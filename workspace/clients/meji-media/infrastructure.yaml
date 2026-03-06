@@ -7,35 +7,35 @@ instances:
 
     scenarios:
       - id: 4596203
-        name: "A1 — Enquiry Follow-Up Sequence"
+        name: "A1 - Enquiry Follow-Up Sequence"
         trigger: webhook
         ship: true
         status: active
       - id: 4595921
-        name: "A2 — Reply Detection & Stop"
+        name: "A2 - Reply Detection & Stop"
         trigger: scheduled (300s)
         ship: true
         status: inactive (pending production activation)
       - id: 4596220
-        name: "A3 — Scheduled Follow-Up Steps"
+        name: "A3 - Scheduled Follow-Up Steps"
         trigger: scheduled (900s)
         ship: true
         status: inactive (pending production activation)
       - id: 4604238
-        name: "S0 — Environment Setup"
+        name: "S0 - Environment Setup"
         trigger: webhook
-        ship: true
+        ship: false
         status: active (dev-tested)
         note: "One-run setup utility. Creates data stores, seeds config/templates, creates Google Sheet. Run once then delete."
         webhook: 2548022
         webhook_url: "https://hook.eu1.make.com/levvajivbiyp9j22yli66kvfyavkf4cl"
       - id: 4598117
-        name: "UTIL — Sheet Reader"
+        name: "UTIL - Sheet Reader"
         trigger: webhook
         ship: false
         note: "Dev-only testing fixture. Delete before client handoff."
       - id: 4598123
-        name: "UTIL — Cell Writer"
+        name: "UTIL - Cell Writer"
         trigger: tool (callable via scenarios_run)
         ship: false
         note: "Dev-only testing fixture. Delete before client handoff."
@@ -53,7 +53,7 @@ instances:
 
     webhooks:
       - id: 2515332
-        name: "Meji Media — Enquiry Form"
+        name: "Meji Media - Enquiry Form"
         url: "https://hook.eu1.make.com/dr5mcybej4qjryia54np8vxugon0ehcn"
         scenario: 4596203
         ship: true
@@ -63,18 +63,18 @@ instances:
       - id: 5461799
         type: google-sheets
         account: "neumanic2@gmail.com"
-        note: "Dev account — swap to client's Google account before production"
+        note: "Dev account -- swap to client's Google account before production"
       - id: 5461821
         type: gmail
         account: "neumanic2@gmail.com"
-        note: "Dev account — swap to client's shared inbox before production"
+        note: "Dev account -- swap to client's shared inbox before production"
 
     spreadsheet:
       id: "14AcAeuYdDh46meaORZbBGQ0kfuXdTycZ-0kj-uiprZI"
       name: "MejiMedia_Enquiries_Followup"
       worksheet: "Leads"
       columns: 17 (A-Q)
-      note: "Dev Google Drive — recreate in client's Drive during deployment"
+      note: "Dev Google Drive -- recreate in client's Drive during deployment"
 
   # Client's Make.com org (production)
   - type: make
@@ -87,17 +87,17 @@ instances:
 
     scenarios:
       - id: 8804011
-        name: "A1 — Enquiry Follow-Up Sequence"
+        name: "A1 - Enquiry Follow-Up Sequence"
         trigger: webhook
         ship: true
         status: active
       - id: 8804012
-        name: "A2 — Reply Detection & Stop"
+        name: "A2 - Reply Detection & Stop"
         trigger: scheduled (300s)
         ship: true
         status: inactive (activate after client Gmail connected)
       - id: 8804014
-        name: "A3 — Scheduled Follow-Up Steps"
+        name: "A3 - Scheduled Follow-Up Steps"
         trigger: scheduled (900s)
         ship: true
         status: inactive (activate after A2)
@@ -115,7 +115,7 @@ instances:
 
     webhooks:
       - id: 3939562
-        name: "Meji Media — Enquiry Form"
+        name: "Meji Media - Enquiry Form"
         url: "https://hook.eu2.make.com/cva0g9j0ru2p9690nrxji8791grkhhya"
         scenario: 8804011
         ship: true
@@ -124,11 +124,11 @@ instances:
       - id: 13838215
         type: google-sheets
         account: "client.meji-media@unpauseai.com"
-        note: "Test account — swap to client's Google account for production"
+        note: "Test account -- swap to client's Google account for production"
       - id: 13838220
         type: gmail
         account: "client.meji-media@unpauseai.com"
-        note: "Test account — swap to client's shared inbox (enquire@christmasofficeparty.co.uk)"
+        note: "Test account -- swap to client's shared inbox (enquire@christmasofficeparty.co.uk)"
 
     spreadsheet:
       id: "1nZcLJzjJ0Ff1j4yZQfxB09REsL2MZe4kt1xuVwaiS-M"

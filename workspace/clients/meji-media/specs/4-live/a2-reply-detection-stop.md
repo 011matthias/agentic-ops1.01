@@ -6,7 +6,7 @@ stage: live
 needs_fixes: false
 version: 2.0.0
 created: 2026-02-24
-updated: 2026-03-03
+updated: 2026-03-06
 orchestrator: make
 trigger:
   type: cron
@@ -23,7 +23,15 @@ make:
   scenario_id: 4595921
   google_connection: 5461799
   gmail_connection: 5461821
+make_production:
+  org: 5473701
+  team: 2826470
+  zone: eu2.make.com
+  scenario_id: 8804012
+  google_connection: 13838215
+  gmail_connection: 13838220
 last_changes:
+  - "2026-03-06: Fixed UTF-8 encoding in eu2 deployment (ASCII hyphens in scenario names)"
   - "2026-02-25: Updated spec to match live implementation"
 next_steps: []
 stage_history:

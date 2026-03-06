@@ -6,7 +6,7 @@ stage: live
 needs_fixes: false
 version: 3.0.0
 created: 2026-02-24
-updated: 2026-03-03
+updated: 2026-03-06
 orchestrator: make
 trigger:
   type: webhook
@@ -25,8 +25,17 @@ make:
   scenario_id: 4596203
   google_connection: 5461799
   gmail_connection: 5461821
+make_production:
+  org: 5473701
+  team: 2826470
+  zone: eu2.make.com
+  scenario_id: 8804011
+  google_connection: 13838215
+  gmail_connection: 13838220
+  webhook_url: "https://hook.eu2.make.com/cva0g9j0ru2p9690nrxji8791grkhhya"
 last_changes:
-  - "2026-03-03: v3.0.0 — A/B testing (module 56, column Q, variant-suffixed template keys)"
+  - "2026-03-06: Fixed UTF-8 encoding in eu2 deployment (ASCII hyphens in scenario names)"
+  - "2026-03-03: v3.0.0 - A/B testing (module 56, column Q, variant-suffixed template keys)"
   - "2026-02-25: Updated spec to match live implementation"
 next_steps: []
 stage_history:
@@ -186,7 +195,7 @@ The scoring factors and their weights are stored in Pipeline Config DS 98606. Ea
   {{if(50.ab_testing_enabled = "true"; if(parseNumber(formatDate(now; "s")) < 30; "A"; "B"); "A")}}
   ```
 - When `ab_testing_enabled` = `false` (default), all leads get variant `A` (backward-compatible)
-- When enabled, ~50/50 split: seconds 0-29 → A, seconds 30-59 → B
+- When enabled, ~50/50 split: seconds 0-29 -> A, seconds 30-59 -> B
 - **Output:** `{{56.ab_variant}}` (string: `A` or `B`)
 
 ### 7. AI Personalised Opening (Module 70: http:ActionSendData)
@@ -336,7 +345,7 @@ Structure: `key` (PK), `subject`, `body_html`, `active`, `updated_at`. Templates
 - [x] Templates fetched from Email Templates data store (not hardcoded)
 - [ ] A/B variant assigned (A or B) and written to column Q
 - [ ] Template key includes A/B suffix (`initial_standard_a`, `initial_high_b`, etc.)
-- [ ] A/B toggle: `ab_testing_enabled=false` → all leads get variant A (backward-compatible)
+- [ ] A/B toggle: `ab_testing_enabled=false` -> all leads get variant A (backward-compatible)
 
 ## Implementation Notes
 

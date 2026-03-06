@@ -6,7 +6,7 @@ stage: live
 needs_fixes: false
 version: 3.0.0
 created: 2026-02-24
-updated: 2026-03-03
+updated: 2026-03-06
 orchestrator: make
 trigger:
   type: cron
@@ -24,8 +24,16 @@ make:
   scenario_id: 4596220
   google_connection: 5461799
   gmail_connection: 5461821
+make_production:
+  org: 5473701
+  team: 2826470
+  zone: eu2.make.com
+  scenario_id: 8804014
+  google_connection: 13838215
+  gmail_connection: 13838220
 last_changes:
-  - "2026-03-03: v3.0.0 — A/B testing (module 63 getCell Q, variant-suffixed template keys with ifempty fallback)"
+  - "2026-03-06: Fixed UTF-8 encoding in eu2 deployment (ASCII hyphens in scenario names)"
+  - "2026-03-03: v3.0.0 - A/B testing (module 63 getCell Q, variant-suffixed template keys with ifempty fallback)"
   - "2026-02-25: Updated spec to match live implementation"
 next_steps: []
 stage_history:
@@ -52,13 +60,13 @@ flowchart TD
     SCHED["Module 1: builtin:BasicScheduler\nEvery 15 minutes"] --> FILTER["Module 9: google-sheets:filterRows\nstopped=FALSE (active leads only)"]
     FILTER --> EMPTY_GUARD{"Empty-Row Guard Filter\nSkip if no data"}
     EMPTY_GUARD -->|Empty| SKIP_EMPTY["Skip: No active leads"]
-    EMPTY_GUARD -->|Has data| GETCELL_NAME["Module 10: getCell → C (name)"]
-    GETCELL_NAME --> GETCELL_EMAIL["Module 11: getCell → D (email)"]
-    GETCELL_EMAIL --> GETCELL_TOPIC["Module 12: getCell → F (discussion_topic)"]
-    GETCELL_TOPIC --> GETCELL_STEP["Module 13: getCell → L (current_step)"]
-    GETCELL_STEP --> GETCELL_DUE["Module 14: getCell → M (next_step_due)"]
-    GETCELL_DUE --> GETCELL_PRIORITY["Module 61: getCell → I (priority)"]
-    GETCELL_PRIORITY --> GETCELL_VARIANT["Module 63: getCell → Q (ab_variant)"]
+    EMPTY_GUARD -->|Has data| GETCELL_NAME["Module 10: getCell -> C (name)"]
+    GETCELL_NAME --> GETCELL_EMAIL["Module 11: getCell -> D (email)"]
+    GETCELL_EMAIL --> GETCELL_TOPIC["Module 12: getCell -> F (discussion_topic)"]
+    GETCELL_TOPIC --> GETCELL_STEP["Module 13: getCell -> L (current_step)"]
+    GETCELL_STEP --> GETCELL_DUE["Module 14: getCell -> M (next_step_due)"]
+    GETCELL_DUE --> GETCELL_PRIORITY["Module 61: getCell -> I (priority)"]
+    GETCELL_PRIORITY --> GETCELL_VARIANT["Module 63: getCell -> Q (ab_variant)"]
     GETCELL_VARIANT --> DUE_FILTER{"Date Filter\nnext_step_due <= now\n(IML string comparison)"}
     DUE_FILTER -->|Not due| SKIP_DUE["Skip: Not due yet"]
     DUE_FILTER -->|Due| DS_CONFIG["Module 62: datastore:GetRecord\nPipeline Config (DS 98606)"]
