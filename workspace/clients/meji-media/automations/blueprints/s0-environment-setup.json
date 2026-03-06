@@ -1,0 +1,1376 @@
+{
+  "name": "S0 — Environment Setup",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": {
+        "hook": null,
+        "maxResults": 1
+      },
+      "mapper": {},
+      "metadata": {
+        "restore": {
+          "parameters": {
+            "hook": {
+              "label": "S0 Setup"
+            }
+          }
+        },
+        "designer": {
+          "x": 0,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "util:SetVariable2",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "name": "api_base_url",
+        "scope": "roundtrip",
+        "value": "{{\"https://\" + 1.data.make_zone + \".make.com/api/v2\"}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "util:SetVariable2",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "name": "email_signature_html",
+        "scope": "roundtrip",
+        "value": "{{\"<p style='margin-top:24px'>Best regards,<br><strong>The \" + 1.data.company_name + \" Team</strong></p><p style='font-size:13px;color:#555;margin-top:16px;border-top:1px solid #eee;padding-top:12px'>\" + 1.data.company_name + \"<br><a href='\" + 1.data.website_url + \"'>Website</a> &middot; <a href='\" + 1.data.portfolio_url + \"'>Our Work</a> &middot; <a href='\" + 1.data.booking_url + \"'>Book a Call</a></p>\"}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 4,
+      "module": "util:SetVariable2",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "name": "ai_system_prompt",
+        "scope": "roundtrip",
+        "value": "{{\"You are writing the opening line of a follow-up email for \" + 1.data.company_name + \", an events company based in the UK. Write ONE warm, natural sentence that references the person's specific enquiry. Be conversational and British-friendly. Never use words like just or reaching out. Do not include any greeting like Hi or Dear - the template already has those. Do not include any closing or sign-off. Output ONLY the single opening line sentence, nothing else.\"}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 900,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 5,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "{{2.api_base_url}}/data-structures",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Token {{1.data.make_api_token}}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "parseResponse": true,
+        "serializeUrl": false,
+        "shareCookies": false,
+        "followRedirect": true,
+        "followAllRedirects": true,
+        "useQuerystring": false,
+        "rejectUnauthorized": true,
+        "useMtls": false,
+        "gzip": true,
+        "data": "{\"name\":\"Pipeline Config\",\"teamId\":{{1.data.make_team_id}},\"strict\":false,\"spec\":[{\"name\":\"key\",\"type\":\"text\",\"required\":true},{\"name\":\"weight_has_organisation\",\"type\":\"text\"},{\"name\":\"weight_business_email\",\"type\":\"text\"},{\"name\":\"weight_has_phone\",\"type\":\"text\"},{\"name\":\"weight_long_message\",\"type\":\"text\"},{\"name\":\"weight_business_hours\",\"type\":\"text\"},{\"name\":\"weight_form_completeness\",\"type\":\"text\"},{\"name\":\"topic_weight_wedding\",\"type\":\"text\"},{\"name\":\"topic_weight_corporate\",\"type\":\"text\"},{\"name\":\"topic_weight_festival\",\"type\":\"text\"},{\"name\":\"topic_weight_default\",\"type\":\"text\"},{\"name\":\"weight_budget_keywords\",\"type\":\"text\"},{\"name\":\"tier_hot_min\",\"type\":\"text\"},{\"name\":\"tier_warm_min\",\"type\":\"text\"},{\"name\":\"handoff_threshold\",\"type\":\"text\"},{\"name\":\"handoff_enabled\",\"type\":\"text\"},{\"name\":\"handoff_email\",\"type\":\"text\"},{\"name\":\"handoff_urgency_hours\",\"type\":\"text\"},{\"name\":\"cadence_hot_step2\",\"type\":\"text\"},{\"name\":\"cadence_hot_step3\",\"type\":\"text\"},{\"name\":\"cadence_warm_step2\",\"type\":\"text\"},{\"name\":\"cadence_warm_step3\",\"type\":\"text\"},{\"name\":\"cadence_standard_step2\",\"type\":\"text\"},{\"name\":\"cadence_standard_step3\",\"type\":\"text\"},{\"name\":\"cadence_cold_grace_hours\",\"type\":\"text\"},{\"name\":\"ai_enabled\",\"type\":\"text\"},{\"name\":\"ai_api_key\",\"type\":\"text\"},{\"name\":\"ai_model\",\"type\":\"text\"},{\"name\":\"ai_temperature\",\"type\":\"text\"},{\"name\":\"ai_max_tokens\",\"type\":\"text\"},{\"name\":\"ai_system_prompt\",\"type\":\"text\"},{\"name\":\"company_name\",\"type\":\"text\"},{\"name\":\"email_signature_html\",\"type\":\"text\"},{\"name\":\"handoff_max_per_day\",\"type\":\"text\"},{\"name\":\"ab_testing_enabled\",\"type\":\"text\"}]}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 1200,
+          "y": 0
+        }
+      },
+      "onerror": [
+        {
+          "id": 25,
+          "module": "builtin:Resume",
+          "version": 1,
+          "parameters": {},
+          "mapper": {},
+          "metadata": {
+            "designer": {
+              "x": 1200,
+              "y": 300
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "{{2.api_base_url}}/data-stores",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Token {{1.data.make_api_token}}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "parseResponse": true,
+        "serializeUrl": false,
+        "shareCookies": false,
+        "followRedirect": true,
+        "followAllRedirects": true,
+        "useQuerystring": false,
+        "rejectUnauthorized": true,
+        "useMtls": false,
+        "gzip": true,
+        "data": "{\"name\":\"Pipeline Config\",\"teamId\":{{1.data.make_team_id}},\"datastructureId\":{{5.data.id}},\"maxSizeMB\":1}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 1500,
+          "y": 0
+        }
+      },
+      "onerror": [
+        {
+          "id": 26,
+          "module": "builtin:Resume",
+          "version": 1,
+          "parameters": {},
+          "mapper": {},
+          "metadata": {
+            "designer": {
+              "x": 1500,
+              "y": 300
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "{{2.api_base_url}}/data-stores/{{6.data.id}}/data",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Token {{1.data.make_api_token}}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "parseResponse": true,
+        "serializeUrl": false,
+        "shareCookies": false,
+        "followRedirect": true,
+        "followAllRedirects": true,
+        "useQuerystring": false,
+        "rejectUnauthorized": true,
+        "useMtls": false,
+        "gzip": true,
+        "data": "{\"key\":\"main\",\"data\":{\"weight_has_organisation\":\"5\",\"weight_business_email\":\"3\",\"weight_has_phone\":\"4\",\"weight_long_message\":\"8\",\"weight_business_hours\":\"2\",\"weight_form_completeness\":\"10\",\"topic_weight_wedding\":\"15\",\"topic_weight_corporate\":\"12\",\"topic_weight_festival\":\"8\",\"topic_weight_default\":\"0\",\"weight_budget_keywords\":\"7\",\"tier_hot_min\":\"50\",\"tier_warm_min\":\"25\",\"handoff_threshold\":\"50\",\"handoff_enabled\":\"true\",\"handoff_email\":\"{{1.data.handoff_email}}\",\"handoff_urgency_hours\":\"24\",\"cadence_hot_step2\":\"6\",\"cadence_hot_step3\":\"24\",\"cadence_warm_step2\":\"12\",\"cadence_warm_step3\":\"48\",\"cadence_standard_step2\":\"24\",\"cadence_standard_step3\":\"72\",\"cadence_cold_grace_hours\":\"72\",\"ai_enabled\":\"true\",\"ai_api_key\":\"{{1.data.openai_api_key}}\",\"ai_model\":\"gpt-4o-mini\",\"ai_temperature\":\"0.7\",\"ai_max_tokens\":\"80\",\"ai_system_prompt\":\"{{4.ai_system_prompt}}\",\"company_name\":\"{{1.data.company_name}}\",\"email_signature_html\":\"{{3.email_signature_html}}\",\"handoff_max_per_day\":\"10\",\"ab_testing_enabled\":\"false\"}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 1800,
+          "y": 0
+        }
+      },
+      "onerror": [
+        {
+          "id": 27,
+          "module": "builtin:Resume",
+          "version": 1,
+          "parameters": {},
+          "mapper": {},
+          "metadata": {
+            "designer": {
+              "x": 1800,
+              "y": 300
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "{{2.api_base_url}}/data-structures",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Token {{1.data.make_api_token}}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "parseResponse": true,
+        "serializeUrl": false,
+        "shareCookies": false,
+        "followRedirect": true,
+        "followAllRedirects": true,
+        "useQuerystring": false,
+        "rejectUnauthorized": true,
+        "useMtls": false,
+        "gzip": true,
+        "data": "{\"name\":\"Email Templates\",\"teamId\":{{1.data.make_team_id}},\"strict\":false,\"spec\":[{\"name\":\"key\",\"type\":\"text\",\"required\":true},{\"name\":\"subject\",\"type\":\"text\"},{\"name\":\"body_html\",\"type\":\"text\"},{\"name\":\"active\",\"type\":\"text\"},{\"name\":\"updated_at\",\"type\":\"text\"}]}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 2100,
+          "y": 0
+        }
+      },
+      "onerror": [
+        {
+          "id": 28,
+          "module": "builtin:Resume",
+          "version": 1,
+          "parameters": {},
+          "mapper": {},
+          "metadata": {
+            "designer": {
+              "x": 2100,
+              "y": 300
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "{{2.api_base_url}}/data-stores",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Token {{1.data.make_api_token}}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "parseResponse": true,
+        "serializeUrl": false,
+        "shareCookies": false,
+        "followRedirect": true,
+        "followAllRedirects": true,
+        "useQuerystring": false,
+        "rejectUnauthorized": true,
+        "useMtls": false,
+        "gzip": true,
+        "data": "{\"name\":\"Email Templates\",\"teamId\":{{1.data.make_team_id}},\"datastructureId\":{{8.data.id}},\"maxSizeMB\":1}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 2400,
+          "y": 0
+        }
+      },
+      "onerror": [
+        {
+          "id": 29,
+          "module": "builtin:Resume",
+          "version": 1,
+          "parameters": {},
+          "mapper": {},
+          "metadata": {
+            "designer": {
+              "x": 2400,
+              "y": 300
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "{{2.api_base_url}}/data-stores/{{9.data.id}}/data",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Token {{1.data.make_api_token}}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "parseResponse": true,
+        "serializeUrl": false,
+        "shareCookies": false,
+        "followRedirect": true,
+        "followAllRedirects": true,
+        "useQuerystring": false,
+        "rejectUnauthorized": true,
+        "useMtls": false,
+        "gzip": true,
+        "data": "{\"key\":\"initial_standard_a\",\"data\":{\"subject\":\"Thanks for your enquiry, ##name## — {{1.data.company_name}}\",\"body_html\":\"<p>Hi ##name##,</p>##ai_opening##<p>Thank you for getting in touch about ##topic##. We've received your enquiry and are excited to learn more about what you have in mind.</p><p>We work with a wide range of clients across events, film, and media production, and we'd love to explore how we can help bring your vision to life.</p><p>One of our team will review your details and get back to you shortly. In the meantime, feel free to reply to this email if there's anything else you'd like to share — we'd love to hear more.</p>##signature##\",\"active\":\"true\",\"updated_at\":\"{{formatDate(now; \\\"YYYY-MM-DDTHH:mm:ssZ\\\")}}\"}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 2700,
+          "y": 0
+        }
+      },
+      "onerror": [
+        {
+          "id": 30,
+          "module": "builtin:Resume",
+          "version": 1,
+          "parameters": {},
+          "mapper": {},
+          "metadata": {
+            "designer": {
+              "x": 2700,
+              "y": 300
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "{{2.api_base_url}}/data-stores/{{9.data.id}}/data",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Token {{1.data.make_api_token}}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "parseResponse": true,
+        "serializeUrl": false,
+        "shareCookies": false,
+        "followRedirect": true,
+        "followAllRedirects": true,
+        "useQuerystring": false,
+        "rejectUnauthorized": true,
+        "useMtls": false,
+        "gzip": true,
+        "data": "{\"key\":\"initial_high_a\",\"data\":{\"subject\":\"Thanks for your enquiry, ##name## — {{1.data.company_name}}\",\"body_html\":\"<p>Hi ##name##,</p>##ai_opening##<p>Thank you so much for reaching out about ##topic##. This sounds like a brilliant project and exactly the kind of work we love getting involved in.</p><p>We've had a look at your enquiry and we're keen to chat through the details with you as soon as possible. Would you be free for a quick call this week? Just reply with a time that works and we'll make it happen.</p><p>In the meantime, feel free to take a look at some of our recent work — we think you'll get a great sense of what we can do together.</p>##signature##\",\"active\":\"true\",\"updated_at\":\"{{formatDate(now; \\\"YYYY-MM-DDTHH:mm:ssZ\\\")}}\"}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 3000,
+          "y": 0
+        }
+      },
+      "onerror": [
+        {
+          "id": 31,
+          "module": "builtin:Resume",
+          "version": 1,
+          "parameters": {},
+          "mapper": {},
+          "metadata": {
+            "designer": {
+              "x": 3000,
+              "y": 300
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "{{2.api_base_url}}/data-stores/{{9.data.id}}/data",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Token {{1.data.make_api_token}}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "parseResponse": true,
+        "serializeUrl": false,
+        "shareCookies": false,
+        "followRedirect": true,
+        "followAllRedirects": true,
+        "useQuerystring": false,
+        "rejectUnauthorized": true,
+        "useMtls": false,
+        "gzip": true,
+        "data": "{\"key\":\"step_2_a\",\"data\":{\"subject\":\"Following up on your enquiry — ##topic## | {{1.data.company_name}}\",\"body_html\":\"<p>Hi ##name##,</p>##ai_opening##<p>We wanted to follow up on your recent enquiry about ##topic##. We know things can get busy, so we just wanted to make sure your message didn't slip through the cracks.</p><p>We've been thinking about your project and would love the chance to discuss it properly. Whether you have questions, want to explore ideas, or are ready to get started — we're here to help.</p><p>Just reply to this email and we'll pick things up from there.</p>##signature##\",\"active\":\"true\",\"updated_at\":\"{{formatDate(now; \\\"YYYY-MM-DDTHH:mm:ssZ\\\")}}\"}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 3300,
+          "y": 0
+        }
+      },
+      "onerror": [
+        {
+          "id": 32,
+          "module": "builtin:Resume",
+          "version": 1,
+          "parameters": {},
+          "mapper": {},
+          "metadata": {
+            "designer": {
+              "x": 3300,
+              "y": 300
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "{{2.api_base_url}}/data-stores/{{9.data.id}}/data",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Token {{1.data.make_api_token}}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "parseResponse": true,
+        "serializeUrl": false,
+        "shareCookies": false,
+        "followRedirect": true,
+        "followAllRedirects": true,
+        "useQuerystring": false,
+        "rejectUnauthorized": true,
+        "useMtls": false,
+        "gzip": true,
+        "data": "{\"key\":\"step_3_a\",\"data\":{\"subject\":\"One last check-in — ##topic## | {{1.data.company_name}}\",\"body_html\":\"<p>Hi ##name##,</p>##ai_opening##<p>We're checking in one last time regarding your enquiry about ##topic##. We completely understand if now isn't the right time — plans change, and there's absolutely no pressure.</p><p>If you are still interested, we'd be happy to pick up where we left off. And if your needs have changed, that's fine too — just let us know and we'll update our records.</p><p>Either way, it was great to hear from you, and we're always here if you need us in the future.</p>##signature##\",\"active\":\"true\",\"updated_at\":\"{{formatDate(now; \\\"YYYY-MM-DDTHH:mm:ssZ\\\")}}\"}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 3600,
+          "y": 0
+        }
+      },
+      "onerror": [
+        {
+          "id": 33,
+          "module": "builtin:Resume",
+          "version": 1,
+          "parameters": {},
+          "mapper": {},
+          "metadata": {
+            "designer": {
+              "x": 3600,
+              "y": 300
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 40,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "{{2.api_base_url}}/data-stores/{{9.data.id}}/data",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Token {{1.data.make_api_token}}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "parseResponse": true,
+        "serializeUrl": false,
+        "shareCookies": false,
+        "followRedirect": true,
+        "followAllRedirects": true,
+        "useQuerystring": false,
+        "rejectUnauthorized": true,
+        "useMtls": false,
+        "gzip": true,
+        "data": "{\"key\":\"initial_standard_b\",\"data\":{\"subject\":\"Thanks for your enquiry, ##name## — {{1.data.company_name}}\",\"body_html\":\"<p>Hi ##name##,</p>##ai_opening##<p>Thank you for getting in touch about ##topic##. We've received your enquiry and are excited to learn more about what you have in mind.</p><p>We work with a wide range of clients across events, film, and media production, and we'd love to explore how we can help bring your vision to life.</p><p>One of our team will review your details and get back to you shortly. In the meantime, feel free to reply to this email if there's anything else you'd like to share — we'd love to hear more.</p>##signature##\",\"active\":\"true\",\"updated_at\":\"{{formatDate(now; \\\"YYYY-MM-DDTHH:mm:ssZ\\\")}}\"}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 3700,
+          "y": -300
+        }
+      },
+      "onerror": [
+        {
+          "id": 44,
+          "module": "builtin:Resume",
+          "version": 1,
+          "parameters": {},
+          "mapper": {},
+          "metadata": {
+            "designer": {
+              "x": 3700,
+              "y": -100
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 41,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "{{2.api_base_url}}/data-stores/{{9.data.id}}/data",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Token {{1.data.make_api_token}}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "parseResponse": true,
+        "serializeUrl": false,
+        "shareCookies": false,
+        "followRedirect": true,
+        "followAllRedirects": true,
+        "useQuerystring": false,
+        "rejectUnauthorized": true,
+        "useMtls": false,
+        "gzip": true,
+        "data": "{\"key\":\"initial_high_b\",\"data\":{\"subject\":\"Thanks for your enquiry, ##name## — {{1.data.company_name}}\",\"body_html\":\"<p>Hi ##name##,</p>##ai_opening##<p>Thank you so much for reaching out about ##topic##. This sounds like a brilliant project and exactly the kind of work we love getting involved in.</p><p>We've had a look at your enquiry and we're keen to chat through the details with you as soon as possible. Would you be free for a quick call this week? Just reply with a time that works and we'll make it happen.</p><p>In the meantime, feel free to take a look at some of our recent work — we think you'll get a great sense of what we can do together.</p>##signature##\",\"active\":\"true\",\"updated_at\":\"{{formatDate(now; \\\"YYYY-MM-DDTHH:mm:ssZ\\\")}}\"}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 4000,
+          "y": -300
+        }
+      },
+      "onerror": [
+        {
+          "id": 45,
+          "module": "builtin:Resume",
+          "version": 1,
+          "parameters": {},
+          "mapper": {},
+          "metadata": {
+            "designer": {
+              "x": 4000,
+              "y": -100
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 42,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "{{2.api_base_url}}/data-stores/{{9.data.id}}/data",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Token {{1.data.make_api_token}}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "parseResponse": true,
+        "serializeUrl": false,
+        "shareCookies": false,
+        "followRedirect": true,
+        "followAllRedirects": true,
+        "useQuerystring": false,
+        "rejectUnauthorized": true,
+        "useMtls": false,
+        "gzip": true,
+        "data": "{\"key\":\"step_2_b\",\"data\":{\"subject\":\"Following up on your enquiry — ##topic## | {{1.data.company_name}}\",\"body_html\":\"<p>Hi ##name##,</p>##ai_opening##<p>We wanted to follow up on your recent enquiry about ##topic##. We know things can get busy, so we just wanted to make sure your message didn't slip through the cracks.</p><p>We've been thinking about your project and would love the chance to discuss it properly. Whether you have questions, want to explore ideas, or are ready to get started — we're here to help.</p><p>Just reply to this email and we'll pick things up from there.</p>##signature##\",\"active\":\"true\",\"updated_at\":\"{{formatDate(now; \\\"YYYY-MM-DDTHH:mm:ssZ\\\")}}\"}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 4300,
+          "y": -300
+        }
+      },
+      "onerror": [
+        {
+          "id": 46,
+          "module": "builtin:Resume",
+          "version": 1,
+          "parameters": {},
+          "mapper": {},
+          "metadata": {
+            "designer": {
+              "x": 4300,
+              "y": -100
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 43,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "{{2.api_base_url}}/data-stores/{{9.data.id}}/data",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Token {{1.data.make_api_token}}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "parseResponse": true,
+        "serializeUrl": false,
+        "shareCookies": false,
+        "followRedirect": true,
+        "followAllRedirects": true,
+        "useQuerystring": false,
+        "rejectUnauthorized": true,
+        "useMtls": false,
+        "gzip": true,
+        "data": "{\"key\":\"step_3_b\",\"data\":{\"subject\":\"One last check-in — ##topic## | {{1.data.company_name}}\",\"body_html\":\"<p>Hi ##name##,</p>##ai_opening##<p>We're checking in one last time regarding your enquiry about ##topic##. We completely understand if now isn't the right time — plans change, and there's absolutely no pressure.</p><p>If you are still interested, we'd be happy to pick up where we left off. And if your needs have changed, that's fine too — just let us know and we'll update our records.</p><p>Either way, it was great to hear from you, and we're always here if you need us in the future.</p>##signature##\",\"active\":\"true\",\"updated_at\":\"{{formatDate(now; \\\"YYYY-MM-DDTHH:mm:ssZ\\\")}}\"}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 4600,
+          "y": -300
+        }
+      },
+      "onerror": [
+        {
+          "id": 47,
+          "module": "builtin:Resume",
+          "version": 1,
+          "parameters": {},
+          "mapper": {},
+          "metadata": {
+            "designer": {
+              "x": 4600,
+              "y": -100
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "module": "google-sheets:createSpreadsheet",
+      "version": 2,
+      "parameters": {
+        "__IMTCONN__": 5461799
+      },
+      "mapper": {
+        "properties": {
+          "title": "{{1.data.company_name}} - Enquiry Tracker"
+        },
+        "sheets": [
+          {
+            "properties": {
+              "title": "Leads"
+            }
+          }
+        ]
+      },
+      "metadata": {
+        "restore": {
+          "parameters": {
+            "__IMTCONN__": {
+              "label": "Google Sheets (neumanic2@gmail.com)"
+            }
+          }
+        },
+        "designer": {
+          "x": 4900,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 15,
+      "module": "google-sheets:addRow",
+      "version": 2,
+      "parameters": {
+        "__IMTCONN__": 5461799
+      },
+      "mapper": {
+        "mode": "map",
+        "spreadsheetId": "{{14.spreadsheetId}}",
+        "sheetId": "Leads",
+        "tableFirstRow": "A1:Z1",
+        "insertUnformatted": false,
+        "valueInputOption": "USER_ENTERED",
+        "values": {
+          "0": "enquiry_id",
+          "1": "received_at",
+          "2": "name",
+          "3": "email",
+          "4": "phone",
+          "5": "discussion_topic",
+          "6": "organisation",
+          "7": "message",
+          "8": "priority",
+          "9": "status",
+          "10": "stopped",
+          "11": "current_step",
+          "12": "next_step_due",
+          "13": "last_email_sent",
+          "14": "source",
+          "15": "lead_score",
+          "16": "ab_variant"
+        }
+      },
+      "metadata": {
+        "restore": {
+          "parameters": {
+            "__IMTCONN__": {
+              "label": "Google Sheets (neumanic2@gmail.com)"
+            }
+          }
+        },
+        "designer": {
+          "x": 5200,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 16,
+      "module": "google-email:sendAnEmail",
+      "version": 4,
+      "parameters": {
+        "__IMTCONN__": 5461821
+      },
+      "mapper": {
+        "to": "{{1.data.handoff_email}}",
+        "subject": "Setup Complete - {{1.data.company_name}} Follow-Up System",
+        "content": "<html><body><h2>Your automated follow-up system is live!</h2><h3>What was created:</h3><ul><li><strong>Pipeline Config</strong> (Data Store ID: {{6.data.id}})</li><li><strong>Email Templates</strong> (Data Store ID: {{9.data.id}})</li><li><strong>Google Sheet:</strong> <a href='https://docs.google.com/spreadsheets/d/{{14.spreadsheetId}}/edit'>Open Spreadsheet</a></li><li><strong>A1 Enquiry Follow-Up</strong> (Scenario ID: {{ifempty(54.data.scenario.id; &quot;pending&quot;)}})</li><li><strong>A2 Reply Detection</strong> (Scenario ID: {{ifempty(56.data.scenario.id; &quot;pending&quot;)}})</li><li><strong>A3 Scheduled Follow-Ups</strong> (Scenario ID: {{ifempty(58.data.scenario.id; &quot;pending&quot;)}})</li></ul><h3>Next Steps:</h3><ol><li>Copy the <strong>A1 webhook URL</strong> from the setup wizard and point your website form to it</li><li>Delete the S0 setup scenario from your Make.com account (it is no longer needed)</li></ol><h3>Resource IDs:</h3><table border='1' cellpadding='8' style='border-collapse:collapse'><tr><td><strong>Pipeline Config DS</strong></td><td>{{6.data.id}}</td></tr><tr><td><strong>Email Templates DS</strong></td><td>{{9.data.id}}</td></tr><tr><td><strong>Spreadsheet ID</strong></td><td>{{14.spreadsheetId}}</td></tr></table></body></html>",
+        "bodyType": "rawHtml",
+        "fromName": "{{1.data.company_name}}"
+      },
+      "metadata": {
+        "restore": {
+          "parameters": {
+            "__IMTCONN__": {
+              "label": "Gmail (neumanic2@gmail.com)"
+            }
+          }
+        },
+        "designer": {
+          "x": 5500,
+          "y": 0
+        }
+      },
+      "onerror": [
+        {
+          "id": 34,
+          "module": "builtin:Resume",
+          "version": 1,
+          "parameters": {},
+          "mapper": {},
+          "metadata": {
+            "designer": {
+              "x": 5500,
+              "y": 300
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 50,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "{{2.api_base_url}}/connections?teamId={{1.data.make_team_id}}",
+        "method": "get",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Token {{1.data.make_api_token}}"
+          }
+        ],
+        "parseResponse": true,
+        "serializeUrl": false,
+        "shareCookies": false,
+        "followRedirect": true,
+        "followAllRedirects": true,
+        "useQuerystring": false,
+        "rejectUnauthorized": true,
+        "useMtls": false,
+        "gzip": true
+      },
+      "metadata": {
+        "designer": {
+          "x": 5900,
+          "y": 0
+        }
+      },
+      "onerror": [
+        {
+          "id": 150,
+          "module": "builtin:Resume",
+          "version": 1,
+          "parameters": {},
+          "mapper": {},
+          "metadata": {
+            "designer": {
+              "x": 5900,
+              "y": 300
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 51,
+      "module": "util:SetVariable2",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "name": "sheets_conn_id",
+        "scope": "roundtrip",
+        "value": "{{first(map(50.data.connections; \"id\"; \"accountName\"; \"google\"))}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 6200,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 52,
+      "module": "util:SetVariable2",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "name": "gmail_conn_id",
+        "scope": "roundtrip",
+        "value": "{{first(map(50.data.connections; \"id\"; \"accountName\"; \"google-email\"))}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 6500,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 53,
+      "module": "util:SetVariable2",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "name": "a1_blueprint_str",
+        "scope": "roundtrip",
+        "value": "{{replace(replace(replace(replace(replace(1.data.blueprints.a1; \"9999991\"; toString(51.sheets_conn_id)); \"9999992\"; toString(52.gmail_conn_id)); \"__SPREADSHEET_ID__\"; 14.spreadsheetId); \"9999993\"; toString(6.data.id)); \"9999994\"; toString(9.data.id))}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 6800,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 54,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "{{2.api_base_url}}/scenarios",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Token {{1.data.make_api_token}}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "data": "{\"teamId\":{{1.data.make_team_id}},\"blueprint\":{{toJSON(53.a1_blueprint_str)}},\"scheduling\":\"{\\\"type\\\":\\\"indefinitely\\\"}\"}",
+        "parseResponse": true,
+        "serializeUrl": false,
+        "shareCookies": false,
+        "followRedirect": true,
+        "followAllRedirects": true,
+        "useQuerystring": false,
+        "rejectUnauthorized": true,
+        "useMtls": false,
+        "gzip": true
+      },
+      "metadata": {
+        "designer": {
+          "x": 7100,
+          "y": 0
+        }
+      },
+      "onerror": [
+        {
+          "id": 154,
+          "module": "builtin:Resume",
+          "version": 1,
+          "parameters": {},
+          "mapper": {},
+          "metadata": {
+            "designer": {
+              "x": 7100,
+              "y": 300
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 55,
+      "module": "util:SetVariable2",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "name": "a2_blueprint_str",
+        "scope": "roundtrip",
+        "value": "{{replace(replace(replace(replace(replace(1.data.blueprints.a2; \"9999991\"; toString(51.sheets_conn_id)); \"9999992\"; toString(52.gmail_conn_id)); \"__SPREADSHEET_ID__\"; 14.spreadsheetId); \"9999993\"; toString(6.data.id)); \"9999994\"; toString(9.data.id))}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 7400,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 56,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "{{2.api_base_url}}/scenarios",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Token {{1.data.make_api_token}}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "data": "{\"teamId\":{{1.data.make_team_id}},\"blueprint\":{{toJSON(55.a2_blueprint_str)}},\"scheduling\":\"{\\\"type\\\":\\\"indefinitely\\\",\\\"interval\\\":300}\"}",
+        "parseResponse": true,
+        "serializeUrl": false,
+        "shareCookies": false,
+        "followRedirect": true,
+        "followAllRedirects": true,
+        "useQuerystring": false,
+        "rejectUnauthorized": true,
+        "useMtls": false,
+        "gzip": true
+      },
+      "metadata": {
+        "designer": {
+          "x": 7700,
+          "y": 0
+        }
+      },
+      "onerror": [
+        {
+          "id": 156,
+          "module": "builtin:Resume",
+          "version": 1,
+          "parameters": {},
+          "mapper": {},
+          "metadata": {
+            "designer": {
+              "x": 7700,
+              "y": 300
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 57,
+      "module": "util:SetVariable2",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "name": "a3_blueprint_str",
+        "scope": "roundtrip",
+        "value": "{{replace(replace(replace(replace(replace(1.data.blueprints.a3; \"9999991\"; toString(51.sheets_conn_id)); \"9999992\"; toString(52.gmail_conn_id)); \"__SPREADSHEET_ID__\"; 14.spreadsheetId); \"9999993\"; toString(6.data.id)); \"9999994\"; toString(9.data.id))}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 8000,
+          "y": 0
+        }
+      }
+    },
+    {
+      "id": 58,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "{{2.api_base_url}}/scenarios",
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Token {{1.data.make_api_token}}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "data": "{\"teamId\":{{1.data.make_team_id}},\"blueprint\":{{toJSON(57.a3_blueprint_str)}},\"scheduling\":\"{\\\"type\\\":\\\"indefinitely\\\",\\\"interval\\\":900}\"}",
+        "parseResponse": true,
+        "serializeUrl": false,
+        "shareCookies": false,
+        "followRedirect": true,
+        "followAllRedirects": true,
+        "useQuerystring": false,
+        "rejectUnauthorized": true,
+        "useMtls": false,
+        "gzip": true
+      },
+      "metadata": {
+        "designer": {
+          "x": 8300,
+          "y": 0
+        }
+      },
+      "onerror": [
+        {
+          "id": 158,
+          "module": "builtin:Resume",
+          "version": 1,
+          "parameters": {},
+          "mapper": {},
+          "metadata": {
+            "designer": {
+              "x": 8300,
+              "y": 300
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 59,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "{{2.api_base_url}}/scenarios/{{54.data.scenario.id}}/blueprint",
+        "method": "get",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Token {{1.data.make_api_token}}"
+          }
+        ],
+        "parseResponse": true,
+        "serializeUrl": false,
+        "shareCookies": false,
+        "followRedirect": true,
+        "followAllRedirects": true,
+        "useQuerystring": false,
+        "rejectUnauthorized": true,
+        "useMtls": false,
+        "gzip": true
+      },
+      "metadata": {
+        "designer": {
+          "x": 8600,
+          "y": 0
+        }
+      },
+      "onerror": [
+        {
+          "id": 159,
+          "module": "builtin:Resume",
+          "version": 1,
+          "parameters": {},
+          "mapper": {},
+          "metadata": {
+            "designer": {
+              "x": 8600,
+              "y": 300
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 69,
+      "module": "http:ActionSendData",
+      "version": 3,
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      },
+      "mapper": {
+        "url": "{{2.api_base_url}}/hooks/{{59.data.response.flow[1].parameters.hook}}",
+        "method": "get",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Token {{1.data.make_api_token}}"
+          }
+        ],
+        "parseResponse": true,
+        "serializeUrl": false,
+        "shareCookies": false,
+        "followRedirect": true,
+        "followAllRedirects": true,
+        "useQuerystring": false,
+        "rejectUnauthorized": true,
+        "useMtls": false,
+        "gzip": true
+      },
+      "metadata": {
+        "designer": {
+          "x": 8900,
+          "y": 0
+        }
+      },
+      "onerror": [
+        {
+          "id": 169,
+          "module": "builtin:Resume",
+          "version": 1,
+          "parameters": {},
+          "mapper": {},
+          "metadata": {
+            "designer": {
+              "x": 8900,
+              "y": 300
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "module": "gateway:WebhookRespond",
+      "version": 1,
+      "parameters": {},
+      "mapper": {
+        "body": "{\"status\":\"success\",\"pipeline_config_ds_id\":{{6.data.id}},\"email_templates_ds_id\":{{9.data.id}},\"spreadsheet_id\":\"{{14.spreadsheetId}}\",\"spreadsheet_url\":\"https://docs.google.com/spreadsheets/d/{{14.spreadsheetId}}/edit\",\"a1_scenario_id\":{{ifempty(54.data.scenario.id; 0)}},\"a2_scenario_id\":{{ifempty(56.data.scenario.id; 0)}},\"a3_scenario_id\":{{ifempty(58.data.scenario.id; 0)}},\"a1_webhook_url\":\"{{ifempty(69.data.url; \"\")}}\",\"scenarios_deployed\":true,\"message\":\"Setup complete. All scenarios deployed.\"}",
+        "status": 200,
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ]
+      },
+      "metadata": {
+        "designer": {
+          "x": 9200,
+          "y": 0
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "designer": {
+      "orphans": []
+    },
+    "scenario": {
+      "dataloss": false,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "roundtrips": 1,
+      "sequential": false,
+      "confidential": false,
+      "autoCommitTriggerLast": true
+    }
+  },
+  "scheduling": {
+    "type": "immediately"
+  },
+  "interface": {
+    "input": [],
+    "output": []
+  }
+}

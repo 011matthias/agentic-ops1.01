@@ -1,0 +1,75 @@
+# Environment
+.env
+*.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+.eggs/
+*.egg-info/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Railway
+.railway/
+
+# API documentation (fetched, not versioned)
+api-docs/
+
+# Google OAuth credentials (never commit these)
+client_secrets.json
+token.json
+**/google-oauth/client_secrets.json
+**/google-oauth/token.json
+
+# MCP config (contains API credentials for client instances)
+.mcp.json
+
+# Internal tools and credentials (your testing environment)
+internal/
+
+# Scripts with hardcoded credentials
+scripts/update_workflows.py
+
+# Playgrounds — auto-generated files
+workspace/playgrounds/spec-data.js
+
+# Client context — API keys, auth tokens, infrastructure IDs, comms logs
+# Per CLAUDE.md: "Client knowledge (IDs, mappings) → context/ only"
+workspace/clients/*/context/
+
+# Session context YAMLs — contain inline API keys
+docs/sessions/*-context.yaml
+
+# Claude Code local settings (machine-specific permissions)
+.claude/settings.local.json

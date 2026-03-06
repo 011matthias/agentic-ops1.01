@@ -1,0 +1,18 @@
+{
+  "herbox-sweden": {
+    "label": "Herbox Sweden",
+    "color": "#2563eb"
+  },
+  "herbox-netherlands": {
+    "label": "Herbox Netherlands",
+    "color": "#f97316"
+  },
+  "peakora": {
+    "label": "Peakora",
+    "color": "#7c3aed"
+  },
+  "uplifted-consulting": {
+    "label": "Uplifted Consulting",
+    "color": "#059669"
+  }
+}

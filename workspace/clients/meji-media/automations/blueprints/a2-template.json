@@ -1,0 +1,219 @@
+{
+  "flow": [
+    {
+      "id": 1,
+      "mapper": {},
+      "module": "google-email:triggerWatchNewEmails",
+      "version": 4,
+      "metadata": {
+        "restore": {
+          "parameters": {
+            "size": {
+              "nested": {
+                "unit": {
+                  "label": "MB (megabytes)"
+                },
+                "criteria": {
+                  "label": "Greater than"
+                }
+              }
+            },
+            "folder": {
+              "label": "Inbox"
+            },
+            "format": {
+              "label": "Full content"
+            },
+            "criteria": {
+              "label": "Only unread messages"
+            },
+            "labelIds": {
+              "label": "Empty"
+            },
+            "filterType": {
+              "label": "Simple filter"
+            },
+            "__IMTCONN__": {
+              "data": {
+                "scoped": "true",
+                "connection": "google-email"
+              },
+              "label": "My Gmail connection (neumanic2@gmail.com)"
+            }
+          }
+        },
+        "designer": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "from": "",
+        "size": {
+          "unit": "M",
+          "amount": null,
+          "criteria": "larger"
+        },
+        "limit": 10,
+        "folder": "INBOX",
+        "format": "full",
+        "subject": "",
+        "criteria": "is:unread",
+        "labelIds": "",
+        "markSeen": false,
+        "filterType": "simpleSearch",
+        "__IMTCONN__": 9999992,
+        "excludeWords": "",
+        "includeWords": "",
+        "hasAttachment": false
+      }
+    },
+    {
+      "id": 2,
+      "mapper": {
+        "from": "drive",
+        "limit": 10,
+        "filter": [
+          [
+            {
+              "a": "D",
+              "b": "{{1.fromEmail}}",
+              "o": "text:equal"
+            },
+            {
+              "a": "K",
+              "b": "FALSE",
+              "o": "text:equal"
+            }
+          ]
+        ],
+        "sheetId": "Leads",
+        "spreadsheetId": "__SPREADSHEET_ID__",
+        "tableFirstRow": "A1:Z1",
+        "includesHeaders": true,
+        "valueRenderOption": "FORMATTED_VALUE"
+      },
+      "module": "google-sheets:filterRows",
+      "version": 2,
+      "metadata": {
+        "restore": {
+          "parameters": {
+            "sheetId": {
+              "label": "Leads"
+            },
+            "spreadsheetId": {
+              "label": "MejiMedia_Enquiries_Followup"
+            }
+          }
+        },
+        "designer": {
+          "x": 300,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "__IMTCONN__": 9999991
+      }
+    },
+    {
+      "id": 4,
+      "filter": {
+        "name": "Has Matching Row",
+        "conditions": [
+          [
+            {
+              "a": "{{2.__ROW_NUMBER__}}",
+              "b": "",
+              "o": "text:isnotempty"
+            }
+          ]
+        ]
+      },
+      "mapper": {
+        "cell": "A{{2.__ROW_NUMBER__}}",
+        "from": "drive",
+        "sheetId": "Leads",
+        "spreadsheetId": "__SPREADSHEET_ID__",
+        "includesHeaders": true,
+        "valueRenderOption": "FORMATTED_VALUE"
+      },
+      "module": "google-sheets:getCell",
+      "version": 2,
+      "metadata": {
+        "restore": {
+          "parameters": {
+            "sheetId": {
+              "label": "Leads"
+            },
+            "spreadsheetId": {
+              "label": "MejiMedia_Enquiries_Followup"
+            }
+          }
+        },
+        "designer": {
+          "x": 600,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "__IMTCONN__": 9999991
+      }
+    },
+    {
+      "id": 3,
+      "mapper": {
+        "from": "drive",
+        "mode": "select",
+        "values": {
+          "status": "replied",
+          "stopped": "TRUE"
+        },
+        "sheetId": "Leads",
+        "rowNumber": "{{2.__ROW_NUMBER__}}",
+        "spreadsheetId": "__SPREADSHEET_ID__",
+        "includesHeaders": true,
+        "useColumnHeaders": true,
+        "valueInputOption": "USER_ENTERED"
+      },
+      "module": "google-sheets:updateRow",
+      "version": 2,
+      "metadata": {
+        "restore": {
+          "parameters": {
+            "sheetId": {
+              "label": "Leads"
+            },
+            "spreadsheetId": {
+              "label": "MejiMedia_Enquiries_Followup"
+            }
+          }
+        },
+        "designer": {
+          "x": 900,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "__IMTCONN__": 9999991
+      }
+    }
+  ],
+  "name": "A2 — Reply Detection & Stop",
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "designer": {
+      "orphans": []
+    },
+    "scenario": {
+      "dataloss": false,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "roundtrips": 1,
+      "sequential": false,
+      "confidential": false,
+      "autoCommitTriggerLast": true,
+      "slots": null
+    }
+  }
+}

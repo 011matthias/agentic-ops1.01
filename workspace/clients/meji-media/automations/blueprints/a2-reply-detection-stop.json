@@ -1,0 +1,268 @@
+{
+	"flow": [
+		{
+			"id": 1,
+			"mapper": {},
+			"module": "google-email:triggerWatchNewEmails",
+			"version": 4,
+			"metadata": {
+				"restore": {
+					"parameters": {
+						"size": {
+							"nested": {
+								"unit": {
+									"label": "MB (megabytes)"
+								},
+								"criteria": {
+									"label": "Greater than"
+								}
+							}
+						},
+						"folder": {
+							"label": "Inbox"
+						},
+						"format": {
+							"label": "Full content"
+						},
+						"criteria": {
+							"label": "Only unread messages"
+						},
+						"labelIds": {
+							"label": "Empty"
+						},
+						"filterType": {
+							"label": "Simple filter"
+						},
+						"__IMTCONN__": {
+							"data": {
+								"scoped": "true",
+								"connection": "google-email"
+							},
+							"label": "My Gmail connection (neumanic2@gmail.com)"
+						}
+					}
+				},
+				"designer": {
+					"x": 0,
+					"y": 0
+				}
+			},
+			"parameters": {
+				"from": "",
+				"size": {
+					"unit": "M",
+					"amount": null,
+					"criteria": "larger"
+				},
+				"limit": 10,
+				"folder": "INBOX",
+				"format": "full",
+				"subject": "",
+				"criteria": "is:unread",
+				"labelIds": "",
+				"markSeen": false,
+				"filterType": "simpleSearch",
+				"__IMTCONN__": 5461821,
+				"excludeWords": "",
+				"includeWords": "",
+				"hasAttachment": false
+			}
+		},
+		{
+			"id": 2,
+			"mapper": {
+				"from": "drive",
+				"limit": 10,
+				"filter": [
+					[
+						{
+							"a": "D",
+							"b": "{{1.fromEmail}}",
+							"o": "text:equal"
+						},
+						{
+							"a": "K",
+							"b": "FALSE",
+							"o": "text:equal"
+						}
+					]
+				],
+				"sheetId": "Leads",
+				"spreadsheetId": "14AcAeuYdDh46meaORZbBGQ0kfuXdTycZ-0kj-uiprZI",
+				"tableFirstRow": "A1:Z1",
+				"includesHeaders": true,
+				"valueRenderOption": "FORMATTED_VALUE"
+			},
+			"module": "google-sheets:filterRows",
+			"onerror": [
+				{
+					"id": 20,
+					"mapper": {},
+					"module": "builtin:Resume",
+					"version": 1,
+					"metadata": {
+						"designer": {
+							"x": 300,
+							"y": 150
+						}
+					}
+				}
+			],
+			"version": 2,
+			"metadata": {
+				"restore": {
+					"parameters": {
+						"sheetId": {
+							"label": "Leads"
+						},
+						"spreadsheetId": {
+							"label": "MejiMedia_Enquiries_Followup"
+						}
+					}
+				},
+				"designer": {
+					"x": 300,
+					"y": 0
+				}
+			},
+			"parameters": {
+				"__IMTCONN__": 5461799
+			}
+		},
+		{
+			"id": 4,
+			"filter": {
+				"name": "Has Matching Row",
+				"conditions": [
+					[
+						{
+							"a": "{{2.__ROW_NUMBER__}}",
+							"b": "",
+							"o": "text:isnotempty"
+						}
+					]
+				]
+			},
+			"mapper": {
+				"cell": "A{{2.__ROW_NUMBER__}}",
+				"from": "drive",
+				"sheetId": "Leads",
+				"spreadsheetId": "14AcAeuYdDh46meaORZbBGQ0kfuXdTycZ-0kj-uiprZI",
+				"includesHeaders": true,
+				"valueRenderOption": "FORMATTED_VALUE"
+			},
+			"module": "google-sheets:getCell",
+			"onerror": [
+				{
+					"id": 21,
+					"mapper": {},
+					"module": "builtin:Resume",
+					"version": 1,
+					"metadata": {
+						"designer": {
+							"x": 600,
+							"y": 150
+						}
+					}
+				}
+			],
+			"version": 2,
+			"metadata": {
+				"restore": {
+					"parameters": {
+						"sheetId": {
+							"label": "Leads"
+						},
+						"spreadsheetId": {
+							"label": "MejiMedia_Enquiries_Followup"
+						}
+					}
+				},
+				"designer": {
+					"x": 600,
+					"y": 0
+				}
+			},
+			"parameters": {
+				"__IMTCONN__": 5461799
+			}
+		},
+		{
+			"id": 3,
+			"mapper": {
+				"from": "drive",
+				"mode": "select",
+				"values": {
+					"status": "replied",
+					"stopped": "TRUE"
+				},
+				"sheetId": "Leads",
+				"rowNumber": "{{2.__ROW_NUMBER__}}",
+				"spreadsheetId": "14AcAeuYdDh46meaORZbBGQ0kfuXdTycZ-0kj-uiprZI",
+				"includesHeaders": true,
+				"useColumnHeaders": true,
+				"valueInputOption": "USER_ENTERED"
+			},
+			"module": "google-sheets:updateRow",
+			"onerror": [
+				{
+					"id": 22,
+					"mapper": {},
+					"module": "builtin:Resume",
+					"version": 1,
+					"metadata": {
+						"designer": {
+							"x": 900,
+							"y": 150
+						}
+					}
+				}
+			],
+			"version": 2,
+			"metadata": {
+				"restore": {
+					"parameters": {
+						"sheetId": {
+							"label": "Leads"
+						},
+						"spreadsheetId": {
+							"label": "MejiMedia_Enquiries_Followup"
+						}
+					}
+				},
+				"designer": {
+					"x": 900,
+					"y": 0
+				}
+			},
+			"parameters": {
+				"__IMTCONN__": 5461799
+			}
+		}
+	],
+	"name": "A2 — Reply Detection & Stop",
+	"metadata": {
+		"instant": false,
+		"version": 1,
+		"designer": {
+			"orphans": []
+		},
+		"scenario": {
+			"dataloss": false,
+			"maxErrors": 3,
+			"autoCommit": true,
+			"roundtrips": 1,
+			"sequential": false,
+			"confidential": false,
+			"autoCommitTriggerLast": true
+		}
+	},
+	"scheduling": {
+		"type": "indefinitely",
+		"interval": 300
+	},
+	"interface": {
+		"input": [],
+		"output": []
+	}
+}

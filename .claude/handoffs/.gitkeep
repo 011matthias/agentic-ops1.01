@@ -1,0 +1,29 @@
+# Agent Handoff Directory
+
+This directory stores handoff reports between agents during automation building.
+
+## Structure
+
+```
+.claude/handoffs/{session-id}/
+├── phase1-plan-report.md
+├── phase2-implementation-report.md
+├── phase3-test-report.md
+├── phase4-docs-report.md
+├── phase5-deploy-report.md
+├── phase6-verify-report.md
+└── session-summary.md
+```
+
+## Session IDs
+
+Format: `{client}-{automation-id}-{timestamp}`
+
+Example: `herbox-a6.1-20260115-143022`
+
+## Purpose
+
+- **Agent Handoffs**: Pass context between phases
+- **Audit Trail**: Track what happened in each phase
+- **Resumability**: Allow sessions to be paused and resumed
+- **Debugging**: Review what went wrong if issues occur

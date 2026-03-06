@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Setup Wizard — Automated Follow-Up System</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 640px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    header h1 {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    header p {
+      font-size: 14px;
+      color: #666;
+    }
+
+    /* ── Progress Stepper ── */
+    .progress-bar {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0;
+      margin-bottom: 32px;
+    }
+    .progress-step {
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+    .step-circle {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #e5e7eb;
+      color: #9ca3af;
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s;
+      flex-shrink: 0;
+    }
+    .step-circle.active {
+      background: #2563eb;
+      color: #fff;
+    }
+    .step-circle.completed {
+      background: #16a34a;
+      color: #fff;
+    }
+    .step-line {
+      width: 60px;
+      height: 2px;
+      background: #e5e7eb;
+      transition: background 0.3s;
+    }
+    .step-line.completed {
+      background: #16a34a;
+    }
+    .step-label {
+      font-size: 11px;
+      color: #9ca3af;
+      text-align: center;
+      margin-top: 4px;
+      width: 32px;
+      position: relative;
+    }
+    .step-label.active { color: #2563eb; font-weight: 600; }
+    .step-label.completed { color: #16a34a; }
+    .progress-node {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ── Cards & Fields ── */
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      padding: 32px;
+      margin-bottom: 24px;
+    }
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #888;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #eee;
+    }
+    .field {
+      margin-bottom: 20px;
+    }
+    .field:last-child {
+      margin-bottom: 0;
+    }
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+    label .required {
+      color: #e53e3e;
+    }
+    .hint {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 6px;
+    }
+    input[type="text"], input[type="url"], input[type="email"], select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: #4a90d9;
+      box-shadow: 0 0 0 3px rgba(74, 144, 217, 0.1);
+    }
+    input.error {
+      border-color: #e53e3e;
+    }
+    .error-msg {
+      font-size: 12px;
+      color: #e53e3e;
+      margin-top: 4px;
+      display: none;
+    }
+
+    /* ── File inputs ── */
+    input[type="file"] {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px dashed #ccc;
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: inherit;
+      background: #fafafa;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    input[type="file"]:hover {
+      border-color: #4a90d9;
+    }
+    input[type="file"].file-loaded {
+      border-color: #16a34a;
+      border-style: solid;
+      background: #f0fdf4;
+    }
+    input[type="file"].error {
+      border-color: #e53e3e;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 14px 28px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-primary {
+      background: #2563eb;
+      color: #fff;
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: #1d4ed8;
+    }
+    .btn-secondary {
+      background: #e5e7eb;
+      color: #374151;
+    }
+    .btn-secondary:hover:not(:disabled) {
+      background: #d1d5db;
+    }
+    .btn-full {
+      width: 100%;
+    }
+    .nav-buttons {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 8px;
+    }
+    .nav-buttons .btn {
+      flex: 1;
+    }
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Steps (show/hide) ── */
+    .step { display: none; }
+    .step.active { display: block; }
+
+    /* ── Step 1: Checklist ── */
+    .checklist {
+      list-style: none;
+      padding: 0;
+    }
+    .checklist li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px 0;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .checklist li:last-child {
+      border-bottom: none;
+    }
+    .checklist input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      margin-top: 2px;
+      flex-shrink: 0;
+      accent-color: #2563eb;
+      cursor: pointer;
+    }
+    .checklist .check-label {
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .checklist .check-hint {
+      font-size: 12px;
+      color: #888;
+      margin-top: 2px;
+    }
+    .checklist .check-hint a {
+      color: #2563eb;
+    }
+
+    /* ── Instruction Steps ── */
+    .instruction {
+      display: flex;
+      gap: 14px;
+      padding: 14px 0;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .instruction:last-child {
+      border-bottom: none;
+    }
+    .instruction-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #eff6ff;
+      color: #2563eb;
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .instruction-text {
+      font-size: 14px;
+    }
+    .instruction-text strong {
+      color: #111;
+    }
+    .instruction-text code {
+      background: #f3f4f6;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+
+    /* ── Callout Boxes ── */
+    .callout {
+      background: #eff6ff;
+      border-left: 3px solid #2563eb;
+      border-radius: 0 8px 8px 0;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #1e40af;
+      margin: 16px 0;
+    }
+    .callout-warn {
+      background: #fffbeb;
+      border-left-color: #f59e0b;
+      color: #92400e;
+    }
+    .callout-success {
+      background: #f0fdf4;
+      border-left-color: #16a34a;
+      color: #166534;
+    }
+
+    /* ── Result IDs ── */
+    .id-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #dcfce7;
+    }
+    .id-row:last-child {
+      border-bottom: none;
+    }
+    .id-label {
+      font-size: 13px;
+      color: #555;
+    }
+    .id-value {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 13px;
+      font-weight: 600;
+      color: #166534;
+      cursor: pointer;
+      padding: 2px 8px;
+      background: #dcfce7;
+      border-radius: 4px;
+      transition: background 0.2s;
+    }
+    .id-value:hover {
+      background: #bbf7d0;
+    }
+    .id-value.copied {
+      background: #166534;
+      color: #fff;
+    }
+
+    /* ── Success banner ── */
+    .success-banner {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .success-banner h2 {
+      color: #166534;
+      font-size: 20px;
+      margin-bottom: 8px;
+    }
+    .success-banner p {
+      font-size: 14px;
+      color: #555;
+    }
+
+    /* ── Webhook URL display ── */
+    .webhook-url-box {
+      background: #eff6ff;
+      border: 2px solid #2563eb;
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+    .webhook-url-box label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #1e40af;
+      margin-bottom: 8px;
+    }
+    .webhook-url-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .webhook-url-row input {
+      flex: 1;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      padding: 8px 10px;
+      border: 1px solid #bfdbfe;
+      border-radius: 6px;
+      background: #fff;
+    }
+    .webhook-url-row button {
+      padding: 8px 14px;
+      border: none;
+      border-radius: 6px;
+      background: #2563eb;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .webhook-url-row button:hover {
+      background: #1d4ed8;
+    }
+
+    /* ── Help toggle ── */
+    .help-toggle {
+      font-size: 12px;
+      color: #4a90d9;
+      cursor: pointer;
+      text-decoration: underline;
+      margin-top: 4px;
+      display: inline-block;
+    }
+    .help-content {
+      display: none;
+      font-size: 12px;
+      color: #666;
+      background: #f9fafb;
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin-top: 6px;
+    }
+    .help-content.visible {
+      display: block;
+    }
+
+    /* ── Inline error for form ── */
+    .result-error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    .result-error h2 {
+      color: #991b1b;
+      font-size: 18px;
+      margin-bottom: 8px;
+    }
+    .result-error pre {
+      font-size: 12px;
+      background: #fff;
+      padding: 12px;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Automated Follow-Up System</h1>
+      <p>Setup Wizard</p>
+    </header>
+
+    <!-- ── Progress Bar (3 steps) ── -->
+    <div class="progress-bar" id="progressBar">
+      <div class="progress-node">
+        <div class="step-circle active" data-step="1">1</div>
+        <div class="step-label active">Prep</div>
+      </div>
+      <div class="step-line" data-after="1"></div>
+      <div class="progress-node">
+        <div class="step-circle" data-step="2">2</div>
+        <div class="step-label">Import</div>
+      </div>
+      <div class="step-line" data-after="2"></div>
+      <div class="progress-node">
+        <div class="step-circle" data-step="3">3</div>
+        <div class="step-label">Config</div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════ -->
+    <!-- STEP 1: Before You Start                          -->
+    <!-- ══════════════════════════════════════════════════ -->
+    <div class="step active" data-step="1">
+      <div class="card">
+        <div class="section-title">Before You Start</div>
+        <p style="font-size:14px;color:#555;margin-bottom:20px">
+          This wizard will set up your automated enquiry follow-up system in about 5 minutes.
+          Make sure you have the following ready before you continue.
+        </p>
+        <ul class="checklist" id="prereqChecklist">
+          <li>
+            <input type="checkbox" id="chk-make" onchange="updatePrereqs()">
+            <div>
+              <div class="check-label">Make.com account</div>
+              <div class="check-hint">
+                Don't have one? <a href="https://www.make.com/en/register" target="_blank">Sign up here</a> (free plan works to start).
+              </div>
+            </div>
+          </li>
+          <li>
+            <input type="checkbox" id="chk-google" onchange="updatePrereqs()">
+            <div>
+              <div class="check-label">Google account with Gmail and Sheets</div>
+              <div class="check-hint">
+                This is the account that will send follow-up emails and own the tracking spreadsheet.
+                Use a shared/team inbox if you have one.
+              </div>
+            </div>
+          </li>
+          <li>
+            <input type="checkbox" id="chk-openai" onchange="updatePrereqs()">
+            <div>
+              <div class="check-label">OpenAI API key</div>
+              <div class="check-hint">
+                Used to generate personalised email opening lines.
+                <a href="https://platform.openai.com/api-keys" target="_blank">Create one here</a> &mdash; costs ~$0.01 per enquiry.
+              </div>
+            </div>
+          </li>
+          <li>
+            <input type="checkbox" id="chk-files" onchange="updatePrereqs()">
+            <div>
+              <div class="check-label">Downloaded files from the link we sent you</div>
+              <div class="check-hint">
+                You should have these files saved on your computer:<br>
+                <code>s0-environment-setup.json</code><br>
+                <code>a1-template.json</code><br>
+                <code>a2-template.json</code><br>
+                <code>a3-template.json</code><br>
+                Make sure they're all in the same folder so they're easy to find.
+              </div>
+            </div>
+          </li>
+        </ul>
+      </div>
+      <button class="btn btn-primary btn-full" id="btnStep1" disabled onclick="goToStep(2)">
+        I have everything &mdash; let's go
+      </button>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════ -->
+    <!-- STEP 2: Import the Setup Scenario                 -->
+    <!-- ══════════════════════════════════════════════════ -->
+    <div class="step" data-step="2">
+      <div class="card">
+        <div class="section-title">Import the Setup Scenario</div>
+        <p style="font-size:14px;color:#555;margin-bottom:20px">
+          First, we need to import a one-time setup scenario into your Make.com account.
+          Follow these steps exactly:
+        </p>
+
+        <div class="instruction">
+          <div class="instruction-num">1</div>
+          <div class="instruction-text">
+            <strong>Log into Make.com</strong> and click <strong>Scenarios</strong> in the left sidebar.
+          </div>
+        </div>
+        <div class="instruction">
+          <div class="instruction-num">2</div>
+          <div class="instruction-text">
+            Click <strong>Create a new scenario</strong> (top-right corner).
+          </div>
+        </div>
+        <div class="instruction">
+          <div class="instruction-num">3</div>
+          <div class="instruction-text">
+            You'll see a blank canvas. Click the <strong>"&hellip;" (three dots) menu</strong> in the
+            <strong>top-right corner</strong> and select <strong>Import Blueprint</strong>.
+          </div>
+        </div>
+        <div class="instruction">
+          <div class="instruction-num">4</div>
+          <div class="instruction-text">
+            Select the file <code>s0-environment-setup.json</code> from the files you downloaded, then click <strong>Save</strong>.
+          </div>
+        </div>
+        <div class="instruction">
+          <div class="instruction-num">5</div>
+          <div class="instruction-text">
+            Make.com will show the scenario and ask you to <strong>set up connections</strong>.
+            You'll see prompts for <strong>Google Sheets</strong> and <strong>Gmail</strong> &mdash;
+            click each one and <strong>sign in with the Google account</strong> you want to use for sending emails and owning the spreadsheet.
+          </div>
+        </div>
+        <div class="instruction">
+          <div class="instruction-num">6</div>
+          <div class="instruction-text">
+            Click the big purple <strong>Run once</strong> button at the bottom-left of the canvas.
+            The scenario will show "waiting for data" &mdash; that's normal.
+          </div>
+        </div>
+        <div class="instruction">
+          <div class="instruction-num">7</div>
+          <div class="instruction-text">
+            Click the <strong>first circle</strong> on the far left (labelled <strong>Webhooks</strong>).
+            You'll see a <strong>URL</strong> &mdash; copy it. You'll paste it in the next step.
+          </div>
+        </div>
+
+        <div class="callout">
+          Keep your Make.com tab open &mdash; the scenario is waiting for data. You'll come right back to the next step here.
+        </div>
+      </div>
+
+      <div class="nav-buttons">
+        <button class="btn btn-secondary" onclick="goToStep(1)">Back</button>
+        <button class="btn btn-primary" onclick="goToStep(3)">I've copied the webhook URL</button>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════ -->
+    <!-- STEP 3: Configure & Deploy                        -->
+    <!-- ══════════════════════════════════════════════════ -->
+    <div class="step" data-step="3">
+      <!-- Form (hidden after success) -->
+      <div id="step3Form">
+        <form id="setupForm" novalidate>
+          <div id="formError"></div>
+
+          <!-- Make.com Connection -->
+          <div class="card">
+            <div class="section-title">Make.com Connection</div>
+
+            <div class="field">
+              <label>Webhook URL <span class="required">*</span></label>
+              <div class="hint">Paste the URL you copied from the S0 scenario in the previous step.</div>
+              <input type="url" name="webhook_url" required placeholder="https://hook.eu1.make.com/...">
+              <div class="error-msg">Please enter the webhook URL from your S0 scenario.</div>
+            </div>
+
+            <div class="field">
+              <label>Make.com API Token <span class="required">*</span></label>
+              <div class="hint">
+                Profile icon (bottom-left) &rarr; API Tokens &rarr; Create token.
+                <span class="help-toggle" onclick="toggleHelp(this)">More info</span>
+              </div>
+              <div class="help-content">
+                In Make.com, click your profile picture in the bottom-left corner, then select <strong>API Tokens</strong>. Click <strong>Create a new token</strong>, give it a name (e.g., "Setup"), and copy the token. You only need this once.
+              </div>
+              <input type="text" name="make_api_token" required placeholder="Your Make.com API token">
+              <div class="error-msg">An API token is required to create data stores.</div>
+            </div>
+
+            <div class="field">
+              <label>Team ID <span class="required">*</span></label>
+              <div class="hint">
+                Found in your Make.com URL: make.com/.../<strong>team/TEAM_ID</strong>/...
+                <span class="help-toggle" onclick="toggleHelp(this)">More info</span>
+              </div>
+              <div class="help-content">
+                Navigate to any page in Make.com. Look at your browser's address bar &mdash; the URL contains <code>/team/123456/</code>. The number after <code>/team/</code> is your Team ID.
+              </div>
+              <input type="text" name="make_team_id" required placeholder="e.g. 964106" pattern="[0-9]+">
+              <div class="error-msg">Enter your numeric Team ID.</div>
+            </div>
+
+            <div class="field">
+              <label>Make.com Zone <span class="required">*</span></label>
+              <div class="hint">Check your Make.com URL &mdash; it starts with eu1, eu2, us1, or us2.</div>
+              <select name="make_zone" required>
+                <option value="eu1" selected>eu1 (Europe 1)</option>
+                <option value="eu2">eu2 (Europe 2)</option>
+                <option value="us1">us1 (US East)</option>
+                <option value="us2">us2 (US West)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Company Details -->
+          <div class="card">
+            <div class="section-title">Your Company</div>
+
+            <div class="field">
+              <label>Company Name <span class="required">*</span></label>
+              <div class="hint">Used as the email sender name and in your signature.</div>
+              <input type="text" name="company_name" required placeholder="e.g. Meji Media">
+              <div class="error-msg">Please enter your company name.</div>
+            </div>
+
+            <div class="field">
+              <label>Team / Notification Email <span class="required">*</span></label>
+              <div class="hint">Receives hot lead notifications and the setup confirmation email.</div>
+              <input type="email" name="handoff_email" required placeholder="e.g. team@yourcompany.com">
+              <div class="error-msg">Please enter a valid email address.</div>
+            </div>
+
+            <div class="field">
+              <label>OpenAI API Key <span class="required">*</span></label>
+              <div class="hint">
+                Used for AI-generated email opening lines.
+                <span class="help-toggle" onclick="toggleHelp(this)">More info</span>
+              </div>
+              <div class="help-content">
+                Go to <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a>, create a new key, and paste it here. The system uses <code>gpt-4o-mini</code> by default (very cost-effective).
+              </div>
+              <input type="text" name="openai_api_key" required placeholder="sk-proj-...">
+              <div class="error-msg">An OpenAI API key is required for email personalisation.</div>
+            </div>
+          </div>
+
+          <!-- Brand Links -->
+          <div class="card">
+            <div class="section-title">Brand Links (for email signature)</div>
+
+            <div class="field">
+              <label>Website URL <span class="required">*</span></label>
+              <input type="url" name="website_url" required placeholder="https://yourcompany.com">
+              <div class="error-msg">Please enter your website URL.</div>
+            </div>
+
+            <div class="field">
+              <label>Portfolio / Work URL <span class="required">*</span></label>
+              <input type="url" name="portfolio_url" required placeholder="https://yourcompany.com/portfolio">
+              <div class="error-msg">Please enter your portfolio URL.</div>
+            </div>
+
+            <div class="field">
+              <label>Booking / Calendar URL <span class="required">*</span></label>
+              <input type="url" name="booking_url" required placeholder="https://yourcompany.com/book">
+              <div class="error-msg">Please enter your booking URL.</div>
+            </div>
+          </div>
+
+          <!-- Blueprint Files -->
+          <div class="card">
+            <div class="section-title">Blueprint Files</div>
+            <p style="font-size:14px;color:#555;margin-bottom:20px">
+              Select the 3 automation blueprint files you downloaded earlier.
+              These will be deployed automatically to your Make.com account.
+            </p>
+
+            <div class="field">
+              <label>A1 &mdash; Enquiry Follow-Up <span class="required">*</span></label>
+              <div class="hint">Select <code>a1-template.json</code></div>
+              <input type="file" id="fileA1" accept=".json" required onchange="onFileSelect(this, 'a1')">
+              <div class="error-msg">Please select the A1 blueprint file.</div>
+            </div>
+
+            <div class="field">
+              <label>A2 &mdash; Reply Detection <span class="required">*</span></label>
+              <div class="hint">Select <code>a2-template.json</code></div>
+              <input type="file" id="fileA2" accept=".json" required onchange="onFileSelect(this, 'a2')">
+              <div class="error-msg">Please select the A2 blueprint file.</div>
+            </div>
+
+            <div class="field">
+              <label>A3 &mdash; Scheduled Follow-Ups <span class="required">*</span></label>
+              <div class="hint">Select <code>a3-template.json</code></div>
+              <input type="file" id="fileA3" accept=".json" required onchange="onFileSelect(this, 'a3')">
+              <div class="error-msg">Please select the A3 blueprint file.</div>
+            </div>
+          </div>
+
+          <!-- Submit -->
+          <div class="nav-buttons">
+            <button type="button" class="btn btn-secondary" onclick="goToStep(2)">Back</button>
+            <button type="submit" class="btn btn-primary" id="submitBtn" style="flex:2">Deploy Everything</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Success (shown after deploy) -->
+      <div id="step3Success" style="display:none">
+        <div class="success-banner">
+          <h2>Setup Complete</h2>
+          <p>Your environment and all 3 automation scenarios have been deployed.</p>
+        </div>
+
+        <!-- A1 Webhook URL -->
+        <div class="card">
+          <div class="webhook-url-box">
+            <label>A1 Webhook URL &mdash; point your website form here</label>
+            <div class="webhook-url-row">
+              <input type="text" id="webhookUrlDisplay" readonly value="">
+              <button onclick="copyWebhookUrl()">Copy</button>
+            </div>
+          </div>
+          <div class="callout callout-warn" style="margin-top:0">
+            Save this URL &mdash; your web developer needs it to connect your contact form.
+          </div>
+        </div>
+
+        <!-- Resource IDs -->
+        <div class="card" style="background:#f0fdf4;border:1px solid #bbf7d0">
+          <div class="section-title" style="color:#166534;border-bottom-color:#bbf7d0">Created Resources</div>
+          <p style="font-size:13px;color:#888;margin-bottom:16px">
+            A confirmation email with all these details has been sent to <strong id="successEmail"></strong>.
+          </p>
+          <div id="successIds"></div>
+        </div>
+
+        <!-- Test It -->
+        <div class="card">
+          <div class="section-title">Test It</div>
+          <p style="font-size:14px;color:#555;margin-bottom:16px">
+            Run a quick test to make sure everything is working:
+          </p>
+          <div class="instruction">
+            <div class="instruction-num">1</div>
+            <div class="instruction-text">
+              <strong>Connect your website contact form</strong> to the A1 webhook URL above.
+              <span class="help-toggle" data-label="Details for your web developer" onclick="toggleHelp(this)">Details for your web developer</span>
+            </div>
+            <div class="help-content">
+              <p style="margin-bottom:8px">The A1 webhook expects form submissions in <strong>Tally format</strong> (nested fields array). If you use <strong>Tally</strong> for your contact form, just point it at the webhook URL &mdash; no extra setup needed.</p>
+              <p style="margin-bottom:8px">If you use a different form tool, your developer needs to send a POST request with this structure:</p>
+              <pre style="font-size:11px;background:#f3f4f6;padding:10px;border-radius:6px;overflow-x:auto;margin-bottom:8px">{
+  "data": {
+    "fields": [
+      { "label": "What's your name?", "value": "..." },
+      { "label": "Email address", "value": "..." },
+      { "label": "Phone", "value": "..." },
+      { "label": "Discussion Topic", "value": "..." },
+      { "label": "Organisation Name", "value": "..." },
+      { "label": "A brief description about your project/request/consultation", "value": "..." }
+    ]
+  }
+}</pre>
+              <p><strong>Important:</strong> The field labels must match exactly (including punctuation and capitalisation).</p>
+            </div>
+          </div>
+          <div class="instruction">
+            <div class="instruction-num">2</div>
+            <div class="instruction-text">
+              Submit a <strong>test enquiry</strong> through your website contact form (use a personal email you can check).
+            </div>
+          </div>
+          <div class="instruction">
+            <div class="instruction-num">3</div>
+            <div class="instruction-text">
+              Open your <strong>Google Sheet</strong> (<a id="successSheetLink" href="#" target="_blank">open spreadsheet</a>).
+              A new row should appear within about 30 seconds.
+            </div>
+          </div>
+          <div class="instruction">
+            <div class="instruction-num">4</div>
+            <div class="instruction-text">
+              Check the <strong>inbox of the test email address</strong> you used. A follow-up email should arrive within a minute or two.
+            </div>
+          </div>
+          <div class="callout callout-success">
+            If all checks pass &mdash; you're live! Every new enquiry will now be automatically logged, scored, and followed up.
+          </div>
+        </div>
+
+        <!-- Cleanup -->
+        <div class="card">
+          <div class="section-title">Cleanup</div>
+          <div class="instruction">
+            <div class="instruction-num">1</div>
+            <div class="instruction-text">
+              Go to <strong>Scenarios</strong> in Make.com, find the <strong>S0 (Environment Setup)</strong> scenario,
+              click the <strong>"&hellip;"</strong> next to it, and select <strong>Delete</strong>.
+              It was a one-time setup tool and is no longer needed.
+            </div>
+          </div>
+        </div>
+
+        <!-- What's Next -->
+        <div class="card">
+          <div class="section-title">What's Next</div>
+          <p style="font-size:14px;color:#555;">
+            Open <strong>meji-media-complete-guide.html</strong> (included in your files) for the full reference guide.
+            It covers how to customise your email templates, adjust lead scoring, change follow-up timing, and troubleshoot issues.
+          </p>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /.container -->
+
+  <script>
+    /* ── State ── */
+    let currentStep = 1;
+    let setupResult = null;
+    const blueprintFiles = { a1: null, a2: null, a3: null };
+
+    /* ── Help toggles ── */
+    function toggleHelp(el) {
+      const parent = el.closest('.hint') || el.closest('.instruction-text');
+      const content = parent ? parent.nextElementSibling : null;
+      if (content && content.classList.contains('help-content')) {
+        content.classList.toggle('visible');
+        el.textContent = content.classList.contains('visible') ? 'Hide' : el.dataset.label || 'More info';
+      }
+    }
+
+    /* ── Copy to clipboard ── */
+    function copyToClipboard(el) {
+      const text = el.textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        el.classList.add('copied');
+        const orig = el.textContent;
+        el.textContent = 'Copied!';
+        setTimeout(() => {
+          el.textContent = orig;
+          el.classList.remove('copied');
+        }, 1500);
+      });
+    }
+
+    function copyWebhookUrl() {
+      const input = document.getElementById('webhookUrlDisplay');
+      navigator.clipboard.writeText(input.value).then(() => {
+        const btn = input.nextElementSibling;
+        btn.textContent = 'Copied!';
+        btn.style.background = '#16a34a';
+        setTimeout(() => {
+          btn.textContent = 'Copy';
+          btn.style.background = '#2563eb';
+        }, 2000);
+      });
+    }
+
+    /* ── Step 1: prerequisites gating ── */
+    function updatePrereqs() {
+      const boxes = document.querySelectorAll('#prereqChecklist input[type="checkbox"]');
+      const allChecked = [...boxes].every(b => b.checked);
+      document.getElementById('btnStep1').disabled = !allChecked;
+    }
+
+    /* ── File input handling ── */
+    function onFileSelect(input, key) {
+      const file = input.files[0];
+      if (!file) {
+        blueprintFiles[key] = null;
+        input.classList.remove('file-loaded');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          // Validate it's valid JSON
+          JSON.parse(e.target.result);
+          blueprintFiles[key] = e.target.result;
+          input.classList.add('file-loaded');
+          input.classList.remove('error');
+        } catch {
+          blueprintFiles[key] = null;
+          input.classList.remove('file-loaded');
+          input.classList.add('error');
+          const msg = input.parentElement.querySelector('.error-msg');
+          if (msg) {
+            msg.textContent = 'Invalid JSON file. Please check you selected the right file.';
+            msg.style.display = 'block';
+          }
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    /* ── Step navigation ── */
+    function goToStep(n) {
+      // Block going back after successful deployment
+      if (n < 3 && setupResult) return;
+
+      currentStep = n;
+
+      // Show/hide steps
+      document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+      const target = document.querySelector(`.step[data-step="${n}"]`);
+      if (target) target.classList.add('active');
+
+      // Update progress bar
+      document.querySelectorAll('.step-circle').forEach(c => {
+        const s = parseInt(c.dataset.step);
+        c.classList.remove('active', 'completed');
+        if (s === n) c.classList.add('active');
+        else if (s < n) {
+          c.classList.add('completed');
+          c.innerHTML = '&#10003;';
+        } else {
+          c.textContent = s;
+        }
+      });
+      document.querySelectorAll('.step-label').forEach(l => {
+        l.classList.remove('active', 'completed');
+      });
+      document.querySelectorAll('.progress-node').forEach((node, i) => {
+        const stepNum = i + 1;
+        const label = node.querySelector('.step-label');
+        if (stepNum === n) label.classList.add('active');
+        else if (stepNum < n) label.classList.add('completed');
+      });
+      document.querySelectorAll('.step-line').forEach(line => {
+        const after = parseInt(line.dataset.after);
+        line.classList.toggle('completed', after < n);
+      });
+
+      // Scroll to top
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    /* ── Step 3: form submission ── */
+    document.getElementById('setupForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      // Clear previous errors
+      document.querySelectorAll('input.error').forEach(el => el.classList.remove('error'));
+      document.querySelectorAll('.error-msg').forEach(el => el.style.display = 'none');
+      document.getElementById('formError').innerHTML = '';
+
+      const form = e.target;
+      const formData = new FormData(form);
+      const data = Object.fromEntries(formData);
+
+      // Validate text/select fields
+      let hasErrors = false;
+      form.querySelectorAll('input[required]:not([type="file"]), select[required]').forEach(input => {
+        if (!input.value.trim()) {
+          input.classList.add('error');
+          const msg = input.parentElement.querySelector('.error-msg');
+          if (msg) msg.style.display = 'block';
+          hasErrors = true;
+        }
+      });
+
+      // Validate blueprint files
+      ['a1', 'a2', 'a3'].forEach(key => {
+        if (!blueprintFiles[key]) {
+          const input = document.getElementById('file' + key.toUpperCase());
+          input.classList.add('error');
+          const msg = input.parentElement.querySelector('.error-msg');
+          if (msg) msg.style.display = 'block';
+          hasErrors = true;
+        }
+      });
+
+      if (hasErrors) return;
+
+      // Extract webhook URL (not sent in payload)
+      const webhookUrl = data.webhook_url;
+      delete data.webhook_url;
+
+      // Convert team_id to number
+      data.make_team_id = parseInt(data.make_team_id, 10);
+
+      // Attach blueprint files as strings
+      data.blueprints = {
+        a1: blueprintFiles.a1,
+        a2: blueprintFiles.a2,
+        a3: blueprintFiles.a3
+      };
+
+      // Disable form
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Deploying everything...';
+
+      try {
+        const response = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        const text = await response.text();
+        let result;
+        try {
+          result = JSON.parse(text);
+        } catch {
+          result = { status: 'error', message: text };
+        }
+
+        if (response.ok && result.status === 'success') {
+          setupResult = result;
+          setupResult._companyName = data.company_name;
+          setupResult._handoffEmail = data.handoff_email;
+
+          // Show success, hide form
+          document.getElementById('step3Form').style.display = 'none';
+          document.getElementById('step3Success').style.display = 'block';
+
+          // Mark progress bar as all complete
+          document.querySelectorAll('.step-circle').forEach(c => {
+            c.classList.remove('active');
+            c.classList.add('completed');
+            c.innerHTML = '&#10003;';
+          });
+          document.querySelectorAll('.step-label').forEach(l => {
+            l.classList.remove('active');
+            l.classList.add('completed');
+          });
+          document.querySelectorAll('.step-line').forEach(l => l.classList.add('completed'));
+
+          // Populate webhook URL
+          document.getElementById('webhookUrlDisplay').value = result.a1_webhook_url || '(not available)';
+
+          // Populate email
+          document.getElementById('successEmail').textContent = data.handoff_email;
+
+          // Populate resource IDs
+          const idsHtml = `
+            <div class="id-row">
+              <span class="id-label">A1 Scenario ID</span>
+              <span class="id-value" onclick="copyToClipboard(this)">${escapeHtml(String(result.a1_scenario_id || 'N/A'))}</span>
+            </div>
+            <div class="id-row">
+              <span class="id-label">A2 Scenario ID</span>
+              <span class="id-value" onclick="copyToClipboard(this)">${escapeHtml(String(result.a2_scenario_id || 'N/A'))}</span>
+            </div>
+            <div class="id-row">
+              <span class="id-label">A3 Scenario ID</span>
+              <span class="id-value" onclick="copyToClipboard(this)">${escapeHtml(String(result.a3_scenario_id || 'N/A'))}</span>
+            </div>
+            <div class="id-row">
+              <span class="id-label">Pipeline Config (Data Store)</span>
+              <span class="id-value" onclick="copyToClipboard(this)">${escapeHtml(String(result.pipeline_config_ds_id))}</span>
+            </div>
+            <div class="id-row">
+              <span class="id-label">Email Templates (Data Store)</span>
+              <span class="id-value" onclick="copyToClipboard(this)">${escapeHtml(String(result.email_templates_ds_id))}</span>
+            </div>
+            <div class="id-row">
+              <span class="id-label">Spreadsheet</span>
+              <a href="${escapeHtml(result.spreadsheet_url)}" target="_blank" style="color:#2563eb;font-size:13px">Open Spreadsheet</a>
+            </div>
+          `;
+          document.getElementById('successIds').innerHTML = idsHtml;
+
+          // Populate sheet link in test section
+          document.getElementById('successSheetLink').href = result.spreadsheet_url;
+
+          // Scroll to top
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+          document.getElementById('formError').innerHTML = `
+            <div class="result-error">
+              <h2>Setup Failed</h2>
+              <p style="font-size:14px">Something went wrong. Check the details below and try again.</p>
+              <pre>${escapeHtml(typeof result === 'string' ? result : JSON.stringify(result, null, 2))}</pre>
+            </div>
+          `;
+          btn.disabled = false;
+          btn.innerHTML = 'Deploy Everything';
+        }
+      } catch (err) {
+        document.getElementById('formError').innerHTML = `
+          <div class="result-error">
+            <h2>Connection Error</h2>
+            <p style="font-size:14px">Could not reach the webhook. Make sure you've clicked <strong>Run once</strong> in the S0 scenario before submitting this form.</p>
+            <pre>${escapeHtml(err.message)}</pre>
+          </div>
+        `;
+        btn.disabled = false;
+        btn.innerHTML = 'Deploy Everything';
+      }
+    });
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>

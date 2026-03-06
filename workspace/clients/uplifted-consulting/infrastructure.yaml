@@ -1,0 +1,7 @@
+# Uplifted Consulting Infrastructure Configuration
+# Documents all Trigger.dev projects for the Uplifted Consulting client
+
+instances:
+  - type: trigger-dev
+    name: uplifted-trigger
+    dashboard_url: https://cloud.trigger.dev

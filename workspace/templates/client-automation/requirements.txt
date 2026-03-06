@@ -1,0 +1,28 @@
+# Web framework
+fastapi>=0.109.0
+uvicorn>=0.27.0
+
+# HTTP client
+httpx>=0.26.0
+
+# Environment & validation
+python-dotenv>=1.0.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# Database
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9  # PostgreSQL driver for Railway
+
+# Templating
+jinja2>=3.1.0
+
+# Documentation rendering
+markdown>=3.5.0
+
+# Google (service account for Sheets)
+google-auth>=2.26.0
+gspread>=6.0.0
+
+# Error tracking (optional)
+# sentry-sdk>=1.39.0

@@ -1,0 +1,68 @@
+instances:
+  - type: n8n
+    name: n8n-kunde-inc
+    url: https://unpauseai.app.n8n.cloud
+    note: "Shared instance (also hosts Herbox Sweden workflows)"
+
+    workflows:
+      - id: kSdp7t5gHcTBk5iq
+        name: "A1 — Daily Campaign Sync"
+        spec: a1
+        trigger: cron (daily 08:00)
+        status: active
+        note: "Running with simulated Smartlead data. Replace Code node with HTTP Request when API key available."
+      - id: 0869MI6O30YT5juH
+        name: "A2 — Weekly Snapshot"
+        spec: a2
+        trigger: cron (Monday 06:00)
+        status: active
+      - id: QoEf8USAiguQR6T2
+        name: "A3a — Dashboard API: Campaigns"
+        spec: a3
+        trigger: webhook
+        status: active
+      - id: kwl5FhcCHOdUF6ps
+        name: "A3b — Dashboard API: Sequences"
+        spec: a3
+        trigger: webhook
+        status: active
+      - id: LNLQ5YqXvTneEBtO
+        name: "A3c — Dashboard API: Weekly Trends"
+        spec: a3
+        trigger: webhook
+        status: active
+      - id: IrCcqNzWLxAtwU4i
+        name: "UTIL — Setup: Create Dashboard Sheets"
+        trigger: manual
+        ship: false
+        status: inactive
+        note: "Ran once to create spreadsheet. Dev-only."
+
+    credentials:
+      - id: wxB9tZucr03X1PNa
+        type: google-sheets-oauth2
+        account: "neumanic2@gmail.com"
+
+    google_sheets:
+      spreadsheet_id: "1axfHoNjE8LaJY-tKwbbAElfwVXN--cU09aeHaT6ZRoU"
+      spreadsheet_name: "Kunde Inc. — Campaign Dashboard"
+      tabs:
+        - Campaigns (18 rows)
+        - Sequences (50 rows)
+        - Weekly Snapshots (432+ rows, grows weekly)
+
+    webhooks:
+      - path: /webhook/dashboard-campaigns
+        workflow: QoEf8USAiguQR6T2
+        auth: "token query param (kunde-demo-2026)"
+      - path: /webhook/dashboard-sequences
+        workflow: kwl5FhcCHOdUF6ps
+        auth: "token query param (kunde-demo-2026)"
+      - path: /webhook/dashboard-weekly
+        workflow: LNLQ5YqXvTneEBtO
+        auth: "token query param (kunde-demo-2026)"
+
+  dashboard:
+    local_path: automations/dashboard/index.html
+    deployed_url: null  # TBD — GitHub Pages
+    auth_token: kunde-demo-2026

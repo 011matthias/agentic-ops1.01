@@ -1,0 +1,6 @@
+{
+  "enabledPlugins": {
+    "productivity-suite@riccardovandra": true,
+    "playground@claude-plugins-official": true
+  }
+}

@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meji Media — Automated Follow-Up System</title>
+    <style>
+@media print {
+    body { margin: 0; }
+    .page-break { page-break-before: always; }
+    h2 { page-break-before: always; }
+    h2:first-of-type { page-break-before: avoid; }
+    table { page-break-inside: avoid; }
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    max-width: 900px;
+    margin: 40px auto;
+    padding: 0 30px;
+    color: #1a1a1a;
+    line-height: 1.65;
+    font-size: 15px;
+}
+
+h1 {
+    font-size: 28px;
+    border-bottom: 3px solid #2563eb;
+    padding-bottom: 12px;
+    margin-top: 0;
+}
+
+h2 {
+    font-size: 22px;
+    color: #1e40af;
+    border-bottom: 1px solid #dbeafe;
+    padding-bottom: 8px;
+    margin-top: 48px;
+}
+
+h3 {
+    font-size: 17px;
+    color: #374151;
+    margin-top: 32px;
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+    font-size: 14px;
+}
+
+th {
+    background-color: #1e40af;
+    color: white;
+    text-align: left;
+    padding: 10px 14px;
+    font-weight: 600;
+}
+
+td {
+    padding: 9px 14px;
+    border-bottom: 1px solid #e5e7eb;
+    vertical-align: top;
+}
+
+tr:nth-child(even) td {
+    background-color: #f8fafc;
+}
+
+tr:hover td {
+    background-color: #eff6ff;
+}
+
+blockquote {
+    border-left: 4px solid #2563eb;
+    margin: 20px 0;
+    padding: 12px 20px;
+    background-color: #eff6ff;
+    color: #1e40af;
+    font-style: normal;
+}
+
+blockquote p {
+    margin: 0;
+}
+
+code {
+    background-color: #f1f5f9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #be185d;
+}
+
+pre {
+    background-color: #1e293b;
+    color: #e2e8f0;
+    padding: 16px 20px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+pre code {
+    background: none;
+    color: inherit;
+    padding: 0;
+}
+
+hr {
+    border: none;
+    border-top: 1px solid #e5e7eb;
+    margin: 40px 0;
+}
+
+a {
+    color: #2563eb;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+ol, ul {
+    padding-left: 24px;
+}
+
+li {
+    margin-bottom: 6px;
+}
+
+strong {
+    color: #111827;
+}
+
+em {
+    color: #6b7280;
+}
+
+.footer {
+    text-align: center;
+    color: #9ca3af;
+    font-size: 13px;
+    margin-top: 60px;
+    padding-top: 20px;
+    border-top: 1px solid #e5e7eb;
+}
+</style>
+</head>
+<body>
+<h1>Meji Media — Automated Follow-Up System</h1>
+<h3>Complete Guide</h3>
+<p><strong>Version 2.0 | February 2026</strong></p>
+<blockquote>
+<p>Your automated follow-up system is live and running. This guide explains how it works, what you&rsquo;ll see, and how to make changes.</p>
+</blockquote>
+<hr />
+<p><strong>In this guide:</strong></p>
+<ol>
+<li><a href="#what-we-built">What We Built</a></li>
+<li><a href="#how-it-works--the-big-picture">How It Works — The Big Picture</a></li>
+<li><a href="#the-enquiry-lifecycle">The Enquiry Lifecycle</a></li>
+<li><a href="#your-google-sheet--what-youll-see">Your Google Sheet</a></li>
+<li><a href="#email-templates">Email Templates</a></li>
+<li><a href="#lead-scoring--priority">Lead Scoring &amp; Priority</a></li>
+<li><a href="#follow-up-cadence">Follow-Up Cadence</a></li>
+<li><a href="#what-you-can-configure">What You Can Configure</a></li>
+<li><a href="#troubleshooting--quick-reference">Troubleshooting — Quick Reference</a></li>
+<li><a href="#a1-enquiry-follow-up-sequence">A1: Enquiry Follow-Up Sequence — Detailed</a></li>
+<li><a href="#a2-reply-detection--stop">A2: Reply Detection &amp; Stop — Detailed</a></li>
+<li><a href="#a3-scheduled-follow-up-steps">A3: Scheduled Follow-Up Steps — Detailed</a></li>
+<li><a href="#key-contacts">Key Contacts</a></li>
+</ol>
+<hr />
+<h2>What We Built</h2>
+<p>Your website receives 20–30 enquiries per day (up to 100 over a weekend). Previously, every follow-up email was sent manually — slow, inconsistent, and easy to lose track of.</p>
+<p>We built an automated follow-up pipeline that:</p>
+<ul>
+<li><strong>Responds instantly</strong> when someone submits an enquiry on your website</li>
+<li><strong>Prioritises high-value leads</strong> — hot leads get a personalised email and your team gets notified immediately</li>
+<li><strong>Personalises every email with AI</strong> — each email opens with a unique, AI-generated sentence that references the enquirer&rsquo;s specific topic, so nothing feels templated</li>
+<li><strong>Sends timed follow-ups</strong> — a sequence of 2–3 emails over ~9 days, spaced based on lead priority</li>
+<li><strong>Stops automatically</strong> when someone replies — no awkward double-sends</li>
+<li><strong>Tracks everything</strong> in a Google Sheet you can view at any time</li>
+</ul>
+<p>The system runs 24/7 without any manual work. You only need to step in when a lead replies and the conversation becomes human-to-human.</p>
+<hr />
+<h2>How It Works — The Big Picture</h2>
+<p>Three automations work together:</p>
+<blockquote>
+<p><strong>Plain-text summary:</strong> Website Form → <strong>A1</strong> (instant: log, score, send first email) → <strong>A2</strong> (every 5 min: detect replies, stop follow-ups) → <strong>A3</strong> (every 15 min: send scheduled follow-ups, close cold leads)</p>
+</blockquote>
+<p><strong>A1</strong> handles the initial response. <strong>A2</strong> watches for replies. <strong>A3</strong> sends the follow-ups. They share the same Google Sheet as their source of truth.</p>
+<hr />
+<h2>The Enquiry Lifecycle</h2>
+<p>Here&rsquo;s what happens from the moment someone fills in your website form:</p>
+<ol>
+<li><strong>Form submitted</strong> — A1 receives the enquiry instantly</li>
+<li><strong>Logged to Google Sheet</strong> — A new row appears with the person&rsquo;s name, email, topic, and a priority score</li>
+<li><strong>First email sent</strong> — Within seconds. Hot leads get a warmer, more personalised email; your team also gets a notification. Standard leads get a friendly acknowledgement.</li>
+<li><strong>Waiting for reply</strong> — A2 checks the inbox every 5 minutes</li>
+<li><strong>If they reply</strong> — A2 marks the enquiry as &ldquo;replied&rdquo; and all follow-ups stop. You take over the conversation.</li>
+<li><strong>If they don&rsquo;t reply</strong> — A3 sends a follow-up the next day (Step 2), then another a few days later (Step 3)</li>
+<li><strong>Still no reply after ~9 days</strong> — The enquiry is marked as &ldquo;cold&rdquo; and follow-ups stop</li>
+</ol>
+<hr />
+<h2>Your Google Sheet — What You&rsquo;ll See</h2>
+<p>The &ldquo;Meji Media — Enquiry Tracker&rdquo; spreadsheet is where everything is tracked. Here&rsquo;s what each column means:</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>What It Shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Enquiry ID</strong></td>
+<td>A unique reference for each enquiry (e.g., <code>ENQ-20260224-143022</code>)</td>
+</tr>
+<tr>
+<td><strong>Received At</strong></td>
+<td>When the form was submitted</td>
+</tr>
+<tr>
+<td><strong>Name</strong></td>
+<td>The enquirer&rsquo;s full name</td>
+</tr>
+<tr>
+<td><strong>Email</strong></td>
+<td>Their email address (used for reply matching)</td>
+</tr>
+<tr>
+<td><strong>Phone</strong></td>
+<td>Phone number, if provided</td>
+</tr>
+<tr>
+<td><strong>Discussion Topic</strong></td>
+<td>What they enquired about (from the form)</td>
+</tr>
+<tr>
+<td><strong>Organisation</strong></td>
+<td>Their company name, if provided</td>
+</tr>
+<tr>
+<td><strong>Message</strong></td>
+<td>The free-text message from the form</td>
+</tr>
+<tr>
+<td><strong>Priority</strong></td>
+<td><code>hot</code>, <code>warm</code>, or <code>standard</code> — set automatically based on lead scoring</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Where this enquiry is in the pipeline (see below)</td>
+</tr>
+<tr>
+<td><strong>Stopped</strong></td>
+<td><code>TRUE</code> or <code>FALSE</code> — whether follow-ups are still active</td>
+</tr>
+<tr>
+<td><strong>Current Step</strong></td>
+<td>Which follow-up step they&rsquo;re on (1 = initial email done)</td>
+</tr>
+<tr>
+<td><strong>Next Step Due</strong></td>
+<td>When the next follow-up is scheduled</td>
+</tr>
+<tr>
+<td><strong>Last Email Sent</strong></td>
+<td>When the last email went out</td>
+</tr>
+<tr>
+<td><strong>Source</strong></td>
+<td>Where the enquiry came from</td>
+</tr>
+<tr>
+<td><strong>Lead Score</strong></td>
+<td>A numeric score based on their enquiry details</td>
+</tr>
+</tbody>
+</table>
+<h3>Status Meanings</h3>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>What It Means</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>new</strong></td>
+<td>Enquiry just received, initial email sent, waiting for next step</td>
+</tr>
+<tr>
+<td><strong>handoff</strong></td>
+<td>Hot lead — team has been notified, personalised email sent. <strong>All further activity is managed by your team, not the automation.</strong></td>
+</tr>
+<tr>
+<td><strong>following_up</strong></td>
+<td>Automated follow-up sequence is active (step 2 or 3)</td>
+</tr>
+<tr>
+<td><strong>replied</strong></td>
+<td>They replied to an email — follow-ups stopped, you&rsquo;re handling it now</td>
+</tr>
+<tr>
+<td><strong>cold</strong></td>
+<td>No reply after the full sequence (~9 days) — follow-ups stopped</td>
+</tr>
+</tbody>
+</table>
+<h3>How Statuses Progress</h3>
+<pre><code>new → following_up → replied     (they replied during follow-ups)
+new → following_up → cold        (no reply after all steps)
+new → replied                    (they replied before follow-ups started)
+new → handoff                    (hot lead — immediate team notification, no automated follow-ups)
+</code></pre>
+<hr />
+<h2>Email Templates</h2>
+<p>The system sends 4 different emails depending on the situation:</p>
+<table>
+<thead>
+<tr>
+<th>Email</th>
+<th>When It&rsquo;s Sent</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Initial — Standard</strong></td>
+<td>Immediately (A1)</td>
+<td>Friendly acknowledgement for standard/warm leads</td>
+</tr>
+<tr>
+<td><strong>Initial — High Priority</strong></td>
+<td>Immediately (A1)</td>
+<td>Warmer, more personalised email for hot leads</td>
+</tr>
+<tr>
+<td><strong>Follow-Up #2</strong></td>
+<td>~24 hours later (A3)</td>
+<td>Friendly nudge if no reply yet</td>
+</tr>
+<tr>
+<td><strong>Follow-Up #3</strong></td>
+<td>~4 days later (A3)</td>
+<td>Final follow-up before closing out</td>
+</tr>
+</tbody>
+</table>
+<p>All emails are sent from your shared Gmail inbox with your company domain. Each email includes an AI-generated opening sentence that references the enquirer&rsquo;s specific topic — so even though the emails are automated, they read as if someone on your team wrote them personally.</p>
+<h3>Editing Email Templates</h3>
+<p>Templates are stored in Make.com — the automation platform that powers your follow-up system (think of it as the engine running behind the scenes). They live in a section called &ldquo;Email Templates&rdquo;, and you can update the wording at any time without touching the automations themselves:</p>
+<ol>
+<li>Log in to <a href="https://eu1.make.com">eu1.make.com</a></li>
+<li>Go to <strong>Data Stores</strong> in the left sidebar</li>
+<li>Open the <strong>&ldquo;Email Templates&rdquo;</strong> data store</li>
+<li>Click on the template you want to edit</li>
+<li>Update the <code>subject</code> or <code>body_html</code> fields</li>
+<li>Save</li>
+</ol>
+<p>Templates use placeholders like <code>##name##</code> and <code>##topic##</code> that get replaced with the enquirer&rsquo;s actual details when the email is sent. The AI-generated opening line is handled automatically — you don&rsquo;t need to add anything for it.</p>
+<hr />
+<h2>Lead Scoring &amp; Priority</h2>
+<p>Every enquiry is automatically scored when it arrives. The score determines how quickly follow-ups are sent and whether your team gets an immediate notification.</p>
+<table>
+<thead>
+<tr>
+<th>Priority</th>
+<th>What It Means</th>
+<th>What Happens</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Hot</strong></td>
+<td>High-scoring lead (score 50+)</td>
+<td>Your team gets an instant email notification with full details. The enquirer gets a personalised acknowledgement. No automated follow-ups — you handle it directly.</td>
+</tr>
+<tr>
+<td><strong>Warm</strong></td>
+<td>Mid-scoring lead (score 25–49)</td>
+<td>Standard acknowledgement email, followed by slightly faster follow-ups</td>
+</tr>
+<tr>
+<td><strong>Standard</strong></td>
+<td>Lower-scoring lead (below 25)</td>
+<td>Standard acknowledgement email, followed by regular-pace follow-ups</td>
+</tr>
+</tbody>
+</table>
+<p>The scoring weights and the threshold for &ldquo;hot lead&rdquo; notifications are configurable — ask us if you&rsquo;d like to adjust them.</p>
+<hr />
+<h2>Follow-Up Cadence</h2>
+<p>How quickly follow-ups are sent depends on the enquiry&rsquo;s priority:</p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Hot Leads</th>
+<th>Warm Leads</th>
+<th>Standard Leads</th>
+<th>What Happens</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 (Initial)</td>
+<td>Immediate</td>
+<td>Immediate</td>
+<td>Immediate</td>
+<td>A1 sends first email</td>
+</tr>
+<tr>
+<td>2 (First follow-up)</td>
+<td>+6 hours</td>
+<td>+12 hours</td>
+<td>+24 hours</td>
+<td>A3 sends follow-up #2</td>
+</tr>
+<tr>
+<td>3 (Final follow-up)</td>
+<td>+30 hours</td>
+<td>+60 hours</td>
+<td>+96 hours</td>
+<td>A3 sends follow-up #3</td>
+</tr>
+<tr>
+<td>4 (Close out)</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>A3 marks enquiry as cold</td>
+</tr>
+</tbody>
+</table>
+<p><em>All times are measured from when the initial email was sent.</em></p>
+<p>These timings are configurable — ask us if you&rsquo;d like to adjust them.</p>
+<p><strong>Note:</strong> Hot leads marked as &ldquo;handoff&rdquo; skip the automated sequence entirely. Your team handles those directly.</p>
+<hr />
+<h2>What You Can Configure</h2>
+<p>Most settings can be changed without touching the automations. Here&rsquo;s what you can adjust and where:</p>
+<h3>In Make.com Data Stores (Pipeline Config)</h3>
+<p>Log in to <a href="https://eu1.make.com">eu1.make.com</a> → Data Stores → Pipeline Config → click the &ldquo;main&rdquo; record.</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Field Name</th>
+<th>Current Default</th>
+<th>What It Does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Handoff score threshold</td>
+<td><code>handoff_threshold</code></td>
+<td>50</td>
+<td>Leads scoring above this get an immediate team notification</td>
+</tr>
+<tr>
+<td>Handoff on/off</td>
+<td><code>handoff_enabled</code></td>
+<td>true</td>
+<td>Turn off to send all leads through the standard follow-up sequence</td>
+</tr>
+<tr>
+<td>Handoff notification email</td>
+<td><code>handoff_email</code></td>
+<td>(your team email)</td>
+<td>Who gets notified when a hot lead comes in</td>
+</tr>
+<tr>
+<td>Hot lead follow-up timing</td>
+<td><code>cadence_hot_step2</code>, <code>cadence_hot_step3</code></td>
+<td>6h, 24h</td>
+<td>Hours before step 2 and step 3 emails for hot leads</td>
+</tr>
+<tr>
+<td>Warm lead follow-up timing</td>
+<td><code>cadence_warm_step2</code>, <code>cadence_warm_step3</code></td>
+<td>12h, 48h</td>
+<td>Hours before step 2 and step 3 emails for warm leads</td>
+</tr>
+<tr>
+<td>Standard lead follow-up timing</td>
+<td><code>cadence_standard_step2</code>, <code>cadence_standard_step3</code></td>
+<td>24h, 72h</td>
+<td>Hours before step 2 and step 3 emails for standard leads</td>
+</tr>
+<tr>
+<td>Cold grace period</td>
+<td><code>cadence_cold_grace_hours</code></td>
+<td>72h</td>
+<td>Hours after the final follow-up before marking an enquiry as cold</td>
+</tr>
+<tr>
+<td>AI personalisation on/off</td>
+<td><code>ai_enabled</code></td>
+<td>true</td>
+<td>Whether emails include an AI-generated personalised opening line</td>
+</tr>
+<tr>
+<td>AI model</td>
+<td><code>ai_model</code></td>
+<td>gpt-4o-mini</td>
+<td>Which AI model generates the opening lines</td>
+</tr>
+<tr>
+<td>Company name</td>
+<td><code>company_name</code></td>
+<td>Meji Media</td>
+<td>Displayed as the sender name on all automated emails</td>
+</tr>
+<tr>
+<td>Email signature</td>
+<td><code>email_signature_html</code></td>
+<td>(HTML block)</td>
+<td>The sign-off and company links at the bottom of every email. Edit this once to update all templates.</td>
+</tr>
+<tr>
+<td>Scoring weights</td>
+<td><code>weight_*</code> fields</td>
+<td>Various</td>
+<td>How much each factor contributes to the lead score</td>
+</tr>
+</tbody>
+</table>
+<h3>In Make.com Data Stores (Email Templates)</h3>
+<p>Go to Data Stores → Email Templates. Click any template to edit its subject line or body text.</p>
+<h3>In Make.com Scenario Settings</h3>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Where</th>
+<th>Current Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>How often replies are checked</td>
+<td>A2 scenario → Scheduling tab</td>
+<td>Every 5 minutes</td>
+</tr>
+<tr>
+<td>How often follow-ups are sent</td>
+<td>A3 scenario → Scheduling tab</td>
+<td>Every 15 minutes</td>
+</tr>
+</tbody>
+</table>
+<p>To change these: open the scenario in Make.com, click the clock icon (Scheduling), and adjust the interval.</p>
+<hr />
+<h2>Troubleshooting — Quick Reference</h2>
+<table>
+<thead>
+<tr>
+<th>Issue</th>
+<th>What to Check</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Enquiry not appearing in the sheet</td>
+<td>Check the form is submitting correctly. Look at the A1 automation in Make.com — is it running?</td>
+</tr>
+<tr>
+<td>No email was sent</td>
+<td>Check the Gmail connection in Make.com — go to Connections → find Gmail → click &ldquo;Reauthorize&rdquo; if expired. Also check the A1 run history for errors.</td>
+</tr>
+<tr>
+<td>Follow-ups didn&rsquo;t stop after a reply</td>
+<td>Check A2 is running (every 5 minutes). The reply must come from the same email address listed in the sheet.</td>
+</tr>
+<tr>
+<td>Follow-up sent after someone replied</td>
+<td>There can be up to a 5-minute delay between a reply and A2 detecting it. If A3 ran in that window, one extra follow-up may have gone out.</td>
+</tr>
+<tr>
+<td>Enquiry marked as cold too quickly</td>
+<td>Check the cadence settings. The timings depend on priority — hot leads move faster through the sequence.</td>
+</tr>
+<tr>
+<td>All automations stopped working</td>
+<td>Check Make.com — the automations may have been paused. Log in and verify they&rsquo;re active (green toggle).</td>
+</tr>
+<tr>
+<td>Emails feel generic / no personalised opening</td>
+<td>The AI that generates the opening line may have had a temporary issue. Check the AI settings in Pipeline Config (see &ldquo;What You Can Configure&rdquo; above). If <code>ai_enabled</code> is <code>true</code> and the issue persists, contact your automation specialist.</td>
+</tr>
+</tbody>
+</table>
+<p>For any issues not covered here, contact your automation support team. Detailed troubleshooting for each automation is in the sections below.</p>
+<hr />
+<h2>A1: Enquiry Follow-Up Sequence</h2>
+<h3>What It Does</h3>
+<p>When someone submits an enquiry through your website, this automation kicks in instantly. It logs the enquiry to your Google Sheet, scores the lead, generates a personalised AI opening line, and sends an appropriate first email — all within seconds of the form being submitted.</p>
+<p><strong>Runs:</strong> Instantly, every time a form is submitted.</p>
+<h3>What Happens Step by Step</h3>
+<ol>
+<li><strong>Enquiry received</strong> — The automation receives the form data the moment someone submits it on your website</li>
+<li><strong>Logged to Google Sheet</strong> — A new row is created in your tracking sheet with all the enquirer&rsquo;s details (name, email, phone, topic, organisation, message), a unique enquiry ID, and a timestamp</li>
+<li><strong>Lead scored</strong> — The system calculates a lead score based on 9 configurable factors from the enquiry details. This determines the priority: hot, warm, or standard</li>
+<li><strong>AI personalisation</strong> — The system generates a unique opening sentence for the email, referencing the enquirer&rsquo;s specific topic. If the AI is temporarily unavailable, the email still sends — just without the personalised opener</li>
+<li><strong>Email sent</strong> — Based on the priority:</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>Priority</th>
+<th>What Gets Sent</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Hot</strong> (score 50+)</td>
+<td><strong>Your team</strong> receives an instant notification email with full enquiry details, priority score, and a prompt to follow up quickly. <strong>The enquirer</strong> receives a warm, personalised acknowledgement. Follow-ups are stopped — your team handles it from here.</td>
+</tr>
+<tr>
+<td><strong>Warm / Standard</strong></td>
+<td>The enquirer receives a friendly acknowledgement email. The system schedules the next follow-up (A3 handles this).</td>
+</tr>
+</tbody>
+</table>
+<ol start="6">
+<li><strong>Done</strong> — The website form receives a confirmation that everything went through successfully</li>
+</ol>
+<h3>What You&rsquo;ll See</h3>
+<p>When A1 runs successfully:</p>
+<ul>
+<li><strong>In the Google Sheet:</strong> A new row with all fields filled in. The <code>status</code> column will show <code>new</code> (or <code>handoff</code> for hot leads). The <code>priority</code> column will show <code>hot</code>, <code>warm</code>, or <code>standard</code>.</li>
+<li><strong>In your Gmail inbox:</strong> The sent email will appear in your Sent folder (since it&rsquo;s sent from your shared inbox). The email will have a personalised opening sentence that references the enquirer&rsquo;s specific topic.</li>
+<li><strong>For hot leads:</strong> Your team will receive a separate notification email with a subject like &ldquo;HOT LEAD: Sarah Thompson - Wedding DJ (Score: 85)&rdquo;</li>
+</ul>
+<h3>Before and After</h3>
+<p><strong>Before (Manual Process)</strong></p>
+<ol>
+<li>Enquiry arrives via form → CRM logs it</li>
+<li>SendGrid sends a generic auto-confirmation</li>
+<li>Staff manually reads the enquiry</li>
+<li>Staff decides priority</li>
+<li>Staff writes and sends a personalised email</li>
+<li><strong>Hours or days pass</strong> before the first real response</li>
+</ol>
+<p><strong>After (Automated)</strong></p>
+<ol>
+<li>Enquiry arrives via form</li>
+<li>Within seconds: logged, scored, AI-personalised email sent (opening line references their specific enquiry)</li>
+<li>Hot leads: team notified immediately with full context</li>
+<li>Staff only needs to step in when someone replies</li>
+</ol>
+<h3>A1 Troubleshooting</h3>
+<p><strong>&ldquo;An enquiry came in but no email was sent&rdquo;</strong>
+- Check the A1 automation in Make.com — click on it and look at the run history. If the most recent run shows an error (red), the issue will be described there.
+- Most common cause: the Gmail connection expired and needs to be reconnected. Go to Make.com → Connections → find Gmail → click &ldquo;Reauthorize&rdquo;.</p>
+<p><strong>&ldquo;The enquiry isn&rsquo;t in the Google Sheet&rdquo;</strong>
+- Check that the form is actually submitting to the automation. The submission link in your website form must match the one configured in A1.
+- If the form is correct, check the A1 run history — if Google Sheets was temporarily unavailable, the email may still have been sent even though the row wasn&rsquo;t created.</p>
+<p><strong>&ldquo;The lead was scored as standard but should have been hot&rdquo;</strong>
+- Lead scoring is based on the information provided in the form. If the enquiry details didn&rsquo;t meet the scoring thresholds, it will be scored lower.
+- The scoring weights and thresholds can be adjusted — contact your automation specialist.</p>
+<p><strong>&ldquo;I got a team notification for a lead that isn&rsquo;t actually high-value&rdquo;</strong>
+- The scoring system uses the information available at submission time. You can adjust the handoff threshold to be more or less sensitive.</p>
+<hr />
+<h2>A2: Reply Detection &amp; Stop</h2>
+<h3>What It Does</h3>
+<p>This automation watches your Gmail inbox for new emails. Every 5 minutes, it checks whether any incoming email is a reply from someone in your tracking sheet. If it finds a match, it immediately stops all automated follow-ups for that enquiry — so you never send an automated email to someone who&rsquo;s already in conversation with you.</p>
+<p><strong>Runs:</strong> Every 5 minutes, automatically.</p>
+<h3>What Happens Step by Step</h3>
+<ol>
+<li><strong>Inbox check</strong> — Every 5 minutes, the automation looks at any new emails that have arrived in your shared Gmail inbox</li>
+<li><strong>Sender lookup</strong> — For each new email, it checks whether the sender&rsquo;s email address matches anyone in your tracking sheet</li>
+<li><strong>Match found?</strong>
+   - <strong>Yes, and follow-ups are still active</strong> → The enquiry is marked as &ldquo;replied&rdquo; and follow-ups are stopped
+   - <strong>Yes, but already stopped</strong> → No action (already handled)
+   - <strong>No match</strong> → Ignored (it&rsquo;s an email from someone not in the tracking sheet — a colleague, a supplier, etc.)</li>
+</ol>
+<h3>What You&rsquo;ll See</h3>
+<p>When A2 detects a reply:</p>
+<ul>
+<li><strong>In the Google Sheet:</strong> The matching enquiry row will update:</li>
+<li><code>stopped</code> changes from <code>FALSE</code> to <code>TRUE</code></li>
+<li><code>status</code> changes to <code>replied</code></li>
+<li><strong>In your inbox:</strong> Nothing changes — you&rsquo;ll see the reply as normal. The only difference is that the system won&rsquo;t send any more automated follow-ups to that person.</li>
+</ul>
+<h3>Why This Matters</h3>
+<p>Without reply detection, the system would keep sending follow-up emails even after someone has already replied and started a conversation with your team. That would feel impersonal and spammy — the opposite of what you want.</p>
+<p>With A2 running every 5 minutes, the maximum delay between someone replying and follow-ups stopping is 5 minutes. In practice, it&rsquo;s usually faster.</p>
+<h3>A2 Troubleshooting</h3>
+<p><strong>&ldquo;Someone replied but they still got another follow-up&rdquo;</strong>
+- There&rsquo;s a small window (up to 5 minutes) between when a reply arrives and when A2 detects it. If the follow-up automation (A3) happened to run in that exact window, one extra email may have gone out. This is rare and unavoidable with a polling interval.
+- Check the Google Sheet — if <code>stopped</code> is now <code>TRUE</code> and <code>status</code> is <code>replied</code>, A2 did its job. The extra email was sent before the detection happened.</p>
+<p><strong>&ldquo;Follow-ups didn&rsquo;t stop even though the person replied&rdquo;</strong>
+- <strong>Check the email address.</strong> The reply must come from the exact same email address listed in the Email column of the tracking sheet. If someone replies from a different address (e.g., a personal email instead of their work email), A2 won&rsquo;t match it.
+- <strong>Check A2 is running.</strong> Log in to Make.com and verify the A2 automation is active (green toggle). Look at the run history — is it running every 5 minutes?
+- <strong>Check the Gmail connection.</strong> If the connection expired, A2 can&rsquo;t read the inbox. Go to Connections → Gmail → Reauthorize if needed.</p>
+<p><strong>&ldquo;A2 shows errors in the run history&rdquo;</strong>
+- If Google Sheets is temporarily unavailable, A2 will skip that cycle and try again in 5 minutes. One missed cycle isn&rsquo;t a problem.
+- If errors persist, check that the Google Sheets connection is still active and that the spreadsheet hasn&rsquo;t been moved or renamed.</p>
+<hr />
+<h2>A3: Scheduled Follow-Up Steps</h2>
+<h3>What It Does</h3>
+<p>This automation handles the timed follow-up sequence. Every 15 minutes, it checks the tracking sheet for enquiries that are due for their next follow-up email. If one is due, it generates a personalised AI opening line and sends the appropriate follow-up, then schedules the next step. After the final follow-up, it marks the enquiry as &ldquo;cold&rdquo; and stops.</p>
+<p><strong>Runs:</strong> Every 15 minutes, automatically.</p>
+<h3>The Follow-Up Sequence</h3>
+<p>After the initial email (sent by A1), the follow-up sequence works like this:</p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>What Happens</th>
+<th>Email Sent?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Step 1</strong></td>
+<td>Initial email sent by A1</td>
+<td>Yes — handled by A1, not A3</td>
+</tr>
+<tr>
+<td><strong>Step 2</strong></td>
+<td>First follow-up — a friendly nudge with AI-personalised opening</td>
+<td>Yes — from editable template</td>
+</tr>
+<tr>
+<td><strong>Step 3</strong></td>
+<td>Final follow-up — a last check-in with AI-personalised opening</td>
+<td>Yes — from editable template</td>
+</tr>
+<tr>
+<td><strong>Step 4</strong></td>
+<td>Close-out — marked as cold</td>
+<td>No — the enquiry is simply closed</td>
+</tr>
+</tbody>
+</table>
+<p>If the person replies at any point during this sequence, A2 detects it and stops everything. No more automated emails.</p>
+<h3>Timing — How Quickly Follow-Ups Are Sent</h3>
+<p>The timing between steps depends on the enquiry&rsquo;s priority. Higher-priority leads get follow-ups sooner:</p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Hot Leads</th>
+<th>Warm Leads</th>
+<th>Standard Leads</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Step 2 (first follow-up)</td>
+<td>6 hours after initial</td>
+<td>12 hours after initial</td>
+<td>24 hours after initial</td>
+</tr>
+<tr>
+<td>Step 3 (final follow-up)</td>
+<td>30 hours after initial</td>
+<td>60 hours after initial</td>
+<td>96 hours after initial</td>
+</tr>
+<tr>
+<td>Step 4 (close-out)</td>
+<td>~3 days after step 3</td>
+<td>~3 days after step 3</td>
+<td>~3 days after step 3</td>
+</tr>
+</tbody>
+</table>
+<p><em>All times are measured from when the initial email was sent.</em></p>
+<p>These timings are configurable — ask your automation specialist if you&rsquo;d like to adjust them.</p>
+<p><strong>Note:</strong> Hot leads marked as &ldquo;handoff&rdquo; (where your team was notified immediately) skip the automated sequence entirely. A3 won&rsquo;t send follow-ups for those.</p>
+<h3>What You&rsquo;ll See</h3>
+<p>When A3 sends a follow-up:</p>
+<ul>
+<li><strong>In the Google Sheet:</strong> The row updates:</li>
+<li><code>current_step</code> increases by 1 (e.g., 2 → 3)</li>
+<li><code>next_step_due</code> is set to the next follow-up time</li>
+<li><code>status</code> changes to <code>following_up</code></li>
+<li><code>last_email_sent</code> shows when the email went out</li>
+<li><strong>In your Gmail Sent folder:</strong> The follow-up email will appear as a sent message</li>
+<li><strong>In the enquirer&rsquo;s inbox:</strong> They receive a follow-up that looks like a natural, personal email — each one opens with an AI-generated sentence referencing their specific enquiry topic</li>
+</ul>
+<p>When A3 marks an enquiry as cold:</p>
+<ul>
+<li><strong>In the Google Sheet:</strong> The row updates:</li>
+<li><code>status</code> changes to <code>cold</code></li>
+<li><code>stopped</code> changes to <code>TRUE</code></li>
+<li><strong>No email is sent</strong> — the enquiry is simply closed out</li>
+</ul>
+<h3>What &ldquo;Marked as Cold&rdquo; Means</h3>
+<p>When an enquiry reaches step 4 without a reply, it&rsquo;s marked as &ldquo;cold&rdquo;. This means:</p>
+<ul>
+<li>The person didn&rsquo;t respond to any of the 3 emails (initial + 2 follow-ups)</li>
+<li>All automated follow-ups are stopped</li>
+<li>The row stays in the Google Sheet for your records</li>
+<li>You can still reach out to them manually if you wish — the automation won&rsquo;t interfere</li>
+</ul>
+<p>Being marked as cold is a normal part of the process. Not every enquiry turns into a conversation, and the system handles that gracefully.</p>
+<h3>A3 Troubleshooting</h3>
+<p><strong>&ldquo;A follow-up wasn&rsquo;t sent when I expected it&rdquo;</strong>
+- A3 checks every 15 minutes, so there can be up to a 15-minute delay after a follow-up becomes due.
+- Check the <code>next_step_due</code> column in the sheet — the follow-up won&rsquo;t be sent until that time has passed.
+- Verify A3 is running: log in to Make.com and check the A3 automation is active (green toggle).</p>
+<p><strong>&ldquo;An enquiry was marked as cold too quickly&rdquo;</strong>
+- Check the <code>priority</code> column. Hot leads move through the sequence faster than standard leads.
+- If the cadence feels too aggressive, the timing can be adjusted. Contact your automation specialist.</p>
+<p><strong>&ldquo;A follow-up went out after someone replied&rdquo;</strong>
+- This can happen if the reply arrived in the few minutes between A2&rsquo;s last check and A3&rsquo;s run. See the A2 troubleshooting section above for details.
+- It&rsquo;s rare and limited to at most one extra email.</p>
+<p><strong>&ldquo;The follow-up email didn&rsquo;t have a personalised opening&rdquo;</strong>
+- The AI that generates the opening line occasionally has temporary issues. When this happens, the email still sends — it just skips the personalised opening sentence. This is by design (better to send a slightly less personal email than to delay the follow-up).
+- If it happens consistently, check the AI settings in Pipeline Config (see the &ldquo;What You Can Configure&rdquo; section above).</p>
+<p><strong>&ldquo;I see errors in the A3 run history&rdquo;</strong>
+- If a single email fails to send (e.g., temporary Gmail issue), A3 skips that enquiry and will retry on its next run (15 minutes later).
+- If the Google Sheet update fails, A3 retries up to 3 times to make sure the step tracking stays accurate.
+- If errors persist, check that both the Gmail and Google Sheets connections are active in Make.com.</p>
+<hr />
+<h2>Key Contacts</h2>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Who</th>
+<th>Contact</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Decision maker / Technical setup</td>
+<td>Gurmej Pawar</td>
+<td>Via Upwork or email</td>
+</tr>
+<tr>
+<td>Operations / Day-to-day questions</td>
+<td>Jess Harrar</td>
+<td>Via Upwork or email</td>
+</tr>
+<tr>
+<td>Automation support</td>
+<td>Your automation specialist</td>
+<td>Via Upwork</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p><em>Version 2.0 | Last updated: 25 February 2026</em></p>
+<div class="footer">
+    Meji Media — Automated Follow-Up System | Confidential
+</div>
+</body>
+</html>

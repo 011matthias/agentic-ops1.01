@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ client_display_name }} - Automation Settings</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+        header {
+            background: white;
+            padding: 1rem;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        header h1 {
+            font-size: 1.25rem;
+            color: #333;
+        }
+        header nav a {
+            color: #666;
+            text-decoration: none;
+            margin-left: 1rem;
+        }
+        header nav a:hover {
+            color: #0066cc;
+        }
+        .section {
+            background: white;
+            border-radius: 8px;
+            margin: 1rem 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .section-header {
+            padding: 1rem;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .section-header h2 {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+        .section-header p {
+            font-size: 0.875rem;
+            color: #666;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        thead {
+            background: #f5f5f5;
+        }
+        th {
+            text-align: left;
+            padding: 0.75rem 1rem;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: #666;
+            font-weight: 600;
+        }
+        td {
+            padding: 1rem;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        tr:last-child td {
+            border-bottom: none;
+        }
+        .automation-name {
+            font-weight: 600;
+            color: #333;
+        }
+        .automation-desc {
+            font-size: 0.875rem;
+            color: #666;
+            margin-top: 0.25rem;
+        }
+        .trigger {
+            font-size: 0.75rem;
+            padding: 0.125rem 0.5rem;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        .trigger.cron { background: #e3f2fd; color: #1565c0; }
+        .trigger.webhook { background: #f3e5f5; color: #7b1fa2; }
+        .trigger.manual { background: #e8f5e9; color: #2e7d32; }
+        .status-badge {
+            font-size: 0.75rem;
+            padding: 0.125rem 0.5rem;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        .status-badge.enabled {
+            background: #e6f4ea;
+            color: #1e7e34;
+        }
+        .status-badge.disabled {
+            background: #fce8e6;
+            color: #c5221f;
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 48px;
+            height: 24px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .3s;
+            border-radius: 24px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #2e7d32;
+        }
+        input:checked + .slider:before {
+            transform: translateX(24px);
+        }
+        .schedule {
+            font-size: 0.75rem;
+            color: #666;
+            padding: 0.125rem 0.5rem;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>{{ client_display_name }} - Settings</h1>
+        <nav>
+            <a href="/">Dashboard</a>
+            <a href="/orders">Orders</a>
+            <a href="/automations">Automations</a>
+            <a href="/settings">Settings</a>
+            <a href="/logs">Logs</a>
+            <a href="/docs">Docs</a>
+            <a href="/logout">Logout</a>
+        </nav>
+    </header>
+
+    <div class="container">
+        <div class="section">
+            <div class="section-header">
+                <h2>Automation Controls</h2>
+                <p>Enable or disable automations. Disabled automations will skip execution.</p>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Automation</th>
+                        <th>Trigger</th>
+                        <th>Status</th>
+                        <th>Enabled</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for auto in automations %}
+                    <tr>
+                        <td>
+                            <div class="automation-name">{{ auto.name }}</div>
+                            <div class="automation-desc">{{ auto.description }}</div>
+                        </td>
+                        <td>
+                            <span class="trigger {{ auto.trigger }}">{{ auto.trigger }}</span>
+                            {% if auto.schedule %}
+                            <span class="schedule">{{ auto.schedule }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% set setting = automation_settings.get(auto.id) %}
+                            <span class="status-badge {% if setting and setting.enabled %}enabled{% else %}disabled{% endif %}">
+                                {% if setting and setting.enabled %}Enabled{% else %}Disabled{% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            <label class="toggle-switch">
+                                <input type="checkbox"
+                                       {% if setting and setting.enabled %}checked{% endif %}
+                                       onchange="toggleAutomation('{{ auto.id }}', this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+    async function toggleAutomation(automationId, enabled) {
+        try {
+            const response = await fetch(`/settings/${automationId}/toggle`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ enabled: enabled })
+            });
+
+            if (response.ok) {
+                // Update status badge
+                const row = event.target.closest('tr');
+                const badge = row.querySelector('.status-badge');
+                if (enabled) {
+                    badge.textContent = 'Enabled';
+                    badge.classList.remove('disabled');
+                    badge.classList.add('enabled');
+                } else {
+                    badge.textContent = 'Disabled';
+                    badge.classList.remove('enabled');
+                    badge.classList.add('disabled');
+                }
+            } else {
+                console.error('Failed to toggle automation');
+                // Revert toggle
+                event.target.checked = !enabled;
+                alert('Failed to update automation status. Please try again.');
+            }
+        } catch (error) {
+            console.error('Error toggling automation:', error);
+            // Revert toggle
+            event.target.checked = !enabled;
+            alert('Error updating automation status. Please try again.');
+        }
+    }
+    </script>
+</body>
+</html>

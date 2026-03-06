@@ -1,0 +1,12 @@
+# Git Subtree Configuration
+# This folder is managed as a git subtree
+
+remote: https://github.com/nickswagster/agentic-ops--uplifted-consulting.git
+prefix: clients/uplifted-consulting/automations
+branch: main
+
+# Push command (run from workspace root):
+# git subtree push --prefix=clients/uplifted-consulting/automations https://github.com/nickswagster/agentic-ops--uplifted-consulting.git main
+
+# Pull command (run from workspace root):
+# git subtree pull --prefix=clients/uplifted-consulting/automations https://github.com/nickswagster/agentic-ops--uplifted-consulting.git main --squash

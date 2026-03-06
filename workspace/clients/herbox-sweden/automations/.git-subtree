@@ -1,0 +1,12 @@
+# Git Subtree Configuration
+# This folder is managed as a git subtree
+
+remote: https://github.com/Uplifted-Consulting/client-herbox-sweden.git
+prefix: workspace/clients/herbox-sweden/automations
+branch: main
+
+# Push command (run from workspace root):
+# git subtree push --prefix=workspace/clients/herbox-sweden/automations https://github.com/Uplifted-Consulting/client-herbox-sweden.git main
+
+# Pull command (run from workspace root):
+# git subtree pull --prefix=workspace/clients/herbox-sweden/automations https://github.com/Uplifted-Consulting/client-herbox-sweden.git main --squash

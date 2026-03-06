@@ -1,0 +1,578 @@
+{
+  "flow": [
+    {
+      "id": 2,
+      "mapper": {
+        "from": "drive",
+        "limit": 10,
+        "filter": [
+          [
+            {
+              "a": "K",
+              "b": "FALSE",
+              "o": "text:equal"
+            }
+          ]
+        ],
+        "sheetId": "Leads",
+        "spreadsheetId": "14AcAeuYdDh46meaORZbBGQ0kfuXdTycZ-0kj-uiprZI",
+        "tableFirstRow": "A1:Z1",
+        "includesHeaders": true,
+        "valueRenderOption": "FORMATTED_VALUE"
+      },
+      "module": "google-sheets:filterRows",
+      "version": 2,
+      "metadata": {
+        "restore": {
+          "parameters": {
+            "sheetId": {
+              "label": "Leads"
+            },
+            "spreadsheetId": {
+              "label": "MejiMedia_Enquiries_Followup"
+            }
+          }
+        },
+        "designer": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "__IMTCONN__": 5461799
+      }
+    },
+    {
+      "id": 10,
+      "filter": {
+        "name": "Has Matching Row",
+        "conditions": [
+          [
+            {
+              "a": "{{2.__ROW_NUMBER__}}",
+              "b": "1",
+              "o": "number:greaterorequal"
+            }
+          ]
+        ]
+      },
+      "mapper": {
+        "cell": "C{{2.__ROW_NUMBER__}}",
+        "select": "map",
+        "sheetId": "Leads",
+        "spreadsheetId": "14AcAeuYdDh46meaORZbBGQ0kfuXdTycZ-0kj-uiprZI",
+        "valueRenderOption": "FORMATTED_VALUE"
+      },
+      "module": "google-sheets:getCell",
+      "version": 2,
+      "metadata": {
+        "designer": {
+          "x": 200,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "__IMTCONN__": 5461799
+      }
+    },
+    {
+      "id": 11,
+      "mapper": {
+        "cell": "D{{2.__ROW_NUMBER__}}",
+        "select": "map",
+        "sheetId": "Leads",
+        "spreadsheetId": "14AcAeuYdDh46meaORZbBGQ0kfuXdTycZ-0kj-uiprZI",
+        "valueRenderOption": "FORMATTED_VALUE"
+      },
+      "module": "google-sheets:getCell",
+      "version": 2,
+      "metadata": {
+        "designer": {
+          "x": 400,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "__IMTCONN__": 5461799
+      }
+    },
+    {
+      "id": 12,
+      "mapper": {
+        "cell": "F{{2.__ROW_NUMBER__}}",
+        "select": "map",
+        "sheetId": "Leads",
+        "spreadsheetId": "14AcAeuYdDh46meaORZbBGQ0kfuXdTycZ-0kj-uiprZI",
+        "valueRenderOption": "FORMATTED_VALUE"
+      },
+      "module": "google-sheets:getCell",
+      "version": 2,
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "__IMTCONN__": 5461799
+      }
+    },
+    {
+      "id": 13,
+      "mapper": {
+        "cell": "L{{2.__ROW_NUMBER__}}",
+        "select": "map",
+        "sheetId": "Leads",
+        "spreadsheetId": "14AcAeuYdDh46meaORZbBGQ0kfuXdTycZ-0kj-uiprZI",
+        "valueRenderOption": "FORMATTED_VALUE"
+      },
+      "module": "google-sheets:getCell",
+      "version": 2,
+      "metadata": {
+        "designer": {
+          "x": 800,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "__IMTCONN__": 5461799
+      }
+    },
+    {
+      "id": 14,
+      "mapper": {
+        "cell": "M{{2.__ROW_NUMBER__}}",
+        "select": "map",
+        "sheetId": "Leads",
+        "spreadsheetId": "14AcAeuYdDh46meaORZbBGQ0kfuXdTycZ-0kj-uiprZI",
+        "valueRenderOption": "FORMATTED_VALUE"
+      },
+      "module": "google-sheets:getCell",
+      "version": 2,
+      "metadata": {
+        "designer": {
+          "x": 900,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "__IMTCONN__": 5461799
+      }
+    },
+    {
+      "id": 61,
+      "mapper": {
+        "cell": "I{{2.__ROW_NUMBER__}}",
+        "select": "map",
+        "sheetId": "Leads",
+        "spreadsheetId": "14AcAeuYdDh46meaORZbBGQ0kfuXdTycZ-0kj-uiprZI",
+        "valueRenderOption": "FORMATTED_VALUE"
+      },
+      "module": "google-sheets:getCell",
+      "version": 2,
+      "metadata": {
+        "designer": {
+          "x": 1000,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "__IMTCONN__": 5461799
+      }
+    },
+    {
+      "id": 63,
+      "mapper": {
+        "cell": "Q{{2.__ROW_NUMBER__}}",
+        "select": "map",
+        "sheetId": "Leads",
+        "spreadsheetId": "14AcAeuYdDh46meaORZbBGQ0kfuXdTycZ-0kj-uiprZI",
+        "valueRenderOption": "FORMATTED_VALUE"
+      },
+      "module": "google-sheets:getCell",
+      "version": 2,
+      "metadata": {
+        "designer": {
+          "x": 1050,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "__IMTCONN__": 5461799
+      }
+    },
+    {
+      "id": 62,
+      "mapper": {
+        "key": "main",
+        "returnWrapped": false
+      },
+      "module": "datastore:GetRecord",
+      "version": 1,
+      "metadata": {
+        "restore": {
+          "parameters": {
+            "datastore": {
+              "label": "Pipeline Config"
+            }
+          }
+        },
+        "designer": {
+          "x": 1100,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "datastore": 98606
+      }
+    },
+    {
+      "id": 60,
+      "mapper": {
+        "key": "{{if(13.value = \"2\"; \"step_2\"; \"step_3\") + \"_\" + lower(ifempty(63.value; \"a\"))}}",
+        "returnWrapped": false
+      },
+      "module": "datastore:GetRecord",
+      "version": 1,
+      "metadata": {
+        "restore": {
+          "parameters": {
+            "datastore": {
+              "label": "Email Templates"
+            }
+          }
+        },
+        "designer": {
+          "x": 1200,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "datastore": 98605
+      }
+    },
+    {
+      "id": 70,
+      "mapper": {
+        "url": "https://api.openai.com/v1/chat/completions",
+        "data": "{\"model\":\"{{62.ai_model}}\",\"messages\":[{\"role\":\"system\",\"content\":\"{{62.ai_system_prompt}}\"},{\"role\":\"user\",\"content\":\"Name: {{ifempty(10.value; \"there\")}}. Topic: {{ifempty(12.value; \"general enquiry\")}}. Step: {{if(13.value = \"2\"; \"first follow-up, sent a day after their initial enquiry\"; \"final follow-up before we stop reaching out\")}}.\"}],\"max_tokens\":{{parseNumber(62.ai_max_tokens; \".\")}},\"temperature\":{{parseNumber(62.ai_temperature; \".\")}}}",
+        "gzip": true,
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Bearer {{62.ai_api_key}}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "useMtls": false,
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "shareCookies": false,
+        "parseResponse": true,
+        "followRedirect": true,
+        "useQuerystring": false,
+        "rejectUnauthorized": true
+      },
+      "module": "http:ActionSendData",
+      "onerror": [
+        {
+          "id": 71,
+          "mapper": {},
+          "module": "builtin:Resume",
+          "version": 1,
+          "parameters": {}
+        }
+      ],
+      "version": 3,
+      "metadata": {
+        "designer": {
+          "x": 1280,
+          "y": 0
+        }
+      },
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      }
+    },
+    {
+      "id": 4,
+      "mapper": null,
+      "module": "builtin:BasicRouter",
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 5,
+              "filter": {
+                "name": "Step 2 Due",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{13.value}}",
+                      "b": "2",
+                      "o": "text:equal"
+                    },
+                    {
+                      "a": "{{if(14.value < formatDate(now; \"YYYY-MM-DDTHH:mm:ssZ\"); \"due\"; \"notdue\")}}",
+                      "b": "due",
+                      "o": "text:equal"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "to": "{{11.value}}",
+                "subject": "{{replace(replace(60.subject; \"##name##\"; ifempty(10.value; \"there\")); \"##topic##\"; ifempty(12.value; \"your enquiry\"))}}",
+                "fromName": "{{62.company_name}}",
+                "content": "{{\"<html><body>\" + replace(replace(replace(replace(60.body_html; \"##name##\"; ifempty(10.value; \"there\")); \"##topic##\"; ifempty(12.value; \"your enquiry\")); \"##ai_opening##\"; if(length(ifempty(70.data.choices[1].message.content; \"\")) > 0; \"<p>\" + 70.data.choices[1].message.content + \"</p>\"; \"\")); \"##signature##\"; ifempty(62.email_signature_html; \"\")) + \"</body></html>\"}}",
+                "bodyType": "rawHtml"
+              },
+              "module": "google-email:sendAnEmail",
+              "onerror": [
+                {
+                  "id": 21,
+                  "mapper": {},
+                  "module": "builtin:Resume",
+                  "version": 1,
+                  "parameters": {}
+                }
+              ],
+              "version": 4,
+              "metadata": {
+                "designer": {
+                  "x": 1650,
+                  "y": -200
+                }
+              },
+              "parameters": {
+                "__IMTCONN__": 5461821
+              }
+            },
+            {
+              "id": 8,
+              "mapper": {
+                "from": "drive",
+                "mode": "select",
+                "values": {
+                  "status": "following_up",
+                  "current_step": "3",
+                  "next_step_due": "{{formatDate(addHours(now; if(61.value = \"hot\"; parseNumber(62.cadence_hot_step3; \".\"); if(61.value = \"warm\"; parseNumber(62.cadence_warm_step3; \".\"); parseNumber(62.cadence_standard_step3; \".\")))); \"YYYY-MM-DDTHH:mm:ssZ\")}}",
+                  "last_email_sent": "{{formatDate(now; \"YYYY-MM-DDTHH:mm:ssZ\")}}"
+                },
+                "sheetId": "Leads",
+                "rowNumber": "{{2.__ROW_NUMBER__}}",
+                "spreadsheetId": "14AcAeuYdDh46meaORZbBGQ0kfuXdTycZ-0kj-uiprZI",
+                "includesHeaders": true,
+                "useColumnHeaders": true,
+                "valueInputOption": "USER_ENTERED"
+              },
+              "module": "google-sheets:updateRow",
+              "version": 2,
+              "metadata": {
+                "restore": {
+                  "parameters": {
+                    "sheetId": {
+                      "label": "Leads"
+                    },
+                    "spreadsheetId": {
+                      "label": "MejiMedia_Enquiries_Followup"
+                    }
+                  }
+                },
+                "designer": {
+                  "x": 1850,
+                  "y": -200
+                }
+              },
+              "parameters": {
+                "__IMTCONN__": 5461799
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 15,
+              "filter": {
+                "name": "Step 3 Due",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{13.value}}",
+                      "b": "3",
+                      "o": "text:equal"
+                    },
+                    {
+                      "a": "{{if(14.value < formatDate(now; \"YYYY-MM-DDTHH:mm:ssZ\"); \"due\"; \"notdue\")}}",
+                      "b": "due",
+                      "o": "text:equal"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "to": "{{11.value}}",
+                "subject": "{{replace(replace(60.subject; \"##name##\"; ifempty(10.value; \"there\")); \"##topic##\"; ifempty(12.value; \"your enquiry\"))}}",
+                "fromName": "{{62.company_name}}",
+                "content": "{{\"<html><body>\" + replace(replace(replace(replace(60.body_html; \"##name##\"; ifempty(10.value; \"there\")); \"##topic##\"; ifempty(12.value; \"your enquiry\")); \"##ai_opening##\"; if(length(ifempty(70.data.choices[1].message.content; \"\")) > 0; \"<p>\" + 70.data.choices[1].message.content + \"</p>\"; \"\")); \"##signature##\"; ifempty(62.email_signature_html; \"\")) + \"</body></html>\"}}",
+                "bodyType": "rawHtml"
+              },
+              "module": "google-email:sendAnEmail",
+              "onerror": [
+                {
+                  "id": 22,
+                  "mapper": {},
+                  "module": "builtin:Resume",
+                  "version": 1,
+                  "parameters": {}
+                }
+              ],
+              "version": 4,
+              "metadata": {
+                "designer": {
+                  "x": 1650,
+                  "y": 0
+                }
+              },
+              "parameters": {
+                "__IMTCONN__": 5461821
+              }
+            },
+            {
+              "id": 16,
+              "mapper": {
+                "from": "drive",
+                "mode": "select",
+                "values": {
+                  "status": "following_up",
+                  "current_step": "4",
+                  "next_step_due": "{{formatDate(addHours(now; parseNumber(62.cadence_cold_grace_hours; \".\")); \"YYYY-MM-DDTHH:mm:ssZ\")}}",
+                  "last_email_sent": "{{formatDate(now; \"YYYY-MM-DDTHH:mm:ssZ\")}}"
+                },
+                "sheetId": "Leads",
+                "rowNumber": "{{2.__ROW_NUMBER__}}",
+                "spreadsheetId": "14AcAeuYdDh46meaORZbBGQ0kfuXdTycZ-0kj-uiprZI",
+                "includesHeaders": true,
+                "useColumnHeaders": true,
+                "valueInputOption": "USER_ENTERED"
+              },
+              "module": "google-sheets:updateRow",
+              "version": 2,
+              "metadata": {
+                "restore": {
+                  "parameters": {
+                    "sheetId": {
+                      "label": "Leads"
+                    },
+                    "spreadsheetId": {
+                      "label": "MejiMedia_Enquiries_Followup"
+                    }
+                  }
+                },
+                "designer": {
+                  "x": 1850,
+                  "y": 0
+                }
+              },
+              "parameters": {
+                "__IMTCONN__": 5461799
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 17,
+              "filter": {
+                "name": "Step 4+ Cold Due",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{13.value}}",
+                      "b": "4",
+                      "o": "number:greaterorequal"
+                    },
+                    {
+                      "a": "{{if(14.value < formatDate(now; \"YYYY-MM-DDTHH:mm:ssZ\"); \"due\"; \"notdue\")}}",
+                      "b": "due",
+                      "o": "text:equal"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "from": "drive",
+                "mode": "select",
+                "values": {
+                  "status": "cold",
+                  "stopped": "TRUE"
+                },
+                "sheetId": "Leads",
+                "rowNumber": "{{2.__ROW_NUMBER__}}",
+                "spreadsheetId": "14AcAeuYdDh46meaORZbBGQ0kfuXdTycZ-0kj-uiprZI",
+                "includesHeaders": true,
+                "useColumnHeaders": true,
+                "valueInputOption": "USER_ENTERED"
+              },
+              "module": "google-sheets:updateRow",
+              "version": 2,
+              "metadata": {
+                "restore": {
+                  "parameters": {
+                    "sheetId": {
+                      "label": "Leads"
+                    },
+                    "spreadsheetId": {
+                      "label": "MejiMedia_Enquiries_Followup"
+                    }
+                  }
+                },
+                "designer": {
+                  "x": 1650,
+                  "y": 200
+                }
+              },
+              "parameters": {
+                "__IMTCONN__": 5461799
+              }
+            }
+          ]
+        }
+      ],
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 1450,
+          "y": 0
+        }
+      },
+      "parameters": {}
+    }
+  ],
+  "name": "A3 â€” Scheduled Follow-Up Steps",
+  "metadata": {
+    "zone": "eu1.make.com",
+    "instant": false,
+    "version": 1,
+    "designer": {
+      "orphans": []
+    },
+    "scenario": {
+      "dataloss": false,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "roundtrips": 1,
+      "sequential": true,
+      "confidential": false,
+      "autoCommitTriggerLast": true,
+      "slots": null
+    }
+  }
+}

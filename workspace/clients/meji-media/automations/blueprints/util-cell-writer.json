@@ -1,0 +1,102 @@
+{
+	"flow": [
+		{
+			"id": 1,
+			"module": "scenario-service:StartSubscenario",
+			"version": 2,
+			"metadata": {
+				"restore": {},
+				"designer": {
+					"x": 0,
+					"y": 0
+				},
+				"interface": [
+					{
+						"name": "cell",
+						"type": "text",
+						"required": true,
+						"description": "The cell reference to write to (e.g. A3, P3)"
+					},
+					{
+						"name": "value",
+						"type": "text",
+						"required": false,
+						"description": "The value to write into the cell"
+					},
+					{
+						"name": "sheet",
+						"type": "text",
+						"required": false,
+						"description": "The sheet tab name (default: Leads)"
+					}
+				]
+			}
+		},
+		{
+			"id": 2,
+			"mapper": {
+				"cell": "{{1.cell}}",
+				"from": "drive",
+				"value": "{{1.value}}",
+				"select": "map",
+				"sheetId": "{{ifempty(1.sheet; \"Leads\")}}",
+				"spreadsheetId": "14AcAeuYdDh46meaORZbBGQ0kfuXdTycZ-0kj-uiprZI",
+				"valueInputOption": "USER_ENTERED"
+			},
+			"module": "google-sheets:updateCell",
+			"version": 2,
+			"metadata": {
+				"designer": {
+					"x": 300,
+					"y": 0
+				}
+			},
+			"parameters": {
+				"__IMTCONN__": 5461799
+			}
+		},
+		{
+			"id": 3,
+			"mapper": {
+				"tool_output": "{{`2`}}"
+			},
+			"module": "scenario-service:ReturnData",
+			"version": 2,
+			"metadata": {
+				"expect": [
+					{
+						"name": "tool_output",
+						"type": "dynamicCollection",
+						"label": ""
+					}
+				],
+				"restore": {},
+				"designer": {
+					"x": 600,
+					"y": 0
+				}
+			},
+			"parameters": {}
+		}
+	],
+	"name": "UTIL — Cell Writer",
+	"metadata": {
+		"instant": false,
+		"version": 1,
+		"designer": {
+			"orphans": []
+		},
+		"scenario": {
+			"dlq": false,
+			"slots": null,
+			"dataloss": false,
+			"maxErrors": 3,
+			"autoCommit": true,
+			"roundtrips": 1,
+			"sequential": false,
+			"confidential": false,
+			"freshVariables": false,
+			"autoCommitTriggerLast": true
+		}
+	}
+}

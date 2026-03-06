@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentic Ops — Spec Pipeline</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --border: #e2e8f0;
+    --text: #1e293b;
+    --text-muted: #64748b;
+    --col-bg: #f1f3f6;
+    --col-border: #dde1e7;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05);
+    --shadow-drag: 0 8px 24px rgba(0,0,0,0.15);
+    --drop-highlight: rgba(37,99,235,0.08);
+    --drop-border: #2563eb;
+    --radius: 8px;
+    --col-spec: #64748b;
+    --col-build: #d97706;
+    --col-test: #7c3aed;
+    --col-live: #059669;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  header h1 {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  header h1 span { color: var(--text-muted); font-weight: 400; }
+
+  /* ── CLIENT FILTER TABS ── */
+  .tabs {
+    display: flex;
+    gap: 6px;
+    margin-left: auto;
+    flex-wrap: wrap;
+  }
+  .tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1.5px solid var(--border);
+    background: var(--surface);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .tab .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .tab:hover { border-color: #94a3b8; color: var(--text); }
+  .tab.active {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  /* ── STATS BAR ── */
+  .stats-bar {
+    display: flex;
+    gap: 0;
+    padding: 10px 24px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .stat-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 20px 0 0;
+    border-right: 1px solid var(--border);
+    margin-right: 20px;
+  }
+  .stat-item:last-child { border-right: none; }
+  .stat-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+  }
+  .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-count { font-size: 18px; font-weight: 700; line-height: 1; }
+
+  /* ── BOARD ── */
+  .board-wrap { flex: 1; padding: 20px 24px; overflow-x: auto; }
+  .board {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(260px, 1fr));
+    gap: 16px;
+    min-width: 900px;
+    align-items: start;
+  }
+
+  /* ── COLUMN ── */
+  .column {
+    background: var(--col-bg);
+    border: 1px solid var(--col-border);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    min-height: 200px;
+  }
+  .column-header {
+    padding: 12px 14px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--col-border);
+  }
+  .column-stage-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .column-title {
+    font-size: 13px;
+    font-weight: 600;
+    flex: 1;
+  }
+  .column-count {
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--surface);
+    border: 1px solid var(--col-border);
+    border-radius: 10px;
+    padding: 1px 8px;
+    color: var(--text-muted);
+  }
+
+  .column-body {
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+    min-height: 120px;
+    transition: background 0.15s;
+    border-radius: 0 0 10px 10px;
+  }
+  .column-body.drag-over {
+    background: var(--drop-highlight);
+    outline: 2px dashed var(--drop-border);
+    outline-offset: -4px;
+  }
+
+  /* ── CARD ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    cursor: grab;
+    transition: box-shadow 0.15s, transform 0.15s;
+    position: relative;
+    border-left: 3px solid transparent;
+  }
+  .card:hover { box-shadow: var(--shadow-drag); transform: translateY(-1px); }
+  .card.dragging { opacity: 0.4; cursor: grabbing; }
+
+  .card-top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .badge-id {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+    font-family: monospace;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .badge-automation  { background: #dbeafe; color: #1d4ed8; }
+  .badge-sub-automation { background: #ede9fe; color: #6d28d9; }
+  .badge-bug-fix     { background: #fee2e2; color: #b91c1c; }
+  .badge-project     { background: #f3e8ff; color: #7e22ce; }
+
+  .badge-n8n          { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+  .badge-fastapi      { background: #f8fafc; color: #475569; border: 1px solid #e2e8f0; }
+  .badge-trigger-dev  { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+  .badge-tbd          { background: #fefce8; color: #854d0e; border: 1px solid #fde68a; }
+  .badge-none         { background: #f8fafc; color: #94a3b8; border: 1px solid #e2e8f0; }
+
+  .card-name {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.3;
+    margin-bottom: 8px;
+    color: var(--text);
+  }
+  .card-bottom {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 7px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 500;
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+  }
+  .chip-more {
+    background: transparent;
+    border: 1px dashed #cbd5e1;
+    color: #94a3b8;
+  }
+  .warn-badge {
+    margin-left: auto;
+    font-size: 10px;
+    font-weight: 600;
+    color: #b45309;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 6px;
+    padding: 2px 6px;
+    white-space: nowrap;
+  }
+
+  /* empty state */
+  .empty-drop {
+    border: 2px dashed var(--col-border);
+    border-radius: 6px;
+    padding: 24px 12px;
+    text-align: center;
+    font-size: 12px;
+    color: #94a3b8;
+    pointer-events: none;
+  }
+
+  /* ── PENDING CHANGES ── */
+  .pending-section {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 16px 24px;
+    display: none;
+  }
+  .pending-section.visible { display: block; }
+  .pending-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .pending-title {
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .pending-count {
+    font-size: 11px;
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fde68a;
+    border-radius: 10px;
+    padding: 1px 8px;
+    font-weight: 600;
+  }
+  .btn {
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: opacity 0.15s;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn-copy { background: #2563eb; color: white; }
+  .btn-reset { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+  .btn-copied { background: #059669; color: white; }
+
+  .pending-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .pending-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    padding: 6px 10px;
+    background: #fafafa;
+    border: 1px solid #f1f5f9;
+    border-radius: 6px;
+  }
+  .pending-arrow { color: #94a3b8; }
+  .pending-file { font-family: monospace; color: #2563eb; font-size: 11px; }
+  .pending-path { color: var(--text-muted); font-family: monospace; font-size: 11px; }
+
+  .commands-block {
+    background: #1e293b;
+    color: #94a3b8;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-family: monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.6;
+  }
+  .commands-block .cmd-mv { color: #38bdf8; }
+  .commands-block .cmd-path { color: #86efac; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Agentic Ops <span>— Spec Pipeline</span></h1>
+  <div class="tabs" id="tabs"></div>
+</header>
+
+<div class="stats-bar" id="statsBar"></div>
+
+<div class="board-wrap">
+  <div class="board" id="board"></div>
+</div>
+
+<!-- spec-data.js is generated by generate-spec-data.py -->
+<script src="spec-data.js"></script>
+
+<div class="pending-section" id="pendingSection">
+  <div class="pending-header">
+    <span class="pending-title">Pending Changes</span>
+    <span class="pending-count" id="pendingCount">0</span>
+    <button class="btn btn-copy" id="copyBtn" onclick="copyCommands()">Copy mv commands</button>
+    <button class="btn btn-reset" onclick="resetChanges()">Reset</button>
+  </div>
+  <div class="pending-list" id="pendingList"></div>
+  <div class="commands-block" id="commandsBlock"></div>
+</div>
+
+<script>
+
+const STAGES = [
+  { key: '1-spec',  label: 'Spec',  color: '#64748b' },
+  { key: '2-build', label: 'Build', color: '#d97706' },
+  { key: '3-test',  label: 'Test',  color: '#7c3aed' },
+  { key: '4-live',  label: 'Live',  color: '#059669' },
+];
+
+// State: current stage for each card (keyed by "clientName:filename")
+const state = { filter: 'all', cards: {} };
+const changes = []; // { client, filename, fromStage, toStage }
+
+// Init card state from data
+DATA.clients.forEach(client => {
+  client.specs.forEach(spec => {
+    const key = `${client.name}:${spec.filename}`;
+    state.cards[key] = spec.stage_folder;
+  });
+});
+
+// Drag state
+let dragging = null; // { key, fromStage }
+
+// ── TABS ──
+function renderTabs() {
+  const el = document.getElementById('tabs');
+  const all = { name: 'all', label: 'All Clients', color: '#64748b' };
+  const clients = [all, ...DATA.clients];
+  el.innerHTML = clients.map(c => {
+    const active = state.filter === c.name ? 'active' : '';
+    const borderColor = active ? c.color : 'transparent';
+    const borderStyle = active ? `border-color:${c.color}; color:${c.color};` : '';
+    return `<button class="tab ${active}" style="${borderStyle}" onclick="setFilter('${c.name}')">
+      ${c.name !== 'all' ? `<span class="dot" style="background:${c.color}"></span>` : ''}
+      ${c.label}
+    </button>`;
+  }).join('');
+}
+
+function setFilter(name) {
+  state.filter = name;
+  renderAll();
+}
+
+// ── VISIBLE SPECS ──
+function getVisibleSpecs() {
+  const result = []; // { client, spec, currentStage }
+  DATA.clients.forEach(client => {
+    if (state.filter !== 'all' && state.filter !== client.name) return;
+    client.specs.forEach(spec => {
+      const key = `${client.name}:${spec.filename}`;
+      result.push({ client, spec, currentStage: state.cards[key] });
+    });
+  });
+  return result;
+}
+
+// ── STATS ──
+function renderStats() {
+  const el = document.getElementById('statsBar');
+  const visible = getVisibleSpecs();
+  const counts = {};
+  STAGES.forEach(s => counts[s.key] = 0);
+  visible.forEach(({ currentStage }) => { if (counts[currentStage] !== undefined) counts[currentStage]++; });
+  el.innerHTML = STAGES.map(s => `
+    <div class="stat-item">
+      <span class="stat-dot" style="background:${s.color}"></span>
+      <span class="stat-count">${counts[s.key]}</span>
+      <span class="stat-label">${s.label}</span>
+    </div>
+  `).join('');
+}
+
+// ── CARD HTML ──
+function cardHTML(client, spec) {
+  const typeClass = `badge-${spec.type}`;
+  const orchClass = `badge-${spec.orchestrator}`;
+  const shown = spec.systems.slice(0, 3);
+  const extra = spec.systems.length - 3;
+  const sysChips = shown.map(s => `<span class="chip">${s}</span>`).join('');
+  const extraChip = extra > 0 ? `<span class="chip chip-more">+${extra} more</span>` : '';
+  const warnBadge = spec.needs_fixes ? `<span class="warn-badge">⚠ needs fixes</span>` : '';
+
+  return `<div class="card"
+    style="border-left-color:${client.color}"
+    draggable="true"
+    data-key="${client.name}:${spec.filename}"
+    data-client="${client.name}"
+    data-filename="${spec.filename}"
+    ondragstart="onDragStart(event)"
+    ondragend="onDragEnd(event)">
+    <div class="card-top">
+      <span class="badge badge-id">${spec.id}</span>
+      <span class="badge ${typeClass}">${spec.type}</span>
+      <span class="badge ${orchClass}">${spec.orchestrator}</span>
+    </div>
+    <div class="card-name">${spec.name}</div>
+    <div class="card-bottom">
+      ${sysChips}${extraChip}
+      ${warnBadge}
+    </div>
+  </div>`;
+}
+
+// ── BOARD ──
+function renderBoard() {
+  const board = document.getElementById('board');
+  const visible = getVisibleSpecs();
+
+  board.innerHTML = STAGES.map(stage => {
+    const stageCards = visible.filter(v => v.currentStage === stage.key);
+    const cardsHTML = stageCards.length === 0
+      ? `<div class="empty-drop">Drop cards here</div>`
+      : stageCards.map(({ client, spec }) => cardHTML(client, spec)).join('');
+
+    return `<div class="column">
+      <div class="column-header">
+        <span class="column-stage-dot" style="background:${stage.color}"></span>
+        <span class="column-title">${stage.label}</span>
+        <span class="column-count">${stageCards.length}</span>
+      </div>
+      <div class="column-body"
+        data-stage="${stage.key}"
+        ondragover="onDragOver(event)"
+        ondragleave="onDragLeave(event)"
+        ondrop="onDrop(event)">
+        ${cardsHTML}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── DRAG & DROP ──
+function onDragStart(e) {
+  const card = e.currentTarget;
+  dragging = {
+    key: card.dataset.key,
+    client: card.dataset.client,
+    filename: card.dataset.filename,
+  };
+  card.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function onDragEnd(e) {
+  e.currentTarget.classList.remove('dragging');
+  dragging = null;
+}
+
+function onDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  e.currentTarget.classList.add('drag-over');
+}
+
+function onDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+
+function onDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (!dragging) return;
+
+  const toStage = e.currentTarget.dataset.stage;
+  const fromStage = state.cards[dragging.key];
+
+  if (toStage === fromStage) return;
+
+  // Record change
+  const existing = changes.findIndex(c => c.key === dragging.key);
+  if (existing !== -1) {
+    // Update existing change; if back to original, remove it
+    const original = getOriginalStage(dragging.client, dragging.filename);
+    if (toStage === original) {
+      changes.splice(existing, 1);
+    } else {
+      changes[existing].toStage = toStage;
+    }
+  } else {
+    changes.push({
+      key: dragging.key,
+      client: dragging.client,
+      filename: dragging.filename,
+      fromStage,
+      toStage,
+    });
+  }
+
+  state.cards[dragging.key] = toStage;
+  renderAll();
+}
+
+function getOriginalStage(clientName, filename) {
+  const client = DATA.clients.find(c => c.name === clientName);
+  const spec = client?.specs.find(s => s.filename === filename);
+  return spec?.stage_folder ?? null;
+}
+
+// ── PENDING CHANGES ──
+function renderPending() {
+  const section = document.getElementById('pendingSection');
+  const listEl = document.getElementById('pendingList');
+  const countEl = document.getElementById('pendingCount');
+  const cmdEl = document.getElementById('commandsBlock');
+
+  if (changes.length === 0) {
+    section.classList.remove('visible');
+    return;
+  }
+  section.classList.add('visible');
+  countEl.textContent = changes.length;
+
+  listEl.innerHTML = changes.map(c => {
+    const fromLabel = STAGES.find(s => s.key === c.fromStage)?.label ?? c.fromStage;
+    const toLabel = STAGES.find(s => s.key === c.toStage)?.label ?? c.toStage;
+    return `<div class="pending-item">
+      <span class="pending-file">${c.filename}</span>
+      <span class="pending-path">clients/${c.client}/specs/${c.fromStage}/</span>
+      <span class="pending-arrow">→</span>
+      <span class="pending-path">clients/${c.client}/specs/${c.toStage}/</span>
+      <span style="margin-left:auto;font-size:11px;color:#64748b">${fromLabel} → ${toLabel}</span>
+    </div>`;
+  }).join('');
+
+  const cmds = changes.map(c =>
+    `mv "workspace/clients/${c.client}/specs/${c.fromStage}/${c.filename}" "workspace/clients/${c.client}/specs/${c.toStage}/${c.filename}"`
+  ).join('\n');
+
+  cmdEl.innerHTML = changes.map(c =>
+    `<span class="cmd-mv">mv</span> <span class="cmd-path">"workspace/clients/${c.client}/specs/${c.fromStage}/${c.filename}"</span> \\\n   <span class="cmd-path">"workspace/clients/${c.client}/specs/${c.toStage}/${c.filename}"</span>`
+  ).join('\n');
+}
+
+function copyCommands() {
+  const cmds = changes.map(c =>
+    `mv "workspace/clients/${c.client}/specs/${c.fromStage}/${c.filename}" "workspace/clients/${c.client}/specs/${c.toStage}/${c.filename}"`
+  ).join('\n');
+  navigator.clipboard.writeText(cmds).then(() => {
+    const btn = document.getElementById('copyBtn');
+    btn.textContent = '✓ Copied!';
+    btn.classList.add('btn-copied');
+    btn.classList.remove('btn-copy');
+    setTimeout(() => {
+      btn.textContent = 'Copy mv commands';
+      btn.classList.remove('btn-copied');
+      btn.classList.add('btn-copy');
+    }, 2000);
+  });
+}
+
+function resetChanges() {
+  // Restore all cards to original
+  changes.forEach(c => {
+    state.cards[c.key] = getOriginalStage(c.client, c.filename);
+  });
+  changes.length = 0;
+  renderAll();
+}
+
+// ── MAIN RENDER ──
+function renderAll() {
+  renderTabs();
+  renderStats();
+  renderBoard();
+  renderPending();
+}
+
+renderAll();
+</script>
+</body>
+</html>

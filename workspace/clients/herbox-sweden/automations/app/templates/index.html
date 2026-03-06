@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ client_display_name }} - Automations Dashboard</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+        header {
+            background: white;
+            padding: 1rem;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        header h1 {
+            font-size: 1.25rem;
+            color: #333;
+        }
+        header nav a {
+            color: #666;
+            text-decoration: none;
+            margin-left: 1rem;
+        }
+        header nav a:hover {
+            color: #0066cc;
+        }
+        .section {
+            background: white;
+            border-radius: 8px;
+            margin: 1rem 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .section-header {
+            padding: 1rem;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .section-header h2 {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+        .automation-list {
+            padding: 0;
+        }
+        .automation-item {
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .automation-item:last-child {
+            border-bottom: none;
+        }
+        .status-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 1rem;
+            font-size: 0.875rem;
+        }
+        .status-success { background: #e6f4ea; color: #1e7e34; }
+        .status-failed { background: #fce8e6; color: #c5221f; }
+        .status-warning { background: #fef7e0; color: #b06000; }
+        .automation-info {
+            flex: 1;
+        }
+        .automation-name {
+            font-weight: 600;
+            color: #333;
+        }
+        .automation-last {
+            font-size: 0.875rem;
+            color: #666;
+        }
+        .log-item {
+            padding: 1rem;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .log-item:last-child {
+            border-bottom: none;
+        }
+        .log-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        .log-time {
+            font-size: 0.875rem;
+            color: #666;
+            width: 80px;
+        }
+        .log-automation {
+            font-weight: 600;
+            margin-right: 0.5rem;
+        }
+        .log-status {
+            font-size: 0.75rem;
+            padding: 0.125rem 0.5rem;
+            border-radius: 4px;
+        }
+        .log-status.success { background: #e6f4ea; color: #1e7e34; }
+        .log-status.failed { background: #fce8e6; color: #c5221f; }
+        .log-status.auto_resolved { background: #fef7e0; color: #b06000; }
+        .log-steps {
+            font-size: 0.875rem;
+            color: #666;
+            margin-left: 80px;
+        }
+        .empty-state {
+            padding: 2rem;
+            text-align: center;
+            color: #666;
+        }
+        .view-all {
+            font-size: 0.875rem;
+            color: #0066cc;
+            text-decoration: none;
+        }
+        /* Automation cards */
+        .automation-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1rem;
+            padding: 1rem;
+        }
+        .card {
+            background: #fafafa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .card h3 {
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+            color: #333;
+        }
+        .card p {
+            font-size: 0.875rem;
+            color: #666;
+            margin-bottom: 0.75rem;
+        }
+        .card .meta {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+            flex-wrap: wrap;
+        }
+        .card .trigger {
+            font-size: 0.75rem;
+            padding: 0.125rem 0.5rem;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        .card .trigger.cron { background: #e3f2fd; color: #1565c0; }
+        .card .trigger.webhook { background: #f3e5f5; color: #7b1fa2; }
+        .card .trigger.manual { background: #e8f5e9; color: #2e7d32; }
+        .card .schedule {
+            font-size: 0.75rem;
+            color: #666;
+            padding: 0.125rem 0.5rem;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+        .card .actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .card .actions a {
+            font-size: 0.75rem;
+            padding: 0.375rem 0.75rem;
+            border-radius: 4px;
+            text-decoration: none;
+            transition: background 0.2s;
+        }
+        .card .actions .doc-link {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        .card .actions .doc-link:hover {
+            background: #c8e6c9;
+        }
+        .card .actions .run-link {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+        .card .actions .run-link:hover {
+            background: #bbdefb;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>{{ client_display_name }} - Automations</h1>
+        <nav>
+            <a href="/">Dashboard</a>
+            <a href="/orders">Orders</a>
+            <a href="/automations">Automations</a>
+            <a href="/settings">Settings</a>
+            <a href="/logs">Logs</a>
+            <a href="/docs">Docs</a>
+            <a href="/logout">Logout</a>
+        </nav>
+    </header>
+
+    <div class="container">
+        <div class="section">
+            <div class="section-header">
+                <h2>Automation Status</h2>
+            </div>
+            <div class="automation-list">
+                {% if summary %}
+                    {% for automation_id, log in summary.items() %}
+                    <div class="automation-item">
+                        <div class="status-icon {% if log.status == 'success' %}status-success{% elif log.status == 'failed' %}status-failed{% else %}status-warning{% endif %}">
+                            {% if log.status == 'success' %}&#10003;{% elif log.status == 'failed' %}&#10007;{% else %}!{% endif %}
+                        </div>
+                        <div class="automation-info">
+                            <div class="automation-name">{{ automation_id }}</div>
+                            <div class="automation-last">
+                                Last: {{ log.started_at.strftime('%Y-%m-%d %H:%M') if log.started_at else 'Never' }}
+                                {% if log.steps and log.steps|length > 0 %}
+                                - {{ log.steps[-1].get('output_summary', '') }}
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="empty-state">No automations have run yet.</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-header">
+                <h2>Recent Activity</h2>
+                <a href="/logs" class="view-all">View All</a>
+            </div>
+            <div class="log-list">
+                {% if recent_logs %}
+                    {% for log in recent_logs %}
+                    <div class="log-item">
+                        <div class="log-header">
+                            <span class="log-time">{{ log.started_at.strftime('%H:%M') if log.started_at else '' }}</span>
+                            <span class="log-automation">{{ log.automation_id }}</span>
+                            <span class="log-status {{ log.status }}">
+                                {% if log.status == 'success' %}&#10003;{% elif log.status == 'failed' %}&#10007;{% else %}!{% endif %}
+                                {{ log.status }}
+                            </span>
+                        </div>
+                        <div class="log-steps">
+                            {% if log.steps %}
+                            Steps: {{ log.steps | map(attribute='name') | join(' -> ') }}
+                            {% endif %}
+                            {% if log.error %}
+                            <br>Error: {{ log.error[:100] }}
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="empty-state">No recent activity.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>

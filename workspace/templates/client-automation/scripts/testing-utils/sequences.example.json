@@ -1,0 +1,32 @@
+[
+  {
+    "seq_number": 1,
+    "seq_delay_days": 0,
+    "seq_variants": [
+      {
+        "subject": "Test Email 1",
+        "email_body": "<p>Hi {{first_name}},</p><p>This is a test email from our automation.</p>"
+      }
+    ]
+  },
+  {
+    "seq_number": 2,
+    "seq_delay_days": 3,
+    "seq_variants": [
+      {
+        "subject": "Follow-up",
+        "email_body": "<p>Hi {{first_name}},</p><p>Just following up on my previous email!</p>"
+      }
+    ]
+  },
+  {
+    "seq_number": 3,
+    "seq_delay_days": 5,
+    "seq_variants": [
+      {
+        "subject": "Last follow-up",
+        "email_body": "<p>Hi {{first_name}},</p><p>This is my last attempt to reach you.</p>"
+      }
+    ]
+  }
+]

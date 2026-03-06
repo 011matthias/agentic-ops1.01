@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ client_display_name }} - Order Detail</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.5;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+        header {
+            background: white;
+            padding: 1rem;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        header h1 { font-size: 1.25rem; color: #333; }
+        header nav a {
+            color: #666;
+            text-decoration: none;
+            margin-left: 1rem;
+        }
+        header nav a:hover { color: #0066cc; }
+        header nav a.active { color: #0066cc; font-weight: 600; }
+
+        .back-link {
+            display: inline-block;
+            margin: 1rem 0;
+            color: #0066cc;
+            text-decoration: none;
+            font-size: 0.875rem;
+        }
+        .back-link:hover { text-decoration: underline; }
+
+        .flash {
+            padding: 0.75rem 1rem;
+            background: #e3f2fd;
+            color: #1565c0;
+            border-radius: 6px;
+            margin: 0.5rem 0 1rem;
+            border: 1px solid #90caf9;
+        }
+
+        /* Sections */
+        .section {
+            background: white;
+            border-radius: 8px;
+            margin: 1rem 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .section-header {
+            padding: 1rem;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .section-header h2 { font-size: 1rem; font-weight: 600; }
+        .section-body { padding: 1rem; }
+
+        /* Order header */
+        .order-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 1.5rem;
+            background: white;
+            border-radius: 8px;
+            margin: 0 0 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .order-title h2 {
+            font-size: 1.125rem;
+            margin-bottom: 0.25rem;
+        }
+        .order-meta { font-size: 0.875rem; color: #666; }
+        .order-meta span { margin-right: 1.5rem; }
+
+        /* Badge */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .badge-pending { background: #fef7e0; color: #b06000; }
+        .badge-approved { background: #e3f2fd; color: #1565c0; }
+        .badge-created { background: #e6f4ea; color: #1e7e34; }
+        .badge-denied { background: #f5f5f5; color: #666; }
+        .badge-failed { background: #fce8e6; color: #c5221f; }
+
+        /* Form fields */
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+        .form-group label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 0.25rem;
+        }
+        .form-group input,
+        .form-group textarea {
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            font-family: inherit;
+        }
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #0066cc;
+            box-shadow: 0 0 0 2px rgba(0,102,204,0.15);
+        }
+        .form-group input:disabled,
+        .form-group textarea:disabled {
+            background: #f5f5f5;
+            color: #888;
+        }
+        .form-group textarea { resize: vertical; min-height: 60px; }
+        .input-suffix {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .input-suffix input { flex: 1; }
+        .input-suffix span { font-size: 0.8rem; color: #888; }
+
+        /* Line items table */
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+        }
+        .items-table th {
+            text-align: left;
+            padding: 0.5rem;
+            background: #fafafa;
+            border-bottom: 2px solid #e0e0e0;
+            font-weight: 600;
+            color: #555;
+            font-size: 0.8rem;
+        }
+        .items-table td {
+            padding: 0.375rem 0.5rem;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .items-table input {
+            width: 100%;
+            padding: 0.375rem 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-size: 0.8rem;
+            font-family: inherit;
+        }
+        .items-table input:focus {
+            outline: none;
+            border-color: #0066cc;
+        }
+        .items-table input:disabled { background: #f9f9f9; border-color: #eee; }
+        .items-table .num-input { text-align: right; }
+        .remove-row {
+            background: none;
+            border: none;
+            color: #c5221f;
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 0.25rem 0.5rem;
+        }
+        .remove-row:hover { background: #fce8e6; border-radius: 4px; }
+
+        .add-row-btn {
+            margin: 0.75rem 0.5rem;
+            padding: 0.375rem 0.75rem;
+            background: #f0f0f0;
+            border: 1px dashed #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            color: #555;
+        }
+        .add-row-btn:hover { background: #e8e8e8; }
+
+        .total-row {
+            font-weight: 700;
+            font-size: 1rem;
+            text-align: right;
+            padding: 1rem 0.5rem;
+        }
+
+        /* Buttons */
+        .actions {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e0e0e0;
+        }
+        .btn {
+            padding: 0.625rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-primary { background: #0066cc; color: white; }
+        .btn-primary:hover { background: #0052a3; }
+        .btn-approve { background: #1e7e34; color: white; }
+        .btn-approve:hover { background: #166928; }
+        .btn-deny { background: #c5221f; color: white; }
+        .btn-deny:hover { background: #a31b18; }
+        .btn-danger { background: #7b1fa2; color: white; }
+        .btn-danger:hover { background: #6a1b9a; }
+        .btn-secondary { background: #e0e0e0; color: #333; }
+        .btn-secondary:hover { background: #d0d0d0; }
+
+        /* Audit log */
+        .audit-list { list-style: none; }
+        .audit-item {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 0.8rem;
+            display: flex;
+            gap: 1rem;
+            align-items: baseline;
+        }
+        .audit-item:last-child { border-bottom: none; }
+        .audit-time { color: #888; white-space: nowrap; min-width: 130px; }
+        .audit-action { font-weight: 600; }
+        .audit-action.approved { color: #1e7e34; }
+        .audit-action.denied { color: #666; }
+        .audit-action.edited { color: #1565c0; }
+        .audit-action.created { color: #1e7e34; }
+        .audit-action.failed { color: #c5221f; }
+        .audit-action.deleted { color: #7b1fa2; }
+        .audit-details { color: #666; }
+
+        .error-box {
+            background: #fce8e6;
+            border: 1px solid #f5c6cb;
+            color: #c5221f;
+            padding: 0.75rem 1rem;
+            border-radius: 6px;
+            margin: 0.5rem 0;
+            font-size: 0.875rem;
+        }
+
+        /* Customer info card */
+        .customer-info-card {
+            background: white;
+            border-radius: 8px;
+            margin: 0 0 1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 1rem;
+        }
+        .customer-info-card h4 {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 0.75rem;
+        }
+        .info-grid { display: flex; flex-direction: column; gap: 0.375rem; }
+        .info-row { display: flex; gap: 1rem; font-size: 0.875rem; }
+        .info-label { color: #888; min-width: 120px; flex-shrink: 0; }
+        .info-value { color: #333; }
+        .info-value a { color: #0066cc; text-decoration: none; }
+        .info-value a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>{{ client_display_name }} - Automations</h1>
+        <nav>
+            <a href="/">Dashboard</a>
+            <a href="/orders" class="active">Orders</a>
+            <a href="/automations">Automations</a>
+            <a href="/settings">Settings</a>
+            <a href="/logs">Logs</a>
+            <a href="/docs">Docs</a>
+            <a href="/logout">Logout</a>
+        </nav>
+    </header>
+
+    <div class="container">
+        <a href="/orders{% if delivery_from %}?tab=recurring&delivery_from={{ delivery_from }}&delivery_to={{ delivery_to }}{% endif %}" class="back-link">&larr; Back to Orders</a>
+
+        {% if flash %}
+        <div class="flash">{{ flash }}</div>
+        {% endif %}
+
+        <!-- Order header -->
+        <div class="order-header">
+            <div class="order-title">
+                <h2>Order: {{ order.your_order_number }}</h2>
+                <div class="order-meta">
+                    <span>Customer: <strong>{{ order.customer_name }}</strong> (#{{ order.customer_number }})</span>
+                    <span>Contract: <strong>#{{ order.contract_number }}</strong></span>
+                </div>
+            </div>
+            <span class="badge badge-{{ order.status }}">{{ order.status }}</span>
+        </div>
+
+        {% if order.status == 'failed' and order.error_message %}
+        <div class="error-box">
+            <strong>Error:</strong> {{ order.error_message }}
+        </div>
+        {% endif %}
+
+        {% if order.customer_info %}
+        <div class="customer-info-card">
+            <h4>Customer Information</h4>
+            <div class="info-grid">
+                {% if order.customer_info.phone %}
+                <div class="info-row">
+                    <span class="info-label">Phone</span>
+                    <span class="info-value">
+                        <a href="tel:{{ order.customer_info.phone }}">{{ order.customer_info.phone }}</a>
+                    </span>
+                </div>
+                {% endif %}
+                {% if order.customer_info.email %}
+                <div class="info-row">
+                    <span class="info-label">Email</span>
+                    <span class="info-value">
+                        <a href="mailto:{{ order.customer_info.email }}">{{ order.customer_info.email }}</a>
+                    </span>
+                </div>
+                {% endif %}
+                {% if order.customer_info.address1 %}
+                <div class="info-row">
+                    <span class="info-label">Delivery Address</span>
+                    <span class="info-value">
+                        {{ order.customer_info.address1 }},
+                        {{ order.customer_info.zip or '' }}
+                        {{ order.customer_info.city or '' }},
+                        {{ order.customer_info.country or '' }}
+                    </span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% set editable = order.status in ('pending', 'failed') %}
+
+        <form method="POST" action="/orders/{{ order.id }}/edit" id="order-form">
+            <!-- Order details -->
+            <div class="section">
+                <div class="section-header">
+                    <h2>Order Details</h2>
+                </div>
+                <div class="section-body">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Delivery Date</label>
+                            <input type="date" name="delivery_date"
+                                   value="{{ order.delivery_date.strftime('%Y-%m-%d') if order.delivery_date else '' }}"
+                                   {% if not editable %}disabled{% endif %} />
+                        </div>
+                        <div class="form-group">
+                            <label>Period Start</label>
+                            <input type="date" name="period_start"
+                                   value="{{ order.period_start.strftime('%Y-%m-%d') if order.period_start else '' }}"
+                                   {% if not editable %}disabled{% endif %} />
+                        </div>
+                        <div class="form-group">
+                            <label>Period End</label>
+                            <input type="date" name="period_end"
+                                   value="{{ order.period_end.strftime('%Y-%m-%d') if order.period_end else '' }}"
+                                   {% if not editable %}disabled{% endif %} />
+                        </div>
+                        <div class="form-group">
+                            <label>Interval</label>
+                            <span style="padding: 0.5rem 0; font-size: 0.875rem; color: #333;">{{ order.interval or '—' }}</span>
+                        </div>
+                        <div class="form-group">
+                            <label>Administration Fee</label>
+                            <div class="input-suffix">
+                                <input type="number" name="administration_fee" step="0.01"
+                                       value="{{ order.administration_fee or 0 }}"
+                                       {% if not editable %}disabled{% endif %} />
+                                <span>SEK</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Freight</label>
+                            <div class="input-suffix">
+                                <input type="number" name="freight" step="0.01"
+                                       value="{{ order.freight or 0 }}"
+                                       {% if not editable %}disabled{% endif %} />
+                                <span>SEK</span>
+                            </div>
+                        </div>
+                        <div class="form-group full-width">
+                            <label>Remarks</label>
+                            <textarea name="remarks" rows="2"
+                                      {% if not editable %}disabled{% endif %}>{{ order.remarks or '' }}</textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Line items -->
+            <div class="section">
+                <div class="section-header">
+                    <h2>Line Items</h2>
+                </div>
+                <div class="section-body" style="padding: 0;">
+                    <table class="items-table">
+                        <thead>
+                            <tr>
+                                <th>Article</th>
+                                <th>Description</th>
+                                <th>Qty</th>
+                                <th>Price</th>
+                                <th>VAT %</th>
+                                <th>Unit</th>
+                                {% if editable %}<th></th>{% endif %}
+                            </tr>
+                        </thead>
+                        <tbody id="order-rows">
+                            {% for row in order_rows %}
+                            <tr>
+                                <td><input value="{{ row.get('ArticleNumber', '') }}" data-field="ArticleNumber" {% if not editable %}disabled{% endif %} /></td>
+                                <td><input value="{{ row.get('Description', '') }}" data-field="Description" {% if not editable %}disabled{% endif %} /></td>
+                                <td><input type="number" class="num-input qty-input" value="{{ row.get('DeliveredQuantity', row.get('Quantity', 0)) }}" data-field="DeliveredQuantity" step="any" {% if not editable %}disabled{% endif %} /></td>
+                                <td><input type="number" class="num-input price-input" value="{{ row.get('Price', 0) }}" data-field="Price" step="0.01" {% if not editable %}disabled{% endif %} /></td>
+                                <td><input type="number" class="num-input" value="{{ row.get('VAT', 25) }}" data-field="VAT" {% if not editable %}disabled{% endif %} /></td>
+                                <td><input value="{{ row.get('Unit', '') }}" data-field="Unit" style="width:60px;" {% if not editable %}disabled{% endif %} /></td>
+                                {% if editable %}<td><button type="button" class="remove-row" onclick="removeRow(this)">&times;</button></td>{% endif %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% if editable %}
+                    <button type="button" class="add-row-btn" onclick="addRow()">+ Add Row</button>
+                    {% endif %}
+                    <div class="total-row" id="line-total">
+                        Line items total: <span id="calculated-total">0</span> SEK
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hidden field for rows JSON -->
+            <input type="hidden" name="rows_json" id="rows-json" />
+
+            <!-- Action buttons -->
+            {% if editable %}
+            <div class="actions">
+                <button type="submit" class="btn btn-primary" onclick="prepareSubmit()">Save Changes</button>
+                <button type="button" class="btn btn-approve" onclick="approveOrder()">Approve</button>
+                <button type="button" class="btn btn-deny" onclick="denyOrder()">Deny</button>
+                <button type="button" class="btn btn-danger" onclick="deleteOrder()">Delete Order</button>
+                <a href="/orders{% if delivery_from %}?tab=recurring&delivery_from={{ delivery_from }}&delivery_to={{ delivery_to }}{% endif %}" class="btn btn-secondary">Back to List</a>
+            </div>
+            {% else %}
+            <div class="actions">
+                {% if order.status == 'denied' %}
+                <button type="button" class="btn btn-danger" onclick="deleteOrder()">Delete Order</button>
+                {% endif %}
+                <a href="/orders{% if delivery_from %}?tab=recurring&delivery_from={{ delivery_from }}&delivery_to={{ delivery_to }}{% endif %}" class="btn btn-secondary">Back to List</a>
+            </div>
+            {% endif %}
+        </form>
+
+        <!-- Audit log -->
+        <div class="section">
+            <div class="section-header">
+                <h2>Audit Log</h2>
+            </div>
+            <div class="section-body">
+                {% if logs %}
+                <ul class="audit-list">
+                    {% for log in logs %}
+                    <li class="audit-item">
+                        <span class="audit-time">{{ log.created_at.strftime('%Y-%m-%d %H:%M') if log.created_at else '' }}</span>
+                        <span class="audit-action {{ log.action }}">{{ log.action }}</span>
+                        <span class="audit-details">
+                            {% if log.performed_by %}by {{ log.performed_by }}{% endif %}
+                            {% if log.details and log.action == 'edited' %}
+                                - Changed: {{ log.details.keys() | join(', ') if log.details is mapping else log.details }}
+                            {% elif log.details and log.action == 'created' %}
+                                - Fortnox #{{ log.details.get('fortnox_order_number', '') }}
+                            {% elif log.details and log.action == 'failed' %}
+                                - {{ log.details.get('error', '')[:100] }}
+                            {% elif log.details and log.action == 'deleted' %}
+                                - was {{ log.details.get('previous_status', '') }}
+                            {% endif %}
+                        </span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p style="color: #888; font-size: 0.875rem;">No actions recorded yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function collectRows() {
+            var tbody = document.getElementById('order-rows');
+            var rows = [];
+            var trs = tbody.querySelectorAll('tr');
+            for (var i = 0; i < trs.length; i++) {
+                var inputs = trs[i].querySelectorAll('input');
+                var row = {};
+                for (var j = 0; j < inputs.length; j++) {
+                    var field = inputs[j].getAttribute('data-field');
+                    if (field) {
+                        var val = inputs[j].value;
+                        if (inputs[j].type === 'number') {
+                            val = parseFloat(val) || 0;
+                        }
+                        row[field] = val;
+                    }
+                }
+                if (Object.keys(row).length > 0) {
+                    rows.push(row);
+                }
+            }
+            return rows;
+        }
+
+        function prepareSubmit() {
+            var rows = collectRows();
+            document.getElementById('rows-json').value = JSON.stringify(rows);
+        }
+
+        function addRow() {
+            var tbody = document.getElementById('order-rows');
+            var tr = document.createElement('tr');
+            tr.innerHTML = '<td><input value="" data-field="ArticleNumber" /></td>'
+                + '<td><input value="" data-field="Description" /></td>'
+                + '<td><input type="number" class="num-input qty-input" value="1" data-field="DeliveredQuantity" step="any" /></td>'
+                + '<td><input type="number" class="num-input price-input" value="0" data-field="Price" step="0.01" /></td>'
+                + '<td><input type="number" class="num-input" value="25" data-field="VAT" /></td>'
+                + '<td><input value="" data-field="Unit" style="width:60px;" /></td>'
+                + '<td><button type="button" class="remove-row" onclick="removeRow(this)">&times;</button></td>';
+            tbody.appendChild(tr);
+            updateTotal();
+        }
+
+        function removeRow(btn) {
+            btn.closest('tr').remove();
+            updateTotal();
+        }
+
+        function updateTotal() {
+            var rows = collectRows();
+            var total = 0;
+            for (var i = 0; i < rows.length; i++) {
+                total += (parseFloat(rows[i].DeliveredQuantity) || 0) * (parseFloat(rows[i].Price) || 0);
+            }
+            document.getElementById('calculated-total').textContent = total.toLocaleString('sv-SE', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+        }
+
+        function approveOrder() {
+            if (!confirm('Approve this order and create it in Fortnox?')) return;
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/orders/approve';
+            var input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'order_ids';
+            input.value = '{{ order.id }}';
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
+        }
+
+        function denyOrder() {
+            if (!confirm('Deny this order?')) return;
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/orders/deny';
+            var input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'order_ids';
+            input.value = '{{ order.id }}';
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
+        }
+
+        function deleteOrder() {
+            if (!confirm('Delete this order for {{ order.customer_name }}? It will be hidden from the dashboard.')) return;
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/orders/delete';
+
+            var idsInput = document.createElement('input');
+            idsInput.type = 'hidden';
+            idsInput.name = 'order_ids';
+            idsInput.value = '{{ order.id }}';
+            form.appendChild(idsInput);
+
+            var tabInput = document.createElement('input');
+            tabInput.type = 'hidden';
+            tabInput.name = 'tab';
+            tabInput.value = '{{ "recurring" if order.source == "recurring" else "new" }}';
+            form.appendChild(tabInput);
+
+            document.body.appendChild(form);
+            form.submit();
+        }
+
+        // Calculate total on load and on input changes
+        updateTotal();
+        document.getElementById('order-rows').addEventListener('input', updateTotal);
+
+        // Ensure rows JSON is set on form submit
+        document.getElementById('order-form').addEventListener('submit', function(e) {
+            prepareSubmit();
+        });
+    </script>
+</body>
+</html>

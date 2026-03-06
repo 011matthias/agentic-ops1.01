@@ -1,0 +1,453 @@
+{
+  "flow": [
+    {
+      "id": 1,
+      "mapper": {},
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "metadata": {
+        "restore": {
+          "parameters": {
+            "hook": {
+              "label": "Meji Media - Enquiry Form"
+            }
+          }
+        },
+        "designer": {
+          "x": 0,
+          "y": 750
+        }
+      },
+      "parameters": {
+        "hook": null,
+        "maxResults": 1
+      }
+    },
+    {
+      "id": 50,
+      "mapper": {
+        "key": "main",
+        "returnWrapped": false
+      },
+      "module": "datastore:GetRecord",
+      "version": 1,
+      "metadata": {
+        "restore": {
+          "parameters": {
+            "datastore": {
+              "label": "Pipeline Config"
+            }
+          }
+        },
+        "designer": {
+          "x": 300,
+          "y": 750
+        }
+      },
+      "parameters": {
+        "datastore": 9999993
+      }
+    },
+    {
+      "id": 52,
+      "mapper": {
+        "name": "lead_score",
+        "scope": "roundtrip",
+        "value": "{{(if(length(ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Organisation Name\")); \"\")) > 0; parseNumber(50.weight_has_organisation; \".\"); 0)) + (if(contains(\"gmail.com,yahoo.com,hotmail.com,outlook.com,live.com,icloud.com,aol.com\"; last(split(lower(ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Email address\")); \"x@gmail.com\")); \"@\"))); 0; parseNumber(50.weight_business_email; \".\"))) + (if(contains(lower(ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Discussion Topic\")); \"\")); \"wedding\"); parseNumber(50.topic_weight_wedding; \".\"); if(contains(lower(ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Discussion Topic\")); \"\")); \"corporate\"); parseNumber(50.topic_weight_corporate; \".\"); if(contains(lower(ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Discussion Topic\")); \"\")); \"festival\"); parseNumber(50.topic_weight_festival; \".\"); parseNumber(50.topic_weight_default; \".\"))))) + (if(length(ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Phone\")); \"\")) > 3; parseNumber(50.weight_has_phone; \".\"); 0)) + (if(length(ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"A brief description about your project/request/consultation\")); \"\")) > 100; parseNumber(50.weight_long_message; \".\"); 0)) + (if(contains(lower(ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"A brief description about your project/request/consultation\")); \"\")); \"budget\"); parseNumber(50.weight_budget_keywords; \".\"); if(contains(lower(ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"A brief description about your project/request/consultation\")); \"\")); \"quote\"); parseNumber(50.weight_budget_keywords; \".\"); if(contains(lower(ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"A brief description about your project/request/consultation\")); \"\")); \"price\"); parseNumber(50.weight_budget_keywords; \".\"); 0)))) + (if(parseNumber(formatDate(now; \"H\"); \".\") >= 9; if(parseNumber(formatDate(now; \"H\"); \".\") < 17; parseNumber(50.weight_business_hours; \".\"); 0); 0)) + (if(length(ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Phone\")); \"\")) > 3; if(length(ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Organisation Name\")); \"\")) > 0; if(length(ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"A brief description about your project/request/consultation\")); \"\")) > 0; parseNumber(50.weight_form_completeness; \".\"); 0); 0); 0))}}"
+      },
+      "module": "util:SetVariable2",
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 750
+        }
+      },
+      "parameters": {}
+    },
+    {
+      "id": 53,
+      "mapper": {
+        "name": "priority",
+        "scope": "roundtrip",
+        "value": "{{if(52.lead_score >= parseNumber(50.tier_hot_min; \".\"); \"hot\"; if(52.lead_score >= parseNumber(50.tier_warm_min; \".\"); \"warm\"; \"standard\"))}}"
+      },
+      "module": "util:SetVariable2",
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 900,
+          "y": 750
+        }
+      },
+      "parameters": {}
+    },
+    {
+      "id": 56,
+      "mapper": {
+        "name": "ab_variant",
+        "scope": "roundtrip",
+        "value": "{{if(50.ab_testing_enabled = \"true\"; if(parseNumber(formatDate(now; \"s\")) < 30; \"A\"; \"B\"); \"A\")}}"
+      },
+      "module": "util:SetVariable2",
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 1050,
+          "y": 750
+        }
+      },
+      "parameters": {}
+    },
+    {
+      "id": 2,
+      "mapper": {
+        "select": "map",
+        "values": {
+          "0": "ENQ-{{formatDate(now; \"YYYYMMDD-HHmmss\")}}",
+          "1": "{{formatDate(now; \"YYYY-MM-DDTHH:mm:ssZ\")}}",
+          "2": "{{ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"What's your name?\")); \"\")}}",
+          "3": "{{ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Email address\")); \"\")}}",
+          "4": "'{{ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Phone\")); \"\")}}",
+          "5": "{{ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Discussion Topic\")); \"Enquiry\")}}",
+          "6": "{{ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Organisation Name\")); \"\")}}",
+          "7": "{{ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"A brief description about your project/request/consultation\")); \"\")}}",
+          "8": "{{53.priority}}",
+          "9": "{{if(52.lead_score >= parseNumber(50.handoff_threshold; \".\"); if(50.handoff_enabled = \"true\"; \"handoff\"; \"new\"); \"new\")}}",
+          "10": "{{if(52.lead_score >= parseNumber(50.handoff_threshold; \".\"); if(50.handoff_enabled = \"true\"; \"TRUE\"; \"FALSE\"); \"FALSE\")}}",
+          "11": "2",
+          "12": "{{formatDate(addHours(now; if(53.priority = \"hot\"; parseNumber(50.cadence_hot_step2; \".\"); if(53.priority = \"warm\"; parseNumber(50.cadence_warm_step2; \".\"); parseNumber(50.cadence_standard_step2; \".\")))); \"YYYY-MM-DDTHH:mm:ssZ\")}}",
+          "13": "{{formatDate(now; \"YYYY-MM-DDTHH:mm:ssZ\")}}",
+          "14": "tally_form",
+          "15": "{{52.lead_score}}",
+          "16": "{{56.ab_variant}}"
+        },
+        "sheetId": "Leads",
+        "spreadsheetId": "__SPREADSHEET_ID__",
+        "tableFirstRow": "A1:Z1",
+        "valueInputOption": "USER_ENTERED",
+        "insertUnformatted": false
+      },
+      "module": "google-sheets:addRow",
+      "onerror": [
+        {
+          "id": 20,
+          "mapper": {},
+          "module": "builtin:Resume",
+          "version": 1,
+          "metadata": {
+            "designer": {
+              "x": 1500,
+              "y": 1500
+            }
+          },
+          "parameters": {}
+        }
+      ],
+      "version": 2,
+      "metadata": {
+        "restore": {
+          "parameters": {
+            "sheetId": {
+              "label": "Leads"
+            },
+            "spreadsheetId": {
+              "label": "MejiMedia_Enquiries_Followup"
+            }
+          }
+        },
+        "designer": {
+          "x": 1200,
+          "y": 750
+        }
+      },
+      "parameters": {
+        "__IMTCONN__": 9999991
+      }
+    },
+    {
+      "id": 51,
+      "mapper": {
+        "key": "{{if(52.lead_score >= parseNumber(50.handoff_threshold; \".\"); \"initial_high\"; \"initial_standard\") + \"_\" + lower(56.ab_variant)}}",
+        "returnWrapped": false
+      },
+      "module": "datastore:GetRecord",
+      "version": 1,
+      "metadata": {
+        "restore": {
+          "parameters": {
+            "datastore": {
+              "label": "Email Templates"
+            }
+          }
+        },
+        "designer": {
+          "x": 1519,
+          "y": 783
+        }
+      },
+      "parameters": {
+        "datastore": 9999994
+      }
+    },
+    {
+      "id": 70,
+      "mapper": {
+        "url": "https://api.openai.com/v1/chat/completions",
+        "data": "{\"model\":\"{{50.ai_model}}\",\"messages\":[{\"role\":\"system\",\"content\":\"{{50.ai_system_prompt}}\"},{\"role\":\"user\",\"content\":\"Name: {{ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"What's your name?\")); \"there\")}}. Topic: {{ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Discussion Topic\")); \"general enquiry\")}}. Organisation: {{ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Organisation Name\")); \"not specified\")}}. This is the initial acknowledgement email.\"}],\"max_tokens\":{{parseNumber(50.ai_max_tokens; \".\")}},\"temperature\":{{parseNumber(50.ai_temperature; \".\")}}}",
+        "gzip": true,
+        "method": "post",
+        "headers": [
+          {
+            "name": "Authorization",
+            "value": "Bearer {{50.ai_api_key}}"
+          },
+          {
+            "name": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "useMtls": false,
+        "bodyType": "raw",
+        "contentType": "application/json",
+        "serializeUrl": false,
+        "shareCookies": false,
+        "parseResponse": true,
+        "followRedirect": true,
+        "useQuerystring": false,
+        "rejectUnauthorized": true
+      },
+      "module": "http:ActionSendData",
+      "onerror": [
+        {
+          "id": 71,
+          "mapper": {},
+          "module": "builtin:Resume",
+          "version": 1,
+          "metadata": {
+            "designer": {
+              "x": 2100,
+              "y": 1200
+            }
+          },
+          "parameters": {}
+        }
+      ],
+      "version": 3,
+      "metadata": {
+        "designer": {
+          "x": 1800,
+          "y": 600
+        }
+      },
+      "parameters": {
+        "handleErrors": true,
+        "useNewZLibDeCompress": true
+      }
+    },
+    {
+      "id": 3,
+      "mapper": null,
+      "module": "builtin:BasicRouter",
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 54,
+              "filter": {
+                "name": "Handoff Eligible",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{52.lead_score}}",
+                      "b": "{{parseNumber(50.handoff_threshold; \".\")}}",
+                      "o": "number:greaterorequal"
+                    },
+                    {
+                      "a": "{{50.handoff_enabled}}",
+                      "b": "true",
+                      "o": "text:equal"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "to": "{{50.handoff_email}}",
+                "content": "<html><body><h2>New High-Priority Enquiry</h2><table style=\"border-collapse:collapse;width:100%;max-width:600px\"><tr><td style=\"padding:8px;border:1px solid #ddd\"><strong>Name</strong></td><td style=\"padding:8px;border:1px solid #ddd\">{{ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"What's your name?\")); \"Not provided\")}}</td></tr><tr><td style=\"padding:8px;border:1px solid #ddd\"><strong>Email</strong></td><td style=\"padding:8px;border:1px solid #ddd\">{{ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Email address\")); \"Not provided\")}}</td></tr><tr><td style=\"padding:8px;border:1px solid #ddd\"><strong>Phone</strong></td><td style=\"padding:8px;border:1px solid #ddd\">{{ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Phone\")); \"Not provided\")}}</td></tr><tr><td style=\"padding:8px;border:1px solid #ddd\"><strong>Organisation</strong></td><td style=\"padding:8px;border:1px solid #ddd\">{{ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Organisation Name\")); \"Not provided\")}}</td></tr><tr><td style=\"padding:8px;border:1px solid #ddd\"><strong>Topic</strong></td><td style=\"padding:8px;border:1px solid #ddd\">{{ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Discussion Topic\")); \"Not specified\")}}</td></tr><tr><td style=\"padding:8px;border:1px solid #ddd\"><strong>Message</strong></td><td style=\"padding:8px;border:1px solid #ddd\">{{ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"A brief description about your project/request/consultation\")); \"No message\")}}</td></tr></table><hr><p><strong>Lead Score:</strong> {{52.lead_score}} ({{53.priority}})</p><p><strong>Target Response Time:</strong> {{50.handoff_urgency_hours}} hour(s)</p><p style=\"color:#c0392b\"><strong>Please respond to this enquiry within {{50.handoff_urgency_hours}} hour(s) for best conversion.</strong></p></body></html>",
+                "subject": "HOT LEAD: {{ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"What's your name?\")); \"Unknown\")}} - {{ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Discussion Topic\")); \"General Enquiry\")}} (Score: {{52.lead_score}})",
+                "bodyType": "rawHtml",
+                "fromName": "{{50.company_name}}"
+              },
+              "module": "google-email:sendAnEmail",
+              "onerror": [
+                {
+                  "id": 57,
+                  "mapper": {},
+                  "module": "builtin:Resume",
+                  "version": 1,
+                  "metadata": {
+                    "designer": {
+                      "x": 3001,
+                      "y": 271
+                    }
+                  },
+                  "parameters": {}
+                }
+              ],
+              "version": 4,
+              "metadata": {
+                "designer": {
+                  "x": 2428,
+                  "y": 260
+                }
+              },
+              "parameters": {
+                "__IMTCONN__": 9999992
+              }
+            },
+            {
+              "id": 55,
+              "mapper": {
+                "to": "{{ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Email address\")); \"\")}}",
+                "content": "{{\"<html><body>\" + replace(replace(replace(replace(replace(51.body_html; \"##name##\"; ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"What's your name?\")); \"there\")); \"##topic##\"; ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Discussion Topic\")); \"your enquiry\")); \"##organisation##\"; ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Organisation Name\")); \"\")); \"##ai_opening##\"; if(length(ifempty(70.data.choices[1].message.content; \"\")) > 0; \"<p>\" + 70.data.choices[1].message.content + \"</p>\"; \"\")); \"##signature##\"; ifempty(50.email_signature_html; \"\")) + \"</body></html>\"}}",
+                "subject": "{{replace(replace(51.subject; \"##name##\"; ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"What's your name?\")); \"there\")); \"##topic##\"; ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Discussion Topic\")); \"your enquiry\"))}}",
+                "bodyType": "rawHtml",
+                "fromName": "{{50.company_name}}"
+              },
+              "module": "google-email:sendAnEmail",
+              "onerror": [
+                {
+                  "id": 58,
+                  "mapper": {},
+                  "module": "builtin:Resume",
+                  "version": 1,
+                  "metadata": {
+                    "designer": {
+                      "x": 3034,
+                      "y": -97
+                    }
+                  },
+                  "parameters": {}
+                }
+              ],
+              "version": 4,
+              "metadata": {
+                "designer": {
+                  "x": 2439,
+                  "y": -98
+                }
+              },
+              "parameters": {
+                "__IMTCONN__": 9999992
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 5,
+              "filter": {
+                "name": "NOT Handoff",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{if(52.lead_score >= parseNumber(50.handoff_threshold; \".\"); if(50.handoff_enabled = \"true\"; \"handoff\"; \"normal\"); \"normal\")}}",
+                      "b": "normal",
+                      "o": "text:equal"
+                    }
+                  ]
+                ]
+              },
+              "mapper": {
+                "to": "{{ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Email address\")); \"\")}}",
+                "content": "{{\"<html><body>\" + replace(replace(replace(replace(replace(51.body_html; \"##name##\"; ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"What's your name?\")); \"there\")); \"##topic##\"; ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Discussion Topic\")); \"your enquiry\")); \"##organisation##\"; ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Organisation Name\")); \"\")); \"##ai_opening##\"; if(length(ifempty(70.data.choices[1].message.content; \"\")) > 0; \"<p>\" + 70.data.choices[1].message.content + \"</p>\"; \"\")); \"##signature##\"; ifempty(50.email_signature_html; \"\")) + \"</body></html>\"}}",
+                "subject": "{{replace(replace(51.subject; \"##name##\"; ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"What's your name?\")); \"there\")); \"##topic##\"; ifempty(first(map(1.data.fields; \"value\"; \"label\"; \"Discussion Topic\")); \"your enquiry\"))}}",
+                "bodyType": "rawHtml",
+                "fromName": "{{50.company_name}}"
+              },
+              "module": "google-email:sendAnEmail",
+              "onerror": [
+                {
+                  "id": 22,
+                  "mapper": {},
+                  "module": "builtin:Resume",
+                  "version": 1,
+                  "metadata": {
+                    "designer": {
+                      "x": 3020,
+                      "y": 612
+                    }
+                  },
+                  "parameters": {}
+                }
+              ],
+              "version": 4,
+              "metadata": {
+                "designer": {
+                  "x": 2400,
+                  "y": 600
+                }
+              },
+              "parameters": {
+                "__IMTCONN__": 9999992
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 6,
+              "mapper": {
+                "body": "{\"status\": \"ok\", \"message\": \"Enquiry received\"}",
+                "status": 200,
+                "headers": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ]
+              },
+              "module": "gateway:WebhookRespond",
+              "version": 1,
+              "metadata": {
+                "designer": {
+                  "x": 2342,
+                  "y": 935
+                }
+              },
+              "parameters": {}
+            }
+          ]
+        }
+      ],
+      "version": 1,
+      "metadata": {
+        "designer": {
+          "x": 2100,
+          "y": 450
+        }
+      },
+      "parameters": {}
+    }
+  ],
+  "name": "A1 — Enquiry Follow-Up Sequence",
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "designer": {
+      "orphans": []
+    },
+    "scenario": {
+      "slots": null,
+      "dataloss": false,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "roundtrips": 1,
+      "sequential": false,
+      "confidential": false,
+      "autoCommitTriggerLast": true
+    }
+  }
+}
