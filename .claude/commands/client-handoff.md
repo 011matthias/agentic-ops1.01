@@ -11,7 +11,7 @@ Creates a dedicated GitHub repository for a client and sets up git subtree for d
 
 - Working directory: !`pwd`
 - Client name: $ARGUMENTS
-- GitHub username: nickswagster
+- GitHub username: akkton
 - Repo naming convention: `agentic-ops--{client-name}`
 
 ## Prerequisites
@@ -37,7 +37,7 @@ Run `git status` to ensure:
 ## Step 3: Check if GitHub Repo Exists
 
 ```bash
-gh repo view nickswagster/agentic-ops--$ARGUMENTS 2>/dev/null
+gh repo view akkton/agentic-ops--$ARGUMENTS 2>/dev/null
 ```
 
 | Result | Action |
@@ -50,7 +50,7 @@ gh repo view nickswagster/agentic-ops--$ARGUMENTS 2>/dev/null
 Create private repository:
 
 ```bash
-gh repo create nickswagster/agentic-ops--$ARGUMENTS \
+gh repo create akkton/agentic-ops--$ARGUMENTS \
   --private \
   --description "Automation service for $ARGUMENTS" \
   --disable-wiki \
@@ -88,7 +88,7 @@ git commit -m "Prepare $ARGUMENTS automations for subtree" --allow-empty
 # Add subtree
 git subtree add \
   --prefix=workspace/clients/$ARGUMENTS/automations \
-  git@github.com:nickswagster/agentic-ops--$ARGUMENTS.git \
+  git@github.com:akkton/agentic-ops--$ARGUMENTS.git \
   main \
   --squash
 ```
@@ -99,7 +99,7 @@ If the repo is new/empty, we need to push first:
 # Push initial content to new repo
 git subtree push \
   --prefix=workspace/clients/$ARGUMENTS/automations \
-  git@github.com:nickswagster/agentic-ops--$ARGUMENTS.git \
+  git@github.com:akkton/agentic-ops--$ARGUMENTS.git \
   main
 ```
 
@@ -110,7 +110,7 @@ Push the automations subtree to GitHub:
 ```bash
 git subtree push \
   --prefix=workspace/clients/$ARGUMENTS/automations \
-  git@github.com:nickswagster/agentic-ops--$ARGUMENTS.git \
+  git@github.com:akkton/agentic-ops--$ARGUMENTS.git \
   main
 ```
 
@@ -119,7 +119,7 @@ git subtree push \
 Check that the repository has content:
 
 ```bash
-gh repo view nickswagster/agentic-ops--$ARGUMENTS --json defaultBranchRef
+gh repo view akkton/agentic-ops--$ARGUMENTS --json defaultBranchRef
 ```
 
 Visit the repo to confirm files are present.
@@ -139,14 +139,14 @@ Set up GitHub secrets for CI/CD deployment:
 ```bash
 # Prompt user for their Trigger.dev access token
 gh secret set TRIGGER_ACCESS_TOKEN \
-  --repo nickswagster/agentic-ops--$ARGUMENTS \
+  --repo akkton/agentic-ops--$ARGUMENTS \
   --body "<prompt-user-for-token>"
 ```
 
 If self-hosted Trigger.dev, also set:
 ```bash
 gh secret set TRIGGER_API_URL \
-  --repo nickswagster/agentic-ops--$ARGUMENTS \
+  --repo akkton/agentic-ops--$ARGUMENTS \
   --body "<trigger-dev-api-url>"
 ```
 
@@ -169,7 +169,7 @@ Output instructions for connecting Railway:
 3. Connect GitHub repo:
    - Go to Railway dashboard
    - Select project → Settings → GitHub
-   - Connect: nickswagster/agentic-ops--$ARGUMENTS
+   - Connect: akkton/agentic-ops--$ARGUMENTS
 
 4. Set environment variables:
    railway variables --set "KEY=value"
@@ -181,23 +181,23 @@ Output instructions for connecting Railway:
 ## Output Summary
 
 ```
-✓ GitHub repository created: nickswagster/agentic-ops--$ARGUMENTS
+✓ GitHub repository created: akkton/agentic-ops--$ARGUMENTS
 ✓ Git subtree configured for workspace/clients/$ARGUMENTS/automations/
 
-Repository: https://github.com/nickswagster/agentic-ops--$ARGUMENTS
+Repository: https://github.com/akkton/agentic-ops--$ARGUMENTS
 
 Subtree commands for future updates:
 
   # Push changes to client repo
   git subtree push \
     --prefix=workspace/clients/$ARGUMENTS/automations \
-    git@github.com:nickswagster/agentic-ops--$ARGUMENTS.git \
+    git@github.com:akkton/agentic-ops--$ARGUMENTS.git \
     main
 
   # Pull from client repo (rare)
   git subtree pull \
     --prefix=workspace/clients/$ARGUMENTS/automations \
-    git@github.com:nickswagster/agentic-ops--$ARGUMENTS.git \
+    git@github.com:akkton/agentic-ops--$ARGUMENTS.git \
     main --squash
 
 Next steps (Trigger.dev):

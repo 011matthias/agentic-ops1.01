@@ -108,7 +108,7 @@ Each client gets their own isolated infrastructure:
 │  GIT SUBTREE      │  │    │   └── automations/        │  │    RAILWAY        │
 │  ────────────►    │  │    │       ├── a1-xxx.md       │  │    ────────►      │
 │                   │  │    │       └── a2-xxx.md       │  │                   │
-│  nickswagster/  │  │    │                           │  │   herbox-sweden   │
+│  akkton/  │  │    │                           │  │   herbox-sweden   │
 │  agentic-ops--    │  │    └── automations/ ──────────►│──┼──► Railway App    │
 │  herbox-sweden    │  │        └── (FastAPI app)       │  │                   │
 │                   │  │                                │  │                   │
@@ -119,7 +119,7 @@ Each client gets their own isolated infrastructure:
 │  GIT SUBTREE      │  │    ├── specs/                  │  │    RAILWAY        │
 │  ────────────►    │  │    │   └── automations/        │  │    ────────►      │
 │                   │  │    │                           │  │                   │
-│  nickswagster/  │  │    └── automations/ ──────────►│──┼──► uplifted       │
+│  akkton/  │  │    └── automations/ ──────────►│──┼──► uplifted       │
 │  agentic-ops--    │  │        └── (FastAPI app)       │  │    Railway App    │
 │  uplifted-...     │  │                                 │  │                   │
 │                   │  │                                 │  │                   │
@@ -260,7 +260,7 @@ When ready to give client their own repo:
 /client-handoff acme-corp
 
 # Creates:
-# - GitHub repo: nickswagster/agentic-ops--acme-corp
+# - GitHub repo: akkton/agentic-ops--acme-corp
 # - Git subtree connection for future syncs
 ```
 

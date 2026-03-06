@@ -110,7 +110,7 @@ Fixed persistent dashboard bugs (scrolling, fullscreen chart zoom), automated Go
 - `workspace/clients/kunde-inc/automations/dashboard/index.html` — The dashboard (CSS fixes ~line 322, fullscreen ~line 2593)
 
 ### Open Questions
-- Which GitHub account/org for dashboard deployment? User's personal or `nickswagster`?
+- Which GitHub account/org for dashboard deployment? User's personal or `akkton`?
 - What password for production? Keep `kunde-demo-2026` or change?
 
 ### Reference Materials

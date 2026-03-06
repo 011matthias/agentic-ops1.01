@@ -446,7 +446,7 @@ Deployment is automatic via GitHub Actions when code is pushed to `main`:
 # Push changes via git subtree
 git subtree push \
   --prefix="workspace/clients/{client}/automations" \
-  git@github.com:nickswagster/agentic-ops--{client}.git \
+  git@github.com:akkton/agentic-ops--{client}.git \
   main
 ```
 
