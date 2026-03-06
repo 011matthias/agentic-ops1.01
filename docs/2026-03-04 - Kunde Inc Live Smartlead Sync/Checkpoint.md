@@ -133,8 +133,8 @@ Triggers → Write Column Headers → Clear Campaigns Sheet → Read Campaigns
 - Should ARCHIVED campaigns be shown in dashboard by default or hidden?
 
 ### Reference Materials
-- A3a endpoint (live): `https://unpauseai.app.n8n.cloud/webhook/dashboard-campaigns?token=kunde-demo-2026`
-- Smartlead API: `https://server.smartlead.ai/api/v1/campaigns/?api_key=713b78de-2224-47ea-8208-b9b7b14cb2f5_ohlflph`
+- A3a endpoint (live): `https://unpauseai.app.n8n.cloud/webhook/dashboard-campaigns?token=<SEE_CONTEXT>`
+- Smartlead API: `https://server.smartlead.ai/api/v1/campaigns/?api_key=<SEE_CONTEXT>`
 - Google Sheets: `https://docs.google.com/spreadsheets/d/1axfHoNjE8LaJY-tKwbbAElfwVXN--cU09aeHaT6ZRoU/edit`
 - Plan file (original): `C:\Users\neuma\.claude\plans\quiet-exploring-journal.md`
 
