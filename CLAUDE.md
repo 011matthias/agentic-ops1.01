@@ -88,7 +88,7 @@ For parallel work across clients, open separate terminal sessions and `/resume {
 git subtree push --prefix="workspace/clients/{client}/automations" git@github.com:akkton/agentic-ops--{client}.git main
 ```
 
-## Platform (unpausai.com)
+## Platform (unpauseai.com)
 
 Next.js 15 + Tailwind + TypeScript in `platform/`. Deployed to Vercel (Root Directory: `platform/`).
 

@@ -10,7 +10,7 @@ export default function Home() {
           operations. We build workflows tailored to your business.
         </p>
         <a
-          href="mailto:hello@unpausai.com"
+          href="mailto:hello@unpauseai.com"
           className="rounded-full bg-accent px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-accent-light"
         >
           Get in Touch

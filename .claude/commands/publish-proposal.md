@@ -5,7 +5,7 @@ argument-hint: <slug>
 
 # Publish Proposal
 
-Merges a proposal branch to main, triggering a Vercel production deployment. The proposal becomes accessible at `unpausai.com/proposals/{slug}`.
+Merges a proposal branch to main, triggering a Vercel production deployment. The proposal becomes accessible at `unpauseai.com/proposals/{slug}`.
 
 ## Context
 
@@ -69,7 +69,7 @@ git push origin --delete proposal/{slug}
 ```
 Proposal published: {slug}
 
-  Production URL: https://unpausai.com/proposals/{slug}
+  Production URL: https://unpauseai.com/proposals/{slug}
   Status: {status}
   Merged to: main
   Branch: {deleted or kept}
@@ -81,5 +81,5 @@ The page will be live within ~60 seconds after Vercel deploys.
 
 - This merges to main — ensure the proposal content is reviewed
 - Vercel automatically deploys on push to main
-- The production URL requires DNS to be configured (unpausai.com → Vercel)
+- The production URL requires DNS to be configured (unpauseai.com → Vercel)
 - Until DNS is set up, the page is accessible at the Vercel project URL

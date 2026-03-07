@@ -105,7 +105,7 @@ Preview URL (after Vercel builds):
   https://{branch-slug}-agentic-ops.vercel.app/proposals/{slug}
 
 Production URL (after merge to main):
-  https://unpausai.com/proposals/{slug}
+  https://unpauseai.com/proposals/{slug}
 
 Next steps:
   1. Review the proposal content and edit if needed

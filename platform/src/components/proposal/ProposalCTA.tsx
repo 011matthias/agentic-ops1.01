@@ -11,7 +11,7 @@ export function ProposalCTA({ prospect }: ProposalCTAProps) {
         directly.
       </p>
       <a
-        href="mailto:hello@unpausai.com"
+        href="mailto:hello@unpauseai.com"
         className="inline-block rounded-full bg-accent px-8 py-3 text-sm font-medium text-white transition-colors hover:bg-accent-light"
       >
         Let&apos;s Talk, {prospect}
