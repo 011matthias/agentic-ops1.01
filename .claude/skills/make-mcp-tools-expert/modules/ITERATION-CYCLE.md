@@ -11,7 +11,7 @@ Standard diagnose-fix-test pattern for iterating on Make.com scenarios autonomou
 2. CHECK   → executions_list → find latest execution, check status
 3. DIAGNOSE → if error: read error message
               if success but wrong output: inspect sheet data / email
-4. FIX     → update blueprint via scenarios_update
+4. FIX     → update blueprint via make-api.py update (scenarios_update 500s on blueprints)
 5. VERIFY  → re-send test data, check execution again
 6. REPEAT  → until clean execution with correct output
 ```
@@ -24,7 +24,7 @@ Standard diagnose-fix-test pattern for iterating on Make.com scenarios autonomou
 - `executions_list(scenarioId)` → list executions with status and error messages
 - `executions_get(scenarioId, executionId)` → execution metadata
 - `scenarios_get(scenarioId)` → current blueprint (to identify the failing module)
-- `scenarios_update(scenarioId, blueprint)` → deploy fixes
+- `uv run tools/make-api.py update --zone {ZONE} --scenario-id {ID} --blueprint {PATH}` → deploy fixes (NOT `scenarios_update` — returns 500 on blueprint param)
 - `scenarios_activate/deactivate(scenarioId)` → control scenario state
 - `scenarios_run(scenarioId)` → trigger scheduled scenarios on demand
 - `hooks_list(teamId)` → find webhook URLs
@@ -33,6 +33,7 @@ Standard diagnose-fix-test pattern for iterating on Make.com scenarios autonomou
 
 ### What we CAN do locally:
 - `curl` → send test webhook payloads (see WEBHOOK-TESTING.md)
+- `uv run tools/make-api.py` → REST API for blueprint deploy/update, data store CRUD, scenario run (bypasses MCP 500 errors on blueprint params)
 - Bash scripts → automate multi-step test sequences
 
 ### What we CANNOT do directly (Make API limitation):
@@ -52,7 +53,7 @@ When you need to see what data flows between modules:
 2. Get the current blueprint: `scenarios_get(scenarioId)`
 3. Insert a `datastore:addRecord` module AFTER the module you want to inspect
 4. Map the module's output variables into the data store record (use `toString()` to capture complex objects)
-5. Deploy the modified blueprint: `scenarios_update`
+5. Deploy the modified blueprint: `uv run tools/make-api.py update`
 6. Run the scenario (curl or trigger)
 7. Read the captured data: `data-store-records_list(dataStoreId)`
 8. **Remove the debug tap** and redeploy the clean blueprint
@@ -80,7 +81,7 @@ See also: `webhook-inspector` skill for a dedicated webhook payload capture work
 
 ## Workflow: New Scenario Integration
 
-1. **Deploy blueprint** via `scenarios_update`
+1. **Deploy blueprint** via `uv run tools/make-api.py update`
 2. **Activate** via `scenarios_activate`
 3. **Test with clean JSON** via curl (see WEBHOOK-TESTING.md)
 4. **Check execution** via `executions_list`
@@ -109,7 +110,7 @@ See also: `webhook-inspector` skill for a dedicated webhook payload capture work
 2. **Read error message** → tells you which module/filter failed
 3. **Get current blueprint** → `scenarios_get(scenarioId)` → find the failing module
 4. **Fix the blueprint** → modify the relevant module/filter/mapper
-5. **Deploy** → `scenarios_update`
+5. **Deploy** → `uv run tools/make-api.py update`
 6. **Re-test** → curl or run
 
 ---

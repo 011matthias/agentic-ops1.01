@@ -84,16 +84,17 @@ Extract:
 
 ## Write Procedures
 
-### After `/draft` (outbound logging)
+### After `/draft` (outbound logging — automatic)
 
-After the user approves a draft, ask: "Want me to log this in the comms history?"
+After the user approves a draft, log it automatically (no confirmation needed — the system created the message):
 
-If yes:
 1. Auto-generate an outbound entry from the approved draft
 2. Extract open items (questions asked, things requested from client)
-3. Show the proposed entry to the user before writing
+3. Show the log entry: "Logged to comms history:" followed by the entry
 4. Append to `context/comms-log.md`
 5. Update frontmatter (`last_contact`, `total_entries`, `unresolved_count`)
+
+Why automatic: Outbound drafts are system-generated artifacts. Asking "want me to log?" makes logging opt-in, which causes comms to fall stale across sessions. The "always automate" rule applies.
 
 ### After `/comms inbound` (inbound logging)
 

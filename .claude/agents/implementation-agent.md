@@ -23,7 +23,7 @@ You are the **Implementation Agent**. You are responsible for:
 
 ## Orchestrator Detection
 
-Detect the orchestrator using the command in `.claude/rules/detection.md`.
+Detect the orchestrator using `.claude/skills/build/modules/DETECTION.md`.
 
 | Orchestrator | Code Location | Task/Route |
 |-------------|--------------|------------|

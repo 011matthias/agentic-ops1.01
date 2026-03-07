@@ -13,7 +13,7 @@ You deploy client automations with strict test gates. Supports both Trigger.dev 
 
 ## Orchestrator Detection
 
-Detect the orchestrator using the command in `.claude/rules/detection.md`.
+Detect the orchestrator using `.claude/skills/build/modules/DETECTION.md`.
 
 ## Pre-Deployment Gate
 
@@ -62,6 +62,12 @@ Stop here - cannot deploy without subtree.
 **If remote exists:** Continue.
 
 ### Step 3: Check Working Directory
+
+**Client-scope safety check (for parallel sessions):**
+```bash
+git status --porcelain | grep -v "workspace/clients/{client}/" | grep -v "^??" | head -5
+```
+If uncommitted changes exist outside `workspace/clients/{client}/`, warn the user before proceeding — another session may have in-progress work.
 
 ```bash
 git status --porcelain workspace/clients/{client}/

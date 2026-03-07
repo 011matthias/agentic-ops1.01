@@ -25,6 +25,7 @@ Read all files in `docs/sessions/`:
 - Extract `friction_events` count from each file's frontmatter
 - Collect all `**Friction:**` lines from session entries (skip "None")
 - Note `clients_touched` and `sessions` counts per day
+- Collect `work_types` from frontmatter (if present) for distribution analysis
 
 ### Build Logs
 Read `workspace/clients/*/context/build-log.md` for each client that has one:
@@ -86,6 +87,16 @@ Sort by ROI descending. Top 5 are candidates for `/system-dev` implementation.
 ### Error Distribution
 | Category | Count | % of Total | In FIX-PATTERNS? |
 |----------|-------|------------|-------------------|
+
+### Work Type Distribution
+| Type | Sessions | % |
+|------|----------|---|
+| client-dev | {N} | {%} |
+| system-infra | {N} | {%} |
+| comms | {N} | {%} |
+| misc | {N} | {%} |
+
+_Note: Sessions before work type tracking show as "unclassified."_
 
 ### Recommendations
 1. {Highest-ROI pattern} — suggest /system-dev to implement

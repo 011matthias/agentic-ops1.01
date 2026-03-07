@@ -15,7 +15,7 @@ Unified reference for building Make.com scenarios. Consolidates: make-mcp-tools-
 2. **Read spec** — Extract flow, systems, edge cases, acceptance criteria
 3. **List connections** — Verify auth connections exist for required services
 4. **Generate blueprint** → Load BLUEPRINT module for JSON format
-5. **Deploy** — Via Make.com UI "Import Blueprint" (API deployment broken — see gotchas)
+5. **Deploy** — Via `uv run tools/make-api.py update|deploy` (MCP deployment broken — see gotchas). Fallback: UI import.
 6. **Verify** — Test with Run Once, check execution inspector
 7. **Activate** — Enable scheduling or webhook listening
 
@@ -95,3 +95,4 @@ Load ONE module at a time based on your current task.
 - No module-level I/O for successful executions — use proxy indicators
 - No sheet cell reading via MCP RPCs — use direct Google Sheets API
 - `validate_blueprint_schema` validates API format only — not UI import format. Run HANDOVER-FORMAT-CHECKER before handover.
+- **Blueprint deployment tool:** `uv run tools/make-api.py {update|deploy|get|list|ds-upsert|scenario-run}` — full REST API wrapper that bypasses MCP 500 errors on blueprint params.

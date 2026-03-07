@@ -25,4 +25,4 @@ Cold email agency using Smartlead for campaigns. Module #1: Dashboard Automation
 - [ ] Smartlead API key (to replace simulated data in A1)
 - [ ] Deploy dashboard to GitHub Pages
 - [ ] Set production auth token (replace kunde-demo-2026)
-- [ ] Update spec bodies to reflect Google Sheets (currently reference Airtable from original design)
+- [x] Update spec bodies to reflect Google Sheets (done 2026-03-06)

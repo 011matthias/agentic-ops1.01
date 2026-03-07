@@ -69,7 +69,7 @@ Continue? (yes/no)
 
 ## Orchestrator Detection
 
-Detect the client's orchestrator using the command in `.claude/rules/detection.md`.
+Detect the client's orchestrator using `.claude/skills/build/modules/DETECTION.md`.
 
 This affects:
 - **Phase 2 (Implement):** Python code goes in `python/automations/` (Trigger.dev) vs `app/automations/` (FastAPI). Trigger.dev also needs a TypeScript task wrapper in `src/trigger/`.
@@ -88,7 +88,7 @@ Phase 3: Test (testing-agent)
 Phase 3.5: Dev Test (testing-agent with /test-dev)
   ↓ Live dev test with real APIs
   ↓ If fail → Bug fixer → retry
-Phase 4: Document (doc-generator)
+Phase 4: Document (DOC-GENERATION skill module)
 Phase 5: Deploy (deployer)
   ↓ If fail → Bug fixer → retry
 Phase 6: Verify (status-check)
@@ -133,13 +133,13 @@ Ask the user:
 Generate session ID and create handoff directory:
 
 ```python
-session_id = f"{client}-{automation_id}-{timestamp}"
-handoff_dir = f".claude/handoffs/{session_id}"
+session_id = f"{automation_id}-{timestamp}"
+handoff_dir = f".claude/handoffs/{client}/{session_id}"
 ```
 
 Create directory:
 ```bash
-mkdir -p .claude/handoffs/{session_id}
+mkdir -p .claude/handoffs/{client}/{session_id}
 ```
 
 **Step 2: Determine Mode**
@@ -188,7 +188,7 @@ Show spec summary and ask:
 - If **No**: Use spec-updater to revise, then re-approve
 - If **Yes**: Proceed to Phase 2
 
-4. **Call project-manager** to update status to `planned`
+4. **Update status** to `spec_created` (see Status Update Procedure below)
 
 ---
 
@@ -235,7 +235,7 @@ Show key code sections and ask:
 - If **No**: Note issues, consider invoking bug-fixer or implementation-agent again
 - If **Yes**: Proceed to Phase 3
 
-4. **Call project-manager** to update status to `in_progress`
+4. **Update status** to `implemented` (see Status Update Procedure below)
 
 ---
 
@@ -254,7 +254,7 @@ Show key code sections and ask:
 2. **Pass/fail decision:**
    - **Pass (coverage ≥ 80%):** Save report to `.claude/handoffs/{session}/phase3-test-report.md`, proceed to Phase 3.5
    - **Fail:** Invoke bug-fixer with test output → re-run testing-agent → loop until pass or manual intervention
-3. **Call project-manager** to update status to `tested_locally`
+3. **Update status** to `tested_locally` (see Status Update Procedure below)
 
 ---
 
@@ -290,13 +290,13 @@ After dev test execution succeeds, do NOT proceed to Phase 4 yet:
 Save report to `.claude/handoffs/{session}/phase3.5-dev-test-report.md` (must include outcome verification table and any verification debt).
 
 3. **Operationalization check:** After verification, ask: "What couldn't I verify autonomously? What manual steps did the user perform?" (per `operationalization-loop.md` "After Building" section)
-4. **Call project-manager** to update status to `tested_dev`
+4. **Update status** to `tested_dev` (see Status Update Procedure below)
 
 ---
 
 ### Phase 4: Document
 
-**Agent:** doc-generator
+**Skill Module:** DOC-GENERATION (load from `.claude/skills/build/modules/DOC-GENERATION.md`)
 
 **Goal:** Generate technical and client docs
 
@@ -307,7 +307,7 @@ Save report to `.claude/handoffs/{session}/phase3.5-dev-test-report.md` (must in
 
 **Process:**
 
-1. **Invoke doc-generator:** Generate technical and client-facing documentation.
+1. **Load DOC-GENERATION module** and generate technical + client-facing documentation directly (no agent spawn needed).
 
 2. **Generate Phase Report** per Agent Handoff Protocol format. Save to `.claude/handoffs/{session}/phase4-docs-report.md`. Artifacts: technical doc, client doc.
 
@@ -356,7 +356,7 @@ else:
 
 4. **Generate Phase Report** per Agent Handoff Protocol format. Save to `.claude/handoffs/{session}/phase5-deploy-report.md`. Artifacts: Railway URL, health status, commit SHA.
 
-5. **Call project-manager** to update status to `production_ready`
+5. **Update status** to `deployed` (see Status Update Procedure below)
 
 ---
 
@@ -387,113 +387,13 @@ After verifying deployment is live:
 
 Save report to `.claude/handoffs/{session}/phase6-verify-report.md` (must include post-deploy outcome verification table).
 
-3. **Call project-manager** to update status to `tested_live`
+3. **Update status** to `tested_live` (see Status Update Procedure below)
 
 ---
 
 ### Phase 7: Complete
 
-**Generate Session Summary:**
-
-Create `.claude/handoffs/{session}/session-summary.md`:
-
-```markdown
-# Build Session Summary
-
-**Client:** {client}
-**Automation:** {id}
-**Session ID:** {session_id}
-**Duration:** {start} → {end}
-
-## Phase Results
-
-| Phase | Status | Duration |
-|-------|--------|----------|
-| Plan | ✓ Success | 5m |
-| Implement | ✓ Success | 10m |
-| Test (Local) | ✓ Success (after 1 fix) | 15m |
-| Test (Dev) | ✓ Success | 10m |
-| Docs | ✓ Success | 3m |
-| Deploy | ✓ Success | 5m |
-| Verify | ✓ Success | 2m |
-
-## Artifacts Created
-
-**Spec:**
-- `workspace/clients/{client}/specs/automations/{id}.md`
-
-**Code:**
-- `workspace/clients/{client}/automations/app/automations/{name}.py` ({N} lines)
-- `workspace/clients/{client}/automations/tests/test_{name}.py` ({N} tests)
-
-**Documentation:**
-- `workspace/clients/{client}/automations/docs/technical/{id}.md` ({N} words)
-- `workspace/clients/{client}/automations/docs/client/{id}.md` ({N} words)
-
-**Deployment:**
-- Railway URL: https://{domain}
-- Health: https://{domain}/health
-- Webhook: https://{domain}/webhooks/{path}
-
-## Test Results
-
-**Unit Tests:** {passed}/{total} passed
-**Coverage:** {percentage}%
-**Acceptance Criteria:** {verified}/{total} verified
-
-## Issues & Fixes
-
-1. {Phase}: {issue} → {fix}
-
-## Next Steps
-
-- Monitor first automated run
-- Check dashboard for execution logs
-- Set up alerts if needed
-
-## Session Files
-
-All phase reports saved to: `.claude/handoffs/{session_id}/`
-```
-
-**Append Build Log:**
-
-After generating the session summary, append an entry to `workspace/clients/{client}/context/build-log.md`:
-
-1. If the file doesn't exist, create it with frontmatter:
-   ```yaml
-   ---
-   client: {client}
-   total_builds: 0
-   ---
-   ```
-
-2. Increment `total_builds` in frontmatter
-3. Append build entry:
-   ```markdown
-   ### {DATE} — {AUTOMATION_ID} ({AUTOMATION_NAME}) — {STAGE}
-   **Iterations:** {N} | **Errors:** [{error categories from build-test-fix}]
-   **Fixes applied:** [{FIX-PATTERN IDs}] | **Outcome:** {success/partial/escalated}
-   ```
-
----
-
-## Progress Updates
-
-Throughout the process, provide progress updates:
-
-```markdown
-## Build Progress: Phase {N}/7 - {Phase Name}
-
-**Current:** {agent_name} working...
-**Elapsed:** {duration}
-**Estimated:** {remaining}
-
-{phase-specific_details}
-
----
-**Next:** {next_phase_name}
-```
+For session summary, progress update, phase report, and build log templates, load `.claude/skills/build/modules/BUILD-TEMPLATES.md`.
 
 ## Agent Handoff Protocol
 
@@ -503,31 +403,9 @@ Throughout the process, provide progress updates:
 3. Load artifacts from previous phase
 
 ### After Each Phase:
-1. Generate phase report
+1. Generate phase report (see BUILD-TEMPLATES.md for format)
 2. Save to handoff directory
 3. Pass report path to next agent
-
-### Report Format:
-```markdown
-# Phase Report: {Phase Name}
-
-**Agent:** {agent-name}
-**Status:** success|failure|partial
-**Timestamp:** {ISO}
-
-## Artifacts
-- [ ] {artifact}: {path}
-
-## Context for Next Phase
-**Key Information:**
-- {bullet points}
-
-**Warnings:**
-- {issues}
-
-**Recommendations:**
-- {suggestions}
-```
 
 ## Session Management
 
@@ -546,6 +424,19 @@ Saves:
 - Session ID
 - All phase reports
 - Next steps
+
+## Session Pressure Awareness
+
+After completing Phase 3.5 (Dev Test) or Phase 5 (Deploy):
+- Evaluate session pressure per the session-pressure rule
+- If moderate or high: suggest `/checkpoint --mini` before proceeding to the next phase
+- Continue only after user confirms or declines
+
+When the user requests building a second automation in the same session:
+- Suggest: "Recommend checkpointing the completed build before starting a new one. This preserves full context of the first build."
+
+After Phase 5 (Deploy), if the session continues:
+- Shift to concise mode for Phase 6-7 reporting — shorter phase reports, minimal exploratory reads
 
 ## User Interaction Points
 
@@ -592,6 +483,29 @@ Use Progress Updates format throughout. At completion, output:
 {immediate_actions}
 ```
 
+## Status Update Procedure
+
+After each phase completes, update status directly (no agent spawn needed):
+
+1. Read `workspace/clients/{client}/specs/automation-status.yaml`
+2. Find the automation entry by ID in the `automations:` list
+3. If entry does not exist, create it: `id`, `name` (from spec), `status: planned`, `created: {today}`, `updated: {today}`
+4. Update fields based on completed phase:
+
+| Phase | status | last_changes |
+|-------|--------|-------------|
+| Plan | `spec_created` | "Spec created: {file}" |
+| Implement | `implemented` | "Code: {file}, Tests: {file}" |
+| Test Local | `tested_locally` | "Tests: {pass}/{total}, Coverage: {pct}%" |
+| Test Dev | `tested_dev` | "Dev test passed with real APIs" |
+| Deploy | `deployed` | "Deployed to {platform}" |
+| Verify | `tested_live` | "Verified live: {url}" |
+| Docs | `documentation_created` | "Docs generated" |
+
+5. Set `updated: {today}` (YYYY-MM-DD format)
+6. Write the updated YAML file
+7. Update the status row in `workspace/clients/{client}/specs/README.md` table
+
 ## Notes
 
 - **Always get user approval** at key checkpoints
@@ -599,4 +513,3 @@ Use Progress Updates format throughout. At completion, output:
 - **Save state for resumability**
 - **Handle errors gracefully**
 - **Generate comprehensive reports**
-- **Call project-manager** after each phase

@@ -151,7 +151,7 @@ If you don't want to create a separate inspector scenario, you can add a data st
 1. Get the current blueprint: `scenarios_get(scenarioId)`
 2. Insert a `datastore:addRecord` module after the webhook module (before any processing)
 3. Store `{{toString(1.body)}}` in the data store
-4. Deploy the modified blueprint: `scenarios_update(scenarioId, blueprint)`
+4. Deploy the modified blueprint: `uv run tools/make-api.py update`
 5. Trigger the webhook
 6. Read the data store
 7. **Remove the debug tap** and redeploy the original blueprint

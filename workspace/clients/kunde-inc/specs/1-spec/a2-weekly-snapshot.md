@@ -24,7 +24,7 @@ last_changes:
   - Reads current campaigns, appends weekly snapshot rows
 next_steps:
   - Monitor for 2-3 weeks to verify weekly data accumulation
-  - Update spec body to reflect Google Sheets instead of Airtable
+  - Spec body updated to reflect Google Sheets (done 2026-03-06)
 stage_history:
   - stage: spec
     date: 2026-02-26
@@ -38,7 +38,7 @@ stage_history:
 
 ## Goal
 
-**Problem:** Campaign metrics in Airtable only show current totals. There's no historical trend data to track week-over-week performance changes.
+**Problem:** Campaign metrics in Google Sheets only show current totals. There's no historical trend data to track week-over-week performance changes.
 
 **Solution:** Weekly snapshot of all campaign metrics into a Weekly Snapshots table, enabling trend analysis and weekly reporting charts.
 
@@ -48,13 +48,13 @@ stage_history:
 
 ```mermaid
 flowchart TD
-    TRIGGER(("CRON: Monday 06:00")) --> READ["Airtable: Get All Records<br/>from Campaigns table"]
+    TRIGGER(("CRON: Monday 06:00")) --> READ["Google Sheets: Get All Records<br/>from Campaigns table"]
     READ --> CHECK{{"Records > 0?"}}
     CHECK -->|No| LOG["Code: Log<br/>'No campaign data'"]
     CHECK -->|Yes| COMPUTE["Code: Add week dates<br/>+ compute rates"]
     COMPUTE --> BATCH["Split In Batches<br/>(10 per batch)"]
-    BATCH --> UPSERT["Airtable: Upsert<br/>Weekly Snapshots table"]
-    UPSERT --> WAIT["Wait: 0.5s<br/>(Airtable rate limit)"]
+    BATCH --> UPSERT["Google Sheets: Upsert<br/>Weekly Snapshots table"]
+    UPSERT --> WAIT["Wait: 0.5s<br/>(Google Sheets rate limit)"]
     WAIT --> MORE{{"More records?"}}
     MORE -->|Yes| BATCH
     MORE -->|No| DONE["Complete"]
@@ -65,11 +65,11 @@ flowchart TD
 
 | System | Endpoints | Auth | Rate Limit |
 |--------|-----------|------|------------|
-| Airtable | List records (Campaigns) | Personal access token | 5 req/sec |
-| Airtable | Upsert records (Weekly Snapshots) | Personal access token | 5 req/sec |
+| Google Sheets | List records (Campaigns) | Service account | 5 req/sec |
+| Google Sheets | Upsert records (Weekly Snapshots) | Service account | 5 req/sec |
 
 **Node Strategy:**
-- **Native nodes:** Airtable (read + upsert)
+- **Native nodes:** Google Sheets (read + upsert)
 - **Code nodes:** Compute week dates, rates, snapshot key
 
 ## N8N Workflow
@@ -82,26 +82,26 @@ flowchart TD
 **Credentials Required:**
 | Credential Name | Type | Description |
 |----------------|------|-------------|
-| Airtable | Personal Access Token | Read/write to Kunde Inc. base |
+| Google Sheets | Service Account | Read/write to Kunde Inc. spreadsheet |
 
 **Key Configuration:**
 - **Trigger:** Schedule Trigger (Monday at 06:00, before daily sync)
-- **Error Handling:** Airtable nodes → Continue on Fail
+- **Error Handling:** Google Sheets nodes → Continue on Fail
 
 **Node Types Used:**
 | Node | Purpose | Count |
 |------|---------|-------|
 | Schedule Trigger | Weekly execution | 1 |
-| Airtable | Read campaigns / Upsert snapshots | 2 |
+| Google Sheets | Read campaigns / Upsert snapshots | 2 |
 | Code | Compute dates and rates | 1 |
 | IF | Check records exist | 1 |
-| Split In Batches | Batch Airtable writes | 1 |
-| Wait | Airtable rate limiting | 1 |
+| Split In Batches | Batch Google Sheets writes | 1 |
+| Wait | Google Sheets rate limiting | 1 |
 
 ## Step Details
 
 ### 1. Read All Campaign Records
-- Airtable node: Get All Records from Campaigns table
+- Google Sheets node: Get All Records from Campaigns table
 - Returns all fields including Emails Sent, Opened, Replied, Bounced, Meetings Booked, Total Leads
 
 ### 2. Compute Weekly Snapshot Data
@@ -152,18 +152,18 @@ return items.map(item => {
 | Campaigns table empty | Log and exit cleanly | IF node |
 | Re-run on same Monday | Upsert overwrites existing snapshot | Upsert on Snapshot Key |
 | Campaign added mid-week | Captured in next Monday snapshot | No special handling |
-| Airtable rate limit | 10 records per batch with 0.5s wait | Split In Batches + Wait |
+| Google Sheets rate limit | 10 records per batch with 0.5s wait | Split In Batches + Wait |
 
 ## Manual Testing in N8N
 
 **Setup:**
 1. Ensure A1 has run at least once (Campaigns table populated)
-2. Add Limit node (set to 3) after Airtable read
-3. Disable Airtable upsert
+2. Add Limit node (set to 3) after Google Sheets read
+3. Disable Google Sheets upsert
 
 **Test Execution:**
 1. Run manually, inspect Code node output for correct week dates and rates
-2. Enable upsert, verify in Airtable: Weekly Snapshots table has rows with correct data
+2. Enable upsert, verify in Google Sheets: Weekly Snapshots table has rows with correct data
 3. Re-run: verify no duplicate rows (upsert on Snapshot Key)
 
 ### Acceptance Criteria
@@ -176,7 +176,7 @@ return items.map(item => {
 
 ## Implementation Notes
 
-**Orchestrator:** n8n (native Airtable nodes only)
+**Orchestrator:** n8n (Google Sheets nodes only)
 
 **Dependencies:** Requires A1 (Daily Campaign Sync) to populate the Campaigns table first.
 

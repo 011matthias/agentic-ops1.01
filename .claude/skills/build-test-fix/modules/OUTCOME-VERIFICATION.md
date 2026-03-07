@@ -46,16 +46,18 @@ After execution succeeds (status OK), verify each output against expected outcom
 | Placeholders resolved | No `##placeholder##` literals in subject/body | No (requires reading sent email) |
 | AI content injected | If AI module ran (ops count), check its output length > 0 | Yes (check AI module output) |
 
-**Unverifiable autonomously:** Actual rendered email content in Gmail. Flag this and either:
-- Ask user to check one sent email
-- Create a UTIL scenario that reads Gmail sent folder (if persistent testing needed)
+**Mostly verifiable via proxies:** Before asking the user to check email content:
+1. Check `context/test-fixtures.md` for an Email Reader fixture
+2. Check email module input mapping — populated subject + body_html with non-placeholder values = strong proxy
+3. Check AI module output (non-empty) + email module transfer bytes > 500 = high confidence
+4. Only ask user if ALL proxy indicators are inconclusive
 
 #### Spreadsheet Outputs
 | Check | How to Verify | Autonomous? |
 |-------|--------------|-------------|
 | Row written/updated | Operations count includes sheets module | Yes |
 | Correct columns | Check module input mapping for column references | Partial |
-| Values correct | Use Sheet Reader fixture if available, otherwise ask user | Depends on fixtures |
+| Values correct | **Check `context/test-fixtures.md` for Sheet Reader fixture.** If exists: curl the webhook URL, parse pipe-separated response, compare field-by-field against expected. If no fixture exists: create one using `make-api.py`. | **Yes (with fixtures)** |
 
 #### Data Store Outputs
 | Check | How to Verify | Autonomous? |
@@ -76,6 +78,24 @@ After execution succeeds (status OK), verify each output against expected outcom
 |-------|--------------|-------------|
 | Message sent | Operations count includes notification module | Yes |
 | Content correct | Check module input mapping | Partial |
+
+### Fixture-Based Verification (Make.com)
+
+Before falling back to proxy indicators or user verification, check for persistent test fixtures:
+
+1. **Read `workspace/clients/{client}/context/test-fixtures.md`** for available fixtures
+2. **Sheet Reader pattern:** `curl -s "{WEBHOOK_URL}"` returns pipe-separated `key=value` pairs. Parse and compare field-by-field against expected values.
+3. **Cell Writer pattern:** `uv run tools/make-api.py scenario-run --zone {ZONE} --scenario-id {WRITER_ID} --data '{"cell":"{CELL}","value":"{VALUE}"}'` to set preconditions before test runs.
+4. **Full autonomous test cycle:**
+   ```
+   READ  -> curl Sheet Reader -> baseline state
+   SET   -> Cell Writer -> set preconditions (timestamps, flags, step values)
+   RUN   -> trigger scenario under test (webhook POST or scenarios_run)
+   READ  -> curl Sheet Reader -> new state
+   COMPARE -> expected vs actual, field by field
+   ```
+
+This converts "unverifiable" spreadsheet outputs into fully autonomous verification. Use it instead of asking the user.
 
 ### Step 4: Classify Results
 

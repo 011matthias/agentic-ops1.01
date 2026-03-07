@@ -20,7 +20,7 @@ last_changes:
 next_steps:
   - Deploy to GitHub Pages
   - Set production auth token
-  - Update spec body to reflect Google Sheets instead of Airtable
+  - Spec body updated to reflect Google Sheets (done 2026-03-06)
 stage_history:
   - stage: spec
     date: 2026-02-26
@@ -32,11 +32,11 @@ stage_history:
 
 ## Goal
 
-**Problem:** Campaign data lives in Airtable but isn't easy to visualize — no trend charts, no at-a-glance summary cards, no sequence-level drill-down.
+**Problem:** Campaign data lives in Google Sheets but isn't easy to visualize — no trend charts, no at-a-glance summary cards, no sequence-level drill-down.
 
 **Solution:** Static HTML/CSS/JS dashboard hosted on Vercel/Netlify/GitHub Pages that fetches data from n8n webhook API endpoints.
 
-**Business Value:** Clean visual interface for the client to monitor campaign performance, identify underperforming campaigns, and track week-over-week trends without opening Airtable.
+**Business Value:** Clean visual interface for the client to monitor campaign performance, identify underperforming campaigns, and track week-over-week trends without opening Google Sheets.
 
 ## Tech Stack
 
