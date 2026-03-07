@@ -65,16 +65,21 @@ Pipeline Summary
 After the table, note any proposals that need attention:
 - Proposals in `draft` status older than 3 days (stale drafts)
 - Proposals in `sent` status older than 7 days (no response — consider follow-up)
+- Proposals in `won` status without a matching client folder — suggest `/convert-proposal`
 
 ```
 Action Items:
   - p001 (Acme Corp): sent 5 days ago — consider follow-up
   - p003 (Gamma LLC): draft for 4 days — send or archive
+  - p004 (Delta Co): won — run /convert-proposal delta-co-automation to scaffold client folder
 ```
+
+For won proposals, check if `workspace/clients/{derived-client-name}/` exists. If not, prompt conversion.
 
 ## Notes
 
 - This command is read-only — it doesn't modify any files
 - To create a new proposal: /new-proposal
 - To deploy a proposal to production: /publish-proposal
+- To convert a won proposal to a client: /convert-proposal
 - Proposal files: platform/src/content/proposals/*.md
