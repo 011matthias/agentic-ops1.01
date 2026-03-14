@@ -27,7 +27,7 @@ last_changes:
   - "2026-03-03: Stage corrected to live (workflow active with simulated data)"
 next_steps:
   - Verify sequence sync (Split In Batches typeVersion 3 done-output fix) on next run
-  - Update spec body to reflect Google Sheets instead of Airtable (body still references Airtable)
+  - Spec body updated to reflect Google Sheets (done 2026-03-06)
   - Add client filtering: consider separate per-client sheets tabs when client list grows
 stage_history:
   - stage: spec
@@ -42,11 +42,11 @@ stage_history:
 
 ## Goal
 
-**Problem:** Campaign performance metrics in Smartlead are disconnected from the Airtable Business OS, requiring manual data entry to track outreach effectiveness across campaigns and sequences.
+**Problem:** Campaign performance metrics in Smartlead are disconnected from the Google Sheets Business OS, requiring manual data entry to track outreach effectiveness across campaigns and sequences.
 
-**Solution:** Daily automated sync of all Smartlead campaign analytics and sequence-level stats to Airtable, with automatic upsert on Campaign ID.
+**Solution:** Daily automated sync of all Smartlead campaign analytics and sequence-level stats to Google Sheets, with automatic upsert on Campaign ID.
 
-**Business Value:** Real-time campaign visibility in Airtable, automated reporting, elimination of manual data entry. Estimated 5+ hours/week saved on manual reporting.
+**Business Value:** Real-time campaign visibility in Google Sheets, automated reporting, elimination of manual data entry. Estimated 5+ hours/week saved on manual reporting.
 
 ## Flow Diagram
 
@@ -60,10 +60,10 @@ flowchart TD
     BATCH --> STATS["HTTP Request:<br/>Get Campaign Analytics<br/>/analytics/campaign/{id}"]
     STATS --> SEQ["HTTP Request:<br/>Get Sequence Analytics<br/>/campaigns/{id}/sequences/analytics"]
     SEQ --> LEAD["HTTP Request:<br/>Get Lead Category Response<br/>/analytics/lead-category-wise-response"]
-    LEAD --> MAP["Code: Map to<br/>Airtable fields"]
-    MAP --> UPSERT_C["Airtable: Upsert<br/>Campaigns table"]
+    LEAD --> MAP["Code: Map to<br/>Google Sheets fields"]
+    MAP --> UPSERT_C["Google Sheets: Upsert<br/>Campaigns table"]
     UPSERT_C --> FLATTEN["Code: Flatten<br/>sequences array"]
-    FLATTEN --> UPSERT_S["Airtable: Upsert<br/>Sequence Stats table"]
+    FLATTEN --> UPSERT_S["Google Sheets: Upsert<br/>Sequence Stats table"]
     UPSERT_S --> WAIT["Wait: 2s<br/>(rate limiting)"]
     WAIT --> MORE{{"More campaigns?"}}
     MORE -->|Yes| BATCH
@@ -79,10 +79,10 @@ flowchart TD
 | Smartlead | `GET /analytics/campaign/{id}` | API key (query param) | ~5 req/sec |
 | Smartlead | `GET /campaigns/{id}/sequences/analytics` | API key (query param) | ~5 req/sec |
 | Smartlead | `GET /analytics/lead-category-wise-response` | API key (query param) | ~5 req/sec |
-| Airtable | Upsert records | Personal access token | 5 req/sec |
+| Google Sheets | Upsert records | Service account | 5 req/sec |
 
 **Node Strategy:**
-- **Native nodes:** Airtable (upsert)
+- **Native nodes:** Google Sheets (upsert)
 - **HTTP Request nodes:** Smartlead (no native n8n node)
 - **Code nodes:** Extract campaign list, map fields, flatten sequences
 
@@ -96,7 +96,7 @@ flowchart TD
 **Credentials Required:**
 | Credential Name | Type | Description |
 |----------------|------|-------------|
-| Airtable | Personal Access Token | Read/write to Kunde Inc. base |
+| Google Sheets | Service Account | Read/write to Kunde Inc. spreadsheet |
 
 **Key Configuration:**
 - **Trigger:** Schedule Trigger (daily at 08:00, client timezone)
@@ -111,7 +111,7 @@ flowchart TD
 | Code | Transform/extract data | 4 |
 | IF | Check campaigns exist | 1 |
 | Split In Batches | Process 1 campaign at a time | 1 |
-| Airtable | Upsert records | 2 |
+| Google Sheets | Upsert records | 2 |
 | Wait | Rate limiting (2s) | 1 |
 
 ## Step Details
@@ -140,10 +140,10 @@ return campaigns.map(c => ({ json: { campaign_id: c.id, campaign_name: c.name, c
 - `GET /analytics/lead-category-wise-response?api_key={{$env.SMARTLEAD_API_KEY}}&campaign_ids={{$json.campaign_id}}`
 - Returns: categories including "Meeting Booked" count
 
-### 6. Map to Airtable Fields
-Code node maps raw API data to Airtable column names:
+### 6. Map to Google Sheets Fields
+Code node maps raw API data to Google Sheets column names:
 
-| Smartlead Field | Airtable Field |
+| Smartlead Field | Google Sheets Field |
 |----------------|----------------|
 | `id` | Campaign ID |
 | `name` | Campaign Name |
@@ -161,7 +161,7 @@ Code node maps raw API data to Airtable column names:
 | `Meeting Booked` category count | Meetings Booked |
 | `new Date().toISOString()` | Last Synced |
 
-### 7. Upsert to Airtable Campaigns
+### 7. Upsert to Google Sheets Campaigns
 - Operation: Upsert
 - Table: Campaigns
 - Match field: Campaign ID
@@ -175,24 +175,24 @@ Code node flattens sequence array into individual items, then upserts each to Se
 |----------|----------|------------|
 | Rate limit (429) | Wait 2s between campaigns | Wait node |
 | Smartlead API error on single campaign | Skip campaign, continue | Continue On Fail |
-| Airtable rate limit | 10 records per batch | Split In Batches |
+| Google Sheets rate limit | 10 records per batch | Split In Batches |
 | No campaigns returned | Log and exit cleanly | IF node |
 | Missing sequence analytics | Upsert campaign only, skip sequences | Continue On Fail |
-| Duplicate campaigns in API response | Airtable upsert handles idempotently | Upsert on Campaign ID |
+| Duplicate campaigns in API response | Google Sheets upsert handles idempotently | Upsert on Campaign ID |
 
 ## Manual Testing in N8N
 
 **Setup:**
 1. Add Limit node (set to 2) after Code: Extract campaign array
-2. Disable Airtable upsert nodes
+2. Disable Google Sheets upsert nodes
 3. Run with Manual Trigger
 
 **Test Execution:**
 1. Run manually via n8n UI
 2. Inspect HTTP Request outputs: verify campaign data structure
 3. Inspect Code node outputs: verify field mapping correctness
-4. Enable Airtable upserts for single campaign (Limit = 1)
-5. Verify in Airtable UI: fields populated correctly
+4. Enable Google Sheets upserts for single campaign (Limit = 1)
+5. Verify in Google Sheets: fields populated correctly
 
 **Production Run:**
 1. Remove Limit node
@@ -202,7 +202,7 @@ Code node flattens sequence array into individual items, then upserts each to Se
 
 ### Acceptance Criteria
 
-- [ ] All active campaigns synced to Airtable Campaigns table
+- [ ] All active campaigns synced to Google Sheets Campaigns table
 - [ ] Sequence stats synced per campaign per step
 - [ ] Upsert on Campaign ID (no duplicates on re-run)
 - [ ] Meetings Booked count populated from lead categories
@@ -211,7 +211,7 @@ Code node flattens sequence array into individual items, then upserts each to Se
 
 ## Implementation Notes
 
-**Orchestrator:** n8n (HTTP Request for Smartlead, native node for Airtable)
+**Orchestrator:** n8n (HTTP Request for Smartlead, Google Sheets node for data layer)
 
 **Environment Variables:**
 | Variable | Required | Description |
@@ -219,7 +219,7 @@ Code node flattens sequence array into individual items, then upserts each to Se
 | SMARTLEAD_API_KEY | Yes | Smartlead API key (query param auth) |
 | DASHBOARD_TOKEN | Yes | Shared secret for webhook API auth |
 
-**Reference:** Herbox Sweden A7 spec (`workspace/clients/herbox-sweden/specs/4-live/a7-smartlead-campaign-sync.md`) — identical Smartlead→Airtable pattern in FastAPI. Reuse field mapping logic.
+**Reference:** Herbox Sweden A7 spec (`workspace/clients/herbox-sweden/specs/4-live/a7-smartlead-campaign-sync.md`) — identical Smartlead→Google Sheets pattern in FastAPI. Reuse field mapping logic.
 
 ## Changelog
 

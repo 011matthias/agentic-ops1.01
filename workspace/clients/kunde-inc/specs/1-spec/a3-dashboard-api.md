@@ -24,7 +24,7 @@ last_changes:
   - Built 3 webhook endpoints reading from Google Sheets (not Airtable)
   - Token auth via query param
 next_steps:
-  - Update spec body to reflect Google Sheets instead of Airtable
+  - Spec body updated to reflect Google Sheets (done 2026-03-06)
   - Set production password (replace kunde-demo-2026)
 stage_history:
   - stage: spec
@@ -37,9 +37,9 @@ stage_history:
 
 ## Goal
 
-**Problem:** The static dashboard frontend needs to read data from Airtable, but cannot safely embed API keys in client-side JavaScript.
+**Problem:** The static dashboard frontend needs to read data from Google Sheets, but cannot safely embed API keys in client-side JavaScript.
 
-**Solution:** Three n8n webhook endpoints that act as an authenticated API proxy — the dashboard calls them, n8n reads from Airtable and returns JSON.
+**Solution:** Three n8n webhook endpoints that act as an authenticated API proxy — the dashboard calls them, n8n reads from Google Sheets and returns JSON.
 
 **Business Value:** Keeps all secrets server-side in n8n. The dashboard is a zero-secret static site that can be hosted on any CDN.
 
@@ -50,7 +50,7 @@ flowchart TD
     subgraph "Endpoint 1: /dashboard-campaigns"
         W1["Webhook GET"] --> AUTH1{{"Token valid?"}}
         AUTH1 -->|No| R401_1["Respond 401"]
-        AUTH1 -->|Yes| READ1["Airtable: Get All<br/>Campaigns"]
+        AUTH1 -->|Yes| READ1["Google Sheets: Get All<br/>Campaigns"]
         READ1 --> FMT1["Code: Format JSON"]
         FMT1 --> RESP1["Respond to Webhook<br/>200 JSON"]
     end
@@ -58,7 +58,7 @@ flowchart TD
     subgraph "Endpoint 2: /dashboard-sequences"
         W2["Webhook GET"] --> AUTH2{{"Token valid?"}}
         AUTH2 -->|No| R401_2["Respond 401"]
-        AUTH2 -->|Yes| READ2["Airtable: Get All<br/>Sequence Stats"]
+        AUTH2 -->|Yes| READ2["Google Sheets: Get All<br/>Sequence Stats"]
         READ2 --> FMT2["Code: Format +<br/>filter by campaign_id"]
         FMT2 --> RESP2["Respond to Webhook<br/>200 JSON"]
     end
@@ -66,7 +66,7 @@ flowchart TD
     subgraph "Endpoint 3: /dashboard-weekly"
         W3["Webhook GET"] --> AUTH3{{"Token valid?"}}
         AUTH3 -->|No| R401_3["Respond 401"]
-        AUTH3 -->|Yes| READ3["Airtable: Get All<br/>Weekly Snapshots"]
+        AUTH3 -->|Yes| READ3["Google Sheets: Get All<br/>Weekly Snapshots"]
         READ3 --> FMT3["Code: Format as<br/>chart-ready arrays"]
         FMT3 --> RESP3["Respond to Webhook<br/>200 JSON"]
     end
@@ -76,10 +76,10 @@ flowchart TD
 
 | System | Endpoints | Auth | Rate Limit |
 |--------|-----------|------|------------|
-| Airtable | List records (3 tables) | Personal access token | 5 req/sec |
+| Google Sheets | List records (3 tables) | Service account | 5 req/sec |
 
 **Node Strategy:**
-- **Native nodes:** Airtable (read), Respond to Webhook
+- **Native nodes:** Google Sheets (read), Respond to Webhook
 - **Code nodes:** Format JSON, filter, group by campaign
 
 ## N8N Workflow
@@ -89,7 +89,7 @@ flowchart TD
 **Credentials Required:**
 | Credential Name | Type | Description |
 |----------------|------|-------------|
-| Airtable | Personal Access Token | Read from Kunde Inc. base |
+| Google Sheets | Service Account | Read from Kunde Inc. spreadsheet |
 
 **Key Configuration:**
 - **Trigger:** Webhook (GET, responseMode: lastNode)
@@ -101,7 +101,7 @@ flowchart TD
 |------|---------|-------|
 | Webhook | Receive GET request | 1 |
 | IF | Token validation | 1 |
-| Airtable | Read records | 1 |
+| Google Sheets | Read records | 1 |
 | Code | Format response JSON | 1 |
 | Respond to Webhook | Return JSON | 2 (200 + 401) |
 
@@ -192,7 +192,7 @@ flowchart TD
 | Scenario | Handling | n8n Config |
 |----------|----------|------------|
 | Invalid/missing token | Return 401 Unauthorized | IF node |
-| Airtable empty | Return empty array (200) | Code node handles gracefully |
+| Google Sheets empty | Return empty array (200) | Code node handles gracefully |
 | CORS preflight | n8n handles OPTIONS automatically | Webhook config |
 | Large dataset (100+ campaigns) | Return all, let frontend paginate if needed | No pagination for now |
 
@@ -209,7 +209,7 @@ flowchart TD
 
 - [ ] All 3 endpoints return valid JSON
 - [ ] Invalid token returns 401
-- [ ] Campaign data matches what's in Airtable
+- [ ] Campaign data matches what's in Google Sheets
 - [ ] Sequence endpoint filters by campaign_id when provided
 - [ ] Weekly endpoint returns data grouped by campaign with weeks sorted chronologically
 - [ ] CORS headers allow requests from dashboard domain

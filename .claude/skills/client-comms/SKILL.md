@@ -64,15 +64,16 @@ Present the draft. If there are sanity check or feasibility warnings, show them 
 
 The user may ask to adjust: "shorter", "more casual", "add X", "remove the part about Y", "make it friendlier". Apply changes and re-run the style validation.
 
-### 7. Offer to Log
+### 7. Auto-Log
 
-After the user approves the final draft, ask: "Want me to log this in the comms history?"
+After the user approves the final draft, automatically log it:
 
-If yes, follow [COMMS-LOG.md](modules/COMMS-LOG.md) write procedures:
-1. Auto-generate an outbound entry from the approved draft
+1. Auto-generate an outbound entry from the approved draft (follow [COMMS-LOG.md](modules/COMMS-LOG.md) outbound write procedure)
 2. Extract open items (questions asked, things requested from client)
-3. Show the proposed entry to the user before writing
-4. Append to `context/comms-log.md`
+3. Show the log entry to the user: "Logged to comms history:" followed by the entry
+4. Append to `context/comms-log.md` and update frontmatter
+
+Do NOT ask "Want me to log this?" — outbound drafts are always logged. The system created the message; the system logs it.
 
 ## Inbound Process (`/comms`)
 

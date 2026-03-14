@@ -40,6 +40,10 @@ if iteration == max_iterations:
     ESCALATE with full diagnosis
 ```
 
+## Session-Level Backpressure
+
+The per-build cap is `max_iterations = 3`, but multiple build cycles in one session accumulate context pressure. After completing a build-test-fix cycle (success or escalation), evaluate session pressure per the session-pressure rule before starting another cycle. If 6+ total iterations across all builds in this session, suggest `/checkpoint --mini` before proceeding.
+
 ## Step 1: Execute
 
 ### Make.com
@@ -122,7 +126,7 @@ Map the error to the taxonomy in FAILURE-TAXONOMY.md. Key signals:
    - For `OUTCOME_MISMATCH` categories, also check OUTCOME-VERIFICATION.md for output-specific guidance
 2. Choose the most specific matching pattern
 3. Apply the fix:
-   - **Make.com**: Fetch current blueprint → modify → `scenarios_update`
+   - **Make.com**: Fetch current blueprint (`make-api.py get`) → modify → deploy fix (`uv run tools/make-api.py update`). Do NOT use `scenarios_update` with blueprint param (returns 500).
    - **n8n**: Fetch workflow → modify → update via MCP
    - **Trigger.dev**: Edit source file directly
 4. Record the fix in `fix_history`:

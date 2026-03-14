@@ -11,6 +11,18 @@ Create a checkpoint that captures the current conversation state for future sess
 2. If no argument, infer the topic from what we've been working on in this conversation
 3. Format topic as title case (e.g., "Fortnox API Integration")
 
+## Check for Mini Mode
+
+If `$ARGUMENTS` contains `--mini`:
+1. Strip `--mini` from arguments; remainder is the topic
+2. Use **MINI mode** — a lightweight checkpoint that preserves essential state without full analysis
+3. Skip: Friction Self-Audit, Comms Staleness Check, Strategic Feedback sections
+4. Write a shorter checkpoint (see Mini-Checkpoint Template below)
+5. Use filename: `Mini-Checkpoint-{N}.md` where N = count of existing `Mini-Checkpoint-*.md` files in the folder + 1
+6. Session log entry includes `(mini)` suffix: `### Session {N} — {TOPIC} (mini)`
+7. Still write/update the context YAML (critical for /resume)
+8. Skip directly to Confirm after writing
+
 ## Check/Create Folder
 
 1. Check if `docs/[TODAY's DATE] - [TOPIC]/` exists
@@ -22,6 +34,11 @@ Create a checkpoint that captures the current conversation state for future sess
 
 Analyze the current conversation and gather:
 
+- **Work Type**: Classify the primary work done this session:
+  - `client-dev` — building/testing/deploying/fixing client automations
+  - `system-infra` — improving the agentic-ops system itself
+  - `comms` — client communication, drafting, comms catch-up
+  - `misc` — one-off tasks, research, exploration
 - **Summary**: 1-2 sentence overview of work done this session
 - **What Was Done**: Categorized list of completed work
 - **Key Decisions**: Important choices made with rationale
@@ -31,6 +48,21 @@ Analyze the current conversation and gather:
 - **Files to Read First**: Critical files the next agent should read
 - **Open Questions**: Unresolved questions needing attention
 - **Reference Materials**: URLs, related docs, plan files
+
+## Friction Self-Audit
+
+Before writing the checkpoint, review the conversation for friction events:
+
+1. **Scan for user corrections:** Did the user redirect your approach? ("No, use X instead", "You can just...", "Try Y", "Figure it out")
+2. **Scan for user-performed tasks:** Did the user check something you could have checked via fixtures/tools? ("I checked the sheet and...", "The email looks like...")
+3. **Scan for missed tools:** Did you ask the user to do something that `tools/make-api.py`, test fixtures, or MCP tools could have done?
+
+For each event found, classify:
+- `agent-deferred`: Asked user to perform an automatable task
+- `missed-tool`: A tool/fixture existed but wasn't used
+- `redundant-escalation`: Escalated when autonomous fix was available
+
+Include these in the session log `**Friction:**` line and increment `friction_events` in frontmatter. Append rows to `docs/friction-register.md`. "None" ONLY if self-audit found zero events.
 
 ## Write Checkpoint
 
@@ -123,13 +155,15 @@ After writing the checkpoint, append a session log entry to `docs/sessions/{YYYY
    sessions: 0
    clients_touched: []
    friction_events: 0
+   work_types: []
    ---
    ```
 
-2. Increment `sessions` count and merge clients into `clients_touched`
+2. Increment `sessions` count, merge clients into `clients_touched`, merge work type into `work_types` (deduplicated)
 3. Append:
    ```markdown
    ### Session {N} — {TOPIC}
+   **Type:** {work_type}
    **Focus:** {summary from checkpoint}
    **Clients:** {clients touched}
    **Built:** {key deliverables}
@@ -149,6 +183,7 @@ Create/update `docs/sessions/{YYYY-MM-DD}-context.yaml`:
 checkpoint_date: "{YYYY-MM-DD}"
 checkpoint_topic: "{TOPIC}"
 checkpoint_file: "docs/{YYYY-MM-DD} - {TOPIC}/Checkpoint.md"
+work_type: "{client-dev|system-infra|comms|misc}"
 clients:
   {client-id}:                        # only clients touched this session
     orchestrator: {n8n|make|trigger-dev|fastapi}
@@ -185,7 +220,40 @@ After writing the YAML, for each client in `clients_touched`:
 
 If all clients are under 4 days, skip this section.
 
+## Mini-Checkpoint Template
+
+When in MINI mode, use this shorter format instead of the full checkpoint template:
+
+```markdown
+# Mini-Checkpoint: [Topic Name]
+
+**Date:** [TODAY's DATE]
+**Status:** [Current Phase/Status]
+**Type:** mini
+
+---
+
+## Summary
+[1-2 sentence overview]
+
+## What Was Done
+- [Item 1]
+- [Item 2]
+- [Item 3]
+
+## Current Status
+[Where things stand]
+
+## Next Steps
+1. [Priority 1]
+2. [Priority 2]
+
+## Files to Read First
+- [path/to/critical/file]
+```
+
 ## Confirm
 
 After creating the checkpoint, confirm:
-> "Checkpoint saved to `docs/[DATE] - [TOPIC]/Checkpoint.md`."
+- Full mode: "Checkpoint saved to `docs/[DATE] - [TOPIC]/Checkpoint.md`."
+- Mini mode: "Mini-checkpoint saved to `docs/[DATE] - [TOPIC]/Mini-Checkpoint-{N}.md`."

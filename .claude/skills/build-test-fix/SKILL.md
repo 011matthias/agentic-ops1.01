@@ -37,7 +37,7 @@ Wraps the iterative cycle that happens after every initial build: execute → ch
 
 | Orchestrator | Execute | Read Results | Fix |
 |-------------|---------|-------------|-----|
-| **Make.com** | `scenarios_run` or webhook POST | `executions_list` → `executions_get_detail` | Update blueprint via `scenarios_update` |
+| **Make.com** | `scenarios_run` or webhook POST | `executions_list` → `executions_get_detail` | Update blueprint via `tools/make-api.py update` (NOT `scenarios_update` — returns 500 on blueprints) |
 | **n8n** | MCP workflow execution | n8n execution history via MCP | Update workflow JSON via MCP |
 | **Trigger.dev** | `npx trigger.dev@latest dev` + trigger | Task run logs | Edit TypeScript source |
 

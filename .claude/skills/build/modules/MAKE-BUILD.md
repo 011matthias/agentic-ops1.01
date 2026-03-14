@@ -90,16 +90,27 @@ Using the spec and the **`make-mcp-tools-expert` > BLUEPRINT-FORMAT.md** referen
 
 ---
 
-## Step 5: Deploy via MCP
+## Step 5: Deploy via REST API
 
-Use Make.com MCP tools to deploy the scenario:
+MCP `scenarios_update`/`scenarios_create` return 500 with blueprint payloads. Use `tools/make-api.py` instead.
 
-1. Create scenario from blueprint (requires team ID)
-2. Verify scenario was created (get scenario details)
-3. Note the scenario URL and ID for documentation
-4. If webhook trigger: copy the generated webhook URL to the source system
+### Update existing scenario:
+```bash
+uv run tools/make-api.py update --zone {ZONE} --scenario-id {SCENARIO_ID} \
+    --blueprint workspace/clients/{client}/automations/blueprints/{id}-{name}.json
+```
 
-**Fallback:** If MCP deployment fails, provide the blueprint JSON for manual import in the Make.com UI (Scenarios → Import Blueprint).
+### Create new scenario:
+```bash
+uv run tools/make-api.py deploy --zone {ZONE} --team-id {TEAM_ID} \
+    --blueprint workspace/clients/{client}/automations/blueprints/{id}-{name}.json
+```
+
+Get zone and team ID from `workspace/clients/{client}/infrastructure.yaml`.
+
+**After deployment:** If this is a tool-type scenario, call `scenarios_set_interface` MCP tool to bind input parameters (REST API deploy leaves interface empty). Only `name` and `type` fields allowed.
+
+**Fallback:** If `make-api.py` fails (missing token, network error), provide blueprint JSON for manual UI import.
 
 ---
 
@@ -174,6 +185,55 @@ Update the following after activation:
 2. **`workspace/clients/{client}/infrastructure.yaml`** -- Ensure Make.com entry exists
 3. **Spec frontmatter** -- Set `stage: live` when confirmed working
 4. **Export final blueprint** -- Save to `workspace/clients/{client}/automations/blueprints/{id}-{name}.json`
+
+---
+
+## Step 8.5: Production Deployment (Cross-Org)
+
+When deploying from dev org to client's production org:
+
+### Automated steps (via `make-api.py`):
+
+1. **Create data stores** in production org:
+   ```bash
+   # MCP data store creation works — use it
+   # Or via REST API if structure needs cloning
+   ```
+
+2. **Seed data store records:**
+   ```bash
+   uv run tools/make-api.py ds-upsert --zone {PROD_ZONE} --datastore-id {PROD_DS_ID} \
+       --key {KEY} --data '{...}'
+   ```
+
+3. **Prepare blueprint for target org:**
+   - Download dev blueprint: `uv run tools/make-api.py get --zone {DEV_ZONE} --scenario-id {DEV_ID} --output blueprint.json`
+   - Replace connection IDs (dev → production, from `infrastructure.yaml`)
+   - Replace data store IDs (dev DS → production DS)
+   - Replace spreadsheet IDs (dev sheet → production sheet)
+   - Remove webhook IDs (new hooks generated on deploy)
+
+4. **Deploy to production:**
+   ```bash
+   uv run tools/make-api.py deploy --zone {PROD_ZONE} --team-id {PROD_TEAM_ID} \
+       --blueprint path/to/production-blueprint.json
+   ```
+
+5. **Set interface** (if tool scenarios):
+   ```
+   scenarios_set_interface(scenarioId, input: [{name, type}...])
+   ```
+
+6. **Record IDs:** Update `infrastructure.yaml` with production scenario IDs, webhook URLs, data store IDs.
+
+### Manual steps (document in handover checklist):
+- [ ] **OAuth connections:** Client must create connections in their Make.com org (Google Sheets, Gmail, etc.)
+- [ ] **Webhook URL update:** New webhook URL generated on deploy -- update source systems
+- [ ] **Credential swap:** Replace test credentials with production credentials in connections page
+- [ ] **Activation:** Activate scheduled scenarios after connections are verified
+
+### Production verification:
+Run the same test cycle from Step 6 against the production org. Use production zone in `make-api.py` commands.
 
 ---
 

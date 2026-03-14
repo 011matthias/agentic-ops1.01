@@ -5,7 +5,7 @@ argument-hint: <client-name>
 
 # Resume Client Work
 
-Reloads context for a client so work can continue from where it left off. Eliminates the cold-start problem at the beginning of sessions.
+Reloads context for a client so work can continue from where it left off. Eliminates the cold-start problem at the beginning of sessions. **This command scopes the session to a single client** — all subsequent operations target only this client's directory. For parallel work, open separate sessions and `/resume` in each.
 
 ## Context
 

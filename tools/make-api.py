@@ -239,16 +239,16 @@ def cmd_ds_upsert(args: argparse.Namespace) -> None:
     record_data = json.loads(args.data)
 
     # Try PUT (update) first, fall back to POST (create)
+    # PUT expects flat fields (no 'data' wrapper), POST expects {"key": ..., ...fields}
     url = f"{base_url(args.zone)}/data-stores/{args.datastore_id}/data/{args.key}"
-    body = {"data": record_data}
     print(f"Upserting record '{args.key}' in data store {args.datastore_id}...")
     with httpx.Client(timeout=30) as client:
-        resp = client.put(url, headers=headers(token), json=body)
+        resp = client.put(url, headers=headers(token), json=record_data)
 
         if resp.status_code == 404:
             # Record doesn't exist, create it
             url = f"{base_url(args.zone)}/data-stores/{args.datastore_id}/data"
-            body = {"key": args.key, "data": record_data}
+            body = {"key": args.key, **record_data}
             resp = client.post(url, headers=headers(token), json=body)
 
     if resp.status_code in (200, 201):

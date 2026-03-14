@@ -6,7 +6,7 @@
 # ]
 # ///
 """
-Export Meji Media client docs to a styled HTML file (open in browser → Print → PDF).
+Export Meji Media client docs to a styled HTML file (open in browser -> Print -> PDF).
 
 Usage:
     uv run build-export.py                          # outputs meji-media-complete-guide.html
@@ -171,6 +171,7 @@ INDIVIDUAL_DOCS_ORDER = [
     "a1-enquiry-follow-up.md",
     "a2-reply-detection.md",
     "a3-follow-up-steps.md",
+    "ab-testing-guide.md",
 ]
 
 
@@ -211,13 +212,13 @@ def md_to_html(md_text: str) -> str:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Meji Media — Automated Follow-Up System</title>
+    <title>Meji Media -- Automated Follow-Up System</title>
     <style>{CSS}</style>
 </head>
 <body>
 {html_body}
 <div class="footer">
-    Meji Media — Automated Follow-Up System | Confidential
+    Meji Media -- Automated Follow-Up System | Confidential
 </div>
 </body>
 </html>"""

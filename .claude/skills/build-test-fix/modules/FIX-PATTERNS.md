@@ -17,7 +17,7 @@ Known failure→fix mappings. Each pattern includes: trigger condition, fix proc
 2. Add a filter between the filterRows module and the next downstream module
 3. Filter condition: `{{N.__ROW_NUMBER__}} >= 1` (where N = filterRows module ID)
 4. Alternative (safer): Use `text:isnotempty` on `{{N.__ROW_NUMBER__}}` — avoids numeric coercion edge cases
-5. Update blueprint via `scenarios_update`
+5. Update blueprint via `uv run tools/make-api.py update`
 
 **Post-fix verification:** Run scenario with data that produces 0 filterRows matches. Expect: execution completes with 0 operations after the guard (no error).
 

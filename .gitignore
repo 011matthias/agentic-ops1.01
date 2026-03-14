@@ -73,3 +73,8 @@ docs/sessions/*-context.yaml
 
 # Claude Code local settings (machine-specific permissions)
 .claude/settings.local.json
+
+# Platform (Next.js)
+platform/.next/
+platform/node_modules/
+platform/.env.local

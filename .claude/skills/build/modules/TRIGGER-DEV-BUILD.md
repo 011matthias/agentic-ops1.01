@@ -2,6 +2,17 @@
 
 Trigger.dev automations use TypeScript task wrappers that call Python scripts via `python.runScript()`. Code lives in the client's automations folder.
 
+## Design Principles
+
+- Use `schemaTask` with Zod validation for typed, validated payloads
+- Break complex workflows into subtasks for independent retry/idempotency, but avoid over-splitting — use `Promise.allSettled` for parallel work within a single task to save costs (each subtask gets its own process, billed per-ms)
+- Always configure `retry` (maxAttempts, delay, backoff) — don't over-retry
+- Use `triggerAndWait`/`batchTriggerAndWait` only when parent needs child results; otherwise use `trigger`/`batchTrigger`
+- Pass `idempotencyKey` when triggering from inside tasks to prevent duplicate work on retries
+- Use `logger` at key execution points for visibility
+- Group single-use subtasks in the same file as the parent; don't export them
+- Never wrap `triggerAndWait`/`batchTriggerAndWait` in `Promise.all` — not supported
+
 ---
 
 ## Folder Structure

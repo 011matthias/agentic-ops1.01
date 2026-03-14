@@ -2,5 +2,29 @@
   "enabledPlugins": {
     "productivity-suite@riccardovandra": true,
     "playground@claude-plugins-official": true
+  },
+  "hooks": {
+    "PreCompact": [
+      {
+        "matcher": "auto",
+        "hooks": [
+          {
+            "type": "agent",
+            "prompt": "Auto-compaction is about to happen. Write an emergency mini-checkpoint to preserve session state. Steps: (1) Determine the current date and working topic from available context. (2) Create docs/[DATE] - Auto-Checkpoint/Mini-Checkpoint-auto.md with: Summary, What Was Done, Current Status, Next Steps, Files to Read First. (3) Update docs/sessions/[DATE]-context.yaml if it exists — add or merge client data. (4) Keep it fast — you have 60 seconds. Prioritize capturing next steps and files modified over completeness."
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'LATEST=$(ls -t docs/sessions/*-context.yaml 2>/dev/null | head -1); if [ -n \"$LATEST\" ]; then echo \"[SESSION RESTORED FROM AUTO-CHECKPOINT]\"; cat \"$LATEST\"; fi'"
+          }
+        ]
+      }
+    ]
   }
 }

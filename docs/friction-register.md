@@ -7,3 +7,4 @@
 | 2026-03-04 | kunde-inc | syntax-bug | Python f-string collapses `{{...}}` to `{...}` — n8n expressions require double braces; use string concatenation to build expression strings | Yes |
 | 2026-03-04 | kunde-inc | platform-limitation | n8n Split In Batches typeVersion 1 never fires done output[1]; need typeVersion 3 for the done signal | Yes |
 | 2026-03-04 | kunde-inc | platform-gotcha | Google Sheets API 429 when Clear Sheet node receives N items (1 per campaign) instead of 1 — must place Clear before Read Campaigns in flow | Yes |
+| 2026-03-06 | meji-media | missed-tool | `/draft` creates messages but doesn't auto-log to comms-log.md — comms log fell 4 days stale across 3 sessions despite messages being drafted via the system. Need `/draft` to auto-append comms-log entries. | Yes |
