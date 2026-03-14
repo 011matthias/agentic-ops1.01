@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/react";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,9 +16,20 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "UnpausAI — Automation Solutions",
+  title: {
+    default: "UnpausAI — Automation Solutions",
+    template: "%s | UnpausAI",
+  },
   description:
-    "Custom automation solutions for businesses. We build workflows that save you time and scale your operations.",
+    "We build automations that run your business. Lead follow-up, CRM sync, sales dashboards, and custom workflows — connected to your existing tools.",
+  openGraph: {
+    title: "UnpausAI — Automation Solutions",
+    description:
+      "We build automations that run your business. Lead follow-up, CRM sync, sales dashboards, and custom workflows.",
+    url: "https://unpauseai.com",
+    siteName: "UnpausAI",
+    type: "website",
+  },
 };
 
 export default function RootLayout({
@@ -28,7 +42,10 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <Header />
+        <main>{children}</main>
+        <Footer />
+        <Analytics />
       </body>
     </html>
   );
