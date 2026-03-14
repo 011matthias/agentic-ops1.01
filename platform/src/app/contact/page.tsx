@@ -145,10 +145,10 @@ export default function ContactPage() {
         <p className="text-sm text-muted">
           Prefer email directly?{" "}
           <a
-            href="mailto:hello@unpauseai.com"
+            href="mailto:nicholas.neuman@unpauseai.com"
             className="text-accent hover:text-accent-light"
           >
-            hello@unpauseai.com
+            nicholas.neuman@unpauseai.com
           </a>
         </p>
       </div>

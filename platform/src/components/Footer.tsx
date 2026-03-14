@@ -27,10 +27,10 @@ export default function Footer() {
             Contact
           </Link>
           <a
-            href="mailto:hello@unpauseai.com"
+            href="mailto:nicholas.neuman@unpauseai.com"
             className="text-sm text-muted transition-colors hover:text-foreground"
           >
-            hello@unpauseai.com
+            nicholas.neuman@unpauseai.com
           </a>
         </div>
       </div>
