@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation"
-import { desc, eq } from "drizzle-orm"
+import { desc, eq, asc } from "drizzle-orm"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { clients, projects } from "@/lib/schema"
+import { clients, projects, milestones } from "@/lib/schema"
 import PageHeader from "@/components/ui/PageHeader"
 import EmptyState from "@/components/ui/EmptyState"
 import Card from "@/components/ui/Card"
@@ -11,6 +11,7 @@ import Badge from "@/components/ui/Badge"
 export const metadata = { title: "Automations" }
 
 type ProjectStatus = "active" | "paused" | "complete"
+type MilestoneStatus = "pending" | "in-progress" | "done"
 
 const statusVariant: Record<ProjectStatus, "success" | "warning" | "default"> =
   {
@@ -41,6 +42,99 @@ function formatDate(date: Date | null): string {
   })
 }
 
+function MilestoneIcon({ status }: { status: MilestoneStatus }) {
+  if (status === "done") {
+    return (
+      <span
+        className="inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold shrink-0"
+        style={{ color: "var(--accent)", border: "2px solid var(--accent)" }}
+        aria-label="Done"
+      >
+        ✓
+      </span>
+    )
+  }
+  if (status === "in-progress") {
+    return (
+      <span
+        className="inline-flex items-center justify-center w-5 h-5 rounded-full text-xs shrink-0"
+        style={{
+          color: "var(--foreground)",
+          border: "2px solid var(--foreground)",
+          backgroundColor: "var(--foreground)",
+        }}
+        aria-label="In progress"
+      >
+        <span
+          className="w-2 h-2 rounded-full"
+          style={{ backgroundColor: "var(--background)" }}
+        />
+      </span>
+    )
+  }
+  return (
+    <span
+      className="inline-flex items-center justify-center w-5 h-5 rounded-full text-xs shrink-0"
+      style={{ border: "2px solid var(--muted)" }}
+      aria-label="Pending"
+    />
+  )
+}
+
+type MilestoneRow = typeof milestones.$inferSelect
+type ProjectWithMilestones = typeof projects.$inferSelect & {
+  milestones: MilestoneRow[]
+}
+
+function MilestoneTimeline({
+  projectMilestones,
+}: {
+  projectMilestones: MilestoneRow[]
+}) {
+  if (projectMilestones.length === 0) return null
+
+  const doneCount = projectMilestones.filter((m) => m.status === "done").length
+  const total = projectMilestones.length
+
+  return (
+    <div className="mt-4 pt-4 border-t border-border">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs font-medium text-foreground">Milestones</span>
+        <span className="text-xs text-muted">
+          {doneCount} / {total} complete
+        </span>
+      </div>
+      <ul className="space-y-2">
+        {projectMilestones.map((milestone) => {
+          const status = milestone.status as MilestoneStatus
+          const labelColor =
+            status === "done"
+              ? "var(--accent)"
+              : status === "in-progress"
+                ? "var(--foreground)"
+                : "var(--muted)"
+          return (
+            <li key={milestone.id} className="flex items-center gap-3">
+              <MilestoneIcon status={status} />
+              <span
+                className="flex-1 text-sm truncate"
+                style={{ color: labelColor }}
+              >
+                {milestone.title}
+              </span>
+              {milestone.dueDate && (
+                <span className="text-xs shrink-0" style={{ color: "var(--muted)" }}>
+                  {formatDate(milestone.dueDate)}
+                </span>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
 export default async function AutomationsPage() {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
@@ -49,10 +143,15 @@ export default async function AutomationsPage() {
     where: eq(clients.userId, session.user.id),
   })
 
-  const projectList = client
+  const projectList: ProjectWithMilestones[] = client
     ? await db.query.projects.findMany({
         where: eq(projects.clientId, client.id),
         orderBy: desc(projects.createdAt),
+        with: {
+          milestones: {
+            orderBy: asc(milestones.dueDate),
+          },
+        },
       })
     : []
 
@@ -104,6 +203,10 @@ export default async function AutomationsPage() {
                     <span>Started: {formatDate(project.startDate)}</span>
                   )}
                 </div>
+
+                {project.milestones.length > 0 && (
+                  <MilestoneTimeline projectMilestones={project.milestones} />
+                )}
               </Card>
             )
           })}
