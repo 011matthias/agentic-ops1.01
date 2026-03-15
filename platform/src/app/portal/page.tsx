@@ -1,14 +1,11 @@
 import { auth } from "@/lib/auth"
-import { redirect } from "next/navigation"
+import StatCard from "@/components/portal/StatCard"
+import PortalCard from "@/components/portal/PortalCard"
 
 export default async function PortalPage() {
   const session = await auth()
 
-  if (!session?.user) {
-    redirect("/login")
-  }
-
-  const firstName = session.user.name?.split(" ")[0] ?? "there"
+  const firstName = session?.user?.name?.split(" ")[0] ?? "there"
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-12">
@@ -56,49 +53,5 @@ export default async function PortalPage() {
         />
       </div>
     </div>
-  )
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6">
-      <p className="text-sm text-gray-500 dark:text-gray-400">{label}</p>
-      <p className="mt-1 text-3xl font-bold text-gray-900 dark:text-white">{value}</p>
-    </div>
-  )
-}
-
-function PortalCard({
-  title,
-  description,
-  href,
-  icon,
-  empty,
-}: {
-  title: string
-  description: string
-  href: string
-  icon: string
-  empty?: boolean
-}) {
-  return (
-    <a
-      href={href}
-      className="group block rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 hover:border-gray-400 dark:hover:border-gray-600 transition-colors"
-    >
-      <div className="flex items-start justify-between mb-3">
-        <span className="text-2xl">{icon}</span>
-        <span className="text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors">
-          →
-        </span>
-      </div>
-      <h3 className="font-semibold text-gray-900 dark:text-white mb-1">{title}</h3>
-      <p className="text-sm text-gray-600 dark:text-gray-400">{description}</p>
-      {empty && (
-        <p className="mt-3 text-xs text-gray-400 dark:text-gray-600 italic">
-          Coming soon
-        </p>
-      )}
-    </a>
   )
 }

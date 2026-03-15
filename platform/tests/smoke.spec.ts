@@ -8,7 +8,7 @@ import { test, expect } from "@playwright/test"
 
 test("home page loads", async ({ page }) => {
   await page.goto("/")
-  await expect(page).toHaveTitle(/UnpausAI/)
+  await expect(page).toHaveTitle(/UnpauseAI/)
   await page.screenshot({ path: "test-results/home.png", fullPage: true })
 })
 
