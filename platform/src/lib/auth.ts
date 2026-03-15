@@ -29,8 +29,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     session({ session, user }) {
       if (session.user && user) {
         session.user.id = user.id
-        // @ts-expect-error – role is a custom field added to users table
-        session.user.role = user.role
+        session.user.role = user.role ?? "client"
       }
       return session
     },
