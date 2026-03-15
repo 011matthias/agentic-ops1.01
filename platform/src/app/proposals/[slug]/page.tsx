@@ -46,7 +46,7 @@ export async function generateMetadata({
   if (!proposal) return { title: "Proposal Not Found" };
 
   return {
-    title: `${proposal.frontmatter.project_title} | UnpausAI`,
+    title: `${proposal.frontmatter.project_title} | UnpauseAI`,
     description: `Proposal for ${proposal.frontmatter.prospect}: ${proposal.frontmatter.project_title}`,
   };
 }

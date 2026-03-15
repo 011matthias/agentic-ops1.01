@@ -5,7 +5,7 @@ export default function Footer() {
     <footer className="border-t border-border">
       <div className="mx-auto flex max-w-5xl flex-col items-center gap-4 px-6 py-8 sm:flex-row sm:justify-between">
         <p className="text-sm text-muted">
-          &copy; {new Date().getFullYear()} UnpausAI. All rights reserved.
+          &copy; {new Date().getFullYear()} UnpauseAI. All rights reserved.
         </p>
         <div className="flex gap-6">
           <Link
@@ -27,10 +27,10 @@ export default function Footer() {
             Contact
           </Link>
           <a
-            href="mailto:nicholas.neuman@unpauseai.com"
+            href="mailto:nicolas.neumann@unpauseai.com"
             className="text-sm text-muted transition-colors hover:text-foreground"
           >
-            nicholas.neuman@unpauseai.com
+            nicolas.neumann@unpauseai.com
           </a>
         </div>
       </div>

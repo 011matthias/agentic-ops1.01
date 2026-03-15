@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "About",
   description:
-    "UnpausAI builds custom automation solutions. We connect your existing tools into reliable workflows that run 24/7.",
+    "UnpauseAI builds custom automation solutions. We connect your existing tools into reliable workflows that run 24/7.",
 };
 
 const orchestrators = [
@@ -27,7 +27,7 @@ export default function AboutPage() {
     <div className="flex flex-col">
       <section className="mx-auto max-w-3xl px-6 py-20">
         <h1 className="mb-6 text-3xl font-bold tracking-tight sm:text-4xl">
-          About UnpausAI
+          About UnpauseAI
         </h1>
 
         <div className="space-y-6 leading-relaxed text-muted">
