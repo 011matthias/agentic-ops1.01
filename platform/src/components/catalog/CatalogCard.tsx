@@ -1,81 +1,73 @@
 import Link from "next/link"
-import { CatalogItem } from "@/content/catalog"
+import type { CatalogItem } from "@/content/catalog"
 
-interface Props {
+interface CatalogCardProps {
   item: CatalogItem
 }
 
-export function CatalogCard({ item }: Props) {
-  const ctaHref =
-    item.type === "custom"
-      ? `/contact?service=${item.slug}`
-      : `/contact?package=${item.slug}`
-  const ctaText = item.type === "custom" ? "Get a quote" : "Request access"
+export function CatalogCard({ item }: CatalogCardProps) {
+  const isPurchasable =
+    item.type === "ready-setup" && item.startingFrom !== "Free"
 
   return (
-    <div className="relative flex flex-col rounded-lg border border-border bg-background p-6 transition-shadow hover:shadow-sm">
-      {/* Popular badge */}
-      {item.popular && (
-        <span className="absolute right-4 top-4 rounded-full bg-accent px-3 py-0.5 text-xs font-medium text-white">
-          Popular
-        </span>
-      )}
-
-      {/* Header */}
-      <div className="mb-3 pr-16">
-        <h3 className="text-base font-semibold leading-snug">{item.name}</h3>
-        <p className="mt-1 text-sm text-muted">{item.tagline}</p>
+    <div className="flex flex-col rounded-lg border border-border p-6">
+      <div className="mb-1 text-xs font-medium uppercase tracking-widest text-muted">
+        {item.category}
       </div>
+      <h3 className="mb-1 text-lg font-semibold">{item.name}</h3>
+      <p className="mb-4 text-sm leading-relaxed text-muted">{item.tagline}</p>
 
-      {/* Description */}
-      <p className="mb-5 text-sm leading-relaxed text-muted">
-        {item.description}
-      </p>
+      <ul className="mb-6 flex-1 space-y-1.5">
+        {item.whatYouGet.map((benefit) => (
+          <li key={benefit} className="flex items-start gap-2 text-sm text-muted">
+            <span className="mt-0.5 text-accent">&#10003;</span>
+            {benefit}
+          </li>
+        ))}
+      </ul>
 
-      {/* What you get */}
-      <div className="mb-5">
-        <p className="mb-2 text-xs font-medium uppercase tracking-wide">
-          What you get
-        </p>
-        <ul className="space-y-1.5">
-          {item.whatYouGet.map((line) => (
-            <li key={line} className="flex items-start gap-2 text-sm text-muted">
-              <span className="mt-0.5 shrink-0 text-accent">&#10003;</span>
-              <span>{line}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {/* Spacer pushes footer to bottom */}
-      <div className="flex-1" />
-
-      {/* Tags */}
-      <div className="mb-4 flex flex-wrap gap-1.5">
-        {item.tags.map((tag) => (
+      <div className="flex flex-wrap gap-1.5 mb-6">
+        {item.tools.map((tool) => (
           <span
-            key={tag}
+            key={tool}
             className="rounded-full border border-border px-2.5 py-0.5 text-xs text-muted"
           >
-            {tag}
+            {tool}
           </span>
         ))}
       </div>
 
-      {/* Footer row */}
       <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
-        <div className="flex flex-col gap-0.5">
-          <span className="text-xs text-muted">{item.typicalTimeline}</span>
-          <span className="text-sm font-semibold">
-            {item.startingFrom === "Free" ? "Free" : `From ${item.startingFrom}`}
-          </span>
-        </div>
-        <Link
-          href={ctaHref}
-          className="shrink-0 rounded-full bg-accent px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-accent-light"
-        >
-          {ctaText}
-        </Link>
+        <span className="text-sm font-medium">
+          {item.startingFrom === "Free" ? (
+            <span className="text-accent">Free</span>
+          ) : (
+            item.startingFrom
+          )}
+        </span>
+
+        {isPurchasable ? (
+          <Link
+            href={`/buy/${item.slug}`}
+            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:opacity-90"
+          >
+            Buy now &rarr;
+          </Link>
+        ) : item.startingFrom === "Free" ? (
+          <Link
+            href={`/contact?package=${item.slug}`}
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-border/30"
+          >
+            Get access
+          </Link>
+        ) : (
+          <Link
+            href={`/contact?package=${item.slug}`}
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-border/30"
+          >
+            Request access
+          </Link>
+        )}
       </div>
     </div>
   )

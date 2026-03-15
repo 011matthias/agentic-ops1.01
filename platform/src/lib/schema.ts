@@ -5,6 +5,7 @@ import {
   integer,
   primaryKey,
   uuid,
+  boolean,
 } from "drizzle-orm/pg-core"
 import { relations } from "drizzle-orm"
 import type { AdapterAccountType } from "next-auth/adapters"
@@ -148,6 +149,31 @@ export const files = pgTable("files", {
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
 })
 
+// ── Purchase tables ───────────────────────────────────────────────────────────
+
+export const products = pgTable("products", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  catalogSlug: text("catalog_slug").notNull().unique(),
+  name: text("name").notNull(),
+  priceUsd: integer("price_usd").notNull(), // cents, e.g. 4900 for $49
+  stripePriceId: text("stripe_price_id"), // set after Stripe product created
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+})
+
+export const purchases = pgTable("purchases", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+  productId: uuid("product_id")
+    .references(() => products.id)
+    .notNull(),
+  stripeSessionId: text("stripe_session_id").unique(),
+  status: text("status", { enum: ["pending", "complete", "refunded"] })
+    .default("pending")
+    .notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+})
+
 // ── Relations ─────────────────────────────────────────────────────────────────
 
 export const clientsRelations = relations(clients, ({ many }) => ({
@@ -180,5 +206,16 @@ export const filesRelations = relations(files, ({ one }) => ({
   project: one(projects, {
     fields: [files.projectId],
     references: [projects.id],
+  }),
+}))
+
+export const productsRelations = relations(products, ({ many }) => ({
+  purchases: many(purchases),
+}))
+
+export const purchasesRelations = relations(purchases, ({ one }) => ({
+  product: one(products, {
+    fields: [purchases.productId],
+    references: [products.id],
   }),
 }))
