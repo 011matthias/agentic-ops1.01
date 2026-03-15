@@ -1,153 +1,150 @@
-export type ProductType = "custom" | "ready-setup"
+export type CatalogItemType = "ready-setup" | "custom"
 
 export interface CatalogItem {
   id: string
   slug: string
-  type: ProductType
+  type: CatalogItemType
   name: string
   tagline: string
   description: string
-  whatYouGet: string[]
-  typicalTimeline: string
   startingFrom: string
-  tags: string[]
-  popular?: boolean
+  whatYouGet: string[]
+  tools: string[]
+  category: string
 }
 
 export const catalog: CatalogItem[] = [
-  // --- CUSTOM BUILDS ---
   {
-    id: "custom-lead-nurture",
-    slug: "lead-nurture-sequence",
-    type: "custom",
-    name: "Lead Nurture Sequence",
-    tagline: "Automated follow-up that converts enquiries into booked clients",
-    description:
-      "We build a multi-step follow-up automation tailored to your sales process — from first enquiry through to booking confirmation. Integrates with your CRM, email, and calendar.",
-    whatYouGet: [
-      "Custom-built automation in Make.com or n8n",
-      "Personalised email sequences (3–5 steps)",
-      "CRM integration (HubSpot, Airtable, Notion, or similar)",
-      "30-day monitoring and iteration",
-    ],
-    typicalTimeline: "1–2 weeks",
-    startingFrom: "$800",
-    tags: ["CRM", "Email", "Lead Gen"],
-    popular: true,
-  },
-  {
-    id: "custom-enquiry-pipeline",
-    slug: "enquiry-pipeline",
-    type: "custom",
-    name: "Enquiry-to-Invoice Pipeline",
-    tagline:
-      "From new enquiry to signed contract and first invoice — fully automated",
-    description:
-      "End-to-end pipeline that captures enquiries, qualifies leads, sends proposals, collects signatures, and generates invoices — without manual steps.",
-    whatYouGet: [
-      "Multi-platform automation (form → email → contract → invoice)",
-      "E-signature integration (DocuSign or similar)",
-      "Automated invoicing (Xero, QuickBooks, or Stripe)",
-      "Client onboarding triggered on contract sign",
-    ],
-    typicalTimeline: "2–3 weeks",
-    startingFrom: "$1,200",
-    tags: ["Sales", "Finance", "Onboarding"],
-  },
-  {
-    id: "custom-reporting",
-    slug: "automated-reporting",
-    type: "custom",
-    name: "Automated Reporting Dashboard",
-    tagline: "Weekly reports delivered to your inbox — no spreadsheet wrangling",
-    description:
-      "Pull data from multiple sources (ad platforms, CRMs, spreadsheets), aggregate it, and deliver formatted reports on a schedule. You set the metrics, we automate the delivery.",
-    whatYouGet: [
-      "Data pipeline from 2–4 sources",
-      "Custom report template (Google Sheets, Notion, or PDF)",
-      "Scheduled delivery via email or Slack",
-      "Anomaly alerts for key metrics",
-    ],
-    typicalTimeline: "1–2 weeks",
-    startingFrom: "$600",
-    tags: ["Analytics", "Reporting", "Data"],
-  },
-  {
-    id: "custom-client-portal",
-    slug: "client-portal-setup",
-    type: "custom",
-    name: "Client Portal Setup",
-    tagline:
-      "Give your clients a branded hub for files, messages, and project status",
-    description:
-      "We configure and customise a client portal connected to your project management tools — so clients always know what's happening without chasing you for updates.",
-    whatYouGet: [
-      "Branded portal (white-label or UnpauseAI hosted)",
-      "File delivery and versioning",
-      "Project timeline and milestone tracker",
-      "Automated status update notifications",
-    ],
-    typicalTimeline: "2–4 weeks",
-    startingFrom: "$1,500",
-    tags: ["Portal", "Client Experience", "Projects"],
-  },
-  // --- READY SETUP ---
-  {
-    id: "ready-upwork-profile",
-    slug: "upwork-profile-optimiser",
+    id: "cat-001",
+    slug: "lead-follow-up-starter",
     type: "ready-setup",
-    name: "Upwork Profile Optimiser",
-    tagline: "A step-by-step system to rank higher and win more proposals",
+    name: "Lead Follow-Up Starter",
+    tagline: "Instant auto-response + 3-step AI follow-up sequence",
     description:
-      "A complete Upwork setup system — profile audit checklist, proposal templates, niche positioning guide, and a tracked outreach tracker. Self-guided, delivered instantly.",
+      "A pre-built automation that fires the moment a lead submits your form. Sends a personalized response within seconds, then follows up at day 1, day 3, and day 7 — stopping the moment they reply.",
+    startingFrom: "$49",
     whatYouGet: [
-      "Profile audit checklist (25 points)",
-      "5 proven proposal templates by job type",
-      "Niche positioning workbook",
-      "Weekly outreach tracking spreadsheet",
+      "Instant auto-response email on form submission",
+      "3-step AI-personalized follow-up sequence",
+      "Reply detection — sequence stops when they respond",
+      "Lead logged to Google Sheets",
+      "Setup guide + 30-day support",
     ],
-    typicalTimeline: "Instant access",
+    tools: ["Make.com", "Gmail", "Google Sheets", "OpenAI"],
+    category: "Lead Automation",
+  },
+  {
+    id: "cat-002",
+    slug: "crm-erp-sync-starter",
+    type: "ready-setup",
+    name: "CRM–ERP Sync Starter",
+    tagline: "Bidirectional sync between your CRM and ERP, no manual data entry",
+    description:
+      "Keep your CRM and ERP in lockstep. When a deal closes in your CRM, it flows into your ERP automatically — and vice versa. No more copy-paste, no more stale records.",
+    startingFrom: "$149",
+    whatYouGet: [
+      "Bidirectional sync on deal stage changes",
+      "Automated invoice creation on deal close",
+      "Slack or email notification on sync",
+      "Error logging with retry logic",
+      "Setup guide + 30-day support",
+    ],
+    tools: ["n8n", "HubSpot", "Fortnox"],
+    category: "CRM & ERP",
+  },
+  {
+    id: "cat-003",
+    slug: "weekly-campaign-report",
+    type: "ready-setup",
+    name: "Weekly Campaign Report",
+    tagline: "Auto-delivered campaign summary every Monday morning",
+    description:
+      "Every Monday, a clean campaign summary lands in your inbox. Open rates, reply rates, and trend vs. last week — pulled from your outreach tool and written in plain English.",
+    startingFrom: "$49",
+    whatYouGet: [
+      "Weekly email report with key metrics",
+      "Trend comparison vs. previous week",
+      "AI-written summary in plain English",
+      "Data pulled from your outreach tool",
+      "Setup guide + 30-day support",
+    ],
+    tools: ["n8n", "Smartlead", "OpenRouter", "Gmail"],
+    category: "Reporting",
+  },
+  {
+    id: "cat-004",
+    slug: "webhook-router",
+    type: "ready-setup",
+    name: "Webhook Router",
+    tagline: "Route incoming webhooks to multiple destinations without code",
+    description:
+      "Connect any tool that sends webhooks to any tool that receives them. Filter by payload fields, transform the data, and fan out to multiple endpoints — all configured through a visual interface.",
+    startingFrom: "$49",
+    whatYouGet: [
+      "Receive webhooks from any source",
+      "Field-based filtering and routing rules",
+      "Payload transformation (rename, map, drop fields)",
+      "Fan-out to multiple endpoints",
+      "Setup guide + 30-day support",
+    ],
+    tools: ["Make.com", "n8n"],
+    category: "Infrastructure",
+  },
+  {
+    id: "cat-005",
+    slug: "database-poller",
+    type: "ready-setup",
+    name: "Database Poller",
+    tagline: "Poll MySQL or Postgres on a schedule and trigger downstream actions",
+    description:
+      "Run a query on your database every N minutes. When new rows appear, trigger any downstream action — send an email, update a CRM record, post to Slack, or call an API.",
+    startingFrom: "$49",
+    whatYouGet: [
+      "Scheduled polling (1 min to daily)",
+      "New-row detection with deduplication",
+      "Configurable downstream action (email, Slack, API call)",
+      "Error alerting if poll fails",
+      "Setup guide + 30-day support",
+    ],
+    tools: ["Make.com", "MySQL", "Postgres"],
+    category: "Infrastructure",
+  },
+  {
+    id: "cat-006",
+    slug: "custom-automation",
+    type: "custom",
+    name: "Custom Automation",
+    tagline: "Fully scoped to your workflow — any tools, any complexity",
+    description:
+      "For workflows that don't fit a template. We scope the project, propose a solution, and build it end-to-end. Includes discovery call, written proposal, and full implementation.",
+    startingFrom: "From $299",
+    whatYouGet: [
+      "Discovery call to map your workflow",
+      "Written proposal with scope and price",
+      "Full implementation and testing",
+      "Documentation for your team",
+      "Ongoing support available",
+    ],
+    tools: ["Make.com", "n8n", "Trigger.dev", "Any API"],
+    category: "Custom",
+  },
+  {
+    id: "cat-007",
+    slug: "automation-audit",
+    type: "custom",
+    name: "Automation Audit",
+    tagline: "We review your existing automations and tell you what to fix",
+    description:
+      "Already running automations but not sure if they're reliable? We review your workflows, identify failure points, and give you a prioritized list of fixes with estimated impact.",
     startingFrom: "Free",
-    tags: ["Upwork", "Freelance", "Templates"],
-    popular: true,
-  },
-  {
-    id: "ready-make-starter",
-    slug: "make-starter-pack",
-    type: "ready-setup",
-    name: "Make.com Starter Pack",
-    tagline: "5 plug-and-play automation templates for service businesses",
-    description:
-      "Ready-to-import Make.com blueprints for the most common service business automations. Import, connect your apps, and run — no custom build required.",
     whatYouGet: [
-      "5 Make.com blueprint files (.json)",
-      "Setup guide for each blueprint",
-      "Video walkthrough (15 min)",
-      "Community Discord access",
+      "Review of up to 5 existing automations",
+      "Written report with findings",
+      "Prioritized fix recommendations",
+      "30-minute walkthrough call",
+      "No obligation to proceed",
     ],
-    typicalTimeline: "Instant access",
-    startingFrom: "$49",
-    tags: ["Make.com", "Templates", "DIY"],
-  },
-  {
-    id: "ready-n8n-starter",
-    slug: "n8n-starter-pack",
-    type: "ready-setup",
-    name: "n8n Workflow Starter Pack",
-    tagline: "Self-hosted automation templates — own your stack",
-    description:
-      "5 n8n workflow templates for businesses that want full control. Export to your own n8n instance and customise freely.",
-    whatYouGet: [
-      "5 n8n workflow JSON files",
-      "Docker setup guide for self-hosting",
-      "Customisation tips per workflow",
-      "Email support for 14 days",
-    ],
-    typicalTimeline: "Instant access",
-    startingFrom: "$49",
-    tags: ["n8n", "Self-hosted", "Templates"],
+    tools: ["Make.com", "n8n", "Zapier", "Any platform"],
+    category: "Consulting",
   },
 ]
-
-export const customItems = catalog.filter((i) => i.type === "custom")
-export const readyItems = catalog.filter((i) => i.type === "ready-setup")
