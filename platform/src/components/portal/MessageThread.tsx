@@ -12,6 +12,10 @@ type MessageRow = {
 
 interface MessageThreadProps {
   initialMessages: MessageRow[]
+  /** Override the POST endpoint (default: /api/portal/messages) */
+  apiEndpoint?: string
+  /** clientId to include in the POST body (used by admin endpoint) */
+  clientId?: string
 }
 
 function formatRelativeTime(date: Date): string {
@@ -69,7 +73,11 @@ function groupByDate(
   }))
 }
 
-export default function MessageThread({ initialMessages }: MessageThreadProps) {
+export default function MessageThread({
+  initialMessages,
+  apiEndpoint = "/api/portal/messages",
+  clientId,
+}: MessageThreadProps) {
   const [messages, setMessages] = useState<MessageRow[]>(initialMessages)
   const [body, setBody] = useState("")
   const [sending, setSending] = useState(false)
@@ -86,10 +94,13 @@ export default function MessageThread({ initialMessages }: MessageThreadProps) {
     setError(null)
 
     try {
-      const res = await fetch("/api/portal/messages", {
+      const payload: Record<string, string> = { body: body.trim() }
+      if (clientId) payload.clientId = clientId
+
+      const res = await fetch(apiEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: body.trim() }),
+        body: JSON.stringify(payload),
       })
 
       if (!res.ok) {
