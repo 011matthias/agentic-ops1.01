@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { redirect } from "next/navigation"
 import { and, isNull, eq } from "drizzle-orm"
 import { db } from "@/lib/db"
@@ -38,12 +39,12 @@ export default async function AdminThreadPage({ params }: Props) {
   return (
     <div className="max-w-3xl mx-auto px-4 py-12">
       <div className="mb-8">
-        <a
+        <Link
           href="/admin/messages"
           className="text-sm text-muted hover:text-foreground transition-colors mb-4 inline-block"
         >
           ← Back to messages
-        </a>
+        </Link>
         <PageHeader
           title={client.companyName}
           subtitle={`Thread for client ${client.userId}`}

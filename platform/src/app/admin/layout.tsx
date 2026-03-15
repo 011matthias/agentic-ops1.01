@@ -4,8 +4,11 @@ import { redirect } from "next/navigation"
 import Link from "next/link"
 
 const navLinks = [
+  { href: "/admin", label: "Dashboard", icon: "⚡" },
   { href: "/admin/clients", label: "Clients", icon: "👥" },
+  { href: "/admin/projects", label: "Projects", icon: "🗂️" },
   { href: "/admin/messages", label: "Messages", icon: "💬" },
+  { href: "/admin/revenue", label: "Revenue", icon: "💰" },
 ]
 
 export default async function AdminLayout({

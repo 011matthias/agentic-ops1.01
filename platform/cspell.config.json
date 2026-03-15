@@ -74,7 +74,22 @@
     "dlopen",
     "esbuild",
     "swcminify",
-    "Geist"
+    "Geist",
+    "Fortnox",
+    "Smartlead",
+    "Upsales",
+    "Airtable",
+    "Apify",
+    "automations",
+    "Automations",
+    "sublabel",
+    "neondatabase",
+    "Unpaus",
+    "msword",
+    "officedocument",
+    "openxmlformats",
+    "spreadsheetml",
+    "wordprocessingml"
   ],
   "ignorePaths": [
     "node_modules",

@@ -148,3 +148,6 @@ export const catalog: CatalogItem[] = [
     category: "Consulting",
   },
 ]
+
+export const customItems = catalog.filter((item) => item.type === "custom")
+export const readyItems = catalog.filter((item) => item.type === "ready-setup")
