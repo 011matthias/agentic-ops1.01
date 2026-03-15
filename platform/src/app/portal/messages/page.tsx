@@ -1,19 +1,38 @@
+import { redirect } from "next/navigation"
+import { desc, eq } from "drizzle-orm"
+import { auth } from "@/lib/auth"
+import { db } from "@/lib/db"
+import { clients, messages } from "@/lib/schema"
 import PageHeader from "@/components/ui/PageHeader"
-import EmptyState from "@/components/ui/EmptyState"
+import MessageThread from "@/components/portal/MessageThread"
 
 export const metadata = { title: "Messages" }
 
-export default function MessagesPage() {
+export default async function MessagesPage() {
+  const session = await auth()
+  if (!session?.user?.id) redirect("/login")
+
+  const client = await db.query.clients.findFirst({
+    where: eq(clients.userId, session.user.id),
+  })
+
+  const messageList = client
+    ? await db.query.messages.findMany({
+        where: eq(messages.clientId, client.id),
+        orderBy: desc(messages.createdAt),
+      })
+    : []
+
+  // Reverse so oldest is shown first (thread order)
+  const sorted = [...messageList].reverse()
+
   return (
-    <div className="max-w-5xl mx-auto px-4 py-12">
+    <div className="max-w-3xl mx-auto px-4 py-12">
       <PageHeader
         title="Messages"
         subtitle="Communicate with the UnpauseAI team about your project."
       />
-      <EmptyState
-        title="No messages yet"
-        description="Your conversations with the UnpauseAI team will appear here. Replies, project updates, and support threads all in one place."
-      />
+      <MessageThread initialMessages={sorted} />
     </div>
   )
 }

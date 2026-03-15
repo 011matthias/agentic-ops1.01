@@ -1,4 +1,7 @@
+import { eq, isNull, and } from "drizzle-orm"
 import { auth } from "@/lib/auth"
+import { db } from "@/lib/db"
+import { clients, projects, messages } from "@/lib/schema"
 import StatCard from "@/components/portal/StatCard"
 import PortalCard from "@/components/portal/PortalCard"
 
@@ -6,6 +9,36 @@ export default async function PortalPage() {
   const session = await auth()
 
   const firstName = session?.user?.name?.split(" ")[0] ?? "there"
+
+  // Fetch live counts if we have a session
+  let activeAutomations = "—"
+  let openMessages = "—"
+
+  if (session?.user?.id) {
+    const client = await db.query.clients.findFirst({
+      where: eq(clients.userId, session.user.id),
+    })
+
+    if (client) {
+      const [activeProjects, unreadMessages] = await Promise.all([
+        db.query.projects.findMany({
+          where: and(
+            eq(projects.clientId, client.id),
+            eq(projects.status, "active")
+          ),
+        }),
+        db.query.messages.findMany({
+          where: and(
+            eq(messages.clientId, client.id),
+            isNull(messages.readAt)
+          ),
+        }),
+      ])
+
+      activeAutomations = String(activeProjects.length)
+      openMessages = String(unreadMessages.length)
+    }
+  }
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-12">
@@ -17,9 +50,9 @@ export default async function PortalPage() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-12">
-        <StatCard label="Active Automations" value="—" />
+        <StatCard label="Active Automations" value={activeAutomations} />
         <StatCard label="Runs This Month" value="—" />
-        <StatCard label="Open Messages" value="—" />
+        <StatCard label="Open Messages" value={openMessages} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -4,7 +4,9 @@ import {
   timestamp,
   integer,
   primaryKey,
+  uuid,
 } from "drizzle-orm/pg-core"
+import { relations } from "drizzle-orm"
 import type { AdapterAccountType } from "next-auth/adapters"
 
 // ── Auth.js required tables ──────────────────────────────────────────────────
@@ -78,3 +80,105 @@ export const clients = pgTable("client", {
   status: text("status").$type<"active" | "inactive">().default("active"),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow(),
 })
+
+// ── Portal tables ─────────────────────────────────────────────────────────────
+
+export const projects = pgTable("projects", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  clientId: text("client_id")
+    .references(() => clients.id, { onDelete: "cascade" })
+    .notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  status: text("status", { enum: ["active", "paused", "complete"] })
+    .default("active")
+    .notNull(),
+  orchestrator: text("orchestrator", {
+    enum: ["make", "n8n", "trigger-dev", "fastapi"],
+  }),
+  startDate: timestamp("start_date", { mode: "date" }),
+  targetDate: timestamp("target_date", { mode: "date" }),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+})
+
+export const milestones = pgTable("milestones", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  projectId: uuid("project_id")
+    .references(() => projects.id, { onDelete: "cascade" })
+    .notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  status: text("status", { enum: ["pending", "in-progress", "done"] })
+    .default("pending")
+    .notNull(),
+  dueDate: timestamp("due_date", { mode: "date" }),
+  completedAt: timestamp("completed_at", { mode: "date" }),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+})
+
+export const messages = pgTable("messages", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  clientId: text("client_id")
+    .references(() => clients.id, { onDelete: "cascade" })
+    .notNull(),
+  authorId: text("author_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  authorRole: text("author_role", { enum: ["admin", "client"] }).notNull(),
+  body: text("body").notNull(),
+  readAt: timestamp("read_at", { mode: "date" }),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+})
+
+export const files = pgTable("files", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  clientId: text("client_id")
+    .references(() => clients.id, { onDelete: "cascade" })
+    .notNull(),
+  projectId: uuid("project_id").references(() => projects.id, {
+    onDelete: "set null",
+  }),
+  uploadedBy: text("uploaded_by").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  filename: text("filename").notNull(),
+  url: text("url").notNull(),
+  sizeBytes: integer("size_bytes"),
+  mimeType: text("mime_type"),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+})
+
+// ── Relations ─────────────────────────────────────────────────────────────────
+
+export const clientsRelations = relations(clients, ({ many }) => ({
+  projects: many(projects),
+  messages: many(messages),
+  files: many(files),
+}))
+
+export const projectsRelations = relations(projects, ({ one, many }) => ({
+  client: one(clients, { fields: [projects.clientId], references: [clients.id] }),
+  milestones: many(milestones),
+}))
+
+export const milestonesRelations = relations(milestones, ({ one }) => ({
+  project: one(projects, {
+    fields: [milestones.projectId],
+    references: [projects.id],
+  }),
+}))
+
+export const messagesRelations = relations(messages, ({ one }) => ({
+  client: one(clients, {
+    fields: [messages.clientId],
+    references: [clients.id],
+  }),
+}))
+
+export const filesRelations = relations(files, ({ one }) => ({
+  client: one(clients, { fields: [files.clientId], references: [clients.id] }),
+  project: one(projects, {
+    fields: [files.projectId],
+    references: [projects.id],
+  }),
+}))
