@@ -8,7 +8,7 @@ export default defineConfig({
   reporter: "list",
 
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000',
     screenshot: "on",
     trace: "retain-on-failure",
   },
@@ -20,11 +20,13 @@ export default defineConfig({
     },
   ],
 
-  // Auto-start dev server if not already running
-  webServer: {
-    command: "npm run dev",
-    url: "http://localhost:3000",
-    reuseExistingServer: true,
-    timeout: 30000,
-  },
+  // Auto-start dev server if not already running (skipped when PLAYWRIGHT_BASE_URL points to a remote host)
+  webServer: process.env.PLAYWRIGHT_BASE_URL
+    ? undefined
+    : {
+        command: "npm run dev",
+        url: "http://localhost:3000",
+        reuseExistingServer: true,
+        timeout: 30000,
+      },
 })
