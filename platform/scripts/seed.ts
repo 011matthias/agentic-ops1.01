@@ -81,9 +81,25 @@ async function main() {
     console.log(`  [+] Created client record: Test Company Ltd`)
   }
 
+  // Test prospect user (pending approval)
+  const prospectEmail = "prospect@test.com"
+  const existingProspect = await db.query.users.findFirst({
+    where: eq(users.email, prospectEmail),
+  })
+
+  if (existingProspect) {
+    console.log(`  [skip] Prospect user already exists: ${prospectEmail}`)
+  } else {
+    await db
+      .insert(users)
+      .values({ name: "Test Prospect", email: prospectEmail, role: "prospect" })
+    console.log(`  [+] Created prospect user: ${prospectEmail}`)
+  }
+
   console.log("\nSeed complete.")
-  console.log(`  Admin:  ${adminEmail}  (role: admin)`)
-  console.log(`  Client: ${clientEmail}  (role: client)`)
+  console.log(`  Admin:    ${adminEmail}     (role: admin)`)
+  console.log(`  Client:   ${clientEmail}    (role: client)`)
+  console.log(`  Prospect: ${prospectEmail}  (role: prospect)`)
   console.log("\nTo sign in: use /login with magic link or OAuth.")
 }
 

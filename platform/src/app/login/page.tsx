@@ -126,9 +126,10 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-xs text-gray-500">
-          Only existing clients can sign in. Not a client yet?{" "}
+          Sign in or create an account. New accounts are reviewed before
+          portal access is granted.{" "}
           <a href="/contact" className="underline hover:text-gray-800 dark:hover:text-gray-200">
-            Get in touch
+            Questions? Get in touch
           </a>
         </p>
       </div>

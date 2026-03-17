@@ -20,7 +20,7 @@ export const users = pgTable("user", {
   email: text("email").unique(),
   emailVerified: timestamp("emailVerified", { mode: "date" }),
   image: text("image"),
-  role: text("role").$type<"admin" | "client">().default("client"),
+  role: text("role").$type<"admin" | "client" | "prospect">().default("prospect"),
   createdAt: timestamp("createdAt", { mode: "date" }).defaultNow(),
 })
 

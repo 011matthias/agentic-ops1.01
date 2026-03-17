@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     .values({
       clientId: client.id,
       authorId: session.user.id,
-      authorRole: session.user.role ?? "client",
+      authorRole: "client" as const,
       body: body.trim(),
     })
     .returning()

@@ -23,7 +23,40 @@ export default async function PortalLayout({
     redirect("/login")
   }
 
-  // After redirect, session and user are guaranteed to be defined
+  // Prospects see a pending-approval page instead of the full portal
+  if (session.user.role === "prospect") {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4 bg-gray-50 dark:bg-gray-900">
+        <div className="max-w-md w-full text-center space-y-6">
+          <div className="w-16 h-16 mx-auto rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+            <span className="text-2xl">&#9203;</span>
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Account Under Review
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            Your account has been created and is pending approval. We&apos;ll
+            notify you by email once you have access to the client portal.
+          </p>
+          <form
+            action={async () => {
+              "use server"
+              await signOut({ redirectTo: "/" })
+            }}
+          >
+            <button
+              type="submit"
+              className="px-6 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
+  // After checks, session and user are guaranteed to be a client or admin
   const user = session!.user
 
   return (
