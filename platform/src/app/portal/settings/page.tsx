@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
 import PageHeader from "@/components/ui/PageHeader"
 import Card from "@/components/ui/Card"
+import ThemeSection from "./ThemeSection"
 
 export const metadata = { title: "Settings" }
 
@@ -43,6 +44,14 @@ export default async function SettingsPage() {
               Contact your account manager to update profile details.
             </p>
           </Card>
+        </section>
+
+        {/* Appearance section */}
+        <section>
+          <h2 className="text-sm font-semibold text-muted uppercase tracking-wide mb-3">
+            Appearance
+          </h2>
+          <ThemeSection />
         </section>
 
         {/* Notifications section */}

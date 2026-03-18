@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Card from "@/components/ui/Card";
 
 const services = [
   {
@@ -33,7 +34,7 @@ export default function Home() {
   return (
     <div className="flex flex-col">
       {/* Hero */}
-      <section className="mx-auto flex max-w-3xl flex-col items-center gap-6 px-6 py-24 text-center sm:py-32">
+      <section className="mx-auto flex max-w-3xl flex-col items-center gap-6 px-6 py-24 text-center sm:py-32 bg-gradient-to-b from-accent/5 via-transparent to-transparent">
         <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
           We build automations that run your business
         </h1>
@@ -80,15 +81,12 @@ export default function Home() {
         </p>
         <div className="grid gap-8 sm:grid-cols-2">
           {services.map((service) => (
-            <div
-              key={service.title}
-              className="rounded-lg border border-border p-6"
-            >
+            <Card key={service.title}>
               <h3 className="mb-2 font-semibold">{service.title}</h3>
               <p className="text-sm leading-relaxed text-muted">
                 {service.description}
               </p>
-            </div>
+            </Card>
           ))}
         </div>
         <div className="mt-12 text-center">

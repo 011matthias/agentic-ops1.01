@@ -2,6 +2,7 @@ import type { ReactNode } from "react"
 import { auth, signOut } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import Link from "next/link"
+import ThemeToggle from "@/components/ThemeToggle"
 
 const navLinks = [
   { href: "/portal", label: "Dashboard", icon: "▦" },
@@ -96,6 +97,9 @@ export default async function PortalLayout({
           <div className="px-3 py-2 mb-1">
             <p className="text-sm font-medium text-white truncate">{user.name ?? "—"}</p>
             <p className="text-xs text-gray-500 truncate">{user.email ?? "—"}</p>
+          </div>
+          <div className="flex items-center gap-2 px-1 mb-2">
+            <ThemeToggle className="text-gray-400 hover:text-white hover:bg-gray-800" />
           </div>
           <form
             action={async () => {

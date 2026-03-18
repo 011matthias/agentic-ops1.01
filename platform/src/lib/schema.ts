@@ -1,5 +1,6 @@
 import {
   pgTable,
+  pgEnum,
   text,
   timestamp,
   integer,
@@ -174,6 +175,97 @@ export const purchases = pgTable("purchases", {
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
 })
 
+// ── Autopilot tables ─────────────────────────────────────────────────────────
+
+export const autopilotBuildStatusEnum = pgEnum("autopilot_build_status", [
+  "pending",
+  "running",
+  "waiting",
+  "completed",
+  "failed",
+  "cancelled",
+])
+
+export const autopilotPhaseNameEnum = pgEnum("autopilot_phase_name", [
+  "plan",
+  "implement",
+  "test_local",
+  "test_dev",
+  "document",
+  "deploy",
+  "verify",
+  "complete",
+])
+
+export const autopilotBuilds = pgTable("autopilot_builds", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  projectId: uuid("project_id")
+    .references(() => projects.id, { onDelete: "cascade" })
+    .notNull(),
+  specId: text("spec_id").notNull(),
+  status: autopilotBuildStatusEnum("status").default("pending").notNull(),
+  directive: text("directive").notNull(),
+  currentPhase: autopilotPhaseNameEnum("current_phase"),
+  triggerRunId: text("trigger_run_id"),
+  error: text("error"),
+  startedAt: timestamp("started_at", { mode: "date" }),
+  completedAt: timestamp("completed_at", { mode: "date" }),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+})
+
+export const autopilotPhases = pgTable("autopilot_phases", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  buildId: uuid("build_id")
+    .references(() => autopilotBuilds.id, { onDelete: "cascade" })
+    .notNull(),
+  name: autopilotPhaseNameEnum("name").notNull(),
+  status: text("status", {
+    enum: ["pending", "running", "waiting", "passed", "failed", "skipped"],
+  })
+    .default("pending")
+    .notNull(),
+  output: text("output"),
+  error: text("error"),
+  startedAt: timestamp("started_at", { mode: "date" }),
+  completedAt: timestamp("completed_at", { mode: "date" }),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+})
+
+export const autopilotApprovals = pgTable("autopilot_approvals", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  buildId: uuid("build_id")
+    .references(() => autopilotBuilds.id, { onDelete: "cascade" })
+    .notNull(),
+  phase: autopilotPhaseNameEnum("phase").notNull(),
+  status: text("status", {
+    enum: ["pending", "approved", "rejected", "timed_out"],
+  })
+    .default("pending")
+    .notNull(),
+  waitpointTokenId: text("waitpoint_token_id"),
+  reviewerId: text("reviewer_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  comments: text("comments"),
+  resolvedAt: timestamp("resolved_at", { mode: "date" }),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+})
+
+export const autopilotLogs = pgTable("autopilot_logs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  buildId: uuid("build_id")
+    .references(() => autopilotBuilds.id, { onDelete: "cascade" })
+    .notNull(),
+  phase: autopilotPhaseNameEnum("phase"),
+  level: text("level", { enum: ["info", "warn", "error"] })
+    .default("info")
+    .notNull(),
+  message: text("message").notNull(),
+  metadata: text("metadata"),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+})
+
 // ── Relations ─────────────────────────────────────────────────────────────────
 
 export const clientsRelations = relations(clients, ({ many }) => ({
@@ -185,6 +277,7 @@ export const clientsRelations = relations(clients, ({ many }) => ({
 export const projectsRelations = relations(projects, ({ one, many }) => ({
   client: one(clients, { fields: [projects.clientId], references: [clients.id] }),
   milestones: many(milestones),
+  autopilotBuilds: many(autopilotBuilds),
 }))
 
 export const milestonesRelations = relations(milestones, ({ one }) => ({
@@ -217,5 +310,40 @@ export const purchasesRelations = relations(purchases, ({ one }) => ({
   product: one(products, {
     fields: [purchases.productId],
     references: [products.id],
+  }),
+}))
+
+export const autopilotBuildsRelations = relations(autopilotBuilds, ({ one, many }) => ({
+  project: one(projects, {
+    fields: [autopilotBuilds.projectId],
+    references: [projects.id],
+  }),
+  phases: many(autopilotPhases),
+  approvals: many(autopilotApprovals),
+  logs: many(autopilotLogs),
+}))
+
+export const autopilotPhasesRelations = relations(autopilotPhases, ({ one }) => ({
+  build: one(autopilotBuilds, {
+    fields: [autopilotPhases.buildId],
+    references: [autopilotBuilds.id],
+  }),
+}))
+
+export const autopilotApprovalsRelations = relations(autopilotApprovals, ({ one }) => ({
+  build: one(autopilotBuilds, {
+    fields: [autopilotApprovals.buildId],
+    references: [autopilotBuilds.id],
+  }),
+  reviewer: one(users, {
+    fields: [autopilotApprovals.reviewerId],
+    references: [users.id],
+  }),
+}))
+
+export const autopilotLogsRelations = relations(autopilotLogs, ({ one }) => ({
+  build: one(autopilotBuilds, {
+    fields: [autopilotLogs.buildId],
+    references: [autopilotBuilds.id],
   }),
 }))

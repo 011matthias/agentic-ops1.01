@@ -18,7 +18,7 @@ export default function PortalCard({
   return (
     <a
       href={href}
-      className={`group block rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 hover:border-gray-400 dark:hover:border-gray-600 transition-colors ${className}`}
+      className={`group block rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-gray-400 dark:hover:border-gray-600 transition-all duration-200 ${className}`}
     >
       <div className="flex items-start justify-between mb-3">
         <span className="text-2xl">{icon}</span>

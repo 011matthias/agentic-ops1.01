@@ -89,7 +89,9 @@
     "officedocument",
     "openxmlformats",
     "spreadsheetml",
-    "wordprocessingml"
+    "wordprocessingml",
+    "waitpoint",
+    "autopilot"
   ],
   "ignorePaths": [
     "node_modules",

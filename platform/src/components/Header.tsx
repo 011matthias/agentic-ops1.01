@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useSession, signOut } from "next-auth/react";
+import ThemeToggle from "./ThemeToggle";
 
 const navLinks = [
   { href: "/", label: "Home" },
@@ -35,6 +36,9 @@ export default function Header() {
               </Link>
             </li>
           ))}
+          <li>
+            <ThemeToggle />
+          </li>
           <li>
             {session ? (
               <div className="flex items-center gap-4">
@@ -99,6 +103,9 @@ export default function Header() {
               </Link>
             </li>
           ))}
+          <li className="pt-2">
+            <ThemeToggle className="w-full justify-start" />
+          </li>
           <li className="pt-2">
             {session ? (
               <>
