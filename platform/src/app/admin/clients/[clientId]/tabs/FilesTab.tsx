@@ -1,13 +1,26 @@
-import { redirect } from "next/navigation"
-import { desc, eq } from "drizzle-orm"
-import { auth } from "@/lib/auth"
-import { db } from "@/lib/db"
-import { clients, files, projects } from "@/lib/schema"
-import PageHeader from "@/components/ui/PageHeader"
+"use client"
+
+import { useState } from "react"
+import { useRouter } from "next/navigation"
 import EmptyState from "@/components/ui/EmptyState"
+import Card from "@/components/ui/Card"
+import Button from "@/components/ui/Button"
 import FileUpload from "@/components/ui/FileUpload"
 
-export const metadata = { title: "Files" }
+interface FileRecord {
+  id: string
+  filename: string
+  url: string
+  sizeBytes: number | null
+  mimeType: string | null
+  createdAt: string
+  project: { id: string; name: string } | null
+}
+
+interface FilesTabProps {
+  files: FileRecord[]
+  clientId: string
+}
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B"
@@ -17,85 +30,61 @@ function formatBytes(bytes: number): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
 }
 
-function formatDate(date: Date): string {
-  return date.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  })
-}
-
 function mimeLabel(mimeType: string | null): string {
   if (!mimeType) return "File"
   if (mimeType === "application/pdf") return "PDF"
   if (mimeType.startsWith("image/")) return "Image"
-  if (
-    mimeType === "application/msword" ||
-    mimeType ===
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-  )
-    return "Doc"
-  if (
-    mimeType === "application/vnd.ms-excel" ||
-    mimeType ===
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-  )
-    return "Sheet"
+  if (mimeType.includes("wordprocessingml") || mimeType === "application/msword") return "Doc"
+  if (mimeType.includes("spreadsheetml") || mimeType === "application/vnd.ms-excel") return "Sheet"
   if (mimeType === "text/csv") return "CSV"
   if (mimeType.startsWith("video/")) return "Video"
   if (mimeType.startsWith("audio/")) return "Audio"
-  if (mimeType === "application/zip" || mimeType === "application/x-zip-compressed")
-    return "ZIP"
+  if (mimeType === "application/zip" || mimeType === "application/x-zip-compressed") return "ZIP"
   return "File"
 }
 
-type FileRow = typeof files.$inferSelect & {
-  project: typeof projects.$inferSelect | null
-}
+export default function FilesTab({ files: fileList, clientId }: FilesTabProps) {
+  const router = useRouter()
+  const [deleting, setDeleting] = useState<string | null>(null)
 
-export default async function FilesPage() {
-  const session = await auth()
-  if (!session?.user?.id) redirect("/login")
+  const handleDelete = async (fileId: string) => {
+    if (!confirm("Delete this file? This cannot be undone.")) return
+    setDeleting(fileId)
+    try {
+      const res = await fetch(`/api/admin/files/${fileId}`, { method: "DELETE" })
+      if (!res.ok) throw new Error("Delete failed")
+      router.refresh()
+    } catch {
+      alert("Failed to delete file")
+    } finally {
+      setDeleting(null)
+    }
+  }
 
-  const client = await db.query.clients.findFirst({
-    where: eq(clients.userId, session.user.id),
-  })
-
-  const fileList: FileRow[] = client
-    ? await db.query.files.findMany({
-        where: eq(files.clientId, client.id),
-        orderBy: desc(files.createdAt),
-        with: {
-          project: true,
-        },
-      })
-    : []
-
-  // Group files by project name (or "General" if no project)
-  const groups = new Map<string, FileRow[]>()
+  // Group files by project name
+  const groups = new Map<string, FileRecord[]>()
   for (const file of fileList) {
     const groupName = file.project?.name ?? "General"
-    if (!groups.has(groupName)) {
-      groups.set(groupName, [])
-    }
+    if (!groups.has(groupName)) groups.set(groupName, [])
     groups.get(groupName)!.push(file)
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-12">
-      <PageHeader
-        title="Files"
-        subtitle="Deliverables and documents shared by your team."
-      />
+    <div className="flex flex-col gap-8">
+      {/* Upload section */}
+      <Card>
+        <h2 className="text-base font-semibold text-foreground mb-4">Upload file</h2>
+        <FileUpload
+          endpoint="/api/admin/files"
+          clientId={clientId}
+        />
+      </Card>
 
-      <div className="mb-8">
-        <FileUpload endpoint="/api/portal/files" />
-      </div>
-
+      {/* File list */}
       {fileList.length === 0 ? (
         <EmptyState
           title="No files yet"
-          description="Your team will upload deliverables here."
+          description="Upload files for this client using the form above."
         />
       ) : (
         <div className="space-y-8">
@@ -111,12 +100,9 @@ export default async function FilesPage() {
                       key={file.id}
                       className="flex items-center gap-4 px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
                     >
-                      {/* Mime type badge */}
                       <span className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 text-xs font-semibold text-muted shrink-0">
                         {mimeLabel(file.mimeType)}
                       </span>
-
-                      {/* Filename + download */}
                       <div className="flex-1 min-w-0">
                         <a
                           href={file.url}
@@ -128,14 +114,26 @@ export default async function FilesPage() {
                           {file.filename}
                         </a>
                         <p className="text-xs text-muted mt-0.5">
-                          Uploaded {formatDate(file.createdAt)}
+                          Uploaded{" "}
+                          {new Date(file.createdAt).toLocaleDateString("en-GB", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
                         </p>
                       </div>
-
-                      {/* File size */}
                       <span className="text-xs text-muted shrink-0">
-                        {file.sizeBytes != null ? formatBytes(file.sizeBytes) : "—"}
+                        {file.sizeBytes != null ? formatBytes(file.sizeBytes) : "\u2014"}
                       </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDelete(file.id)}
+                        disabled={deleting === file.id}
+                        className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      >
+                        {deleting === file.id ? "..." : "Delete"}
+                      </Button>
                     </li>
                   ))}
                 </ul>

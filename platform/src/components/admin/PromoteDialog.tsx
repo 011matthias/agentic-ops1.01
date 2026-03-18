@@ -8,7 +8,7 @@ interface PromoteDialogProps {
   userName: string | null
 }
 
-export default function PromoteDialog({ userId, userName }: PromoteDialogProps) {
+export default function PromoteDialog({ userId }: PromoteDialogProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [companyName, setCompanyName] = useState("")
