@@ -6,6 +6,7 @@ import PageHeader from "@/components/ui/PageHeader"
 import Badge from "@/components/ui/Badge"
 import PromoteDialog from "@/components/admin/PromoteDialog"
 import RoleSelect from "@/components/admin/RoleSelect"
+import InviteClientDialog from "@/components/admin/InviteClientDialog"
 
 export const metadata = { title: "Users — Admin" }
 
@@ -37,10 +38,16 @@ export default async function AdminUsersPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-12">
-      <PageHeader
-        title="Users"
-        subtitle={`${totalUsers} total user${totalUsers !== 1 ? "s" : ""}${prospects.length > 0 ? ` \u00b7 ${prospects.length} pending review` : ""}`}
-      />
+      <div className="flex items-start justify-between gap-4 mb-8">
+        <PageHeader
+          title="Users"
+          subtitle={`${totalUsers} total user${totalUsers !== 1 ? "s" : ""}${prospects.length > 0 ? ` \u00b7 ${prospects.length} pending review` : ""}`}
+          className="mb-0"
+        />
+        <div className="shrink-0 pt-1">
+          <InviteClientDialog />
+        </div>
+      </div>
 
       {allUsers.length === 0 ? (
         <div className="flex flex-col items-center justify-center text-center rounded-2xl border border-dashed border-border p-12">

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
-import { eq, and, isNull, count, desc } from "drizzle-orm"
+import { eq, and, isNull, count, desc, asc } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { clients, projects, messages, files, purchases, products } from "@/lib/schema"
+import { clients, projects, messages, files, purchases, products, clientResources } from "@/lib/schema"
 import PageHeader from "@/components/ui/PageHeader"
 import Badge from "@/components/ui/Badge"
 import EmptyState from "@/components/ui/EmptyState"
@@ -11,9 +11,10 @@ import Link from "next/link"
 import OverviewTab from "./tabs/OverviewTab"
 import ProjectsTab from "./tabs/ProjectsTab"
 import FilesTab from "./tabs/FilesTab"
+import ResourcesTab from "./tabs/ResourcesTab"
 
-type Tab = "overview" | "projects" | "messages" | "files" | "purchases"
-const VALID_TABS: Tab[] = ["overview", "projects", "messages", "files", "purchases"]
+type Tab = "overview" | "projects" | "messages" | "files" | "purchases" | "resources"
+const VALID_TABS: Tab[] = ["overview", "projects", "messages", "files", "purchases", "resources"]
 
 interface Props {
   params: Promise<{ clientId: string }>
@@ -47,11 +48,12 @@ export default async function AdminClientDetailPage({ params, searchParams }: Pr
     redirect("/admin/clients")
   }
 
-  const [projectCount, unreadCount, fileCount, purchaseCount] = await Promise.all([
+  const [projectCount, unreadCount, fileCount, purchaseCount, resourceCount] = await Promise.all([
     db.select({ value: count() }).from(projects).where(eq(projects.clientId, clientId)).then((r) => r[0]?.value ?? 0),
     db.select({ value: count() }).from(messages).where(and(eq(messages.clientId, clientId), isNull(messages.readAt))).then((r) => r[0]?.value ?? 0),
     db.select({ value: count() }).from(files).where(eq(files.clientId, clientId)).then((r) => r[0]?.value ?? 0),
     db.select({ value: count() }).from(purchases).where(eq(purchases.userId, client.userId)).then((r) => r[0]?.value ?? 0),
+    db.select({ value: count() }).from(clientResources).where(eq(clientResources.clientId, clientId)).then((r) => r[0]?.value ?? 0),
   ])
 
   // Per-tab data fetching
@@ -74,6 +76,7 @@ export default async function AdminClientDetailPage({ params, searchParams }: Pr
     productName: string | null
     priceUsd: number | null
   }> | undefined
+  let resourceList: Awaited<ReturnType<typeof db.query.clientResources.findMany>> | undefined
 
   if (tab === "overview" || tab === "projects") {
     projectList = await db.query.projects.findMany({
@@ -103,6 +106,13 @@ export default async function AdminClientDetailPage({ params, searchParams }: Pr
     }) as typeof fileList
   }
 
+  if (tab === "resources") {
+    resourceList = await db.query.clientResources.findMany({
+      where: eq(clientResources.clientId, clientId),
+      orderBy: [asc(clientResources.category), asc(clientResources.sortOrder)],
+    })
+  }
+
   if (tab === "purchases") {
     purchaseList = await db
       .select({
@@ -124,6 +134,7 @@ export default async function AdminClientDetailPage({ params, searchParams }: Pr
     { key: "projects", label: "Projects", count: projectCount },
     { key: "messages", label: "Messages", count: unreadCount > 0 ? unreadCount : undefined },
     { key: "files", label: "Files", count: fileCount },
+    { key: "resources", label: "Resources", count: resourceCount },
     { key: "purchases", label: "Purchases", count: purchaseCount },
   ]
 
@@ -175,6 +186,17 @@ export default async function AdminClientDetailPage({ params, searchParams }: Pr
           files={(fileList ?? []).map((f) => ({
             ...f,
             createdAt: f.createdAt.toISOString(),
+          }))}
+          clientId={clientId}
+        />
+      )}
+
+      {/* Resources */}
+      {tab === "resources" && (
+        <ResourcesTab
+          resources={(resourceList ?? []).map((r) => ({
+            ...r,
+            createdAt: r.createdAt.toISOString(),
           }))}
           clientId={clientId}
         />
