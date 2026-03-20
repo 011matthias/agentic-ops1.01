@@ -10,6 +10,7 @@ const navLinks = [
   { href: "/portal/messages", label: "Messages", icon: "💬" },
   { href: "/portal/files", label: "Files", icon: "📁" },
   { href: "/portal/reports", label: "Reports", icon: "📊" },
+  { href: "/portal/resources", label: "Resources", icon: "📚" },
   { href: "/portal/settings", label: "Settings", icon: "⚙️" },
 ]
 

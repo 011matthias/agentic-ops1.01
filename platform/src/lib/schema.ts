@@ -150,6 +150,23 @@ export const files = pgTable("files", {
   createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
 })
 
+export const clientResources = pgTable("client_resources", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  clientId: text("client_id")
+    .references(() => clients.id, { onDelete: "cascade" })
+    .notNull(),
+  projectId: uuid("project_id").references(() => projects.id, { onDelete: "set null" }),
+  title: text("title").notNull(),
+  description: text("description"),
+  type: text("type", { enum: ["html_page", "video", "link", "file"] }).notNull(),
+  url: text("url").notNull(),
+  category: text("category", { enum: ["documentation", "setup", "guides", "videos"] }).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  published: boolean("published").default(false).notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+})
+
 // ── Purchase tables ───────────────────────────────────────────────────────────
 
 export const products = pgTable("products", {
@@ -272,6 +289,7 @@ export const clientsRelations = relations(clients, ({ many }) => ({
   projects: many(projects),
   messages: many(messages),
   files: many(files),
+  resources: many(clientResources),
 }))
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
@@ -300,6 +318,11 @@ export const filesRelations = relations(files, ({ one }) => ({
     fields: [files.projectId],
     references: [projects.id],
   }),
+}))
+
+export const clientResourcesRelations = relations(clientResources, ({ one }) => ({
+  client: one(clients, { fields: [clientResources.clientId], references: [clients.id] }),
+  project: one(projects, { fields: [clientResources.projectId], references: [projects.id] }),
 }))
 
 export const productsRelations = relations(products, ({ many }) => ({
