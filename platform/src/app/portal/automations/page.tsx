@@ -161,27 +161,40 @@ function MilestoneTimeline({
 function ExecutionSummary({ executions }: { executions: ExecutionRow[] }) {
   if (executions.length === 0) return null
 
-  const latest = executions[0]
   const totalRuns = executions.length
-  const latestStatus = latest.status as ExecutionStatus
+  const successCount = executions.filter((e) => e.status === "success").length
+  const successRate = totalRuns > 0 ? Math.round((successCount / totalRuns) * 100) : 0
+  const recent = executions.slice(0, 5)
 
   return (
     <div className="mt-4 pt-4 border-t border-border">
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-medium text-foreground">Recent Activity</span>
-        <span className="text-xs text-muted">{totalRuns} run{totalRuns !== 1 ? "s" : ""}</span>
-      </div>
-      <div className="flex items-center gap-3">
-        <Badge variant={executionStatusVariant[latestStatus]}>
-          {latestStatus}
-        </Badge>
         <span className="text-xs text-muted">
-          {formatRelativeTime(latest.executedAt)}
+          {totalRuns} run{totalRuns !== 1 ? "s" : ""} · {successRate}% success
         </span>
-        {latest.itemCount > 0 && (
-          <span className="text-xs text-muted">
-            {latest.itemCount} item{latest.itemCount !== 1 ? "s" : ""}
-          </span>
+      </div>
+      <div className="flex items-center gap-1.5 mb-2">
+        {recent.map((exec) => {
+          const status = exec.status as ExecutionStatus
+          const colors: Record<ExecutionStatus, string> = {
+            success: "bg-green-500",
+            error: "bg-red-500",
+            partial: "bg-amber-500",
+          }
+          return (
+            <div
+              key={exec.id}
+              className={`h-2 flex-1 rounded-full ${colors[status] ?? "bg-gray-400"}`}
+              title={`${status} — ${formatRelativeTime(exec.executedAt)}${exec.itemCount > 0 ? ` — ${exec.itemCount} items` : ""}`}
+            />
+          )
+        })}
+      </div>
+      <div className="flex items-center gap-2 text-xs text-muted">
+        <span>Latest: {formatRelativeTime(recent[0].executedAt)}</span>
+        {recent[0].itemCount > 0 && (
+          <span>· {recent[0].itemCount} item{recent[0].itemCount !== 1 ? "s" : ""}</span>
         )}
       </div>
     </div>

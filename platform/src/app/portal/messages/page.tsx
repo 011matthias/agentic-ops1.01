@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
-import { desc, eq } from "drizzle-orm"
+import { desc, eq, and, isNull } from "drizzle-orm"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { clients, messages } from "@/lib/schema"
@@ -15,6 +15,14 @@ export default async function MessagesPage() {
   const client = await db.query.clients.findFirst({
     where: eq(clients.userId, session.user.id),
   })
+
+  if (client) {
+    // Mark unread messages as read when client views the page
+    await db
+      .update(messages)
+      .set({ readAt: new Date() })
+      .where(and(eq(messages.clientId, client.id), isNull(messages.readAt)))
+  }
 
   const messageList = client
     ? await db.query.messages.findMany({

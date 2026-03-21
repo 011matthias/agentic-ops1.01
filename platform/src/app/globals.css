@@ -3,12 +3,14 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fafafa;
+  --foreground: #111111;
   --accent: #2563eb;
   --accent-light: #3b82f6;
-  --muted: #6b7280;
-  --border: #e5e7eb;
+  --muted: #71717a;
+  --border: #e4e4e7;
+  --surface: #ffffff;
+  --surface-hover: #f4f4f5;
 }
 
 @theme inline {
@@ -18,20 +20,36 @@
   --color-accent-light: var(--accent-light);
   --color-muted: var(--muted);
   --color-border: var(--border);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 .dark {
-  --background: #0a0a0a;
-  --foreground: #ededed;
+  --background: #09090b;
+  --foreground: #fafafa;
   --accent: #3b82f6;
   --accent-light: #60a5fa;
-  --muted: #9ca3af;
-  --border: #374151;
+  --muted: #a1a1aa;
+  --border: #27272a;
+  --surface: #18181b;
+  --surface-hover: #27272a;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+/* Smooth transitions for theme changes */
+* {
+  transition-property: background-color, border-color;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
+}
+
+/* Override transition for elements that shouldn't animate */
+input, textarea, button, a, [class*="transition-"] {
+  transition-property: all;
 }
