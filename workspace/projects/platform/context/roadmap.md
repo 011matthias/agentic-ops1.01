@@ -1,41 +1,49 @@
 # Platform Roadmap
 
-Last aligned: 2026-03-20
+Last aligned: 2026-03-21
 
 ## Vision
 
 Two distinct experiences:
-1. **Public website** — Normal automation agency site. Showcases services, sells automations, handles proposals. Entry point for leads.
-2. **Client portal** — The agentic automation platform. Where clients track live automations, get resources, communicate.
+1. **Public website** — Automation agency site. Showcases services, sells automations, handles proposals.
+2. **Client portal** — The agentic automation platform. Clients track live automations, get resources, communicate.
 
-## Prospect Channels
+## Milestones
 
-- **Inbound:** Traffic → public site → interested → requests proposal → becomes client → portal activated
-- **Outbound:** Hunt prospects (Upwork, direct outreach) → build their setup (proposal page, pitch) → sign → portal activated
+Each milestone is tied to a user-visible outcome, not a technical task.
 
-## Phases
+### M1 — Foundation Verified (Current)
+**Outcome:** Admin can log in and see everything working. Architecture map gives permanent transparency.
 
-### Phase 0 — Unblock (Done)
-- [x] Merge `platform/client-resources` branch (PR #21 merged 2026-03-20)
-- [ ] Fix Autopilot Trigger.dev crash (PR #19 — CI build failure, deferred)
+- [x] Auth works (admin via Google, client via magic link)
+- [x] Module execution tracking (schema + API + portal UI)
+- [x] Architecture map admin page (`/admin/architecture`)
+- [ ] Verify end-to-end: admin logs in, sees dashboard, visits portal, sees execution data
 
-### Phase 1 — Live Portal Data (Current)
-- [x] Wire modules system: first module registered (meji-enquiry-followup), push execution data via `/api/modules/{name}`
-- [x] Portal automations page: last execution, run count, live status badge
-- [x] DB: add module_executions table
+### M2 — First Real Client Live
+**Outcome:** First paying client using the portal with real, live automation data.
 
-### Phase 2 — Close the Funnel (Weeks 2-3)
+- [ ] Wire Make.com scenario to POST execution data to `/api/modules/meji-enquiry-followup`
+- [ ] Create Meji Media client account (invite Gurmej/Jess via admin)
+- [ ] Seed their project + resources via admin UI
+- [ ] Client logs in, sees their project with live data + docs
+
+### M3 — Funnel + Onboarding
+**Outcome:** New prospects can find you, request service, and get onboarded.
+
+- [ ] Proposal pages: "Get Started" CTA -> admin invite queue
 - [ ] Portal first-login onboarding state
-- [ ] Proposal pages: "Get Started" CTA → admin invite queue
-- [ ] Outbound workflow: proposal page → send → sign → one-click invite from admin
+- [ ] Outbound workflow: proposal -> send -> sign -> one-click invite
 
-### Phase 3 — Buy Flow + Auto-Deploy (Weeks 3-6)
-- [ ] Pick 1 template to sell (lead inquiry follow-up)
-- [ ] Stripe → Autopilot task → deploy template
-- [ ] Portal auto-activate for buyer
+### M4 — Self-Service + Payments
+**Outcome:** Someone can buy an automation and start using it without manual admin work.
+
+- [ ] Stripe -> auto-deploy template -> portal auto-activate
 - [ ] Buy page polish (real output, deliverables, pricing)
 
-### Phase 4 — Agentic Story (Weeks 6-8, after Autopilot stable)
+### M5 — Agentic Story
+**Outcome:** The unique selling point is visible on the public site.
+
 - [ ] Homepage "How it works" section
 - [ ] About page: AI-assisted delivery model
 - [ ] Portal "Autopilot activity" feed
@@ -45,3 +53,4 @@ Two distinct experiences:
 - Autopilot is internal until stable — not marketed yet
 - Portal is where the differentiation lives, not the public site
 - First module registered: meji-enquiry-followup (Make.com)
+- Architecture map at `/admin/architecture` is the single source of truth for platform state

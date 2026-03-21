@@ -10,6 +10,7 @@ const navLinks = [
   { href: "/admin/projects", label: "Projects", icon: "🗂️" },
   { href: "/admin/builds", label: "Builds", icon: "🤖" },
   { href: "/admin/messages", label: "Messages", icon: "💬" },
+  { href: "/admin/architecture", label: "Architecture", icon: "🗺️" },
 ]
 
 export default async function AdminLayout({
