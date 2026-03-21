@@ -2,7 +2,7 @@ import { redirect } from "next/navigation"
 import { desc, eq, asc } from "drizzle-orm"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { clients, projects, milestones } from "@/lib/schema"
+import { clients, projects, milestones, moduleExecutions } from "@/lib/schema"
 import PageHeader from "@/components/ui/PageHeader"
 import EmptyState from "@/components/ui/EmptyState"
 import Card from "@/components/ui/Card"
@@ -12,6 +12,7 @@ export const metadata = { title: "Automations" }
 
 type ProjectStatus = "active" | "paused" | "complete"
 type MilestoneStatus = "pending" | "in-progress" | "done"
+type ExecutionStatus = "success" | "error" | "partial"
 
 const statusVariant: Record<ProjectStatus, "success" | "warning" | "default"> =
   {
@@ -24,6 +25,12 @@ const statusLabel: Record<ProjectStatus, string> = {
   active: "Active",
   paused: "Paused",
   complete: "Complete",
+}
+
+const executionStatusVariant: Record<ExecutionStatus, "success" | "error" | "warning"> = {
+  success: "success",
+  error: "error",
+  partial: "warning",
 }
 
 const orchestratorLabel: Record<string, string> = {
@@ -40,6 +47,20 @@ function formatDate(date: Date | null): string {
     month: "short",
     year: "numeric",
   })
+}
+
+function formatRelativeTime(date: Date): string {
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
+
+  if (diffMins < 1) return "just now"
+  if (diffMins < 60) return `${diffMins}m ago`
+  if (diffHours < 24) return `${diffHours}h ago`
+  if (diffDays < 7) return `${diffDays}d ago`
+  return formatDate(date)
 }
 
 function MilestoneIcon({ status }: { status: MilestoneStatus }) {
@@ -82,8 +103,10 @@ function MilestoneIcon({ status }: { status: MilestoneStatus }) {
 }
 
 type MilestoneRow = typeof milestones.$inferSelect
-type ProjectWithMilestones = typeof projects.$inferSelect & {
+type ExecutionRow = typeof moduleExecutions.$inferSelect
+type ProjectWithData = typeof projects.$inferSelect & {
   milestones: MilestoneRow[]
+  moduleExecutions: ExecutionRow[]
 }
 
 function MilestoneTimeline({
@@ -135,6 +158,36 @@ function MilestoneTimeline({
   )
 }
 
+function ExecutionSummary({ executions }: { executions: ExecutionRow[] }) {
+  if (executions.length === 0) return null
+
+  const latest = executions[0]
+  const totalRuns = executions.length
+  const latestStatus = latest.status as ExecutionStatus
+
+  return (
+    <div className="mt-4 pt-4 border-t border-border">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-medium text-foreground">Recent Activity</span>
+        <span className="text-xs text-muted">{totalRuns} run{totalRuns !== 1 ? "s" : ""}</span>
+      </div>
+      <div className="flex items-center gap-3">
+        <Badge variant={executionStatusVariant[latestStatus]}>
+          {latestStatus}
+        </Badge>
+        <span className="text-xs text-muted">
+          {formatRelativeTime(latest.executedAt)}
+        </span>
+        {latest.itemCount > 0 && (
+          <span className="text-xs text-muted">
+            {latest.itemCount} item{latest.itemCount !== 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default async function AutomationsPage() {
   const session = await auth()
   if (!session?.user?.id) redirect("/login")
@@ -143,13 +196,17 @@ export default async function AutomationsPage() {
     where: eq(clients.userId, session.user.id),
   })
 
-  const projectList: ProjectWithMilestones[] = client
+  const projectList: ProjectWithData[] = client
     ? await db.query.projects.findMany({
         where: eq(projects.clientId, client.id),
         orderBy: desc(projects.createdAt),
         with: {
           milestones: {
             orderBy: asc(milestones.dueDate),
+          },
+          moduleExecutions: {
+            orderBy: desc(moduleExecutions.executedAt),
+            limit: 10,
           },
         },
       })
@@ -203,6 +260,8 @@ export default async function AutomationsPage() {
                     <span>Started: {formatDate(project.startDate)}</span>
                   )}
                 </div>
+
+                <ExecutionSummary executions={project.moduleExecutions} />
 
                 {project.milestones.length > 0 && (
                   <MilestoneTimeline projectMilestones={project.milestones} />

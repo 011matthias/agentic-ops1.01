@@ -3,11 +3,15 @@ export interface ModuleConfig {
   description: string;
   orchestrator: "trigger-dev" | "n8n" | "make" | "script";
   webhookPath: string;
+  projectSlug: string;
   enabled: boolean;
 }
 
 export interface ModuleWebhookPayload {
   module: string;
   timestamp: string;
-  data: Record<string, unknown>;
+  status: "success" | "error" | "partial";
+  itemCount?: number;
+  durationMs?: number;
+  data?: Record<string, unknown>;
 }

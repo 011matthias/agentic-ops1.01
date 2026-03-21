@@ -167,6 +167,22 @@ export const clientResources = pgTable("client_resources", {
   updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
 })
 
+// ── Module execution tables ──────────────────────────────────────────────────
+
+export const moduleExecutions = pgTable("module_executions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  projectId: uuid("project_id")
+    .references(() => projects.id, { onDelete: "cascade" })
+    .notNull(),
+  moduleName: text("module_name").notNull(),
+  status: text("status", { enum: ["success", "error", "partial"] }).notNull(),
+  itemCount: integer("item_count").default(0).notNull(),
+  durationMs: integer("duration_ms"),
+  metadata: text("metadata"),
+  executedAt: timestamp("executed_at", { mode: "date" }).notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+})
+
 // ── Purchase tables ───────────────────────────────────────────────────────────
 
 export const products = pgTable("products", {
@@ -295,6 +311,7 @@ export const clientsRelations = relations(clients, ({ many }) => ({
 export const projectsRelations = relations(projects, ({ one, many }) => ({
   client: one(clients, { fields: [projects.clientId], references: [clients.id] }),
   milestones: many(milestones),
+  moduleExecutions: many(moduleExecutions),
   autopilotBuilds: many(autopilotBuilds),
 }))
 
@@ -323,6 +340,13 @@ export const filesRelations = relations(files, ({ one }) => ({
 export const clientResourcesRelations = relations(clientResources, ({ one }) => ({
   client: one(clients, { fields: [clientResources.clientId], references: [clients.id] }),
   project: one(projects, { fields: [clientResources.projectId], references: [projects.id] }),
+}))
+
+export const moduleExecutionsRelations = relations(moduleExecutions, ({ one }) => ({
+  project: one(projects, {
+    fields: [moduleExecutions.projectId],
+    references: [projects.id],
+  }),
 }))
 
 export const productsRelations = relations(products, ({ many }) => ({

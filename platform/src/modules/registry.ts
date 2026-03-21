@@ -1,15 +1,14 @@
 import type { ModuleConfig } from "./types";
 
 const modules: ModuleConfig[] = [
-  // Phase 2: Register automation modules here
-  // Example:
-  // {
-  //   name: "upwork-scraper",
-  //   description: "Scrapes Upwork for relevant leads",
-  //   orchestrator: "trigger-dev",
-  //   webhookPath: "/api/modules/upwork-scraper",
-  //   enabled: false,
-  // },
+  {
+    name: "meji-enquiry-followup",
+    description: "Enquiry follow-up email sequence",
+    orchestrator: "make",
+    webhookPath: "/api/modules/meji-enquiry-followup",
+    projectSlug: "meji-media",
+    enabled: true,
+  },
 ];
 
 export function getModule(name: string): ModuleConfig | undefined {

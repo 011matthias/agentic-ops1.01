@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
 import { getModule } from "@/modules/registry";
+import { db } from "@/lib/db";
+import { moduleExecutions, projects } from "@/lib/schema";
+import type { ModuleWebhookPayload } from "@/modules/types";
 
 export async function POST(
   request: NextRequest,
@@ -22,13 +26,40 @@ export async function POST(
     );
   }
 
-  // Phase 2: Process module webhook payload and store in database
-  const payload = await request.json();
+  const payload: ModuleWebhookPayload = await request.json();
+
+  // Find the project linked to this module
+  const project = await db.query.projects.findFirst({
+    where: eq(projects.name, config.projectSlug),
+  });
+
+  if (!project) {
+    return NextResponse.json(
+      { error: `No project found for module "${moduleName}"` },
+      { status: 404 }
+    );
+  }
+
+  const [execution] = await db
+    .insert(moduleExecutions)
+    .values({
+      projectId: project.id,
+      moduleName: config.name,
+      status: payload.status ?? "success",
+      itemCount: payload.itemCount ?? 0,
+      durationMs: payload.durationMs ?? null,
+      metadata: payload.data ? JSON.stringify(payload.data) : null,
+      executedAt: payload.timestamp ? new Date(payload.timestamp) : new Date(),
+    })
+    .returning();
+
   return NextResponse.json({
     received: true,
+    executionId: execution.id,
     module: moduleName,
-    timestamp: new Date().toISOString(),
-    items: Array.isArray(payload.data) ? payload.data.length : 1,
+    status: execution.status,
+    itemCount: execution.itemCount,
+    executedAt: execution.executedAt,
   });
 }
 
