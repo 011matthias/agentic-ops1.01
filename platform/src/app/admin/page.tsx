@@ -1,6 +1,6 @@
 import { db } from "@/lib/db"
-import { clients, projects, milestones, messages, products, purchases } from "@/lib/schema"
-import { eq, count, sum, desc, isNull, gte, and, isNotNull } from "drizzle-orm"
+import { clients, projects, milestones, messages, users } from "@/lib/schema"
+import { eq, count, desc, isNull, and, isNotNull } from "drizzle-orm"
 import PageHeader from "@/components/ui/PageHeader"
 import StatCard from "@/components/admin/StatCard"
 
@@ -61,26 +61,15 @@ export default async function AdminDashboardPage() {
     .from(messages)
     .where(and(isNull(messages.readAt), eq(messages.authorRole, "client")))
 
-  const startOfMonth = new Date()
-  startOfMonth.setDate(1)
-  startOfMonth.setHours(0, 0, 0, 0)
-
-  const [revenueMtdResult] = await db
-    .select({ value: sum(products.priceUsd) })
-    .from(purchases)
-    .leftJoin(products, eq(purchases.productId, products.id))
-    .where(
-      and(
-        eq(purchases.status, "complete"),
-        gte(purchases.createdAt, startOfMonth)
-      )
-    )
+  const [prospectsResult] = await db
+    .select({ value: count(users.id) })
+    .from(users)
+    .where(eq(users.role, "prospect"))
 
   const activeClientsCount = activeClientsResult?.value ?? 0
   const activeProjectsCount = activeProjectsResult?.value ?? 0
   const unreadMessagesCount = unreadMessagesResult?.value ?? 0
-  const revenueMtdCents = Number(revenueMtdResult?.value ?? 0)
-  const revenueMtdDisplay = `$${(revenueMtdCents / 100).toFixed(0)}`
+  const prospectsCount = prospectsResult?.value ?? 0
 
   // ── Activity feed ─────────────────────────────────────────────────────────
 
@@ -156,7 +145,11 @@ export default async function AdminDashboardPage() {
           value={unreadMessagesCount}
           sublabel="from clients"
         />
-        <StatCard label="Revenue MTD" value={revenueMtdDisplay} />
+        <StatCard
+          label="Pending review"
+          value={prospectsCount}
+          sublabel="prospects"
+        />
       </div>
 
       {/* Activity feed */}

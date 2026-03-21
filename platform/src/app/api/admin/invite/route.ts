@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
   const inviteUrl = `${baseUrl}/api/auth/callback/resend?callbackUrl=${callbackUrl}&token=${token}&email=${encodeURIComponent(cleanEmail)}`
 
   // Send invite email
-  await sendEmail({
+  const emailSent = await sendEmail({
     to: cleanEmail,
     subject: "You're invited to the UnpauseAI client portal",
     text: `Hi there,
@@ -105,6 +105,13 @@ This link expires in 7 days. If you have any questions, reply to this email.
 
 The UnpauseAI Team`,
   })
+
+  if (!emailSent) {
+    return NextResponse.json(
+      { error: "User and client created, but invite email failed to send. Check RESEND_API_KEY and domain verification." },
+      { status: 500 }
+    )
+  }
 
   return NextResponse.json({ success: true })
 }
