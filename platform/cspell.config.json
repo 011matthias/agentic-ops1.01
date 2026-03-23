@@ -95,7 +95,18 @@
     "Menovia",
     "menovia",
     "Agentic",
-    "agentic"
+    "agentic",
+    "Typeform",
+    "Brevo",
+    "toolstack",
+    "Toolstack",
+    "touchpoint",
+    "personalised",
+    "finalised",
+    "finalises",
+    "milestonesdone",
+    "Mollie",
+    "MessageBird"
   ],
   "ignorePaths": [
     "node_modules",

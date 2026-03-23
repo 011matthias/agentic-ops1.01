@@ -27,7 +27,8 @@ const statusLabel: Record<ProjectStatus, string> = {
   complete: "Complete",
 }
 
-const _executionStatusVariant: Record<ExecutionStatus, "success" | "error" | "warning"> = {
+/* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+const executionStatusVariant: Record<ExecutionStatus, "success" | "error" | "warning"> = {
   success: "success",
   error: "error",
   partial: "warning",
