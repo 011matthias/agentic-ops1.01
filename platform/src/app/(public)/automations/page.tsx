@@ -19,7 +19,7 @@ export default function AutomationsPage() {
         </h1>
         <p className="mt-4 text-lg text-muted">
           Whether you want it built for you or want to hit the ground running
-          yourself &mdash; we&rsquo;ve got you covered.
+          yourself, we&rsquo;ve got you covered.
         </p>
         <div className="mt-8 flex justify-center gap-6">
           <a

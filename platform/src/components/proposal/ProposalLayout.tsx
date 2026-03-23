@@ -15,7 +15,7 @@ export function ProposalLayout({ proposal, children }: ProposalLayoutProps) {
         <article className="prose-custom">{children}</article>
         <ProposalCTA prospect={proposal.frontmatter.prospect} />
         <footer className="mt-16 border-t border-border pt-6 text-center text-xs text-muted">
-          <p>UnpauseAI &mdash; Custom Automation Solutions</p>
+          <p>UnpauseAI | Custom Automation Solutions</p>
         </footer>
       </div>
     </div>

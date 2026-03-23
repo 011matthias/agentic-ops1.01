@@ -34,9 +34,8 @@ export default function AboutPage() {
           <p>
             We&rsquo;re an automation consultancy that builds workflows for
             businesses. Not the &ldquo;let&rsquo;s replace your whole
-            stack&rdquo; kind &mdash; the kind that connects the tools you
-            already use and makes them work together without you having to think
-            about it.
+            stack&rdquo; kind. We connect the tools you already use and make
+            them work together without you having to think about it.
           </p>
           <p>
             Our clients are businesses that deal with high volumes of repetitive
@@ -73,9 +72,9 @@ export default function AboutPage() {
           </div>
 
           <p className="mt-8 text-sm text-muted">
-            We also integrate with 20+ external services: HubSpot, Fortnox,
-            Smartlead, Google Sheets, Gmail, Slack, Airtable, MySQL, Postgres,
-            OpenAI, and more.
+            We integrate with services like HubSpot, Fortnox, Smartlead,
+            Google Sheets, Gmail, Slack, Airtable, MySQL, Postgres, OpenAI,
+            and more.
           </p>
         </div>
       </section>

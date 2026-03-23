@@ -19,9 +19,10 @@ export default async function PortalPage() {
     doneMilestones: number
   }
 
-  let activeAutomations = "—"
-  let milestonesdone = "—"
-  let openMessages = "—"
+  let hasClient = false
+  let activeAutomations = "0"
+  let milestonesdone = "0"
+  let openMessages = "0"
   let clientProjects: ProjectWithProgress[] = []
 
   if (session?.user?.id) {
@@ -30,6 +31,7 @@ export default async function PortalPage() {
     })
 
     if (client) {
+      hasClient = true
       const [activeProjectRows, unreadMessages] = await Promise.all([
         db.query.projects.findMany({
           where: and(
@@ -83,16 +85,20 @@ export default async function PortalPage() {
       <div className="mb-10">
         <h1 className="text-3xl font-bold">Welcome back, {firstName}</h1>
         <p className="mt-1 text-gray-600 dark:text-gray-400">
-          Here&apos;s an overview of your automations and activity.
+          {hasClient
+            ? "Here\u2019s an overview of your automations and activity."
+            : "Your workspace is being set up. We\u2019ll have everything ready for you shortly."}
         </p>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-12">
-        <StatCard label="Active Automations" value={activeAutomations} />
-        <StatCard label="Milestones Done" value={milestonesdone} />
-        <StatCard label="Open Messages" value={openMessages} />
-      </div>
+      {/* Stats — only show when client record exists */}
+      {hasClient && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-12">
+          <StatCard label="Active Automations" value={activeAutomations} />
+          <StatCard label="Milestones Done" value={milestonesdone} />
+          <StatCard label="Open Messages" value={openMessages} />
+        </div>
+      )}
 
       {/* Active projects */}
       {clientProjects.length > 0 ? (
@@ -142,7 +148,9 @@ export default async function PortalPage() {
       ) : (
         <div className="mb-12 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-10 text-center">
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            Your project is being set up. Check back soon.
+            {hasClient
+              ? "No active projects yet. Check back soon."
+              : "Your workspace is being set up. Check back soon or reach out via Messages."}
           </p>
         </div>
       )}

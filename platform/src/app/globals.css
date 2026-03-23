@@ -11,6 +11,8 @@
   --border: #e4e4e7;
   --surface: #ffffff;
   --surface-hover: #f4f4f5;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
 }
 
 @theme inline {
@@ -35,6 +37,8 @@
   --border: #27272a;
   --surface: #18181b;
   --surface-hover: #27272a;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.2);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.2);
 }
 
 body {

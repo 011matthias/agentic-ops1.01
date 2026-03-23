@@ -15,14 +15,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://unpauseai.com"),
   title: {
-    default: "UnpauseAI — Automation Solutions",
+    default: "UnpauseAI | Automation Solutions",
     template: "%s | UnpauseAI",
   },
   description:
-    "We build automations that run your business. Lead follow-up, CRM sync, sales dashboards, and custom workflows — connected to your existing tools.",
+    "We build automations that run your business. Lead follow-up, CRM sync, sales dashboards, and custom workflows. Connected to your existing tools.",
   openGraph: {
-    title: "UnpauseAI — Automation Solutions",
+    title: "UnpauseAI | Automation Solutions",
     description:
       "We build automations that run your business. Lead follow-up, CRM sync, sales dashboards, and custom workflows.",
     url: "https://unpauseai.com",

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import ThemeToggle from "./ThemeToggle";
+import Logo from "./Logo";
 
 const navLinks = [
   { href: "/", label: "Home" },
@@ -20,9 +21,7 @@ export default function Header() {
   return (
     <header className="border-b border-border">
       <nav className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-        <Link href="/" className="text-lg font-semibold tracking-tight">
-          UnpauseAI
-        </Link>
+        <Logo size="md" />
 
         {/* Desktop nav */}
         <ul className="hidden gap-8 sm:flex items-center">

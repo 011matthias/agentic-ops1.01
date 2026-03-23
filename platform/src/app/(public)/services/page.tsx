@@ -76,7 +76,7 @@ export default function ServicesPage() {
         </h1>
         <p className="mt-4 text-lg text-muted">
           We connect your existing tools into reliable, always-on systems.
-          No rip-and-replace &mdash; just automation that works with what you
+          No rip-and-replace. Just automation that works with what you
           already use.
         </p>
       </section>

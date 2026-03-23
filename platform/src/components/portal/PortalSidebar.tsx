@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import ThemeToggle from "@/components/ThemeToggle"
+import Logo from "@/components/Logo"
 
 const navLinks = [
   { href: "/portal", label: "Dashboard", icon: DashboardIcon, exact: true },
@@ -32,12 +33,7 @@ export default function PortalSidebar({ userName, userEmail, userRole, signOutAc
     <aside className="w-full sm:w-60 sm:min-h-screen bg-gray-950 text-gray-100 flex flex-col shrink-0 border-r border-gray-800/50">
       {/* Brand */}
       <div className="px-5 py-4 border-b border-gray-800/50">
-        <Link
-          href="/portal"
-          className="text-sm font-semibold tracking-tight text-white hover:text-gray-200 transition-colors"
-        >
-          UnpauseAI
-        </Link>
+        <Logo size="sm" href="/portal" className="text-white hover:text-gray-200 transition-colors" />
         <p className="text-[11px] text-gray-500 mt-0.5 tracking-wide uppercase">Portal</p>
       </div>
 
