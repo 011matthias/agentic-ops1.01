@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meji Media &ndash; A/B Testing Battle Plan</title>
+<style>
+:root {
+  --bg: #f8fafc; --surface: #ffffff; --surface2: #f1f5f9; --border: #e2e8f0;
+  --text: #0f172a; --text2: #475569; --text3: #94a3b8;
+  --blue: #2563eb; --blue-light: #dbeafe; --blue-dark: #1e40af;
+  --green: #16a34a; --green-light: #dcfce7;
+  --amber: #d97706; --amber-light: #fef3c7;
+  --purple: #7c3aed; --purple-light: #ede9fe;
+  --red: #dc2626; --red-light: #fee2e2;
+  --shadow: 0 1px 3px rgba(0,0,0,.08); --shadow-md: 0 4px 6px rgba(0,0,0,.07);
+  --nav-bg: #ffffff;
+}
+[data-theme="dark"] {
+  --bg: #0f172a; --surface: #1e293b; --surface2: #0f172a; --border: #334155;
+  --text: #f1f5f9; --text2: #94a3b8; --text3: #475569;
+  --blue: #3b82f6; --blue-light: #1e3a5f; --blue-dark: #93c5fd;
+  --green: #22c55e; --green-light: #14532d;
+  --amber: #f59e0b; --amber-light: #451a03;
+  --purple: #a78bfa; --purple-light: #2e1065;
+  --red: #f87171; --red-light: #450a0a;
+  --shadow: 0 1px 3px rgba(0,0,0,.3); --shadow-md: 0 4px 6px rgba(0,0,0,.4);
+  --nav-bg: #1e293b;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg); color: var(--text);
+  font-size: 15px; line-height: 1.6; min-height: 100vh;
+  transition: background .2s, color .2s;
+  padding-top: 56px;
+}
+
+/* Nav */
+.doc-nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+  background: var(--nav-bg); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; height: 56px; box-shadow: var(--shadow);
+  transition: background .2s;
+}
+.doc-nav-left { display: flex; align-items: center; gap: 12px; }
+.doc-nav-logo {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 800; font-size: 14px;
+}
+.doc-nav-brand { font-size: 14px; font-weight: 700; color: var(--text); }
+.doc-nav-sep { color: var(--border); font-size: 18px; }
+.doc-nav-links { display: flex; gap: 4px; }
+.doc-nav-links a {
+  font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+  color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.doc-nav-links a:hover { background: var(--surface2); color: var(--text); }
+.doc-nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.doc-nav-right { display: flex; align-items: center; gap: 8px; }
+.doc-nav-theme {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+  padding: 4px 10px; cursor: pointer; font-size: 13px; color: var(--text2);
+}
+.doc-nav-theme:hover { background: var(--border); }
+.doc-nav-status {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+  background: var(--green-light); color: var(--green);
+}
+.doc-nav-status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1}50%{opacity:.5} }
+@media (max-width: 640px) {
+  .doc-nav { padding: 0 12px; }
+  .doc-nav-brand, .doc-nav-sep { display: none; }
+  .doc-nav-links a { padding: 6px 8px; font-size: 12px; }
+}
+
+/* Content */
+.main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+.hero {
+  background: linear-gradient(135deg, var(--purple), var(--blue));
+  border-radius: 16px; padding: 48px 40px; color: #fff; margin-bottom: 40px;
+}
+.hero h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+.hero p { font-size: 16px; opacity: .9; max-width: 600px; }
+.section { margin-bottom: 48px; }
+.section-title {
+  font-size: 13px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--text3); margin-bottom: 16px;
+}
+h2 { font-size: 20px; font-weight: 700; margin-bottom: 12px; color: var(--text); }
+h3 { font-size: 16px; font-weight: 600; margin: 20px 0 8px; color: var(--text); }
+p, li { margin-bottom: 8px; color: var(--text); }
+code {
+  background: var(--surface2); padding: 2px 6px; border-radius: 4px;
+  font-size: 13px; color: var(--purple);
+}
+a { color: var(--blue); }
+strong { color: var(--text); }
+
+/* Flow diagram */
+.flow-diagram {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  padding: 32px; margin: 24px 0; overflow-x: auto;
+}
+.flow-row { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.flow-node {
+  background: var(--surface2); border: 2px solid var(--border); border-radius: 12px;
+  padding: 16px 20px; text-align: center; min-width: 120px;
+}
+.flow-node-label { font-size: 13px; font-weight: 700; }
+.flow-node-sub { font-size: 11px; color: var(--text2); margin-top: 2px; }
+.flow-arrow { font-size: 20px; color: var(--text3); }
+.flow-split {
+  display: flex; flex-direction: column; gap: 12px; align-items: center;
+}
+.flow-branch { display: flex; align-items: center; gap: 12px; }
+.flow-node-a { border-color: var(--blue); background: var(--blue-light); }
+.flow-node-a .flow-node-label { color: var(--blue-dark); }
+.flow-node-b { border-color: var(--purple); background: var(--purple-light); }
+.flow-node-b .flow-node-label { color: var(--purple); }
+.flow-node-result { border-color: var(--green); background: var(--green-light); }
+.flow-node-result .flow-node-label { color: var(--green); }
+
+/* Steps */
+.steps { counter-reset: step; }
+.step {
+  display: flex; gap: 16px; margin-bottom: 20px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px;
+}
+.step::before {
+  counter-increment: step; content: counter(step);
+  flex-shrink: 0; width: 32px; height: 32px; border-radius: 50%;
+  background: var(--blue); color: #fff; display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 14px;
+}
+.step-content { flex: 1; }
+.step-content h3 { margin: 0 0 4px; font-size: 15px; }
+.step-content p { margin: 0; font-size: 14px; color: var(--text2); }
+
+/* Table */
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+th { background: var(--blue); color: #fff; text-align: left; padding: 10px 14px; font-weight: 600; }
+td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:nth-child(even) td { background: var(--surface2); }
+
+/* Timeline */
+.roadmap { display: flex; flex-direction: column; gap: 16px; }
+.roadmap-item {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 20px; display: flex; gap: 16px; align-items: flex-start;
+}
+.roadmap-phase {
+  flex-shrink: 0; padding: 4px 12px; border-radius: 8px;
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+}
+.roadmap-phase-1 { background: var(--green-light); color: var(--green); }
+.roadmap-phase-2 { background: var(--blue-light); color: var(--blue); }
+.roadmap-phase-3 { background: var(--amber-light); color: var(--amber); }
+.roadmap-phase-4 { background: var(--purple-light); color: var(--purple); }
+.roadmap-info h4 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+.roadmap-info p { font-size: 13px; color: var(--text2); margin: 0; }
+
+.footer {
+  text-align: center; padding: 32px 24px; font-size: 13px; color: var(--text3);
+  border-top: 1px solid var(--border);
+}
+.footer a { color: var(--blue); text-decoration: none; }
+
+@media (max-width: 640px) {
+  .hero { padding: 32px 24px; }
+  .hero h1 { font-size: 22px; }
+  .main { padding: 24px 16px 60px; }
+  .flow-row { flex-direction: column; }
+}
+</style>
+</head>
+<body>
+
+<nav class="doc-nav">
+  <div class="doc-nav-left">
+    <div class="doc-nav-logo">U</div>
+    <span class="doc-nav-brand">Meji Media</span>
+    <span class="doc-nav-sep">|</span>
+    <div class="doc-nav-links">
+      <a href="/docs/meji-media/">Hub</a>
+      <a href="/docs/meji-media/guide">Guide</a>
+      <a href="/docs/meji-media/ab-testing" class="active">A/B Testing</a>
+      <a href="/docs/meji-media/lead-scoring">Scoring</a>
+      <a href="/docs/meji-media/system-overview">Overview</a>
+    </div>
+  </div>
+  <div class="doc-nav-right">
+    <span class="doc-nav-status"><span class="doc-nav-status-dot"></span> Live</span>
+    <button class="doc-nav-theme" onclick="toggleTheme()" id="theme-btn">&#9790; Theme</button>
+  </div>
+</nav>
+
+<div class="main">
+
+  <div class="hero">
+    <h1>A/B Testing Battle Plan</h1>
+    <p>Split-test your email templates to find what gets more replies. This guide covers everything: how it works, how to run a test, and a longer-term testing strategy.</p>
+  </div>
+
+  <!-- How It Works -->
+  <div class="section">
+    <div class="section-title">How A/B Testing Works</div>
+    <div class="flow-diagram">
+      <div class="flow-row">
+        <div class="flow-node">
+          <div class="flow-node-label">New Enquiry</div>
+          <div class="flow-node-sub">Arrives via website</div>
+        </div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-node" style="border-color:var(--amber);background:var(--amber-light);">
+          <div class="flow-node-label" style="color:var(--amber);">Random Split</div>
+          <div class="flow-node-sub">50/50 assignment</div>
+        </div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-split">
+          <div class="flow-branch">
+            <div class="flow-node flow-node-a">
+              <div class="flow-node-label">Group A</div>
+              <div class="flow-node-sub">Gets Version A emails</div>
+            </div>
+          </div>
+          <div class="flow-branch">
+            <div class="flow-node flow-node-b">
+              <div class="flow-node-label">Group B</div>
+              <div class="flow-node-sub">Gets Version B emails</div>
+            </div>
+          </div>
+        </div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-node flow-node-result">
+          <div class="flow-node-label">Track Results</div>
+          <div class="flow-node-sub">AB_Analytics tab</div>
+        </div>
+      </div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-top:16px;">
+      <p style="margin:0;font-size:14px;color:var(--text2);">
+        <strong style="color:var(--text);">Key point:</strong> Once assigned, a lead stays in their group for the entire follow-up sequence (initial email, follow-up #2, follow-up #3). The assignment is permanent.
+      </p>
+    </div>
+  </div>
+
+  <!-- Battle Plan -->
+  <div class="section">
+    <div class="section-title">Quick-Start Battle Plan</div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-content">
+          <h3>Enable A/B testing</h3>
+          <p>Go to <a href="https://eu2.make.com" target="_blank">eu2.make.com</a> &rarr; Data Stores &rarr; Pipeline Config &rarr; set <code>ab_testing_enabled</code> to <code>true</code></p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-content">
+          <h3>Edit your Version B templates</h3>
+          <p>Data Stores &rarr; Email Templates. Edit the <code>_b</code> variant of the email you want to test. Change the subject line, body text, or both.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-content">
+          <h3>Let it run</h3>
+          <p>Wait for <strong>at least 30-50 enquiries per group</strong> before drawing conclusions. With fewer leads, random chance can skew results.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-content">
+          <h3>Check your results</h3>
+          <p>Open your Google Sheet &rarr; <strong>AB_Analytics</strong> tab. Compare reply rates between Group A and Group B. The <strong>Lift</strong> column shows the difference.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-content">
+          <h3>Pick the winner</h3>
+          <p>Copy the winning version into both A and B templates (or disable A/B testing and keep the winner as Version A).</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- What to Edit -->
+  <div class="section">
+    <div class="section-title">Template Reference</div>
+    <table>
+      <thead>
+        <tr><th>Email</th><th>Version A Key</th><th>Version B Key</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Initial response (standard leads)</td><td><code>initial_standard_a</code></td><td><code>initial_standard_b</code></td></tr>
+        <tr><td>Initial response (hot leads)</td><td><code>initial_high_a</code></td><td><code>initial_high_b</code></td></tr>
+        <tr><td>First follow-up</td><td><code>step_2_a</code></td><td><code>step_2_b</code></td></tr>
+        <tr><td>Final follow-up</td><td><code>step_3_a</code></td><td><code>step_3_b</code></td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:14px;color:var(--text2);margin-top:8px;">
+      <strong>Placeholders to keep:</strong> <code>##name##</code>, <code>##topic##</code>, <code>##organisation##</code>, <code>##ai_opening##</code>, <code>##signature##</code>.
+      Do not change the <code>key</code> or <code>active</code> fields.
+    </p>
+  </div>
+
+  <!-- Example Tests -->
+  <div class="section">
+    <div class="section-title">Example Test Ideas</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div style="background:var(--blue-light);border:1px solid var(--border);border-radius:12px;padding:20px;">
+        <div style="font-size:12px;font-weight:700;color:var(--blue);text-transform:uppercase;margin-bottom:8px;">Version A (Control)</div>
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px;">Subject: "Thanks for your enquiry"</div>
+        <div style="font-size:13px;color:var(--text2);">Professional, straightforward acknowledgement. Includes AI-generated personalised opener.</div>
+      </div>
+      <div style="background:var(--purple-light);border:1px solid var(--border);border-radius:12px;padding:20px;">
+        <div style="font-size:12px;font-weight:700;color:var(--purple);text-transform:uppercase;margin-bottom:8px;">Version B (Challenger)</div>
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px;">Subject: "Your Christmas party is going to be amazing"</div>
+        <div style="font-size:13px;color:var(--text2);">Warmer, more enthusiastic tone. Leads with excitement about their event before the details.</div>
+      </div>
+    </div>
+    <div style="margin-top:16px;">
+      <h3>What to test (in order of impact)</h3>
+      <ol style="font-size:14px;padding-left:20px;">
+        <li><strong>Subject lines</strong> -- highest impact, easiest to test. Change one thing at a time.</li>
+        <li><strong>Opening line tone</strong> -- formal vs friendly, question vs statement.</li>
+        <li><strong>Call-to-action</strong> -- "Reply to this email" vs "Call us on..." vs "Book a viewing".</li>
+        <li><strong>Email length</strong> -- short and punchy vs detailed and informative.</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- Reading Results -->
+  <div class="section">
+    <div class="section-title">Reading Your Results</div>
+    <p>Open your Google Sheet &rarr; <strong>AB_Analytics</strong> tab:</p>
+    <table>
+      <thead>
+        <tr><th>Metric</th><th>What It Means</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>Total Leads</strong></td><td>How many enquiries in each group</td></tr>
+        <tr><td><strong>Replied</strong></td><td>How many people replied to your emails</td></tr>
+        <tr><td><strong>Reply Rate</strong></td><td>Percentage who replied -- <strong>this is the key metric</strong></td></tr>
+        <tr><td><strong>Cold</strong></td><td>Went through all follow-ups without replying</td></tr>
+        <tr><td><strong>Still Active</strong></td><td>Still in the follow-up sequence</td></tr>
+        <tr><td><strong>Lift (B vs A)</strong></td><td>Difference in reply rates -- positive means B is winning</td></tr>
+      </tbody>
+    </table>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-top:16px;">
+      <p style="margin:0;font-size:14px;color:var(--text2);">
+        <strong style="color:var(--text);">Statistical significance:</strong> With 30+ leads per group, a 5%+ lift is meaningful. With fewer leads, differences could be random noise. When in doubt, keep running.
+      </p>
+    </div>
+  </div>
+
+  <!-- Long-term Strategy -->
+  <div class="section">
+    <div class="section-title">Longer-Term Testing Roadmap</div>
+    <div class="roadmap">
+      <div class="roadmap-item">
+        <span class="roadmap-phase roadmap-phase-1">Phase 1</span>
+        <div class="roadmap-info">
+          <h4>Subject line testing</h4>
+          <p>Start here. Test 2-3 different subject line approaches over 2-4 weeks. Find your best-performing hook.</p>
+        </div>
+      </div>
+      <div class="roadmap-item">
+        <span class="roadmap-phase roadmap-phase-2">Phase 2</span>
+        <div class="roadmap-info">
+          <h4>Tone and style</h4>
+          <p>With the winning subject line locked in, test different email body styles: formal vs casual, short vs detailed.</p>
+        </div>
+      </div>
+      <div class="roadmap-item">
+        <span class="roadmap-phase roadmap-phase-3">Phase 3</span>
+        <div class="roadmap-info">
+          <h4>Follow-up timing</h4>
+          <p>Adjust cadence settings (not A/B -- change timing in Pipeline Config). Try faster follow-ups for warm leads or longer gaps for standard.</p>
+        </div>
+      </div>
+      <div class="roadmap-item">
+        <span class="roadmap-phase roadmap-phase-4">Phase 4</span>
+        <div class="roadmap-info">
+          <h4>Seasonal refresh</h4>
+          <p>Re-test before peak seasons (September-November for Christmas parties). What worked in spring may not work in autumn.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Config Reference -->
+  <div class="section">
+    <div class="section-title">Configuration Quick Reference</div>
+    <table>
+      <thead>
+        <tr><th>Setting</th><th>Where</th><th>Field</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Enable/disable A/B testing</td><td>Pipeline Config</td><td><code>ab_testing_enabled</code></td></tr>
+        <tr><td>Email template variants</td><td>Email Templates</td><td><code>*_a</code> and <code>*_b</code> keys</td></tr>
+        <tr><td>Results dashboard</td><td>Google Sheet</td><td>AB_Analytics tab</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:13px;color:var(--text2);margin-top:12px;">
+      All configuration is in <a href="https://eu2.make.com" target="_blank">eu2.make.com</a>. For help, contact your automation specialist.
+    </p>
+  </div>
+
+</div>
+
+<footer class="footer">
+  <p>Built and maintained by <a href="https://unpauseai.com" target="_blank">UnpauseAI</a></p>
+  <p style="margin-top:4px;">Last updated: 23 March 2026</p>
+</footer>
+
+<!-- Auth gate -->
+<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
+  <div style="text-align:center;max-width:360px;padding:24px;">
+    <div style="width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:24px;margin:0 auto 20px;">U</div>
+    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Meji Media Documentation</h2>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Enter your access code to continue.</p>
+    <div style="display:flex;gap:8px;">
+      <input id="auth-input" type="password" placeholder="Access code" autocomplete="off"
+        style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;"
+        onkeydown="if(event.key==='Enter')checkAuth()" />
+      <button onclick="checkAuth()"
+        style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">Enter</button>
+    </div>
+    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Incorrect code. Please try again.</p>
+  </div>
+</div>
+
+<script>
+var MEJI_CODE='meji2026';
+function checkAuth(){var i=document.getElementById('auth-input').value;if(i===MEJI_CODE){localStorage.setItem('meji-docs-access','granted');var g=document.getElementById('auth-gate');g.style.opacity='0';setTimeout(function(){g.style.display='none'},300)}else{document.getElementById('auth-error').style.display='block';document.getElementById('auth-input').value='';document.getElementById('auth-input').focus()}}
+(function(){if(localStorage.getItem('meji-docs-access')==='granted'){document.getElementById('auth-gate').style.display='none'}else{document.getElementById('auth-input').focus()}})();
+function toggleTheme(){var h=document.documentElement;var n=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('meji-docs-theme',n);document.getElementById('theme-btn').innerHTML=n==='dark'?'&#9788; Theme':'&#9790; Theme'}
+(function(){var s=localStorage.getItem('meji-docs-theme');if(s){document.documentElement.setAttribute('data-theme',s);if(s==='dark')document.getElementById('theme-btn').innerHTML='&#9788; Theme'}})();
+</script>
+
+</body>
+</html>

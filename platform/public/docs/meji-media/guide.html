@@ -244,6 +244,42 @@ em {
 .doc-nav-status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: navpulse 2s infinite; }
 @keyframes navpulse { 0%,100% { opacity:1; } 50% { opacity:.5; } }
 
+/* Guide sidebar */
+.guide-sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 16px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.guide-sidebar ul { list-style: none; padding: 0; }
+.guide-sidebar li { margin: 0; }
+.guide-sidebar a {
+    display: block; padding: 7px 16px; font-size: 12px; font-weight: 500;
+    color: var(--text2); text-decoration: none;
+    border-left: 3px solid transparent; transition: background .15s, color .15s;
+}
+.guide-sidebar a:hover { background: var(--surface2); color: var(--text); text-decoration: none; }
+.guide-sidebar a.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.guide-sidebar .sidebar-group { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text3); padding: 12px 16px 4px; }
+
+.guide-content { margin-left: 220px; }
+
+.guide-hamburger {
+    display: none; position: fixed; bottom: 20px; left: 20px; z-index: 60;
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--blue); color: #fff; border: none; cursor: pointer;
+    font-size: 20px; box-shadow: 0 2px 8px rgba(0,0,0,.2);
+}
+.guide-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 45; }
+.guide-backdrop.active { display: block; }
+
+@media (max-width: 768px) {
+    .guide-sidebar { transform: translateX(-100%); z-index: 200; }
+    .guide-sidebar.open { transform: translateX(0); }
+    .guide-content { margin-left: 0; }
+    .guide-hamburger { display: flex; align-items: center; justify-content: center; }
+}
+
 @media (max-width: 640px) {
     .doc-nav { padding: 0 12px; }
     .doc-nav-brand { display: none; }
@@ -261,8 +297,10 @@ em {
         <span class="doc-nav-sep">|</span>
         <div class="doc-nav-links">
             <a href="/docs/meji-media/">Hub</a>
-            <a href="/docs/meji-media/guide" class="active">Complete Guide</a>
-            <a href="/docs/meji-media/system-overview">System Overview</a>
+            <a href="/docs/meji-media/guide" class="active">Guide</a>
+            <a href="/docs/meji-media/ab-testing">A/B Testing</a>
+            <a href="/docs/meji-media/lead-scoring">Scoring</a>
+            <a href="/docs/meji-media/system-overview">Overview</a>
         </div>
     </div>
     <div class="doc-nav-right">
@@ -284,6 +322,37 @@ function toggleTheme() {
     if (s) { document.documentElement.setAttribute('data-theme', s); if (s === 'dark') document.getElementById('theme-btn').innerHTML = '&#9788; Theme'; }
 })();
 </script>
+
+<!-- Sidebar -->
+<div class="guide-backdrop" id="guideBackdrop" onclick="closeSidebar()"></div>
+<nav class="guide-sidebar" id="guideSidebar">
+  <ul>
+    <li class="sidebar-group">Overview</li>
+    <li><a href="#what-we-built">What We Built</a></li>
+    <li><a href="#how-it-works--the-big-picture">How It Works</a></li>
+    <li><a href="#the-enquiry-lifecycle">Enquiry Lifecycle</a></li>
+    <li class="sidebar-group">Reference</li>
+    <li><a href="#your-google-sheet--what-youll-see">Google Sheet</a></li>
+    <li><a href="#email-templates">Email Templates</a></li>
+    <li><a href="#lead-scoring--priority">Lead Scoring</a></li>
+    <li><a href="#follow-up-cadence">Follow-Up Cadence</a></li>
+    <li><a href="#ab-testing">A/B Testing</a></li>
+    <li><a href="#what-you-can-configure">Configuration</a></li>
+    <li><a href="#operations-usage">Operations Usage</a></li>
+    <li><a href="#troubleshooting--quick-reference">Troubleshooting</a></li>
+    <li><a href="#key-contacts">Key Contacts</a></li>
+    <li class="sidebar-group">Automations</li>
+    <li><a href="#a0-mysql-enquiry-poller">A0: MySQL Poller</a></li>
+    <li><a href="#a1-enquiry-follow-up-sequence">A1: Follow-Up</a></li>
+    <li><a href="#a2-reply-detection--stop">A2: Reply Detection</a></li>
+    <li><a href="#a3-scheduled-follow-up-steps">A3: Follow-Up Steps</a></li>
+    <li class="sidebar-group">Guides</li>
+    <li><a href="#ab-testing-guide">A/B Testing Guide</a></li>
+  </ul>
+</nav>
+<button class="guide-hamburger" id="guideHamburger" onclick="toggleSidebar()">&#9776;</button>
+
+<div class="guide-content">
 <h1>Meji Media &ndash; Automated Follow-Up System</h1>
 <blockquote>
 <p>Your automated follow-up system is live and running. This guide explains how it works, what you&rsquo;ll see, and how to make changes.</p>
@@ -1151,6 +1220,27 @@ new -> handoff                    (hot lead -- immediate team notification, no a
 <li>Set all 8 <code>_a</code> and <code>_b</code> variants to <code>active: false</code></li>
 </ol>
 <p>The system will use the original single-version templates for all new enquiries.</p>
+
+</div><!-- end guide-content -->
+
+<script>
+// Sidebar toggle
+function toggleSidebar(){document.getElementById('guideSidebar').classList.toggle('open');document.getElementById('guideBackdrop').classList.toggle('active')}
+function closeSidebar(){document.getElementById('guideSidebar').classList.remove('open');document.getElementById('guideBackdrop').classList.remove('active')}
+// Active state on scroll
+(function(){
+  var links=document.querySelectorAll('.guide-sidebar a[href^="#"]');
+  var sections=[];
+  links.forEach(function(a){var t=document.querySelector(a.getAttribute('href'));if(t)sections.push({el:t,link:a})});
+  window.addEventListener('scroll',function(){
+    var scrollPos=window.scrollY+100;
+    var active=null;
+    sections.forEach(function(s){if(s.el.offsetTop<=scrollPos)active=s});
+    links.forEach(function(a){a.classList.remove('active')});
+    if(active)active.link.classList.add('active');
+  });
+})();
+</script>
 
 <div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
   <div style="text-align:center;max-width:360px;padding:24px;">

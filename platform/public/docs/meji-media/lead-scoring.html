@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meji Media &ndash; Lead Scoring &amp; Priority System</title>
+<style>
+:root {
+  --bg: #f8fafc; --surface: #ffffff; --surface2: #f1f5f9; --border: #e2e8f0;
+  --text: #0f172a; --text2: #475569; --text3: #94a3b8;
+  --blue: #2563eb; --blue-light: #dbeafe; --blue-dark: #1e40af;
+  --green: #16a34a; --green-light: #dcfce7;
+  --amber: #d97706; --amber-light: #fef3c7;
+  --purple: #7c3aed; --purple-light: #ede9fe;
+  --red: #dc2626; --red-light: #fee2e2;
+  --shadow: 0 1px 3px rgba(0,0,0,.08); --shadow-md: 0 4px 6px rgba(0,0,0,.07);
+  --nav-bg: #ffffff;
+}
+[data-theme="dark"] {
+  --bg: #0f172a; --surface: #1e293b; --surface2: #0f172a; --border: #334155;
+  --text: #f1f5f9; --text2: #94a3b8; --text3: #475569;
+  --blue: #3b82f6; --blue-light: #1e3a5f; --blue-dark: #93c5fd;
+  --green: #22c55e; --green-light: #14532d;
+  --amber: #f59e0b; --amber-light: #451a03;
+  --purple: #a78bfa; --purple-light: #2e1065;
+  --red: #f87171; --red-light: #450a0a;
+  --shadow: 0 1px 3px rgba(0,0,0,.3); --shadow-md: 0 4px 6px rgba(0,0,0,.4);
+  --nav-bg: #1e293b;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg); color: var(--text);
+  font-size: 15px; line-height: 1.6; min-height: 100vh;
+  transition: background .2s, color .2s;
+  padding-top: 56px;
+}
+
+/* Nav (same as ab-testing) */
+.doc-nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+  background: var(--nav-bg); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; height: 56px; box-shadow: var(--shadow); transition: background .2s;
+}
+.doc-nav-left { display: flex; align-items: center; gap: 12px; }
+.doc-nav-logo { width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(135deg, #2563eb, #7c3aed); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 14px; }
+.doc-nav-brand { font-size: 14px; font-weight: 700; color: var(--text); }
+.doc-nav-sep { color: var(--border); font-size: 18px; }
+.doc-nav-links { display: flex; gap: 4px; }
+.doc-nav-links a { font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px; color: var(--text2); text-decoration: none; transition: background .15s, color .15s; }
+.doc-nav-links a:hover { background: var(--surface2); color: var(--text); }
+.doc-nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.doc-nav-right { display: flex; align-items: center; gap: 8px; }
+.doc-nav-theme { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 13px; color: var(--text2); }
+.doc-nav-theme:hover { background: var(--border); }
+.doc-nav-status { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; background: var(--green-light); color: var(--green); }
+.doc-nav-status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1}50%{opacity:.5} }
+@media (max-width: 640px) { .doc-nav { padding: 0 12px; } .doc-nav-brand, .doc-nav-sep { display: none; } .doc-nav-links a { padding: 6px 8px; font-size: 12px; } }
+
+/* Content */
+.main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+.hero {
+  background: linear-gradient(135deg, var(--amber), #dc2626);
+  border-radius: 16px; padding: 48px 40px; color: #fff; margin-bottom: 40px;
+}
+.hero h1 { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+.hero p { font-size: 16px; opacity: .9; max-width: 600px; }
+.section { margin-bottom: 48px; }
+.section-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text3); margin-bottom: 16px; }
+h2 { font-size: 20px; font-weight: 700; margin-bottom: 12px; }
+h3 { font-size: 16px; font-weight: 600; margin: 20px 0 8px; }
+p, li { margin-bottom: 8px; }
+code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-size: 13px; color: var(--amber); }
+a { color: var(--blue); }
+
+/* Flow diagram */
+.scoring-flow {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  padding: 32px; margin: 24px 0;
+}
+.scoring-flow-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text3); margin-bottom: 20px; }
+
+.scoring-pipeline { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; justify-content: center; }
+.scoring-stage {
+  flex: 1; min-width: 140px; max-width: 200px;
+  border: 2px solid var(--border); border-radius: 12px;
+  padding: 16px; text-align: center; position: relative;
+}
+.scoring-arrow {
+  display: flex; align-items: center; padding: 0 8px;
+  font-size: 24px; color: var(--text3);
+}
+.scoring-stage-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
+.scoring-stage-content { font-size: 13px; color: var(--text2); }
+.scoring-stage-input { border-color: var(--blue); background: var(--blue-light); }
+.scoring-stage-input .scoring-stage-label { color: var(--blue); }
+.scoring-stage-engine { border-color: var(--purple); background: var(--purple-light); }
+.scoring-stage-engine .scoring-stage-label { color: var(--purple); }
+.scoring-stage-output { border-color: var(--green); background: var(--green-light); }
+.scoring-stage-output .scoring-stage-label { color: var(--green); }
+
+/* Priority cards */
+.priority-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+.priority-card {
+  border-radius: 12px; padding: 24px;
+  border: 2px solid var(--border);
+}
+.priority-card-hot { border-color: var(--red); background: var(--red-light); }
+.priority-card-warm { border-color: var(--amber); background: var(--amber-light); }
+.priority-card-standard { border-color: var(--blue); background: var(--blue-light); }
+.priority-card h3 { margin: 0 0 4px; font-size: 18px; }
+.priority-card-hot h3 { color: var(--red); }
+.priority-card-warm h3 { color: var(--amber); }
+.priority-card-standard h3 { color: var(--blue); }
+.priority-card .score { font-size: 24px; font-weight: 800; margin-bottom: 8px; }
+.priority-card-hot .score { color: var(--red); }
+.priority-card-warm .score { color: var(--amber); }
+.priority-card-standard .score { color: var(--blue); }
+.priority-card p { font-size: 13px; color: var(--text2); margin: 0; }
+
+/* Table */
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+th { background: var(--amber); color: #fff; text-align: left; padding: 10px 14px; font-weight: 600; }
+[data-theme="dark"] th { background: #92400e; }
+td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:nth-child(even) td { background: var(--surface2); }
+
+/* Example scenarios */
+.example {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 20px; margin-bottom: 12px; display: flex; gap: 16px; align-items: flex-start;
+}
+.example-badge {
+  flex-shrink: 0; padding: 4px 12px; border-radius: 8px;
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+}
+.example-hot .example-badge { background: var(--red-light); color: var(--red); }
+.example-warm .example-badge { background: var(--amber-light); color: var(--amber); }
+.example-standard .example-badge { background: var(--blue-light); color: var(--blue); }
+.example-info h4 { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+.example-info p { font-size: 13px; color: var(--text2); margin: 0; }
+
+/* Tuning guide */
+.tuning-item {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 20px; margin-bottom: 12px;
+}
+.tuning-item h4 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+.tuning-item p { font-size: 14px; color: var(--text2); margin: 0; }
+.tuning-item code { font-size: 12px; }
+
+.footer { text-align: center; padding: 32px 24px; font-size: 13px; color: var(--text3); border-top: 1px solid var(--border); }
+.footer a { color: var(--blue); text-decoration: none; }
+
+@media (max-width: 640px) {
+  .hero { padding: 32px 24px; } .hero h1 { font-size: 22px; }
+  .main { padding: 24px 16px 60px; }
+  .scoring-pipeline { flex-direction: column; align-items: center; }
+  .scoring-arrow { transform: rotate(90deg); padding: 4px 0; }
+}
+</style>
+</head>
+<body>
+
+<nav class="doc-nav">
+  <div class="doc-nav-left">
+    <div class="doc-nav-logo">U</div>
+    <span class="doc-nav-brand">Meji Media</span>
+    <span class="doc-nav-sep">|</span>
+    <div class="doc-nav-links">
+      <a href="/docs/meji-media/">Hub</a>
+      <a href="/docs/meji-media/guide">Guide</a>
+      <a href="/docs/meji-media/ab-testing">A/B Testing</a>
+      <a href="/docs/meji-media/lead-scoring" class="active">Scoring</a>
+      <a href="/docs/meji-media/system-overview">Overview</a>
+    </div>
+  </div>
+  <div class="doc-nav-right">
+    <span class="doc-nav-status"><span class="doc-nav-status-dot"></span> Live</span>
+    <button class="doc-nav-theme" onclick="toggleTheme()" id="theme-btn">&#9790; Theme</button>
+  </div>
+</nav>
+
+<div class="main">
+
+  <div class="hero">
+    <h1>Lead Scoring &amp; Priority System</h1>
+    <p>Every enquiry gets an automatic score that determines priority, email timing, and whether your team gets an immediate notification. Here's how it works and how to tune it.</p>
+  </div>
+
+  <!-- How Scoring Works -->
+  <div class="section">
+    <div class="section-title">How Scoring Works</div>
+    <div class="scoring-flow">
+      <div class="scoring-flow-title">Scoring Pipeline</div>
+      <div class="scoring-pipeline">
+        <div class="scoring-stage scoring-stage-input">
+          <div class="scoring-stage-label">Enquiry Data</div>
+          <div class="scoring-stage-content">Name, email, phone, topic, organisation, message</div>
+        </div>
+        <div class="scoring-arrow">&rarr;</div>
+        <div class="scoring-stage scoring-stage-engine">
+          <div class="scoring-stage-label">Scoring Engine</div>
+          <div class="scoring-stage-content">Weighted factors are summed to produce a numeric score</div>
+        </div>
+        <div class="scoring-arrow">&rarr;</div>
+        <div class="scoring-stage scoring-stage-output">
+          <div class="scoring-stage-label">Priority Assignment</div>
+          <div class="scoring-stage-content">Hot (50+), Warm (25-49), Standard (&lt;25)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Priority Tiers -->
+  <div class="section">
+    <div class="section-title">Priority Tiers</div>
+    <div class="priority-cards">
+      <div class="priority-card priority-card-hot">
+        <div class="score">50+</div>
+        <h3>Hot Lead</h3>
+        <p>Your team gets an instant email notification with full details. The enquirer receives a personalised acknowledgement. <strong>No automated follow-ups</strong> -- your team handles this directly.</p>
+      </div>
+      <div class="priority-card priority-card-warm">
+        <div class="score">25-49</div>
+        <h3>Warm Lead</h3>
+        <p>Standard acknowledgement email sent immediately. Follow-ups sent on a <strong>faster schedule</strong> (12h, then 48h). Higher chance of conversion.</p>
+      </div>
+      <div class="priority-card priority-card-standard">
+        <div class="score">&lt; 25</div>
+        <h3>Standard Lead</h3>
+        <p>Standard acknowledgement email. Follow-ups on the <strong>regular schedule</strong> (24h, then 72h). Still fully automated with AI-personalised emails.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scoring Weights -->
+  <div class="section">
+    <div class="section-title">Scoring Weights</div>
+    <p>Each factor adds points to the lead score. These are configurable in Pipeline Config.</p>
+    <table>
+      <thead>
+        <tr><th>Factor</th><th>Field</th><th>Points</th><th>What It Measures</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Has phone number</td><td><code>weight_has_phone</code></td><td>+10</td><td>Provided a phone number (signals higher intent)</td></tr>
+        <tr><td>Has organisation</td><td><code>weight_has_org</code></td><td>+10</td><td>Corporate enquiry rather than personal</td></tr>
+        <tr><td>Message length</td><td><code>weight_message_length</code></td><td>+5 to +15</td><td>Longer messages signal more serious interest</td></tr>
+        <tr><td>Topic match</td><td><code>weight_topic_match</code></td><td>+10 to +20</td><td>High-value topics (corporate events, large parties)</td></tr>
+        <tr><td>Organisation size indicators</td><td><code>weight_org_size</code></td><td>+5 to +15</td><td>Keywords suggesting larger events or companies</td></tr>
+        <tr><td>Urgency signals</td><td><code>weight_urgency</code></td><td>+5 to +10</td><td>Time-sensitive language ("next week", "urgent")</td></tr>
+      </tbody>
+    </table>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-top:16px;">
+      <p style="margin:0;font-size:14px;color:var(--text2);">
+        <strong style="color:var(--text);">How scores add up:</strong> A corporate enquiry with a phone number, detailed message about a Christmas party for 200 people might score: 10 (phone) + 10 (org) + 15 (message length) + 20 (topic) + 10 (org size) = 65 &rarr; <strong>Hot lead</strong>.
+      </p>
+    </div>
+  </div>
+
+  <!-- Example Scenarios -->
+  <div class="section">
+    <div class="section-title">Example Scenarios</div>
+    <div class="example example-hot">
+      <span class="example-badge">Hot</span>
+      <div class="example-info">
+        <h4>"Corporate Christmas party for 200 staff at the Birmingham venue"</h4>
+        <p>Score ~65: has org name, detailed message, high-value topic, large group size. Team notified immediately.</p>
+      </div>
+    </div>
+    <div class="example example-warm">
+      <span class="example-badge">Warm</span>
+      <div class="example-info">
+        <h4>"Hi, interested in booking a party for about 30 people in December"</h4>
+        <p>Score ~35: moderate detail, mentions group size, no phone or org. Gets faster follow-ups.</p>
+      </div>
+    </div>
+    <div class="example example-standard">
+      <span class="example-badge">Standard</span>
+      <div class="example-info">
+        <h4>"How much does it cost?"</h4>
+        <p>Score ~10: short message, no org, no phone, generic topic. Gets standard follow-up cadence.</p>
+      </div>
+    </div>
+    <div class="example example-hot">
+      <span class="example-badge">Hot</span>
+      <div class="example-info">
+        <h4>"Jess Harrar from XYZ Corp, 07700900000, need to book the Wolverhampton venue urgently for our team event"</h4>
+        <p>Score ~75: phone number, organisation, urgency, venue-specific, contact name. Immediate team notification + personalised email.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tuning Guide -->
+  <div class="section">
+    <div class="section-title">Tuning Guide</div>
+    <div class="tuning-item">
+      <h4>Getting too many "hot" notifications?</h4>
+      <p>Raise <code>handoff_threshold</code> from 50 to 60 or 70. Only the highest-quality leads will trigger team notifications.</p>
+    </div>
+    <div class="tuning-item">
+      <h4>Missing valuable leads?</h4>
+      <p>Lower <code>handoff_threshold</code> from 50 to 40 or 35. More leads will trigger notifications, but there will be more noise.</p>
+    </div>
+    <div class="tuning-item">
+      <h4>Phone numbers should matter more?</h4>
+      <p>Increase <code>weight_has_phone</code> from 10 to 15 or 20. Leads with phone numbers will score higher.</p>
+    </div>
+    <div class="tuning-item">
+      <h4>Want to disable team notifications entirely?</h4>
+      <p>Set <code>handoff_enabled</code> to <code>false</code>. All leads will go through the automated follow-up sequence regardless of score.</p>
+    </div>
+    <div class="tuning-item">
+      <h4>Want to change who gets notified?</h4>
+      <p>Edit <code>handoff_email</code> -- comma-separated list of email addresses. Currently: gurmej@mejimedia.com, enquire@christmasofficeparty.co.uk.</p>
+    </div>
+  </div>
+
+  <!-- Config Reference -->
+  <div class="section">
+    <div class="section-title">Configuration Quick Reference</div>
+    <table>
+      <thead>
+        <tr><th>Setting</th><th>Field</th><th>Current Value</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Hot lead threshold</td><td><code>handoff_threshold</code></td><td>50</td></tr>
+        <tr><td>Handoff enabled</td><td><code>handoff_enabled</code></td><td>true</td></tr>
+        <tr><td>Notification emails</td><td><code>handoff_email</code></td><td>gurmej@mejimedia.com, enquire@christmasofficeparty.co.uk</td></tr>
+        <tr><td>Phone weight</td><td><code>weight_has_phone</code></td><td>10</td></tr>
+        <tr><td>Organisation weight</td><td><code>weight_has_org</code></td><td>10</td></tr>
+        <tr><td>Message length weight</td><td><code>weight_message_length</code></td><td>5-15 (scaled)</td></tr>
+        <tr><td>Topic match weight</td><td><code>weight_topic_match</code></td><td>10-20 (scaled)</td></tr>
+      </tbody>
+    </table>
+    <p style="font-size:13px;color:var(--text2);margin-top:12px;">
+      All settings in <a href="https://eu2.make.com" target="_blank">eu2.make.com</a> &rarr; Data Stores &rarr; Pipeline Config &rarr; "main" record.
+    </p>
+  </div>
+
+</div>
+
+<footer class="footer">
+  <p>Built and maintained by <a href="https://unpauseai.com" target="_blank">UnpauseAI</a></p>
+  <p style="margin-top:4px;">Last updated: 23 March 2026</p>
+</footer>
+
+<!-- Auth gate -->
+<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
+  <div style="text-align:center;max-width:360px;padding:24px;">
+    <div style="width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:24px;margin:0 auto 20px;">U</div>
+    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Meji Media Documentation</h2>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Enter your access code to continue.</p>
+    <div style="display:flex;gap:8px;">
+      <input id="auth-input" type="password" placeholder="Access code" autocomplete="off"
+        style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;"
+        onkeydown="if(event.key==='Enter')checkAuth()" />
+      <button onclick="checkAuth()"
+        style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">Enter</button>
+    </div>
+    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Incorrect code. Please try again.</p>
+  </div>
+</div>
+
+<script>
+var MEJI_CODE='meji2026';
+function checkAuth(){var i=document.getElementById('auth-input').value;if(i===MEJI_CODE){localStorage.setItem('meji-docs-access','granted');var g=document.getElementById('auth-gate');g.style.opacity='0';setTimeout(function(){g.style.display='none'},300)}else{document.getElementById('auth-error').style.display='block';document.getElementById('auth-input').value='';document.getElementById('auth-input').focus()}}
+(function(){if(localStorage.getItem('meji-docs-access')==='granted'){document.getElementById('auth-gate').style.display='none'}else{document.getElementById('auth-input').focus()}})();
+function toggleTheme(){var h=document.documentElement;var n=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('meji-docs-theme',n);document.getElementById('theme-btn').innerHTML=n==='dark'?'&#9788; Theme':'&#9790; Theme'}
+(function(){var s=localStorage.getItem('meji-docs-theme');if(s){document.documentElement.setAttribute('data-theme',s);if(s==='dark')document.getElementById('theme-btn').innerHTML='&#9788; Theme'}})();
+</script>
+
+</body>
+</html>
