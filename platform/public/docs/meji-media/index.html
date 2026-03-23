@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meji Media &ndash; Automation Documentation</title>
+<style>
+:root {
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface2: #f1f5f9;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --text2: #475569;
+  --text3: #94a3b8;
+  --blue: #2563eb;
+  --blue-light: #dbeafe;
+  --blue-dark: #1e40af;
+  --green: #16a34a;
+  --green-light: #dcfce7;
+  --amber: #d97706;
+  --amber-light: #fef3c7;
+  --purple: #7c3aed;
+  --purple-light: #ede9fe;
+  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05);
+  --shadow-md: 0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.05);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,.1), 0 4px 6px rgba(0,0,0,.05);
+}
+[data-theme="dark"] {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface2: #0f172a;
+  --border: #334155;
+  --text: #f1f5f9;
+  --text2: #94a3b8;
+  --text3: #475569;
+  --blue: #3b82f6;
+  --blue-light: #1e3a5f;
+  --blue-dark: #93c5fd;
+  --green: #22c55e;
+  --green-light: #14532d;
+  --amber: #f59e0b;
+  --amber-light: #451a03;
+  --purple: #a78bfa;
+  --purple-light: #2e1065;
+  --shadow: 0 1px 3px rgba(0,0,0,.3);
+  --shadow-md: 0 4px 6px rgba(0,0,0,.4);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,.5);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.6;
+  min-height: 100vh;
+  transition: background .2s, color .2s;
+}
+
+/* Header */
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 24px 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: var(--shadow);
+}
+.header-left { display: flex; align-items: center; gap: 16px; }
+.header-logo {
+  width: 40px; height: 40px; border-radius: 10px;
+  background: linear-gradient(135deg, var(--blue), var(--purple));
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 800; font-size: 18px;
+}
+.header-title h1 { font-size: 18px; font-weight: 700; color: var(--text); }
+.header-title p { font-size: 13px; color: var(--text2); margin-top: 1px; }
+.header-right { display: flex; align-items: center; gap: 12px; }
+
+.theme-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text2);
+  display: flex; align-items: center; gap: 6px;
+  transition: background .15s;
+}
+.theme-btn:hover { background: var(--border); }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.badge-green { background: var(--green-light); color: var(--green); }
+.badge-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.5; } }
+
+/* Main */
+.main { max-width: 960px; margin: 0 auto; padding: 40px 24px 80px; }
+
+/* Hero */
+.hero {
+  background: linear-gradient(135deg, var(--blue), var(--purple));
+  border-radius: 16px;
+  padding: 48px 40px;
+  color: #fff;
+  margin-bottom: 40px;
+  box-shadow: var(--shadow-lg);
+}
+.hero h2 { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+.hero p { font-size: 16px; opacity: .9; max-width: 600px; line-height: 1.5; }
+.hero-stats {
+  display: flex; gap: 32px; margin-top: 24px; flex-wrap: wrap;
+}
+.hero-stat { text-align: left; }
+.hero-stat-value { font-size: 24px; font-weight: 800; }
+.hero-stat-label { font-size: 12px; opacity: .8; text-transform: uppercase; letter-spacing: .05em; }
+
+/* Section */
+.section { margin-bottom: 40px; }
+.section-title {
+  font-size: 13px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--text3); margin-bottom: 16px;
+}
+
+/* Cards grid */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  transition: box-shadow .15s, transform .15s;
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+.card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+.card-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; margin-bottom: 12px;
+}
+.card-icon-blue { background: var(--blue-light); color: var(--blue); }
+.card-icon-green { background: var(--green-light); color: var(--green); }
+.card-icon-amber { background: var(--amber-light); color: var(--amber); }
+.card-icon-purple { background: var(--purple-light); color: var(--purple); }
+
+.card h3 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.card p { font-size: 13px; color: var(--text2); line-height: 1.5; }
+.card-tag {
+  display: inline-block;
+  font-size: 11px; font-weight: 600; padding: 2px 8px;
+  border-radius: 20px; margin-top: 12px;
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.card-tag-live { background: var(--green-light); color: var(--green); }
+.card-tag-link { background: var(--blue-light); color: var(--blue); }
+
+/* Automation row */
+.auto-list { display: flex; flex-direction: column; gap: 12px; }
+.auto-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.auto-id {
+  font-size: 14px; font-weight: 800; color: var(--blue);
+  background: var(--blue-light);
+  border-radius: 8px;
+  padding: 6px 12px;
+  white-space: nowrap;
+}
+.auto-info { flex: 1; }
+.auto-info h4 { font-size: 15px; font-weight: 600; }
+.auto-info p { font-size: 13px; color: var(--text2); margin-top: 2px; }
+.auto-status {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 20px;
+  font-size: 12px; font-weight: 600;
+  background: var(--green-light); color: var(--green);
+  white-space: nowrap;
+}
+.auto-status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+
+/* Timeline */
+.timeline { position: relative; padding-left: 28px; }
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 8px; top: 4px; bottom: 4px;
+  width: 2px;
+  background: var(--border);
+}
+.timeline-item { position: relative; margin-bottom: 20px; }
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -24px; top: 6px;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--blue);
+  border: 2px solid var(--surface);
+}
+.timeline-date { font-size: 12px; font-weight: 600; color: var(--text3); margin-bottom: 2px; }
+.timeline-text { font-size: 14px; color: var(--text); }
+.timeline-detail { font-size: 13px; color: var(--text2); margin-top: 2px; }
+
+/* Config table */
+.config-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.config-table th {
+  background: var(--blue);
+  color: #fff;
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.config-table td {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  vertical-align: top;
+}
+.config-table tr:last-child td { border-bottom: none; }
+.config-table tr:nth-child(even) td { background: var(--surface2); }
+
+/* Footer */
+.footer {
+  text-align: center;
+  padding: 32px 24px;
+  font-size: 13px;
+  color: var(--text3);
+  border-top: 1px solid var(--border);
+}
+.footer a { color: var(--blue); text-decoration: none; }
+.footer a:hover { text-decoration: underline; }
+
+/* Responsive */
+@media (max-width: 640px) {
+  .header { padding: 16px 20px; flex-wrap: wrap; gap: 8px; }
+  .hero { padding: 32px 24px; }
+  .hero h2 { font-size: 22px; }
+  .hero-stats { gap: 20px; }
+  .main { padding: 24px 16px 60px; }
+  .auto-item { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-left">
+    <div class="header-logo">U</div>
+    <div class="header-title">
+      <h1>Meji Media</h1>
+      <p>Automation Documentation</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <span class="badge badge-green"><span class="badge-dot"></span> All Systems Live</span>
+    <button class="theme-btn" onclick="toggleTheme()">
+      <span id="theme-icon">&#9790;</span> Theme
+    </button>
+  </div>
+</header>
+
+<!-- Main Content -->
+<div class="main">
+
+  <!-- Hero -->
+  <div class="hero">
+    <h2>Your Automated Follow-Up System</h2>
+    <p>Your enquiry follow-up pipeline runs 24/7. New enquiries are scored, emailed automatically, followed up on schedule, and closed when cold -- all without manual work.</p>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <div class="hero-stat-value">4</div>
+        <div class="hero-stat-label">Automations Live</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value">24/7</div>
+        <div class="hero-stat-label">Monitoring</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value">&lt; 30s</div>
+        <div class="hero-stat-label">Response Time</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Documentation -->
+  <div class="section">
+    <div class="section-title">Documentation</div>
+    <div class="cards">
+      <a href="guide.html" class="card">
+        <div class="card-icon card-icon-blue">&#128214;</div>
+        <h3>Complete Guide</h3>
+        <p>Everything about your system: how it works, email templates, lead scoring, configuration options, troubleshooting, and A/B testing.</p>
+        <span class="card-tag card-tag-link">Open Guide</span>
+      </a>
+      <a href="system-overview.html" class="card">
+        <div class="card-icon card-icon-purple">&#128200;</div>
+        <h3>System Overview</h3>
+        <p>Visual map of your entire automation pipeline. See how data flows from enquiry to follow-up, with every automation and connection shown.</p>
+        <span class="card-tag card-tag-link">View Diagram</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Live Automations -->
+  <div class="section">
+    <div class="section-title">Live Automations</div>
+    <div class="auto-list">
+      <div class="auto-item">
+        <div class="auto-id">A0</div>
+        <div class="auto-info">
+          <h4>MySQL Enquiry Poller</h4>
+          <p>Polls your website database every 30 minutes for new enquiries and feeds them into the pipeline.</p>
+        </div>
+        <div class="auto-status"><span class="auto-status-dot"></span> Live</div>
+      </div>
+      <div class="auto-item">
+        <div class="auto-id">A1</div>
+        <div class="auto-info">
+          <h4>Enquiry Follow-Up Sequence</h4>
+          <p>Instantly logs the enquiry, scores the lead, and sends the first personalised email. Hot leads trigger a team notification.</p>
+        </div>
+        <div class="auto-status"><span class="auto-status-dot"></span> Live</div>
+      </div>
+      <div class="auto-item">
+        <div class="auto-id">A2</div>
+        <div class="auto-info">
+          <h4>Reply Detection &amp; Stop</h4>
+          <p>Checks the inbox every 10 minutes. When a reply is detected, follow-ups stop automatically.</p>
+        </div>
+        <div class="auto-status"><span class="auto-status-dot"></span> Live</div>
+      </div>
+      <div class="auto-item">
+        <div class="auto-id">A3</div>
+        <div class="auto-info">
+          <h4>Scheduled Follow-Up Steps</h4>
+          <p>Sends timed follow-up emails (Step 2, Step 3) based on lead priority. Marks enquiries as cold after the grace period.</p>
+        </div>
+        <div class="auto-status"><span class="auto-status-dot"></span> Live</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Configuration -->
+  <div class="section">
+    <div class="section-title">Where to Edit &amp; Configure</div>
+    <table class="config-table">
+      <thead>
+        <tr>
+          <th>What</th>
+          <th>Where</th>
+          <th>How</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Email templates</strong><br><span style="font-size:13px;color:var(--text2)">Subject lines, body text, variants</span></td>
+          <td>Make.com &rarr; Data Stores &rarr; Email Templates</td>
+          <td>Click any template, edit <code>subject</code> or <code>body_html</code>, save. Changes take effect immediately.</td>
+        </tr>
+        <tr>
+          <td><strong>Follow-up timing</strong><br><span style="font-size:13px;color:var(--text2)">Hours between emails per priority</span></td>
+          <td>Make.com &rarr; Data Stores &rarr; Pipeline Config</td>
+          <td>Edit <code>cadence_hot_step2</code>, <code>cadence_warm_step2</code>, etc. Values are in hours.</td>
+        </tr>
+        <tr>
+          <td><strong>Lead scoring</strong><br><span style="font-size:13px;color:var(--text2)">Hot/warm/standard thresholds</span></td>
+          <td>Make.com &rarr; Data Stores &rarr; Pipeline Config</td>
+          <td>Adjust <code>handoff_threshold</code> (default: 50) and <code>weight_*</code> fields.</td>
+        </tr>
+        <tr>
+          <td><strong>Handoff notifications</strong><br><span style="font-size:13px;color:var(--text2)">Who gets notified for hot leads</span></td>
+          <td>Make.com &rarr; Data Stores &rarr; Pipeline Config</td>
+          <td>Edit <code>handoff_email</code> field. Comma-separated for multiple recipients.</td>
+        </tr>
+        <tr>
+          <td><strong>A/B testing</strong><br><span style="font-size:13px;color:var(--text2)">Enable/disable email split testing</span></td>
+          <td>Make.com &rarr; Data Stores &rarr; Pipeline Config</td>
+          <td>Set <code>ab_testing_enabled</code> to <code>true</code> or <code>false</code>.</td>
+        </tr>
+        <tr>
+          <td><strong>Venue templates</strong><br><span style="font-size:13px;color:var(--text2)">Per-venue email personalisation</span></td>
+          <td>Make.com &rarr; Data Stores &rarr; MM - Venue Config</td>
+          <td>Edit venue-specific fields (features, tiers, phone, dates). 3 venues configured.</td>
+        </tr>
+        <tr>
+          <td><strong>AI personalisation</strong><br><span style="font-size:13px;color:var(--text2)">Toggle AI-generated email openers</span></td>
+          <td>Make.com &rarr; Data Stores &rarr; Pipeline Config</td>
+          <td>Set <code>ai_enabled</code> to <code>true</code>/<code>false</code>. Model: <code>ai_model</code> field.</td>
+        </tr>
+        <tr>
+          <td><strong>Email signature</strong><br><span style="font-size:13px;color:var(--text2)">Footer on all automated emails</span></td>
+          <td>Make.com &rarr; Data Stores &rarr; Pipeline Config</td>
+          <td>Edit <code>email_signature_html</code>. Updates all templates at once.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="font-size:13px;color:var(--text2);margin-top:12px;">
+      All configuration is in <a href="https://eu2.make.com" target="_blank" rel="noopener" style="color:var(--blue)">eu2.make.com</a>.
+      If you need help making changes, contact your automation specialist.
+    </p>
+  </div>
+
+  <!-- Recent Changes -->
+  <div class="section">
+    <div class="section-title">Recent Changes</div>
+    <div class="timeline">
+      <div class="timeline-item">
+        <div class="timeline-date">23 March 2026</div>
+        <div class="timeline-text">BCC configuration fix</div>
+        <div class="timeline-detail">Fixed developer BCC on Module 54 (initial email for standard leads). All 5 email-sending modules now correctly BCC the developer address for monitoring.</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-date">23 March 2026</div>
+        <div class="timeline-text">Weekend health check -- all 4 automations healthy</div>
+        <div class="timeline-detail">Verified A0 (poller), A1 (follow-up), A2 (reply detection), A3 (scheduled steps) all running correctly.</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-date">19 March 2026</div>
+        <div class="timeline-text">Full go-live</div>
+        <div class="timeline-detail">All 4 automations activated on production. Gmail switched to enquire@christmasofficeparty.co.uk. Google Sheets connected to gurmej@mejimedia.com.</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-date">19 March 2026</div>
+        <div class="timeline-text">Scheduling optimisation</div>
+        <div class="timeline-detail">A0 interval: 15min to 30min. A2 interval: 5min to 10min. Projected usage fits within 30,000 ops/month budget with 10% buffer.</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-date">17 March 2026</div>
+        <div class="timeline-text">A0 MySQL Poller deployed</div>
+        <div class="timeline-detail">New automation added: polls christmasofficeparty.co.uk MySQL database for enquiries and feeds them into the pipeline. Cursor-based deduplication ensures no duplicates.</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-date">14 March 2026</div>
+        <div class="timeline-text">Venue-specific email templates</div>
+        <div class="timeline-detail">Added per-venue configuration for Birmingham, Wolverhampton, and Leicester. Emails now reference venue-specific features, tiers, and contact details.</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-date">14 March 2026</div>
+        <div class="timeline-text">A/B email testing system</div>
+        <div class="timeline-detail">Built A/B split testing infrastructure. Each enquiry randomly assigned to Group A or B. AB_Analytics tab in spreadsheet tracks reply rates per variant.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- How It Works (brief) -->
+  <div class="section">
+    <div class="section-title">How It Works</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;line-height:1.7;">
+      <p style="margin-bottom:16px;">Three automations work together, powered by <a href="https://eu2.make.com" target="_blank" rel="noopener" style="color:var(--blue)">Make.com</a>:</p>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+        <span style="background:var(--blue-light);color:var(--blue);padding:6px 14px;border-radius:8px;font-weight:700;font-size:14px;">A0 Poller</span>
+        <span style="color:var(--text3);">&rarr;</span>
+        <span style="background:var(--blue-light);color:var(--blue);padding:6px 14px;border-radius:8px;font-weight:700;font-size:14px;">A1 First Email</span>
+        <span style="color:var(--text3);">&rarr;</span>
+        <span style="background:var(--green-light);color:var(--green);padding:6px 14px;border-radius:8px;font-weight:700;font-size:14px;">A2 Reply Check</span>
+        <span style="color:var(--text3);">&rarr;</span>
+        <span style="background:var(--amber-light);color:var(--amber);padding:6px 14px;border-radius:8px;font-weight:700;font-size:14px;">A3 Follow-Ups</span>
+      </div>
+      <ol style="padding-left:20px;font-size:14px;color:var(--text2);">
+        <li style="margin-bottom:6px;"><strong style="color:var(--text);">A0</strong> polls your website database every 30 minutes for new enquiries</li>
+        <li style="margin-bottom:6px;"><strong style="color:var(--text);">A1</strong> instantly logs the enquiry, scores the lead, and sends the first email</li>
+        <li style="margin-bottom:6px;"><strong style="color:var(--text);">A2</strong> checks the inbox every 10 minutes -- if they reply, follow-ups stop</li>
+        <li><strong style="color:var(--text);">A3</strong> sends scheduled follow-ups and closes cold leads after ~9 days</li>
+      </ol>
+      <p style="margin-top:16px;font-size:13px;color:var(--text3);">For the full visual diagram, see <a href="system-overview.html" style="color:var(--blue)">System Overview</a>.</p>
+    </div>
+  </div>
+
+  <!-- Support -->
+  <div class="section">
+    <div class="section-title">Support</div>
+    <div class="cards" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));">
+      <div class="card">
+        <div class="card-icon card-icon-green">&#128172;</div>
+        <h3>Request a Change</h3>
+        <p>Need to adjust timing, templates, or scoring? Message your automation specialist via Upwork or email.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon card-icon-amber">&#128736;</div>
+        <h3>Report an Issue</h3>
+        <p>Emails not sending? Enquiries missing? Check the troubleshooting section in the Complete Guide, or contact support.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Footer -->
+<footer class="footer">
+  <p>Built and maintained by <a href="https://unpauseai.com" target="_blank" rel="noopener">UnpauseAI</a></p>
+  <p style="margin-top:4px;">Last updated: 23 March 2026</p>
+</footer>
+
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute('data-theme');
+  const next = current === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('theme', next);
+  document.getElementById('theme-icon').innerHTML = next === 'dark' ? '&#9788;' : '&#9790;';
+}
+
+// Restore theme
+const saved = localStorage.getItem('theme');
+if (saved) {
+  document.documentElement.setAttribute('data-theme', saved);
+  if (saved === 'dark') document.getElementById('theme-icon').innerHTML = '&#9788;';
+}
+</script>
+
+</body>
+</html>

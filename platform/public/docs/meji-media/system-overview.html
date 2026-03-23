@@ -1,0 +1,1408 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meji Media &ndash; System Overview</title>
+<style>
+:root {
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface2: #f1f5f9;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --text2: #475569;
+  --text3: #94a3b8;
+  --blue: #2563eb;
+  --blue-light: #dbeafe;
+  --blue-dark: #1e40af;
+  --green: #16a34a;
+  --green-light: #dcfce7;
+  --amber: #d97706;
+  --amber-light: #fef3c7;
+  --purple: #7c3aed;
+  --purple-light: #ede9fe;
+  --red: #dc2626;
+  --red-light: #fee2e2;
+  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05);
+  --shadow-md: 0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.05);
+  --sidebar-width: 200px;
+}
+[data-theme="dark"] {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface2: #0f172a;
+  --border: #334155;
+  --text: #f1f5f9;
+  --text2: #94a3b8;
+  --text3: #475569;
+  --blue: #3b82f6;
+  --blue-light: #1e3a5f;
+  --blue-dark: #93c5fd;
+  --green: #22c55e;
+  --green-light: #14532d;
+  --amber: #f59e0b;
+  --amber-light: #451a03;
+  --purple: #a78bfa;
+  --purple-light: #2e1065;
+  --red: #f87171;
+  --red-light: #450a0a;
+  --shadow: 0 1px 3px rgba(0,0,0,.3);
+  --shadow-md: 0 4px 6px rgba(0,0,0,.4);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+  transition: background .2s, color .2s;
+}
+
+/* ── Header ── */
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 20px 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: var(--shadow);
+}
+.header-left h1 { font-size: 20px; font-weight: 700; color: var(--text); }
+.header-left p { font-size: 13px; color: var(--text2); margin-top: 2px; }
+.header-right { display: flex; align-items: center; gap: 16px; }
+
+.theme-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text2);
+  display: flex; align-items: center; gap: 6px;
+  transition: background .15s;
+}
+.theme-btn:hover { background: var(--border); }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.badge-green { background: var(--green-light); color: var(--green); }
+.badge-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.5; } }
+
+/* ── Sidebar ── */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--sidebar-width);
+  height: 100vh;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  z-index: 150;
+  padding-top: 80px;
+  overflow-y: auto;
+  transition: transform .25s ease;
+}
+.sidebar-nav { list-style: none; padding: 12px 0; }
+.sidebar-nav li { margin: 0; }
+.sidebar-nav a {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text2);
+  text-decoration: none;
+  border-left: 3px solid transparent;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.sidebar-nav a:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+.sidebar-nav a.active {
+  background: var(--blue-light);
+  color: var(--blue-dark);
+  border-left-color: var(--blue);
+  font-weight: 700;
+}
+.sidebar-nav .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+
+/* ── Layout with sidebar ── */
+.header { padding-left: calc(var(--sidebar-width) + 40px); }
+.page-layout { margin-left: var(--sidebar-width); }
+
+/* ── Hamburger (mobile) ── */
+.hamburger {
+  display: none;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--text2);
+  line-height: 1;
+}
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.4);
+  z-index: 140;
+}
+.sidebar-backdrop.active { display: block; }
+
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); z-index: 200; }
+  .sidebar.open { transform: translateX(0); }
+  .header { padding-left: 20px; }
+  .page-layout { margin-left: 0; }
+  .hamburger { display: block; }
+}
+
+/* ── Main layout ── */
+.main { padding: 40px; max-width: 1200px; margin: 0 auto; }
+
+/* ── Legend ── */
+.legend {
+  display: flex; flex-wrap: wrap; gap: 12px;
+  margin-bottom: 32px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+}
+.legend-item {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--text2);
+}
+.legend-color {
+  width: 14px; height: 14px; border-radius: 4px;
+}
+
+/* ── Flow diagram ── */
+.flow-wrapper {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px;
+  box-shadow: var(--shadow-md);
+  margin-bottom: 40px;
+  overflow-x: auto;
+}
+
+.flow-title {
+  font-size: 13px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--text3);
+  margin-bottom: 32px;
+}
+
+/* Swimlane grid */
+.swimlane-grid {
+  display: grid;
+  grid-template-columns: 120px 1fr 1fr 1fr 1fr;
+  gap: 0;
+  min-width: 800px;
+}
+
+.lane-label {
+  display: flex; align-items: center; justify-content: flex-end;
+  padding-right: 16px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--text3);
+}
+
+.lane {
+  border-left: 2px solid var(--border);
+  padding: 0 12px;
+  min-height: 80px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+
+/* Event node */
+.node {
+  background: var(--surface2);
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  text-align: center;
+  width: 100%;
+  position: relative;
+}
+.node-label { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+.node-sub { font-size: 11px; color: var(--text2); }
+.node-tag {
+  display: inline-block;
+  font-size: 10px; font-weight: 700; padding: 2px 7px;
+  border-radius: 20px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em;
+}
+
+.node-blue { border-color: var(--blue); background: var(--blue-light); }
+.node-blue .node-label { color: var(--blue-dark); }
+.node-blue .node-tag { background: var(--blue); color: #fff; }
+
+.node-green { border-color: var(--green); background: var(--green-light); }
+.node-green .node-label { color: var(--green); }
+.node-green .node-tag { background: var(--green); color: #fff; }
+
+.node-amber { border-color: var(--amber); background: var(--amber-light); }
+.node-amber .node-label { color: var(--amber); }
+.node-amber .node-tag { background: var(--amber); color: #fff; }
+
+.node-purple { border-color: var(--purple); background: var(--purple-light); }
+.node-purple .node-label { color: var(--purple); }
+.node-purple .node-tag { background: var(--purple); color: #fff; }
+
+.node-red { border-color: var(--red); background: var(--red-light); }
+.node-red .node-label { color: var(--red); }
+
+/* Arrow */
+.arrow-row {
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text3); font-size: 20px; padding: 4px 0;
+}
+.arrow-label {
+  font-size: 10px; color: var(--text3); text-align: center;
+  margin-top: 2px;
+}
+
+/* ── Cards grid ── */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 40px; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+.card-header {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 16px;
+}
+.card-icon {
+  width: 36px; height: 36px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+.card-title { font-size: 14px; font-weight: 700; }
+.card-sub { font-size: 12px; color: var(--text2); }
+
+.step-list { list-style: none; }
+.step-list li {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.step-list li:last-child { border-bottom: none; }
+.step-num {
+  min-width: 22px; height: 22px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: var(--text2);
+  margin-top: 1px;
+}
+
+/* ── Config section ── */
+.config-section { margin-bottom: 40px; }
+.section-title {
+  font-size: 17px; font-weight: 700; margin-bottom: 16px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+.config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+
+.config-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.config-card-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px; font-weight: 700;
+  display: flex; align-items: center; gap: 8px;
+}
+.config-row {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+  gap: 16px;
+}
+.config-row:last-child { border-bottom: none; }
+.config-key { font-size: 12px; color: var(--text2); font-family: monospace; }
+.config-val { font-size: 12px; color: var(--text); text-align: right; max-width: 60%; }
+.config-editable { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 2px 6px; border-radius: 4px; }
+.editable { background: var(--green-light); color: var(--green); }
+.read-only { background: var(--surface2); color: var(--text3); }
+
+/* ── Email flow table ── */
+.email-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.email-table th {
+  background: var(--blue); color: #fff;
+  padding: 10px 14px; text-align: left; font-weight: 600; font-size: 12px;
+}
+.email-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.email-table tr:hover td { background: var(--surface2); }
+.from-tag { font-size: 11px; font-family: monospace; color: var(--text2); }
+
+/* ── Cadence visual ── */
+.cadence-timeline {
+  display: flex; gap: 0; align-items: stretch;
+  margin: 16px 0;
+  overflow-x: auto;
+}
+.cadence-step {
+  flex: 1; min-width: 110px;
+  border: 1px solid var(--border);
+  border-left: none;
+  padding: 12px 14px;
+  background: var(--surface);
+  position: relative;
+}
+.cadence-step:first-child { border-left: 1px solid var(--border); border-radius: 8px 0 0 8px; }
+.cadence-step:last-child { border-radius: 0 8px 8px 0; }
+.cadence-step-label { font-size: 11px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: .04em; }
+.cadence-step-title { font-size: 13px; font-weight: 700; margin: 4px 0; }
+.cadence-priority { display: grid; grid-template-columns: 1fr; gap: 3px; margin-top: 8px; }
+.priority-row { font-size: 11px; display: flex; justify-content: space-between; }
+.hot-t { color: var(--red); font-weight: 700; }
+.warm-t { color: var(--amber); font-weight: 700; }
+.std-t { color: var(--blue); font-weight: 700; }
+
+/* ── Footer ── */
+.footer {
+  text-align: center; padding: 32px;
+  color: var(--text3); font-size: 12px;
+  border-top: 1px solid var(--border);
+  margin-top: 20px;
+}
+
+/* ── Search ── */
+.search-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.5); z-index: 999;
+  align-items: flex-start; justify-content: center;
+  padding-top: 120px;
+}
+.search-overlay.active { display: flex; }
+.search-box {
+  background: var(--surface); border-radius: 12px;
+  width: 500px; max-width: 90vw;
+  box-shadow: 0 20px 60px rgba(0,0,0,.3);
+  overflow: hidden;
+}
+.search-input {
+  width: 100%; border: none; outline: none;
+  padding: 16px 20px; font-size: 16px;
+  background: transparent; color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+.search-results { max-height: 300px; overflow-y: auto; }
+.search-result-item {
+  padding: 12px 20px; cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+.search-result-item:hover { background: var(--surface2); }
+.search-hint { padding: 10px 20px; font-size: 12px; color: var(--text3); }
+
+/* ── Pipeline strip (Part A) ── */
+.pipeline-strip {
+  display: flex; align-items: center;
+  flex-wrap: wrap; gap: 8px;
+  justify-content: center; padding: 8px 0;
+}
+.pipe-node {
+  border: 2px solid; border-radius: 12px;
+  padding: 14px 18px; min-width: 155px; max-width: 200px;
+  text-align: center;
+}
+.pipe-node-stack { display: flex; flex-direction: column; gap: 10px; }
+.pipe-tag { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 5px; }
+.pipe-name { display: block; font-size: 14px; font-weight: 700; margin-bottom: 3px; }
+.pipe-sub { display: block; font-size: 11px; color: var(--text2); }
+.pipe-node.pipe-blue  { border-color: var(--blue);   background: var(--blue-light);   }
+.pipe-node.pipe-blue  .pipe-tag, .pipe-node.pipe-blue  .pipe-name { color: var(--blue-dark); }
+.pipe-node.pipe-green { border-color: var(--green);  background: var(--green-light);  }
+.pipe-node.pipe-green .pipe-tag, .pipe-node.pipe-green .pipe-name { color: var(--green); }
+.pipe-node.pipe-purple{ border-color: var(--purple); background: var(--purple-light); }
+.pipe-node.pipe-purple .pipe-tag, .pipe-node.pipe-purple .pipe-name { color: var(--purple); }
+.pipe-node.pipe-amber { border-color: var(--amber);  background: var(--amber-light);  }
+.pipe-node.pipe-amber .pipe-tag, .pipe-node.pipe-amber .pipe-name { color: var(--amber); }
+
+.pipe-connector { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 0 4px; }
+.pipe-shaft { position: relative; width: 64px; height: 2px; background: var(--border); }
+.pipe-shaft::after {
+  content: ''; position: absolute; right: -7px; top: 50%; transform: translateY(-50%);
+  border: 6px solid transparent; border-left-color: var(--border);
+}
+.pipe-connector-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text3); }
+
+/* ── SVG flow (Part B) ── */
+.flow-svg { display: block; margin: 0 auto; }
+.node-bg-blue   { fill: var(--blue-light);   stroke: var(--blue);   stroke-width: 2; }
+.node-bg-green  { fill: var(--green-light);  stroke: var(--green);  stroke-width: 2; }
+.node-bg-red    { fill: var(--red-light);    stroke: var(--red);    stroke-width: 2; }
+.node-bg-amber  { fill: var(--amber-light);  stroke: var(--amber);  stroke-width: 2; }
+.node-bg-muted  { fill: var(--surface2);     stroke: var(--border); stroke-width: 1.5; }
+.node-label-blue   { fill: var(--blue-dark); }
+.node-label-green  { fill: var(--green); }
+.node-label-red    { fill: var(--red); }
+.node-label-amber  { fill: var(--amber); }
+.node-label-muted  { fill: var(--text2); }
+.svg-sub       { fill: var(--text2); }
+.conn          { stroke: var(--text3); stroke-width: 1.5; fill: none; }
+.conn-red      { stroke: var(--red);   stroke-width: 1.5; fill: none; }
+.conn-green    { stroke: var(--green); stroke-width: 1.5; fill: none; }
+.conn-fork     { stroke: var(--text3); stroke-width: 1.5; fill: none; }
+.arrow-tip     { fill: var(--text3); }
+.arrow-tip-red { fill: var(--red); }
+.arrow-tip-green { fill: var(--green); }
+.fork-label-red   { fill: var(--red); }
+.fork-label-green { fill: var(--green); }
+
+/* ── Email routing upgrade ── */
+.email-badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+.email-badge-a1 { background: var(--green-light);  color: var(--green);  }
+.email-badge-a2 { background: var(--purple-light); color: var(--purple); }
+.email-badge-a3 { background: var(--amber-light);  color: var(--amber);  }
+.email-table tr td:first-child { padding-left: 16px; }
+.email-row-a1 td:first-child { box-shadow: inset 3px 0 0 var(--green);  }
+.email-row-a2 td:first-child { box-shadow: inset 3px 0 0 var(--purple); }
+.email-row-a3 td:first-child { box-shadow: inset 3px 0 0 var(--amber);  }
+.email-row-a2 td { opacity: .5; }
+
+/* ── Testing section ── */
+.testing-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.status-mini-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: var(--shadow);
+  border-left: 4px solid var(--border);
+}
+.status-mini-card.status-a0 { border-left-color: var(--blue); }
+.status-mini-card.status-a1 { border-left-color: var(--green); }
+.status-mini-card.status-a2 { border-left-color: var(--purple); }
+.status-mini-card.status-a3 { border-left-color: var(--amber); }
+.status-mini-title { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+.status-mini-row { font-size: 12px; color: var(--text2); display: flex; justify-content: space-between; padding: 2px 0; }
+.status-mini-val { color: var(--text); font-weight: 600; }
+
+.test-timeline { position: relative; padding-left: 28px; margin: 24px 0; }
+.test-timeline::before {
+  content: '';
+  position: absolute;
+  left: 12px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+}
+.tl-entry {
+  position: relative;
+  margin-bottom: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 18px;
+  box-shadow: var(--shadow);
+}
+.tl-entry::before {
+  content: '';
+  position: absolute;
+  left: -22px;
+  top: 18px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--green);
+  border: 2px solid var(--surface);
+}
+.tl-entry.tl-partial::before { background: var(--amber); }
+.tl-entry.tl-diagnostic::before { background: var(--blue); }
+.tl-entry-border-blue { border-left: 3px solid var(--blue); }
+.tl-entry-border-green { border-left: 3px solid var(--green); }
+.tl-entry-border-amber { border-left: 3px solid var(--amber); }
+.tl-entry-border-purple { border-left: 3px solid var(--purple); }
+.tl-entry-border-multi { border-left: 3px solid var(--text3); }
+.tl-header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.tl-date { font-size: 11px; font-weight: 700; color: var(--text3); font-family: monospace; min-width: 80px; }
+.tl-scope { font-size: 13px; font-weight: 700; color: var(--text); }
+.tl-result {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 12px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+}
+.tl-result-pass { background: var(--green-light); color: var(--green); }
+.tl-result-partial { background: var(--amber-light); color: var(--amber); }
+.tl-result-blocked { background: var(--amber-light); color: var(--amber); }
+.tl-result-diagnostic { background: var(--blue-light); color: var(--blue); }
+.tl-desc { font-size: 12px; color: var(--text2); }
+.tl-details summary {
+  font-size: 12px; color: var(--blue); cursor: pointer;
+  margin-top: 6px; font-weight: 600;
+}
+.tl-details summary:hover { text-decoration: underline; }
+.tl-details-content { font-size: 12px; color: var(--text2); padding: 8px 0 0 0; line-height: 1.6; }
+
+.coverage-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 16px; }
+.coverage-table th {
+  background: var(--green); color: #fff;
+  padding: 10px 14px; text-align: left; font-weight: 600; font-size: 12px;
+}
+.coverage-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.coverage-table tr:hover td { background: var(--surface2); }
+.coverage-auto { font-weight: 700; font-size: 12px; }
+.coverage-auto-a0 { color: var(--blue-dark); }
+.coverage-auto-a1 { color: var(--green); }
+.coverage-auto-a2 { color: var(--purple); }
+.coverage-auto-a3 { color: var(--amber); }
+
+.health-footer {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 14px 18px;
+  background: var(--surface2);
+  border-radius: 0 0 12px 12px;
+  font-size: 12px; color: var(--text2);
+  border-top: 1px solid var(--border);
+}
+.health-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 12px;
+  font-size: 11px; font-weight: 700;
+  background: var(--green-light); color: var(--green);
+}
+</style>
+</head>
+<body>
+
+<!-- Sidebar backdrop (mobile) -->
+<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
+
+<!-- Sidebar navigation -->
+<nav class="sidebar" id="sidebar">
+  <ul class="sidebar-nav">
+    <li><a href="#section-overview" data-section="section-overview"><span class="nav-icon">&#9670;</span> Overview</a></li>
+    <li><a href="#section-automations" data-section="section-automations"><span class="nav-icon">&#9889;</span> Automations</a></li>
+    <li><a href="#section-cadence" data-section="section-cadence"><span class="nav-icon">&#128337;</span> Cadence</a></li>
+    <li><a href="#section-email" data-section="section-email"><span class="nav-icon">&#9993;</span> Email Routing</a></li>
+    <li><a href="#section-config" data-section="section-config"><span class="nav-icon">&#9881;</span> Configuration</a></li>
+    <li><a href="#section-testing" data-section="section-testing"><span class="nav-icon">&#10003;</span> Testing</a></li>
+  </ul>
+</nav>
+
+<!-- Search overlay -->
+<div class="search-overlay" id="searchOverlay" onclick="if(event.target===this)closeSearch()">
+  <div class="search-box">
+    <input class="search-input" id="searchInput" placeholder="Search (automation, setting, email...)" oninput="doSearch(this.value)" />
+    <div class="search-results" id="searchResults">
+      <div class="search-hint">Type to search across automations, settings, and email flows.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left" style="display:flex;align-items:center;gap:12px;">
+    <button class="hamburger" id="hamburgerBtn" onclick="toggleSidebar()">&#9776;</button>
+    <div>
+      <h1>Meji Media &ndash; Enquiry Follow-Up System</h1>
+      <p>System overview &middot; All 4 automations &middot; Live as of 19 March 2026</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <span class="badge badge-green"><span class="badge-dot"></span>All systems live</span>
+    <button class="theme-btn" onclick="toggleTheme()">&#9680; Toggle theme</button>
+    <button class="theme-btn" onclick="openSearch()" title="Ctrl/Cmd+K">&#x2315; Search</button>
+  </div>
+</div>
+
+<div class="page-layout">
+<div class="main">
+
+<!-- ── Legend ── -->
+<div id="section-overview" class="legend">
+  <div class="legend-item"><span class="legend-color" style="background:#2563eb"></span>A0 &mdash; MySQL Poller</div>
+  <div class="legend-item"><span class="legend-color" style="background:#16a34a"></span>A1 &mdash; Enquiry Sequence</div>
+  <div class="legend-item"><span class="legend-color" style="background:#7c3aed"></span>A2 &mdash; Reply Detection</div>
+  <div class="legend-item"><span class="legend-color" style="background:#d97706"></span>A3 &mdash; Scheduled Follow-Ups</div>
+  <div class="legend-item"><span class="legend-color" style="background:#e2e8f0;border:1px solid #94a3b8"></span>Configurable</div>
+</div>
+
+<!-- ── Full system flow diagram ── -->
+<div class="flow-wrapper">
+  <div class="flow-title">End-to-end flow &mdash; what happens to every enquiry</div>
+
+  <!-- Part A: Pipeline overview -->
+  <div class="pipeline-strip">
+    <div class="pipe-node pipe-blue">
+      <span class="pipe-tag">A0 &middot; every 30 min</span>
+      <strong class="pipe-name">MySQL Poller</strong>
+      <span class="pipe-sub">Detects new enquiries in CRM database</span>
+    </div>
+    <div class="pipe-connector">
+      <div class="pipe-shaft"></div>
+      <span class="pipe-connector-label">webhook</span>
+    </div>
+    <div class="pipe-node pipe-green">
+      <span class="pipe-tag">A1 &middot; instant</span>
+      <strong class="pipe-name">Enquiry Processor</strong>
+      <span class="pipe-sub">Score &rarr; route &rarr; email</span>
+    </div>
+    <div class="pipe-connector">
+      <div class="pipe-shaft"></div>
+      <span class="pipe-connector-label">feeds</span>
+    </div>
+    <div class="pipe-node-stack">
+      <div class="pipe-node pipe-purple">
+        <span class="pipe-tag">A2 &middot; every 10 min</span>
+        <strong class="pipe-name">Reply Monitor</strong>
+        <span class="pipe-sub">Stops sequence on reply</span>
+      </div>
+      <div class="pipe-node pipe-amber">
+        <span class="pipe-tag">A3 &middot; every 60 min</span>
+        <strong class="pipe-name">Follow-Up Scheduler</strong>
+        <span class="pipe-sub">Steps 2 &amp; 3 &rarr; mark cold</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="border-top:1px solid var(--border);margin:32px 0 28px;"></div>
+
+  <!-- Part B: A1 routing logic (SVG) -->
+  <div class="flow-title" style="margin-bottom:20px">A1 routing logic &mdash; what happens inside each enquiry</div>
+
+  <div style="overflow-x:auto;">
+    <svg class="flow-svg" width="760" height="510" viewBox="0 0 760 510" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M0,0 L10,5 L0,10 Z" class="arrow-tip"/>
+      </marker>
+      <marker id="ah-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M0,0 L10,5 L0,10 Z" class="arrow-tip-red"/>
+      </marker>
+      <marker id="ah-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+        <path d="M0,0 L10,5 L0,10 Z" class="arrow-tip-green"/>
+      </marker>
+    </defs>
+
+    <!-- Node 1: New Enquiry Received -->
+    <rect class="node-bg-blue" x="240" y="8" width="280" height="50" rx="10"/>
+    <text class="node-label-blue" x="380" y="29" text-anchor="middle" font-size="12" font-weight="700" font-family="system-ui,sans-serif">New Enquiry Received</text>
+    <text class="svg-sub" x="380" y="47" text-anchor="middle" font-size="11" font-family="system-ui,sans-serif">A0 polls database &#x2192; posts via webhook to A1</text>
+    <line class="conn" x1="380" y1="59" x2="380" y2="75" marker-end="url(#ah)"/>
+
+    <!-- Node 2: Lead Scoring -->
+    <rect class="node-bg-green" x="245" y="78" width="270" height="50" rx="10"/>
+    <text class="node-label-green" x="380" y="99" text-anchor="middle" font-size="12" font-weight="700" font-family="system-ui,sans-serif">Lead Scoring</text>
+    <text class="svg-sub" x="380" y="116" text-anchor="middle" font-size="11" font-family="system-ui,sans-serif">9 factors &#xB7; hot / warm / standard priority</text>
+    <line class="conn" x1="380" y1="129" x2="380" y2="145" marker-end="url(#ah)"/>
+
+    <!-- Node 3: A/B + AI Opening Line -->
+    <rect class="node-bg-green" x="205" y="148" width="350" height="50" rx="10"/>
+    <text class="node-label-green" x="380" y="169" text-anchor="middle" font-size="12" font-weight="700" font-family="system-ui,sans-serif">A/B Variant + AI Opening Line</text>
+    <text class="svg-sub" x="380" y="186" text-anchor="middle" font-size="11" font-family="system-ui,sans-serif">Assign Group A or B &#xB7; GPT-4o-mini personalisation</text>
+    <line class="conn" x1="380" y1="199" x2="380" y2="215" marker-end="url(#ah)"/>
+
+    <!-- Node 4: Log to Sheet -->
+    <rect class="node-bg-green" x="245" y="218" width="270" height="50" rx="10"/>
+    <text class="node-label-green" x="380" y="239" text-anchor="middle" font-size="12" font-weight="700" font-family="system-ui,sans-serif">Log to Google Sheet</text>
+    <text class="svg-sub" x="380" y="256" text-anchor="middle" font-size="11" font-family="system-ui,sans-serif">21 columns written immediately</text>
+
+    <!-- Stem + fork -->
+    <line class="conn-fork" x1="380" y1="269" x2="380" y2="292"/>
+    <line class="conn-fork" x1="155" y1="292" x2="625" y2="292"/>
+    <!-- Fork branch labels -->
+    <text class="fork-label-red"   x="155" y="286" text-anchor="middle" font-size="10" font-weight="700" font-family="system-ui,sans-serif">score &#x2265; 50</text>
+    <text class="fork-label-green" x="625" y="286" text-anchor="middle" font-size="10" font-weight="700" font-family="system-ui,sans-serif">standard / warm</text>
+    <!-- Branch drops -->
+    <line class="conn-red"   x1="155" y1="292" x2="155" y2="310" marker-end="url(#ah-r)"/>
+    <line class="conn-green" x1="625" y1="292" x2="625" y2="310" marker-end="url(#ah-g)"/>
+
+    <!-- HOT PATH -->
+    <rect class="node-bg-red" x="45" y="314" width="220" height="50" rx="10"/>
+    <text class="node-label-red" x="155" y="335" text-anchor="middle" font-size="12" font-weight="700" font-family="system-ui,sans-serif">Hot Lead Flagged</text>
+    <text class="svg-sub" x="155" y="352" text-anchor="middle" font-size="11" font-family="system-ui,sans-serif">Immediately escalated</text>
+    <line class="conn-red" x1="155" y1="365" x2="155" y2="381" marker-end="url(#ah-r)"/>
+
+    <rect class="node-bg-red" x="20" y="384" width="270" height="64" rx="10"/>
+    <text class="node-label-red" x="155" y="403" text-anchor="middle" font-size="11" font-weight="700" font-family="system-ui,sans-serif">Team notification sent</text>
+    <text class="svg-sub" x="155" y="420" text-anchor="middle" font-size="10" font-family="system-ui,sans-serif">&#x2192; gurmej@mejimedia.com</text>
+    <text class="svg-sub" x="155" y="436" text-anchor="middle" font-size="10" font-family="system-ui,sans-serif">+ warm ack to enquirer</text>
+    <line class="conn-red" x1="155" y1="449" x2="155" y2="465" marker-end="url(#ah-r)"/>
+
+    <rect class="node-bg-muted" x="35" y="468" width="240" height="36" rx="8"/>
+    <text class="node-label-muted" x="155" y="491" text-anchor="middle" font-size="11" font-weight="700" font-family="system-ui,sans-serif">stopped = TRUE &#xB7; no follow-ups</text>
+
+    <!-- STANDARD PATH -->
+    <rect class="node-bg-green" x="515" y="314" width="220" height="50" rx="10"/>
+    <text class="node-label-green" x="625" y="335" text-anchor="middle" font-size="12" font-weight="700" font-family="system-ui,sans-serif">Standard / Warm Lead</text>
+    <text class="svg-sub" x="625" y="352" text-anchor="middle" font-size="11" font-family="system-ui,sans-serif">Enters follow-up sequence</text>
+    <line class="conn-green" x1="625" y1="365" x2="625" y2="381" marker-end="url(#ah-g)"/>
+
+    <rect class="node-bg-green" x="510" y="384" width="230" height="50" rx="10"/>
+    <text class="node-label-green" x="625" y="405" text-anchor="middle" font-size="12" font-weight="700" font-family="system-ui,sans-serif">Initial Email Sent</text>
+    <text class="svg-sub" x="625" y="422" text-anchor="middle" font-size="11" font-family="system-ui,sans-serif">Template A or B per A/B variant</text>
+    <line class="conn-green" x1="625" y1="435" x2="625" y2="451" marker-end="url(#ah-g)"/>
+
+    <rect class="node-bg-amber" x="490" y="454" width="270" height="52" rx="10"/>
+    <text class="node-label-amber" x="625" y="474" text-anchor="middle" font-size="11" font-weight="700" font-family="system-ui,sans-serif">A3 sends steps 2 &amp; 3 (hourly)</text>
+    <text class="svg-sub" x="625" y="491" text-anchor="middle" font-size="10" font-family="system-ui,sans-serif">A2 monitors Gmail &#x2192; stops on reply</text>
+    </svg>
+  </div>
+</div>
+
+<!-- ── Automation cards ── -->
+<div id="section-automations" class="cards">
+
+  <!-- A0 -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon" style="background:var(--blue-light)">&#128204;</div>
+      <div>
+        <div class="card-title" style="color:var(--blue-dark)">A0 &mdash; MySQL Enquiry Poller</div>
+        <div class="card-sub">Every 30 minutes &middot; Always-on</div>
+      </div>
+    </div>
+    <ul class="step-list">
+      <li><span class="step-num">1</span><span>Connects to <code>enquiries</code> table in your CRM database</span></li>
+      <li><span class="step-num">2</span><span>Finds all rows with ID greater than the last-processed ID</span></li>
+      <li><span class="step-num">3</span><span>Posts each new enquiry as a flat JSON object to A1's webhook URL</span></li>
+      <li><span class="step-num">4</span><span>Saves the new cursor position so duplicates are never sent</span></li>
+    </ul>
+  </div>
+
+  <!-- A1 -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon" style="background:var(--green-light)">&#9889;</div>
+      <div>
+        <div class="card-title" style="color:var(--green)">A1 &mdash; Enquiry Follow-Up Sequence</div>
+        <div class="card-sub">Instant webhook &middot; Fires per enquiry</div>
+      </div>
+    </div>
+    <ul class="step-list">
+      <li><span class="step-num">1</span><span>Fetches pipeline config and email templates from data stores</span></li>
+      <li><span class="step-num">2</span><span>Scores lead across 9 factors using configurable weights</span></li>
+      <li><span class="step-num">3</span><span>Assigns priority tier: hot (&ge;50) / warm (&ge;25) / standard</span></li>
+      <li><span class="step-num">4</span><span>Assigns A/B variant (A or B) &mdash; stored in sheet column Q</span></li>
+      <li><span class="step-num">5</span><span>Calls OpenAI for a personalised one-sentence opening line</span></li>
+      <li><span class="step-num">6</span><span>Logs row to Google Sheet (21 columns)</span></li>
+      <li><span class="step-num">7</span><span>Routes: hot &rarr; team alert + warm ack; standard &rarr; initial email</span></li>
+    </ul>
+  </div>
+
+  <!-- A2 -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon" style="background:var(--purple-light)">&#128267;</div>
+      <div>
+        <div class="card-title" style="color:var(--purple)">A2 &mdash; Reply Detection &amp; Stop</div>
+        <div class="card-sub">Every 10 minutes &middot; Gmail monitor</div>
+      </div>
+    </div>
+    <ul class="step-list">
+      <li><span class="step-num">1</span><span>Scans Gmail inbox (<code>enquire@christmasofficeparty.co.uk</code>) for new replies</span></li>
+      <li><span class="step-num">2</span><span>Matches reply sender to a row in the tracking sheet by email address</span></li>
+      <li><span class="step-num">3</span><span>If found and not already stopped: sets <code>stopped = TRUE</code>, <code>status = In Contact</code></span></li>
+      <li><span class="step-num">4</span><span>A3 will never send further emails to a stopped lead</span></li>
+    </ul>
+  </div>
+
+  <!-- A3 -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon" style="background:var(--amber-light)">&#128336;</div>
+      <div>
+        <div class="card-title" style="color:var(--amber)">A3 &mdash; Scheduled Follow-Up Steps</div>
+        <div class="card-sub">Every 60 minutes &middot; Processes all due leads</div>
+      </div>
+    </div>
+    <ul class="step-list">
+      <li><span class="step-num">1</span><span>Finds all leads where <code>stopped = FALSE</code></span></li>
+      <li><span class="step-num">2</span><span>Filters to only leads where <code>next_step_due &le; now</code></span></li>
+      <li><span class="step-num">3</span><span>Reads A/B variant from column Q &mdash; uses matching template</span></li>
+      <li><span class="step-num">4</span><span>Generates AI opening line, sends step 2 or step 3 email</span></li>
+      <li><span class="step-num">5</span><span>Updates sheet: increments step, sets next due time per priority</span></li>
+      <li><span class="step-num">6</span><span>Step 4+: marks as cold, stops the sequence</span></li>
+    </ul>
+  </div>
+
+</div>
+
+<!-- ── Follow-up cadence ── -->
+<div id="section-cadence" class="config-section">
+  <div class="section-title">&#128337; Follow-Up Cadence (configurable)</div>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;box-shadow:var(--shadow);">
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px;">Timing from the previous email. Adjustable in <strong>Pipeline Config &rarr; cadence_*</strong> fields.</p>
+    <div class="cadence-timeline">
+      <div class="cadence-step">
+        <div class="cadence-step-label">Step 1</div>
+        <div class="cadence-step-title">Initial Email</div>
+        <div style="font-size:12px;color:var(--text2)">Sent by A1<br>Immediately on submission</div>
+      </div>
+      <div class="cadence-step">
+        <div class="cadence-step-label">Step 2</div>
+        <div class="cadence-step-title">Follow-Up #2</div>
+        <div class="cadence-priority">
+          <div class="priority-row"><span class="hot-t">Hot:</span><span>+6 hours</span></div>
+          <div class="priority-row"><span class="warm-t">Warm:</span><span>+12 hours</span></div>
+          <div class="priority-row"><span class="std-t">Standard:</span><span>+24 hours</span></div>
+        </div>
+      </div>
+      <div class="cadence-step">
+        <div class="cadence-step-label">Step 3</div>
+        <div class="cadence-step-title">Follow-Up #3 (Final)</div>
+        <div class="cadence-priority">
+          <div class="priority-row"><span class="hot-t">Hot:</span><span>+24 hours</span></div>
+          <div class="priority-row"><span class="warm-t">Warm:</span><span>+48 hours</span></div>
+          <div class="priority-row"><span class="std-t">Standard:</span><span>+72 hours</span></div>
+        </div>
+      </div>
+      <div class="cadence-step">
+        <div class="cadence-step-label">Step 4</div>
+        <div class="cadence-step-title">Mark Cold</div>
+        <div style="font-size:12px;color:var(--text2)">After +72h fixed<br>No email sent<br>stopped = TRUE</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Email routing ── -->
+<div id="section-email" class="config-section">
+  <div class="section-title">&#9993; Email Routing &mdash; Who Receives What</div>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:var(--shadow);">
+    <table class="email-table">
+      <thead>
+        <tr>
+          <th>Automation</th>
+          <th>Trigger</th>
+          <th>To</th>
+          <th>BCC</th>
+          <th>Content</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="email-row-a1">
+          <td><span class="email-badge email-badge-a1">A1</span></td>
+          <td>Hot lead (score &ge; 50)</td>
+          <td>gurmej@mejimedia.com<br><span class="from-tag">&#11014; Team notification</span></td>
+          <td><span class="from-tag">client.meji-media@unpauseai.com</span></td>
+          <td>Inline HTML: name, email, phone, score, urgency</td>
+        </tr>
+        <tr class="email-row-a1">
+          <td><span class="email-badge email-badge-a1">A1</span></td>
+          <td>Hot lead &mdash; warm ack to enquirer</td>
+          <td>Enquirer's email<br><span class="from-tag">&#11015; To enquirer</span></td>
+          <td><span class="from-tag">client.meji-media@unpauseai.com</span></td>
+          <td>Template: <code>initial_high_a</code> or <code>initial_high_b</code></td>
+        </tr>
+        <tr class="email-row-a1">
+          <td><span class="email-badge email-badge-a1">A1</span></td>
+          <td>Standard / warm lead</td>
+          <td>Enquirer's email<br><span class="from-tag">&#11015; To enquirer</span></td>
+          <td><span class="from-tag">client.meji-media@unpauseai.com</span></td>
+          <td>Template: <code>initial_standard_a</code> or <code>initial_standard_b</code></td>
+        </tr>
+        <tr class="email-row-a2">
+          <td><span class="email-badge email-badge-a2">A2</span></td>
+          <td>Read-only Gmail monitor &mdash; no emails sent</td>
+          <td>&mdash;</td>
+          <td>&mdash;</td>
+          <td>&mdash;</td>
+        </tr>
+        <tr class="email-row-a3">
+          <td><span class="email-badge email-badge-a3">A3</span></td>
+          <td>Follow-up #2 due</td>
+          <td>Enquirer's email<br><span class="from-tag">&#11015; To enquirer</span></td>
+          <td><span class="from-tag">client.meji-media@unpauseai.com</span></td>
+          <td>Template: <code>step_2_a</code> or <code>step_2_b</code></td>
+        </tr>
+        <tr class="email-row-a3">
+          <td><span class="email-badge email-badge-a3">A3</span></td>
+          <td>Follow-up #3 due (final)</td>
+          <td>Enquirer's email<br><span class="from-tag">&#11015; To enquirer</span></td>
+          <td><span class="from-tag">client.meji-media@unpauseai.com</span></td>
+          <td>Template: <code>step_3_a</code> or <code>step_3_b</code></td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="padding:12px 18px;font-size:12px;color:var(--text2);background:var(--surface2);">
+      All emails sent <strong>from</strong> <code>enquire@christmasofficeparty.co.uk</code> &middot;
+      BCC monitors but does not reply &middot;
+      <code>handoff_email</code> configurable in Pipeline Config data store
+    </div>
+  </div>
+</div>
+
+<!-- ── Config reference ── -->
+<div id="section-config" class="config-section">
+  <div class="section-title">&#9881; What You Can Configure</div>
+  <div class="config-grid">
+
+    <div class="config-card">
+      <div class="config-card-header" style="background:var(--surface2)">
+        &#128196; Pipeline Config data store &middot; key: <code>main</code>
+      </div>
+      <div class="config-row">
+        <span class="config-key">handoff_email</span>
+        <div style="text-align:right">
+          <div class="config-val">gurmej@mejimedia.com</div>
+          <span class="config-editable editable">editable</span>
+        </div>
+      </div>
+      <div class="config-row">
+        <span class="config-key">handoff_enabled</span>
+        <div style="text-align:right">
+          <div class="config-val">true</div>
+          <span class="config-editable editable">editable</span>
+        </div>
+      </div>
+      <div class="config-row">
+        <span class="config-key">handoff_threshold</span>
+        <div style="text-align:right">
+          <div class="config-val">50 (score)</div>
+          <span class="config-editable editable">editable</span>
+        </div>
+      </div>
+      <div class="config-row">
+        <span class="config-key">ab_testing_enabled</span>
+        <div style="text-align:right">
+          <div class="config-val">false</div>
+          <span class="config-editable editable">editable</span>
+        </div>
+      </div>
+      <div class="config-row">
+        <span class="config-key">cadence_hot_step2</span>
+        <div style="text-align:right">
+          <div class="config-val">6 hours</div>
+          <span class="config-editable editable">editable</span>
+        </div>
+      </div>
+      <div class="config-row">
+        <span class="config-key">cadence_standard_step2</span>
+        <div style="text-align:right">
+          <div class="config-val">24 hours</div>
+          <span class="config-editable editable">editable</span>
+        </div>
+      </div>
+      <div class="config-row">
+        <span class="config-key">ai_enabled</span>
+        <div style="text-align:right">
+          <div class="config-val">true</div>
+          <span class="config-editable editable">editable</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="config-card">
+      <div class="config-card-header" style="background:var(--surface2)">
+        &#9993; Email Templates data store &middot; 8 active templates
+      </div>
+      <div class="config-row">
+        <span class="config-key">initial_standard_a / _b</span>
+        <div style="text-align:right">
+          <div class="config-val">Initial email (standard leads)</div>
+          <span class="config-editable editable">editable</span>
+        </div>
+      </div>
+      <div class="config-row">
+        <span class="config-key">initial_high_a / _b</span>
+        <div style="text-align:right">
+          <div class="config-val">Warm ack (hot leads)</div>
+          <span class="config-editable editable">editable</span>
+        </div>
+      </div>
+      <div class="config-row">
+        <span class="config-key">step_2_a / _b</span>
+        <div style="text-align:right">
+          <div class="config-val">Follow-up #2</div>
+          <span class="config-editable editable">editable</span>
+        </div>
+      </div>
+      <div class="config-row">
+        <span class="config-key">step_3_a / _b</span>
+        <div style="text-align:right">
+          <div class="config-val">Follow-up #3 (final)</div>
+          <span class="config-editable editable">editable</span>
+        </div>
+      </div>
+      <div style="padding:12px 18px;background:var(--surface2);font-size:12px;color:var(--text2);">
+        <strong>Placeholders (do not remove):</strong><br>
+        <code>##name##</code> &middot; <code>##topic##</code> &middot; <code>##organisation##</code> &middot; <code>##ai_opening##</code> &middot; <code>##signature##</code> &middot; <code>##venue_name##</code>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Testing & Verification ── -->
+<div id="section-testing" class="config-section">
+  <div class="section-title">&#10003; Testing &amp; Verification</div>
+
+  <!-- Live Status Summary -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;box-shadow:var(--shadow);margin-bottom:24px;">
+    <div style="font-size:13px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;">Live Status Summary</div>
+    <div class="testing-status-grid">
+      <div class="status-mini-card status-a0">
+        <div class="status-mini-title" style="color:var(--blue-dark)">A0 &mdash; MySQL Poller</div>
+        <div class="status-mini-row"><span>Status</span><span class="status-mini-val" style="color:var(--green)">Active</span></div>
+        <div class="status-mini-row"><span>Trigger</span><span class="status-mini-val">Polling / 30min</span></div>
+        <div class="status-mini-row"><span>Executions</span><span class="status-mini-val">644</span></div>
+        <div class="status-mini-row"><span>Errors (lifetime)</span><span class="status-mini-val">11</span></div>
+      </div>
+      <div class="status-mini-card status-a1">
+        <div class="status-mini-title" style="color:var(--green)">A1 &mdash; Enquiry Sequence</div>
+        <div class="status-mini-row"><span>Status</span><span class="status-mini-val" style="color:var(--green)">Active</span></div>
+        <div class="status-mini-row"><span>Trigger</span><span class="status-mini-val">Webhook</span></div>
+        <div class="status-mini-row"><span>Executions</span><span class="status-mini-val">39</span></div>
+        <div class="status-mini-row"><span>Errors (lifetime)</span><span class="status-mini-val">0</span></div>
+      </div>
+      <div class="status-mini-card status-a2">
+        <div class="status-mini-title" style="color:var(--purple)">A2 &mdash; Reply Detection</div>
+        <div class="status-mini-row"><span>Status</span><span class="status-mini-val" style="color:var(--green)">Active</span></div>
+        <div class="status-mini-row"><span>Trigger</span><span class="status-mini-val">Polling / 10min</span></div>
+        <div class="status-mini-row"><span>Executions</span><span class="status-mini-val">892</span></div>
+        <div class="status-mini-row"><span>Errors (lifetime)</span><span class="status-mini-val">0</span></div>
+      </div>
+      <div class="status-mini-card status-a3">
+        <div class="status-mini-title" style="color:var(--amber)">A3 &mdash; Scheduled Follow-Ups</div>
+        <div class="status-mini-row"><span>Status</span><span class="status-mini-val" style="color:var(--green)">Active</span></div>
+        <div class="status-mini-row"><span>Trigger</span><span class="status-mini-val">Polling / 60min</span></div>
+        <div class="status-mini-row"><span>Executions</span><span class="status-mini-val">232</span></div>
+        <div class="status-mini-row"><span>Errors (lifetime)</span><span class="status-mini-val">0</span></div>
+      </div>
+    </div>
+    <div class="health-footer">
+      <span>Last health check: <strong>2026-03-23</strong></span>
+      <span>Ops budget: <strong>~65% of 30k</strong></span>
+      <span class="health-badge"><span class="badge-dot" style="width:6px;height:6px;"></span> GREEN</span>
+    </div>
+  </div>
+
+  <!-- Test Timeline -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;box-shadow:var(--shadow);margin-bottom:24px;">
+    <div style="font-size:13px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;">Test Timeline</div>
+    <div class="test-timeline">
+
+      <!-- 2026-03-09 -->
+      <div class="tl-entry tl-entry-border-multi">
+        <div class="tl-header">
+          <span class="tl-date">2026-03-09</span>
+          <span class="tl-scope">A1/A2/A3 Pipeline</span>
+          <span class="tl-result tl-result-pass">PASS</span>
+        </div>
+        <div class="tl-desc">10/10 pass, 1 skip &mdash; Standard + hot leads, reply detection, step progression</div>
+        <details class="tl-details">
+          <summary>Details</summary>
+          <div class="tl-details-content">
+            Full pipeline test covering A1 lead scoring and routing (standard and hot paths), A2 reply detection and stop logic, and A3 step progression through steps 2/3/cold. One test skipped (edge case deferred). All email templates rendered correctly. Sheet logging verified across 21 columns.
+          </div>
+        </details>
+      </div>
+
+      <!-- 2026-03-12 -->
+      <div class="tl-entry tl-entry-border-multi">
+        <div class="tl-header">
+          <span class="tl-date">2026-03-12</span>
+          <span class="tl-scope">All 4 E2E</span>
+          <span class="tl-result tl-result-pass">PASS</span>
+        </div>
+        <div class="tl-desc">10/10 pass &mdash; Full integration, A0 cursor, interactions</div>
+        <details class="tl-details">
+          <summary>Details</summary>
+          <div class="tl-details-content">
+            End-to-end integration test including A0 MySQL polling with cursor tracking. Verified A0 posts correct webhook payload, A1 processes and logs, A2 detects replies, A3 advances steps. Cursor position persists correctly between runs. No data loss or duplication.
+          </div>
+        </details>
+      </div>
+
+      <!-- 2026-03-13 -->
+      <div class="tl-entry tl-entry-border-multi">
+        <div class="tl-header">
+          <span class="tl-date">2026-03-13</span>
+          <span class="tl-scope">Live data</span>
+          <span class="tl-result tl-result-pass">PASS</span>
+        </div>
+        <div class="tl-desc">All pass &mdash; 3 real enquiries processed, email safety verified</div>
+        <details class="tl-details">
+          <summary>Details</summary>
+          <div class="tl-details-content">
+            First live data test with 3 real enquiries from the CRM database. Verified end-to-end processing: MySQL pickup, webhook delivery, lead scoring, email send, sheet logging. BCC capture confirmed. No emails sent to unintended recipients. Email safety controls validated.
+          </div>
+        </details>
+      </div>
+
+      <!-- 2026-03-14 A3 optimization -->
+      <div class="tl-entry tl-entry-border-amber">
+        <div class="tl-header">
+          <span class="tl-date">2026-03-14</span>
+          <span class="tl-scope">A3 optimization</span>
+          <span class="tl-result tl-result-pass">PASS</span>
+        </div>
+        <div class="tl-desc">All pass &mdash; Early-exit filter, interval 15min to 60min</div>
+        <details class="tl-details">
+          <summary>Details</summary>
+          <div class="tl-details-content">
+            A3 scheduling interval changed from 15-minute to 60-minute polling. Added early-exit filter that skips execution when no leads are due, reducing unnecessary operations. Verified step progression timing remains correct with new interval. Ops efficiency improved significantly.
+          </div>
+        </details>
+      </div>
+
+      <!-- 2026-03-14 A/B templates -->
+      <div class="tl-entry tl-entry-border-green">
+        <div class="tl-header">
+          <span class="tl-date">2026-03-14</span>
+          <span class="tl-scope">A/B templates</span>
+          <span class="tl-result tl-result-pass">PASS</span>
+        </div>
+        <div class="tl-desc">Bug found + fixed &mdash; 10 templates deployed, venue_dates_count bug fixed</div>
+        <details class="tl-details">
+          <summary>Details</summary>
+          <div class="tl-details-content">
+            Deployed 10 email templates (5 per A/B variant). During testing, discovered <code>venue_dates_count</code> placeholder was not being populated correctly in venue-aware templates. Bug traced to missing data store field mapping. Fixed and re-tested. All 10 templates now render correctly with all placeholders resolved.
+          </div>
+        </details>
+      </div>
+
+      <!-- 2026-03-14 Venue integration -->
+      <div class="tl-entry tl-entry-border-green">
+        <div class="tl-header">
+          <span class="tl-date">2026-03-14</span>
+          <span class="tl-scope">Venue integration</span>
+          <span class="tl-result tl-result-pass">PASS</span>
+        </div>
+        <div class="tl-desc">All pass &mdash; 3 venues configured, A1+A3 updated</div>
+        <details class="tl-details">
+          <summary>Details</summary>
+          <div class="tl-details-content">
+            Venue-aware routing added to A1 and A3. Three venues configured in pipeline config data store. Templates now include <code>##venue_name##</code> placeholder. Tested with enquiries mapped to each venue. Correct venue name appears in sent emails. Fallback for unknown venues verified.
+          </div>
+        </details>
+      </div>
+
+      <!-- 2026-03-15 Email render test -->
+      <div class="tl-entry tl-partial tl-entry-border-multi">
+        <div class="tl-header">
+          <span class="tl-date">2026-03-15</span>
+          <span class="tl-scope">Email render test</span>
+          <span class="tl-result tl-result-blocked">BLOCKED</span>
+        </div>
+        <div class="tl-desc">Partial &mdash; Infrastructure built, Make.com API limitation</div>
+        <details class="tl-details">
+          <summary>Details</summary>
+          <div class="tl-details-content">
+            Built email render test infrastructure to preview template output without sending. Test harness works locally. However, Make.com API does not support dry-run execution of email modules, so full render verification requires a live send. Workaround: BCC capture used for post-send verification. Infrastructure preserved for future use if API adds dry-run support.
+          </div>
+        </details>
+      </div>
+
+      <!-- 2026-03-19 Production go-live -->
+      <div class="tl-entry tl-entry-border-multi">
+        <div class="tl-header">
+          <span class="tl-date">2026-03-19</span>
+          <span class="tl-scope">Production go-live</span>
+          <span class="tl-result tl-result-pass">PASS</span>
+        </div>
+        <div class="tl-desc">All pass &mdash; Gmail swap, all 4 activated</div>
+        <details class="tl-details">
+          <summary>Details</summary>
+          <div class="tl-details-content">
+            Production cutover: Gmail connection swapped from test account to <code>enquire@christmasofficeparty.co.uk</code>. All 4 scenarios activated on production Make.com instance. Smoke test: triggered A0 manually, verified enquiry flowed through A1, appeared in Google Sheet, and BCC received at <code>client.meji-media@unpauseai.com</code>. A2 and A3 confirmed polling on schedule.
+          </div>
+        </details>
+      </div>
+
+      <!-- 2026-03-20 Vitals -->
+      <div class="tl-entry tl-entry-border-multi">
+        <div class="tl-header">
+          <span class="tl-date">2026-03-20</span>
+          <span class="tl-scope">Vitals + reconciliation</span>
+          <span class="tl-result tl-result-pass">PASS</span>
+        </div>
+        <div class="tl-desc">All pass &mdash; All healthy, drift fixed</div>
+        <details class="tl-details">
+          <summary>Details</summary>
+          <div class="tl-details-content">
+            Post-launch vitals check. All 4 automations running with zero errors since go-live. Detected minor infrastructure.yaml drift (scenario IDs out of date) and reconciled. Execution counts, error rates, and ops budget all within expected ranges. No data inconsistencies between MySQL, Google Sheet, and data stores.
+          </div>
+        </details>
+      </div>
+
+      <!-- 2026-03-23 Weekend health check -->
+      <div class="tl-entry tl-entry-border-multi">
+        <div class="tl-header">
+          <span class="tl-date">2026-03-23</span>
+          <span class="tl-scope">Weekend health check</span>
+          <span class="tl-result tl-result-pass">PASS</span>
+        </div>
+        <div class="tl-desc">All pass &mdash; Zero failures, 2 new enquiries, ops 65%, BCC fix applied</div>
+        <details class="tl-details">
+          <summary>Details</summary>
+          <div class="tl-details-content">
+            Weekend health check across all 4 automations. Zero failures since last check. 2 new enquiries processed end-to-end correctly. Operations budget at ~65% of 30k monthly allocation (green). BCC address fix applied to ensure all outbound emails are captured. All execution logs clean.
+          </div>
+        </details>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Coverage Summary -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:var(--shadow);">
+    <div style="padding:16px 18px;font-size:13px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border);">Coverage Summary</div>
+    <table class="coverage-table">
+      <thead>
+        <tr>
+          <th>Automation</th>
+          <th>Areas Covered</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="coverage-auto coverage-auto-a0">A0</span></td>
+          <td>MySQL polling, cursor tracking, ops efficiency</td>
+        </tr>
+        <tr>
+          <td><span class="coverage-auto coverage-auto-a1">A1</span></td>
+          <td>Standard/hot routing, edge cases, templates, venue-aware, A/B ready</td>
+        </tr>
+        <tr>
+          <td><span class="coverage-auto coverage-auto-a2">A2</span></td>
+          <td>Reply detection, idempotency, interaction with A3</td>
+        </tr>
+        <tr>
+          <td><span class="coverage-auto coverage-auto-a3">A3</span></td>
+          <td>Step 2/3/4/cold, early-exit, venue-aware, cadence timing</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</div><!-- /main -->
+</div><!-- /page-layout -->
+
+<div class="footer" style="margin-left:var(--sidebar-width);">
+  Meji Media Enquiry Follow-Up System &middot; Built by UnpauseAI &middot; Live 19 March 2026<br>
+  For support: nicolas.neumann@unpauseai.com
+</div>
+
+<script>
+// Theme
+const root = document.documentElement;
+function toggleTheme() {
+  const t = root.dataset.theme === 'dark' ? 'light' : 'dark';
+  root.dataset.theme = t;
+  localStorage.setItem('mm-theme', t);
+}
+(function() {
+  const saved = localStorage.getItem('mm-theme');
+  if (saved) root.dataset.theme = saved;
+})();
+
+// Sidebar
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarBackdrop').classList.toggle('active');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarBackdrop').classList.remove('active');
+}
+
+// Active section highlight via IntersectionObserver
+(function() {
+  const sections = document.querySelectorAll('[id^="section-"]');
+  const navLinks = document.querySelectorAll('.sidebar-nav a');
+  if (!sections.length) return;
+
+  const observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting) {
+        navLinks.forEach(function(link) { link.classList.remove('active'); });
+        const activeLink = document.querySelector('.sidebar-nav a[data-section="' + entry.target.id + '"]');
+        if (activeLink) activeLink.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -60% 0px', threshold: 0 });
+
+  sections.forEach(function(section) { observer.observe(section); });
+
+  // Close sidebar on nav click (mobile)
+  navLinks.forEach(function(link) {
+    link.addEventListener('click', function() {
+      if (window.innerWidth <= 768) closeSidebar();
+    });
+  });
+})();
+
+// Search
+const searchIndex = [
+  { title: 'A0 -- MySQL Poller', desc: 'Polls CRM database every 30 minutes for new enquiries', id: 'a0' },
+  { title: 'A1 -- Enquiry Follow-Up Sequence', desc: 'Instant webhook, lead scoring, routing, initial email, AI personalisation', id: 'a1' },
+  { title: 'A2 -- Reply Detection', desc: 'Gmail monitor every 10 minutes, stops follow-ups when reply detected', id: 'a2' },
+  { title: 'A3 -- Scheduled Follow-Ups', desc: 'Hourly scheduler for step 2 and step 3 follow-up emails', id: 'a3' },
+  { title: 'A/B Testing', desc: 'Split testing for email templates -- ab_testing_enabled toggle in Pipeline Config', id: 'ab' },
+  { title: 'handoff_email', desc: 'Where hot lead team notifications are sent -- currently gurmej@mejimedia.com', id: 'config' },
+  { title: 'Lead Scoring', desc: '9-factor weighted score -- hot >= 50, warm >= 25, standard below 25', id: 'a1' },
+  { title: 'Email Placeholders', desc: '##name## ##topic## ##organisation## ##ai_opening## ##signature## ##venue_name##', id: 'templates' },
+  { title: 'Cadence', desc: 'Hot: +6/24h, Warm: +12/48h, Standard: +24/72h between follow-ups', id: 'cadence' },
+  { title: 'Pipeline Config', desc: 'All system settings in Make.com data store -- handoff, cadence, AI, A/B', id: 'config' },
+  { title: 'Email Templates', desc: 'Edit subject and body_html in Make.com data store -- 8 active variants', id: 'templates' },
+  { title: 'enquire@christmasofficeparty.co.uk', desc: 'Gmail account used to send all automated emails', id: 'email' },
+  { title: 'Google Sheet', desc: 'MejiMedia_Enquiries_Followup -- Leads tab tracks all enquiries, AB_Analytics for A/B results', id: 'sheet' },
+  { title: 'Testing overview', desc: 'Live status, test timeline, and coverage for all 4 automations', id: 'testing' },
+  { title: 'Health check results', desc: 'Latest health check: 2026-03-23, all green, ops at 65%', id: 'testing' },
+  { title: 'Test coverage per automation', desc: 'A0: polling+cursor, A1: routing+templates+venue, A2: reply+idempotency, A3: steps+early-exit', id: 'testing' },
+];
+
+function openSearch() {
+  document.getElementById('searchOverlay').classList.add('active');
+  setTimeout(function() { document.getElementById('searchInput').focus(); }, 50);
+}
+function closeSearch() {
+  document.getElementById('searchOverlay').classList.remove('active');
+  document.getElementById('searchInput').value = '';
+  document.getElementById('searchResults').innerHTML = '<div class="search-hint">Type to search across automations, settings, and email flows.</div>';
+}
+function doSearch(q) {
+  var results = document.getElementById('searchResults');
+  if (!q.trim()) { results.innerHTML = '<div class="search-hint">Type to search across automations, settings, and email flows.</div>'; return; }
+  var matches = searchIndex.filter(function(i) { return (i.title + i.desc).toLowerCase().indexOf(q.toLowerCase()) !== -1; });
+  if (!matches.length) { results.innerHTML = '<div class="search-hint">No results found.</div>'; return; }
+  results.innerHTML = matches.map(function(m) { return '<div class="search-result-item" onclick="closeSearch()"><strong>' + m.title + '</strong><br><span style="color:var(--text2);font-size:12px">' + m.desc + '</span></div>'; }).join('');
+}
+document.addEventListener('keydown', function(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); openSearch(); }
+  if (e.key === 'Escape') closeSearch();
+});
+</script>
+</body>
+</html>
