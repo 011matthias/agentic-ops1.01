@@ -12,6 +12,15 @@ sent: null
 value_estimate: "3500-5500"
 timeline: "4-7 weeks"
 tags: [n8n, healthcare, crm, gdpr, automation, mollie]
+phases:
+  - name: "Core Patient Journey"
+    weeks: "1-4"
+    price: "EUR 3,500"
+    items: ["CRM + intake workflow", "Booking + payment flow", "Email/SMS sequences", "End-to-end testing"]
+  - name: "Compliance & Handover"
+    weeks: "5-7"
+    price: "EUR 2,000"
+    items: ["GDPR audit + consent flows", "Intercom + Dutch content", "Documentation + training"]
 ---
 
 ## What We Understood

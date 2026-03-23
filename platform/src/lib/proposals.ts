@@ -2,6 +2,13 @@ import fs from "fs";
 import path from "path";
 import matter from "gray-matter";
 
+export interface ProposalPhase {
+  name: string;
+  weeks: string;
+  price?: string;
+  items: string[];
+}
+
 export interface ProposalFrontmatter {
   id: string;
   slug: string;
@@ -16,6 +23,7 @@ export interface ProposalFrontmatter {
   value_estimate: string;
   timeline: string;
   tags: string[];
+  phases?: ProposalPhase[];
 }
 
 export interface Proposal {
@@ -24,6 +32,29 @@ export interface Proposal {
 }
 
 const PROPOSALS_DIR = path.join(process.cwd(), "src", "content", "proposals");
+
+export function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+export function extractHeadings(
+  markdown: string
+): { id: string; text: string; level: 2 | 3 }[] {
+  const regex = /^(#{2,3})\s+(.+)$/gm;
+  const headings: { id: string; text: string; level: 2 | 3 }[] = [];
+  let match;
+  while ((match = regex.exec(markdown)) !== null) {
+    headings.push({
+      id: slugify(match[2]),
+      text: match[2],
+      level: match[1].length as 2 | 3,
+    });
+  }
+  return headings;
+}
 
 export function getProposalSlugs(): string[] {
   if (!fs.existsSync(PROPOSALS_DIR)) return [];
