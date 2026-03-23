@@ -91,7 +91,11 @@
     "spreadsheetml",
     "wordprocessingml",
     "waitpoint",
-    "autopilot"
+    "autopilot",
+    "Menovia",
+    "menovia",
+    "Agentic",
+    "agentic"
   ],
   "ignorePaths": [
     "node_modules",

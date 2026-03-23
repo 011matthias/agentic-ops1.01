@@ -27,7 +27,7 @@ const statusLabel: Record<ProjectStatus, string> = {
   complete: "Complete",
 }
 
-const executionStatusVariant: Record<ExecutionStatus, "success" | "error" | "warning"> = {
+const _executionStatusVariant: Record<ExecutionStatus, "success" | "error" | "warning"> = {
   success: "success",
   error: "error",
   partial: "warning",
