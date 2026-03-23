@@ -247,25 +247,25 @@ tr:nth-child(even) td { background: var(--surface2); }
     <p>Each factor adds points to the lead score. All weights are configurable in Pipeline Config.</p>
     <table>
       <thead>
-        <tr><th>Factor</th><th>Field</th><th>What It Checks</th></tr>
+        <tr><th>Factor</th><th>Field</th><th>Points</th><th>What It Checks</th></tr>
       </thead>
       <tbody>
-        <tr><td>Has organisation</td><td><code>weight_has_organisation</code></td><td>Is the organisation field filled in?</td></tr>
-        <tr><td>Business email</td><td><code>weight_business_email</code></td><td>Is the email domain NOT a free provider (gmail, yahoo, hotmail, outlook, etc.)?</td></tr>
-        <tr><td>Topic: Corporate</td><td><code>topic_weight_corporate</code></td><td>Does the enquiry topic contain "corporate"?</td></tr>
-        <tr><td>Topic: Wedding</td><td><code>topic_weight_wedding</code></td><td>Does the enquiry topic contain "wedding"?</td></tr>
-        <tr><td>Topic: Festival</td><td><code>topic_weight_festival</code></td><td>Does the enquiry topic contain "festival"?</td></tr>
-        <tr><td>Topic: Default</td><td><code>topic_weight_default</code></td><td>Fallback score if no specific topic matches</td></tr>
-        <tr><td>Has phone</td><td><code>weight_has_phone</code></td><td>Is a phone number provided (more than 3 characters)?</td></tr>
-        <tr><td>Long message</td><td><code>weight_long_message</code></td><td>Is the message longer than 100 characters?</td></tr>
-        <tr><td>Budget keywords</td><td><code>weight_budget_keywords</code></td><td>Does the message mention "budget", "quote", or "price"?</td></tr>
-        <tr><td>Business hours</td><td><code>weight_business_hours</code></td><td>Was the form submitted between 9am and 5pm?</td></tr>
-        <tr><td>Form completeness</td><td><code>weight_form_completeness</code></td><td>Are ALL of phone, organisation, and a long message present?</td></tr>
+        <tr><td>Topic: Wedding</td><td><code>topic_weight_wedding</code></td><td><strong>25</strong></td><td>Does the enquiry topic contain "wedding"?</td></tr>
+        <tr><td>Topic: Corporate</td><td><code>topic_weight_corporate</code></td><td><strong>20</strong></td><td>Does the enquiry topic contain "corporate"?</td></tr>
+        <tr><td>Has organisation</td><td><code>weight_has_organisation</code></td><td><strong>20</strong></td><td>Is the organisation field filled in?</td></tr>
+        <tr><td>Business email</td><td><code>weight_business_email</code></td><td><strong>15</strong></td><td>Is the email domain NOT a free provider (gmail, yahoo, hotmail, outlook, etc.)?</td></tr>
+        <tr><td>Budget keywords</td><td><code>weight_budget_keywords</code></td><td><strong>15</strong></td><td>Does the message mention "budget", "quote", or "price"?</td></tr>
+        <tr><td>Topic: Festival</td><td><code>topic_weight_festival</code></td><td><strong>15</strong></td><td>Does the enquiry topic contain "festival"?</td></tr>
+        <tr><td>Has phone</td><td><code>weight_has_phone</code></td><td><strong>10</strong></td><td>Is a phone number provided (more than 3 characters)?</td></tr>
+        <tr><td>Long message</td><td><code>weight_long_message</code></td><td><strong>10</strong></td><td>Is the message longer than 100 characters?</td></tr>
+        <tr><td>Form completeness</td><td><code>weight_form_completeness</code></td><td><strong>10</strong></td><td>Are ALL of phone, organisation, and a long message present?</td></tr>
+        <tr><td>Topic: Default</td><td><code>topic_weight_default</code></td><td><strong>10</strong></td><td>Fallback score if no specific topic matches</td></tr>
+        <tr><td>Business hours</td><td><code>weight_business_hours</code></td><td><strong>5</strong></td><td>Was the form submitted between 9am and 5pm?</td></tr>
       </tbody>
     </table>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-top:16px;">
       <p style="margin:0;font-size:14px;color:var(--text2);">
-        <strong style="color:var(--text);">How scores add up:</strong> A corporate enquiry with a phone number, detailed message, business email, submitted at 2pm might score: organisation + business email + topic (corporate) + phone + long message + business hours + form completeness &rarr; high score &rarr; <strong>Hot lead</strong>. Exact point values are set in Pipeline Config and can be tuned.
+        <strong style="color:var(--text);">How scores add up:</strong> A corporate enquiry from a business email, with phone, detailed message, submitted at 2pm: organisation (20) + business email (15) + corporate topic (20) + phone (10) + long message (10) + business hours (5) + form completeness (10) = <strong>90 points &rarr; Hot lead</strong>. Only one topic weight applies per enquiry (highest match wins). Maximum possible score: ~105.
       </p>
     </div>
   </div>
@@ -274,31 +274,31 @@ tr:nth-child(even) td { background: var(--surface2); }
   <div class="section">
     <div class="section-title">Example Scenarios</div>
     <div class="example example-hot">
-      <span class="example-badge">Hot</span>
+      <span class="example-badge">Hot &middot; 90</span>
       <div class="example-info">
-        <h4>"Corporate Christmas party for 200 staff at the Birmingham venue"</h4>
-        <p>Scores on: organisation field filled + topic matches "corporate" + long message + business email (company domain) + form completeness bonus. Team notified immediately.</p>
+        <h4>"We're XYZ Corp and need to book a corporate Christmas party for 200 staff at the Birmingham venue. Can you send a quote for VIP and Super VIP packages? Contact me at 07700 900000."</h4>
+        <p>Organisation (20) + business email (15) + corporate topic (20) + phone (10) + long message (10) + budget keyword "quote" (15) + form completeness (10) = <strong>100</strong>. Submitted at 2pm adds business hours (5) = <strong>105</strong>.</p>
       </div>
     </div>
     <div class="example example-warm">
-      <span class="example-badge">Warm</span>
+      <span class="example-badge">Warm &middot; 35</span>
       <div class="example-info">
-        <h4>"Hi, interested in booking a party for about 30 people in December"</h4>
-        <p>Scores on: long message + default topic weight. No phone, no org, gmail address. Gets faster follow-ups but not a handoff.</p>
+        <h4>"Hi, I work for Acme Ltd and we're interested in booking a corporate event for about 30 people sometime in December. Could you let me know what's available?"</h4>
+        <p>Organisation (20) + corporate topic (20) = 40. But gmail address (0) and no phone (0). If submitted outside business hours: <strong>40</strong>. With business email instead: <strong>55 = hot</strong>. The email domain is the swing factor here.</p>
       </div>
     </div>
     <div class="example example-standard">
-      <span class="example-badge">Standard</span>
+      <span class="example-badge">Standard &middot; 10</span>
       <div class="example-info">
         <h4>"How much does it cost?"</h4>
-        <p>Scores on: default topic weight only. Short message, no org, no phone, gmail address. Gets standard follow-up cadence.</p>
+        <p>Default topic (10). Short message (0), no org (0), no phone (0), gmail (0), no budget keywords (0). Score: <strong>10</strong>.</p>
       </div>
     </div>
-    <div class="example example-hot">
-      <span class="example-badge">Hot</span>
+    <div class="example example-warm">
+      <span class="example-badge">Warm &middot; 30</span>
       <div class="example-info">
-        <h4>"Jess from XYZ Corp (jess@xyzcorp.com), 07700900000, need to book the venue for our corporate team event next month"</h4>
-        <p>Scores on: organisation + business email + topic "corporate" + phone + long message + budget keyword ("book") + business hours + form completeness. Maximum scoring factors hit.</p>
+        <h4>"Hi, I'm looking at the Wolverhampton venue for a wedding reception next spring. We'd have around 150 guests and I'd love to know about pricing and what packages are available for the evening."</h4>
+        <p>Wedding topic (25) + long message (10) = <strong>35</strong>. No org, no phone, gmail address. One factor away from warm/hot boundary.</p>
       </div>
     </div>
   </div>
@@ -347,17 +347,17 @@ tr:nth-child(even) td { background: var(--surface2); }
         <tr><td>Hot lead threshold</td><td><code>handoff_threshold</code></td><td>50</td></tr>
         <tr><td>Handoff enabled</td><td><code>handoff_enabled</code></td><td>true</td></tr>
         <tr><td>Notification emails</td><td><code>handoff_email</code></td><td>gurmej@mejimedia.com, enquire@christmasofficeparty.co.uk</td></tr>
-        <tr><td>Organisation weight</td><td><code>weight_has_organisation</code></td><td>Configurable</td></tr>
-        <tr><td>Business email weight</td><td><code>weight_business_email</code></td><td>Configurable</td></tr>
-        <tr><td>Phone weight</td><td><code>weight_has_phone</code></td><td>Configurable</td></tr>
-        <tr><td>Long message weight</td><td><code>weight_long_message</code></td><td>Configurable</td></tr>
-        <tr><td>Budget keywords weight</td><td><code>weight_budget_keywords</code></td><td>Configurable</td></tr>
-        <tr><td>Business hours weight</td><td><code>weight_business_hours</code></td><td>Configurable</td></tr>
-        <tr><td>Form completeness weight</td><td><code>weight_form_completeness</code></td><td>Configurable</td></tr>
-        <tr><td>Topic: Corporate</td><td><code>topic_weight_corporate</code></td><td>Configurable</td></tr>
-        <tr><td>Topic: Wedding</td><td><code>topic_weight_wedding</code></td><td>Configurable</td></tr>
-        <tr><td>Topic: Festival</td><td><code>topic_weight_festival</code></td><td>Configurable</td></tr>
-        <tr><td>Topic: Default</td><td><code>topic_weight_default</code></td><td>Configurable</td></tr>
+        <tr><td>Organisation weight</td><td><code>weight_has_organisation</code></td><td>20</td></tr>
+        <tr><td>Business email weight</td><td><code>weight_business_email</code></td><td>15</td></tr>
+        <tr><td>Phone weight</td><td><code>weight_has_phone</code></td><td>10</td></tr>
+        <tr><td>Long message weight</td><td><code>weight_long_message</code></td><td>10</td></tr>
+        <tr><td>Budget keywords weight</td><td><code>weight_budget_keywords</code></td><td>15</td></tr>
+        <tr><td>Business hours weight</td><td><code>weight_business_hours</code></td><td>5</td></tr>
+        <tr><td>Form completeness weight</td><td><code>weight_form_completeness</code></td><td>10</td></tr>
+        <tr><td>Topic: Wedding</td><td><code>topic_weight_wedding</code></td><td>25</td></tr>
+        <tr><td>Topic: Corporate</td><td><code>topic_weight_corporate</code></td><td>20</td></tr>
+        <tr><td>Topic: Festival</td><td><code>topic_weight_festival</code></td><td>15</td></tr>
+        <tr><td>Topic: Default</td><td><code>topic_weight_default</code></td><td>10</td></tr>
       </tbody>
     </table>
     <p style="font-size:13px;color:var(--text2);margin-top:12px;">
