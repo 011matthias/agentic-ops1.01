@@ -1,4 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <rect width="32" height="32" rx="6" fill="#2563eb"/>
-  <text x="16" y="23" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="700" fill="white">U</text>
+  <rect width="32" height="32" rx="7" fill="#2563eb"/>
+  <!-- Pause bar (left, static) -->
+  <rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/>
+  <!-- Play/forward bar (right, tilted to suggest motion) -->
+  <polygon points="18,8 23,16 18,24" fill="white"/>
 </svg>

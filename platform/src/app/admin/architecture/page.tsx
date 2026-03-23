@@ -46,6 +46,8 @@ const pages: PageEntry[] = [
   { route: "/contact", label: "Contact", area: "public", reads: [], writes: [], status: "live" },
   { route: "/proposals/[slug]", label: "Proposals", area: "public", reads: [], writes: [], status: "live", notes: "SSG from markdown" },
   { route: "/buy/[slug]", label: "Buy Page", area: "public", reads: ["products"], writes: ["purchases"], status: "live", notes: "Stripe checkout" },
+  { route: "/terms", label: "Terms of Service", area: "public", reads: [], writes: [], status: "live" },
+  { route: "/privacy", label: "Privacy Policy", area: "public", reads: [], writes: [], status: "live" },
 
   // Portal (client-facing)
   { route: "/portal", label: "Dashboard", area: "portal", reads: ["clients", "projects", "milestones", "messages"], writes: [], status: "live" },
@@ -279,6 +281,16 @@ export default async function ArchitecturePage() {
         title="Architecture"
         subtitle="Platform map, data flows, live health, and roadmap. Everything in one place."
       />
+
+      {/* ── Section 0: System Overview Infographic ─────────────────────────── */}
+      <section className="mb-12">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          System Overview
+        </h2>
+        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 overflow-x-auto">
+          <SystemDiagram />
+        </div>
+      </section>
 
       {/* ── Section A: Live Health Check ──────────────────────────────────── */}
       <section className="mb-12">
@@ -527,5 +539,160 @@ function QuickLink({ href, label }: { href: string; label: string }) {
     >
       {label}
     </a>
+  )
+}
+
+// ── System Diagram ────────────────────────────────────────────────────────────
+
+function DiagramBox({
+  title,
+  subtitle,
+  items,
+  href,
+  accent,
+  className = "",
+}: {
+  title: string
+  subtitle?: string
+  items?: string[]
+  href?: string
+  accent?: string
+  className?: string
+}) {
+  const border = accent ? `border-${accent}` : "border-gray-300 dark:border-gray-600"
+  const content = (
+    <div className={`rounded-lg border ${border} bg-gray-50 dark:bg-gray-800/50 p-3 ${className}`}>
+      <p className={`text-xs font-bold uppercase tracking-wider ${accent ? `text-${accent}` : "text-gray-500 dark:text-gray-400"}`}>
+        {title}
+      </p>
+      {subtitle && (
+        <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{subtitle}</p>
+      )}
+      {items && (
+        <ul className="mt-2 space-y-0.5">
+          {items.map((item) => (
+            <li key={item} className="text-[11px] text-gray-600 dark:text-gray-300">
+              {item}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+  if (href) {
+    return <a href={href} className="block hover:opacity-80 transition-opacity">{content}</a>
+  }
+  return content
+}
+
+function DiagramArrow({ label, className = "" }: { label?: string; className?: string }) {
+  return (
+    <div className={`flex flex-col items-center gap-0.5 ${className}`}>
+      <div className="w-px h-4 bg-gray-300 dark:bg-gray-600" />
+      {label && (
+        <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono whitespace-nowrap">
+          {label}
+        </span>
+      )}
+      <div className="w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[6px] border-t-gray-300 dark:border-t-gray-600" />
+    </div>
+  )
+}
+
+function SystemDiagram() {
+  return (
+    <div className="flex flex-col items-center gap-1 min-w-[600px]">
+      {/* Layer 1: Public Website */}
+      <DiagramBox
+        title="Public Website"
+        subtitle="unpauseai.com"
+        items={["Homepage", "Services", "Proposals", "Contact", "Terms / Privacy"]}
+        href="/"
+        className="w-full max-w-lg"
+      />
+
+      <DiagramArrow label="Login (Google / Magic Link)" />
+
+      {/* Layer 2: Portal + Admin side by side */}
+      <div className="flex gap-6 w-full max-w-lg">
+        <DiagramBox
+          title="Client Portal"
+          subtitle="/portal"
+          items={["Dashboard", "Automations", "Messages", "Resources", "Files", "Settings"]}
+          href="/portal"
+          accent="blue-400"
+          className="flex-1"
+        />
+        <DiagramBox
+          title="Admin Panel"
+          subtitle="/admin"
+          items={["Dashboard", "Clients", "Projects", "Messages", "Architecture", "Builds"]}
+          href="/admin"
+          accent="blue-500"
+          className="flex-1"
+        />
+      </div>
+
+      {/* Shared messages note */}
+      <p className="text-[10px] text-gray-400 dark:text-gray-500 italic">
+        Messages are shared between portal and admin (same DB table)
+      </p>
+
+      <DiagramArrow label="Drizzle ORM queries" />
+
+      {/* Layer 3: Database */}
+      <DiagramBox
+        title="Neon Database"
+        subtitle="PostgreSQL"
+        items={["users", "clients", "projects", "milestones", "messages", "module_executions", "client_resources", "files", "products", "purchases"]}
+        className="w-full max-w-xs"
+      />
+
+      <div className="flex flex-col items-center gap-0.5">
+        <div className="w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-b-[6px] border-b-gray-300 dark:border-b-gray-600" />
+        <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono">
+          POST /api/modules/&#123;name&#125;
+        </span>
+        <div className="w-px h-4 bg-gray-300 dark:bg-gray-600" />
+      </div>
+
+      {/* Layer 4: Orchestrators */}
+      <div className="flex gap-4 w-full max-w-md justify-center">
+        <DiagramBox title="Make.com" subtitle="Visual workflows" className="flex-1" />
+        <DiagramBox title="n8n" subtitle="Data pipelines" className="flex-1" />
+        <DiagramBox title="Trigger.dev" subtitle="Code-first AI" className="flex-1" />
+      </div>
+
+      <div className="flex flex-col items-center gap-0.5 mt-1">
+        <div className="w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-b-[6px] border-b-gray-300 dark:border-b-gray-600" />
+        <span className="text-[10px] text-gray-400 dark:text-gray-500 font-mono">
+          built &amp; managed by
+        </span>
+        <div className="w-px h-4 bg-gray-300 dark:bg-gray-600" />
+      </div>
+
+      {/* Layer 5: Agentic Ops */}
+      <div className="rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-800/30 p-4 w-full max-w-lg text-center">
+        <p className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+          Agentic Ops
+        </p>
+        <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+          This repo + Claude Code
+        </p>
+        <div className="flex justify-center gap-2 mt-2">
+          {["specs", "build", "test", "deploy"].map((step, i) => (
+            <span key={step} className="flex items-center gap-1.5">
+              <span className="text-[11px] font-medium text-gray-600 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded">
+                {step}
+              </span>
+              {i < 3 && <span className="text-gray-400 text-[10px]">&rarr;</span>}
+            </span>
+          ))}
+        </div>
+        <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-2">
+          Automations are defined as specs, implemented on orchestrators, and push results to the platform via webhook.
+        </p>
+      </div>
+    </div>
   )
 }

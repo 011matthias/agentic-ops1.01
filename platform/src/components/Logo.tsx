@@ -14,10 +14,9 @@ interface LogoProps {
 
 export default function Logo({ size = "md", href = "/", className = "" }: LogoProps) {
   const content = (
-    <span className={`${sizes[size]} font-semibold tracking-tight ${className}`}>
-      <span className="text-accent">Un</span>
-      <span>pause</span>
-      <span className="text-accent">AI</span>
+    <span className={`${sizes[size]} tracking-tight ${className}`}>
+      <span className="font-bold">Unpause</span>
+      <span className="font-bold text-accent">AI</span>
     </span>
   );
 

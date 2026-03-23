@@ -30,10 +30,12 @@ export default function AdminSidebar({ userName, userEmail, signOutAction }: Adm
 
   return (
     <aside className="w-full sm:w-60 sm:min-h-screen bg-gray-950 text-gray-100 flex flex-col shrink-0 border-r border-gray-800/50">
+      {/* Blue accent bar — distinguishes admin from portal */}
+      <div className="h-1 bg-blue-500" />
       {/* Brand */}
       <div className="px-5 py-4 border-b border-gray-800/50">
         <Logo size="sm" href="/admin" className="text-white hover:text-gray-200 transition-colors" />
-        <p className="text-[11px] text-gray-500 mt-0.5 tracking-wide uppercase">Admin</p>
+        <p className="text-xs text-blue-400 mt-0.5 font-semibold tracking-wide uppercase">Admin</p>
       </div>
 
       {/* Nav */}
