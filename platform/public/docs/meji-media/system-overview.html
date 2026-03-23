@@ -1379,10 +1379,10 @@ const root = document.documentElement;
 function toggleTheme() {
   const t = root.dataset.theme === 'dark' ? 'light' : 'dark';
   root.dataset.theme = t;
-  localStorage.setItem('mm-theme', t);
+  localStorage.setItem('meji-docs-theme', t);
 }
 (function() {
-  const saved = localStorage.getItem('mm-theme');
+  const saved = localStorage.getItem('meji-docs-theme');
   if (saved) root.dataset.theme = saved;
 })();
 

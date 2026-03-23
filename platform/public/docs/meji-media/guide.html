@@ -81,12 +81,14 @@ h2 {
     border-bottom: 1px solid var(--blue-light);
     padding-bottom: 8px;
     margin-top: 48px;
+    scroll-margin-top: 80px;
 }
 
 h3 {
     font-size: 17px;
     color: var(--text2);
     margin-top: 32px;
+    scroll-margin-top: 80px;
 }
 
 table {
@@ -507,7 +509,7 @@ new -> handoff                    (hot lead -- immediate team notification, no a
 <tr><td><strong>Standard</strong></td><td>Lower-scoring lead (below 25)</td><td>Standard acknowledgement email, followed by regular-pace follow-ups</td></tr>
 </tbody>
 </table>
-<p>The scoring weights and the threshold for &ldquo;hot lead&rdquo; notifications are configurable &ndash; ask us if you&rsquo;d like to adjust them.</p>
+<p>The scoring weights and the threshold for &ldquo;hot lead&rdquo; notifications are configurable &ndash; you can adjust these in Pipeline Config (see the Configuration section below).</p>
 
 <hr />
 
@@ -531,7 +533,7 @@ new -> handoff                    (hot lead -- immediate team notification, no a
 </tbody>
 </table>
 <p><em>All times are measured from when the initial email was sent.</em></p>
-<p>These timings are configurable &ndash; ask us if you&rsquo;d like to adjust them.</p>
+<p>These timings are configurable &ndash; you can adjust these in Pipeline Config (see the Configuration section below).</p>
 <p><strong>Note:</strong> Hot leads marked as &ldquo;handoff&rdquo; skip the automated sequence entirely. Your team handles those directly.</p>
 
 <hr />
@@ -576,7 +578,7 @@ new -> handoff                    (hot lead -- immediate team notification, no a
 <tr><td>Company name</td><td><code>company_name</code></td><td>Meji Media</td><td>Displayed as the sender name on all automated emails</td></tr>
 <tr><td>Email signature</td><td><code>email_signature_html</code></td><td>(HTML block)</td><td>The sign-off and company links at the bottom of every email. Edit this once to update all templates.</td></tr>
 <tr><td>A/B testing on/off</td><td><code>ab_testing_enabled</code></td><td>false</td><td>When enabled, new enquiries are randomly split between email Version A and Version B (see the A/B Testing Guide)</td></tr>
-<tr><td>Scoring weights</td><td><code>weight_*</code> fields</td><td>Various</td><td>How much each factor contributes to the lead score</td></tr>
+<tr><td>Scoring weights</td><td><code>weight_has_organisation</code>, <code>weight_business_email</code>, <code>weight_has_phone</code>, <code>weight_long_message</code>, <code>weight_budget_keywords</code>, <code>weight_business_hours</code>, <code>weight_form_completeness</code>, <code>topic_weight_corporate</code>, <code>topic_weight_wedding</code>, <code>topic_weight_festival</code>, <code>topic_weight_default</code></td><td>Various</td><td>How much each factor contributes to the lead score. See the <a href="/docs/meji-media/lead-scoring">Lead Scoring Guide</a> for details.</td></tr>
 </tbody>
 </table>
 
