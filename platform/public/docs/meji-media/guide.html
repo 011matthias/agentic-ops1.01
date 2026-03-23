@@ -260,9 +260,9 @@ em {
         <span class="doc-nav-brand">Meji Media</span>
         <span class="doc-nav-sep">|</span>
         <div class="doc-nav-links">
-            <a href="./">Hub</a>
-            <a href="./guide.html" class="active">Complete Guide</a>
-            <a href="./system-overview.html">System Overview</a>
+            <a href="/docs/meji-media/">Hub</a>
+            <a href="/docs/meji-media/guide" class="active">Complete Guide</a>
+            <a href="/docs/meji-media/system-overview">System Overview</a>
         </div>
     </div>
     <div class="doc-nav-right">
@@ -1151,6 +1151,46 @@ new -> handoff                    (hot lead -- immediate team notification, no a
 <li>Set all 8 <code>_a</code> and <code>_b</code> variants to <code>active: false</code></li>
 </ol>
 <p>The system will use the original single-version templates for all new enquiries.</p>
+
+<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
+  <div style="text-align:center;max-width:360px;padding:24px;">
+    <div style="width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:24px;margin:0 auto 20px;">U</div>
+    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Meji Media Documentation</h2>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Enter your access code to continue.</p>
+    <div style="display:flex;gap:8px;">
+      <input id="auth-input" type="password" placeholder="Access code" autocomplete="off"
+        style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;"
+        onkeydown="if(event.key==='Enter')checkAuth()" />
+      <button onclick="checkAuth()"
+        style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">Enter</button>
+    </div>
+    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Incorrect code. Please try again.</p>
+  </div>
+</div>
+
+<script>
+var MEJI_CODE = 'meji2026';
+function checkAuth() {
+  var input = document.getElementById('auth-input').value;
+  if (input === MEJI_CODE) {
+    localStorage.setItem('meji-docs-access', 'granted');
+    var gate = document.getElementById('auth-gate');
+    gate.style.opacity = '0';
+    setTimeout(function() { gate.style.display = 'none'; }, 300);
+  } else {
+    document.getElementById('auth-error').style.display = 'block';
+    document.getElementById('auth-input').value = '';
+    document.getElementById('auth-input').focus();
+  }
+}
+(function() {
+  if (localStorage.getItem('meji-docs-access') === 'granted') {
+    document.getElementById('auth-gate').style.display = 'none';
+  } else {
+    document.getElementById('auth-input').focus();
+  }
+})();
+</script>
 
 </body>
 </html>

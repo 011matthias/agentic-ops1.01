@@ -287,9 +287,9 @@ body {
     </div>
     <span style="color:var(--border);font-size:20px;margin:0 4px;">|</span>
     <nav style="display:flex;gap:4px;">
-      <a href="./" style="font-size:13px;font-weight:700;padding:6px 12px;border-radius:6px;background:var(--blue-light);color:var(--blue);text-decoration:none;">Hub</a>
-      <a href="./guide.html" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Complete Guide</a>
-      <a href="./system-overview.html" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">System Overview</a>
+      <a href="/docs/meji-media/" style="font-size:13px;font-weight:700;padding:6px 12px;border-radius:6px;background:var(--blue-light);color:var(--blue);text-decoration:none;">Hub</a>
+      <a href="/docs/meji-media/guide" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Complete Guide</a>
+      <a href="/docs/meji-media/system-overview" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">System Overview</a>
     </nav>
   </div>
   <div class="header-right">
@@ -327,13 +327,13 @@ body {
   <div class="section">
     <div class="section-title">Documentation</div>
     <div class="cards">
-      <a href="guide.html" class="card">
+      <a href="/docs/meji-media/guide" class="card">
         <div class="card-icon card-icon-blue">&#128214;</div>
         <h3>Complete Guide</h3>
         <p>Everything about your system: how it works, email templates, lead scoring, configuration options, troubleshooting, and A/B testing.</p>
         <span class="card-tag card-tag-link">Open Guide</span>
       </a>
-      <a href="system-overview.html" class="card">
+      <a href="/docs/meji-media/system-overview" class="card">
         <div class="card-icon card-icon-purple">&#128200;</div>
         <h3>System Overview</h3>
         <p>Visual map of your entire automation pipeline. See how data flows from enquiry to follow-up, with every automation and connection shown.</p>
@@ -503,7 +503,7 @@ body {
         <li style="margin-bottom:6px;"><strong style="color:var(--text);">A2</strong> checks the inbox every 10 minutes -- if they reply, follow-ups stop</li>
         <li><strong style="color:var(--text);">A3</strong> sends scheduled follow-ups and closes cold leads after ~9 days</li>
       </ol>
-      <p style="margin-top:16px;font-size:13px;color:var(--text3);">For the full visual diagram, see <a href="system-overview.html" style="color:var(--blue)">System Overview</a>.</p>
+      <p style="margin-top:16px;font-size:13px;color:var(--text3);">For the full visual diagram, see <a href="/docs/meji-media/system-overview" style="color:var(--blue)">System Overview</a>.</p>
     </div>
   </div>
 
@@ -532,18 +532,59 @@ body {
   <p style="margin-top:4px;">Last updated: 23 March 2026</p>
 </footer>
 
+<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
+  <div style="text-align:center;max-width:360px;padding:24px;">
+    <div style="width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:24px;margin:0 auto 20px;">U</div>
+    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Meji Media Documentation</h2>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Enter your access code to continue.</p>
+    <div style="display:flex;gap:8px;">
+      <input id="auth-input" type="password" placeholder="Access code" autocomplete="off"
+        style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;"
+        onkeydown="if(event.key==='Enter')checkAuth()" />
+      <button onclick="checkAuth()"
+        style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">Enter</button>
+    </div>
+    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Incorrect code. Please try again.</p>
+  </div>
+</div>
+
 <script>
+var MEJI_CODE = 'meji2026';
+
+function checkAuth() {
+  var input = document.getElementById('auth-input').value;
+  if (input === MEJI_CODE) {
+    localStorage.setItem('meji-docs-access', 'granted');
+    var gate = document.getElementById('auth-gate');
+    gate.style.opacity = '0';
+    setTimeout(function() { gate.style.display = 'none'; }, 300);
+  } else {
+    document.getElementById('auth-error').style.display = 'block';
+    document.getElementById('auth-input').value = '';
+    document.getElementById('auth-input').focus();
+  }
+}
+
+// Check on load
+(function() {
+  if (localStorage.getItem('meji-docs-access') === 'granted') {
+    document.getElementById('auth-gate').style.display = 'none';
+  } else {
+    document.getElementById('auth-input').focus();
+  }
+})();
+
 function toggleTheme() {
-  const html = document.documentElement;
-  const current = html.getAttribute('data-theme');
-  const next = current === 'dark' ? 'light' : 'dark';
+  var html = document.documentElement;
+  var current = html.getAttribute('data-theme');
+  var next = current === 'dark' ? 'light' : 'dark';
   html.setAttribute('data-theme', next);
   localStorage.setItem('meji-docs-theme', next);
   document.getElementById('theme-icon').innerHTML = next === 'dark' ? '&#9788;' : '&#9790;';
 }
 
 // Restore theme
-const saved = localStorage.getItem('meji-docs-theme');
+var saved = localStorage.getItem('meji-docs-theme');
 if (saved) {
   document.documentElement.setAttribute('data-theme', saved);
   if (saved === 'dark') document.getElementById('theme-icon').innerHTML = '&#9788;';
