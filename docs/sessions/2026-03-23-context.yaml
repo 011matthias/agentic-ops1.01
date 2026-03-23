@@ -1,0 +1,37 @@
+checkpoint_date: "2026-03-23"
+checkpoint_topic: "Meji Media Client Documentation Portal"
+checkpoint_file: "docs/2026-03-23 - Meji Media Client Documentation Portal/Checkpoint.md"
+work_type: "client-dev"
+clients:
+  meji-media:
+    orchestrator: make
+    active_specs:
+      - id: a0
+        stage: live
+        name: "MySQL Enquiry Poller"
+      - id: a1
+        stage: live
+        name: "Enquiry Follow-Up Sequence"
+      - id: a2
+        stage: live
+        name: "Reply Detection & Stop"
+      - id: a3
+        stage: live
+        name: "Scheduled Follow-Up Steps"
+    comms:
+      last_contact: "2026-03-20"
+      staleness_days: 3
+      unresolved_items:
+        - "Template editing walkthrough for Jess (how to edit ##...## placeholders)"
+        - "Confirm system running clean with 30k ops budget"
+    next_steps:
+      - "Share doc site link (unpauseai.com/docs/meji-media/) + access code at meeting"
+      - "Document Venue Config (Birmingham ICC, Wolverhampton ICB, Leicester)"
+      - "Identify 3 undocumented Google Sheet columns (21 vs 18 documented)"
+      - "Record Loom video using docs/video-script.md"
+      - "Clean up UTIL scenarios before handoff"
+    open_questions:
+      - "Should doc site migrate into portal or stay static?"
+      - "Does client prefer self-serve config or request-based changes?"
+      - "Should Jess also receive hot lead team notifications?"
+      - "When to enable A/B testing?"
