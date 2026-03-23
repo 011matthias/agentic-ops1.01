@@ -285,6 +285,12 @@ body {
       <h1>Meji Media</h1>
       <p>Automation Documentation</p>
     </div>
+    <span style="color:var(--border);font-size:20px;margin:0 4px;">|</span>
+    <nav style="display:flex;gap:4px;">
+      <a href="./" style="font-size:13px;font-weight:700;padding:6px 12px;border-radius:6px;background:var(--blue-light);color:var(--blue);text-decoration:none;">Hub</a>
+      <a href="./guide.html" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Complete Guide</a>
+      <a href="./system-overview.html" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">System Overview</a>
+    </nav>
   </div>
   <div class="header-right">
     <span class="badge badge-green"><span class="badge-dot"></span> All Systems Live</span>
@@ -532,12 +538,12 @@ function toggleTheme() {
   const current = html.getAttribute('data-theme');
   const next = current === 'dark' ? 'light' : 'dark';
   html.setAttribute('data-theme', next);
-  localStorage.setItem('theme', next);
+  localStorage.setItem('meji-docs-theme', next);
   document.getElementById('theme-icon').innerHTML = next === 'dark' ? '&#9788;' : '&#9790;';
 }
 
 // Restore theme
-const saved = localStorage.getItem('theme');
+const saved = localStorage.getItem('meji-docs-theme');
 if (saved) {
   document.documentElement.setAttribute('data-theme', saved);
   if (saved === 'dark') document.getElementById('theme-icon').innerHTML = '&#9788;';

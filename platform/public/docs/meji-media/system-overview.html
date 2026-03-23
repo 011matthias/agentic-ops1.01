@@ -598,9 +598,66 @@ body {
   font-size: 11px; font-weight: 700;
   background: var(--green-light); color: var(--green);
 }
+
+/* Shared doc nav */
+.doc-nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 200;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 48px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  transition: background .2s;
+}
+.doc-nav-left { display: flex; align-items: center; gap: 12px; }
+.doc-nav-logo {
+  width: 28px; height: 28px; border-radius: 7px;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 800; font-size: 12px;
+}
+.doc-nav-brand { font-size: 13px; font-weight: 700; color: var(--text); }
+.doc-nav-sep { color: var(--border); font-size: 16px; }
+.doc-nav-links { display: flex; gap: 4px; }
+.doc-nav-links a {
+  font-size: 12px; font-weight: 500;
+  padding: 5px 10px; border-radius: 6px;
+  color: var(--text2); text-decoration: none;
+  transition: background .15s, color .15s;
+}
+.doc-nav-links a:hover { background: var(--surface2); color: var(--text); }
+.doc-nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+
+/* Offset existing header and sidebar below doc-nav */
+.header { top: 48px !important; }
+.sidebar { padding-top: 128px !important; }
+
+@media (max-width: 768px) {
+  .doc-nav-brand { display: none; }
+  .doc-nav-sep { display: none; }
+}
 </style>
 </head>
 <body>
+
+<!-- Shared doc nav -->
+<nav class="doc-nav">
+  <div class="doc-nav-left">
+    <div class="doc-nav-logo">U</div>
+    <span class="doc-nav-brand">Meji Media</span>
+    <span class="doc-nav-sep">|</span>
+    <div class="doc-nav-links">
+      <a href="./">Hub</a>
+      <a href="./guide.html">Complete Guide</a>
+      <a href="./system-overview.html" class="active">System Overview</a>
+    </div>
+  </div>
+</nav>
 
 <!-- Sidebar backdrop (mobile) -->
 <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
