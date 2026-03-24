@@ -315,15 +315,19 @@ tr:hover td { background: var(--blue-bg); }
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#nodes" class="step-link"><span class="step-num">2</span> Node Walkthrough</a>
+            <a href="#video" class="step-link"><span class="step-num">2</span> Video Walkthrough</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#demo" class="step-link"><span class="step-num">3</span> Live Demo</a>
+            <a href="#nodes" class="step-link"><span class="step-num">3</span> Node Walkthrough</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#download" class="step-link"><span class="step-num">4</span> Download</a>
+            <a href="#demo" class="step-link"><span class="step-num">4</span> Live Demo</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#download" class="step-link"><span class="step-num">5</span> Download</a>
         </li>
     </ul>
 </aside>
@@ -370,7 +374,19 @@ tr:hover td { background: var(--blue-bg); }
         </div>
     </div>
 
-    <!-- Section 2: Node Walkthrough -->
+    <!-- Section 2: Video Walkthrough -->
+    <h2 id="video">Video Walkthrough</h2>
+
+    <p>A 2-minute walkthrough of the workflow, how it processes patient intake submissions, and what happens at each step.</p>
+
+    <div class="detail-card" style="padding: 0; overflow: hidden;">
+        <div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;">
+            <iframe src="https://www.loom.com/embed/e6dfb8249a694c72a7cf6fe48e16c9db" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;"></iframe>
+        </div>
+    </div>
+    <p style="text-align: center; margin-top: 12px;"><a href="https://www.loom.com/share/e6dfb8249a694c72a7cf6fe48e16c9db" target="_blank" rel="noopener">Watch on Loom &rarr;</a></p>
+
+    <!-- Section 3: Node Walkthrough -->
     <h2 id="nodes">Node-by-Node Walkthrough</h2>
 
     <p>The workflow consists of 8 nodes arranged in a linear flow with one validation branch. Here is what each node does and why it matters.</p>
@@ -507,18 +523,45 @@ tr:hover td { background: var(--blue-bg); }
         <h3>Expected Response</h3>
         <div class="code-block">
             <div class="code-block-header">
-                <span class="code-block-label">JSON Response</span>
+                <span class="code-block-label">JSON Response (enriched)</span>
             </div>
             <pre>{
   "status": "success",
-  "message": "Bedankt voor uw aanmelding. U ontvangt een bevestigingsmail."
+  "message": "Bedankt voor uw aanmelding. U ontvangt een bevestigingsmail.",
+  "patient_journey_preview": {
+    "step_1": "Contact aangemaakt in Zoho CRM (Lead Status: Nieuw)",
+    "step_2": "Bevestigingsmail verstuurd via Brevo",
+    "step_3": "Herinnering voor afspraak ingepland (+24u)",
+    "step_4": "SMS-herinnering bij geen boeking (+48u)",
+    "step_5": "Voorbereiding consult email (2 dagen voor afspraak)",
+    "step_6": "Nazorg email sequence (na consult)"
+  },
+  "gdpr_audit": {
+    "consent_logged": true,
+    "timestamp": "2026-03-24T14:32:01.000Z",
+    "source": "intake_form",
+    "version": "1.0",
+    "eu_hosted": true
+  },
+  "crm_record": {
+    "fields_created": ["First_Name", "Last_Name", "Email", "Phone", "Lead_Source", "Package", "GDPR_Consent"],
+    "pipeline_stage": "Nieuw",
+    "next_action": "Booking uitnodiging wordt verstuurd"
+  },
+  "data_quality": {
+    "name_provided": "yes",
+    "email_provided": "yes",
+    "phone_provided": "yes",
+    "package_selected": "yes",
+    "gdpr_consent": true
+  }
 }</pre>
         </div>
     </div>
 
     <div class="callout purple">
         <div class="callout-title">Demo Mode</div>
-        <p>This is a demonstration deployment. The CRM and email nodes use placeholder credentials, so no actual CRM records are created and no emails are sent. The workflow structure, validation logic, and response format are identical to what runs in production.</p>
+        <p>This is a demonstration deployment. The CRM and email nodes use placeholder credentials, so no actual CRM records are created and no emails are sent. The enriched response shows you exactly what happens in production: the full patient journey preview, GDPR audit trail, CRM fields that would be created, and a data quality check. The workflow structure and logic are identical to what runs in production.</p>
     </div>
 
     <h3>Request Fields</h3>
@@ -547,7 +590,7 @@ tr:hover td { background: var(--blue-bg); }
 
     <div class="detail-card" style="text-align: center; padding: 32px;">
         <h3 style="margin-top: 0; color: var(--text-strong);">n8n Patient Intake Template</h3>
-        <p style="color: var(--text2); margin-bottom: 24px;">8 nodes &middot; Webhook trigger &middot; GDPR consent logging &middot; CRM + Email</p>
+        <p style="color: var(--text2); margin-bottom: 24px;">8 nodes &middot; 6 annotated sections &middot; Webhook trigger &middot; GDPR consent logging &middot; CRM + Email</p>
         <a href="/clients/menovia/menovia-intake-template.json" download class="download-btn">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             Download JSON Template
@@ -564,9 +607,11 @@ tr:hover td { background: var(--blue-bg); }
 </div>
 
 <!-- Footer -->
-<div class="footer">
-    <p>UnpauseAI &middot; Custom Automation Solutions &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a></p>
-</div>
+<footer class="footer" style="border-top: 1px solid var(--border); padding: 24px 0 40px;">
+    <p>Built and maintained by <a href="https://unpauseai.com" target="_blank" rel="noopener">UnpauseAI</a></p>
+    <p style="margin-top:4px;"><a href="https://unpauseai.com/privacy">Privacy Policy</a> &middot; <a href="https://unpauseai.com/terms">Terms of Service</a></p>
+    <p style="margin-top:4px; font-size: 12px;">Last updated: March 2026</p>
+</footer>
 
 <script>
 function toggleTheme() {
@@ -587,7 +632,7 @@ function copyCode(btn, text) {
 
 // Active sidebar tracking on scroll
 (function() {
-    var sections = ['overview', 'nodes', 'demo', 'download'];
+    var sections = ['overview', 'video', 'nodes', 'demo', 'download'];
     var links = {};
     sections.forEach(function(id) {
         var el = document.querySelector('.step-link[href="#' + id + '"]');

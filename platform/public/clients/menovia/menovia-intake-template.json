@@ -12,7 +12,7 @@
       "name": "Patient Form Submission",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [240, 300]
+      "position": [440, 400]
     },
     {
       "parameters": {
@@ -58,7 +58,7 @@
       "name": "Validate Required Fields",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [460, 300]
+      "position": [660, 400]
     },
     {
       "parameters": {
@@ -113,7 +113,7 @@
       "name": "Log GDPR Consent",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [680, 200]
+      "position": [880, 300]
     },
     {
       "parameters": {
@@ -136,7 +136,7 @@
       "name": "Create CRM Contact",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [900, 200],
+      "position": [1100, 300],
       "notesInFlow": true,
       "notes": "Replace YOUR_ZOHO_ACCESS_TOKEN with actual Zoho OAuth token. Use Zoho EU endpoint (.zohoapis.eu) for GDPR compliance."
     },
@@ -154,7 +154,7 @@
       "name": "Send Confirmation Email",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
-      "position": [1120, 200],
+      "position": [1540, 300],
       "notesInFlow": true,
       "notes": "Connect to Brevo SMTP credentials. Email content in Dutch. Replace with Brevo Send node for tracking."
     },
@@ -193,26 +193,26 @@
       "name": "Schedule Booking Reminder",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [1340, 200],
+      "position": [1760, 300],
       "notesInFlow": true,
       "notes": "In production: connect to a Wait node or scheduled workflow that sends a booking reminder if the patient hasn't booked within 24h."
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={\n  \"status\": \"success\",\n  \"message\": \"Bedankt voor uw aanmelding. U ontvangt een bevestigingsmail.\"\n}",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"message\": \"Bedankt voor uw aanmelding. U ontvangt een bevestigingsmail.\",\n  \"patient_journey_preview\": {\n    \"step_1\": \"Contact aangemaakt in Zoho CRM (Lead Status: Nieuw)\",\n    \"step_2\": \"Bevestigingsmail verstuurd via Brevo\",\n    \"step_3\": \"Herinnering voor afspraak ingepland (+24u)\",\n    \"step_4\": \"SMS-herinnering bij geen boeking (+48u)\",\n    \"step_5\": \"Voorbereiding consult email (2 dagen voor afspraak)\",\n    \"step_6\": \"Nazorg email sequence (na consult)\"\n  },\n  \"gdpr_audit\": {\n    \"consent_logged\": true,\n    \"timestamp\": \"{{ $('Log GDPR Consent').item.json.gdpr_consent_timestamp }}\",\n    \"source\": \"{{ $('Log GDPR Consent').item.json.gdpr_consent_source }}\",\n    \"version\": \"{{ $('Log GDPR Consent').item.json.gdpr_consent_version }}\",\n    \"eu_hosted\": true,\n    \"data_category\": \"administrative_only\"\n  },\n  \"crm_record\": {\n    \"fields_created\": [\"First_Name\", \"Last_Name\", \"Email\", \"Phone\", \"Lead_Source\", \"Package\", \"GDPR_Consent\"],\n    \"pipeline_stage\": \"Nieuw\",\n    \"next_action\": \"Booking uitnodiging wordt verstuurd\"\n  },\n  \"data_quality\": {\n    \"name_provided\": \"{{ $('Log GDPR Consent').item.json.patient_name ? 'yes' : 'no' }}\",\n    \"email_provided\": \"{{ $('Log GDPR Consent').item.json.patient_email ? 'yes' : 'no' }}\",\n    \"phone_provided\": \"{{ $('Log GDPR Consent').item.json.patient_phone ? 'yes' : 'no' }}\",\n    \"package_selected\": \"{{ $('Log GDPR Consent').item.json.selected_package ? 'yes' : 'no' }}\",\n    \"gdpr_consent\": true\n  }\n}",
         "options": {}
       },
       "id": "success-response",
       "name": "Success Response",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1560, 200]
+      "position": [1980, 300]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={\n  \"status\": \"error\",\n  \"message\": \"Verplichte velden ontbreken of toestemming is niet gegeven.\"\n}",
+        "responseBody": "={\n  \"status\": \"error\",\n  \"message\": \"Verplichte velden ontbreken of toestemming is niet gegeven.\",\n  \"required_fields\": {\n    \"name\": \"Volledige naam\",\n    \"email\": \"E-mailadres\",\n    \"gdpr_consent\": \"Toestemming voor gegevensverwerking (verplicht)\"\n  },\n  \"hint\": \"Controleer of alle velden zijn ingevuld en toestemming is gegeven.\"\n}",
         "options": {
           "responseCode": 400
         }
@@ -221,7 +221,85 @@
       "name": "Validation Error",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [680, 440]
+      "position": [880, 540]
+    },
+    {
+      "parameters": {
+        "content": "## Menovia Patient Intake Automation\n**Built by UnpauseAI** | unpauseai.com/clients/menovia\n\nThis workflow automates the complete patient intake process:\n1. Receives form submission via webhook\n2. Validates required fields and GDPR consent\n3. Logs consent with timestamp for compliance\n4. Creates CRM contact in Zoho (EU)\n5. Sends confirmation email in Dutch\n6. Schedules booking reminder\n\n**To set up:** Replace placeholder credentials (Zoho token, Brevo SMTP) with your own. See the onboarding checklist for step-by-step instructions.",
+        "width": 380,
+        "height": 340,
+        "color": 4
+      },
+      "id": "sticky-header",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [240, -60]
+    },
+    {
+      "parameters": {
+        "content": "## INPUT\nWebhook receives form data and validates required fields before processing.",
+        "width": 480,
+        "height": 500,
+        "color": 2
+      },
+      "id": "sticky-input",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [380, 320]
+    },
+    {
+      "parameters": {
+        "content": "## DATA PROCESSING\nGDPR consent logging and CRM record creation. All data stays on EU servers.",
+        "width": 500,
+        "height": 500,
+        "color": 6
+      },
+      "id": "sticky-processing",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [820, 220]
+    },
+    {
+      "parameters": {
+        "content": "## OUTPUT\nConfirmation email, booking reminder, and enriched response with journey preview.",
+        "width": 720,
+        "height": 500,
+        "color": 5
+      },
+      "id": "sticky-output",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1480, 220]
+    },
+    {
+      "parameters": {
+        "content": "**GDPR Compliance**\nConsent is logged BEFORE any data is stored or sent. Timestamp, source, and version are recorded for audit trail. All EU-hosted.",
+        "width": 260,
+        "height": 120,
+        "color": 3
+      },
+      "id": "sticky-gdpr-note",
+      "name": "Sticky Note4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [880, 160]
+    },
+    {
+      "parameters": {
+        "content": "**Credentials needed:**\n- Zoho CRM: OAuth token (EU endpoint)\n- Brevo: SMTP credentials\n- See onboarding checklist",
+        "width": 240,
+        "height": 100,
+        "color": 1
+      },
+      "id": "sticky-credentials",
+      "name": "Sticky Note5",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1280, 160]
     }
   ],
   "connections": {

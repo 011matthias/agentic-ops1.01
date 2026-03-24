@@ -770,26 +770,88 @@ tr:hover td { background: var(--blue-bg); }
     <p><strong>Phase 1</strong> (Weeks 1-4): Core infrastructure, CRM setup, intake form, booking flow, payment integration. <strong>Phase 2</strong> (Weeks 5-7): Communication automations, aftercare sequences, reporting dashboard, go-live.</p>
 </div>
 
-<!-- Section 6: Download -->
-<h2 id="download">Download</h2>
-<p>Print this page or download the PDF version to complete offline. Bring your answers to the kickoff call.</p>
+<!-- Section 6: Quick Start Form -->
+<h2 id="download">Submit Onboarding Info</h2>
 
-<div style="text-align: center; margin: 32px 0;">
-    <a href="/clients/menovia/onboarding-pdf?print" class="download-btn">&#128196; Download Onboarding Checklist (PDF)</a>
-    <p class="download-note">Opens a print-friendly version you can save as PDF from your browser.</p>
+<div class="callout">
+    <div class="callout-title">Submit your details directly</div>
+    <p>Fill in what you can now. You do not need to complete everything at once &mdash; submit what you have and we will follow up on the rest during the kickoff call.</p>
+</div>
+
+<form id="onboarding-form" style="margin-bottom: 32px;">
+    <div style="display: grid; gap: 16px;">
+        <div>
+            <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-strong); margin-bottom: 4px;">Contact name *</label>
+            <input type="text" name="contact_name" required placeholder="Your name" style="width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; background: var(--surface); color: var(--text);">
+        </div>
+        <div>
+            <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-strong); margin-bottom: 4px;">Email *</label>
+            <input type="email" name="email" required placeholder="you@menovia.nl" style="width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; background: var(--surface); color: var(--text);">
+        </div>
+        <div>
+            <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-strong); margin-bottom: 4px;">Role</label>
+            <select name="role" style="width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; background: var(--surface); color: var(--text);">
+                <option value="">Select your role</option>
+                <option value="clinical_lead">Clinical Lead</option>
+                <option value="technical_lead">Technical Lead</option>
+                <option value="operations">Admin / Operations</option>
+                <option value="founder">Founder / Owner</option>
+            </select>
+        </div>
+        <div>
+            <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-strong); margin-bottom: 8px;">Which tools do you already have?</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text); cursor: pointer;"><input type="checkbox" name="tools" value="zoho_crm"> Zoho CRM</label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text); cursor: pointer;"><input type="checkbox" name="tools" value="brevo"> Brevo</label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text); cursor: pointer;"><input type="checkbox" name="tools" value="cal_com"> Cal.com</label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text); cursor: pointer;"><input type="checkbox" name="tools" value="mollie"> Mollie</label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text); cursor: pointer;"><input type="checkbox" name="tools" value="intercom"> Intercom</label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text); cursor: pointer;"><input type="checkbox" name="tools" value="messagebird"> MessageBird</label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text); cursor: pointer;"><input type="checkbox" name="tools" value="typeform_tally"> Typeform / Tally</label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text); cursor: pointer;"><input type="checkbox" name="tools" value="none"> None yet</label>
+            </div>
+        </div>
+        <div>
+            <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-strong); margin-bottom: 4px;">Preferred communication channel</label>
+            <select name="comm_channel" style="width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; background: var(--surface); color: var(--text);">
+                <option value="">Select preferred channel</option>
+                <option value="email">Email</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="slack">Slack</option>
+            </select>
+        </div>
+        <div>
+            <label style="display: block; font-size: 13px; font-weight: 600; color: var(--text-strong); margin-bottom: 4px;">Questions or notes</label>
+            <textarea name="notes" rows="3" placeholder="Anything you want us to know before the kickoff call..." style="width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; background: var(--surface); color: var(--text); resize: vertical;"></textarea>
+        </div>
+        <div>
+            <button type="submit" id="form-submit" style="display: inline-flex; align-items: center; gap: 8px; background: linear-gradient(135deg, var(--blue), var(--purple)); color: #fff; border: none; border-radius: 8px; padding: 12px 28px; font-size: 15px; font-weight: 600; cursor: pointer; transition: opacity .15s;">Submit Onboarding Info</button>
+        </div>
+    </div>
+</form>
+
+<div id="form-success" style="display: none; background: var(--green-bg); border: 1px solid var(--green); border-radius: 10px; padding: 20px 24px; text-align: center; margin-bottom: 32px;">
+    <p style="font-size: 18px; font-weight: 700; color: var(--green-dark); margin-bottom: 4px;">Submitted successfully</p>
+    <p style="font-size: 14px; color: var(--text2); margin-bottom: 0;">We have received your onboarding information. We will be in touch within 24 hours.</p>
+</div>
+
+<div class="callout green" style="margin-bottom: 32px;">
+    <div class="callout-title">Prefer offline?</div>
+    <p><a href="/clients/menovia/onboarding-pdf?print">Download the PDF checklist</a> and bring your answers to the kickoff call. Or <button onclick="window.print()" style="background: none; border: none; color: var(--blue); font-weight: 600; cursor: pointer; padding: 0; font-size: inherit;">print this page</button> directly.</p>
 </div>
 
 <!-- Footer / CTA -->
 <section class="cta-section">
     <h2>Ready to get started?</h2>
-    <p>Complete the checklist and bring your answers to our kickoff call. We will handle the rest.</p>
+    <p>Submit the form above, or get in touch directly.</p>
     <a href="mailto:nicolas.neumann@unpauseai.com" class="cta-btn">Get in touch</a>
-    <button class="cta-secondary" onclick="window.print()">&#128196; Print this page</button>
 </section>
 
-<div class="footer">
-    <p>UnpauseAI &middot; Custom Automation Solutions &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a></p>
-</div>
+<footer class="footer" style="border-top: 1px solid var(--border); padding: 24px 0 40px;">
+    <p>Built and maintained by <a href="https://unpauseai.com" target="_blank" rel="noopener">UnpauseAI</a></p>
+    <p style="margin-top:4px;"><a href="https://unpauseai.com/privacy">Privacy Policy</a> &middot; <a href="https://unpauseai.com/terms">Terms of Service</a></p>
+    <p style="margin-top:4px; font-size: 12px;">Last updated: March 2026</p>
+</footer>
 
 </div>
 </div>
@@ -839,6 +901,56 @@ links.forEach(function(a) {
         document.querySelector('.sidebar').classList.remove('open');
     });
 });
+
+// Onboarding form submission
+var ONBOARDING_WEBHOOK = 'https://unpauseai.app.n8n.cloud/webhook/menovia-onboarding';
+var onboardingForm = document.getElementById('onboarding-form');
+if (onboardingForm) {
+    onboardingForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var btn = document.getElementById('form-submit');
+        btn.textContent = 'Submitting...';
+        btn.disabled = true;
+
+        var data = {
+            contact_name: onboardingForm.contact_name.value,
+            email: onboardingForm.email.value,
+            role: onboardingForm.role.value,
+            tools: Array.from(onboardingForm.querySelectorAll('input[name="tools"]:checked')).map(function(c) { return c.value; }),
+            comm_channel: onboardingForm.comm_channel.value,
+            notes: onboardingForm.notes.value,
+            submitted_at: new Date().toISOString(),
+            source: 'onboarding_form'
+        };
+
+        fetch(ONBOARDING_WEBHOOK, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        }).then(function(res) {
+            if (res.ok) {
+                onboardingForm.style.display = 'none';
+                document.getElementById('form-success').style.display = 'block';
+                localStorage.setItem('menovia-onboarding-submitted', 'true');
+            } else {
+                throw new Error('Submission failed');
+            }
+        }).catch(function() {
+            // Fallback: open mailto with form data
+            var subject = encodeURIComponent('Menovia Onboarding - ' + data.contact_name);
+            var body = encodeURIComponent('Contact: ' + data.contact_name + '\nEmail: ' + data.email + '\nRole: ' + data.role + '\nTools: ' + data.tools.join(', ') + '\nChannel: ' + data.comm_channel + '\nNotes: ' + data.notes);
+            window.location.href = 'mailto:nicolas.neumann@unpauseai.com?subject=' + subject + '&body=' + body;
+            btn.textContent = 'Submit Onboarding Info';
+            btn.disabled = false;
+        });
+    });
+
+    // Restore submitted state
+    if (localStorage.getItem('menovia-onboarding-submitted') === 'true') {
+        onboardingForm.style.display = 'none';
+        document.getElementById('form-success').style.display = 'block';
+    }
+}
 </script>
 <!-- Access Gate -->
 <div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
