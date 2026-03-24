@@ -4,13 +4,14 @@ name: Scheduled Follow-Up Steps
 type: automation
 stage: live
 needs_fixes: false
-version: 3.0.0
+version: 3.1.0
 created: 2026-02-24
-updated: 2026-03-06
+updated: 2026-03-24
 orchestrator: make
 trigger:
   type: cron
-  schedule: "*/15 * * * *"
+  schedule: "0 * * * *"
+  interval_seconds: 3600
 systems:
   - gmail
   - google-sheets
@@ -32,6 +33,9 @@ make_production:
   google_connection: 13838215
   gmail_connection: 13838220
 last_changes:
+  - "2026-03-24: Production health check - 256 executions, 8436 ops, 0 errors. Interval corrected in spec: 3600s (60min) matching live schedule"
+  - "2026-03-23: v3.1.0 - Hot lead fix: hot leads now enter follow-up sequence with fastest cadence (6h/24h)"
+  - "2026-03-14: Interval changed from 900s to 3600s (15min to 60min) to reduce ops burn"
   - "2026-03-06: Fixed UTF-8 encoding in eu2 deployment (ASCII hyphens in scenario names)"
   - "2026-03-03: v3.0.0 - A/B testing (module 63 getCell Q, variant-suffixed template keys with ifempty fallback)"
   - "2026-02-25: Updated spec to match live implementation"
@@ -267,7 +271,7 @@ Cadence timing is configurable via Pipeline Config data store (DS 98606). Values
 
 **Config fields:** `cadence_hot_step2`, `cadence_warm_step2`, `cadence_standard_step2`, `cadence_hot_step3`, `cadence_warm_step3`, `cadence_standard_step3`.
 
-**Handoff exception:** Hot leads marked as `handoff` by A1 have `stopped=TRUE` from the start, so A3 never processes them. The cadence above only applies to hot leads that scored below the handoff threshold but above the hot priority threshold (if such a gap exists in the configuration).
+**Note:** All hot leads enter the follow-up sequence with the fastest cadence (6h/24h). Hot leads above the handoff threshold also trigger a team notification via A1, but they are no longer excluded from automated follow-ups.
 
 ## Data Stores
 
@@ -404,3 +408,4 @@ Cadence timing is configurable via Pipeline Config data store (DS 98606). Values
 | 1.0.0 | 2026-02-24 | Initial specification (searchRows + iterator, fixed cadence, no AI, no data stores) |
 | 2.0.0 | 2026-02-25 | Updated to match live implementation: filterRows + 6x getCell architecture (IML workaround), Pipeline Config + Email Templates data stores, AI personalisation via OpenAI, priority-based cadence (configurable), date comparison via IML string comparison (date:before is broken), empty-row guard filter, 3-route router with per-route updateRow, added scenario/connection IDs |
 | 3.0.0 | 2026-03-03 | A/B testing: module 63 (getCell Q for ab_variant), template key suffix (`_a`/`_b`) with `ifempty` fallback for legacy leads, 7x getCell (was 6x) |
+| 3.1.0 | 2026-03-23 | Hot lead fix: removed handoff exception. All hot leads now enter the follow-up sequence with priority-based cadence (fastest timing). A1 no longer writes `stopped=TRUE` for handoff-eligible leads. |

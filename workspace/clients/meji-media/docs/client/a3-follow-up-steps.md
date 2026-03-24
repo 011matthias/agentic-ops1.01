@@ -35,7 +35,7 @@ The timing between steps depends on the enquiry's priority. Higher-priority lead
 
 These timings are configurable -- ask your automation specialist if you'd like to adjust them.
 
-**Note:** Hot leads marked as "handoff" (where your team was notified immediately) skip the automated sequence entirely. A3 won't send follow-ups for those.
+**Note:** Hot leads (where your team is also notified immediately) enter the follow-up sequence with the fastest timing. They receive the same follow-up emails as other leads, just sooner.
 
 ---
 
@@ -99,4 +99,4 @@ Being marked as cold is a normal part of the process. Not every enquiry turns in
 
 ---
 
-*Version 3.0 | Last updated: 6 March 2026*
+*Version 3.1 | Last updated: 23 March 2026*

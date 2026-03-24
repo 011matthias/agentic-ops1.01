@@ -6,6 +6,7 @@
 <title>Meji Media &ndash; A/B Testing Battle Plan</title>
 <style>
 :root {
+  --header-height: 72px;
   --bg: #f8fafc; --surface: #ffffff; --surface2: #f1f5f9; --border: #e2e8f0;
   --text: #0f172a; --text2: #475569; --text3: #94a3b8;
   --blue: #2563eb; --blue-light: #dbeafe; --blue-dark: #1e40af;
@@ -33,51 +34,38 @@ body {
   background: var(--bg); color: var(--text);
   font-size: 15px; line-height: 1.6; min-height: 100vh;
   transition: background .2s, color .2s;
-  padding-top: 56px;
+  padding-top: var(--header-height);
 }
 
-/* Nav */
-.doc-nav {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+/* Header */
+.header {
   background: var(--nav-bg); border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0 24px; height: 56px; box-shadow: var(--shadow);
-  transition: background .2s;
+  padding: 16px 24px; display: flex; align-items: center; justify-content: space-between;
+  position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+  box-shadow: var(--shadow); transition: background .2s;
 }
-.doc-nav-left { display: flex; align-items: center; gap: 12px; }
-.doc-nav-logo {
-  display: flex; align-items: center; gap: 6px;
-  font-size: 15px; letter-spacing: -0.025em;
+.header-left { display: flex; align-items: center; gap: 16px; }
+.header-logo { display: flex; align-items: center; gap: 6px; font-size: 18px; letter-spacing: -0.025em; }
+.header-logo svg { flex-shrink: 0; }
+.header-logo .logo-text { font-weight: 700; color: var(--text); }
+.header-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.header-title h1 { font-size: 18px; font-weight: 700; color: var(--text); }
+.header-title p { font-size: 13px; color: var(--text2); margin-top: 1px; }
+.header-right { display: flex; align-items: center; gap: 12px; }
+.theme-btn {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 12px; cursor: pointer; font-size: 13px; color: var(--text2);
+  display: flex; align-items: center; gap: 6px; transition: background .15s;
 }
-.doc-nav-logo svg { flex-shrink: 0; }
-.doc-nav-logo .logo-text { font-weight: 700; color: var(--text); }
-.doc-nav-logo .logo-accent { font-weight: 700; color: #2563eb; }
-.doc-nav-brand { font-size: 14px; font-weight: 700; color: var(--text); }
-.doc-nav-sep { color: var(--border); font-size: 18px; }
-.doc-nav-links { display: flex; gap: 4px; }
-.doc-nav-links a {
-  font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
-  color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
-}
-.doc-nav-links a:hover { background: var(--surface2); color: var(--text); }
-.doc-nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
-.doc-nav-right { display: flex; align-items: center; gap: 8px; }
-.doc-nav-theme {
-  background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
-  padding: 4px 10px; cursor: pointer; font-size: 13px; color: var(--text2);
-}
-.doc-nav-theme:hover { background: var(--border); }
-.doc-nav-status {
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
-  background: var(--green-light); color: var(--green);
-}
-.doc-nav-status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 2s infinite; }
+.theme-btn:hover { background: var(--border); }
+.badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+.badge-green { background: var(--green-light); color: var(--green); }
+.badge-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: pulse 2s infinite; }
 @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.5} }
 @media (max-width: 640px) {
-  .doc-nav { padding: 0 12px; }
-  .doc-nav-brand, .doc-nav-sep { display: none; }
-  .doc-nav-links a { padding: 6px 8px; font-size: 12px; }
+  .header { padding: 12px 16px; }
+  .header-title { display: none; }
+  .header nav a { padding: 6px 8px; font-size: 12px; }
 }
 
 /* Content */
@@ -182,24 +170,29 @@ tr:nth-child(even) td { background: var(--surface2); }
 </head>
 <body>
 
-<nav class="doc-nav">
-  <div class="doc-nav-left">
-    <div class="doc-nav-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="24" height="24"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></div>
-    <span class="doc-nav-brand">Meji Media</span>
-    <span class="doc-nav-sep">|</span>
-    <div class="doc-nav-links">
-      <a href="/docs/meji-media/">Hub</a>
-      <a href="/docs/meji-media/guide">Guide</a>
-      <a href="/docs/meji-media/ab-testing" class="active">A/B Testing</a>
-      <a href="/docs/meji-media/lead-scoring">Scoring</a>
-      <a href="/docs/meji-media/system-overview">Overview</a>
+<header class="header">
+  <div class="header-left">
+    <div class="header-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></div>
+    <div class="header-title">
+      <h1>Meji Media</h1>
+      <p>Automation Documentation</p>
     </div>
+    <span style="color:var(--border);font-size:20px;margin:0 4px;">|</span>
+    <nav style="display:flex;gap:4px;">
+      <a href="/docs/meji-media/" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Hub</a>
+      <a href="/docs/meji-media/guide" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Guide</a>
+      <a href="/docs/meji-media/ab-testing" style="font-size:13px;font-weight:700;padding:6px 12px;border-radius:6px;background:var(--blue-light);color:var(--blue);text-decoration:none;">A/B Testing</a>
+      <a href="/docs/meji-media/lead-scoring" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Scoring</a>
+      <a href="/docs/meji-media/system-overview" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Overview</a>
+    </nav>
   </div>
-  <div class="doc-nav-right">
-    <span class="doc-nav-status"><span class="doc-nav-status-dot"></span> Live</span>
-    <button class="doc-nav-theme" onclick="toggleTheme()" id="theme-btn">&#9790; Theme</button>
+  <div class="header-right">
+    <span class="badge badge-green"><span class="badge-dot"></span> All Systems Live</span>
+    <button class="theme-btn" onclick="toggleTheme()">
+      <span id="theme-icon">&#9790;</span> Theme
+    </button>
   </div>
-</nav>
+</header>
 
 <div class="main">
 
@@ -440,8 +433,8 @@ tr:nth-child(even) td { background: var(--surface2); }
 var MEJI_CODE='meji2026';
 function checkAuth(){var i=document.getElementById('auth-input').value;if(i===MEJI_CODE){localStorage.setItem('meji-docs-access','granted');var g=document.getElementById('auth-gate');g.style.opacity='0';setTimeout(function(){g.style.display='none'},300)}else{document.getElementById('auth-error').style.display='block';document.getElementById('auth-input').value='';document.getElementById('auth-input').focus()}}
 (function(){if(localStorage.getItem('meji-docs-access')==='granted'){document.getElementById('auth-gate').style.display='none'}else{document.getElementById('auth-input').focus()}})();
-function toggleTheme(){var h=document.documentElement;var n=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('meji-docs-theme',n);document.getElementById('theme-btn').innerHTML=n==='dark'?'&#9788; Theme':'&#9790; Theme'}
-(function(){var s=localStorage.getItem('meji-docs-theme');if(s){document.documentElement.setAttribute('data-theme',s);if(s==='dark')document.getElementById('theme-btn').innerHTML='&#9788; Theme'}})();
+function toggleTheme(){var h=document.documentElement;var n=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('meji-docs-theme',n);document.getElementById('theme-icon').innerHTML=n==='dark'?'&#9788;':'&#9790;'}
+(function(){var s=localStorage.getItem('meji-docs-theme');if(s){document.documentElement.setAttribute('data-theme',s);if(s==='dark')document.getElementById('theme-icon').innerHTML='&#9788;'}})();
 </script>
 
 </body>

@@ -6,6 +6,7 @@
     <title>Meji Media &ndash; Complete Guide</title>
     <style>
 :root {
+    --header-height: 72px;
     --bg: #ffffff;
     --text: #1a1a1a;
     --text2: #6b7280;
@@ -46,7 +47,7 @@
 
 @media print {
     body { margin: 0; }
-    .doc-nav { display: none !important; }
+    .header { display: none !important; }
     .page-break { page-break-before: always; }
     h2 { page-break-before: always; }
     h2:first-of-type { page-break-before: avoid; }
@@ -60,7 +61,7 @@ body {
     max-width: 900px;
     margin: 0 auto;
     padding: 0 30px;
-    padding-top: 80px;
+    padding-top: var(--header-height);
     color: var(--text);
     background: var(--bg);
     line-height: 1.65;
@@ -81,14 +82,14 @@ h2 {
     border-bottom: 1px solid var(--blue-light);
     padding-bottom: 8px;
     margin-top: 48px;
-    scroll-margin-top: 80px;
+    scroll-margin-top: calc(var(--header-height) + 16px);
 }
 
 h3 {
     font-size: 17px;
     color: var(--text2);
     margin-top: 32px;
-    scroll-margin-top: 80px;
+    scroll-margin-top: calc(var(--header-height) + 16px);
 }
 
 table {
@@ -197,60 +198,58 @@ em {
     border-top: 1px solid var(--border);
 }
 
-/* Shared doc nav */
-.doc-nav {
-    position: fixed;
-    top: 0; left: 0; right: 0;
-    z-index: 1000;
+/* Header */
+.header {
     background: var(--nav-bg);
     border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 24px;
-    height: 56px;
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 1000;
     box-shadow: 0 1px 3px rgba(0,0,0,.08);
     transition: background .2s;
 }
-.doc-nav-left { display: flex; align-items: center; gap: 12px; }
-.doc-nav-logo {
+.header-left { display: flex; align-items: center; gap: 16px; }
+.header-logo {
     display: flex; align-items: center; gap: 6px;
-    font-size: 15px; letter-spacing: -0.025em;
+    font-size: 18px; letter-spacing: -0.025em;
 }
-.doc-nav-logo svg { flex-shrink: 0; }
-.doc-nav-logo .logo-text { font-weight: 700; color: var(--text); }
-.doc-nav-logo .logo-accent { font-weight: 700; color: #2563eb; }
-.doc-nav-brand { font-size: 14px; font-weight: 700; color: var(--text); }
-.doc-nav-sep { color: var(--border); font-size: 18px; }
-.doc-nav-links { display: flex; gap: 4px; }
-.doc-nav-links a {
-    font-size: 13px; font-weight: 500;
-    padding: 6px 12px; border-radius: 6px;
-    color: var(--text2); text-decoration: none;
-    transition: background .15s, color .15s;
-}
-.doc-nav-links a:hover { background: var(--surface2); color: var(--text); text-decoration: none; }
-.doc-nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
-.doc-nav-right { display: flex; align-items: center; gap: 8px; }
-.doc-nav-theme {
+.header-logo svg { flex-shrink: 0; }
+.header-logo .logo-text { font-weight: 700; color: var(--text); }
+.header-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.header-title h1 { font-size: 18px; font-weight: 700; color: var(--text); margin: 0; border: none; padding: 0; }
+.header-title p { font-size: 13px; color: var(--text2); margin-top: 1px; }
+.header-right { display: flex; align-items: center; gap: 12px; }
+.theme-btn {
     background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 6px; padding: 4px 10px; cursor: pointer;
-    font-size: 13px; color: var(--text2); transition: background .15s;
+    border-radius: 8px; padding: 6px 12px; cursor: pointer;
+    font-size: 13px; color: var(--text2);
+    display: flex; align-items: center; gap: 6px;
+    transition: background .15s;
 }
-.doc-nav-theme:hover { background: var(--border); }
-.doc-nav-status {
+.theme-btn:hover { background: var(--border); }
+.badge {
     display: inline-flex; align-items: center; gap: 5px;
-    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
-    background: #dcfce7; color: #16a34a;
+    padding: 4px 10px; border-radius: 20px;
+    font-size: 12px; font-weight: 600;
 }
-[data-theme="dark"] .doc-nav-status { background: #14532d; color: #22c55e; }
-.doc-nav-status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: navpulse 2s infinite; }
-@keyframes navpulse { 0%,100% { opacity:1; } 50% { opacity:.5; } }
+.badge-green { background: #dcfce7; color: #16a34a; }
+[data-theme="dark"] .badge-green { background: #14532d; color: #22c55e; }
+.badge-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.5; } }
+@media (max-width: 640px) {
+    .header { padding: 12px 16px; }
+    .header-title { display: none; }
+    .header nav a { padding: 6px 8px; font-size: 12px; }
+}
 
 /* Guide sidebar */
 .guide-sidebar {
-    position: fixed; top: 56px; left: 0; width: 220px;
-    height: calc(100vh - 56px); overflow-y: auto;
+    position: fixed; top: var(--header-height); left: 0; width: 220px;
+    height: calc(100vh - var(--header-height)); overflow-y: auto;
     background: var(--nav-bg); border-right: 1px solid var(--border);
     padding: 16px 0; z-index: 50; transition: transform .25s, background .2s;
 }
@@ -283,47 +282,48 @@ em {
     .guide-hamburger { display: flex; align-items: center; justify-content: center; }
 }
 
-@media (max-width: 640px) {
-    .doc-nav { padding: 0 12px; }
-    .doc-nav-brand { display: none; }
-    .doc-nav-sep { display: none; }
-    .doc-nav-links a { padding: 6px 8px; font-size: 12px; }
-}
 </style>
 </head>
 <body>
 
-<nav class="doc-nav">
-    <div class="doc-nav-left">
-        <div class="doc-nav-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="24" height="24"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></div>
-        <span class="doc-nav-brand">Meji Media</span>
-        <span class="doc-nav-sep">|</span>
-        <div class="doc-nav-links">
-            <a href="/docs/meji-media/">Hub</a>
-            <a href="/docs/meji-media/guide" class="active">Guide</a>
-            <a href="/docs/meji-media/ab-testing">A/B Testing</a>
-            <a href="/docs/meji-media/lead-scoring">Scoring</a>
-            <a href="/docs/meji-media/system-overview">Overview</a>
-        </div>
+<header class="header">
+  <div class="header-left">
+    <div class="header-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></div>
+    <div class="header-title">
+      <h1>Meji Media</h1>
+      <p>Automation Documentation</p>
     </div>
-    <div class="doc-nav-right">
-        <span class="doc-nav-status"><span class="doc-nav-status-dot"></span> All Live</span>
-        <button class="doc-nav-theme" onclick="toggleTheme()" id="theme-btn">&#9790; Theme</button>
-    </div>
-</nav>
+    <span style="color:var(--border);font-size:20px;margin:0 4px;">|</span>
+    <nav style="display:flex;gap:4px;">
+      <a href="/docs/meji-media/" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Hub</a>
+      <a href="/docs/meji-media/guide" style="font-size:13px;font-weight:700;padding:6px 12px;border-radius:6px;background:var(--blue-light);color:var(--blue);text-decoration:none;">Guide</a>
+      <a href="/docs/meji-media/ab-testing" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">A/B Testing</a>
+      <a href="/docs/meji-media/lead-scoring" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Scoring</a>
+      <a href="/docs/meji-media/system-overview" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Overview</a>
+    </nav>
+  </div>
+  <div class="header-right">
+    <span class="badge badge-green"><span class="badge-dot"></span> All Systems Live</span>
+    <button class="theme-btn" onclick="toggleTheme()">
+      <span id="theme-icon">&#9790;</span> Theme
+    </button>
+  </div>
+</header>
 
 <script>
 function toggleTheme() {
-    var h = document.documentElement;
-    var next = h.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-    h.setAttribute('data-theme', next);
-    localStorage.setItem('meji-docs-theme', next);
-    document.getElementById('theme-btn').innerHTML = next === 'dark' ? '&#9788; Theme' : '&#9790; Theme';
+  var html = document.documentElement;
+  var current = html.getAttribute('data-theme');
+  var next = current === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('meji-docs-theme', next);
+  document.getElementById('theme-icon').innerHTML = next === 'dark' ? '&#9788;' : '&#9790;';
 }
-(function() {
-    var s = localStorage.getItem('meji-docs-theme');
-    if (s) { document.documentElement.setAttribute('data-theme', s); if (s === 'dark') document.getElementById('theme-btn').innerHTML = '&#9788; Theme'; }
-})();
+var saved = localStorage.getItem('meji-docs-theme');
+if (saved) {
+  document.documentElement.setAttribute('data-theme', saved);
+  if (saved === 'dark') document.getElementById('theme-icon').innerHTML = '&#9788;';
+}
 </script>
 
 <!-- Sidebar -->
@@ -395,7 +395,7 @@ function toggleTheme() {
 <p>Here&rsquo;s what happens from the moment someone fills in your website form:</p>
 <ol>
 <li><strong>Enquiry submitted on your website</strong> &ndash; The form data is saved to your MySQL database</li>
-<li><strong>A0 detects the new enquiry</strong> &ndash; Within 5 minutes, A0 spots the new row and forwards it to A1</li>
+<li><strong>A0 detects the new enquiry</strong> &ndash; Within 30 minutes, A0 spots the new row and forwards it to A1</li>
 <li><strong>Logged to Google Sheet</strong> &ndash; A1 creates a new row with the person&rsquo;s name, email, topic, and a priority score</li>
 <li><strong>First email sent</strong> &ndash; Within seconds. Hot leads get a warmer, more personalised email; your team also gets a notification. Standard leads get a friendly acknowledgement.</li>
 <li><strong>Waiting for reply</strong> &ndash; A2 checks the inbox every 10 minutes (A0 detects new enquiries within 30 minutes)</li>
@@ -710,7 +710,7 @@ new -> following_up -> replied     (hot lead -- team notification + fastest cade
 
 <hr />
 
-<p class="footer"><em>Version 5.0 | Last updated: 19 March 2026</em></p>
+<p class="footer"><em>Version 5.1 | Last updated: 24 March 2026</em></p>
 
 <hr />
 
@@ -797,7 +797,7 @@ new -> following_up -> replied     (hot lead -- team notification + fastest cade
 
 <hr />
 
-<p class="footer"><em>Version 5.0 | Last updated: 19 March 2026</em></p>
+<p class="footer"><em>Version 5.1 | Last updated: 24 March 2026</em></p>
 
 <hr />
 
@@ -861,7 +861,7 @@ new -> following_up -> replied     (hot lead -- team notification + fastest cade
 <h3>After (Automated)</h3>
 <ol>
 <li>Enquiry arrives via form &rarr; stored in your MySQL database</li>
-<li>A0 detects it within 5 minutes and forwards to A1</li>
+<li>A0 detects it within 30 minutes and forwards to A1</li>
 <li>Within seconds: logged, scored, AI-personalised email sent (opening line references their specific enquiry)</li>
 <li>Hot leads: team notified immediately with full context</li>
 <li>Staff only needs to step in when someone replies</li>
@@ -896,7 +896,7 @@ new -> following_up -> replied     (hot lead -- team notification + fastest cade
 
 <hr />
 
-<p class="footer"><em>Version 5.0 | Last updated: 19 March 2026</em></p>
+<p class="footer"><em>Version 5.1 | Last updated: 24 March 2026</em></p>
 
 <hr />
 
@@ -966,7 +966,7 @@ new -> following_up -> replied     (hot lead -- team notification + fastest cade
 
 <hr />
 
-<p class="footer"><em>Version 5.0 | Last updated: 19 March 2026</em></p>
+<p class="footer"><em>Version 5.1 | Last updated: 24 March 2026</em></p>
 
 <hr />
 
@@ -1089,14 +1089,14 @@ new -> following_up -> replied     (hot lead -- team notification + fastest cade
 
 <h3>&ldquo;I see errors in the A3 run history&rdquo;</h3>
 <ul>
-<li>If a single email fails to send (e.g., temporary Gmail issue), A3 skips that enquiry and will retry on its next run (15 minutes later).</li>
+<li>If a single email fails to send (e.g., temporary Gmail issue), A3 skips that enquiry and will retry on its next run (60 minutes later).</li>
 <li>If the Google Sheet update fails, A3 retries up to 3 times to make sure the step tracking stays accurate.</li>
 <li>If errors persist, check that both the Gmail and Google Sheets connections are active in Make.com.</li>
 </ul>
 
 <hr />
 
-<p class="footer"><em>Version 5.0 | Last updated: 19 March 2026</em></p>
+<p class="footer"><em>Version 5.1 | Last updated: 24 March 2026</em></p>
 
 <hr />
 

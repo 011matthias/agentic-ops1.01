@@ -85,7 +85,7 @@ The "Meji Media -- Enquiry Tracker" spreadsheet is where everything is tracked. 
 | Status | What It Means |
 |--------|---------------|
 | **new** | Enquiry just received, initial email sent, waiting for next step |
-| **handoff** | Hot lead -- team has been notified, personalised email sent. **All further activity is managed by your team, not the automation.** |
+| **handoff** | Hot lead -- team has been notified, personalised email sent. **The lead also enters the automated follow-up sequence with the fastest timing.** If your team responds first and the enquirer replies, A2 stops the sequence automatically. |
 | **following_up** | Automated follow-up sequence is active (step 2 or 3) |
 | **replied** | They replied to an email -- follow-ups stopped, you're handling it now |
 | **cold** | No reply after the full sequence (~9 days) -- follow-ups stopped |
@@ -96,7 +96,7 @@ The "Meji Media -- Enquiry Tracker" spreadsheet is where everything is tracked. 
 new -> following_up -> replied     (they replied during follow-ups)
 new -> following_up -> cold        (no reply after all steps)
 new -> replied                    (they replied before follow-ups started)
-new -> handoff                    (hot lead -- immediate team notification, no automated follow-ups)
+new -> following_up -> replied     (hot lead -- immediate team notification + fastest follow-up cadence)
 ```
 
 ---
@@ -135,7 +135,7 @@ Every enquiry is automatically scored when it arrives. The score determines how 
 
 | Priority | What It Means | What Happens |
 |----------|---------------|--------------|
-| **Hot** | High-scoring lead (score 50+) | Your team gets an instant email notification with full details. The enquirer gets a personalised acknowledgement. No automated follow-ups -- you handle it directly. |
+| **Hot** | High-scoring lead (score 50+) | Your team gets an instant email notification with full details. The enquirer gets a personalised acknowledgement and enters the follow-up sequence with the fastest timing (6h, 30h). If your team responds first and the person replies, A2 stops the sequence automatically. |
 | **Warm** | Mid-scoring lead (score 25-49) | Standard acknowledgement email, followed by slightly faster follow-ups |
 | **Standard** | Lower-scoring lead (below 25) | Standard acknowledgement email, followed by regular-pace follow-ups |
 
@@ -158,7 +158,7 @@ How quickly follow-ups are sent depends on the enquiry's priority:
 
 These timings are configurable -- ask us if you'd like to adjust them.
 
-**Note:** Hot leads marked as "handoff" skip the automated sequence entirely. Your team handles those directly.
+**Note:** Hot leads receive a team notification AND enter the automated follow-up sequence with the fastest timing (6h, 30h). Your team can respond first, and if the person replies, A2 stops the sequence automatically.
 
 ---
 
@@ -242,4 +242,4 @@ For any issues not covered here, contact your automation support team.
 
 ---
 
-*Version 3.0 | Last updated: 6 March 2026*
+*Version 3.1 | Last updated: 23 March 2026*

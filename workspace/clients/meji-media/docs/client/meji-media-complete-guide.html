@@ -285,7 +285,7 @@ em {
 </tr>
 <tr>
 <td><strong>handoff</strong></td>
-<td>Hot lead &ndash; team has been notified, personalised email sent. <strong>All further activity is managed by your team, not the automation.</strong></td>
+<td>Hot lead &ndash; team has been notified, personalised email sent. <strong>The lead also enters the follow-up sequence with the fastest timing (6h, 30h). If they reply, A2 stops the sequence automatically.</strong></td>
 </tr>
 <tr>
 <td><strong>following_up</strong></td>
@@ -305,7 +305,7 @@ em {
 <pre><code>new -&gt; following_up -&gt; replied     (they replied during follow-ups)
 new -&gt; following_up -&gt; cold        (no reply after all steps)
 new -&gt; replied                    (they replied before follow-ups started)
-new -&gt; handoff                    (hot lead -- immediate team notification, no automated follow-ups)
+new -&gt; following_up -&gt; replied     (hot lead -- team notification + fastest cadence)
 </code></pre>
 <hr />
 <h2>Email Templates</h2>
@@ -368,7 +368,7 @@ new -&gt; handoff                    (hot lead -- immediate team notification, n
 <tr>
 <td><strong>Hot</strong></td>
 <td>High-scoring lead (score 50+)</td>
-<td>Your team gets an instant email notification with full details. The enquirer gets a personalised acknowledgement. No automated follow-ups &ndash; you handle it directly.</td>
+<td>Your team gets an instant email notification with full details. The enquirer gets a personalised acknowledgement. The lead also enters the follow-up sequence with the fastest timing (6h, 30h), and if they reply, A2 stops the sequence automatically.</td>
 </tr>
 <tr>
 <td><strong>Warm</strong></td>
@@ -429,7 +429,7 @@ new -&gt; handoff                    (hot lead -- immediate team notification, n
 </table>
 <p><em>All times are measured from when the initial email was sent.</em></p>
 <p>These timings are configurable &ndash; ask us if you&rsquo;d like to adjust them.</p>
-<p><strong>Note:</strong> Hot leads marked as &ldquo;handoff&rdquo; skip the automated sequence entirely. Your team handles those directly.</p>
+<p><strong>Note:</strong> Hot leads enter the follow-up sequence with the fastest timing (6h, 30h) and your team gets an immediate notification. If the lead replies, A2 stops the sequence automatically.</p>
 <hr />
 <h2>A/B Testing</h2>
 <p>The system can split enquiries between two versions of each email to help you find what works best. When A/B testing is enabled:</p>
@@ -631,7 +631,7 @@ new -&gt; handoff                    (hot lead -- immediate team notification, n
 </tbody>
 </table>
 <hr />
-<p><em>Version 3.0 | Last updated: 6 March 2026</em></p>
+<p><em>Version 3.1 | Last updated: 23 March 2026</em></p>
 <hr />
 <h1>A1: Enquiry Follow-Up Sequence</h1>
 <h2>What It Does</h2>
@@ -657,7 +657,7 @@ new -&gt; handoff                    (hot lead -- immediate team notification, n
 <tbody>
 <tr>
 <td><strong>Hot</strong> (score 50+)</td>
-<td><strong>Your team</strong> receives an instant notification email with full enquiry details, priority score, and a prompt to follow up quickly. <strong>The enquirer</strong> receives a warm, personalised acknowledgement. Follow-ups are stopped &ndash; your team handles it from here.</td>
+<td><strong>Your team</strong> receives an instant notification email with full enquiry details, priority score, and a prompt to follow up quickly. <strong>The enquirer</strong> receives a warm, personalised acknowledgement. The lead enters the follow-up sequence with the fastest timing (6h, 30h). If they reply, A2 stops the sequence automatically.</td>
 </tr>
 <tr>
 <td><strong>Warm / Standard</strong></td>
@@ -672,7 +672,7 @@ new -&gt; handoff                    (hot lead -- immediate team notification, n
 <h2>What You&rsquo;ll See</h2>
 <p>When A1 runs successfully:</p>
 <ul>
-<li><strong>In the Google Sheet:</strong> A new row with all fields filled in. The <code>status</code> column will show <code>new</code> (or <code>handoff</code> for hot leads). The <code>priority</code> column will show <code>hot</code>, <code>warm</code>, or <code>standard</code>.</li>
+<li><strong>In the Google Sheet:</strong> A new row with all fields filled in. The <code>status</code> column will show <code>new</code> (for all leads, including hot leads). The <code>priority</code> column will show <code>hot</code>, <code>warm</code>, or <code>standard</code>.</li>
 <li><strong>In your Gmail inbox:</strong> The sent email will appear in your Sent folder (since it&rsquo;s sent from your shared inbox). The email will have a personalised opening sentence that references the enquirer&rsquo;s specific topic.</li>
 <li><strong>For hot leads:</strong> Your team will receive a separate notification email with a subject like &ldquo;HOT LEAD: Sarah Thompson - Wedding DJ (Score: 85)&rdquo;</li>
 </ul>
@@ -716,7 +716,7 @@ new -&gt; handoff                    (hot lead -- immediate team notification, n
 <li>The scoring system uses the information available at submission time. You can adjust the handoff threshold to be more or less sensitive.</li>
 </ul>
 <hr />
-<p><em>Version 3.0 | Last updated: 6 March 2026</em></p>
+<p><em>Version 3.1 | Last updated: 23 March 2026</em></p>
 <hr />
 <h1>A2: Reply Detection &amp; Stop</h1>
 <h2>What It Does</h2>
@@ -764,7 +764,7 @@ new -&gt; handoff                    (hot lead -- immediate team notification, n
 <li>If errors persist, check that the Google Sheets connection is still active and that the spreadsheet hasn&rsquo;t been moved or renamed.</li>
 </ul>
 <hr />
-<p><em>Version 3.0 | Last updated: 6 March 2026</em></p>
+<p><em>Version 3.1 | Last updated: 23 March 2026</em></p>
 <hr />
 <h1>A3: Scheduled Follow-Up Steps</h1>
 <h2>What It Does</h2>
@@ -839,7 +839,7 @@ new -&gt; handoff                    (hot lead -- immediate team notification, n
 </tbody>
 </table>
 <p>These timings are configurable &ndash; ask your automation specialist if you&rsquo;d like to adjust them.</p>
-<p><strong>Note:</strong> Hot leads marked as &ldquo;handoff&rdquo; (where your team was notified immediately) skip the automated sequence entirely. A3 won&rsquo;t send follow-ups for those.</p>
+<p><strong>Note:</strong> Hot leads enter the follow-up sequence with the fastest timing (6h, 30h) and your team gets an immediate notification. If the lead replies, A2 stops the sequence automatically.</p>
 <hr />
 <h2>What You&rsquo;ll See</h2>
 <p>When A3 sends a follow-up:</p>
@@ -899,7 +899,7 @@ new -&gt; handoff                    (hot lead -- immediate team notification, n
 <li>If errors persist, check that both the Gmail and Google Sheets connections are active in Make.com.</li>
 </ul>
 <hr />
-<p><em>Version 3.0 | Last updated: 6 March 2026</em></p>
+<p><em>Version 3.1 | Last updated: 23 March 2026</em></p>
 <hr />
 <h1>A/B Testing Guide</h1>
 <p>Your follow-up email system can send two different versions of each email to see which gets more replies. This guide explains how to use the feature.</p>

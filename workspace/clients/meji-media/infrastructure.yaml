@@ -91,6 +91,7 @@ instances:
         trigger: webhook
         ship: true
         status: active
+        note: "2026-03-24: v3.2.0 - Added portal reporting HTTP module (route 4). POSTs execution data to unpauseai.com/api/modules/meji-enquiry-followup. Error-safe (Resume on failure)."
       - id: 8804012
         name: "A2 - Reply Detection & Stop"
         trigger: scheduled (300s)
@@ -110,8 +111,19 @@ instances:
         ship: true
       - id: 153175
         name: "Email Templates"
-        records: 8  # A/B variants
+        records: 10  # 5 template pairs x 2 A/B variants
         ship: true
+      - id: 154401
+        name: "MM - Venue Config"
+        records: 3  # birmingham, leicester, wolverhampton
+        fields: 6  # venue_name, venue_title, venue_features_html, venue_tiers_html, venue_phone, venue_dates_count
+        ship: true
+        note: "2026-03-24: Audit found inaccuracies vs venue PDFs. Leicester venue title wrong, tier names wrong for Leicester. Drinks reception listed for venues that don't include it. Pending Jess approval to update."
+      - id: 153982
+        name: "A0 Cursor"
+        records: 1
+        ship: true
+        note: "Tracks last processed MySQL enquiry ID for A0 polling"
 
     webhooks:
       - id: 3939562

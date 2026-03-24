@@ -4,9 +4,9 @@ name: Enquiry Follow-Up Sequence
 type: automation
 stage: live
 needs_fixes: false
-version: 3.0.0
+version: 3.1.0
 created: 2026-02-24
-updated: 2026-03-06
+updated: 2026-03-24
 orchestrator: make
 trigger:
   type: webhook
@@ -34,6 +34,8 @@ make_production:
   gmail_connection: 13838220
   webhook_url: "https://hook.eu2.make.com/cva0g9j0ru2p9690nrxji8791grkhhya"
 last_changes:
+  - "2026-03-24: Production health check - 42 executions, 473 ops, 0 errors. Live enquiry flow confirmed (id 14281 processed at 09:14 UTC)"
+  - "2026-03-23: v3.1.0 - Hot lead fix: all leads now written with status=new, stopped=FALSE. Hot leads enter follow-up sequence with fastest cadence (6h/24h) instead of being excluded"
   - "2026-03-06: Fixed UTF-8 encoding in eu2 deployment (ASCII hyphens in scenario names)"
   - "2026-03-03: v3.0.0 - A/B testing (module 56, column Q, variant-suffixed template keys)"
   - "2026-02-25: Updated spec to match live implementation"
@@ -51,7 +53,7 @@ stage_history:
 
 **Problem:** Meji Media receives 20-30 website enquiries per day (up to 100 over a weekend) and manually follows up with each one. This is slow, inconsistent, and higher-value leads don't get priority attention.
 
-**Solution:** Webhook-triggered automation that instantly logs each enquiry to a tracking sheet, scores the lead across 9 configurable factors, and routes to either a handoff path (hot leads get team notification + personalised acknowledgement, stopped immediately) or a normal path (standard/warm leads get an initial email and enter the follow-up sequence). AI-generated personalised opening lines are injected into emails with graceful degradation.
+**Solution:** Webhook-triggered automation that instantly logs each enquiry to a tracking sheet, scores the lead across 9 configurable factors, and routes to either a handoff path (hot leads get team notification + warmer acknowledgement, then enter the follow-up sequence with fastest cadence) or a normal path (standard/warm leads get a standard initial email and enter the follow-up sequence). AI-generated personalised opening lines are injected into emails with graceful degradation.
 
 **Business Value:** Immediate response to every enquiry (previously hours/days), consistent follow-up, hot leads trigger instant team notification with full context, and AI personalisation makes templated emails feel hand-written.
 
@@ -223,8 +225,8 @@ The scoring factors and their weights are stored in Pipeline Config DS 98606. Ea
 | G: organisation | `{{first(map(1.data.fields; "value"; "label"; "Organisation Name"))}}` |
 | H: message | `{{first(map(1.data.fields; "value"; "label"; "A brief description..."))}}` |
 | I: priority | `{{53.priority}}` |
-| J: status | `new` (normal) or `handoff` (handoff route) |
-| K: stopped | `FALSE` (normal) or `TRUE` (handoff route) |
+| J: status | `new` (always -- both handoff and normal routes) |
+| K: stopped | `FALSE` (always -- all leads enter the follow-up sequence) |
 | L: current_step | `1` |
 | M: next_step_due | Priority-based cadence from Pipeline Config |
 | N: last_email_sent | `{{now}}` |
@@ -245,7 +247,7 @@ Three routes, evaluated in order:
 - **Module 55** (`google-email:sendEmail`): Warm acknowledgement to the enquirer
   - Uses `initial_high` template from DS 98605
   - Placeholder resolution: `replace(replace(replace(replace(51.body_html; "##name##"; NAME); "##topic##"; TOPIC); "##organisation##"; ORG); "##ai_opening##"; ifempty(70.data.choices[1].message.content; ""))`
-- Row written with `status=handoff`, `stopped=TRUE` (no further automated follow-ups)
+- Row written with `status=new`, `stopped=FALSE` (enters follow-up sequence with hot cadence timing)
 
 **Route 2 -- Normal** (Module 5):
 - **Filter:** NOT handoff eligible (fallback)
@@ -316,7 +318,7 @@ Structure: `key` (PK), `subject`, `body_html`, `active`, `updated_at`. Templates
 
 **Test Execution:**
 1. Submit a Tally form with fields that would score above handoff threshold (e.g., high-value discussion topic + organisation)
-2. Verify: row in sheet with `priority=hot`, `status=handoff`, `stopped=TRUE`; team notification email received at handoff_email; warm ack email received by enquirer with AI opening line
+2. Verify: row in sheet with `priority=hot`, `status=new`, `stopped=FALSE`; team notification email received at handoff_email; warm ack email received by enquirer with AI opening line
 3. Submit a form with fields that score below threshold
 4. Verify: row in sheet with `priority=standard` or `warm`, `status=new`, `stopped=FALSE`; standard email received with AI opening line
 5. Temporarily break the OpenAI API key in Pipeline Config
@@ -335,7 +337,7 @@ Structure: `key` (PK), `subject`, `body_html`, `active`, `updated_at`. Templates
 - [x] `priority` set correctly: hot (>=50), warm (>=25), standard (<25)
 - [x] Hot leads above handoff threshold trigger team notification email
 - [x] Hot leads above handoff threshold receive warm ack (initial_high template)
-- [x] Handoff leads written with `status=handoff`, `stopped=TRUE`
+- [x] Handoff leads written with `status=new`, `stopped=FALSE` (enter follow-up sequence with hot cadence)
 - [x] Standard/warm leads receive standard email (initial_standard template)
 - [x] Normal leads written with `status=new`, `stopped=FALSE`
 - [x] AI opening line injected into emails via `##ai_opening##` placeholder
@@ -378,3 +380,4 @@ Structure: `key` (PK), `subject`, `body_html`, `active`, `updated_at`. Templates
 | 1.0.0 | 2026-02-24 | Initial specification (binary scoring, fixed cadence, no AI) |
 | 2.0.0 | 2026-02-25 | Updated to match live implementation: 9-factor lead scoring, priority tiers (hot/warm/standard), handoff system with team notification, AI personalisation via OpenAI, Pipeline Config + Email Templates data stores, Tally webhook payload format, 3-route router |
 | 3.0.0 | 2026-03-03 | A/B testing: module 56 (variant assignment), column Q (`ab_variant`), template key suffix (`_a`/`_b`), `ab_testing_enabled` toggle in Pipeline Config, 8 variant template records |
+| 3.1.0 | 2026-03-23 | Hot lead fix: all leads now written with `status=new`, `stopped=FALSE` regardless of handoff eligibility. Hot leads enter the follow-up sequence with fastest cadence instead of being excluded. Team notification (Module 54) still fires for hot leads. |

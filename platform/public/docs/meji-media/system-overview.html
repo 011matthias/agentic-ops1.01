@@ -6,6 +6,7 @@
 <title>Meji Media &ndash; System Overview</title>
 <style>
 :root {
+  --header-height: 72px;
   --bg: #f8fafc;
   --surface: #ffffff;
   --surface2: #f1f5f9;
@@ -27,6 +28,7 @@
   --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05);
   --shadow-md: 0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.05);
   --sidebar-width: 200px;
+  --nav-bg: #ffffff;
 }
 [data-theme="dark"] {
   --bg: #0f172a;
@@ -49,6 +51,7 @@
   --red-light: #450a0a;
   --shadow: 0 1px 3px rgba(0,0,0,.3);
   --shadow-md: 0 4px 6px rgba(0,0,0,.4);
+  --nav-bg: #1e293b;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -61,24 +64,31 @@ body {
   line-height: 1.5;
   min-height: 100vh;
   transition: background .2s, color .2s;
+  padding-top: var(--header-height);
 }
 
 /* ── Header ── */
 .header {
-  background: var(--surface);
+  background: var(--nav-bg);
   border-bottom: 1px solid var(--border);
-  padding: 20px 40px;
+  padding: 16px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  position: sticky;
-  top: 0;
-  z-index: 100;
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 1000;
   box-shadow: var(--shadow);
+  transition: background .2s;
 }
-.header-left h1 { font-size: 20px; font-weight: 700; color: var(--text); }
-.header-left p { font-size: 13px; color: var(--text2); margin-top: 2px; }
-.header-right { display: flex; align-items: center; gap: 16px; }
+.header-left { display: flex; align-items: center; gap: 16px; }
+.header-logo { display: flex; align-items: center; gap: 6px; font-size: 18px; letter-spacing: -0.025em; }
+.header-logo svg { flex-shrink: 0; }
+.header-logo .logo-text { font-weight: 700; color: var(--text); }
+.header-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.header-title h1 { font-size: 18px; font-weight: 700; color: var(--text); }
+.header-title p { font-size: 13px; color: var(--text2); margin-top: 1px; }
+.header-right { display: flex; align-items: center; gap: 12px; }
 
 .theme-btn {
   background: var(--surface2);
@@ -107,14 +117,13 @@ body {
 /* ── Sidebar ── */
 .sidebar {
   position: fixed;
-  top: 0;
+  top: var(--header-height);
   left: 0;
   width: var(--sidebar-width);
-  height: 100vh;
+  height: calc(100vh - var(--header-height));
   background: var(--surface);
   border-right: 1px solid var(--border);
-  z-index: 150;
-  padding-top: 80px;
+  z-index: 50;
   overflow-y: auto;
   transition: transform .25s ease;
 }
@@ -143,7 +152,7 @@ body {
 .sidebar-nav .nav-icon { font-size: 16px; width: 20px; text-align: center; }
 
 /* ── Layout with sidebar ── */
-.header { padding-left: calc(var(--sidebar-width) + 40px); }
+.header { padding-left: calc(var(--sidebar-width) + 24px); }
 .page-layout { margin-left: var(--sidebar-width); }
 
 /* ── Hamburger (mobile) ── */
@@ -599,68 +608,9 @@ body {
   background: var(--green-light); color: var(--green);
 }
 
-/* Shared doc nav */
-.doc-nav {
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  z-index: 200;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
-  height: 48px;
-  box-shadow: 0 1px 3px rgba(0,0,0,.08);
-  transition: background .2s;
-}
-.doc-nav-left { display: flex; align-items: center; gap: 12px; }
-.doc-nav-logo {
-  display: flex; align-items: center; gap: 6px;
-  font-size: 15px; letter-spacing: -0.025em;
-}
-.doc-nav-logo svg { flex-shrink: 0; }
-.doc-nav-logo .logo-text { font-weight: 700; color: var(--text); }
-.doc-nav-logo .logo-accent { font-weight: 700; color: #2563eb; }
-.doc-nav-brand { font-size: 13px; font-weight: 700; color: var(--text); }
-.doc-nav-sep { color: var(--border); font-size: 16px; }
-.doc-nav-links { display: flex; gap: 4px; }
-.doc-nav-links a {
-  font-size: 12px; font-weight: 500;
-  padding: 5px 10px; border-radius: 6px;
-  color: var(--text2); text-decoration: none;
-  transition: background .15s, color .15s;
-}
-.doc-nav-links a:hover { background: var(--surface2); color: var(--text); }
-.doc-nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
-
-/* Offset existing header and sidebar below doc-nav */
-.header { top: 48px !important; }
-.sidebar { padding-top: 128px !important; }
-
-@media (max-width: 768px) {
-  .doc-nav-brand { display: none; }
-  .doc-nav-sep { display: none; }
-}
 </style>
 </head>
 <body>
-
-<!-- Shared doc nav -->
-<nav class="doc-nav">
-  <div class="doc-nav-left">
-    <div class="doc-nav-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="24" height="24"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></div>
-    <span class="doc-nav-brand">Meji Media</span>
-    <span class="doc-nav-sep">|</span>
-    <div class="doc-nav-links">
-      <a href="/docs/meji-media/">Hub</a>
-      <a href="/docs/meji-media/guide">Guide</a>
-      <a href="/docs/meji-media/ab-testing">A/B Testing</a>
-      <a href="/docs/meji-media/lead-scoring">Scoring</a>
-      <a href="/docs/meji-media/system-overview" class="active">Overview</a>
-    </div>
-  </div>
-</nav>
 
 <!-- Sidebar backdrop (mobile) -->
 <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
@@ -688,20 +638,29 @@ body {
 </div>
 
 <!-- Header -->
-<div class="header">
-  <div class="header-left" style="display:flex;align-items:center;gap:12px;">
+<header class="header">
+  <div class="header-left">
     <button class="hamburger" id="hamburgerBtn" onclick="toggleSidebar()">&#9776;</button>
-    <div>
-      <h1>Meji Media &ndash; Enquiry Follow-Up System</h1>
-      <p>System overview &middot; All 4 automations &middot; Live as of 19 March 2026</p>
+    <div class="header-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></div>
+    <div class="header-title">
+      <h1>Meji Media</h1>
+      <p>Automation Documentation</p>
     </div>
+    <span style="color:var(--border);font-size:20px;margin:0 4px;">|</span>
+    <nav style="display:flex;gap:4px;">
+      <a href="/docs/meji-media/" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Hub</a>
+      <a href="/docs/meji-media/guide" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Guide</a>
+      <a href="/docs/meji-media/ab-testing" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">A/B Testing</a>
+      <a href="/docs/meji-media/lead-scoring" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Scoring</a>
+      <a href="/docs/meji-media/system-overview" style="font-size:13px;font-weight:700;padding:6px 12px;border-radius:6px;background:var(--blue-light);color:var(--blue);text-decoration:none;">Overview</a>
+    </nav>
   </div>
   <div class="header-right">
-    <span class="badge badge-green"><span class="badge-dot"></span>All systems live</span>
-    <button class="theme-btn" onclick="toggleTheme()">&#9680; Toggle theme</button>
+    <span class="badge badge-green"><span class="badge-dot"></span> All Systems Live</span>
+    <button class="theme-btn" onclick="toggleTheme()"><span id="theme-icon">&#9790;</span> Theme</button>
     <button class="theme-btn" onclick="openSearch()" title="Ctrl/Cmd+K">&#x2315; Search</button>
   </div>
-</div>
+</header>
 
 <div class="page-layout">
 <div class="main">
@@ -1381,10 +1340,14 @@ function toggleTheme() {
   const t = root.dataset.theme === 'dark' ? 'light' : 'dark';
   root.dataset.theme = t;
   localStorage.setItem('meji-docs-theme', t);
+  document.getElementById('theme-icon').innerHTML = t === 'dark' ? '&#9788;' : '&#9790;';
 }
 (function() {
   const saved = localStorage.getItem('meji-docs-theme');
-  if (saved) root.dataset.theme = saved;
+  if (saved) {
+    root.dataset.theme = saved;
+    if (saved === 'dark') document.getElementById('theme-icon').innerHTML = '&#9788;';
+  }
 })();
 
 // Sidebar
@@ -1464,6 +1427,26 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') closeSearch();
 });
 
+
+</script>
+
+<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
+  <div style="text-align:center;max-width:360px;padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span></div>
+    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Meji Media Documentation</h2>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Enter your access code to continue.</p>
+    <div style="display:flex;gap:8px;">
+      <input id="auth-input" type="password" placeholder="Access code" autocomplete="off"
+        style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;"
+        onkeydown="if(event.key==='Enter')checkAuth()" />
+      <button onclick="checkAuth()"
+        style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">Enter</button>
+    </div>
+    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Incorrect code. Please try again.</p>
+  </div>
+</div>
+
+<script>
 // Auth gate
 var MEJI_CODE = 'meji2026';
 function checkAuth() {
@@ -1487,22 +1470,6 @@ function checkAuth() {
   }
 })();
 </script>
-
-<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
-  <div style="text-align:center;max-width:360px;padding:24px;">
-    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span></div>
-    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Meji Media Documentation</h2>
-    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Enter your access code to continue.</p>
-    <div style="display:flex;gap:8px;">
-      <input id="auth-input" type="password" placeholder="Access code" autocomplete="off"
-        style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;"
-        onkeydown="if(event.key==='Enter')checkAuth()" />
-      <button onclick="checkAuth()"
-        style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">Enter</button>
-    </div>
-    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Incorrect code. Please try again.</p>
-  </div>
-</div>
 
 </body>
 </html>

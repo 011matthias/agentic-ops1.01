@@ -6,6 +6,7 @@
 <title>Meji Media &ndash; Automation Documentation</title>
 <style>
 :root {
+  --header-height: 72px;
   --bg: #f8fafc;
   --surface: #ffffff;
   --surface2: #f1f5f9;
@@ -25,6 +26,7 @@
   --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05);
   --shadow-md: 0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.05);
   --shadow-lg: 0 10px 15px rgba(0,0,0,.1), 0 4px 6px rgba(0,0,0,.05);
+  --nav-bg: #ffffff;
 }
 [data-theme="dark"] {
   --bg: #0f172a;
@@ -46,6 +48,7 @@
   --shadow: 0 1px 3px rgba(0,0,0,.3);
   --shadow-md: 0 4px 6px rgba(0,0,0,.4);
   --shadow-lg: 0 10px 15px rgba(0,0,0,.5);
+  --nav-bg: #1e293b;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -58,20 +61,22 @@ body {
   line-height: 1.6;
   min-height: 100vh;
   transition: background .2s, color .2s;
+  padding-top: var(--header-height);
 }
 
 /* Header */
 .header {
-  background: var(--surface);
+  background: var(--nav-bg);
   border-bottom: 1px solid var(--border);
-  padding: 24px 40px;
+  padding: 16px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  position: sticky;
-  top: 0;
-  z-index: 100;
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 1000;
   box-shadow: var(--shadow);
+  transition: background .2s;
 }
 .header-left { display: flex; align-items: center; gap: 16px; }
 .header-logo {
@@ -461,6 +466,11 @@ body {
     <div class="section-title">Recent Changes</div>
     <div class="timeline">
       <div class="timeline-item">
+        <div class="timeline-date">24 March 2026</div>
+        <div class="timeline-text">Production health check -- all systems healthy</div>
+        <div class="timeline-detail">All 4 scenarios active with zero errors on A1/A2/A3. 42 enquiries processed, 3 new in last 24 hours. MySQL database healthy (61 rows). Ops usage at 43.1% (12,938 of 30,000). Pipeline confirmed end-to-end: new enquiry (id 14281) flowed from MySQL through A0 to A1 within minutes.</div>
+      </div>
+      <div class="timeline-item">
         <div class="timeline-date">23 March 2026</div>
         <div class="timeline-text">BCC configuration fix</div>
         <div class="timeline-detail">Fixed developer BCC on Module 54 (initial email for standard leads). All 5 email-sending modules now correctly BCC the developer address for monitoring.</div>
@@ -544,7 +554,7 @@ body {
 <!-- Footer -->
 <footer class="footer">
   <p>Built and maintained by <a href="https://unpauseai.com" target="_blank" rel="noopener">UnpauseAI</a></p>
-  <p style="margin-top:4px;">Last updated: 23 March 2026</p>
+  <p style="margin-top:4px;">Last updated: 24 March 2026</p>
 </footer>
 
 <div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">

@@ -6,12 +6,12 @@ stage: live
 needs_fixes: false
 version: 2.0.0
 created: 2026-02-24
-updated: 2026-03-06
+updated: 2026-03-24
 orchestrator: make
 trigger:
   type: cron
-  schedule: "*/5 * * * *"
-  interval_seconds: 300
+  schedule: "*/10 * * * *"
+  interval_seconds: 600
 systems:
   - gmail
   - google-sheets
@@ -31,6 +31,8 @@ make_production:
   google_connection: 13838215
   gmail_connection: 13838220
 last_changes:
+  - "2026-03-24: Production health check - 1040 executions, 1091 ops, 0 errors. Interval corrected in spec: 600s (10min) matching live schedule"
+  - "2026-03-19: Interval changed from 300s to 600s (5min to 10min) during go-live scheduling optimisation"
   - "2026-03-06: Fixed UTF-8 encoding in eu2 deployment (ASCII hyphens in scenario names)"
   - "2026-02-25: Updated spec to match live implementation"
 next_steps: []
