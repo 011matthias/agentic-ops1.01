@@ -7,6 +7,7 @@
 <style>
 :root {
   --header-height: 72px;
+  --sidebar-width: 200px;
   --bg: #f8fafc; --surface: #ffffff; --surface2: #f1f5f9; --border: #e2e8f0;
   --text: #0f172a; --text2: #475569; --text3: #94a3b8;
   --blue: #2563eb; --blue-light: #dbeafe; --blue-dark: #1e40af;
@@ -37,13 +38,48 @@ body {
   padding-top: var(--header-height);
 }
 
+/* Sidebar */
+.sidebar {
+  position: fixed; top: var(--header-height); left: 0;
+  width: var(--sidebar-width); height: calc(100vh - var(--header-height));
+  background: var(--surface); border-right: 1px solid var(--border);
+  z-index: 50; overflow-y: auto; transition: transform .25s ease;
+}
+.sidebar-nav { list-style: none; padding: 12px 0; }
+.sidebar-nav li { margin: 0; }
+.sidebar-nav a {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 20px; font-size: 13px; font-weight: 500;
+  color: var(--text2); text-decoration: none;
+  border-left: 3px solid transparent;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.sidebar-nav a:hover { background: var(--surface2); color: var(--text); }
+.sidebar-nav a.active {
+  background: var(--blue-light); color: var(--blue-dark);
+  border-left-color: var(--blue); font-weight: 700;
+}
+.sidebar-nav .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+.sidebar-backdrop {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.4); z-index: 140;
+}
+.sidebar-backdrop.active { display: block; }
+.hamburger {
+  display: none; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  font-size: 18px; color: var(--text2); line-height: 1;
+}
+
 /* Header */
 .header {
   background: var(--nav-bg); border-bottom: 1px solid var(--border);
-  padding: 16px 24px; display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 24px; padding-left: calc(var(--sidebar-width) + 24px);
+  display: flex; align-items: center; justify-content: space-between;
   position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
   box-shadow: var(--shadow); transition: background .2s;
 }
+.page-layout { margin-left: var(--sidebar-width); }
 .header-left { display: flex; align-items: center; gap: 16px; }
 .header-logo { display: flex; align-items: center; gap: 6px; font-size: 18px; letter-spacing: -0.025em; }
 .header-logo svg { flex-shrink: 0; }
@@ -70,6 +106,13 @@ body {
 
 /* Content */
 .main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); z-index: 200; }
+  .sidebar.open { transform: translateX(0); }
+  .header { padding-left: 24px; }
+  .page-layout { margin-left: 0; }
+  .hamburger { display: block; }
+}
 .hero {
   background: linear-gradient(135deg, var(--amber), #dc2626);
   border-radius: 16px; padding: 48px 40px; color: #fff; margin-bottom: 40px;
@@ -174,8 +217,24 @@ tr:nth-child(even) td { background: var(--surface2); }
 </head>
 <body>
 
+<!-- Sidebar backdrop (mobile) -->
+<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
+
+<!-- Sidebar navigation -->
+<nav class="sidebar" id="sidebar">
+  <ul class="sidebar-nav">
+    <li><a href="#section-how-scoring" data-section="section-how-scoring"><span class="nav-icon">&#9881;</span> How It Works</a></li>
+    <li><a href="#section-tiers" data-section="section-tiers"><span class="nav-icon">&#9733;</span> Priority Tiers</a></li>
+    <li><a href="#section-weights" data-section="section-weights"><span class="nav-icon">&#9878;</span> Weights</a></li>
+    <li><a href="#section-examples" data-section="section-examples"><span class="nav-icon">&#128196;</span> Examples</a></li>
+    <li><a href="#section-tuning" data-section="section-tuning"><span class="nav-icon">&#128295;</span> Tuning</a></li>
+    <li><a href="#section-config" data-section="section-config"><span class="nav-icon">&#9881;</span> Config</a></li>
+  </ul>
+</nav>
+
 <header class="header">
   <div class="header-left">
+    <button class="hamburger" id="hamburgerBtn" onclick="toggleSidebar()">&#9776;</button>
     <div class="header-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></div>
     <div class="header-title">
       <h1>Meji Media</h1>
@@ -198,6 +257,7 @@ tr:nth-child(even) td { background: var(--surface2); }
   </div>
 </header>
 
+<div class="page-layout">
 <div class="main">
 
   <div class="hero">
@@ -206,7 +266,7 @@ tr:nth-child(even) td { background: var(--surface2); }
   </div>
 
   <!-- How Scoring Works -->
-  <div class="section">
+  <div class="section" id="section-how-scoring">
     <div class="section-title">How Scoring Works</div>
     <div class="scoring-flow">
       <div class="scoring-flow-title">Scoring Pipeline</div>
@@ -230,7 +290,7 @@ tr:nth-child(even) td { background: var(--surface2); }
   </div>
 
   <!-- Priority Tiers -->
-  <div class="section">
+  <div class="section" id="section-tiers">
     <div class="section-title">Priority Tiers</div>
     <div class="priority-cards">
       <div class="priority-card priority-card-hot">
@@ -252,7 +312,7 @@ tr:nth-child(even) td { background: var(--surface2); }
   </div>
 
   <!-- Scoring Weights -->
-  <div class="section">
+  <div class="section" id="section-weights">
     <div class="section-title">Scoring Weights</div>
     <div style="background:var(--amber-light);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px;">
       <p style="margin:0;font-size:14px;color:var(--text);">
@@ -286,7 +346,7 @@ tr:nth-child(even) td { background: var(--surface2); }
   </div>
 
   <!-- Example Scenarios -->
-  <div class="section">
+  <div class="section" id="section-examples">
     <div class="section-title">Example Scenarios</div>
     <div class="example example-hot">
       <span class="example-badge">Hot &middot; 90</span>
@@ -319,7 +379,7 @@ tr:nth-child(even) td { background: var(--surface2); }
   </div>
 
   <!-- Tuning Guide -->
-  <div class="section">
+  <div class="section" id="section-tuning">
     <div class="section-title">Tuning Guide</div>
     <div class="tuning-item">
       <h4>Getting too many "hot" notifications?</h4>
@@ -352,7 +412,7 @@ tr:nth-child(even) td { background: var(--surface2); }
   </div>
 
   <!-- Config Reference -->
-  <div class="section">
+  <div class="section" id="section-config">
     <div class="section-title">Configuration Quick Reference</div>
     <table>
       <thead>
@@ -382,10 +442,11 @@ tr:nth-child(even) td { background: var(--surface2); }
 
 </div>
 
-<footer class="footer">
+<footer class="footer" style="margin-left:var(--sidebar-width);">
   <p>Built and maintained by <a href="https://unpauseai.com" target="_blank">UnpauseAI</a></p>
-  <p style="margin-top:4px;">Last updated: 23 March 2026</p>
+  <p style="margin-top:4px;">Last updated: 24 March 2026</p>
 </footer>
+</div><!-- /page-layout -->
 
 <!-- Auth gate -->
 <div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
@@ -410,6 +471,28 @@ function checkAuth(){var i=document.getElementById('auth-input').value;if(i===ME
 (function(){if(localStorage.getItem('meji-docs-access')==='granted'){document.getElementById('auth-gate').style.display='none'}else{document.getElementById('auth-input').focus()}})();
 function toggleTheme(){var h=document.documentElement;var n=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('meji-docs-theme',n);document.getElementById('theme-icon').innerHTML=n==='dark'?'&#9788;':'&#9790;'}
 (function(){var s=localStorage.getItem('meji-docs-theme');if(s){document.documentElement.setAttribute('data-theme',s);if(s==='dark')document.getElementById('theme-icon').innerHTML='&#9788;'}})();
+
+// Sidebar
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('sidebarBackdrop').classList.toggle('active')}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('sidebarBackdrop').classList.remove('active')}
+
+// Active section highlight via IntersectionObserver
+(function(){
+  var sections=document.querySelectorAll('[id^="section-"]');
+  var navLinks=document.querySelectorAll('.sidebar-nav a');
+  if(!sections.length)return;
+  var observer=new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if(entry.isIntersecting){
+        navLinks.forEach(function(link){link.classList.remove('active')});
+        var activeLink=document.querySelector('.sidebar-nav a[data-section="'+entry.target.id+'"]');
+        if(activeLink)activeLink.classList.add('active');
+      }
+    });
+  },{rootMargin:'-20% 0px -60% 0px',threshold:0});
+  sections.forEach(function(section){observer.observe(section)});
+  navLinks.forEach(function(link){link.addEventListener('click',function(){if(window.innerWidth<=768)closeSidebar()})});
+})();
 </script>
 
 </body>

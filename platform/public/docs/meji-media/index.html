@@ -7,6 +7,7 @@
 <style>
 :root {
   --header-height: 72px;
+  --sidebar-width: 200px;
   --bg: #f8fafc;
   --surface: #ffffff;
   --surface2: #f1f5f9;
@@ -64,11 +65,45 @@ body {
   padding-top: var(--header-height);
 }
 
+/* Sidebar */
+.sidebar {
+  position: fixed; top: var(--header-height); left: 0;
+  width: var(--sidebar-width); height: calc(100vh - var(--header-height));
+  background: var(--surface); border-right: 1px solid var(--border);
+  z-index: 50; overflow-y: auto; transition: transform .25s ease;
+}
+.sidebar-nav { list-style: none; padding: 12px 0; }
+.sidebar-nav li { margin: 0; }
+.sidebar-nav a {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 20px; font-size: 13px; font-weight: 500;
+  color: var(--text2); text-decoration: none;
+  border-left: 3px solid transparent;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.sidebar-nav a:hover { background: var(--surface2); color: var(--text); }
+.sidebar-nav a.active {
+  background: var(--blue-light); color: var(--blue-dark);
+  border-left-color: var(--blue); font-weight: 700;
+}
+.sidebar-nav .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+.sidebar-backdrop {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.4); z-index: 140;
+}
+.sidebar-backdrop.active { display: block; }
+.hamburger {
+  display: none; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  font-size: 18px; color: var(--text2); line-height: 1;
+}
+
 /* Header */
 .header {
   background: var(--nav-bg);
   border-bottom: 1px solid var(--border);
   padding: 16px 24px;
+  padding-left: calc(var(--sidebar-width) + 24px);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -78,6 +113,7 @@ body {
   box-shadow: var(--shadow);
   transition: background .2s;
 }
+.page-layout { margin-left: var(--sidebar-width); }
 .header-left { display: flex; align-items: center; gap: 16px; }
 .header-logo {
   display: flex; align-items: center; gap: 6px;
@@ -116,6 +152,13 @@ body {
 
 /* Main */
 .main { max-width: 960px; margin: 0 auto; padding: 40px 24px 80px; }
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); z-index: 200; }
+  .sidebar.open { transform: translateX(0); }
+  .header { padding-left: 24px; }
+  .page-layout { margin-left: 0; }
+  .hamburger { display: block; }
+}
 
 /* Hero */
 .hero {
@@ -283,9 +326,25 @@ body {
 </head>
 <body>
 
+<!-- Sidebar backdrop (mobile) -->
+<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
+
+<!-- Sidebar navigation -->
+<nav class="sidebar" id="sidebar">
+  <ul class="sidebar-nav">
+    <li><a href="#section-docs" data-section="section-docs"><span class="nav-icon">&#128214;</span> Docs</a></li>
+    <li><a href="#section-automations" data-section="section-automations"><span class="nav-icon">&#9889;</span> Automations</a></li>
+    <li><a href="#section-config" data-section="section-config"><span class="nav-icon">&#9881;</span> Configuration</a></li>
+    <li><a href="#section-changes" data-section="section-changes"><span class="nav-icon">&#128197;</span> Changes</a></li>
+    <li><a href="#section-how" data-section="section-how"><span class="nav-icon">&#9670;</span> How It Works</a></li>
+    <li><a href="#section-support" data-section="section-support"><span class="nav-icon">&#128172;</span> Support</a></li>
+  </ul>
+</nav>
+
 <!-- Header -->
 <header class="header">
   <div class="header-left">
+    <button class="hamburger" id="hamburgerBtn" onclick="toggleSidebar()">&#9776;</button>
     <div class="header-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></div>
     <div class="header-title">
       <h1>Meji Media</h1>
@@ -309,6 +368,7 @@ body {
 </header>
 
 <!-- Main Content -->
+<div class="page-layout">
 <div class="main">
 
   <!-- Hero -->
@@ -332,7 +392,7 @@ body {
   </div>
 
   <!-- Documentation -->
-  <div class="section">
+  <div class="section" id="section-docs">
     <div class="section-title">Documentation</div>
     <div class="cards">
       <a href="/docs/meji-media/guide" class="card">
@@ -363,7 +423,7 @@ body {
   </div>
 
   <!-- Live Automations -->
-  <div class="section">
+  <div class="section" id="section-automations">
     <div class="section-title">Live Automations</div>
     <div class="auto-list">
       <div class="auto-item">
@@ -402,7 +462,7 @@ body {
   </div>
 
   <!-- Configuration -->
-  <div class="section">
+  <div class="section" id="section-config">
     <div class="section-title">Where to Edit &amp; Configure</div>
     <table class="config-table">
       <thead>
@@ -462,7 +522,7 @@ body {
   </div>
 
   <!-- Recent Changes -->
-  <div class="section">
+  <div class="section" id="section-changes">
     <div class="section-title">Recent Changes</div>
     <div class="timeline">
       <div class="timeline-item">
@@ -509,7 +569,7 @@ body {
   </div>
 
   <!-- How It Works (brief) -->
-  <div class="section">
+  <div class="section" id="section-how">
     <div class="section-title">How It Works</div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;line-height:1.7;">
       <p style="margin-bottom:16px;">Three automations work together, powered by <a href="https://eu2.make.com" target="_blank" rel="noopener" style="color:var(--blue)">Make.com</a>:</p>
@@ -533,29 +593,32 @@ body {
   </div>
 
   <!-- Support -->
-  <div class="section">
+  <div class="section" id="section-support">
     <div class="section-title">Support</div>
     <div class="cards" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));">
-      <div class="card">
+      <a href="mailto:nicolas@unpauseai.com?subject=Meji%20Media%20-%20Change%20Request" class="card">
         <div class="card-icon card-icon-green">&#128172;</div>
         <h3>Request a Change</h3>
-        <p>Need to adjust timing, templates, or scoring? Message your automation specialist via Upwork or email.</p>
-      </div>
-      <div class="card">
+        <p>Need to adjust timing, templates, or scoring? Email your automation specialist to request a change.</p>
+        <span class="card-tag card-tag-link">Send Email</span>
+      </a>
+      <a href="mailto:nicolas@unpauseai.com?subject=Meji%20Media%20-%20Issue%20Report" class="card">
         <div class="card-icon card-icon-amber">&#128736;</div>
         <h3>Report an Issue</h3>
-        <p>Emails not sending? Enquiries missing? Check the troubleshooting section in the Complete Guide, or contact support.</p>
-      </div>
+        <p>Emails not sending? Enquiries missing? Check the <a href="/docs/meji-media/guide" style="color:var(--blue)">Complete Guide</a> troubleshooting section, or email support.</p>
+        <span class="card-tag card-tag-link">Send Email</span>
+      </a>
     </div>
   </div>
 
 </div>
 
 <!-- Footer -->
-<footer class="footer">
+<footer class="footer" style="margin-left:var(--sidebar-width);">
   <p>Built and maintained by <a href="https://unpauseai.com" target="_blank" rel="noopener">UnpauseAI</a></p>
   <p style="margin-top:4px;">Last updated: 24 March 2026</p>
 </footer>
+</div><!-- /page-layout -->
 
 <div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
   <div style="text-align:center;max-width:360px;padding:24px;">
@@ -614,6 +677,38 @@ if (saved) {
   document.documentElement.setAttribute('data-theme', saved);
   if (saved === 'dark') document.getElementById('theme-icon').innerHTML = '&#9788;';
 }
+
+// Sidebar
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarBackdrop').classList.toggle('active');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarBackdrop').classList.remove('active');
+}
+
+// Active section highlight via IntersectionObserver
+(function() {
+  var sections = document.querySelectorAll('[id^="section-"]');
+  var navLinks = document.querySelectorAll('.sidebar-nav a');
+  if (!sections.length) return;
+  var observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting) {
+        navLinks.forEach(function(link) { link.classList.remove('active'); });
+        var activeLink = document.querySelector('.sidebar-nav a[data-section="' + entry.target.id + '"]');
+        if (activeLink) activeLink.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -60% 0px', threshold: 0 });
+  sections.forEach(function(section) { observer.observe(section); });
+  navLinks.forEach(function(link) {
+    link.addEventListener('click', function() {
+      if (window.innerWidth <= 768) closeSidebar();
+    });
+  });
+})();
 </script>
 
 </body>
