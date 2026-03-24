@@ -69,6 +69,18 @@ Show the suggestion and let user confirm or change. Use the same orchestrator op
 | **Make.com** | Visual scenario builder via Make.com UI. |
 | **Plain FastAPI** (Legacy) | NOT recommended for new clients. |
 
+## Step 5.5: Platform Feasibility Assessment
+
+Before creating any files, investigate the client's platform subscription. Load [PLATFORM-FEASIBILITY](../skills/make-mcp-tools-expert/modules/PLATFORM-FEASIBILITY.md) and run Section A for the chosen orchestrator.
+
+Follow the same procedure as `/new-client` Step 2.5:
+- Ask minimum questions for the orchestrator (plan tier, API access, key limits)
+- Record answers for `infrastructure.yaml` platform section
+- If unknown: record `feasibility: "unassessed"` with a note that it must be completed before building
+- If RED verdict: warn and ask whether to proceed or pause
+
+The proposal's `value_estimate` and `tags` may hint at scope — use them to estimate whether the plan will be sufficient.
+
 ## Step 6: Create Folder Structure
 
 Create the same structure as `/new-client` Step 3:
@@ -214,9 +226,9 @@ Proposal {slug} converted to client: {client-name}
 
 Next steps:
   1. Fill in comms-profile.md (contact details, tone, style)
-  2. Refine first spec: /spec-creator {client-name}
+  2. Refine first spec: /skil_spec-creator {client-name}
   3. Run /resume {client-name} to start the build session
-  4. When ready for GitHub: /client-handoff {client-name}
+  4. When ready for GitHub: /comd_client-handoff {client-name}
 ```
 
 ## Notes

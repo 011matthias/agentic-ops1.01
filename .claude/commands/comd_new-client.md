@@ -1,26 +1,35 @@
 ---
-description: Initialize new client folder structure (no GitHub repo yet)
-argument-hint: <client-name>
+description: Initialize a new project folder (client, internal, or platform)
+argument-hint: <project-name> [--type client|internal|platform]
 ---
 
-# New Client Setup
+# New Project Setup
 
-Creates the complete folder structure for a new client within the Agentic Ops workspace.
+Creates the complete folder structure for a new project within the Agentic Ops workspace. Projects have a type: `client` (default), `internal`, or `platform`.
 
 ## Context
 
 - Working directory: !`pwd`
-- Client name: $ARGUMENTS
+- Arguments: $ARGUMENTS
 
 ## Prerequisites
 
-If $ARGUMENTS is empty, ask the user for the client name.
+Parse $ARGUMENTS:
+- **Project name** (required): the slug, e.g. `acme-corp`, `my-tool`
+- **`--type`** (optional): `client` | `internal` | `platform`. Default: `client`
 
-Client name should be lowercase, kebab-case (e.g., `herbox-sweden`, `acme-corp`).
+If project name is empty, ask the user for it. Name should be lowercase, kebab-case.
 
-## Step 1: Verify Client Doesn't Exist
+**Resolve base directory based on type:**
+- `type: client` → `workspace/clients/{name}/`
+- `type: internal` → `workspace/projects/{name}/`
+- `type: platform` → `workspace/projects/{name}/`
 
-Check if `workspace/clients/$ARGUMENTS/` already exists.
+For `type: internal` or `type: platform`, skip Step 2 (orchestrator selection) and Step 2.5 (feasibility assessment) — proceed directly to Step 3 with a lightweight structure (context/ and scripts/ only). Generate a minimal `infrastructure.yaml` with just `type:` and `notes:` fields. Skip Steps 4–8 that are client-specific (template copy, comms, symlink).
+
+## Step 1: Verify Project Doesn't Exist
+
+Check if the resolved directory already exists.
 
 If it exists, ask the user if they want to:
 1. Abort (default)
@@ -38,6 +47,29 @@ Ask the user which orchestrator to use:
 | **Plain FastAPI** (Legacy) | FastAPI service on Railway with custom dashboard, cron scripts, and webhook routes. NOT recommended for new clients. |
 
 Default to **Trigger.dev** unless the user chooses otherwise.
+
+## Step 2.5: Platform Feasibility Assessment
+
+Before creating any files, investigate the client's platform subscription to catch mismatches early. Load [PLATFORM-FEASIBILITY](../skills/make-mcp-tools-expert/modules/PLATFORM-FEASIBILITY.md) and run Section A (Full Platform Capability Audit) for the chosen orchestrator.
+
+**Minimum questions to ask:**
+
+| Orchestrator | Questions |
+|-------------|-----------|
+| **Make.com** | Plan tier? (free/core/pro/teams/enterprise). Do they have API/MCP access? Any modules they know they need? |
+| **n8n** | Cloud or self-hosted? If cloud: plan tier? Workflow count limit? |
+| **Trigger.dev** | Plan tier? (hobby/pro/enterprise). Expected execution volume? |
+
+**Record the answers** — they'll go into `infrastructure.yaml` under a `platform` section in Step 4.
+
+**If the client doesn't know their plan details yet:**
+- Record `platform.tier: "unknown"` and `platform.feasibility: "unassessed"`
+- Add a note: "Feasibility assessment pending — must complete before first spec build"
+- This is acceptable at onboarding; the assessment MUST be completed before `/build-automation`
+
+**If answers reveal a RED verdict** (plan clearly insufficient for discussed scope):
+- Warn: "The {plan} plan may not support the planned workload. Recommend upgrading to {tier} or reducing scope."
+- Ask: "Proceed with setup anyway, or pause until subscription is confirmed?"
 
 ## Step 3: Create Folder Structure
 
@@ -93,6 +125,8 @@ Workflows are built and managed in the n8n UI and via n8n-mcp tools.
 Create `workspace/clients/$ARGUMENTS/infrastructure.yaml`:
 
 ```yaml
+type: client
+
 instances:
   - type: n8n
     name: n8n-$ARGUMENTS
@@ -143,6 +177,18 @@ Create `workspace/clients/$ARGUMENTS/automations/blueprints/.gitkeep` (empty fil
 Create `workspace/clients/$ARGUMENTS/infrastructure.yaml`:
 
 ```yaml
+type: client
+
+platform:
+  tier: "<from Step 2.5>"       # free|core|pro|teams|enterprise
+  ops_limit: <from plan tier>   # monthly operations cap
+  api_access: <true|false>      # MCP/API available (Pro+ only)
+  concurrent_limit: null        # null = unlimited on paid plans
+  feasibility: "<from Step 2.5>" # green|yellow|orange|red|unassessed
+  blockers: []                  # capability blockers found in Step 2.5
+  assessed: "<today YYYY-MM-DD>"
+  notes: "<any notes from Step 2.5>"
+
 instances:
   - type: make
     name: make-$ARGUMENTS
@@ -158,7 +204,7 @@ Create `workspace/clients/$ARGUMENTS/context/test-fixtures.md`:
 No fixtures created yet. After building the first automation, create
 observability (Sheet Reader) and control (Cell Writer) fixtures.
 
-See `.claude/rules/behaviors.md` for outcome verification and test fixture conventions.
+See `.claude/rules/rule_behaviors.md` for outcome verification and test fixture conventions.
 
 ---
 
@@ -232,7 +278,7 @@ Create `workspace/clients/$ARGUMENTS/specs/README.md`:
 - `p{N}.{M}` — Project phase
 - `fix{N}` — Bug fix (tracked against a parent automation via `fix{N}-{parentId}-{description}.md`)
 
-Use `/spec-creator` to add new work items.
+Use `/skil_spec-creator` to add new work items.
 
 ## Quick Links
 
@@ -365,13 +411,13 @@ Orchestrator: {Trigger.dev | Make.com | Plain FastAPI}
 
 Next steps:
 1. Review and update .env file with real credentials (Trigger.dev/FastAPI) or set up Make.com connections
-2. Create first work item spec: /spec-creator
-3. When ready for deployment: /client-handoff
+2. Create first work item spec: /skil_spec-creator
+3. When ready for deployment: /comd_client-handoff
 ```
 
 ## Notes
 
 - This command does NOT create a GitHub repository
 - The client folder lives in the main Agentic Ops repo initially
-- Use `/client-handoff` when client needs their own repository
+- Use `/comd_client-handoff` when client needs their own repository
 - Specs should be created before implementing automations

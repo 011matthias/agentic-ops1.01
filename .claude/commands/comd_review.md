@@ -28,7 +28,7 @@ Read all files in `docs/sessions/`:
 - Collect `work_types` from frontmatter (if present) for distribution analysis
 
 ### Build Logs
-Read `workspace/clients/*/context/build-log.md` for each client that has one:
+Read `workspace/clients/*/context/build-log.md` and `workspace/projects/*/context/build-log.md` for each project that has one:
 - Extract `total_builds` from frontmatter
 - Collect error categories from `**Errors:**` fields
 - Collect FIX-PATTERN IDs from `**Fixes applied:**` fields
@@ -49,7 +49,7 @@ Read `docs/friction-register.md`:
 ### Error Patterns (from build logs)
 - Compute error category distribution across all builds
 - Flag categories exceeding 30% of total build iterations
-- Identify error categories not covered in FIX-PATTERNS.md (check `.claude/skills/build-test-fix/modules/FIX-PATTERNS.md`)
+- Identify error categories not covered in FIX-PATTERNS.md (check `.claude/skills/skil_build-test-fix/modules/FIX-PATTERNS.md`)
 
 ### Efficiency Patterns (from build logs)
 - Compute average iterations per build (overall and per client)

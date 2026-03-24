@@ -1,6 +1,6 @@
 ---
 description: Show automation status overview with automated verification
-argument-hint: [client-name] [automation-id] [--verify]
+argument-hint: [project-name] [automation-id] [--verify]
 ---
 
 # Automation Status Check
@@ -10,12 +10,12 @@ Display a comprehensive overview of automation statuses with optional automated 
 ## Context
 
 - Working directory: !`pwd`
-- Client argument: $ARGUMENTS
+- Project argument: $ARGUMENTS
 
 ## Parse Arguments
 
 Parse $ARGUMENTS for:
-1. **Client** (optional): e.g., `herbox`, `uplifted-consulting`. If omitted, detect from current path.
+1. **Project** (optional): e.g., `herbox`, `uplifted-consulting`, `platform`. If omitted, detect from current path.
 2. **Automation ID** (optional): e.g., `a6.1`, `a7`. Show specific automation only.
 3. **`--verify`** (optional): Run automated verification against codebase
 
@@ -26,14 +26,21 @@ If not in a client directory:
 - Detect from current path
 - Ask user to specify
 
+## Step 0: Resolve Project Directory
+
+Check in order:
+1. `workspace/clients/{project}/` — for `type: client` projects
+2. `workspace/projects/{project}/` — for `type: internal` or `type: platform` projects
+
+Read `infrastructure.yaml` and check the `type:` field.
+
 ## Step 1: Load Status File
 
-Read `workspace/clients/{client}/specs/automation-status.yaml`
+Read `{project_dir}/specs/automation-status.yaml`
 
 If file doesn't exist:
-- Check if client directory exists
-- Check for specs in `specs/automations/`
-- Offer to create status file from discovered specs
+- For `type: internal` or `type: platform`: note "No automation-status.yaml — project type does not use spec pipeline" and skip to Step 2.5 (Ops Summary) if applicable.
+- For `type: client`: check for specs in `specs/automations/`, offer to create status file from discovered specs.
 
 ## Step 2: Display Status Overview
 
@@ -80,6 +87,32 @@ Show a formatted table:
 │ needs_fixes:     {count} automations                                     │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
+
+## Step 2.5: Ops/Usage Summary
+
+If `infrastructure.yaml` has a `platform` section, show an ops summary before the automation details:
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│ PLATFORM USAGE                                                           │
+├──────────────────────────────────────────────────────────────────────────┤
+│ Orchestrator:    {type} ({tier} plan)                                    │
+│ Ops Limit:       {ops_limit}/month                                       │
+│ Feasibility:     {GREEN|YELLOW|ORANGE|RED} (assessed {date})             │
+│ Active Scenarios: {n}                                                    │
+│                                                                          │
+│ Per-Scenario Estimates:                                                   │
+│   {scenario}: ~{est_ops}/mo ({trigger_type})                             │
+│   {scenario}: ~{est_ops}/mo ({trigger_type})                             │
+│   Total: ~{total_est}/mo ({%} of limit)                                  │
+│                                                                          │
+│ Run /ops-audit for full analysis with live MCP data                      │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+Estimates use OPERATIONS-ANALYZER formulas against `infrastructure.yaml` data (intervals, trigger types). For live data, suggest `/ops-audit`.
+
+If no `platform` section exists, skip this step.
 
 ## Step 3: Display Automation Details
 
@@ -246,7 +279,7 @@ Based on status, suggest next commands:
 ├──────────────────────────────────────────────────────────────────────────┤
 │ /test a6.1           Run tests and mark as tested_locally                │
 │ /verify-live a6.2    Verify production and mark as tested_live           │
-│ /deploy herbox       Deploy to Railway                                    │
+│ /comd_deploy herbox       Deploy to Railway                                    │
 │ /build-automation    Create new automation from spec                     │
 └──────────────────────────────────────────────────────────────────────────┘
 ```

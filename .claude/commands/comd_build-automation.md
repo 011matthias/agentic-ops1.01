@@ -1,20 +1,20 @@
 ---
-description: End-to-end automation building via build-orchestrator agent
-argument-hint: <client-name> [--skip-spec] [--skip-test] [--skip-deploy]
+description: End-to-end automation building via agnt_build-orchestrator agent
+argument-hint: <project-name> [--skip-spec] [--skip-test] [--skip-deploy]
 ---
 
 # Build Automation
 
-Orchestrates the complete automation development workflow from requirements to deployment using the **build-orchestrator** agent.
+Orchestrates the complete automation development workflow from requirements to deployment using the **agnt_build-orchestrator** agent.
 
 ## Context
 
 - Working directory: !`pwd`
-- Client name: $ARGUMENTS
+- Project name: $ARGUMENTS
 
 ## Overview
 
-This command invokes the **build-orchestrator agent** which manages the full automation lifecycle:
+This command invokes the **agnt_build-orchestrator agent** which manages the full automation lifecycle:
 
 ```
 Requirements → Spec → Code → Test (Local) → Test (Dev) → Docs → Deploy → Verify
@@ -24,11 +24,13 @@ The orchestrator coordinates specialized agents for each phase and manages hando
 
 ## Prerequisites
 
-If $ARGUMENTS is empty, ask for client name.
+If $ARGUMENTS is empty, ask for project name.
 
-Verify client exists:
-- `workspace/clients/$ARGUMENTS/` should exist
-- If not, suggest `/new-client $ARGUMENTS` first
+Resolve project directory — check in order:
+1. `workspace/clients/$ARGUMENTS/` — for `type: client` projects
+2. `workspace/projects/$ARGUMENTS/` — for `type: internal` or `type: platform` projects
+
+If neither exists, suggest `/new-client $ARGUMENTS --type [client|internal|platform]`
 
 ## Important: Does Not Auto-Build Everything
 
@@ -55,18 +57,18 @@ When you run `/build-automation herbox`, the orchestrator will:
 ## Parse Arguments
 
 Parse $ARGUMENTS for:
-1. **Client** (required): e.g., `herbox`, `uplifted-consulting`
+1. **Project** (required): e.g., `herbox`, `uplifted-consulting`, `platform`
 2. **`--skip-spec`** (optional): Use existing spec, skip to implementation
 3. **`--skip-test`** (optional): Skip testing phase (not recommended)
 4. **`--skip-deploy`** (optional): Stop before deployment
 
 ## Main Workflow: Invoke Build Orchestrator
 
-Launch the **build-orchestrator** agent to manage the complete workflow:
+Launch the **agnt_build-orchestrator** agent to manage the complete workflow:
 
 ```
 Using Task tool:
-  Agent: build-orchestrator
+  Agent: agnt_build-orchestrator
 
   Prompt:
     Build automation for client: {client}
@@ -78,36 +80,35 @@ Using Task tool:
 
     Process:
     1. Create session and handoff directory
-    2. Phase 1: Plan (spec-creator) - unless --skip-spec
-    3. Phase 2: Implement (implementation-agent)
-    4. Phase 3: Test - Local (testing-agent) - unless --skip-test
-    5. Phase 3.5: Test - Dev (testing-agent with /test-dev) - unless --skip-test
-    6. Phase 4: Document (doc-generator)
-    7. Phase 5: Deploy (deployer) - unless --skip-deploy
-    8. Phase 6: Verify (status-check)
+    2. Phase 1: Plan (skil_spec-creator) - unless --skip-spec
+    3. Phase 2: Implement (agnt_implementation-agent)
+    4. Phase 3: Test - Local (agnt_testing-agent) - unless --skip-test
+    5. Phase 3.5: Test - Dev (agnt_testing-agent with /test dev) - unless --skip-test
+    6. Phase 4: Deploy (agnt_deployer) - unless --skip-deploy
+    7. Phase 5: Verify (status-check)
 
     After each phase:
     - Generate phase report
-    - Call project-manager to update status
+    - Update spec frontmatter (stage, last_changes, next_steps)
     - Get user approval at key checkpoints
 
     Handle errors:
-    - Test failures: invoke bug-fixer, retry
-    - Deploy failures: invoke bug-fixer, retry
+    - Test failures: invoke agnt_bug-fixer, retry
+    - Deploy failures: invoke agnt_bug-fixer, retry
 
     Generate session summary with all artifacts
 ```
 
 ## What the Orchestrator Does
 
-The build-orchestrator agent will:
+The agnt_build-orchestrator agent will:
 
 1. **Create a session** with handoff directory for tracking
 2. **Coordinate all phases** with specialized agents
 3. **Manage handoffs** between phases via reports
 4. **Get user approvals** at key checkpoints (spec, code review)
-5. **Handle errors** by invoking bug-fixer when needed
-6. **Call project-manager** after each phase to update status
+5. **Handle errors** by invoking agnt_bug-fixer when needed
+6. **Update spec frontmatter** after each phase (stage, last_changes, next_steps)
 7. **Generate comprehensive reports** for each phase
 
 ## Phase Reports
@@ -142,13 +143,12 @@ The orchestrator will prompt for approval at:
 
 | Phase | Agent | Output | Status Update |
 |-------|-------|--------|---------------|
-| Plan | spec-creator | Spec file | `planned` |
-| Implement | implementation-agent | Code + tests | `implemented` |
-| Test - Local | testing-agent | Local test report | `tested_locally` |
-| Test - Dev | testing-agent + /test-dev | Dev test report (real APIs) | `tested_dev` |
-| Fix (if needed) | bug-fixer | Fixed code | (revert to previous) |
-| Document | doc-generator | Technical + client docs | `documentation_created` |
-| Deploy | deployer | Live service | `deployed` |
+| Plan | skil_spec-creator | Spec file | `planned` |
+| Implement | agnt_implementation-agent | Code + tests | `implemented` |
+| Test - Local | agnt_testing-agent | Local test report | `tested_locally` |
+| Test - Dev | agnt_testing-agent + /test dev | Dev test report (real APIs) | `tested_dev` |
+| Fix (if needed) | agnt_bug-fixer | Fixed code | (revert to previous) |
+| Deploy | agnt_deployer | Live service | `deployed` |
 | Verify | status-check | Health confirmation | `tested_live` |
 
 **Testing Phases Explained:**
@@ -159,8 +159,8 @@ The orchestrator will prompt for approval at:
 
 ## Notes
 
-- This command delegates all complexity to the build-orchestrator agent
+- This command delegates all complexity to the agnt_build-orchestrator agent
 - The orchestrator manages specialized agents for each phase
 - Session state is saved for resumability
-- All progress tracked via project-manager
+- All progress tracked via spec frontmatter (stage field)
 - Handoff reports provide audit trail

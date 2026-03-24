@@ -1,6 +1,6 @@
 ---
 description: Manage per-client n8n MCP server instances
-argument-hint: [list | add <client-name> | remove <client-name>]
+argument-hint: [list | add <project-name> | remove <project-name>]
 ---
 
 Manage per-client n8n MCP server instances in `.mcp.json`.
@@ -26,7 +26,7 @@ The base `n8n-mcp` entry (docs-only, no credentials) should be labeled as such.
 
 When adding a new client (argument: `$ARGUMENTS`):
 
-1. Determine the client name (should match a folder in `workspace/clients/`)
+1. Resolve project directory — check `workspace/clients/{name}/` first, then `workspace/projects/{name}/`
 2. The MCP server entry name should be `n8n-{client-name}` (e.g., `n8n-herbox`)
 3. Ask the user for:
    - `N8N_API_URL` - The client's n8n instance URL (e.g., `https://herbox.app.n8n.cloud/api/v1`)

@@ -1,8 +1,9 @@
 ---
-name: testing-agent
+name: agnt_testing-agent
 description: Validates automation implementations against specifications and manages testing status. Use proactively after automation code changes to run tests, execute dry-runs, verify acceptance criteria, update automation-status.yaml, and verify production health. Generates test reports and testing checklists.
 tools: Bash, Read, Grep, Glob, Write
 model: sonnet
+permissionMode: acceptEdits
 ---
 
 You validate automation implementations against their specifications and manage the testing lifecycle.
@@ -452,7 +453,7 @@ Add Sign-Off section at the end: Tested by, Date, Result (PASS/FAIL), Notes.
 | Tests fail | Report failure details, do NOT mark as tested_locally |
 | Dry-run fails | Report error, check for missing env vars |
 | No tests found | Check for integration scripts, suggest creating tests |
-| Railway not linked | Instruct user to run `/deploy` first |
+| Railway not linked | Instruct user to run `/comd_deploy` first |
 | Health check fails | Show logs, suggest fixes |
 | No recent executions | May need to trigger manually or check schedule |
 | Status file not found | Warn user that status won't be tracked |

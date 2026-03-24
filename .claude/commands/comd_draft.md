@@ -17,6 +17,7 @@ argument-hint: <client-name> [message-type] [recipient]
    - `$3` = recipient name (optional).
 
 2. **Verify client exists:** Check that `workspace/clients/$1/` exists. If not, list available clients and ask.
+   - Note: `/draft` only applies to `type: client` projects. If the project is found in `workspace/projects/` with `type: internal` or `type: platform`, stop with: "Client comms don't apply to `type: {type}` projects."
 
 3. **Load the client-comms skill** and follow its 6-step process:
    - Load client profile (or set one up)

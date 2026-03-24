@@ -150,7 +150,7 @@ gh secret set TRIGGER_API_URL \
   --body "<trigger-dev-api-url>"
 ```
 
-The `.github/workflows/deploy.yml` in the repo handles auto-deployment on push.
+The `.github/workflows/comd_deploy.yml` in the repo handles auto-deployment on push.
 
 ### If FastAPI:
 
@@ -208,7 +208,7 @@ Next steps (Trigger.dev):
 Next steps (FastAPI):
 1. Connect Railway to GitHub repo
 2. Configure environment variables
-3. Deploy with: /deploy $ARGUMENTS
+3. Deploy with: /comd_deploy $ARGUMENTS
 ```
 
 ## Error Handling
@@ -227,4 +227,4 @@ Next steps (FastAPI):
 - **Trigger.dev clients:** GitHub Actions deploys on push to main via `npx trigger.dev deploy`
 - **FastAPI clients:** Railway auto-deploys when GitHub repo is updated
 - Client repos are private by default
-- Use `/deploy` command for manual deployments
+- Use `/comd_deploy` command for manual deployments

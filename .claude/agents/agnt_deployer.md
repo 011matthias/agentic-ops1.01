@@ -1,11 +1,14 @@
 ---
-name: deployer
+name: agnt_deployer
 description: Deploys automations to Railway with test gates. Use when ready to ship a client automation, after code changes, or for production deployment. Runs tests first and only deploys if all pass.
 tools: Bash, Read, Grep, Glob
 model: sonnet
+permissionMode: acceptEdits
 ---
 
 You deploy client automations with strict test gates. Supports both Trigger.dev and Railway (FastAPI) deployments.
+
+**Ship gate applies.** Build passes → commit + push + PR + merge as ONE action. Never ask for confirmation.
 
 ## Input
 
@@ -13,7 +16,7 @@ You deploy client automations with strict test gates. Supports both Trigger.dev 
 
 ## Orchestrator Detection
 
-Detect the orchestrator using `.claude/skills/build/modules/DETECTION.md`.
+Detect the orchestrator using `.claude/skills/skil_build/modules/DETECTION.md`.
 
 ## Pre-Deployment Gate
 
@@ -55,7 +58,7 @@ git remote -v | grep {client}
 **If no remote found:**
 ```
 Subtree not configured for {client}.
-Run /client-handoff first to set up GitHub repo and subtree.
+Run /comd_client-handoff first to set up GitHub repo and subtree.
 ```
 Stop here - cannot deploy without subtree.
 
@@ -219,7 +222,7 @@ Expected health response: `{"status": "healthy"}` or similar.
 | Error | Action |
 |-------|--------|
 | Tests fail | **STOP** - Do not deploy |
-| No subtree | STOP - Instruct to run /client-handoff |
+| No subtree | STOP - Instruct to run /comd_client-handoff |
 | Git push fails | Check for conflicts, resolve or report |
 | Verification exit 1 | **Deployment Failed** - Parse logs for errors, report specific failure |
 | Verification exit 2 | **Timeout** - Show logs, instruct user to check Railway dashboard |
@@ -228,7 +231,7 @@ Expected health response: `{"status": "healthy"}` or similar.
 
 ## Important Notes
 
-- This agent does NOT create GitHub repos (use /client-handoff for that)
+- This agent does NOT create GitHub repos (use /comd_client-handoff for that)
 - Always run tests before any deployment
 - If in doubt, ask user before proceeding
 - Keep deployment logs for troubleshooting

@@ -1,6 +1,6 @@
 ---
 description: Manage per-client Make.com instance tracking
-argument-hint: [list | add <client-name> | remove <client-name>]
+argument-hint: [list | add <project-name> | remove <project-name>]
 ---
 
 Manage per-client Make.com instance tracking in `infrastructure.yaml`.
@@ -15,7 +15,7 @@ Handle the user's request:
 
 ### List instances
 
-Scan all `workspace/clients/*/infrastructure.yaml` files for entries with `type: make`. Show results in a table:
+Scan all `workspace/clients/*/infrastructure.yaml` and `workspace/projects/*/infrastructure.yaml` files for entries with `type: make`. Show results in a table:
 
 | Client | Instance Name | Org URL | Team |
 |--------|--------------|---------|------|
@@ -26,7 +26,7 @@ If no Make.com instances are found, report that.
 
 When adding Make.com tracking for a client (argument: `$ARGUMENTS`):
 
-1. Determine the client name (should match a folder in `workspace/clients/`)
+1. Resolve project directory — check `workspace/clients/{name}/` first, then `workspace/projects/{name}/`
 2. Ask the user for:
    - **Make.com organization URL** (e.g., `https://www.make.com/en/organizations/12345`)
    - **Team name** (if applicable, otherwise leave empty)
