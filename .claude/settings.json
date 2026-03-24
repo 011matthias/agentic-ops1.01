@@ -1,4 +1,15 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash",
+      "Edit",
+      "Write",
+      "Read",
+      "Glob",
+      "Grep",
+      "WebFetch(domain:github.com)"
+    ]
+  },
   "enabledPlugins": {
     "productivity-suite@riccardovandra": true,
     "playground@claude-plugins-official": true
@@ -10,7 +21,7 @@
         "hooks": [
           {
             "type": "agent",
-            "prompt": "Auto-compaction is about to happen. Write an emergency mini-checkpoint to preserve session state. Steps: (1) Determine the current date and working topic from available context. (2) Create docs/[DATE] - Auto-Checkpoint/Mini-Checkpoint-auto.md with: Summary, What Was Done, Current Status, Next Steps, Files to Read First. (3) Update docs/sessions/[DATE]-context.yaml if it exists — add or merge client data. (4) Keep it fast — you have 60 seconds. Prioritize capturing next steps and files modified over completeness."
+            "prompt": "Auto-compaction is about to happen. Write an emergency mini-checkpoint to preserve session state. Steps: (1) Determine the current date and working topic from available context. (2) Create docs/[DATE] - Auto-Checkpoint/Mini-Checkpoint-auto.md with: Summary (what was being worked on RIGHT NOW, not just completed), What Was Done, In-Progress Work (partially completed items with current state), Current Status, Next Steps, Files Modified This Session (full paths), Critical Context (any IDs, URLs, error messages, or decisions expensive to re-derive). (3) Update docs/sessions/[DATE]-context.yaml if it exists. (4) Append to friction register: compaction-event entry with pressure estimate. (5) Keep it fast -- you have 60 seconds. Prioritize in-progress work state and next steps over completed work summary."
           }
         ]
       }
