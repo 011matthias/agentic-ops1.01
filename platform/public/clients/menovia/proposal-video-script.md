@@ -64,11 +64,11 @@
 
 > We did not just write a proposal. We built a working demo.
 
-> **[Scroll to the video section]** There is a detailed walkthrough of each node in the workflow here, but let me show you the quickest version.
+> Right at the top of the workflow page, you can see an interactive demo with editable fields. The request is pre-filled with test data, but you can change the name, email, package -- anything.
 
-> **[Scroll to the "Try It Live" section. Click the green "Run Live Demo" button.]**
+> **[Click the green "Run Live Demo" button. Wait for response in the right panel.]**
 
-> This just sent a real request to a live n8n workflow running on our cloud. **[Point to the response]** You can see it created a CRM record preview, logged GDPR consent, prepared a confirmation email, and scheduled a booking reminder. All in under two seconds.
+> This just sent a real request to a live n8n workflow running on our cloud. **[Point to the response panel]** You can see it created a CRM record preview, logged GDPR consent, prepared a confirmation email, and scheduled a booking reminder. All in under two seconds.
 
 > You can also download this template and import it into your own n8n instance.
 

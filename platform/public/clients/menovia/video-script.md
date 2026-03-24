@@ -55,11 +55,11 @@
 
 ## [2:05-2:25] Live Demo
 
-**Screen:** Switch to the workflow page on the proposal site (unpauseai.com/clients/menovia/workflow), scroll to the "Try It Live" section
+**Screen:** Switch to the workflow page on the proposal site (unpauseai.com/clients/menovia/workflow). The Live Demo section is at the top.
 
-> Let me show you this is real. I will send a test request right now.
+> Let me show you this is real. On the workflow page, you can see an interactive demo right at the top. The fields are pre-filled with test data, but you can change them.
 
-> **[Click the green "Run Live Demo" button on the page. Wait for the JSON response to appear below it.]**
+> **[Click the green "Run Live Demo" button. Wait for the JSON response to appear in the right panel.]**
 
 > You can see the response includes a full preview of the patient journey, the GDPR audit log, the CRM fields that would be created, and a data quality check. This is not just a pass-through -- it is showing you exactly what the production system does.
 
@@ -81,5 +81,5 @@
 - Use the dark theme in n8n for better contrast on recording
 - Zoom into nodes when explaining them, zoom back out for transitions
 - Speak at a natural pace, not rushed
-- Test the cURL command before recording to make sure the webhook responds
+- Test the "Run Live Demo" button before recording to make sure the webhook responds
 - Total target: under 3 minutes
