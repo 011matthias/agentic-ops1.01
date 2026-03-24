@@ -274,6 +274,12 @@ tr:hover td { background: var(--blue-bg); }
 /* ─── Footer ─── */
 .footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; }
 
+/* ─── Tablet ─── */
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+
 /* ─── Mobile ─── */
 .mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
 @media (max-width: 768px) {
@@ -314,6 +320,8 @@ tr:hover td { background: var(--blue-bg); }
         <a href="/clients/menovia/timeline">Timeline</a>
         <a href="/clients/menovia/investment">Investment</a>
         <a href="/clients/menovia/workflow">Workflow</a>
+        <a href="/clients/menovia/onboarding">Onboarding</a>
+        <a href="/clients/menovia/faq">FAQ</a>
     </div>
     <div class="nav-right">
         <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
@@ -528,15 +536,15 @@ tr:hover td { background: var(--blue-bg); }
 <section class="cta-section" id="next-steps">
     <h2>Ready to get started?</h2>
     <p>Reply to our message on Upwork, or reach out directly.</p>
-    <a href="mailto:hello@unpauseai.com" class="cta-btn">Let's Talk, Menovia</a>
-    <a href="/clients/menovia/menovia-proposal.pdf" download class="cta-secondary">&#128196; Download PDF</a>
+    <a href="mailto:nicolas.neumann@unpauseai.com" class="cta-btn">Let's Talk, Menovia</a>
+    <a href="/clients/menovia/proposal-pdf?print" class="cta-secondary" target="_blank">&#128196; Download Proposal PDF</a>
 </section>
 
 <h2 id="about" style="border:none;text-align:center;margin-top:48px">About UnpauseAI</h2>
 <p style="text-align:center;max-width:560px;margin:0 auto 16px">We build automation infrastructure for businesses that need their operations to run without manual intervention. Our systems are in production today, processing thousands of automated operations monthly. We work exclusively with n8n and Make.com. Based in Europe, GDPR-aware by default.</p>
 
 <div class="footer">
-    <p>UnpauseAI &middot; Custom Automation Solutions &middot; <a href="mailto:hello@unpauseai.com">hello@unpauseai.com</a></p>
+    <p>UnpauseAI &middot; Custom Automation Solutions &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a></p>
 </div>
 
 </div>

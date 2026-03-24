@@ -166,6 +166,10 @@ tr:hover td { background: var(--blue-bg); }
 .cta-secondary:hover { background: var(--surface2); text-decoration: none; }
 
 /* Mobile */
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
 .mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
 @media (max-width: 768px) {
     .sidebar { transform: translateX(-100%); width: 260px; }
@@ -255,6 +259,8 @@ tr:hover td { background: var(--blue-bg); }
         <a href="/clients/menovia/timeline">Timeline</a>
         <a href="/clients/menovia/investment" class="active">Investment</a>
         <a href="/clients/menovia/workflow">Workflow</a>
+        <a href="/clients/menovia/onboarding">Onboarding</a>
+        <a href="/clients/menovia/faq">FAQ</a>
     </div>
     <div class="nav-right">
         <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
@@ -478,9 +484,9 @@ tr:hover td { background: var(--blue-bg); }
 <section class="cta-section">
     <h2>Ready to start?</h2>
     <p>Send us a message and we can get Phase 1 underway within a few days of agreement.</p>
-    <a href="mailto:hello@unpauseai.com" class="cta-btn">
+    <a href="mailto:nicolas.neumann@unpauseai.com" class="cta-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,12 2,6"/></svg>
-        hello@unpauseai.com
+        nicolas.neumann@unpauseai.com
     </a>
     <a href="/clients/menovia/menovia-proposal.pdf" class="cta-secondary">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>

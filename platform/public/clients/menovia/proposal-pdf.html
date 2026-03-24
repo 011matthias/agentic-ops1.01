@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UnpauseAI — Proposal for Menovia</title>
+<style>
+  @page {
+    size: A4;
+    margin: 2cm;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 12pt;
+    line-height: 1.6;
+    color: #1a1a1a;
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 2cm;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  @media print {
+    body {
+      padding: 0;
+    }
+  }
+
+  /* ---- Cover Page ---- */
+  .cover {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 90vh;
+    text-align: center;
+    page-break-after: always;
+  }
+
+  .cover .logo {
+    margin-bottom: 3rem;
+  }
+
+  .cover .brand-name {
+    font-size: 14pt;
+    font-weight: 600;
+    color: #2563eb;
+    letter-spacing: 0.05em;
+    margin-bottom: 4rem;
+  }
+
+  .cover h1 {
+    font-size: 28pt;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: 0.5rem;
+    line-height: 1.2;
+  }
+
+  .cover .subtitle {
+    font-size: 16pt;
+    font-weight: 400;
+    color: #7c3aed;
+    margin-bottom: 3rem;
+  }
+
+  .cover .date {
+    font-size: 13pt;
+    color: #555;
+    margin-bottom: 4rem;
+  }
+
+  .cover .contact {
+    font-size: 10pt;
+    color: #666;
+    line-height: 1.8;
+  }
+
+  .cover .contact strong {
+    color: #1a1a1a;
+  }
+
+  /* ---- Headings ---- */
+  h2 {
+    font-size: 20pt;
+    font-weight: 700;
+    color: #2563eb;
+    margin-bottom: 1rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 2px solid #e5e7eb;
+    page-break-before: always;
+  }
+
+  h2:first-of-type {
+    page-break-before: avoid;
+  }
+
+  h3 {
+    font-size: 14pt;
+    font-weight: 600;
+    color: #7c3aed;
+    margin-top: 1.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  p {
+    margin-bottom: 0.8rem;
+  }
+
+  /* ---- Section spacing ---- */
+  .section {
+    margin-bottom: 2rem;
+  }
+
+  /* ---- Lists ---- */
+  ul, ol {
+    margin-left: 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  li {
+    margin-bottom: 0.3rem;
+  }
+
+  /* ---- Tables ---- */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1.5rem;
+    font-size: 10pt;
+  }
+
+  thead th {
+    background: #2563eb;
+    color: white;
+    text-align: left;
+    padding: 8px 10px;
+    font-weight: 600;
+  }
+
+  tbody td {
+    padding: 7px 10px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  tbody tr:nth-child(even) {
+    background: #f8f9fb;
+  }
+
+  tbody tr:nth-child(odd) {
+    background: #ffffff;
+  }
+
+  /* ---- Highlight box ---- */
+  .highlight-box {
+    background: #f0f4ff;
+    border-left: 4px solid #2563eb;
+    padding: 1rem 1.2rem;
+    border-radius: 4px;
+    margin-bottom: 1.5rem;
+  }
+
+  .highlight-box.purple {
+    background: #f5f0ff;
+    border-left-color: #7c3aed;
+  }
+
+  .highlight-box p:last-child {
+    margin-bottom: 0;
+  }
+
+  /* ---- Investment table ---- */
+  .investment-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+    font-size: 11pt;
+  }
+
+  .investment-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .investment-table .label {
+    font-weight: 600;
+    color: #1a1a1a;
+  }
+
+  .investment-table .amount {
+    text-align: right;
+    font-weight: 600;
+    color: #2563eb;
+  }
+
+  .investment-table .total td {
+    border-top: 2px solid #2563eb;
+    border-bottom: 2px solid #2563eb;
+    font-size: 13pt;
+    font-weight: 700;
+  }
+
+  .investment-table .total .amount {
+    color: #7c3aed;
+  }
+
+  /* ---- Timeline ---- */
+  .timeline-phase {
+    margin-bottom: 1.5rem;
+  }
+
+  .phase-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .phase-badge {
+    display: inline-block;
+    background: #2563eb;
+    color: white;
+    font-size: 9pt;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .phase-badge.phase-2 {
+    background: #7c3aed;
+  }
+
+  .phase-title {
+    font-weight: 600;
+    font-size: 13pt;
+    color: #1a1a1a;
+  }
+
+  /* ---- Steps list ---- */
+  .steps {
+    list-style: none;
+    margin-left: 0;
+    counter-reset: step;
+  }
+
+  .steps li {
+    counter-increment: step;
+    padding: 0.5rem 0 0.5rem 2.5rem;
+    position: relative;
+    margin-bottom: 0.2rem;
+  }
+
+  .steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 0.45rem;
+    width: 1.6rem;
+    height: 1.6rem;
+    background: #2563eb;
+    color: white;
+    border-radius: 50%;
+    font-size: 10pt;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+
+  /* ---- Footer note ---- */
+  .footer-note {
+    font-size: 9pt;
+    color: #888;
+    margin-top: 1rem;
+    font-style: italic;
+  }
+
+  /* ---- Solution cards ---- */
+  .solution-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.8rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .solution-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 0.8rem 1rem;
+  }
+
+  .solution-card h4 {
+    font-size: 11pt;
+    font-weight: 700;
+    color: #2563eb;
+    margin-bottom: 0.3rem;
+  }
+
+  .solution-card p {
+    font-size: 10pt;
+    margin-bottom: 0;
+    color: #444;
+  }
+
+  .solution-card:nth-child(even) h4 {
+    color: #7c3aed;
+  }
+
+  /* ---- GDPR check ---- */
+  .check {
+    color: #16a34a;
+    font-weight: 700;
+  }
+
+  .partial {
+    color: #d97706;
+    font-weight: 600;
+  }
+
+  /* ---- About section ---- */
+  .about-text {
+    font-size: 11pt;
+    color: #444;
+    line-height: 1.7;
+  }
+
+  /* ---- Print overrides ---- */
+  @media print {
+    .solution-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .highlight-box {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    thead th {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .phase-badge {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .steps li::before {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- 1. Cover Page -->
+<div class="cover">
+  <div class="logo">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="64" height="64"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg>
+  </div>
+  <div class="brand-name">UnpauseAI</div>
+  <h1>Proposal for Menovia</h1>
+  <div class="subtitle">Patient Journey Automation</div>
+  <div class="date">March 2026</div>
+  <div class="contact">
+    <strong>Nicolas Neumann</strong><br>
+    nicolas.neumann@unpauseai.com<br>
+    unpauseai.com
+  </div>
+</div>
+
+<!-- 2. Executive Summary -->
+<div class="section">
+  <h2>Executive Summary</h2>
+  <p>Menovia is a Dutch online menopause clinic launching a new digital patient journey. As patient volume grows, manual processes for intake, booking, communications, and follow-ups create bottlenecks that limit the clinic's ability to scale while maintaining quality of care.</p>
+  <p>We propose building a fully automated patient journey across 8 integrated tools: Typeform/Tally, n8n, Zoho CRM, Brevo, Cal.com, Mollie, Intercom, and MessageBird. The system will handle intake, booking, payment processing, multi-channel communications, and CRM management -- all with GDPR-compliant data handling built in from day one.</p>
+  <div class="highlight-box">
+    <p><strong>Scope:</strong> 6 integrated automation components across 8 tools<br>
+    <strong>Timeline:</strong> 7 weeks across 2 phases<br>
+    <strong>Investment:</strong> EUR 5,500 fixed price</p>
+  </div>
+</div>
+
+<!-- 3. The Challenge -->
+<div class="section">
+  <h2>The Challenge</h2>
+  <p>Menovia currently handles patient intake, booking, reminders, and follow-ups manually. As the clinic scales, this creates several critical bottlenecks:</p>
+  <ul>
+    <li><strong>Missed follow-ups</strong> -- patients fall through the cracks when reminders depend on manual tracking</li>
+    <li><strong>Inconsistent communication</strong> -- different staff members send different messages at different times</li>
+    <li><strong>Manual data entry errors</strong> -- copying patient information between systems introduces mistakes</li>
+    <li><strong>GDPR compliance risk</strong> -- sensitive medical-adjacent data handled across multiple tools without a unified consent and data governance framework</li>
+  </ul>
+  <p>The patient journey involves 10+ touchpoints from initial inquiry to post-consultation follow-up. Each touchpoint currently requires manual intervention, creating a process that does not scale.</p>
+</div>
+
+<!-- 4. Our Solution -->
+<div class="section">
+  <h2>Our Solution</h2>
+  <p>We propose 6 integrated components that together automate the full patient journey while keeping clinical data safely separated from administrative systems.</p>
+
+  <div class="solution-grid">
+    <div class="solution-card">
+      <h4>Patient Intake Flow</h4>
+      <p>Typeform captures patient information, n8n validates and routes it, Zoho CRM creates the patient record, and Brevo sends the confirmation email. Fully automatic from submission to first contact.</p>
+    </div>
+    <div class="solution-card">
+      <h4>Booking &amp; Payment</h4>
+      <p>Cal.com handles appointment scheduling with automatic Mollie payment integration. Payment status syncs back to CRM, and patients receive booking confirmations instantly.</p>
+    </div>
+    <div class="solution-card">
+      <h4>Communication Sequences</h4>
+      <p>Brevo manages email sequences (pre-appointment prep, post-consultation follow-up) while MessageBird handles SMS reminders. Timing and content are fully configurable.</p>
+    </div>
+    <div class="solution-card">
+      <h4>CRM as Central Hub</h4>
+      <p>Zoho CRM serves as the single source of truth with a custom pipeline reflecting the patient journey stages. All tools sync status updates back to CRM automatically.</p>
+    </div>
+    <div class="solution-card">
+      <h4>Intercom Integration</h4>
+      <p>Website chat conversations sync to CRM, ensuring patient inquiries are tracked and no conversation is lost between support and the clinical team.</p>
+    </div>
+    <div class="solution-card">
+      <h4>GDPR by Design</h4>
+      <p>Consent is logged at every collection point. All tools use EU-hosted infrastructure. A clear boundary separates administrative data from clinical records in the certified EHR.</p>
+    </div>
+  </div>
+</div>
+
+<!-- 5. Starter Template -->
+<div class="section">
+  <h2>Starter Template</h2>
+  <div class="highlight-box purple">
+    <h3 style="margin-top:0; color: #7c3aed;">Free Deliverable: n8n Patient Intake Template</h3>
+    <p>We have built a working n8n workflow template as a proof of concept, available to you at no cost. This template demonstrates the core intake flow and is ready for testing today.</p>
+  </div>
+  <p>The template includes 8 nodes handling the complete intake path:</p>
+  <ul>
+    <li>Webhook intake receiver</li>
+    <li>Data validation and sanitization</li>
+    <li>GDPR consent logging</li>
+    <li>CRM contact creation</li>
+    <li>Confirmation email dispatch</li>
+    <li>Booking reminder scheduling</li>
+  </ul>
+  <p>Available for download and live-testable at <strong>unpauseai.com/clients/menovia/workflow</strong></p>
+</div>
+
+<!-- 6. GDPR Compliance -->
+<div class="section">
+  <h2>GDPR Compliance</h2>
+  <p>Medical-adjacent data requires careful handling. Our approach: clinical records stay in the NEN 7510-certified EHR. The automation layer handles only administrative data (contact details, appointment times, consent records, payment status).</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Tool</th>
+        <th>Data Category</th>
+        <th>EU Hosting</th>
+        <th>DPA Available</th>
+        <th>Our Measures</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Typeform / Tally</td>
+        <td>Intake responses</td>
+        <td class="check">Yes</td>
+        <td class="check">Yes</td>
+        <td>Consent checkbox, data minimization</td>
+      </tr>
+      <tr>
+        <td>n8n</td>
+        <td>Processing orchestration</td>
+        <td class="check">Yes (self-hosted)</td>
+        <td>N/A</td>
+        <td>EU server, encrypted at rest</td>
+      </tr>
+      <tr>
+        <td>Zoho CRM</td>
+        <td>Contact &amp; pipeline</td>
+        <td class="check">Yes (EU DC)</td>
+        <td class="check">Yes</td>
+        <td>Admin data only, no clinical records</td>
+      </tr>
+      <tr>
+        <td>Brevo</td>
+        <td>Email communications</td>
+        <td class="check">Yes</td>
+        <td class="check">Yes</td>
+        <td>Double opt-in, unsubscribe in every email</td>
+      </tr>
+      <tr>
+        <td>Cal.com</td>
+        <td>Appointment scheduling</td>
+        <td class="check">Yes (EU)</td>
+        <td class="check">Yes</td>
+        <td>Minimal data: name, email, time slot</td>
+      </tr>
+      <tr>
+        <td>Mollie</td>
+        <td>Payment processing</td>
+        <td class="check">Yes (NL-based)</td>
+        <td class="check">Yes</td>
+        <td>PCI DSS compliant, no card data stored</td>
+      </tr>
+      <tr>
+        <td>Intercom</td>
+        <td>Chat conversations</td>
+        <td class="partial">US (EU transfer)</td>
+        <td class="check">Yes</td>
+        <td>SCCs in place, no clinical data in chat</td>
+      </tr>
+      <tr>
+        <td>MessageBird</td>
+        <td>SMS notifications</td>
+        <td class="check">Yes (NL-based)</td>
+        <td class="check">Yes</td>
+        <td>Appointment reminders only, no health data</td>
+      </tr>
+    </tbody>
+  </table>
+  <p class="footer-note">Clinical records (diagnoses, treatment plans, prescriptions) are never stored in or transmitted through the automation layer. These remain exclusively in the NEN 7510-certified EHR system.</p>
+</div>
+
+<!-- 7. Timeline -->
+<div class="section">
+  <h2>Timeline</h2>
+
+  <div class="timeline-phase">
+    <div class="phase-header">
+      <span class="phase-badge">Phase 1</span>
+      <span class="phase-title">Foundation (Weeks 1-4)</span>
+    </div>
+    <ul>
+      <li>Patient intake automation (Typeform/Tally to CRM)</li>
+      <li>Zoho CRM setup with custom patient journey pipeline</li>
+      <li>Cal.com + Mollie booking and payment flow</li>
+      <li>Initial email templates in Brevo</li>
+      <li>GDPR consent framework and logging</li>
+    </ul>
+  </div>
+
+  <div class="timeline-phase">
+    <div class="phase-header">
+      <span class="phase-badge phase-2">Phase 2</span>
+      <span class="phase-title">Communication &amp; Polish (Weeks 5-7)</span>
+    </div>
+    <ul>
+      <li>Pre-appointment and post-consultation email sequences</li>
+      <li>Intercom chat-to-CRM integration</li>
+      <li>MessageBird SMS appointment reminders</li>
+      <li>Monitoring dashboard for operations visibility</li>
+      <li>Handoff documentation and team training</li>
+    </ul>
+  </div>
+
+  <div class="highlight-box">
+    <p><strong>Milestone reviews</strong> at Week 2 and Week 5 to confirm direction and gather feedback before proceeding.</p>
+  </div>
+</div>
+
+<!-- 8. Investment -->
+<div class="section">
+  <h2>Investment</h2>
+
+  <table class="investment-table">
+    <tr>
+      <td class="label">Phase 1: Foundation (Weeks 1-4)</td>
+      <td class="amount">EUR 3,500</td>
+    </tr>
+    <tr>
+      <td class="label">Phase 2: Communication &amp; Polish (Weeks 5-7)</td>
+      <td class="amount">EUR 2,000</td>
+    </tr>
+    <tr class="total">
+      <td class="label">Total (fixed price)</td>
+      <td class="amount">EUR 5,500</td>
+    </tr>
+  </table>
+
+  <p><strong>Included in the fixed price:</strong></p>
+  <ul>
+    <li>All development, testing, and deployment</li>
+    <li>Complete documentation for every automation</li>
+    <li>2 weeks post-launch support</li>
+    <li>Free starter template (delivered upfront)</li>
+  </ul>
+
+  <div class="highlight-box">
+    <p><strong>Estimated monthly tool costs:</strong> approximately EUR 150-300/month depending on plan selection for the 8 tools in the stack.</p>
+    <p class="footer-note" style="margin-top: 0.5rem;">Estimated based on public pricing as of March 2026. Actual costs depend on usage volume and selected plan tiers.</p>
+  </div>
+</div>
+
+<!-- 9. About UnpauseAI -->
+<div class="section">
+  <h2>About UnpauseAI</h2>
+  <div class="about-text">
+    <p>We build automation infrastructure for businesses that need their operations to run without manual intervention. Our systems are in production today, processing thousands of automated operations monthly.</p>
+    <p>We work exclusively with n8n and Make.com as orchestration platforms, giving us deep expertise in both. Every system we build is designed for reliability, maintainability, and clear documentation so your team can understand what runs and why.</p>
+    <p>Based in Europe, GDPR-aware by default. We understand the compliance requirements that European businesses face and build them into every project from the start.</p>
+  </div>
+</div>
+
+<!-- 10. Next Steps -->
+<div class="section">
+  <h2>Next Steps</h2>
+
+  <ol class="steps">
+    <li><strong>Review this proposal</strong> -- take your time to evaluate the scope, timeline, and investment</li>
+    <li><strong>Schedule a 20-minute introduction call</strong> -- we will walk through the approach and answer your questions</li>
+    <li><strong>Complete the onboarding checklist</strong> -- tool accounts, access credentials, and initial requirements</li>
+    <li><strong>We begin Phase 1</strong> -- development starts within one week of kickoff</li>
+  </ol>
+
+  <div class="highlight-box purple" style="margin-top: 2rem;">
+    <p style="font-size: 13pt; margin-bottom: 0.3rem;"><strong>Ready to get started?</strong></p>
+    <p><strong>Nicolas Neumann</strong><br>
+    nicolas.neumann@unpauseai.com<br>
+    unpauseai.com</p>
+  </div>
+</div>
+
+<script>
+window.addEventListener('load', function() {
+    if (window.location.search.indexOf('print') !== -1) {
+        setTimeout(function() { window.print(); }, 500);
+    }
+});
+</script>
+
+</body>
+</html>
