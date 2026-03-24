@@ -226,80 +226,80 @@
     {
       "parameters": {
         "content": "## Menovia Patient Intake Automation\n**Built by UnpauseAI** | unpauseai.com/clients/menovia\n\nThis workflow automates the complete patient intake process:\n1. Receives form submission via webhook\n2. Validates required fields and GDPR consent\n3. Logs consent with timestamp for compliance\n4. Creates CRM contact in Zoho (EU)\n5. Sends confirmation email in Dutch\n6. Schedules booking reminder\n\n**To set up:** Replace placeholder credentials (Zoho token, Brevo SMTP) with your own. See the onboarding checklist for step-by-step instructions.",
-        "width": 380,
-        "height": 340,
+        "width": 1860,
+        "height": 140,
         "color": 4
       },
       "id": "sticky-header",
       "name": "Sticky Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [240, -60]
+      "position": [200, -200]
     },
     {
       "parameters": {
         "content": "## INPUT\nWebhook receives form data and validates required fields before processing.",
-        "width": 480,
-        "height": 500,
+        "width": 380,
+        "height": 280,
         "color": 2
       },
       "id": "sticky-input",
       "name": "Sticky Note1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [380, 320]
+      "position": [360, 240]
     },
     {
       "parameters": {
         "content": "## DATA PROCESSING\nGDPR consent logging and CRM record creation. All data stays on EU servers.",
-        "width": 500,
-        "height": 500,
+        "width": 400,
+        "height": 280,
         "color": 6
       },
       "id": "sticky-processing",
       "name": "Sticky Note2",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [820, 220]
+      "position": [800, 140]
     },
     {
       "parameters": {
         "content": "## OUTPUT\nConfirmation email, booking reminder, and enriched response with journey preview.",
-        "width": 720,
-        "height": 500,
+        "width": 600,
+        "height": 280,
         "color": 5
       },
       "id": "sticky-output",
       "name": "Sticky Note3",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [1480, 220]
+      "position": [1460, 140]
     },
     {
       "parameters": {
         "content": "**GDPR Compliance**\nConsent is logged BEFORE any data is stored or sent. Timestamp, source, and version are recorded for audit trail. All EU-hosted.",
-        "width": 260,
-        "height": 120,
+        "width": 400,
+        "height": 90,
         "color": 3
       },
       "id": "sticky-gdpr-note",
       "name": "Sticky Note4",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [880, 160]
+      "position": [800, 30]
     },
     {
       "parameters": {
         "content": "**Credentials needed:**\n- Zoho CRM: OAuth token (EU endpoint)\n- Brevo: SMTP credentials\n- See onboarding checklist",
-        "width": 240,
-        "height": 100,
+        "width": 300,
+        "height": 90,
         "color": 1
       },
       "id": "sticky-credentials",
       "name": "Sticky Note5",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [1280, 160]
+      "position": [1460, 30]
     }
   ],
   "connections": {

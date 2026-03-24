@@ -559,6 +559,23 @@ tr:hover td { background: var(--blue-bg); }
         </div>
     </div>
 
+    <div style="text-align: center; margin: 24px 0;">
+        <button id="run-demo-btn" onclick="runDemo()" style="display: inline-flex; align-items: center; gap: 8px; background: linear-gradient(135deg, var(--green), var(--green-dark)); color: #fff; border: none; border-radius: 10px; padding: 14px 32px; font-size: 16px; font-weight: 700; cursor: pointer; transition: opacity .15s, transform .15s; box-shadow: 0 2px 12px rgba(5,150,105,.3);">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Run Live Demo
+        </button>
+        <p style="font-size: 13px; color: var(--text2); margin-top: 8px;">Sends a test request to the live workflow and shows the real response below.</p>
+    </div>
+
+    <div id="demo-output" style="display: none; margin: 16px 0;">
+        <div class="code-block">
+            <div class="code-block-header">
+                <span class="code-block-label">Live Response</span>
+            </div>
+            <pre id="demo-output-content" style="white-space: pre-wrap; word-break: break-word;"></pre>
+        </div>
+    </div>
+
     <div class="callout purple">
         <div class="callout-title">Demo Mode</div>
         <p>This is a demonstration deployment. The CRM and email nodes use placeholder credentials, so no actual CRM records are created and no emails are sent. The enriched response shows you exactly what happens in production: the full patient journey preview, GDPR audit trail, CRM fields that would be created, and a data quality check. The workflow structure and logic are identical to what runs in production.</p>
@@ -627,6 +644,42 @@ function copyCode(btn, text) {
         var orig = btn.textContent;
         btn.textContent = 'Copied!';
         setTimeout(function() { btn.textContent = orig; }, 1500);
+    });
+}
+
+function runDemo() {
+    var btn = document.getElementById('run-demo-btn');
+    var output = document.getElementById('demo-output');
+    var content = document.getElementById('demo-output-content');
+    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Running...';
+    btn.disabled = true;
+    btn.style.opacity = '0.7';
+    output.style.display = 'block';
+    content.textContent = 'Sending request to live workflow...';
+
+    fetch('https://unpauseai.app.n8n.cloud/webhook/menovia-intake', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            name: 'Maria de Vries',
+            email: 'demo@example.com',
+            phone: '+31612345678',
+            package: 'Plus',
+            gdpr_consent: true
+        })
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+        content.textContent = JSON.stringify(data, null, 2);
+        btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Run Again';
+        btn.disabled = false;
+        btn.style.opacity = '1';
+    })
+    .catch(function() {
+        content.textContent = 'Request failed. The webhook may not be active right now.\nTry copying the cURL command above and running it in your terminal instead.';
+        btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Try Again';
+        btn.disabled = false;
+        btn.style.opacity = '1';
     });
 }
 
