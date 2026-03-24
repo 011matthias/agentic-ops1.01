@@ -55,11 +55,11 @@
 
 ## [2:05-2:25] Live Demo
 
-**Screen:** Open a terminal or the workflow page, show the cURL command
+**Screen:** Switch to the workflow page on the proposal site (unpauseai.com/clients/menovia/workflow), scroll to the "Try It Live" section
 
 > Let me show you this is real. I will send a test request right now.
 
-> **[Run the cURL command, show the enriched JSON response]**
+> **[Click the green "Run Live Demo" button on the page. Wait for the JSON response to appear below it.]**
 
 > You can see the response includes a full preview of the patient journey, the GDPR audit log, the CRM fields that would be created, and a data quality check. This is not just a pass-through -- it is showing you exactly what the production system does.
 
