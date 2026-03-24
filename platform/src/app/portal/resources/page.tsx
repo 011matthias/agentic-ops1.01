@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation"
+import Link from "next/link"
 import { and, asc, eq } from "drizzle-orm"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
@@ -128,14 +129,23 @@ export default async function ResourcesPage() {
                               </p>
                             )}
                           </div>
-                          <a
-                            href={resource.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="shrink-0 px-4 py-2 text-xs font-medium rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
-                          >
-                            {type === "file" ? "Download" : "Open"}
-                          </a>
+                          {type === "html_page" ? (
+                            <Link
+                              href={`/portal/resources/${resource.id}`}
+                              className="shrink-0 px-4 py-2 text-xs font-medium rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
+                            >
+                              View
+                            </Link>
+                          ) : (
+                            <a
+                              href={resource.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="shrink-0 px-4 py-2 text-xs font-medium rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
+                            >
+                              {type === "file" ? "Download" : "Open"}
+                            </a>
+                          )}
                         </li>
                       )
                     })}

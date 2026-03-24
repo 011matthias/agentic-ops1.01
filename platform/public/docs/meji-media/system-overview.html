@@ -616,11 +616,12 @@ body {
 }
 .doc-nav-left { display: flex; align-items: center; gap: 12px; }
 .doc-nav-logo {
-  width: 28px; height: 28px; border-radius: 7px;
-  background: linear-gradient(135deg, #2563eb, #7c3aed);
-  display: flex; align-items: center; justify-content: center;
-  color: #fff; font-weight: 800; font-size: 12px;
+  display: flex; align-items: center; gap: 6px;
+  font-size: 15px; letter-spacing: -0.025em;
 }
+.doc-nav-logo svg { flex-shrink: 0; }
+.doc-nav-logo .logo-text { font-weight: 700; color: var(--text); }
+.doc-nav-logo .logo-accent { font-weight: 700; color: #2563eb; }
 .doc-nav-brand { font-size: 13px; font-weight: 700; color: var(--text); }
 .doc-nav-sep { color: var(--border); font-size: 16px; }
 .doc-nav-links { display: flex; gap: 4px; }
@@ -648,7 +649,7 @@ body {
 <!-- Shared doc nav -->
 <nav class="doc-nav">
   <div class="doc-nav-left">
-    <div class="doc-nav-logo">U</div>
+    <div class="doc-nav-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="24" height="24"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></div>
     <span class="doc-nav-brand">Meji Media</span>
     <span class="doc-nav-sep">|</span>
     <div class="doc-nav-links">
@@ -1489,7 +1490,7 @@ function checkAuth() {
 
 <div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
   <div style="text-align:center;max-width:360px;padding:24px;">
-    <div style="width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:24px;margin:0 auto 20px;">U</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span></div>
     <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Meji Media Documentation</h2>
     <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Enter your access code to continue.</p>
     <div style="display:flex;gap:8px;">

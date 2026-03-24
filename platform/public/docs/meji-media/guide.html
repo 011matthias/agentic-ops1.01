@@ -214,11 +214,12 @@ em {
 }
 .doc-nav-left { display: flex; align-items: center; gap: 12px; }
 .doc-nav-logo {
-    width: 32px; height: 32px; border-radius: 8px;
-    background: linear-gradient(135deg, #2563eb, #7c3aed);
-    display: flex; align-items: center; justify-content: center;
-    color: #fff; font-weight: 800; font-size: 14px;
+    display: flex; align-items: center; gap: 6px;
+    font-size: 15px; letter-spacing: -0.025em;
 }
+.doc-nav-logo svg { flex-shrink: 0; }
+.doc-nav-logo .logo-text { font-weight: 700; color: var(--text); }
+.doc-nav-logo .logo-accent { font-weight: 700; color: #2563eb; }
 .doc-nav-brand { font-size: 14px; font-weight: 700; color: var(--text); }
 .doc-nav-sep { color: var(--border); font-size: 18px; }
 .doc-nav-links { display: flex; gap: 4px; }
@@ -294,7 +295,7 @@ em {
 
 <nav class="doc-nav">
     <div class="doc-nav-left">
-        <div class="doc-nav-logo">U</div>
+        <div class="doc-nav-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="24" height="24"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></div>
         <span class="doc-nav-brand">Meji Media</span>
         <span class="doc-nav-sep">|</span>
         <div class="doc-nav-links">
@@ -445,7 +446,7 @@ function toggleTheme() {
 </thead>
 <tbody>
 <tr><td><strong>new</strong></td><td>Enquiry just received, initial email sent, waiting for next step</td></tr>
-<tr><td><strong>handoff</strong></td><td>Hot lead &ndash; team has been notified, personalised email sent. <strong>All further activity is managed by your team, not the automation.</strong></td></tr>
+<tr><td><strong>handoff</strong></td><td>Hot lead &ndash; team has been notified, personalised email sent. <strong>The lead also enters the follow-up sequence with the fastest timing (6h, 30h). If they reply, A2 stops the sequence automatically.</strong></td></tr>
 <tr><td><strong>following_up</strong></td><td>Automated follow-up sequence is active (step 2 or 3)</td></tr>
 <tr><td><strong>replied</strong></td><td>They replied to an email &ndash; follow-ups stopped, you&rsquo;re handling it now</td></tr>
 <tr><td><strong>cold</strong></td><td>No reply after the full sequence (~7 days) &ndash; follow-ups stopped</td></tr>
@@ -456,7 +457,7 @@ function toggleTheme() {
 <pre><code>new -> following_up -> replied     (they replied during follow-ups)
 new -> following_up -> cold        (no reply after all steps)
 new -> replied                    (they replied before follow-ups started)
-new -> handoff                    (hot lead -- immediate team notification, no automated follow-ups)</code></pre>
+new -> following_up -> replied     (hot lead -- team notification + fastest cadence)</code></pre>
 
 <hr />
 
@@ -522,7 +523,7 @@ new -> handoff                    (hot lead -- immediate team notification, no a
 </tr>
 </thead>
 <tbody>
-<tr><td><strong>Hot</strong></td><td>High-scoring lead (score 50+)</td><td>Your team gets an instant email notification with full details. The enquirer gets a personalised acknowledgement. No automated follow-ups &ndash; you handle it directly.</td></tr>
+<tr><td><strong>Hot</strong></td><td>High-scoring lead (score 50+)</td><td>Your team gets an instant email notification with full details. The enquirer gets a personalised acknowledgement. The lead also enters the follow-up sequence with the fastest timing (6h, 30h), and if they reply, A2 stops the sequence automatically.</td></tr>
 <tr><td><strong>Warm</strong></td><td>Mid-scoring lead (score 25-49)</td><td>Standard acknowledgement email, followed by slightly faster follow-ups</td></tr>
 <tr><td><strong>Standard</strong></td><td>Lower-scoring lead (below 25)</td><td>Standard acknowledgement email, followed by regular-pace follow-ups</td></tr>
 </tbody>
@@ -552,7 +553,7 @@ new -> handoff                    (hot lead -- immediate team notification, no a
 </table>
 <p><em>All times are measured from when the initial email was sent.</em></p>
 <p>These timings are configurable &ndash; you can adjust these in Pipeline Config (see the Configuration section below).</p>
-<p><strong>Note:</strong> Hot leads marked as &ldquo;handoff&rdquo; skip the automated sequence entirely. Your team handles those directly.</p>
+<p><strong>Note:</strong> Hot leads enter the follow-up sequence with the fastest timing (6h, 30h) and your team gets an immediate notification. If the lead replies, A2 stops the sequence automatically.</p>
 
 <hr />
 
@@ -825,7 +826,7 @@ new -> handoff                    (hot lead -- immediate team notification, no a
 </tr>
 </thead>
 <tbody>
-<tr><td><strong>Hot</strong> (score 50+)</td><td><strong>Your team</strong> receives an instant notification email with full enquiry details, priority score, and a prompt to follow up quickly. <strong>The enquirer</strong> receives a warm, personalised acknowledgement. Follow-ups are stopped &ndash; your team handles it from here.</td></tr>
+<tr><td><strong>Hot</strong> (score 50+)</td><td><strong>Your team</strong> receives an instant notification email with full enquiry details, priority score, and a prompt to follow up quickly. <strong>The enquirer</strong> receives a warm, personalised acknowledgement. The lead enters the follow-up sequence with the fastest timing (6h, 30h). If they reply, A2 stops the sequence automatically.</td></tr>
 <tr><td><strong>Warm / Standard</strong></td><td>The enquirer receives a friendly acknowledgement email. The system schedules the next follow-up (A3 handles this).</td></tr>
 </tbody>
 </table>
@@ -838,7 +839,7 @@ new -> handoff                    (hot lead -- immediate team notification, no a
 <h2>What You&rsquo;ll See</h2>
 <p>When A1 runs successfully:</p>
 <ul>
-<li><strong>In the Google Sheet:</strong> A new row with all fields filled in. The <code>status</code> column will show <code>new</code> (or <code>handoff</code> for hot leads). The <code>priority</code> column will show <code>hot</code>, <code>warm</code>, or <code>standard</code>.</li>
+<li><strong>In the Google Sheet:</strong> A new row with all fields filled in. The <code>status</code> column will show <code>new</code> (for all leads, including hot leads). The <code>priority</code> column will show <code>hot</code>, <code>warm</code>, or <code>standard</code>.</li>
 <li><strong>In your Gmail inbox:</strong> The sent email will appear in your Sent folder (since it&rsquo;s sent from your shared inbox). The email will have a personalised opening sentence that references the enquirer&rsquo;s specific topic.</li>
 <li><strong>For hot leads:</strong> Your team will receive a separate notification email with a subject like &ldquo;HOT LEAD: Sarah Thompson - Wedding DJ (Score: 85)&rdquo;</li>
 </ul>
@@ -1016,7 +1017,7 @@ new -> handoff                    (hot lead -- immediate team notification, no a
 </tbody>
 </table>
 <p>These timings are configurable &ndash; ask your automation specialist if you&rsquo;d like to adjust them.</p>
-<p><strong>Note:</strong> Hot leads marked as &ldquo;handoff&rdquo; (where your team was notified immediately) skip the automated sequence entirely. A3 won&rsquo;t send follow-ups for those.</p>
+<p><strong>Note:</strong> Hot leads enter the follow-up sequence with the fastest timing (6h, 30h) and your team gets an immediate notification. If the lead replies, A2 stops the sequence automatically.</p>
 
 <hr />
 
@@ -1272,7 +1273,7 @@ function closeSidebar(){document.getElementById('guideSidebar').classList.remove
 
 <div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
   <div style="text-align:center;max-width:360px;padding:24px;">
-    <div style="width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,#2563eb,#7c3aed);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:24px;margin:0 auto 20px;">U</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span></div>
     <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Meji Media Documentation</h2>
     <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Enter your access code to continue.</p>
     <div style="display:flex;gap:8px;">

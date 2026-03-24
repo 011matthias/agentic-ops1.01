@@ -34,6 +34,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## platform
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-03-23 | Platform Portal and Logo Unification | system-infra | [Checkpoint](docs/2026-03-23%20-%20Platform%20Portal%20and%20Logo%20Unification/Checkpoint.md) |
+| 2026-03-23 | Platform Stabilization and Professionalization | system-infra | [Checkpoint](docs/2026-03-23%20-%20Platform%20Stabilization%20and%20Professionalization/Checkpoint.md) |
 | 2026-03-22 | Platform Auth Navigation UI Uplift | system-infra | [Checkpoint](docs/2026-03-22%20-%20Platform%20Auth%20Navigation%20UI%20Uplift/Checkpoint.md) |
 | 2026-03-21 | Platform Phase 1 and Architecture Map | system-infra | [Checkpoint](docs/2026-03-21%20-%20Platform%20Phase%201%20and%20Architecture%20Map/Checkpoint.md) |
 | 2026-03-20 | Platform Phase 0 Unblock (Continued) | system-infra | [Checkpoint](docs/2026-03-20%20-%20Platform%20Phase%200%20Unblock/Checkpoint.md) |

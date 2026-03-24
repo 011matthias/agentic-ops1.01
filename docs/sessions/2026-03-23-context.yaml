@@ -1,7 +1,7 @@
 checkpoint_date: "2026-03-23"
-checkpoint_topic: "Meji Media Client Documentation Portal"
-checkpoint_file: "docs/2026-03-23 - Meji Media Client Documentation Portal/Checkpoint.md"
-work_type: "client-dev"
+checkpoint_topic: "Platform Portal and Logo Unification"
+checkpoint_file: "docs/2026-03-23 - Platform Portal and Logo Unification/Checkpoint.md"
+work_type: "system-infra"
 clients:
   meji-media:
     orchestrator: make
@@ -26,12 +26,19 @@ clients:
         - "Confirm system running clean with 30k ops budget"
     next_steps:
       - "Share doc site link (unpauseai.com/docs/meji-media/) + access code at meeting"
-      - "Document Venue Config (Birmingham ICC, Wolverhampton ICB, Leicester)"
-      - "Identify 3 undocumented Google Sheet columns (21 vs 18 documented)"
-      - "Record Loom video using docs/video-script.md"
-      - "Clean up UTIL scenarios before handoff"
+      - "Invite Meji Media to portal when ready (M2)"
+      - "Wire Make.com A1 scenario to POST execution data to portal"
     open_questions:
-      - "Should doc site migrate into portal or stay static?"
-      - "Does client prefer self-serve config or request-based changes?"
-      - "Should Jess also receive hot lead team notifications?"
-      - "When to enable A/B testing?"
+      - "When to invite Meji Media to portal?"
+projects:
+  platform:
+    type: platform
+    orchestrator: vercel
+    next_steps:
+      - "Deploy logo + portal viewer changes (PR + merge)"
+      - "Test portal resource viewer in production"
+      - "M2: Create Meji Media client record, re-run seed script, invite client"
+      - "Logo: continue iterating or pursue professional design"
+    open_questions:
+      - "Logo: pursue professional design or continue code iteration?"
+      - "Iframe viewer: add breadcrumbs, download, fullscreen?"
