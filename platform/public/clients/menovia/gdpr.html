@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Menovia &ndash; Patient Journey Automation | UnpauseAI</title>
+<title>Menovia &ndash; GDPR Compliance | UnpauseAI</title>
 <style>
 :root {
     --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
@@ -114,7 +114,7 @@ body {
 }
 .hero-badge {
     display: inline-flex; align-items: center; gap: 6px;
-    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    background: var(--green-bg); color: var(--green); border-radius: 20px;
     padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
     letter-spacing: .04em; margin-bottom: 16px;
 }
@@ -127,7 +127,7 @@ body {
     transition: transform .15s, box-shadow .15s;
 }
 .stat-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
-.stat-value { font-size: 24px; font-weight: 800; color: var(--blue); }
+.stat-value { font-size: 24px; font-weight: 800; color: var(--green); }
 .stat-label { font-size: 12px; color: var(--text2); font-weight: 500; margin-top: 2px; }
 
 /* ─── Section styling ─── */
@@ -271,6 +271,38 @@ td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: 
 tr:nth-child(even) td { background: var(--surface); }
 tr:hover td { background: var(--blue-bg); }
 
+/* ─── Status badges ─── */
+.badge-ready {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    padding: 2px 8px; border-radius: 12px;
+    background: var(--green-light); color: var(--green-dark);
+}
+.badge-setup {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    padding: 2px 8px; border-radius: 12px;
+    background: var(--blue-light); color: var(--blue-dark);
+}
+
+/* ─── Hosting locations grid ─── */
+.hosting-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 24px 0; }
+.hosting-card {
+    padding: 16px 20px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--surface); display: flex; flex-direction: column; gap: 4px;
+}
+.hosting-tool { font-size: 14px; font-weight: 700; color: var(--text-strong); }
+.hosting-loc { font-size: 12px; color: var(--green-dark); font-weight: 600; }
+.hosting-note { font-size: 12px; color: var(--text2); }
+
+/* ─── Role cards ─── */
+.role-row { display: flex; gap: 12px; margin: 20px 0; }
+.role-card {
+    flex: 1; padding: 18px 20px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--surface);
+}
+.role-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text2); margin-bottom: 4px; }
+.role-name { font-size: 15px; font-weight: 700; color: var(--text-strong); margin-bottom: 6px; }
+.role-desc { font-size: 13px; color: var(--text2); line-height: 1.5; }
+
 /* ─── Footer ─── */
 .footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; }
 
@@ -285,6 +317,8 @@ tr:hover td { background: var(--blue-bg); }
     .zones { grid-template-columns: 1fr; }
     .solution-grid { grid-template-columns: 1fr; }
     .timeline-strip { flex-direction: column; }
+    .hosting-grid { grid-template-columns: 1fr; }
+    .role-row { flex-direction: column; }
     .hero h1 { font-size: 24px; }
     .stats-row { gap: 8px; }
     .stat-card { min-width: 100px; padding: 12px 16px; }
@@ -308,9 +342,9 @@ tr:hover td { background: var(--blue-bg); }
         <span class="nav-client">Menovia</span>
     </div>
     <div class="nav-links">
-        <a href="/clients/menovia/" class="active">Overview</a>
+        <a href="/clients/menovia/">Overview</a>
         <a href="/clients/menovia/solution">Solution</a>
-        <a href="/clients/menovia/gdpr">GDPR</a>
+        <a href="/clients/menovia/gdpr" class="active">GDPR</a>
         <a href="/clients/menovia/timeline">Timeline</a>
         <a href="/clients/menovia/investment">Investment</a>
     </div>
@@ -320,36 +354,39 @@ tr:hover td { background: var(--blue-bg); }
     </div>
 </nav>
 
+<style>
+@keyframes navpulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .4; }
+}
+</style>
+
 <!-- Sidebar -->
 <aside class="sidebar">
-    <div class="sidebar-label">Proposal stages</div>
+    <div class="sidebar-label">On this page</div>
     <ul class="step-list">
         <li class="step-item">
-            <a href="#overview" class="step-link active"><span class="step-num">1</span> Overview</a>
+            <a href="#compliance" class="step-link active"><span class="step-num">1</span> Compliance Matrix</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#how-it-works" class="step-link"><span class="step-num">2</span> How It Works</a>
+            <a href="#hosting" class="step-link"><span class="step-num">2</span> Data Hosting</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#solution" class="step-link"><span class="step-num">3</span> Solution</a>
+            <a href="#consent" class="step-link"><span class="step-num">3</span> Consent Flows</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#your-template" class="step-link"><span class="step-num">4</span> Your Template</a>
+            <a href="#processing" class="step-link"><span class="step-num">4</span> Data Processing</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#timeline" class="step-link"><span class="step-num">5</span> Timeline</a>
+            <a href="#retention" class="step-link"><span class="step-num">5</span> Retention Policy</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#investment" class="step-link"><span class="step-num">6</span> Investment</a>
-            <div class="step-line"></div>
-        </li>
-        <li class="step-item">
-            <a href="#next-steps" class="step-link"><span class="step-num">7</span> Next Steps</a>
+            <a href="#medical" class="step-link"><span class="step-num">6</span> Medical Data</a>
         </li>
     </ul>
 </aside>
@@ -359,180 +396,318 @@ tr:hover td { background: var(--blue-bg); }
 <div class="content-inner">
 
 <!-- Hero -->
-<section class="hero" id="overview">
-    <div class="hero-badge">Proposal for Menovia</div>
-    <h1>Patient Journey Automation</h1>
-    <p class="hero-sub">A complete automation infrastructure for your digital menopause clinic. From first enquiry through to ongoing care, fully automated and GDPR-compliant.</p>
+<section class="hero" id="top">
+    <div class="hero-badge">&#128737;&#65039; GDPR Compliance</div>
+    <h1>GDPR Compliance</h1>
+    <p class="hero-sub">How we ensure your patient data stays safe, stays in Europe, and stays compliant with Dutch and EU privacy regulations.</p>
     <div class="stats-row">
-        <div class="stat-card"><div class="stat-value">8-10</div><div class="stat-label">Workflows</div></div>
-        <div class="stat-card"><div class="stat-value">7</div><div class="stat-label">Integrations</div></div>
-        <div class="stat-card"><div class="stat-value">15+</div><div class="stat-label">Emails Automated</div></div>
-        <div class="stat-card"><div class="stat-value">4-7</div><div class="stat-label">Weeks</div></div>
+        <div class="stat-card"><div class="stat-value">8</div><div class="stat-label">Tools Assessed</div></div>
+        <div class="stat-card"><div class="stat-value">100%</div><div class="stat-label">EU Hosted</div></div>
+        <div class="stat-card"><div class="stat-value">8</div><div class="stat-label">DPAs Available</div></div>
+        <div class="stat-card"><div class="stat-value">EEA</div><div class="stat-label">Data Residency</div></div>
     </div>
 </section>
 
-<!-- How It Works: 3-Zone Infographic -->
-<h2 id="how-it-works">How It Works</h2>
-<p>Your patient journey automated end to end. Data flows in, n8n processes it, and your team and patients get the right information at the right time.</p>
+<!-- Section 1: Compliance Matrix -->
+<h2 id="compliance">Compliance Matrix</h2>
+<p>Every tool in the proposed stack has been evaluated against GDPR requirements. The table below summarises EU data hosting capability, DPA availability, consent obligations, and current setup status.</p>
 
-<div class="zones">
-    <div class="zone zone-blue">
-        <div class="zone-icon">&#128229;</div>
-        <div class="zone-title">Data In</div>
-        <div class="zone-sub">Where patient data enters the system</div>
-        <ul class="zone-items">
-            <li>Screening form submission</li>
-            <li>Payment via Mollie</li>
-            <li>Appointment booking</li>
-            <li>Intercom chat enquiry</li>
-        </ul>
-    </div>
-    <div class="zone zone-purple">
-        <div class="zone-icon">&#9881;&#65039;</div>
-        <div class="zone-title">Automation</div>
-        <div class="zone-sub">n8n validates, routes, and orchestrates</div>
-        <ul class="zone-items">
-            <li>Validate data + log consent</li>
-            <li>Create/update CRM record</li>
-            <li>Trigger email + SMS sequences</li>
-            <li>Schedule reminders (24h/6h/1h)</li>
-        </ul>
-    </div>
-    <div class="zone zone-green">
-        <div class="zone-icon">&#9989;</div>
-        <div class="zone-title">Results</div>
-        <div class="zone-sub">What your team and patients experience</div>
-        <ul class="zone-items">
-            <li>Patient receives confirmation</li>
-            <li>Physician gets notified</li>
-            <li>CRM dashboard updated</li>
-            <li>Next step auto-scheduled</li>
-        </ul>
-    </div>
-</div>
-
-<div class="gdpr-bar">
-    <div class="gdpr-bar-icon">&#128737;&#65039;</div>
-    <div class="gdpr-bar-text"><strong>GDPR by Design</strong> &mdash; Consent tracked at every data collection point. All tools EU-hosted. Medical data stays exclusively in your NEN 7510-certified EHR. <a href="/clients/menovia/gdpr">See full compliance details &rarr;</a></div>
-</div>
-
-<!-- Solution Overview -->
-<h2 id="solution">What We Build</h2>
-<p>Six integrated components that together automate your entire patient journey. Each one connects to the others through n8n.</p>
-
-<div class="solution-grid">
-    <a href="/clients/menovia/solution#intake" class="sol-card">
-        <div class="sol-num">1</div>
-        <div class="sol-info"><div class="sol-title">Patient Intake Flow</div><div class="sol-desc">Form submission triggers CRM record, confirmation email, and booking prompt.</div></div>
-    </a>
-    <a href="/clients/menovia/solution#booking" class="sol-card">
-        <div class="sol-num">2</div>
-        <div class="sol-info"><div class="sol-title">Booking &amp; Payment</div><div class="sol-desc">Cal.com + Mollie in one flow. Book, pay, confirm, all automated.</div></div>
-    </a>
-    <a href="/clients/menovia/solution#comms" class="sol-card">
-        <div class="sol-num">3</div>
-        <div class="sol-info"><div class="sol-title">Communication Sequences</div><div class="sol-desc">Automated email + SMS for reminders, follow-ups, and aftercare. In Dutch.</div></div>
-    </a>
-    <a href="/clients/menovia/solution#crm" class="sol-card">
-        <div class="sol-num">4</div>
-        <div class="sol-info"><div class="sol-title">CRM as Central Hub</div><div class="sol-desc">Zoho CRM with every touchpoint logged. Full pipeline visibility for your team.</div></div>
-    </a>
-    <a href="/clients/menovia/solution#intercom" class="sol-card">
-        <div class="sol-num">5</div>
-        <div class="sol-info"><div class="sol-title">Intercom Integration</div><div class="sol-desc">Chat enquiries auto-matched to CRM. EU workspace. FAQ bot configured.</div></div>
-    </a>
-    <a href="/clients/menovia/solution#gdpr" class="sol-card">
-        <div class="sol-num">6</div>
-        <div class="sol-info"><div class="sol-title">GDPR by Design</div><div class="sol-desc">Consent tracking, EU hosting verification, data retention policies, audit trail.</div></div>
-    </a>
-</div>
-
-<!-- Your Template -->
-<h2 id="your-template">Your Starter Template</h2>
-<p>We built a sample Patient Intake Workflow for you. It is yours to keep, regardless of whether we work together.</p>
-
-<div class="callout">
-    <div class="callout-title">What the template does</div>
-    <p>Webhook receives form data &rarr; Validates required fields &rarr; Logs GDPR consent with timestamp &rarr; Creates contact in Zoho CRM &rarr; Sends confirmation email via Brevo &rarr; Schedules booking reminder. This is one workflow out of the 8-10 in the full system.</p>
-</div>
-
-<p>We can walk you through it on a <strong>20-minute call, no commitment</strong>, so you can see exactly how the automation works.</p>
-
-<h3>GDPR Compliance Matrix</h3>
-<p>We verified every tool in your proposed stack for EU compliance:</p>
 <table>
-    <tr><th>Tool</th><th>EU Hosting</th><th>DPA</th><th>Consent</th><th>Status</th></tr>
-    <tr><td>Zoho CRM</td><td>Yes (EU DC)</td><td>Yes</td><td>Patient data</td><td>Ready</td></tr>
-    <tr><td>n8n Cloud</td><td>Yes (EU)</td><td>Yes</td><td>Processor</td><td>Ready</td></tr>
-    <tr><td>Mollie</td><td>Yes (NL)</td><td>Yes</td><td>Payment</td><td>Ready</td></tr>
-    <tr><td>Brevo</td><td>Yes (EU)</td><td>Yes</td><td>Marketing</td><td>Ready</td></tr>
-    <tr><td>MessageBird</td><td>Yes (NL)</td><td>Yes</td><td>SMS</td><td>Ready</td></tr>
-    <tr><td>Cal.com</td><td>Yes (EU)</td><td>Yes</td><td>Booking</td><td>Ready</td></tr>
-    <tr><td>Intercom</td><td>Yes (EU WS)</td><td>Yes</td><td>Chat/support</td><td>Setup needed</td></tr>
-    <tr><td>Typeform</td><td>Yes (EU)</td><td>Yes</td><td>Forms</td><td>Ready</td></tr>
+    <thead>
+        <tr>
+            <th>Tool</th>
+            <th>EU Data Hosting</th>
+            <th>DPA Available</th>
+            <th>Consent Required</th>
+            <th>Status</th>
+            <th>Notes</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>Zoho CRM</strong></td>
+            <td>Yes (EU data centre)</td>
+            <td>Yes</td>
+            <td>Yes (patient personal data)</td>
+            <td><span class="badge-ready">Ready</span></td>
+            <td>Amsterdam DC available</td>
+        </tr>
+        <tr>
+            <td><strong>n8n Cloud</strong></td>
+            <td>Yes (EU option)</td>
+            <td>Yes</td>
+            <td>N/A (data processor)</td>
+            <td><span class="badge-ready">Ready</span></td>
+            <td>Frankfurt/Amsterdam servers</td>
+        </tr>
+        <tr>
+            <td><strong>Mollie</strong></td>
+            <td>Yes (Netherlands)</td>
+            <td>Yes</td>
+            <td>N/A (payment processor)</td>
+            <td><span class="badge-ready">Ready</span></td>
+            <td>Dutch company, NL-based</td>
+        </tr>
+        <tr>
+            <td><strong>Brevo</strong></td>
+            <td>Yes (EU servers)</td>
+            <td>Yes</td>
+            <td>Yes (marketing emails)</td>
+            <td><span class="badge-ready">Ready</span></td>
+            <td>Paris-based servers</td>
+        </tr>
+        <tr>
+            <td><strong>MessageBird</strong></td>
+            <td>Yes (Netherlands)</td>
+            <td>Yes</td>
+            <td>Yes (SMS comms)</td>
+            <td><span class="badge-ready">Ready</span></td>
+            <td>Amsterdam HQ</td>
+        </tr>
+        <tr>
+            <td><strong>Cal.com</strong></td>
+            <td>Yes (EU option)</td>
+            <td>Yes</td>
+            <td>Yes (booking data)</td>
+            <td><span class="badge-ready">Ready</span></td>
+            <td>EU hosting available</td>
+        </tr>
+        <tr>
+            <td><strong>Intercom</strong></td>
+            <td>Yes (EU workspace)</td>
+            <td>Yes</td>
+            <td>Yes (chat + support)</td>
+            <td><span class="badge-setup">Setup needed</span></td>
+            <td>Requires EU workspace config</td>
+        </tr>
+        <tr>
+            <td><strong>Typeform</strong></td>
+            <td>Yes (EU option)</td>
+            <td>Yes</td>
+            <td>Yes (form submissions)</td>
+            <td><span class="badge-ready">Ready</span></td>
+            <td>EU data residency option</td>
+        </tr>
+    </tbody>
 </table>
 
 <div class="callout green">
-    <div class="callout-title">All clear</div>
-    <p>Every tool in your stack supports EU data hosting and provides Data Processing Agreements. No US-only services. <a href="/clients/menovia/gdpr">Full GDPR details &rarr;</a></p>
+    <div class="callout-title">One configuration task</div>
+    <p>Intercom requires an EU workspace to be selected during account setup. This is a one-time configuration step and is handled as part of the onboarding phase.</p>
 </div>
 
-<!-- Timeline -->
-<h2 id="timeline">Timeline</h2>
-<p>Two phases. Phase 1 delivers a working system. Phase 2 hardens it for compliance and hands it over.</p>
+<!-- Section 2: EU Data Hosting -->
+<h2 id="hosting">EU Data Hosting</h2>
+<p>All tools in the stack were selected specifically for their EU data hosting capability. No personal data leaves the European Economic Area under normal operating conditions.</p>
 
-<div class="timeline-strip">
-    <div class="tl-card">
-        <div class="tl-badge">Week 1-4</div>
-        <div class="tl-title">Core Patient Journey</div>
-        <div class="tl-price">EUR 3,500</div>
-        <ul class="tl-items">
-            <li>CRM configuration + intake workflow</li>
-            <li>Booking + payment integration</li>
-            <li>Email + SMS automation</li>
-            <li>End-to-end testing</li>
-        </ul>
+<div class="hosting-grid">
+    <div class="hosting-card">
+        <div class="hosting-tool">Zoho CRM</div>
+        <div class="hosting-loc">&#127757; Amsterdam, Netherlands</div>
+        <div class="hosting-note">EU data centre selected at account level</div>
     </div>
-    <div class="tl-card phase2">
-        <div class="tl-badge">Week 5-7</div>
-        <div class="tl-title">Compliance &amp; Handover</div>
-        <div class="tl-price">EUR 2,000</div>
-        <ul class="tl-items">
-            <li>GDPR audit + consent flows</li>
-            <li>Intercom + Dutch content</li>
-            <li>Documentation + training</li>
-            <li>2 weeks post-launch support</li>
-        </ul>
+    <div class="hosting-card">
+        <div class="hosting-tool">n8n Cloud</div>
+        <div class="hosting-loc">&#127757; Frankfurt / Amsterdam</div>
+        <div class="hosting-note">EU region selected during workspace setup</div>
+    </div>
+    <div class="hosting-card">
+        <div class="hosting-tool">Mollie</div>
+        <div class="hosting-loc">&#127757; Netherlands</div>
+        <div class="hosting-note">Dutch company &mdash; NL-based by default</div>
+    </div>
+    <div class="hosting-card">
+        <div class="hosting-tool">MessageBird</div>
+        <div class="hosting-loc">&#127757; Amsterdam, Netherlands</div>
+        <div class="hosting-note">Dutch company &mdash; HQ and data in Amsterdam</div>
+    </div>
+    <div class="hosting-card">
+        <div class="hosting-tool">Brevo</div>
+        <div class="hosting-loc">&#127757; Paris, France</div>
+        <div class="hosting-note">EU servers selected in account settings</div>
+    </div>
+    <div class="hosting-card">
+        <div class="hosting-tool">Cal.com</div>
+        <div class="hosting-loc">&#127757; EU region</div>
+        <div class="hosting-note">EU data residency option at workspace level</div>
+    </div>
+    <div class="hosting-card">
+        <div class="hosting-tool">Intercom</div>
+        <div class="hosting-loc">&#127757; EU workspace</div>
+        <div class="hosting-note">EU workspace configuration required at setup</div>
+    </div>
+    <div class="hosting-card">
+        <div class="hosting-tool">Typeform</div>
+        <div class="hosting-loc">&#127757; EU region</div>
+        <div class="hosting-note">EU data residency selected in account settings</div>
     </div>
 </div>
-<p style="text-align:center"><a href="/clients/menovia/timeline">See week-by-week breakdown &rarr;</a></p>
 
-<!-- Investment -->
-<h2 id="investment">Investment</h2>
+<p>Primary hosting locations across the stack are the <strong>Netherlands</strong>, <strong>Germany</strong>, and <strong>France</strong> &mdash; all within the EEA. Two tools (Mollie and MessageBird) are Dutch companies with data stored in the Netherlands by default, with no additional configuration required.</p>
 
-<div class="invest-total">
-    <div class="invest-amount">EUR 5,500</div>
-    <div class="invest-label">Fixed price, two phases</div>
-</div>
+<!-- Section 3: Consent Flows -->
+<h2 id="consent">Consent Flows</h2>
+<p>Every data collection point in the patient journey records explicit consent before any personal data is stored or processed. Consent timestamps and source are logged in Zoho CRM for audit trail purposes.</p>
+
+<h3>Consent touchpoints</h3>
+<ul>
+    <li><strong>Screening form</strong> &mdash; checkbox consent with timestamp recorded before submission is accepted</li>
+    <li><strong>Booking form</strong> &mdash; separate consent field for appointment data processing, distinct from screening consent</li>
+    <li><strong>Email opt-in</strong> &mdash; double opt-in flow via Brevo; marketing emails only sent after confirmation link is clicked</li>
+    <li><strong>SMS opt-in</strong> &mdash; explicit consent captured at intake; recorded in CRM before any SMS is sent</li>
+    <li><strong>Intercom chat</strong> &mdash; consent banner displayed before the chat widget collects any personal data</li>
+</ul>
 
 <div class="callout">
-    <div class="callout-title">For context</div>
-    <p>Comparable digital infrastructure projects at Dutch agencies typically run EUR 12,000-18,000. We keep costs lower because automation infrastructure is all we do. No overhead, no account managers, no discovery workshops that bill by the hour.</p>
+    <div class="callout-title">Audit trail</div>
+    <p>All consent records &mdash; including the source form, timestamp, and consent text version &mdash; are stored as structured fields in Zoho CRM. This gives you a queryable audit trail if consent is ever challenged.</p>
 </div>
 
-<p><strong>What is included:</strong> All n8n workflows, CRM configuration, integration setup, email and SMS templates, GDPR documentation, team training session, and 2 weeks of post-launch support. Tool subscription costs (Zoho, n8n, Mollie, Brevo, Cal.com) are separate and paid directly by Menovia.</p>
-<p style="text-align:center"><a href="/clients/menovia/investment">See full pricing breakdown &rarr;</a></p>
+<h3>Consent withdrawal</h3>
+<p>Withdrawal of consent is handled per channel. Email unsubscribes are processed by Brevo and synced to the CRM. SMS opt-out keywords are handled by MessageBird. A patient record in the CRM reflects the current consent status across all channels at any time.</p>
 
-<!-- Next Steps / CTA -->
-<section class="cta-section" id="next-steps">
-    <h2>Ready to get started?</h2>
-    <p>Reply to our message on Upwork, or reach out directly.</p>
-    <a href="mailto:hello@unpauseai.com" class="cta-btn">Let's Talk, Menovia</a>
-    <a href="/clients/menovia/menovia-proposal.pdf" download class="cta-secondary">&#128196; Download PDF</a>
+<!-- Section 4: Data Processing -->
+<h2 id="processing">Data Processing Agreements</h2>
+<p>A Data Processing Agreement (DPA) is required from every tool vendor before that tool is used to process personal data. The roles within the system are clearly defined.</p>
+
+<div class="role-row">
+    <div class="role-card">
+        <div class="role-label">Data Controller</div>
+        <div class="role-name">Menovia</div>
+        <div class="role-desc">Determines the purpose and means of processing patient personal data. Responsible for the lawful basis and consent management.</div>
+    </div>
+    <div class="role-card">
+        <div class="role-label">Data Processors</div>
+        <div class="role-name">Tool vendors</div>
+        <div class="role-desc">Zoho, Brevo, MessageBird, Cal.com, Intercom, Typeform, Mollie &mdash; each processes data on behalf of Menovia under a DPA.</div>
+    </div>
+    <div class="role-card">
+        <div class="role-label">Sub-processor</div>
+        <div class="role-name">n8n</div>
+        <div class="role-desc">Processes data in transit between systems as an automation layer. Acts as a sub-processor to Menovia with its own DPA and EU data residency.</div>
+    </div>
+</div>
+
+<h3>DPA checklist</h3>
+<ul>
+    <li>Zoho CRM &mdash; DPA available, covers EU data centre selection</li>
+    <li>n8n Cloud &mdash; DPA available, covers sub-processor obligations</li>
+    <li>Mollie &mdash; DPA available, PCI DSS compliant for payment data</li>
+    <li>Brevo &mdash; DPA available, covers email marketing processing</li>
+    <li>MessageBird &mdash; DPA available, covers SMS communication data</li>
+    <li>Cal.com &mdash; DPA available, covers scheduling and booking data</li>
+    <li>Intercom &mdash; DPA available, covers chat and support data</li>
+    <li>Typeform &mdash; DPA available, covers form submission data</li>
+</ul>
+
+<p>A complete DPA checklist document, with links to each vendor's current DPA and instructions for countersigning where required, is provided as part of the project handover package.</p>
+
+<!-- Section 5: Retention Policy -->
+<h2 id="retention">Retention Policy</h2>
+<p>Data retention is defined per data category, aligned with Dutch legal requirements and GDPR's storage limitation principle. Retaining data longer than necessary is treated as a compliance risk, not a convenience.</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Data Category</th>
+            <th>Retention Period</th>
+            <th>Managed By</th>
+            <th>Notes</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>Patient contact records</strong></td>
+            <td>Duration of care + legal minimum</td>
+            <td>Zoho CRM</td>
+            <td>Aligned with Dutch healthcare retention rules</td>
+        </tr>
+        <tr>
+            <td><strong>Marketing consent</strong></td>
+            <td>Until withdrawal</td>
+            <td>Brevo + Zoho CRM</td>
+            <td>Unsubscribe removes from all marketing lists</td>
+        </tr>
+        <tr>
+            <td><strong>Payment data</strong></td>
+            <td>Per PCI DSS requirements</td>
+            <td>Mollie</td>
+            <td>Card data never stored in CRM or automation layer</td>
+        </tr>
+        <tr>
+            <td><strong>Appointment records</strong></td>
+            <td>Duration of care relationship</td>
+            <td>Cal.com + Zoho CRM</td>
+            <td>Historical booking data retained for continuity of care</td>
+        </tr>
+        <tr>
+            <td><strong>Chat logs</strong></td>
+            <td>Configurable</td>
+            <td>Intercom</td>
+            <td>Retention period set in Intercom workspace settings</td>
+        </tr>
+        <tr>
+            <td><strong>Form submissions</strong></td>
+            <td>Until processed and synced</td>
+            <td>Typeform</td>
+            <td>Raw submissions deleted after CRM sync is confirmed</td>
+        </tr>
+        <tr>
+            <td><strong>SMS records</strong></td>
+            <td>90 days</td>
+            <td>MessageBird</td>
+            <td>Message logs retained for delivery confirmation only</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="callout">
+    <div class="callout-title">Automated deletion</div>
+    <p>Where technically supported, n8n workflows can be configured to trigger automated deletion of records at the end of their retention period. This reduces the manual compliance burden on your team.</p>
+</div>
+
+<!-- Section 6: Medical Data Separation -->
+<h2 id="medical">Medical Data Separation</h2>
+
+<div class="callout green">
+    <div class="callout-title">Critical separation principle</div>
+    <p><strong>Medical data never enters the automation system.</strong> Medical records stay exclusively in your NEN 7510-certified Electronic Health Record system. This separation is fundamental to the architecture, not an afterthought.</p>
+</div>
+
+<p>The automation system operates exclusively on <strong>operational data</strong>: contact information, appointment scheduling, payment status, and communication preferences. None of these data categories constitute medical data under Dutch or EU law.</p>
+
+<h3>What the automation system handles</h3>
+<ul>
+    <li>Patient name, email address, phone number</li>
+    <li>Appointment date, time, and status</li>
+    <li>Payment confirmation (reference number only &mdash; no card data)</li>
+    <li>Communication preferences and consent flags</li>
+    <li>Screening form responses (eligibility questions, not clinical assessments)</li>
+</ul>
+
+<h3>What stays exclusively in the EHR</h3>
+<ul>
+    <li>Clinical diagnoses and treatment records</li>
+    <li>Prescription history</li>
+    <li>Lab results and test outcomes</li>
+    <li>Physician consultation notes</li>
+    <li>Any data that constitutes a special category under GDPR Article 9</li>
+</ul>
+
+<div class="callout">
+    <div class="callout-title">NEN 7510 boundary</div>
+    <p>The handoff point between the automation system and the EHR is a notification only: "Patient X has booked an appointment." No clinical data crosses this boundary in either direction. The physician retrieves clinical context from the EHR directly, as they do today.</p>
+</div>
+
+<p>This architecture means the automation system never processes special category data under GDPR Article 9. The legal basis for processing operational data is straightforward contract performance and legitimate interest, with no requirement for explicit medical consent for the automation layer itself.</p>
+
+<!-- Footer / CTA -->
+<section class="cta-section">
+    <h2>Questions about compliance?</h2>
+    <p>We are happy to walk through any aspect of the GDPR approach in more detail.</p>
+    <a href="mailto:hello@unpauseai.com" class="cta-btn">Get in touch</a>
+    <button class="cta-secondary" onclick="window.print()">&#128196; Download PDF</button>
 </section>
-
-<h2 id="about" style="border:none;text-align:center;margin-top:48px">About UnpauseAI</h2>
-<p style="text-align:center;max-width:560px;margin:0 auto 16px">We build automation infrastructure for businesses that need their operations to run without manual intervention. Our systems are in production today, processing thousands of automated operations monthly. We work exclusively with n8n and Make.com. Based in Europe, GDPR-aware by default.</p>
 
 <div class="footer">
     <p>UnpauseAI &middot; Custom Automation Solutions &middot; <a href="mailto:hello@unpauseai.com">hello@unpauseai.com</a></p>
