@@ -273,6 +273,77 @@ tr:hover td { background: var(--blue-bg); }
     transition: box-shadow .15s;
 }
 .detail-card:hover { box-shadow: var(--card-shadow); }
+
+/* Interactive Demo */
+.demo-interactive {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0;
+}
+@media (max-width: 768px) {
+    .demo-interactive { grid-template-columns: 1fr; }
+}
+.demo-panel {
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface); padding: 20px;
+}
+.demo-panel h3 {
+    margin-top: 0; font-size: 14px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .04em; color: var(--text2); margin-bottom: 14px;
+}
+.demo-field { margin-bottom: 12px; }
+.demo-field label {
+    display: block; font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px;
+}
+.demo-field label .req { color: var(--green); font-weight: 700; }
+.demo-field input, .demo-field select {
+    width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 14px; background: var(--bg); color: var(--text); transition: border-color .15s;
+}
+.demo-field input:focus, .demo-field select:focus {
+    border-color: var(--blue); outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+}
+.demo-consent {
+    display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text);
+    margin-top: 4px;
+}
+.demo-consent input[type="checkbox"] { width: auto; margin: 0; }
+.demo-run-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: linear-gradient(135deg, var(--green), var(--green-dark)); color: #fff;
+    border: none; border-radius: 8px; padding: 10px 24px;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    transition: opacity .15s, transform .15s; box-shadow: 0 2px 12px rgba(5,150,105,.3);
+    margin-top: 4px; width: 100%;
+    justify-content: center;
+}
+.demo-run-btn:hover { opacity: .9; }
+.demo-run-btn:disabled { opacity: .6; cursor: not-allowed; }
+.demo-output-pre {
+    white-space: pre-wrap; word-break: break-word; font-family: "SF Mono", "Fira Code", Consolas, monospace;
+    font-size: 12px; line-height: 1.5; color: var(--text); margin: 0;
+    min-height: 200px; max-height: 400px; overflow-y: auto;
+}
+.demo-placeholder {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 200px; color: var(--text2); font-size: 14px; text-align: center;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* Accordion (for Developers section) */
+.accordion-toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    width: 100%; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 16px; cursor: pointer;
+    font-size: 14px; font-weight: 600; color: var(--text); transition: background .15s;
+    margin-top: 16px;
+}
+.accordion-toggle:hover { background: var(--surface2); }
+.accordion-toggle .arrow { transition: transform .2s; font-size: 12px; color: var(--text2); }
+.accordion-toggle.open .arrow { transform: rotate(180deg); }
+.accordion-body {
+    display: none; border: 1px solid var(--border); border-top: none;
+    border-radius: 0 0 8px 8px; padding: 16px; background: var(--surface);
+    margin-top: -1px;
+}
 </style>
 <script>
 (function(){var t=localStorage.getItem('menovia-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
@@ -311,19 +382,19 @@ tr:hover td { background: var(--blue-bg); }
     <div class="sidebar-label">Workflow Demo</div>
     <ul class="step-list">
         <li class="step-item">
-            <a href="#overview" class="step-link active"><span class="step-num">1</span> Overview</a>
+            <a href="#demo" class="step-link active"><span class="step-num">1</span> Live Demo</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#video" class="step-link"><span class="step-num">2</span> Video Walkthrough</a>
+            <a href="#overview" class="step-link"><span class="step-num">2</span> Overview</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#nodes" class="step-link"><span class="step-num">3</span> Node Walkthrough</a>
+            <a href="#video" class="step-link"><span class="step-num">3</span> Video Walkthrough</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#demo" class="step-link"><span class="step-num">4</span> Live Demo</a>
+            <a href="#nodes" class="step-link"><span class="step-num">4</span> Node Walkthrough</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
@@ -349,7 +420,110 @@ tr:hover td { background: var(--blue-bg); }
         </div>
     </div>
 
-    <!-- Section 1: Overview -->
+    <!-- Section 1: Live Demo -->
+    <h2 id="demo">Try It Live</h2>
+
+    <p>Edit the fields below and click <strong>Run Live Demo</strong>. The workflow processes your request in real time and returns the full response, showing exactly what happens in production.</p>
+
+    <div class="demo-interactive">
+        <div class="demo-panel">
+            <h3>Request</h3>
+            <div class="demo-field">
+                <label>Name <span class="req">*</span></label>
+                <input type="text" id="demo-name" value="Maria de Vries">
+            </div>
+            <div class="demo-field">
+                <label>Email <span class="req">*</span></label>
+                <input type="email" id="demo-email" value="demo@example.com">
+            </div>
+            <div class="demo-field">
+                <label>Phone</label>
+                <input type="tel" id="demo-phone" value="+31612345678">
+            </div>
+            <div class="demo-field">
+                <label>Package</label>
+                <select id="demo-package">
+                    <option value="Basic">Basic</option>
+                    <option value="Plus" selected>Plus</option>
+                    <option value="Complete">Complete</option>
+                </select>
+            </div>
+            <div class="demo-field">
+                <label>GDPR Consent <span class="req">*</span></label>
+                <div class="demo-consent">
+                    <input type="checkbox" id="demo-consent" checked>
+                    <span>I consent to data processing</span>
+                </div>
+            </div>
+            <button id="run-demo-btn" onclick="runDemo()" class="demo-run-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Run Live Demo
+            </button>
+        </div>
+        <div class="demo-panel">
+            <h3>Response</h3>
+            <div id="demo-output-placeholder" class="demo-placeholder">Click <strong>Run Live Demo</strong> to see the workflow response.</div>
+            <pre id="demo-output-content" class="demo-output-pre" style="display: none;"></pre>
+        </div>
+    </div>
+
+    <div class="callout purple" style="margin-top: 16px;">
+        <div class="callout-title">Demo Mode</div>
+        <p>This is a demonstration deployment. The CRM and email nodes use placeholder credentials, so no actual records are created and no emails are sent. The enriched response shows exactly what happens in production: GDPR audit trail, CRM fields, patient journey preview, and data quality checks.</p>
+    </div>
+
+    <button class="accordion-toggle" onclick="this.classList.toggle('open'); var b=this.nextElementSibling; b.style.display=b.style.display==='block'?'none':'block';">
+        For Developers: cURL, webhook endpoint, and field reference
+        <span class="arrow">&#9660;</span>
+    </button>
+    <div class="accordion-body">
+        <h3 style="margin-top: 0;">Webhook Endpoint</h3>
+        <div class="code-block">
+            <div class="code-block-header">
+                <span class="code-block-label">URL</span>
+                <button class="code-block-copy" onclick="copyCode(this, 'https://unpauseai.app.n8n.cloud/webhook/menovia-intake')">Copy</button>
+            </div>
+            <pre>https://unpauseai.app.n8n.cloud/webhook/menovia-intake</pre>
+        </div>
+
+        <h3>cURL Example</h3>
+        <div class="code-block">
+            <div class="code-block-header">
+                <span class="code-block-label">cURL</span>
+                <button class="code-block-copy" onclick="copyCode(this, document.getElementById('curl-sample').textContent)">Copy</button>
+            </div>
+            <pre id="curl-sample">curl -X POST https://unpauseai.app.n8n.cloud/webhook/menovia-intake \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Maria de Vries",
+    "email": "maria@example.com",
+    "phone": "+31612345678",
+    "package": "Plus",
+    "gdpr_consent": true
+  }'</pre>
+        </div>
+
+        <h3>Request Fields</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Field</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td><strong>name</strong></td><td>string</td><td>Yes</td><td>Patient's full name</td></tr>
+                <tr><td><strong>email</strong></td><td>string</td><td>Yes</td><td>Patient's email address</td></tr>
+                <tr><td><strong>phone</strong></td><td>string</td><td>No</td><td>Phone number (international format)</td></tr>
+                <tr><td><strong>package</strong></td><td>string</td><td>No</td><td>Selected package: Basic, Plus, or Complete</td></tr>
+                <tr><td><strong>gdpr_consent</strong></td><td>boolean</td><td>Yes</td><td>Must be <code>true</code> to proceed</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Section 2: Overview -->
     <h2 id="overview">Workflow Overview</h2>
 
     <p>This template demonstrates the core patient intake automation. When a new patient submits their details through your website form, this workflow handles everything that follows automatically.</p>
@@ -374,7 +548,7 @@ tr:hover td { background: var(--blue-bg); }
         </div>
     </div>
 
-    <!-- Section 2: Video Walkthrough -->
+    <!-- Section 3: Video Walkthrough -->
     <h2 id="video">Video Walkthrough</h2>
 
     <p>A 2-minute walkthrough of the workflow, how it processes patient intake submissions, and what happens at each step.</p>
@@ -386,7 +560,7 @@ tr:hover td { background: var(--blue-bg); }
     </div>
     <p style="text-align: center; margin-top: 12px;"><a href="https://www.loom.com/share/e6dfb8249a694c72a7cf6fe48e16c9db" target="_blank" rel="noopener">Watch on Loom &rarr;</a></p>
 
-    <!-- Section 3: Node Walkthrough -->
+    <!-- Section 4: Node Walkthrough -->
     <h2 id="nodes">Node-by-Node Walkthrough</h2>
 
     <p>The workflow consists of 8 nodes arranged in a linear flow with one validation branch. Here is what each node does and why it matters.</p>
@@ -488,119 +662,7 @@ tr:hover td { background: var(--blue-bg); }
         </div>
     </div>
 
-    <!-- Section 3: Live Demo -->
-    <h2 id="demo">Try It Live</h2>
-
-    <p>This workflow is deployed and running on n8n Cloud right now. You can test it by sending a POST request to the webhook endpoint below.</p>
-
-    <div class="detail-card">
-        <h3 style="margin-top: 0;">Webhook Endpoint</h3>
-        <div class="code-block">
-            <div class="code-block-header">
-                <span class="code-block-label">URL</span>
-                <button class="code-block-copy" onclick="copyCode(this, 'https://unpauseai.app.n8n.cloud/webhook/menovia-intake')">Copy</button>
-            </div>
-            <pre>https://unpauseai.app.n8n.cloud/webhook/menovia-intake</pre>
-        </div>
-
-        <h3>Sample Request</h3>
-        <div class="code-block">
-            <div class="code-block-header">
-                <span class="code-block-label">cURL</span>
-                <button class="code-block-copy" onclick="copyCode(this, document.getElementById('curl-sample').textContent)">Copy</button>
-            </div>
-            <pre id="curl-sample">curl -X POST https://unpauseai.app.n8n.cloud/webhook/menovia-intake \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Maria de Vries",
-    "email": "maria@example.com",
-    "phone": "+31612345678",
-    "package": "Plus",
-    "gdpr_consent": true
-  }'</pre>
-        </div>
-
-        <h3>Expected Response</h3>
-        <div class="code-block">
-            <div class="code-block-header">
-                <span class="code-block-label">JSON Response (enriched)</span>
-            </div>
-            <pre>{
-  "status": "success",
-  "message": "Bedankt voor uw aanmelding. U ontvangt een bevestigingsmail.",
-  "patient_journey_preview": {
-    "step_1": "Contact aangemaakt in Zoho CRM (Lead Status: Nieuw)",
-    "step_2": "Bevestigingsmail verstuurd via Brevo",
-    "step_3": "Herinnering voor afspraak ingepland (+24u)",
-    "step_4": "SMS-herinnering bij geen boeking (+48u)",
-    "step_5": "Voorbereiding consult email (2 dagen voor afspraak)",
-    "step_6": "Nazorg email sequence (na consult)"
-  },
-  "gdpr_audit": {
-    "consent_logged": true,
-    "timestamp": "2026-03-24T14:32:01.000Z",
-    "source": "intake_form",
-    "version": "1.0",
-    "eu_hosted": true
-  },
-  "crm_record": {
-    "fields_created": ["First_Name", "Last_Name", "Email", "Phone", "Lead_Source", "Package", "GDPR_Consent"],
-    "pipeline_stage": "Nieuw",
-    "next_action": "Booking uitnodiging wordt verstuurd"
-  },
-  "data_quality": {
-    "name_provided": "yes",
-    "email_provided": "yes",
-    "phone_provided": "yes",
-    "package_selected": "yes",
-    "gdpr_consent": true
-  }
-}</pre>
-        </div>
-    </div>
-
-    <div style="text-align: center; margin: 24px 0;">
-        <button id="run-demo-btn" onclick="runDemo()" style="display: inline-flex; align-items: center; gap: 8px; background: linear-gradient(135deg, var(--green), var(--green-dark)); color: #fff; border: none; border-radius: 10px; padding: 14px 32px; font-size: 16px; font-weight: 700; cursor: pointer; transition: opacity .15s, transform .15s; box-shadow: 0 2px 12px rgba(5,150,105,.3);">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            Run Live Demo
-        </button>
-        <p style="font-size: 13px; color: var(--text2); margin-top: 8px;">Sends a test request to the live workflow and shows the real response below.</p>
-    </div>
-
-    <div id="demo-output" style="display: none; margin: 16px 0;">
-        <div class="code-block">
-            <div class="code-block-header">
-                <span class="code-block-label">Live Response</span>
-            </div>
-            <pre id="demo-output-content" style="white-space: pre-wrap; word-break: break-word;"></pre>
-        </div>
-    </div>
-
-    <div class="callout purple">
-        <div class="callout-title">Demo Mode</div>
-        <p>This is a demonstration deployment. The CRM and email nodes use placeholder credentials, so no actual CRM records are created and no emails are sent. The enriched response shows you exactly what happens in production: the full patient journey preview, GDPR audit trail, CRM fields that would be created, and a data quality check. The workflow structure and logic are identical to what runs in production.</p>
-    </div>
-
-    <h3>Request Fields</h3>
-    <table>
-        <thead>
-            <tr>
-                <th>Field</th>
-                <th>Type</th>
-                <th>Required</th>
-                <th>Description</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr><td><strong>name</strong></td><td>string</td><td>Yes</td><td>Patient's full name</td></tr>
-            <tr><td><strong>email</strong></td><td>string</td><td>Yes</td><td>Patient's email address</td></tr>
-            <tr><td><strong>phone</strong></td><td>string</td><td>No</td><td>Phone number (international format)</td></tr>
-            <tr><td><strong>package</strong></td><td>string</td><td>No</td><td>Selected package: Basic, Plus, or Complete</td></tr>
-            <tr><td><strong>gdpr_consent</strong></td><td>boolean</td><td>Yes</td><td>Must be <code>true</code> to proceed</td></tr>
-        </tbody>
-    </table>
-
-    <!-- Section 4: Download -->
+    <!-- Section 5: Download -->
     <h2 id="download">Download the Template</h2>
 
     <p>Import this workflow directly into any n8n instance. The template includes all nodes, connections, and configuration. You will need to connect your own Zoho CRM and Brevo credentials after import.</p>
@@ -649,43 +711,47 @@ function copyCode(btn, text) {
 
 function runDemo() {
     var btn = document.getElementById('run-demo-btn');
-    var output = document.getElementById('demo-output');
+    var placeholder = document.getElementById('demo-output-placeholder');
     var content = document.getElementById('demo-output-content');
-    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Running...';
+    var name = document.getElementById('demo-name').value;
+    var email = document.getElementById('demo-email').value;
+    var phone = document.getElementById('demo-phone').value;
+    var pkg = document.getElementById('demo-package').value;
+    var consent = document.getElementById('demo-consent').checked;
+
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Running...';
     btn.disabled = true;
-    btn.style.opacity = '0.7';
-    output.style.display = 'block';
+    if (placeholder) placeholder.style.display = 'none';
+    content.style.display = 'block';
     content.textContent = 'Sending request to live workflow...';
 
     fetch('https://unpauseai.app.n8n.cloud/webhook/menovia-intake', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            name: 'Maria de Vries',
-            email: 'demo@example.com',
-            phone: '+31612345678',
-            package: 'Plus',
-            gdpr_consent: true
+            name: name,
+            email: email,
+            phone: phone,
+            package: pkg,
+            gdpr_consent: consent
         })
     })
     .then(function(res) { return res.json(); })
     .then(function(data) {
         content.textContent = JSON.stringify(data, null, 2);
-        btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Run Again';
+        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Run Again';
         btn.disabled = false;
-        btn.style.opacity = '1';
     })
     .catch(function() {
-        content.textContent = 'Request failed. The webhook may not be active right now.\nTry copying the cURL command above and running it in your terminal instead.';
-        btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Try Again';
+        content.textContent = 'Request failed. The webhook may not be active right now.\nOpen the "For Developers" section below and try the cURL command instead.';
+        btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg> Try Again';
         btn.disabled = false;
-        btn.style.opacity = '1';
     });
 }
 
 // Active sidebar tracking on scroll
 (function() {
-    var sections = ['overview', 'video', 'nodes', 'demo', 'download'];
+    var sections = ['demo', 'overview', 'video', 'nodes', 'download'];
     var links = {};
     sections.forEach(function(id) {
         var el = document.querySelector('.step-link[href="#' + id + '"]');

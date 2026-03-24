@@ -240,7 +240,7 @@
       "parameters": {
         "content": "## INPUT\nWebhook receives form data and validates required fields before processing.",
         "width": 380,
-        "height": 280,
+        "height": 380,
         "color": 2
       },
       "id": "sticky-input",
@@ -253,7 +253,7 @@
       "parameters": {
         "content": "## DATA PROCESSING\nGDPR consent logging and CRM record creation. All data stays on EU servers.",
         "width": 400,
-        "height": 280,
+        "height": 340,
         "color": 6
       },
       "id": "sticky-processing",
@@ -265,8 +265,8 @@
     {
       "parameters": {
         "content": "## OUTPUT\nConfirmation email, booking reminder, and enriched response with journey preview.",
-        "width": 600,
-        "height": 280,
+        "width": 720,
+        "height": 340,
         "color": 5
       },
       "id": "sticky-output",
@@ -291,7 +291,7 @@
     {
       "parameters": {
         "content": "**Credentials needed:**\n- Zoho CRM: OAuth token (EU endpoint)\n- Brevo: SMTP credentials\n- See onboarding checklist",
-        "width": 300,
+        "width": 420,
         "height": 90,
         "color": 1
       },

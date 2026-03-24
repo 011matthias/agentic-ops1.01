@@ -422,14 +422,6 @@ tr:hover td { background: var(--blue-bg); }
             </select>
         </div>
         <div>
-            <label class="form-label">Brand colors (hex codes) or logo URL</label>
-            <input type="text" name="brand" placeholder="e.g. #4A3560, #8B6BA3 or link to logo file" class="form-input">
-        </div>
-        <div>
-            <label class="form-label">Existing patient intake questions</label>
-            <textarea name="intake_questions" rows="3" placeholder="Paste your current screening questions here (age, medications, allergies, etc.)..." class="form-input" style="resize: vertical;"></textarea>
-        </div>
-        <div>
             <label class="form-label">Questions or notes</label>
             <textarea name="notes" rows="3" placeholder="Anything you want us to know before the kickoff call..." class="form-input" style="resize: vertical;"></textarea>
         </div>
@@ -834,8 +826,6 @@ if (onboardingForm) {
             role: onboardingForm.role.value,
             tools: Array.from(onboardingForm.querySelectorAll('input[name="tools"]:checked')).map(function(c) { return c.value; }),
             comm_channel: onboardingForm.comm_channel.value,
-            brand: onboardingForm.brand.value,
-            intake_questions: onboardingForm.intake_questions.value,
             notes: onboardingForm.notes.value,
             submitted_at: new Date().toISOString(),
             source: 'onboarding_form'
