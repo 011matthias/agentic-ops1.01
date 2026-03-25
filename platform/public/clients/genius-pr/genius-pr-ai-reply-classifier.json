@@ -1,0 +1,452 @@
+{
+  "name": "Genius PR - AI Reply Classifier (WF1)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "genius-pr-reply",
+        "responseMode": "onReceived",
+        "responseData": "allEntries",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Reply Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "genius-pr-reply"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "source-check",
+              "leftValue": "={{ $json.source }}",
+              "rightValue": "instantly",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "source-router",
+      "name": "Source Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "normalize-email",
+              "name": "lead_email",
+              "value": "={{ $json.reply_to || $json.lead_email || $json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "normalize-name",
+              "name": "lead_name",
+              "value": "={{ $json.lead_name || $json.from_name || $json.name || 'Unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "normalize-reply",
+              "name": "reply_text",
+              "value": "={{ $json.reply_text || $json.message || $json.body || $json.text }}",
+              "type": "string"
+            },
+            {
+              "id": "normalize-source",
+              "name": "source_platform",
+              "value": "instantly",
+              "type": "string"
+            },
+            {
+              "id": "normalize-campaign",
+              "name": "campaign_name",
+              "value": "={{ $json.campaign_name || $json.campaign || 'Unknown Campaign' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "normalize-instantly",
+      "name": "Normalize Instantly",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [680, 200]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "normalize-email-lr",
+              "name": "lead_email",
+              "value": "={{ $json.prospect_email || $json.email || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "normalize-name-lr",
+              "name": "lead_name",
+              "value": "={{ $json.prospect_name || $json.first_name + ' ' + ($json.last_name || '') }}",
+              "type": "string"
+            },
+            {
+              "id": "normalize-reply-lr",
+              "name": "reply_text",
+              "value": "={{ $json.message || $json.reply || $json.text }}",
+              "type": "string"
+            },
+            {
+              "id": "normalize-source-lr",
+              "name": "source_platform",
+              "value": "heyreach",
+              "type": "string"
+            },
+            {
+              "id": "normalize-campaign-lr",
+              "name": "campaign_name",
+              "value": "={{ $json.campaign_name || 'LinkedIn Campaign' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "normalize-heyreach",
+      "name": "Normalize HeyReach",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [680, 420]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $credentials.httpHeaderAuth.value }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 1024,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"You are a B2B sales reply classifier for a PR agency. Classify this lead reply and generate an appropriate response.\\n\\nLead: {{ $json.lead_name }}\\nEmail: {{ $json.lead_email }}\\nCampaign: {{ $json.campaign_name }}\\nSource: {{ $json.source_platform }}\\n\\nReply text:\\n{{ $json.reply_text }}\\n\\nRespond with ONLY valid JSON (no markdown, no code blocks):\\n{\\n  \\\"category\\\": \\\"HOT\\\" | \\\"WARM\\\" | \\\"COLD\\\" | \\\"NOT_INTERESTED\\\",\\n  \\\"confidence\\\": 0.0-1.0,\\n  \\\"reasoning\\\": \\\"brief explanation\\\",\\n  \\\"suggested_response\\\": \\\"the full response text to send back\\\",\\n  \\\"include_meeting_link\\\": true/false\\n}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "claude-classify",
+      "name": "Claude Classify Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [920, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Claude API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "parse-classification",
+              "name": "classification",
+              "value": "={{ JSON.parse($json.content[0].text) }}",
+              "type": "object"
+            },
+            {
+              "id": "keep-lead-email",
+              "name": "lead_email",
+              "value": "={{ $('Normalize Instantly').item.json.lead_email || $('Normalize HeyReach').item.json.lead_email }}",
+              "type": "string"
+            },
+            {
+              "id": "keep-lead-name",
+              "name": "lead_name",
+              "value": "={{ $('Normalize Instantly').item.json.lead_name || $('Normalize HeyReach').item.json.lead_name }}",
+              "type": "string"
+            },
+            {
+              "id": "keep-source",
+              "name": "source_platform",
+              "value": "={{ $('Normalize Instantly').item.json.source_platform || $('Normalize HeyReach').item.json.source_platform }}",
+              "type": "string"
+            },
+            {
+              "id": "keep-campaign",
+              "name": "campaign_name",
+              "value": "={{ $('Normalize Instantly').item.json.campaign_name || $('Normalize HeyReach').item.json.campaign_name }}",
+              "type": "string"
+            },
+            {
+              "id": "keep-reply",
+              "name": "reply_text",
+              "value": "={{ $('Normalize Instantly').item.json.reply_text || $('Normalize HeyReach').item.json.reply_text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "parse-response",
+      "name": "Parse Classification",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1140, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "confidence-check",
+              "leftValue": "={{ $json.classification.confidence }}",
+              "rightValue": 0.8,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "confidence-gate",
+      "name": "Confidence >= 80%?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1360, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "hot-check",
+              "leftValue": "={{ $json.classification.category }}",
+              "rightValue": "HOT",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "hot-router",
+      "name": "Is HOT?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1580, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://api.hubapi.com/crm/v3/objects/contacts/search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotApi",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filterGroups\": [\n    {\n      \"filters\": [\n        {\n          \"propertyName\": \"email\",\n          \"operator\": \"EQ\",\n          \"value\": \"{{ $json.lead_email }}\"\n        }\n      ]\n    }\n  ],\n  \"properties\": [\"email\", \"firstname\", \"lastname\", \"hs_lead_status\"]\n}",
+        "options": {}
+      },
+      "id": "hubspot-search",
+      "name": "HubSpot Search Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1800, 100],
+      "credentials": {
+        "hubspotApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "HubSpot Private App"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "sheet",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Lead Replies",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $now.toISO() }}",
+            "Lead Name": "={{ $json.lead_name }}",
+            "Lead Email": "={{ $json.lead_email }}",
+            "Source": "={{ $json.source_platform }}",
+            "Campaign": "={{ $json.campaign_name }}",
+            "Reply Text": "={{ $json.reply_text }}",
+            "Classification": "={{ $json.classification.category }}",
+            "Confidence": "={{ $json.classification.confidence }}",
+            "AI Response": "={{ $json.classification.suggested_response }}",
+            "Reasoning": "={{ $json.classification.reasoning }}"
+          },
+          "matchingColumns": ["Lead Email"]
+        },
+        "options": {}
+      },
+      "id": "sheets-log",
+      "name": "Log to Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1800, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "REPLACE_WITH_CHANNEL_ID",
+        "text": "=:fire: *HOT LEAD ALERT*\n\n*Lead:* {{ $json.lead_name }} ({{ $json.lead_email }})\n*Source:* {{ $json.source_platform }} - {{ $json.campaign_name }}\n*Confidence:* {{ Math.round($json.classification.confidence * 100) }}%\n\n*Their reply:*\n> {{ $json.reply_text }}\n\n*AI suggested response:*\n{{ $json.classification.suggested_response }}\n\n*Classification reasoning:* {{ $json.classification.reasoning }}",
+        "otherOptions": {}
+      },
+      "id": "slack-hot-alert",
+      "name": "Slack HOT Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1800, 500],
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Slack Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "channel": "REPLACE_WITH_CHANNEL_ID",
+        "text": "=:warning: *LOW CONFIDENCE REPLY - MANUAL REVIEW*\n\n*Lead:* {{ $json.lead_name }} ({{ $json.lead_email }})\n*Source:* {{ $json.source_platform }}\n*Confidence:* {{ Math.round($json.classification.confidence * 100) }}% (below 80% threshold)\n*Suggested category:* {{ $json.classification.category }}\n\n*Their reply:*\n> {{ $json.reply_text }}\n\n*AI reasoning:* {{ $json.classification.reasoning }}\n\n_Please classify and respond manually._",
+        "otherOptions": {}
+      },
+      "id": "slack-manual-review",
+      "name": "Slack Manual Review",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1580, 500],
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Slack Bot"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Reply Webhook": {
+      "main": [
+        [{ "node": "Source Router", "type": "main", "index": 0 }]
+      ]
+    },
+    "Source Router": {
+      "main": [
+        [{ "node": "Normalize Instantly", "type": "main", "index": 0 }],
+        [{ "node": "Normalize HeyReach", "type": "main", "index": 0 }]
+      ]
+    },
+    "Normalize Instantly": {
+      "main": [
+        [{ "node": "Claude Classify Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Normalize HeyReach": {
+      "main": [
+        [{ "node": "Claude Classify Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Claude Classify Reply": {
+      "main": [
+        [{ "node": "Parse Classification", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Classification": {
+      "main": [
+        [{ "node": "Confidence >= 80%?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Confidence >= 80%?": {
+      "main": [
+        [{ "node": "Is HOT?", "type": "main", "index": 0 }],
+        [{ "node": "Slack Manual Review", "type": "main", "index": 0 }]
+      ]
+    },
+    "Is HOT?": {
+      "main": [
+        [
+          { "node": "HubSpot Search Contact", "type": "main", "index": 0 },
+          { "node": "Log to Sheets", "type": "main", "index": 0 },
+          { "node": "Slack HOT Alert", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Log to Sheets", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "Genius PR",
+      "id": "genius-pr-tag"
+    }
+  ],
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "REPLACE_WITH_INSTANCE_ID"
+  }
+}

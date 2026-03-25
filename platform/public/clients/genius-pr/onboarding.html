@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Genius PR &ndash; Onboarding Checklist | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+    h2 { page-break-before: always; }
+    h2:first-of-type { page-break-before: avoid; }
+    .check-item { break-inside: avoid; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+
+/* Navigation */
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+
+/* Sidebar */
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+
+/* Main Content */
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+
+/* Hero */
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 560px; margin: 0 auto 32px; line-height: 1.6; }
+.stats-row { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
+.stat-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 24px; text-align: center; min-width: 140px;
+    transition: transform .15s, box-shadow .15s;
+}
+.stat-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.stat-value { font-size: 24px; font-weight: 800; color: var(--blue); }
+.stat-label { font-size: 12px; color: var(--text2); font-weight: 500; margin-top: 2px; }
+
+/* Sections */
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+
+/* Callout */
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+
+/* Checklist Items */
+.check-section { margin-bottom: 32px; }
+.check-section-title {
+    font-size: 16px; font-weight: 700; color: var(--text-strong);
+    padding: 10px 14px; background: var(--surface2); border-radius: 8px 8px 0 0;
+    border: 1px solid var(--border); border-bottom: none;
+    display: flex; align-items: center; gap: 8px;
+}
+.check-section-icon { font-size: 18px; }
+.check-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 14px 16px; border: 1px solid var(--border); border-top: none;
+    background: var(--bg); transition: background .15s; cursor: pointer;
+}
+.check-item:last-child { border-radius: 0 0 8px 8px; }
+.check-item:hover { background: var(--blue-bg); }
+.check-item.checked { background: var(--green-bg); }
+.check-item.checked:hover { background: var(--green-bg); }
+.check-box {
+    width: 20px; height: 20px; border-radius: 5px; border: 2px solid var(--border);
+    flex-shrink: 0; margin-top: 2px; display: flex; align-items: center; justify-content: center;
+    transition: all .15s; background: var(--bg);
+}
+.check-item.checked .check-box { background: var(--green); border-color: var(--green); }
+.check-check { color: #fff; font-size: 12px; font-weight: 700; display: none; }
+.check-item.checked .check-check { display: block; }
+.check-content { flex: 1; }
+.check-name { font-size: 14px; font-weight: 700; color: var(--text-strong); margin-bottom: 3px; }
+.check-item.checked .check-name { color: var(--green-dark); text-decoration: line-through; opacity: 0.7; }
+.check-detail { font-size: 12px; color: var(--text2); line-height: 1.5; }
+.check-tag { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; margin-left: 6px; vertical-align: middle; }
+.check-tag.critical { background: var(--orange-light); color: var(--orange-dark); }
+.check-tag.day5 { background: var(--purple-light); color: var(--purple-dark); }
+.check-tag.optional { background: var(--surface2); color: var(--text2); }
+
+/* Progress bar */
+.progress-wrap {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 20px; margin-bottom: 32px;
+}
+.progress-label { font-size: 13px; font-weight: 600; color: var(--text-strong); margin-bottom: 8px; display: flex; justify-content: space-between; }
+.progress-track { height: 10px; background: var(--surface2); border-radius: 6px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--blue), var(--green)); transition: width .3s; }
+
+/* Q&A style sections */
+.qa-block { margin-bottom: 24px; }
+.qa-q { font-size: 14px; font-weight: 700; color: var(--text-strong); margin-bottom: 6px; }
+.qa-a { font-size: 14px; color: var(--text); padding-left: 16px; border-left: 3px solid var(--border); }
+
+/* CTA */
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+
+/* Footer */
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; }
+
+/* Tablet */
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+
+/* Mobile */
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .hero h1 { font-size: 24px; }
+    .stats-row { gap: 8px; }
+    .stat-card { min-width: 100px; padding: 12px 16px; }
+    .stat-value { font-size: 20px; }
+}
+</style>
+<script>
+(function(){var t=localStorage.getItem('geniuspr-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/genius-pr/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Genius PR</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/genius-pr/">Overview</a>
+        <a href="/clients/genius-pr/solution">Solution</a>
+        <a href="/clients/genius-pr/workflow">Workflow</a>
+        <a href="/clients/genius-pr/timeline">Timeline</a>
+        <a href="/clients/genius-pr/investment">Investment</a>
+        <a href="/clients/genius-pr/faq">FAQ</a>
+        <a href="/clients/genius-pr/onboarding" class="active">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">Onboarding sections</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#credentials" class="step-link active"><span class="step-num">1</span> API Credentials</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#n8n" class="step-link"><span class="step-num">2</span> n8n Instance</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#classification" class="step-link"><span class="step-num">3</span> Classification Rules</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#meeting-slots" class="step-link"><span class="step-num">4</span> Meeting Slots</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#slack-channels" class="step-link"><span class="step-num">5</span> Slack Channels</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#sheets" class="step-link"><span class="step-num">6</span> Google Sheets</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<!-- Hero -->
+<section class="hero" id="top">
+    <div class="hero-badge">Day 1 Kickoff</div>
+    <h1>Onboarding Checklist</h1>
+    <p class="hero-sub">Everything Genius PR needs to provide before Day 1. Work through this list and we can start immediately. Credential delays are the only thing that can push the 7-day timeline.</p>
+    <div class="stats-row">
+        <div class="stat-card"><div class="stat-value">10</div><div class="stat-label">Credentials needed</div></div>
+        <div class="stat-card"><div class="stat-value">6</div><div class="stat-label">Sections to complete</div></div>
+        <div class="stat-card"><div class="stat-value">Day 1</div><div class="stat-label">Target: all ready</div></div>
+    </div>
+</section>
+
+<!-- Progress bar -->
+<div class="progress-wrap" id="progress-wrap">
+    <div class="progress-label">
+        <span>Checklist progress</span>
+        <span id="progress-count">0 / 20 completed</span>
+    </div>
+    <div class="progress-track">
+        <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+    </div>
+</div>
+
+<div class="callout orange">
+    <div class="callout-title">Critical path items</div>
+    <p>Items marked <strong>CRITICAL</strong> are needed on Day 1. Without them, Workflow 1 cannot be built on schedule. Items marked <strong>Day 5</strong> can come later but must be ready before Day 5.</p>
+</div>
+
+<!-- Section 1: API Credentials -->
+<h2 id="credentials">Section 1: API Credentials</h2>
+<p>Share credentials securely via Upwork message or a shared 1Password/Bitwarden vault. Never send API keys via email or unencrypted chat.</p>
+
+<div class="check-section">
+    <div class="check-section-title"><span class="check-section-icon">&#128231;</span> Instantly</div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">Instantly API Key <span class="check-tag critical">CRITICAL</span></div>
+            <div class="check-detail">Settings &rarr; Integrations &rarr; API. Copy the API key. Required for receiving reply webhooks and sending auto-responses via Instantly API.</div>
+        </div>
+    </div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">Instantly Webhook Configuration <span class="check-tag critical">CRITICAL</span></div>
+            <div class="check-detail">We provide the webhook URL on Day 1. You configure the <code>reply_received</code> event in Instantly Settings &rarr; Integrations &rarr; Webhooks to point to that URL.</div>
+        </div>
+    </div>
+</div>
+
+<div class="check-section">
+    <div class="check-section-title"><span class="check-section-icon">&#128101;</span> HeyReach</div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">HeyReach API Key <span class="check-tag critical">CRITICAL</span></div>
+            <div class="check-detail">Settings &rarr; API Keys. Required for receiving LinkedIn reply webhooks and sending auto-responses via HeyReach API.</div>
+        </div>
+    </div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">HeyReach Webhook Configuration <span class="check-tag critical">CRITICAL</span></div>
+            <div class="check-detail">We provide the webhook URL on Day 1. Configure in HeyReach campaign settings to fire on new reply events. HeyReach supports 20+ webhook events.</div>
+        </div>
+    </div>
+</div>
+
+<div class="check-section">
+    <div class="check-section-title"><span class="check-section-icon">&#128279;</span> Dripify</div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">Dripify: Confirm approach <span class="check-tag critical">CRITICAL</span></div>
+            <div class="check-detail">Dripify webhook support requires Pro plan ($59/mo). Please confirm: (A) you have Pro and will configure webhooks, (B) you want to use HeyReach as primary LinkedIn channel and skip Dripify, or (C) you want a Zapier bridge. This determines the Day 2 build path.</div>
+        </div>
+    </div>
+</div>
+
+<div class="check-section">
+    <div class="check-section-title"><span class="check-section-icon">&#128197;</span> Calendly</div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">Calendly API Key <span class="check-tag critical">CRITICAL</span></div>
+            <div class="check-detail">Settings &rarr; Integrations &rarr; API &amp; Webhooks &rarr; API Keys. Required for Workflow 2 (booking confirmation). Must be ready by Day 4.</div>
+        </div>
+    </div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">Calendly Webhook Subscription <span class="check-tag critical">CRITICAL</span></div>
+            <div class="check-detail">We create the webhook subscription via API on Day 4 using your API key. You just need to provide the key. The <code>invitee.created</code> event is what we subscribe to.</div>
+        </div>
+    </div>
+</div>
+
+<div class="check-section">
+    <div class="check-section-title"><span class="check-section-icon">&#128202;</span> HubSpot</div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">HubSpot Private App API Token <span class="check-tag critical">CRITICAL</span></div>
+            <div class="check-detail">Settings &rarr; Integrations &rarr; Private Apps &rarr; Create Private App. Name it "n8n Automation". Required scopes: <strong>crm.objects.contacts</strong> (read/write), <strong>crm.objects.deals</strong> (read/write), <strong>crm.objects.notes</strong> (write), <strong>crm.objects.tasks</strong> (write), <strong>timeline</strong> (write). Copy the token. Required for all three workflows.</div>
+        </div>
+    </div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">HubSpot Pipeline + Deal Stage Names <span class="check-tag critical">CRITICAL</span></div>
+            <div class="check-detail">We need the exact name of your sales pipeline and the deal stages you use. Specifically: what stage name should a new meeting-booked deal be created in? What stage means "proposal sent"? What stage means "closed lost"? Names must match exactly.</div>
+        </div>
+    </div>
+</div>
+
+<div class="check-section">
+    <div class="check-section-title"><span class="check-section-icon">&#128200;</span> Google Sheets</div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">Google Sheets Access (Service Account or OAuth) <span class="check-tag critical">CRITICAL</span></div>
+            <div class="check-detail">We create the logging spreadsheet and share it with a service account. You just need to confirm which Google Workspace to use (personal Gmail or company Google account) and grant write access. We handle the setup.</div>
+        </div>
+    </div>
+</div>
+
+<div class="check-section">
+    <div class="check-section-title"><span class="check-section-icon">&#9999;</span> Notion</div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">Notion Integration Token <span class="check-tag critical">CRITICAL</span></div>
+            <div class="check-detail">Settings &amp; Members &rarr; Connections &rarr; Develop or manage integrations &rarr; New integration. Name it "n8n Automation". Copy the Internal Integration Token. Required for lead tracker and booked meetings logging.</div>
+        </div>
+    </div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">Notion Database IDs (or confirm we create them) <span class="check-tag critical">CRITICAL</span></div>
+            <div class="check-detail">If you have existing lead tracker and booked meetings databases in Notion, share the database IDs (in the URL: notion.so/workspace/<strong>[database-id]</strong>?v=...). If you do not have these, we create them on Day 1. Also grant the integration access to the databases: database settings &rarr; Connections &rarr; add your integration.</div>
+        </div>
+    </div>
+</div>
+
+<div class="check-section">
+    <div class="check-section-title"><span class="check-section-icon">&#127908;</span> Fathom</div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">Fathom API Key <span class="check-tag day5">Day 5</span></div>
+            <div class="check-detail">Settings &rarr; API Access. Required for Workflow 3 (post-call intelligence). Not needed until Day 5, but having it ready earlier avoids a last-minute scramble.</div>
+        </div>
+    </div>
+</div>
+
+<div class="check-section">
+    <div class="check-section-title"><span class="check-section-icon">&#128172;</span> Slack</div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">Slack Bot Token <span class="check-tag critical">CRITICAL</span></div>
+            <div class="check-detail">Create a Slack App: api.slack.com/apps &rarr; Create New App &rarr; From Scratch. Add OAuth scopes: <code>chat:write</code>, <code>chat:write.public</code>. Install to workspace. Copy the Bot User OAuth Token (starts with <code>xoxb-</code>).</div>
+        </div>
+    </div>
+</div>
+
+<div class="check-section">
+    <div class="check-section-title"><span class="check-section-icon">&#129302;</span> Claude API</div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">Anthropic API Key <span class="check-tag critical">CRITICAL</span></div>
+            <div class="check-detail">console.anthropic.com &rarr; API Keys &rarr; Create Key. Claude API usage is billed per token to your Anthropic account. Estimated cost: under $20/month at typical reply volumes. You need a funded account (add a payment method) before Day 1.</div>
+        </div>
+    </div>
+</div>
+
+<!-- Section 2: n8n Instance -->
+<h2 id="n8n">Section 2: n8n Instance (Railway)</h2>
+<p>We set up the Railway n8n instance together on Day 1. You do not need to do this in advance. Just create the accounts.</p>
+
+<div class="check-section">
+    <div class="check-section-title"><span class="check-section-icon">&#9881;</span> Railway + n8n Setup</div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">Railway account created <span class="check-tag critical">CRITICAL</span></div>
+            <div class="check-detail">railway.app &rarr; Sign Up. Add a payment method (Railway charges ~$10&ndash;20/month for n8n hosting). We deploy the n8n template together on Day 1. This takes about 10 minutes.</div>
+        </div>
+    </div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">Share Railway access (collaborator invite) <span class="check-tag critical">CRITICAL</span></div>
+            <div class="check-detail">Invite us as a collaborator on your Railway project on Day 1. We configure the n8n environment variables (database, encryption key, webhook base URL). You retain full ownership and access.</div>
+        </div>
+    </div>
+</div>
+
+<!-- Section 3: Classification Rules -->
+<h2 id="classification">Section 3: Classification Rules</h2>
+<p>Claude classifies replies based on the message content and context. The default prompts work well, but your industry may have specific signals that indicate high intent. Share any special rules before Day 2.</p>
+
+<div class="qa-block">
+    <div class="qa-q">What makes a reply HOT in your context?</div>
+    <div class="qa-a">Default: explicit interest, asks about pricing or availability, mentions timeline, asks to book a call. Any additional signals specific to PR clients? (e.g., "mentions a specific campaign launch date" = HOT)</div>
+</div>
+
+<div class="qa-block">
+    <div class="qa-q">What makes a reply WARM?</div>
+    <div class="qa-a">Default: asks a question, requests more information, mildly engaged but not ready to book. Any specific WARM signals for your market?</div>
+</div>
+
+<div class="qa-block">
+    <div class="qa-q">What are hard NOT INTERESTED signals?</div>
+    <div class="qa-a">Default: "not interested", "remove me", "unsubscribe", explicit decline. Are there any industry-specific phrases that should immediately trigger NOT INTERESTED and suppress future outreach?</div>
+</div>
+
+<div class="callout">
+    <div class="callout-title">How to share this</div>
+    <p>Reply on Upwork with a brief message: "HOT = X. WARM = Y. NOT INTERESTED if they say Z." We incorporate it into the Claude prompt on Day 2. You can also refine it after seeing the first round of live classifications during testing.</p>
+</div>
+
+<!-- Section 4: Meeting Slots -->
+<h2 id="meeting-slots">Section 4: Meeting Slots</h2>
+<p>HOT leads get an auto-response that includes your Calendly link. We need to know which link to use and how you want the response framed.</p>
+
+<div class="check-section">
+    <div class="check-section-title"><span class="check-section-icon">&#128197;</span> Calendly Configuration</div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">Calendly link for HOT lead auto-responses <span class="check-tag critical">CRITICAL</span></div>
+            <div class="check-detail">Which Calendly event type link should be included in HOT lead auto-responses? (e.g., your 30-minute discovery call link). Share the full URL.</div>
+        </div>
+    </div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">Preferred meeting duration and times <span class="check-tag optional">OPTIONAL</span></div>
+            <div class="check-detail">If the auto-generated response should mention meeting duration or availability (e.g., "30-minute call, available this week"), share that context. Otherwise Claude generates a generic meeting invitation.</div>
+        </div>
+    </div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">Auto-response tone / style <span class="check-tag optional">OPTIONAL</span></div>
+            <div class="check-detail">Any tone guidelines for auto-responses? (e.g., "keep it brief, no more than 3 sentences", "match the formality of the original message", "always sign off with [name]"). Share examples of responses you like.</div>
+        </div>
+    </div>
+</div>
+
+<!-- Section 5: Slack Channels -->
+<h2 id="slack-channels">Section 5: Slack Channels</h2>
+<p>The system sends three types of Slack alerts. Tell us which channels to use for each. We can use the same channel for all three or different channels per type.</p>
+
+<div class="check-section">
+    <div class="check-section-title"><span class="check-section-icon">&#128172;</span> Alert Routing</div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">HOT lead alerts channel <span class="check-tag critical">CRITICAL</span></div>
+            <div class="check-detail">Which Slack channel should receive HOT lead alerts from Workflow 1? (Fires in real time when a HOT reply is classified above the confidence threshold.) Share the channel name (e.g., #hot-leads).</div>
+        </div>
+    </div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">Booking confirmation alerts channel <span class="check-tag critical">CRITICAL</span></div>
+            <div class="check-detail">Which channel should receive the closer briefing when a lead books a Calendly call? (Fires immediately when invitee.created webhook arrives.) Share the channel name.</div>
+        </div>
+    </div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">Post-call outcome alerts channel <span class="check-tag day5">Day 5</span></div>
+            <div class="check-detail">Which channel should receive the call outcome summary (WON / FOLLOW UP / NOT QUALIFIED) after Fathom processes a recording? Can be the same as the booking channel or a separate sales-ops channel.</div>
+        </div>
+    </div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">Manual review channel (low-confidence replies) <span class="check-tag critical">CRITICAL</span></div>
+            <div class="check-detail">Which channel should receive alerts when Claude classifies a reply below the 80% confidence threshold? These need human review before responding. Can be a private channel if preferred.</div>
+        </div>
+    </div>
+</div>
+
+<!-- Section 6: Google Sheets -->
+<h2 id="sheets">Section 6: Google Sheets Structure</h2>
+<p>We create the logging spreadsheet. You just need to confirm a few things about your Google Workspace setup.</p>
+
+<div class="check-section">
+    <div class="check-section-title"><span class="check-section-icon">&#128200;</span> Sheets Setup</div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">Confirm Google account to use <span class="check-tag critical">CRITICAL</span></div>
+            <div class="check-detail">Which Google account should own the logging spreadsheet? (Gmail or Google Workspace account.) We create the sheet and share it with the n8n service account. You keep ownership.</div>
+        </div>
+    </div>
+    <div class="check-item" onclick="toggleCheck(this)">
+        <div class="check-box"><span class="check-check">&#10003;</span></div>
+        <div class="check-content">
+            <div class="check-name">Existing spreadsheet (or confirm we create one) <span class="check-tag optional">OPTIONAL</span></div>
+            <div class="check-detail">If you already have a lead tracking spreadsheet you want us to append to, share its URL and tell us which tabs to use. Otherwise we create a new spreadsheet with three tabs: Reply Log, Booked Meetings, Call Outcomes.</div>
+        </div>
+    </div>
+</div>
+
+<div class="callout green">
+    <div class="callout-title">You are ready when...</div>
+    <p>All CRITICAL items above are checked and credentials are ready to share securely. With this in place, we start on Day 1 and deliver on Day 7. The checklist progress above tracks how far through you are.</p>
+</div>
+
+<!-- CTA -->
+<section class="cta-section">
+    <h2>All set? Let's start.</h2>
+    <p>Reply on Upwork with "ready to go" and we will kick off the contract and Day 1 session.</p>
+    <a href="/clients/genius-pr/" class="cta-btn">Back to Overview &rarr;</a>
+</section>
+
+<footer class="footer" style="border-top: 1px solid var(--border); padding: 24px 0 40px;">
+    <p>Built and maintained by <a href="https://unpauseai.com" target="_blank" rel="noopener">UnpauseAI</a></p>
+    <p style="margin-top:4px;"><a href="https://unpauseai.com/privacy">Privacy Policy</a> &middot; <a href="https://unpauseai.com/terms">Terms of Service</a></p>
+    <p style="margin-top:4px; font-size: 12px;">Last updated: March 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+function toggleTheme() {
+    var el = document.documentElement;
+    var t = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    el.setAttribute('data-theme', t);
+    localStorage.setItem('geniuspr-theme', t);
+}
+
+function toggleCheck(el) {
+    el.classList.toggle('checked');
+    updateProgress();
+    saveCheckState();
+}
+
+function updateProgress() {
+    var all = document.querySelectorAll('.check-item');
+    var done = document.querySelectorAll('.check-item.checked');
+    var pct = all.length > 0 ? Math.round((done.length / all.length) * 100) : 0;
+    document.getElementById('progress-fill').style.width = pct + '%';
+    document.getElementById('progress-count').textContent = done.length + ' / ' + all.length + ' completed';
+}
+
+function saveCheckState() {
+    var items = document.querySelectorAll('.check-item');
+    var state = [];
+    items.forEach(function(item) { state.push(item.classList.contains('checked') ? 1 : 0); });
+    localStorage.setItem('geniuspr-onboarding', JSON.stringify(state));
+}
+
+function loadCheckState() {
+    var saved = localStorage.getItem('geniuspr-onboarding');
+    if (!saved) return;
+    try {
+        var state = JSON.parse(saved);
+        var items = document.querySelectorAll('.check-item');
+        items.forEach(function(item, i) {
+            if (state[i]) item.classList.add('checked');
+        });
+    } catch(e) {}
+    updateProgress();
+}
+
+loadCheckState();
+
+var links = document.querySelectorAll('.step-link');
+var sections = [];
+links.forEach(function(a) {
+    var id = a.getAttribute('href').replace('#','');
+    var el = document.getElementById(id);
+    if (el) sections.push({ el: el, link: a });
+});
+
+function updateActive() {
+    var scrollY = window.scrollY + 120;
+    var active = sections[0];
+    for (var i = 0; i < sections.length; i++) {
+        if (sections[i].el.offsetTop <= scrollY) active = sections[i];
+    }
+    links.forEach(function(l) { l.classList.remove('active'); });
+    if (active) active.link.classList.add('active');
+}
+window.addEventListener('scroll', updateActive);
+updateActive();
+
+links.forEach(function(a) {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        var id = this.getAttribute('href').replace('#','');
+        var el = document.getElementById(id);
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+        document.querySelector('.sidebar').classList.remove('open');
+    });
+});
+</script>
+
+<!-- Access Gate -->
+<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
+  <div style="text-align:center;max-width:360px;padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg>
+      <span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span>
+    </div>
+    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Genius PR Proposal</h2>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Enter your access code to continue.</p>
+    <div style="display:flex;gap:8px;">
+      <input id="auth-input" type="password" placeholder="Access code" autocomplete="off" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;" onkeydown="if(event.key==='Enter')checkAuth()" />
+      <button onclick="checkAuth()" style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">Enter</button>
+    </div>
+    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Incorrect code. Please try again.</p>
+  </div>
+</div>
+<script>
+var GP_CODE='genius-pr-ai';
+function checkAuth(){var v=document.getElementById('auth-input').value;if(v===GP_CODE){localStorage.setItem('geniuspr-access','granted');var g=document.getElementById('auth-gate');g.style.opacity='0';setTimeout(function(){g.style.display='none'},300)}else{document.getElementById('auth-error').style.display='block';document.getElementById('auth-input').value='';document.getElementById('auth-input').focus()}}
+(function(){if(localStorage.getItem('geniuspr-access')==='granted'){document.getElementById('auth-gate').style.display='none'}else{var i=document.getElementById('auth-input');if(i)i.focus()}})();
+</script>
+</body>
+</html>
