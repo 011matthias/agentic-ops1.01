@@ -5,7 +5,7 @@
 Hi, rather than guessing at scope, I built a complete proposal for your AI response system:
 {proposal site URL}
 
-The site includes a full solution breakdown, day-by-day timeline, working n8n workflow you can import, and pricing.
+The site includes a full solution breakdown, day-by-day timeline, working n8n workflow you can import, and pricing. It also includes a live demo where you can classify a sample reply using Claude AI in real time, and an interactive onboarding form -- fill it out and we can start on Day 1.
 
 I also recorded a short walkthrough: {loom link}
 
@@ -17,7 +17,7 @@ On your specific points:
 
 2) Claude API is my primary AI tool. I use it daily for classification, structured extraction, and content generation across client projects. The prompt engineering for your classifier uses structured JSON output with confidence scoring -- not free-text generation -- which makes the routing reliable.
 
-3) 7-day delivery is realistic for this scope if credentials and API access are ready on Day 1. I would phase it: AI Responder (days 1-3), Calendly + Fathom (days 4-5), testing and hardening (days 6-7). The onboarding page on the proposal site has a day-1 checklist of everything needed.
+3) 7-day delivery is realistic for this scope if credentials and API access are ready on Day 1. I would phase it: AI Responder (days 1-3), Calendly + Fathom (days 4-5), testing and hardening (days 6-7). The onboarding page is a live form -- fill it out and we can start immediately, no back-and-forth needed to gather the setup information.
 
 4) [Your Upwork Job Success Score here]
 

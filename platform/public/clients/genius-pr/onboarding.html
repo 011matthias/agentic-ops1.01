@@ -159,7 +159,7 @@ li { margin-bottom: 6px; }
 .callout.orange { border-color: var(--orange); background: var(--orange-bg); }
 .callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
 
-/* Checklist Items */
+/* Checklist Items (kept for legacy) */
 .check-section { margin-bottom: 32px; }
 .check-section-title {
     font-size: 16px; font-weight: 700; color: var(--text-strong);
@@ -193,6 +193,24 @@ li { margin-bottom: 6px; }
 .check-tag.critical { background: var(--orange-light); color: var(--orange-dark); }
 .check-tag.day5 { background: var(--purple-light); color: var(--purple-dark); }
 .check-tag.optional { background: var(--surface2); color: var(--text2); }
+
+/* Onboarding Form */
+.onboard-form { max-width: 640px; }
+.form-group { margin-bottom: 20px; }
+.form-label { display: block; font-size: 14px; font-weight: 600; color: var(--text-strong); margin-bottom: 6px; }
+.form-hint { font-size: 12px; color: var(--text2); margin-bottom: 6px; }
+.form-input { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; background: var(--bg); color: var(--text); font-family: inherit; }
+.form-textarea { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; background: var(--bg); color: var(--text); font-family: inherit; resize: vertical; min-height: 80px; }
+.check-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
+.check-item-form { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); font-size: 13px; cursor: pointer; }
+.check-item-form:hover { background: var(--blue-bg); }
+.check-item-form input[type="checkbox"] { accent-color: var(--blue); }
+.form-submit { display: inline-flex; align-items: center; gap: 8px; background: var(--blue); color: #fff; padding: 12px 28px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background .15s; }
+.form-submit:hover { background: var(--blue-dark); }
+.form-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+.form-success { text-align: center; padding: 40px; border: 2px solid var(--green); border-radius: 12px; background: var(--green-bg); margin: 24px 0; }
+.form-success h3 { color: var(--green-dark); font-size: 20px; margin-bottom: 8px; }
+.form-success p { color: var(--green-dark); font-size: 14px; }
 
 /* Progress bar */
 .progress-wrap {
@@ -280,30 +298,22 @@ li { margin-bottom: 6px; }
 
 <!-- Sidebar -->
 <aside class="sidebar">
-    <div class="sidebar-label">Onboarding sections</div>
+    <div class="sidebar-label">Onboarding form</div>
     <ul class="step-list">
         <li class="step-item">
-            <a href="#credentials" class="step-link active"><span class="step-num">1</span> API Credentials</a>
+            <a href="#contact-info" class="step-link active"><span class="step-num">1</span> Contact Info</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#n8n" class="step-link"><span class="step-num">2</span> n8n Instance</a>
+            <a href="#integrations" class="step-link"><span class="step-num">2</span> Integrations</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#classification" class="step-link"><span class="step-num">3</span> Classification Rules</a>
+            <a href="#api-ready" class="step-link"><span class="step-num">3</span> API Keys</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#meeting-slots" class="step-link"><span class="step-num">4</span> Meeting Slots</a>
-            <div class="step-line"></div>
-        </li>
-        <li class="step-item">
-            <a href="#slack-channels" class="step-link"><span class="step-num">5</span> Slack Channels</a>
-            <div class="step-line"></div>
-        </li>
-        <li class="step-item">
-            <a href="#sheets" class="step-link"><span class="step-num">6</span> Google Sheets</a>
+            <a href="#preferences" class="step-link"><span class="step-num">4</span> Preferences</a>
         </li>
     </ul>
 </aside>
@@ -315,317 +325,126 @@ li { margin-bottom: 6px; }
 <!-- Hero -->
 <section class="hero" id="top">
     <div class="hero-badge">Day 1 Kickoff</div>
-    <h1>Onboarding Checklist</h1>
-    <p class="hero-sub">Everything Genius PR needs to provide before Day 1. Work through this list and we can start immediately. Credential delays are the only thing that can push the 7-day timeline.</p>
+    <h1>Onboarding Form</h1>
+    <p class="hero-sub">Fill this out and we can start on Day 1 with no delays. Takes about 5 minutes. Your answers go straight to us so we can configure everything before the kickoff call.</p>
     <div class="stats-row">
-        <div class="stat-card"><div class="stat-value">10</div><div class="stat-label">Credentials needed</div></div>
-        <div class="stat-card"><div class="stat-value">6</div><div class="stat-label">Sections to complete</div></div>
-        <div class="stat-card"><div class="stat-value">Day 1</div><div class="stat-label">Target: all ready</div></div>
+        <div class="stat-card"><div class="stat-value">5</div><div class="stat-label">Minutes to complete</div></div>
+        <div class="stat-card"><div class="stat-value">Day 1</div><div class="stat-label">Start target</div></div>
+        <div class="stat-card"><div class="stat-value">24h</div><div class="stat-label">Response time</div></div>
     </div>
 </section>
 
-<!-- Progress bar -->
-<div class="progress-wrap" id="progress-wrap">
-    <div class="progress-label">
-        <span>Checklist progress</span>
-        <span id="progress-count">0 / 20 completed</span>
-    </div>
-    <div class="progress-track">
-        <div class="progress-fill" id="progress-fill" style="width:0%"></div>
-    </div>
+<!-- Onboarding Form -->
+<div id="form-wrap">
+<form class="onboard-form" id="onboard-form" onsubmit="submitOnboarding(event)">
+
+<h2 id="contact-info">Contact Information</h2>
+
+<div class="form-group">
+    <label class="form-label" for="company-name">Company Name</label>
+    <input class="form-input" type="text" id="company-name" name="company_name" placeholder="Genius PR" required>
 </div>
 
-<div class="callout orange">
-    <div class="callout-title">Critical path items</div>
-    <p>Items marked <strong>CRITICAL</strong> are needed on Day 1. Without them, Workflow 1 cannot be built on schedule. Items marked <strong>Day 5</strong> can come later but must be ready before Day 5.</p>
+<div class="form-group">
+    <label class="form-label" for="contact-name">Contact Name</label>
+    <input class="form-input" type="text" id="contact-name" name="contact_name" placeholder="Your full name" required>
 </div>
 
-<!-- Section 1: API Credentials -->
-<h2 id="credentials">Section 1: API Credentials</h2>
-<p>Share credentials securely via Upwork message or a shared 1Password/Bitwarden vault. Never send API keys via email or unencrypted chat.</p>
-
-<div class="check-section">
-    <div class="check-section-title"><span class="check-section-icon">&#128231;</span> Instantly</div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">Instantly API Key <span class="check-tag critical">CRITICAL</span></div>
-            <div class="check-detail">Settings &rarr; Integrations &rarr; API. Copy the API key. Required for receiving reply webhooks and sending auto-responses via Instantly API.</div>
-        </div>
-    </div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">Instantly Webhook Configuration <span class="check-tag critical">CRITICAL</span></div>
-            <div class="check-detail">We provide the webhook URL on Day 1. You configure the <code>reply_received</code> event in Instantly Settings &rarr; Integrations &rarr; Webhooks to point to that URL.</div>
-        </div>
-    </div>
+<div class="form-group">
+    <label class="form-label" for="contact-email">Contact Email</label>
+    <input class="form-input" type="email" id="contact-email" name="contact_email" placeholder="you@company.com" required>
 </div>
 
-<div class="check-section">
-    <div class="check-section-title"><span class="check-section-icon">&#128101;</span> HeyReach</div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">HeyReach API Key <span class="check-tag critical">CRITICAL</span></div>
-            <div class="check-detail">Settings &rarr; API Keys. Required for receiving LinkedIn reply webhooks and sending auto-responses via HeyReach API.</div>
-        </div>
-    </div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">HeyReach Webhook Configuration <span class="check-tag critical">CRITICAL</span></div>
-            <div class="check-detail">We provide the webhook URL on Day 1. Configure in HeyReach campaign settings to fire on new reply events. HeyReach supports 20+ webhook events.</div>
-        </div>
-    </div>
+<h2 id="integrations">Which integrations do you have access to?</h2>
+<p class="form-hint" style="margin-bottom:12px;">Check everything you currently use or have access to. We will confirm API availability for each on Day 1.</p>
+
+<div class="check-grid">
+    <label class="check-item-form"><input type="checkbox" name="integrations" value="Instantly"> Instantly</label>
+    <label class="check-item-form"><input type="checkbox" name="integrations" value="HeyReach"> HeyReach</label>
+    <label class="check-item-form"><input type="checkbox" name="integrations" value="Dripify"> Dripify</label>
+    <label class="check-item-form"><input type="checkbox" name="integrations" value="Calendly"> Calendly</label>
+    <label class="check-item-form"><input type="checkbox" name="integrations" value="HubSpot"> HubSpot</label>
+    <label class="check-item-form"><input type="checkbox" name="integrations" value="Google Sheets"> Google Sheets</label>
+    <label class="check-item-form"><input type="checkbox" name="integrations" value="Notion"> Notion</label>
+    <label class="check-item-form"><input type="checkbox" name="integrations" value="Fathom"> Fathom</label>
+    <label class="check-item-form"><input type="checkbox" name="integrations" value="Slack"> Slack</label>
 </div>
 
-<div class="check-section">
-    <div class="check-section-title"><span class="check-section-icon">&#128279;</span> Dripify</div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">Dripify: Confirm approach <span class="check-tag critical">CRITICAL</span></div>
-            <div class="check-detail">Dripify webhook support requires Pro plan ($59/mo). Please confirm: (A) you have Pro and will configure webhooks, (B) you want to use HeyReach as primary LinkedIn channel and skip Dripify, or (C) you want a Zapier bridge. This determines the Day 2 build path.</div>
-        </div>
-    </div>
+<h2 id="api-ready">API Keys Ready?</h2>
+<p class="form-hint" style="margin-bottom:16px;">Let us know where you stand on each service. "Need help" means we will walk you through it on Day 1.</p>
+
+<div class="form-group">
+    <div class="form-label">Instantly</div>
+    <label style="display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-size:14px;"><input type="radio" name="api_instantly" value="Ready"> Ready</label>
+    <label style="display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-size:14px;"><input type="radio" name="api_instantly" value="Not yet"> Not yet</label>
+    <label style="display:inline-flex;align-items:center;gap:6px;font-size:14px;"><input type="radio" name="api_instantly" value="Need help"> Need help</label>
 </div>
 
-<div class="check-section">
-    <div class="check-section-title"><span class="check-section-icon">&#128197;</span> Calendly</div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">Calendly API Key <span class="check-tag critical">CRITICAL</span></div>
-            <div class="check-detail">Settings &rarr; Integrations &rarr; API &amp; Webhooks &rarr; API Keys. Required for Workflow 2 (booking confirmation). Must be ready by Day 4.</div>
-        </div>
-    </div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">Calendly Webhook Subscription <span class="check-tag critical">CRITICAL</span></div>
-            <div class="check-detail">We create the webhook subscription via API on Day 4 using your API key. You just need to provide the key. The <code>invitee.created</code> event is what we subscribe to.</div>
-        </div>
-    </div>
+<div class="form-group">
+    <div class="form-label">HeyReach</div>
+    <label style="display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-size:14px;"><input type="radio" name="api_heyreach" value="Ready"> Ready</label>
+    <label style="display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-size:14px;"><input type="radio" name="api_heyreach" value="Not yet"> Not yet</label>
+    <label style="display:inline-flex;align-items:center;gap:6px;font-size:14px;"><input type="radio" name="api_heyreach" value="Need help"> Need help</label>
 </div>
 
-<div class="check-section">
-    <div class="check-section-title"><span class="check-section-icon">&#128202;</span> HubSpot</div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">HubSpot Private App API Token <span class="check-tag critical">CRITICAL</span></div>
-            <div class="check-detail">Settings &rarr; Integrations &rarr; Private Apps &rarr; Create Private App. Name it "n8n Automation". Required scopes: <strong>crm.objects.contacts</strong> (read/write), <strong>crm.objects.deals</strong> (read/write), <strong>crm.objects.notes</strong> (write), <strong>crm.objects.tasks</strong> (write), <strong>timeline</strong> (write). Copy the token. Required for all three workflows.</div>
-        </div>
-    </div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">HubSpot Pipeline + Deal Stage Names <span class="check-tag critical">CRITICAL</span></div>
-            <div class="check-detail">We need the exact name of your sales pipeline and the deal stages you use. Specifically: what stage name should a new meeting-booked deal be created in? What stage means "proposal sent"? What stage means "closed lost"? Names must match exactly.</div>
-        </div>
-    </div>
+<div class="form-group">
+    <div class="form-label">HubSpot</div>
+    <label style="display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-size:14px;"><input type="radio" name="api_hubspot" value="Ready"> Ready</label>
+    <label style="display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-size:14px;"><input type="radio" name="api_hubspot" value="Not yet"> Not yet</label>
+    <label style="display:inline-flex;align-items:center;gap:6px;font-size:14px;"><input type="radio" name="api_hubspot" value="Need help"> Need help</label>
 </div>
 
-<div class="check-section">
-    <div class="check-section-title"><span class="check-section-icon">&#128200;</span> Google Sheets</div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">Google Sheets Access (Service Account or OAuth) <span class="check-tag critical">CRITICAL</span></div>
-            <div class="check-detail">We create the logging spreadsheet and share it with a service account. You just need to confirm which Google Workspace to use (personal Gmail or company Google account) and grant write access. We handle the setup.</div>
-        </div>
-    </div>
+<div class="form-group">
+    <div class="form-label">Claude API (Anthropic)</div>
+    <label style="display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-size:14px;"><input type="radio" name="api_claude" value="Ready"> Ready</label>
+    <label style="display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-size:14px;"><input type="radio" name="api_claude" value="Not yet"> Not yet</label>
+    <label style="display:inline-flex;align-items:center;gap:6px;font-size:14px;"><input type="radio" name="api_claude" value="Need help"> Need help</label>
 </div>
 
-<div class="check-section">
-    <div class="check-section-title"><span class="check-section-icon">&#9999;</span> Notion</div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">Notion Integration Token <span class="check-tag critical">CRITICAL</span></div>
-            <div class="check-detail">Settings &amp; Members &rarr; Connections &rarr; Develop or manage integrations &rarr; New integration. Name it "n8n Automation". Copy the Internal Integration Token. Required for lead tracker and booked meetings logging.</div>
-        </div>
-    </div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">Notion Database IDs (or confirm we create them) <span class="check-tag critical">CRITICAL</span></div>
-            <div class="check-detail">If you have existing lead tracker and booked meetings databases in Notion, share the database IDs (in the URL: notion.so/workspace/<strong>[database-id]</strong>?v=...). If you do not have these, we create them on Day 1. Also grant the integration access to the databases: database settings &rarr; Connections &rarr; add your integration.</div>
-        </div>
-    </div>
+<div class="form-group">
+    <div class="form-label">Slack</div>
+    <label style="display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-size:14px;"><input type="radio" name="api_slack" value="Ready"> Ready</label>
+    <label style="display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-size:14px;"><input type="radio" name="api_slack" value="Not yet"> Not yet</label>
+    <label style="display:inline-flex;align-items:center;gap:6px;font-size:14px;"><input type="radio" name="api_slack" value="Need help"> Need help</label>
 </div>
 
-<div class="check-section">
-    <div class="check-section-title"><span class="check-section-icon">&#127908;</span> Fathom</div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">Fathom API Key <span class="check-tag day5">Day 5</span></div>
-            <div class="check-detail">Settings &rarr; API Access. Required for Workflow 3 (post-call intelligence). Not needed until Day 5, but having it ready earlier avoids a last-minute scramble.</div>
-        </div>
-    </div>
+<h2 id="preferences">Preferences &amp; Notes</h2>
+
+<div class="form-group">
+    <label class="form-label" for="calendly-link">Calendly Booking Link</label>
+    <div class="form-hint">The link to include in HOT lead auto-responses. E.g. your 30-minute discovery call.</div>
+    <input class="form-input" type="text" id="calendly-link" name="calendly_link" placeholder="https://calendly.com/your-link">
 </div>
 
-<div class="check-section">
-    <div class="check-section-title"><span class="check-section-icon">&#128172;</span> Slack</div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">Slack Bot Token <span class="check-tag critical">CRITICAL</span></div>
-            <div class="check-detail">Create a Slack App: api.slack.com/apps &rarr; Create New App &rarr; From Scratch. Add OAuth scopes: <code>chat:write</code>, <code>chat:write.public</code>. Install to workspace. Copy the Bot User OAuth Token (starts with <code>xoxb-</code>).</div>
-        </div>
-    </div>
+<div class="form-group">
+    <label class="form-label" for="slack-channel">Slack Channel for HOT Lead Alerts</label>
+    <div class="form-hint">Which Slack channel should receive real-time HOT lead notifications?</div>
+    <input class="form-input" type="text" id="slack-channel" name="slack_channel" placeholder="#hot-leads">
 </div>
 
-<div class="check-section">
-    <div class="check-section-title"><span class="check-section-icon">&#129302;</span> Claude API</div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">Anthropic API Key <span class="check-tag critical">CRITICAL</span></div>
-            <div class="check-detail">console.anthropic.com &rarr; API Keys &rarr; Create Key. Claude API usage is billed per token to your Anthropic account. Estimated cost: under $20/month at typical reply volumes. You need a funded account (add a payment method) before Day 1.</div>
-        </div>
-    </div>
+<div class="form-group">
+    <label class="form-label" for="classification-rules">Classification Preferences</label>
+    <div class="form-hint">Any special rules for how Claude should classify replies? E.g. "mentions budget = HOT", "asks about timeline = WARM", "says remove me = NOT INTERESTED".</div>
+    <textarea class="form-textarea" id="classification-rules" name="classification_rules" rows="4" placeholder="Leave blank to use our default classification logic, which works well for most outbound sales contexts."></textarea>
 </div>
 
-<!-- Section 2: n8n Instance -->
-<h2 id="n8n">Section 2: n8n Instance (Railway)</h2>
-<p>We set up the Railway n8n instance together on Day 1. You do not need to do this in advance. Just create the accounts.</p>
-
-<div class="check-section">
-    <div class="check-section-title"><span class="check-section-icon">&#9881;</span> Railway + n8n Setup</div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">Railway account created <span class="check-tag critical">CRITICAL</span></div>
-            <div class="check-detail">railway.app &rarr; Sign Up. Add a payment method (Railway charges ~$10&ndash;20/month for n8n hosting). We deploy the n8n template together on Day 1. This takes about 10 minutes.</div>
-        </div>
-    </div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">Share Railway access (collaborator invite) <span class="check-tag critical">CRITICAL</span></div>
-            <div class="check-detail">Invite us as a collaborator on your Railway project on Day 1. We configure the n8n environment variables (database, encryption key, webhook base URL). You retain full ownership and access.</div>
-        </div>
-    </div>
+<div class="form-group">
+    <label class="form-label" for="notes">Additional Notes</label>
+    <div class="form-hint">Anything else we should know before Day 1 kickoff.</div>
+    <textarea class="form-textarea" id="notes" name="notes" rows="4" placeholder="Any context about your outbound campaigns, lead sources, or technical constraints."></textarea>
 </div>
 
-<!-- Section 3: Classification Rules -->
-<h2 id="classification">Section 3: Classification Rules</h2>
-<p>Claude classifies replies based on the message content and context. The default prompts work well, but your industry may have specific signals that indicate high intent. Share any special rules before Day 2.</p>
+<button type="submit" class="form-submit" id="form-submit-btn">&#9654; Submit Onboarding Form</button>
 
-<div class="qa-block">
-    <div class="qa-q">What makes a reply HOT in your context?</div>
-    <div class="qa-a">Default: explicit interest, asks about pricing or availability, mentions timeline, asks to book a call. Any additional signals specific to PR clients? (e.g., "mentions a specific campaign launch date" = HOT)</div>
+</form>
 </div>
 
-<div class="qa-block">
-    <div class="qa-q">What makes a reply WARM?</div>
-    <div class="qa-a">Default: asks a question, requests more information, mildly engaged but not ready to book. Any specific WARM signals for your market?</div>
+<div id="form-success" class="form-success" style="display:none;">
+    <h3>&#10003; Form received</h3>
+    <p>Onboarding form received. We will be in touch within 24 hours.</p>
 </div>
 
-<div class="qa-block">
-    <div class="qa-q">What are hard NOT INTERESTED signals?</div>
-    <div class="qa-a">Default: "not interested", "remove me", "unsubscribe", explicit decline. Are there any industry-specific phrases that should immediately trigger NOT INTERESTED and suppress future outreach?</div>
-</div>
 
-<div class="callout">
-    <div class="callout-title">How to share this</div>
-    <p>Reply on Upwork with a brief message: "HOT = X. WARM = Y. NOT INTERESTED if they say Z." We incorporate it into the Claude prompt on Day 2. You can also refine it after seeing the first round of live classifications during testing.</p>
-</div>
-
-<!-- Section 4: Meeting Slots -->
-<h2 id="meeting-slots">Section 4: Meeting Slots</h2>
-<p>HOT leads get an auto-response that includes your Calendly link. We need to know which link to use and how you want the response framed.</p>
-
-<div class="check-section">
-    <div class="check-section-title"><span class="check-section-icon">&#128197;</span> Calendly Configuration</div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">Calendly link for HOT lead auto-responses <span class="check-tag critical">CRITICAL</span></div>
-            <div class="check-detail">Which Calendly event type link should be included in HOT lead auto-responses? (e.g., your 30-minute discovery call link). Share the full URL.</div>
-        </div>
-    </div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">Preferred meeting duration and times <span class="check-tag optional">OPTIONAL</span></div>
-            <div class="check-detail">If the auto-generated response should mention meeting duration or availability (e.g., "30-minute call, available this week"), share that context. Otherwise Claude generates a generic meeting invitation.</div>
-        </div>
-    </div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">Auto-response tone / style <span class="check-tag optional">OPTIONAL</span></div>
-            <div class="check-detail">Any tone guidelines for auto-responses? (e.g., "keep it brief, no more than 3 sentences", "match the formality of the original message", "always sign off with [name]"). Share examples of responses you like.</div>
-        </div>
-    </div>
-</div>
-
-<!-- Section 5: Slack Channels -->
-<h2 id="slack-channels">Section 5: Slack Channels</h2>
-<p>The system sends three types of Slack alerts. Tell us which channels to use for each. We can use the same channel for all three or different channels per type.</p>
-
-<div class="check-section">
-    <div class="check-section-title"><span class="check-section-icon">&#128172;</span> Alert Routing</div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">HOT lead alerts channel <span class="check-tag critical">CRITICAL</span></div>
-            <div class="check-detail">Which Slack channel should receive HOT lead alerts from Workflow 1? (Fires in real time when a HOT reply is classified above the confidence threshold.) Share the channel name (e.g., #hot-leads).</div>
-        </div>
-    </div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">Booking confirmation alerts channel <span class="check-tag critical">CRITICAL</span></div>
-            <div class="check-detail">Which channel should receive the closer briefing when a lead books a Calendly call? (Fires immediately when invitee.created webhook arrives.) Share the channel name.</div>
-        </div>
-    </div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">Post-call outcome alerts channel <span class="check-tag day5">Day 5</span></div>
-            <div class="check-detail">Which channel should receive the call outcome summary (WON / FOLLOW UP / NOT QUALIFIED) after Fathom processes a recording? Can be the same as the booking channel or a separate sales-ops channel.</div>
-        </div>
-    </div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">Manual review channel (low-confidence replies) <span class="check-tag critical">CRITICAL</span></div>
-            <div class="check-detail">Which channel should receive alerts when Claude classifies a reply below the 80% confidence threshold? These need human review before responding. Can be a private channel if preferred.</div>
-        </div>
-    </div>
-</div>
-
-<!-- Section 6: Google Sheets -->
-<h2 id="sheets">Section 6: Google Sheets Structure</h2>
-<p>We create the logging spreadsheet. You just need to confirm a few things about your Google Workspace setup.</p>
-
-<div class="check-section">
-    <div class="check-section-title"><span class="check-section-icon">&#128200;</span> Sheets Setup</div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">Confirm Google account to use <span class="check-tag critical">CRITICAL</span></div>
-            <div class="check-detail">Which Google account should own the logging spreadsheet? (Gmail or Google Workspace account.) We create the sheet and share it with the n8n service account. You keep ownership.</div>
-        </div>
-    </div>
-    <div class="check-item" onclick="toggleCheck(this)">
-        <div class="check-box"><span class="check-check">&#10003;</span></div>
-        <div class="check-content">
-            <div class="check-name">Existing spreadsheet (or confirm we create one) <span class="check-tag optional">OPTIONAL</span></div>
-            <div class="check-detail">If you already have a lead tracking spreadsheet you want us to append to, share its URL and tell us which tabs to use. Otherwise we create a new spreadsheet with three tabs: Reply Log, Booked Meetings, Call Outcomes.</div>
-        </div>
-    </div>
-</div>
-
-<div class="callout green">
-    <div class="callout-title">You are ready when...</div>
-    <p>All CRITICAL items above are checked and credentials are ready to share securely. With this in place, we start on Day 1 and deliver on Day 7. The checklist progress above tracks how far through you are.</p>
-</div>
 
 <!-- CTA -->
 <section class="cta-section">
@@ -651,41 +470,53 @@ function toggleTheme() {
     localStorage.setItem('geniuspr-theme', t);
 }
 
-function toggleCheck(el) {
-    el.classList.toggle('checked');
-    updateProgress();
-    saveCheckState();
-}
+async function submitOnboarding(e) {
+    e.preventDefault();
+    var btn = document.getElementById('form-submit-btn');
+    btn.disabled = true;
+    btn.textContent = 'Submitting...';
 
-function updateProgress() {
-    var all = document.querySelectorAll('.check-item');
-    var done = document.querySelectorAll('.check-item.checked');
-    var pct = all.length > 0 ? Math.round((done.length / all.length) * 100) : 0;
-    document.getElementById('progress-fill').style.width = pct + '%';
-    document.getElementById('progress-count').textContent = done.length + ' / ' + all.length + ' completed';
-}
+    var form = document.getElementById('onboard-form');
+    var data = {
+        company_name: form.company_name.value,
+        contact_name: form.contact_name.value,
+        contact_email: form.contact_email.value,
+        calendly_link: form.calendly_link.value,
+        slack_channel: form.slack_channel.value,
+        classification_rules: form.classification_rules.value,
+        notes: form.notes.value,
+        api_instantly: form.api_instantly ? (form.api_instantly.value || '') : '',
+        api_heyreach: form.api_heyreach ? (form.api_heyreach.value || '') : '',
+        api_hubspot: form.api_hubspot ? (form.api_hubspot.value || '') : '',
+        api_claude: form.api_claude ? (form.api_claude.value || '') : '',
+        api_slack: form.api_slack ? (form.api_slack.value || '') : '',
+        integrations: []
+    };
 
-function saveCheckState() {
-    var items = document.querySelectorAll('.check-item');
-    var state = [];
-    items.forEach(function(item) { state.push(item.classList.contains('checked') ? 1 : 0); });
-    localStorage.setItem('geniuspr-onboarding', JSON.stringify(state));
-}
+    // Collect radio values properly
+    ['api_instantly','api_heyreach','api_hubspot','api_claude','api_slack'].forEach(function(name) {
+        var checked = form.querySelector('input[name="' + name + '"]:checked');
+        data[name] = checked ? checked.value : '';
+    });
 
-function loadCheckState() {
-    var saved = localStorage.getItem('geniuspr-onboarding');
-    if (!saved) return;
+    // Collect checkboxes
+    var boxes = form.querySelectorAll('input[name="integrations"]:checked');
+    boxes.forEach(function(b) { data.integrations.push(b.value); });
+
     try {
-        var state = JSON.parse(saved);
-        var items = document.querySelectorAll('.check-item');
-        items.forEach(function(item, i) {
-            if (state[i]) item.classList.add('checked');
+        await fetch('https://unpauseai.app.n8n.cloud/webhook/genius-pr-onboarding', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
         });
-    } catch(e) {}
-    updateProgress();
+        document.getElementById('form-wrap').style.display = 'none';
+        document.getElementById('form-success').style.display = 'block';
+    } catch(err) {
+        btn.disabled = false;
+        btn.textContent = 'Submit Onboarding Form';
+        alert('Submission failed: ' + err.message + '. Please try again or contact us directly.');
+    }
 }
-
-loadCheckState();
 
 var links = document.querySelectorAll('.step-link');
 var sections = [];

@@ -6,11 +6,13 @@
 
 ---
 
-## Beat 1 -- Context + Reframe [0:00-0:20]
+## Beat 1 -- Authority Hook + Reframe [0:00-0:30]
 
-> Hi there, Nico here. I put together a complete proposal site for your AI lead response system.
+> Hi there, Nico here. I specialize in n8n webhook pipelines with AI classification -- it is what I build daily with the Claude API.
 
-> The interesting thing about this project is that it looks like three separate workflows, but it is really one system with three entry points. Every reply from Instantly, every LinkedIn message from HeyReach, every Calendly booking, and every Fathom call -- they all converge on the same four destinations. Designing it as a unified system is what makes it reliable at scale.
+> I put together a complete proposal site for your AI response system, including a working n8n workflow you can import right now and a live demo where you can test the classification yourself.
+
+> The interesting thing about this project is that it looks like three separate workflows, but it is really one system with three entry points. Every reply -- email, LinkedIn, call recording -- converges on the same four destinations. Designing it as a unified system is what makes it reliable at scale.
 
 > Let me walk you through it.
 
@@ -46,15 +48,29 @@
 
 > Workflows 2 and 3 follow the same pattern: webhook in, classify or transform, write to HubSpot plus Sheets plus Slack. The Fathom workflow is especially interesting because Claude reads the full call transcript and generates structured notes with outcome classification and follow-up tasks.
 
-### Workflow Page [1:30-1:50]
+### Workflow Page [1:30-2:10]
 
 **[Click: Workflow in nav]**
 
-> This is the architecture diagram. Three entry points on the left, the Claude intelligence layer in the middle, and the four shared outputs on the right.
+> This is the workflow page. At the top you can see the live demo.
 
-> You can see the classification categories color-coded: HOT in red, WARM in orange, COLD in blue, NOT INTERESTED in gray. And the confidence bar showing the 80% threshold gate.
+**[Scroll to demo section, click into the textarea]**
 
-### Timeline + Onboarding [1:50-2:20]
+> I am going to paste in a sample reply and let Claude classify it in real time.
+
+**[Paste a sample text like "Hi, we are interested. Can we set up a call this week?", click Classify Reply]**
+
+> And there it is -- classified as HOT with 92% confidence. The suggested response includes meeting time proposals and the Calendly link. This is the actual Claude API running live, not a simulation.
+
+**[Scroll down to architecture diagram]**
+
+> Below the demo is the architecture diagram. Three entry points on the left, Claude intelligence in the middle, four shared outputs on the right. The confidence bar shows the 80% threshold -- anything below that routes to manual review via Slack.
+
+**[Scroll to download section]**
+
+> And here is the download. The full n8n workflow JSON with color-coded zone sticky notes. Import it into your Railway instance, plug in your API keys, and it runs.
+
+### Timeline + Onboarding [2:10-2:40]
 
 **[Click: Timeline in nav]**
 
@@ -62,7 +78,7 @@
 
 **[Click: Onboarding in nav]**
 
-> The onboarding page is the day-1 kickoff checklist. Everything I need from you: API keys for each service, HubSpot Private App token, Slack channel access, classification rules for your industry. If this is filled out before we start, we hit the ground running on Day 1 with no setup delays.
+> The onboarding page is a live form -- fill it out and we can start on Day 1 with no delays. It covers which integrations you have access to, API key readiness, your Calendly link, Slack channel, and any custom classification rules. Takes about five minutes.
 
 ### Investment [2:20-2:40]
 
@@ -72,22 +88,21 @@
 
 ---
 
-## Beat 3 -- Close [2:40-3:00]
+## Beat 3 -- Close + Requirements [2:40-3:10]
 
-> So the proposal site, the workflow JSON, the architecture -- it is all there for you to review.
+> So that is the full proposal. On your specific requirements: the workflow you just saw IS the webhook example with Claude API and HubSpot integration -- that is requirement one and two answered in one artifact. Seven-day delivery is realistic if credentials are ready on day one. The onboarding page has the full checklist so we can hit the ground running.
 
-> The n8n workflow template is downloadable from the overview page. Import it into your Railway instance, plug in your API keys, and it runs. That is Workflow 1 working out of the box.
+> If we work together, I would build all three workflows as the unified system with shared error handling, retry logic, and contact deduplication. The onboarding page has everything needed to get started.
 
-> If we work together, I would build all three as the unified system with the shared infrastructure, error handling, and the documentation. The onboarding page has everything needed to get started on Day 1.
-
-> Thanks for your time. Happy to discuss any questions.
+> Thanks for watching.
 
 ---
 
 ## Recording Checklist
 
 - [ ] Proposal site loaded in browser, all pages verified
-- [ ] Live demo pages load correctly (dark/light mode works)
+- [ ] Live demo tested (paste sample text, verify classification returns)
+- [ ] Download link works (JSON file downloads)
 - [ ] Clean desktop, no personal tabs visible
 - [ ] Loom: screen + camera bubble (bottom-right)
 - [ ] Beat outline on sticky notes (second monitor or phone)

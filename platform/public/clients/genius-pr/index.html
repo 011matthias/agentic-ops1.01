@@ -435,16 +435,29 @@ tr:hover td { background: var(--blue-bg); }
 
 <!-- Your Template -->
 <h2 id="your-template">Your Starter Template</h2>
-<p>We built a working AI Reply Classifier workflow for you. It is yours to keep, regardless of whether we work together.</p>
+<p>We built a working AI Reply Classifier workflow. It is yours to keep, regardless of whether we work together. Import it into your n8n instance, plug in your API keys, and it runs.</p>
 
-<div class="callout">
-    <div class="callout-title">What the template does</div>
-    <p>Webhook receives reply payload &rarr; Claude API classifies intent (HOT/WARM/COLD/NOT INTERESTED) with confidence score &rarr; Routes based on confidence threshold &rarr; Auto-generates contextual response for HOT leads &rarr; Updates HubSpot contact &rarr; Logs to Google Sheets &rarr; Sends Slack alert for HOT leads.</p>
+<div style="border:2px solid var(--blue);border-radius:12px;padding:24px;margin:24px 0;background:var(--blue-bg);">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--blue);margin-bottom:16px;">Workflow 1: AI Reply Classifier &mdash; 12 nodes</div>
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:20px;font-size:13px;">
+        <span style="background:var(--blue);color:#fff;padding:4px 10px;border-radius:6px;font-weight:600;">Reply Webhook</span>
+        <span style="color:var(--text2);">&rarr;</span>
+        <span style="background:var(--surface);border:1px solid var(--border);padding:4px 10px;border-radius:6px;font-weight:600;color:var(--text-strong);">Source Router</span>
+        <span style="color:var(--text2);">&rarr;</span>
+        <span style="background:var(--surface);border:1px solid var(--border);padding:4px 10px;border-radius:6px;font-weight:600;color:var(--text-strong);">Normalize</span>
+        <span style="color:var(--text2);">&rarr;</span>
+        <span style="background:var(--purple);color:#fff;padding:4px 10px;border-radius:6px;font-weight:600;">Claude Classify</span>
+        <span style="color:var(--text2);">&rarr;</span>
+        <span style="background:var(--surface);border:1px solid var(--border);padding:4px 10px;border-radius:6px;font-weight:600;color:var(--text-strong);">Confidence Gate</span>
+        <span style="color:var(--text2);">&rarr;</span>
+        <span style="background:var(--green);color:#fff;padding:4px 10px;border-radius:6px;font-weight:600;">HubSpot / Sheets / Slack</span>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+        <a href="/clients/genius-pr/genius-pr-ai-reply-classifier.json" download style="display:inline-flex;align-items:center;gap:8px;background:var(--blue);color:#fff;padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none;transition:background .15s;">&#128190; Download n8n Workflow JSON</a>
+        <a href="/clients/genius-pr/workflow#demo" style="display:inline-flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);color:var(--text-strong);padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none;transition:background .15s;">&#9654; Try Live Demo</a>
+    </div>
+    <p style="margin-top:12px;margin-bottom:0;font-size:12px;color:var(--blue-dark);">Includes color-coded zone sticky notes. This is Workflow 1 of the 3 in the full system.</p>
 </div>
-
-<p>Download the n8n workflow JSON and import it into your Railway instance. Replace the API keys with yours and it runs. This is Workflow 1 out of the 3 in the full system.</p>
-
-<p><a href="/clients/genius-pr/genius-pr-ai-reply-classifier.json" download style="display:inline-flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);padding:10px 20px;border-radius:8px;font-weight:600;font-size:14px;">&#128190; Download n8n Workflow JSON</a></p>
 
 <h3>Integration Compatibility</h3>
 <p>We verified every tool in your stack for webhook and API support:</p>

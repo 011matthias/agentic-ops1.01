@@ -289,6 +289,17 @@ li { margin-bottom: 6px; }
 }
 .conf-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--text2); }
 
+/* Demo Interactive */
+.demo-interactive { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 24px 0; }
+.demo-panel { padding: 20px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); }
+.demo-panel h3 { font-size: 15px; margin-bottom: 12px; color: var(--text-strong); }
+.demo-field { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; background: var(--bg); color: var(--text); resize: vertical; font-family: inherit; }
+.demo-btn { display: inline-flex; align-items: center; gap: 8px; background: var(--blue); color: #fff; padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 12px; transition: background .15s; }
+.demo-btn:hover { background: var(--blue-dark); }
+.demo-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.demo-output-pre { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-size: 13px; font-family: 'SF Mono', 'Fira Code', monospace; white-space: pre-wrap; word-break: break-word; color: var(--text); min-height: 200px; overflow: auto; }
+@media (max-width: 768px) { .demo-interactive { grid-template-columns: 1fr; } }
+
 /* Output row */
 .output-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 20px 0; }
 .output-node {
@@ -337,7 +348,15 @@ li { margin-bottom: 6px; }
     <div class="sidebar-label">Architecture sections</div>
     <ul class="step-list">
         <li class="step-item">
-            <a href="#system-map" class="step-link active"><span class="step-num">1</span> System Map</a>
+            <a href="#demo" class="step-link active"><span class="step-num">&#9654;</span> Live Demo</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#download" class="step-link"><span class="step-num">&#8595;</span> Download</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#system-map" class="step-link"><span class="step-num">1</span> System Map</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
@@ -363,13 +382,41 @@ li { margin-bottom: 6px; }
 <div class="content-inner">
 
 <!-- Hero -->
-<section class="hero" id="system-map">
+<section class="hero" id="top">
     <div class="hero-badge">Architecture Diagram</div>
     <h1>Unified System Architecture</h1>
     <p class="hero-sub">Four entry points. One AI intelligence layer. Four shared outputs. All three workflows share the same output infrastructure to keep your data consistent.</p>
 </section>
 
+<!-- Live Demo -->
+<h2 id="demo">Live Demo</h2>
+<p>Paste any sample reply text and Claude will classify it in real time. This is the actual AI classification logic running live, not a simulation.</p>
+
+<div class="demo-interactive">
+    <div class="demo-panel">
+        <h3>Sample Reply Text</h3>
+        <textarea id="demo-text" class="demo-field" rows="7">Hi, thanks for reaching out. We've been looking for exactly this kind of solution. Can we schedule a call this week to discuss further?</textarea>
+        <button id="demo-btn" class="demo-btn" onclick="runDemo()">&#9654; Classify Reply</button>
+    </div>
+    <div class="demo-panel">
+        <h3>Classification Result</h3>
+        <pre id="demo-output" class="demo-output-pre">Click "Classify Reply" to see the Claude API output here.</pre>
+    </div>
+</div>
+
+<div class="callout">
+    <div class="callout-title">What you are seeing</div>
+    <p>The response JSON shows the same fields the workflow uses to route every reply: category, confidence score, reasoning, and suggested_response. A confidence above 0.80 triggers auto-response. Below that, it routes to manual review via Slack.</p>
+</div>
+
+<!-- Download -->
+<h2 id="download">Download Template</h2>
+<p>Import this workflow into your n8n instance. Replace the placeholder credentials with your own API keys and it runs.</p>
+<a href="/clients/genius-pr/genius-pr-ai-reply-classifier.json" download style="display:inline-flex;align-items:center;gap:8px;background:var(--blue);color:#fff;padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none;transition:background .15s;">&#128190; Download n8n Workflow JSON</a>
+<p style="margin-top:12px;font-size:13px;color:var(--text2);">File: genius-pr-ai-reply-classifier.json | 12 nodes | Includes color-coded zone sticky notes</p>
+
 <!-- Full System Diagram -->
+<span id="system-map" style="scroll-margin-top:80px;display:block;"></span>
 <h2 id="entry-points">Full System Map</h2>
 <p>Every reply, booking, and call recording flows through the same AI layer and writes to the same four output systems. This is not three separate automations stitched together. It is one unified system with three trigger points.</p>
 
@@ -637,6 +684,28 @@ links.forEach(function(a) {
         document.querySelector('.sidebar').classList.remove('open');
     });
 });
+
+async function runDemo() {
+    var btn = document.getElementById('demo-btn');
+    var output = document.getElementById('demo-output');
+    var text = document.getElementById('demo-text').value;
+    btn.disabled = true;
+    btn.textContent = 'Classifying...';
+    output.textContent = 'Waiting for Claude AI...';
+    try {
+        var res = await fetch('https://unpauseai.app.n8n.cloud/webhook/genius-pr-demo', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({reply_text: text})
+        });
+        var data = await res.json();
+        output.textContent = JSON.stringify(data, null, 2);
+    } catch(e) {
+        output.textContent = 'Error: ' + e.message;
+    }
+    btn.disabled = false;
+    btn.textContent = 'Classify Reply';
+}
 </script>
 
 <!-- Access Gate -->
