@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Genius PR &ndash; Architecture Diagram | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --red: #dc2626; --red-light: #fee2e2; --red-bg: #fef2f2; --red-dark: #b91c1c;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --red: #f87171; --red-light: #450a0a; --red-bg: #450a0a; --red-dark: #fca5a5;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+
+/* Navigation */
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+
+/* Sidebar */
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+
+/* Main Content */
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 860px; margin: 0 auto; padding: 40px 30px 60px; }
+
+/* Hero */
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 560px; margin: 0 auto 32px; line-height: 1.6; }
+
+/* Sections */
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+
+/* Callout */
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+
+/* CTA */
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+
+/* Footer */
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; }
+
+/* Tablet */
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+
+/* Mobile */
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .hero h1 { font-size: 24px; }
+    .arch-diagram { flex-direction: column; }
+    .arch-col { flex: none; width: 100%; }
+    .arch-arrows { display: none; }
+}
+
+/* Architecture Diagram */
+.arch-diagram {
+    display: flex; align-items: stretch; gap: 0;
+    margin: 32px 0; min-height: 480px;
+}
+.arch-col {
+    flex: 1; display: flex; flex-direction: column; gap: 10px;
+    padding: 0 8px;
+}
+.arch-col-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--text2); text-align: center; margin-bottom: 8px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+.arch-node {
+    border-radius: 10px; padding: 12px 14px; border: 1px solid var(--border);
+    font-size: 13px; font-weight: 600; text-align: center;
+    transition: transform .15s, box-shadow .15s;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.arch-node:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.arch-node-icon { font-size: 22px; }
+.arch-node-name { font-size: 13px; font-weight: 700; }
+.arch-node-sub { font-size: 11px; color: var(--text2); font-weight: 400; }
+.arch-node.blue { background: var(--blue-bg); border-color: color-mix(in srgb, var(--blue) 25%, var(--border)); }
+.arch-node.blue .arch-node-name { color: var(--blue-dark); }
+.arch-node.purple { background: var(--purple-bg); border-color: color-mix(in srgb, var(--purple) 25%, var(--border)); }
+.arch-node.purple .arch-node-name { color: var(--purple-dark); }
+.arch-node.green { background: var(--green-bg); border-color: color-mix(in srgb, var(--green) 25%, var(--border)); }
+.arch-node.green .arch-node-name { color: var(--green-dark); }
+.arch-node.orange { background: var(--orange-bg); border-color: color-mix(in srgb, var(--orange) 25%, var(--border)); }
+.arch-node.orange .arch-node-name { color: var(--orange-dark); }
+.arch-node.center { background: var(--surface); border: 2px solid var(--purple); }
+.arch-node.center .arch-node-name { color: var(--purple-dark); }
+
+.arch-arrows {
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    gap: 8px; padding: 0 4px; color: var(--text2); font-size: 18px;
+    padding-top: 32px;
+}
+.arch-arrow { color: var(--border); font-size: 20px; }
+
+/* Intelligence Layer */
+.intel-layer {
+    border: 2px dashed var(--purple); border-radius: 14px; padding: 20px;
+    margin: 32px 0; background: var(--purple-bg);
+    position: relative;
+}
+.intel-layer-label {
+    position: absolute; top: -12px; left: 16px;
+    background: var(--purple); color: #fff; font-size: 11px; font-weight: 700;
+    padding: 2px 10px; border-radius: 10px; text-transform: uppercase; letter-spacing: .04em;
+}
+.intel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+.intel-card {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px;
+}
+.intel-card-title { font-size: 13px; font-weight: 700; color: var(--purple-dark); margin-bottom: 6px; }
+.intel-card p { font-size: 12px; color: var(--text2); margin: 0; line-height: 1.5; }
+
+/* Classification grid */
+.class-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 20px 0; }
+.class-card {
+    border-radius: 10px; padding: 14px 10px; text-align: center; border: 1px solid var(--border);
+    transition: transform .15s;
+}
+.class-card:hover { transform: translateY(-2px); }
+.class-card.hot { background: var(--red-bg); border-color: color-mix(in srgb, var(--red) 30%, var(--border)); }
+.class-card.warm { background: var(--orange-bg); border-color: color-mix(in srgb, var(--orange) 30%, var(--border)); }
+.class-card.cold { background: var(--blue-bg); border-color: color-mix(in srgb, var(--blue) 30%, var(--border)); }
+.class-card.ni { background: var(--surface2); }
+.class-label { font-size: 12px; font-weight: 800; margin-bottom: 4px; }
+.class-card.hot .class-label { color: var(--red-dark); }
+.class-card.warm .class-label { color: var(--orange-dark); }
+.class-card.cold .class-label { color: var(--blue-dark); }
+.class-card.ni .class-label { color: var(--text2); }
+.class-action { font-size: 11px; color: var(--text2); line-height: 1.4; }
+
+/* Confidence visual */
+.confidence-bar {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px; margin: 24px 0;
+}
+.conf-bar-track {
+    height: 16px; border-radius: 8px; background: var(--surface2);
+    position: relative; margin: 12px 0; overflow: hidden;
+}
+.conf-bar-fill {
+    height: 100%; border-radius: 8px;
+    background: linear-gradient(90deg, var(--red) 0%, var(--orange) 40%, var(--green) 100%);
+}
+.conf-bar-gate {
+    position: absolute; left: 80%; top: -4px; bottom: -4px;
+    width: 3px; background: var(--text-strong); border-radius: 2px;
+}
+.conf-bar-gate::after {
+    content: '80% gate'; position: absolute; top: -22px; left: 50%;
+    transform: translateX(-50%); font-size: 10px; font-weight: 700; color: var(--text-strong);
+    white-space: nowrap;
+}
+.conf-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--text2); }
+
+/* Output row */
+.output-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 20px 0; }
+.output-node {
+    border-radius: 10px; padding: 14px 10px; text-align: center; border: 1px solid var(--border);
+    background: var(--green-bg); border-color: color-mix(in srgb, var(--green) 25%, var(--border));
+    transition: transform .15s;
+}
+.output-node:hover { transform: translateY(-2px); }
+.output-icon { font-size: 24px; margin-bottom: 4px; }
+.output-name { font-size: 12px; font-weight: 700; color: var(--green-dark); }
+.output-desc { font-size: 11px; color: var(--text2); margin-top: 2px; }
+</style>
+<script>
+(function(){var t=localStorage.getItem('geniuspr-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/genius-pr/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Genius PR</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/genius-pr/">Overview</a>
+        <a href="/clients/genius-pr/solution">Solution</a>
+        <a href="/clients/genius-pr/workflow" class="active">Workflow</a>
+        <a href="/clients/genius-pr/timeline">Timeline</a>
+        <a href="/clients/genius-pr/investment">Investment</a>
+        <a href="/clients/genius-pr/faq">FAQ</a>
+        <a href="/clients/genius-pr/onboarding">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">Architecture sections</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#system-map" class="step-link active"><span class="step-num">1</span> System Map</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#entry-points" class="step-link"><span class="step-num">2</span> Entry Points</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#ai-layer" class="step-link"><span class="step-num">3</span> AI Layer</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#confidence" class="step-link"><span class="step-num">4</span> Confidence Gate</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#outputs" class="step-link"><span class="step-num">5</span> Shared Outputs</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<!-- Hero -->
+<section class="hero" id="system-map">
+    <div class="hero-badge">Architecture Diagram</div>
+    <h1>Unified System Architecture</h1>
+    <p class="hero-sub">Four entry points. One AI intelligence layer. Four shared outputs. All three workflows share the same output infrastructure to keep your data consistent.</p>
+</section>
+
+<!-- Full System Diagram -->
+<h2 id="entry-points">Full System Map</h2>
+<p>Every reply, booking, and call recording flows through the same AI layer and writes to the same four output systems. This is not three separate automations stitched together. It is one unified system with three trigger points.</p>
+
+<div class="arch-diagram">
+    <!-- Column 1: Entry Points -->
+    <div class="arch-col">
+        <div class="arch-col-label">Entry Points</div>
+        <div class="arch-node blue">
+            <div class="arch-node-icon">&#128231;</div>
+            <div class="arch-node-name">Instantly</div>
+            <div class="arch-node-sub">Email reply webhook</div>
+        </div>
+        <div class="arch-node blue">
+            <div class="arch-node-icon">&#128101;</div>
+            <div class="arch-node-name">HeyReach</div>
+            <div class="arch-node-sub">LinkedIn reply webhook</div>
+        </div>
+        <div class="arch-node orange">
+            <div class="arch-node-icon">&#128197;</div>
+            <div class="arch-node-name">Calendly</div>
+            <div class="arch-node-sub">Booking confirmation</div>
+        </div>
+        <div class="arch-node purple">
+            <div class="arch-node-icon">&#127908;</div>
+            <div class="arch-node-name">Fathom</div>
+            <div class="arch-node-sub">Post-call transcript</div>
+        </div>
+    </div>
+
+    <!-- Arrows -->
+    <div class="arch-arrows">
+        <div style="font-size:13px;font-weight:700;color:var(--text2);transform:rotate(0deg);">&rarr;</div>
+        <div style="font-size:13px;font-weight:700;color:var(--text2);">&rarr;</div>
+        <div style="font-size:13px;font-weight:700;color:var(--text2);">&rarr;</div>
+        <div style="font-size:13px;font-weight:700;color:var(--text2);">&rarr;</div>
+    </div>
+
+    <!-- Column 2: n8n / Claude -->
+    <div class="arch-col">
+        <div class="arch-col-label">Intelligence Layer</div>
+        <div class="arch-node center" style="flex:1;justify-content:center;">
+            <div class="arch-node-icon">&#129302;</div>
+            <div class="arch-node-name" style="font-size:15px;">Claude API</div>
+            <div class="arch-node-sub">Classification + generation</div>
+            <div style="margin-top:12px;width:100%;">
+                <div style="font-size:11px;font-weight:700;color:var(--purple-dark);margin-bottom:6px;text-align:left;">Outputs:</div>
+                <div style="background:var(--purple-light);border-radius:6px;padding:8px;font-size:11px;color:var(--purple-dark);text-align:left;line-height:1.7;">
+                    classification<br>
+                    confidence (0&ndash;1)<br>
+                    reasoning<br>
+                    suggested_response<br>
+                    next_action
+                </div>
+            </div>
+        </div>
+        <div class="arch-node" style="margin-top:10px;background:var(--surface);border:2px solid var(--blue);">
+            <div class="arch-node-icon">&#9881;</div>
+            <div class="arch-node-name" style="color:var(--blue-dark);">n8n on Railway</div>
+            <div class="arch-node-sub">Orchestration layer</div>
+        </div>
+    </div>
+
+    <!-- Arrows -->
+    <div class="arch-arrows">
+        <div style="font-size:13px;font-weight:700;color:var(--text2);">&rarr;</div>
+        <div style="font-size:13px;font-weight:700;color:var(--text2);">&rarr;</div>
+        <div style="font-size:13px;font-weight:700;color:var(--text2);">&rarr;</div>
+        <div style="font-size:13px;font-weight:700;color:var(--text2);">&rarr;</div>
+    </div>
+
+    <!-- Column 3: Outputs -->
+    <div class="arch-col">
+        <div class="arch-col-label">Shared Outputs</div>
+        <div class="arch-node green">
+            <div class="arch-node-icon">&#128202;</div>
+            <div class="arch-node-name">HubSpot</div>
+            <div class="arch-node-sub">CRM contact + deal update</div>
+        </div>
+        <div class="arch-node green">
+            <div class="arch-node-icon">&#128200;</div>
+            <div class="arch-node-name">Google Sheets</div>
+            <div class="arch-node-sub">Structured log row</div>
+        </div>
+        <div class="arch-node green">
+            <div class="arch-node-icon">&#128101;</div>
+            <div class="arch-node-name">Notion</div>
+            <div class="arch-node-sub">Lead tracker entry</div>
+        </div>
+        <div class="arch-node green">
+            <div class="arch-node-icon">&#128172;</div>
+            <div class="arch-node-name">Slack</div>
+            <div class="arch-node-sub">Alert to closer channel</div>
+        </div>
+    </div>
+</div>
+
+<!-- AI Classification Layer Detail -->
+<h2 id="ai-layer">AI Classification Detail</h2>
+<p>Claude API is the intelligence layer for two of the three workflows: reply classification (Workflow 1) and call outcome analysis (Workflow 3). Each workflow uses a different prompt and returns a different structured JSON schema.</p>
+
+<div class="intel-layer">
+    <div class="intel-layer-label">Claude API Intelligence Layer</div>
+    <div class="intel-grid">
+        <div class="intel-card">
+            <div class="intel-card-title">Workflow 1: Reply Classification</div>
+            <p>Input: reply message body + campaign context. Output: HOT / WARM / COLD / NOT INTERESTED classification with confidence score and suggested response for HOT leads.</p>
+        </div>
+        <div class="intel-card">
+            <div class="intel-card-title">Workflow 3: Call Outcome Analysis</div>
+            <p>Input: Fathom transcript + Fathom AI summary. Output: WON / FOLLOW UP / NOT QUALIFIED outcome, key discussion points (3&ndash;5 bullets), next action step, and HubSpot-formatted deal note.</p>
+        </div>
+        <div class="intel-card">
+            <div class="intel-card-title">Structured JSON Output</div>
+            <p>All Claude responses are enforced as structured JSON using a system prompt schema. n8n parses the JSON node and routes based on field values. No unstructured text parsing.</p>
+        </div>
+        <div class="intel-card">
+            <div class="intel-card-title">Prompt Engineering</div>
+            <p>Prompts are stored as n8n variables, not hardcoded. You can tune classification criteria (e.g., "mentions budget = HOT") without touching the workflow logic.</p>
+        </div>
+    </div>
+</div>
+
+<!-- Classification Categories -->
+<h3>Reply Classification Categories</h3>
+<p>Every email and LinkedIn reply is assigned one of four categories. The category determines the routing path.</p>
+
+<div class="class-grid">
+    <div class="class-card hot">
+        <div class="class-label">HOT</div>
+        <div class="class-action">Auto-respond with Calendly link. Slack alert to closer.</div>
+    </div>
+    <div class="class-card warm">
+        <div class="class-label">WARM</div>
+        <div class="class-action">Log to CRM. Queue for manual follow-up. No auto-response.</div>
+    </div>
+    <div class="class-card cold">
+        <div class="class-label">COLD</div>
+        <div class="class-action">Log to CRM. No action. Remains in sequence.</div>
+    </div>
+    <div class="class-card ni">
+        <div class="class-label">NOT INTERESTED</div>
+        <div class="class-action">Log and suppress from future outreach sequences.</div>
+    </div>
+</div>
+
+<!-- Confidence Gate Visual -->
+<h2 id="confidence">Confidence Threshold Gate</h2>
+<p>The 80% confidence gate is the safety mechanism that makes auto-response viable. When Claude is uncertain, the lead routes to human review instead of triggering an auto-reply.</p>
+
+<div class="confidence-bar">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:13px;font-weight:600;color:var(--text-strong);">Claude Confidence Score</span>
+        <span style="font-size:12px;color:var(--text2);">0.0 &rarr; 1.0</span>
+    </div>
+    <div class="conf-bar-track">
+        <div class="conf-bar-fill" style="width:100%;"></div>
+        <div class="conf-bar-gate"></div>
+    </div>
+    <div class="conf-labels">
+        <span>0% &mdash; Uncertain</span>
+        <span style="color:var(--red);">Below gate: manual review</span>
+        <span style="color:var(--green);">Above gate: auto-respond</span>
+        <span>100% &mdash; Certain</span>
+    </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:20px 0;">
+    <div style="background:var(--red-bg);border:1px solid color-mix(in srgb, var(--red) 25%, var(--border));border-radius:10px;padding:16px;">
+        <div style="font-size:13px;font-weight:700;color:var(--red-dark);margin-bottom:8px;">Below 80% &mdash; Manual Review</div>
+        <p style="font-size:13px;color:var(--text2);margin:0;line-height:1.5;">Lead routed to Slack manual review channel. No auto-response sent. Closer reviews and responds manually. Classification still logged to CRM.</p>
+    </div>
+    <div style="background:var(--green-bg);border:1px solid color-mix(in srgb, var(--green) 25%, var(--border));border-radius:10px;padding:16px;">
+        <div style="font-size:13px;font-weight:700;color:var(--green-dark);margin-bottom:8px;">Above 80% &mdash; Auto-Response</div>
+        <p style="font-size:13px;color:var(--text2);margin:0;line-height:1.5;">For HOT leads: personalized reply sent immediately via originating channel (Instantly or HeyReach API) with your Calendly link. Response generated by Claude based on the original message context.</p>
+    </div>
+</div>
+
+<div class="callout orange">
+    <div class="callout-title">Threshold is configurable</div>
+    <p>The 80% threshold is set as an n8n variable. If you find too many leads going to manual review in the first week, we can lower it to 70%. If you want to be more conservative, raise it to 90%. No code change required.</p>
+</div>
+
+<!-- Shared Outputs -->
+<h2 id="outputs">Shared Output Layer</h2>
+<p>All three workflows write to the same four output systems. This means every lead interaction is captured in a consistent format regardless of which workflow processed it.</p>
+
+<div class="output-row">
+    <div class="output-node">
+        <div class="output-icon">&#128202;</div>
+        <div class="output-name">HubSpot</div>
+        <div class="output-desc">Contact + deal updates, notes, tasks, deal stage progression</div>
+    </div>
+    <div class="output-node">
+        <div class="output-icon">&#128200;</div>
+        <div class="output-name">Google Sheets</div>
+        <div class="output-desc">Master log: timestamp, workflow, classification, outcome</div>
+    </div>
+    <div class="output-node">
+        <div class="output-icon">&#128101;</div>
+        <div class="output-name">Notion</div>
+        <div class="output-desc">Lead tracker + booked meetings database entries</div>
+    </div>
+    <div class="output-node">
+        <div class="output-icon">&#128172;</div>
+        <div class="output-name">Slack</div>
+        <div class="output-desc">HOT lead alerts, booking summaries, call outcomes</div>
+    </div>
+</div>
+
+<div class="callout">
+    <div class="callout-title">Why shared outputs matter</div>
+    <p>When a lead replies to an email (Workflow 1), books a call (Workflow 2), and you run the call (Workflow 3), all three interactions land on the same HubSpot contact record in a consistent format. You see the full journey in one place.</p>
+</div>
+
+<!-- CTA -->
+<section class="cta-section">
+    <h2>See the day-by-day build plan</h2>
+    <p>The timeline page shows exactly what gets built on each day and what we need from you on Day 1.</p>
+    <a href="/clients/genius-pr/timeline" class="cta-btn">View Timeline &rarr;</a>
+</section>
+
+<footer class="footer" style="border-top: 1px solid var(--border); padding: 24px 0 40px;">
+    <p>Built and maintained by <a href="https://unpauseai.com" target="_blank" rel="noopener">UnpauseAI</a></p>
+    <p style="margin-top:4px;"><a href="https://unpauseai.com/privacy">Privacy Policy</a> &middot; <a href="https://unpauseai.com/terms">Terms of Service</a></p>
+    <p style="margin-top:4px; font-size: 12px;">Last updated: March 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+function toggleTheme() {
+    var el = document.documentElement;
+    var t = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    el.setAttribute('data-theme', t);
+    localStorage.setItem('geniuspr-theme', t);
+}
+
+var links = document.querySelectorAll('.step-link');
+var sections = [];
+links.forEach(function(a) {
+    var id = a.getAttribute('href').replace('#','');
+    var el = document.getElementById(id);
+    if (el) sections.push({ el: el, link: a });
+});
+
+function updateActive() {
+    var scrollY = window.scrollY + 120;
+    var active = sections[0];
+    for (var i = 0; i < sections.length; i++) {
+        if (sections[i].el.offsetTop <= scrollY) active = sections[i];
+    }
+    links.forEach(function(l) { l.classList.remove('active'); });
+    if (active) active.link.classList.add('active');
+}
+window.addEventListener('scroll', updateActive);
+updateActive();
+
+links.forEach(function(a) {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        var id = this.getAttribute('href').replace('#','');
+        var el = document.getElementById(id);
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+        document.querySelector('.sidebar').classList.remove('open');
+    });
+});
+</script>
+
+<!-- Access Gate -->
+<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
+  <div style="text-align:center;max-width:360px;padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg>
+      <span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span>
+    </div>
+    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Genius PR Proposal</h2>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Enter your access code to continue.</p>
+    <div style="display:flex;gap:8px;">
+      <input id="auth-input" type="password" placeholder="Access code" autocomplete="off" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;" onkeydown="if(event.key==='Enter')checkAuth()" />
+      <button onclick="checkAuth()" style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">Enter</button>
+    </div>
+    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Incorrect code. Please try again.</p>
+  </div>
+</div>
+<script>
+var GP_CODE='genius-pr-ai';
+function checkAuth(){var v=document.getElementById('auth-input').value;if(v===GP_CODE){localStorage.setItem('geniuspr-access','granted');var g=document.getElementById('auth-gate');g.style.opacity='0';setTimeout(function(){g.style.display='none'},300)}else{document.getElementById('auth-error').style.display='block';document.getElementById('auth-input').value='';document.getElementById('auth-input').focus()}}
+(function(){if(localStorage.getItem('geniuspr-access')==='granted'){document.getElementById('auth-gate').style.display='none'}else{var i=document.getElementById('auth-input');if(i)i.focus()}})();
+</script>
+</body>
+</html>
