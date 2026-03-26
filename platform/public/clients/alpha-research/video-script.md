@@ -55,7 +55,7 @@ Both workflow templates are downloadable right here. Import them into your n8n i
 **Timeline + Investment [2:45-3:00]**
 [Screen: Timeline page briefly, then Investment page]
 
-Twelve working days, three phases. Each phase delivers testable functionality.
+Three weeks, fifteen working days, three phases. Each phase delivers testable functionality.
 
 Two pricing options: fixed initial build plus hourly ongoing, or a full project fixed price. Details on the Investment page.
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Alpha Research &ndash; Project Timeline | UnpauseAI</title>
+<title>Alpha Research &ndash; AI-Powered Investment Research Pipeline | UnpauseAI</title>
 <style>
 :root {
     --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
@@ -114,7 +114,16 @@ body {
     letter-spacing: .04em; margin-bottom: 16px;
 }
 .hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
-.hero-sub { font-size: 16px; color: var(--text2); max-width: 560px; margin: 0 auto; line-height: 1.6; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 560px; margin: 0 auto 32px; line-height: 1.6; }
+.stats-row { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
+.stat-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 24px; text-align: center; min-width: 140px;
+    transition: transform .15s, box-shadow .15s;
+}
+.stat-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.stat-value { font-size: 24px; font-weight: 800; color: var(--blue); }
+.stat-label { font-size: 12px; color: var(--text2); font-weight: 500; margin-top: 2px; }
 h2 {
     font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
     padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
@@ -136,8 +145,45 @@ li { margin-bottom: 6px; }
 .callout.green .callout-title, .callout.green p { color: var(--green-dark); }
 .callout.orange { border-color: var(--orange); background: var(--orange-bg); }
 .callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
-.callout.purple { border-color: var(--purple); background: var(--purple-bg); }
-.callout.purple .callout-title, .callout.purple p { color: var(--purple-dark); }
+.zones { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin: 32px 0; }
+.zone {
+    border-radius: 12px; padding: 20px; border: 1px solid var(--border);
+    transition: transform .15s, box-shadow .15s;
+}
+.zone:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.zone-blue { background: var(--blue-bg); border-color: color-mix(in srgb, var(--blue) 20%, var(--border)); }
+.zone-purple { background: var(--purple-bg); border-color: color-mix(in srgb, var(--purple) 20%, var(--border)); }
+.zone-green { background: var(--green-bg); border-color: color-mix(in srgb, var(--green) 20%, var(--border)); }
+.zone-icon { font-size: 28px; margin-bottom: 8px; }
+.zone-title { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
+.zone-blue .zone-title { color: var(--blue-dark); }
+.zone-purple .zone-title { color: var(--purple-dark); }
+.zone-green .zone-title { color: var(--green-dark); }
+.zone-sub { font-size: 11px; color: var(--text2); margin-bottom: 12px; }
+.zone-items { list-style: none; padding: 0; }
+.zone-items li {
+    font-size: 13px; padding: 5px 0; color: var(--text);
+    display: flex; align-items: center; gap: 8px;
+}
+.zone-items li::before { content: ''; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.zone-blue .zone-items li::before { background: var(--blue); }
+.zone-purple .zone-items li::before { background: var(--purple); }
+.zone-green .zone-items li::before { background: var(--green); }
+.solution-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 24px 0; }
+.sol-card {
+    display: flex; gap: 12px; padding: 16px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--surface);
+    transition: transform .15s, box-shadow .15s;
+    text-decoration: none; color: inherit;
+}
+.sol-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); text-decoration: none; }
+.sol-num {
+    width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; background: var(--blue-light); color: var(--blue); flex-shrink: 0;
+}
+.sol-info { flex: 1; }
+.sol-title { font-size: 14px; font-weight: 600; color: var(--text-strong); margin-bottom: 2px; }
+.sol-desc { font-size: 12px; color: var(--text2); line-height: 1.5; }
 .timeline-strip { display: flex; gap: 16px; margin: 24px 0; }
 .tl-card {
     flex: 1; padding: 20px; border-radius: 10px; border: 1px solid var(--border);
@@ -161,35 +207,12 @@ li { margin-bottom: 6px; }
 .tl-items li::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--blue); flex-shrink: 0; }
 .tl-card.phase2 .tl-items li::before { background: var(--purple); }
 .tl-card.phase3 .tl-items li::before { background: var(--green); }
-.pipeline-block {
-    border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin: 16px 0;
-    background: var(--surface); transition: transform .15s, box-shadow .15s;
+.invest-total {
+    text-align: center; padding: 24px; border-radius: 12px;
+    background: var(--surface); border: 1px solid var(--border); margin: 24px 0;
 }
-.pipeline-block:hover { transform: translateY(-1px); box-shadow: var(--card-shadow); }
-.pipeline-block h3 { margin-top: 0; }
-.pipeline-block.blue { border-left: 4px solid var(--blue); }
-.pipeline-block.purple { border-left: 4px solid var(--purple); }
-.pipeline-block.green { border-left: 4px solid var(--green); }
-.deliverable-box {
-    display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px;
-    border-radius: 8px; margin: 16px 0; font-size: 13px;
-}
-.deliverable-box.blue { background: var(--blue-bg); color: var(--blue-dark); border: 1px solid color-mix(in srgb, var(--blue) 20%, var(--border)); }
-.deliverable-box.purple { background: var(--purple-bg); color: var(--purple-dark); border: 1px solid color-mix(in srgb, var(--purple) 20%, var(--border)); }
-.deliverable-box.green { background: var(--green-bg); color: var(--green-dark); border: 1px solid color-mix(in srgb, var(--green) 20%, var(--border)); }
-.deliverable-box strong { font-weight: 700; }
-table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
-th { background: var(--th-bg); color: #fff; text-align: left; padding: 10px 14px; font-weight: 600; }
-td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
-tr:nth-child(even) td { background: var(--surface); }
-tr:hover td { background: var(--blue-bg); }
-.phase-tag {
-    display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px;
-    border-radius: 12px; white-space: nowrap;
-}
-.phase-tag.blue { background: var(--blue-light); color: var(--blue); }
-.phase-tag.purple { background: var(--purple-light); color: var(--purple); }
-.phase-tag.green { background: var(--green-light); color: var(--green); }
+.invest-amount { font-size: 36px; font-weight: 800; color: var(--blue); }
+.invest-label { font-size: 13px; color: var(--text2); margin-top: 4px; }
 .cta-section {
     text-align: center; padding: 40px 0; margin-top: 48px;
     border-top: 1px solid var(--border);
@@ -204,6 +227,11 @@ tr:hover td { background: var(--blue-bg); }
     box-shadow: 0 2px 8px rgba(37,99,235,.3);
 }
 .cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+th { background: var(--th-bg); color: #fff; text-align: left; padding: 10px 14px; font-weight: 600; }
+td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:nth-child(even) td { background: var(--surface); }
+tr:hover td { background: var(--blue-bg); }
 .footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; }
 @media (max-width: 1100px) {
     .nav-links a { font-size: 12px; padding: 5px 8px; }
@@ -216,8 +244,13 @@ tr:hover td { background: var(--blue-bg); }
     .main-content { margin-left: 0 !important; }
     .mobile-nav-toggle { display: block; }
     .nav-links { display: none; }
+    .zones { grid-template-columns: 1fr; }
+    .solution-grid { grid-template-columns: 1fr; }
     .timeline-strip { flex-direction: column; }
     .hero h1 { font-size: 24px; }
+    .stats-row { gap: 8px; }
+    .stat-card { min-width: 100px; padding: 12px 16px; }
+    .stat-value { font-size: 20px; }
 }
 </style>
 <script>
@@ -237,11 +270,11 @@ tr:hover td { background: var(--blue-bg); }
         <span class="nav-client">Alpha Research</span>
     </div>
     <div class="nav-links">
-        <a href="/clients/alpha-research/">Overview</a>
+        <a href="/clients/alpha-research/" class="active">Overview</a>
         <a href="/clients/alpha-research/brief">Brief</a>
         <a href="/clients/alpha-research/solution">Solution</a>
         <a href="/clients/alpha-research/workflow">Workflow</a>
-        <a href="/clients/alpha-research/timeline" class="active">Timeline</a>
+        <a href="/clients/alpha-research/timeline">Timeline</a>
         <a href="/clients/alpha-research/investment">Investment</a>
         <a href="/clients/alpha-research/faq">FAQ</a>
         <a href="/clients/alpha-research/onboarding">Onboarding</a>
@@ -254,26 +287,34 @@ tr:hover td { background: var(--blue-bg); }
 
 <!-- Sidebar -->
 <aside class="sidebar">
-    <div class="sidebar-label">Timeline sections</div>
+    <div class="sidebar-label">Proposal sections</div>
     <ul class="step-list">
         <li class="step-item">
             <a href="#overview" class="step-link active"><span class="step-num">1</span> Overview</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#phase-1" class="step-link"><span class="step-num">2</span> Phase 1</a>
+            <a href="#how-it-works" class="step-link"><span class="step-num">2</span> How It Works</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#phase-2" class="step-link"><span class="step-num">3</span> Phase 2</a>
+            <a href="#solution" class="step-link"><span class="step-num">3</span> What We Build</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#phase-3" class="step-link"><span class="step-num">4</span> Phase 3</a>
+            <a href="#artifacts" class="step-link"><span class="step-num">4</span> Your Templates</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#deliverables" class="step-link"><span class="step-num">5</span> Deliverables</a>
+            <a href="#timeline" class="step-link"><span class="step-num">5</span> Timeline</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#investment" class="step-link"><span class="step-num">6</span> Investment</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#next-steps" class="step-link"><span class="step-num">7</span> Next Steps</a>
         </li>
     </ul>
 </aside>
@@ -283,19 +324,141 @@ tr:hover td { background: var(--blue-bg); }
 <div class="content-inner">
 
 <!-- Hero -->
-<section class="hero">
-    <div class="hero-badge">Project Timeline</div>
-    <h1>Three Weeks to Production</h1>
-    <p class="hero-sub">Fifteen working days across three phases with clear milestones. Each phase delivers testable, working functionality. You review results after each phase and adjust priorities before the next one starts.</p>
+<section class="hero" id="overview">
+    <div class="hero-badge">Investment Research Automation</div>
+    <h1>AI-Powered Research Pipeline for 300+ Companies</h1>
+    <p class="hero-sub">Five interconnected pipelines. One unified system. From raw web data to curated investment intelligence with human-in-the-loop approval.</p>
+    <div class="stats-row">
+        <div class="stat-card"><div class="stat-value">5</div><div class="stat-label">Pipelines</div></div>
+        <div class="stat-card"><div class="stat-value">300+</div><div class="stat-label">Companies</div></div>
+        <div class="stat-card"><div class="stat-value">8+</div><div class="stat-label">Data Sources</div></div>
+        <div class="stat-card"><div class="stat-value">JSON</div><div class="stat-label">Sandbox Delivery</div></div>
+    </div>
 </section>
 
-<!-- Overview -->
-<h2 id="overview">Timeline Overview</h2>
-<p>The project is structured as three sequential phases over fifteen working days (three weeks). Each phase builds on the previous one and delivers a concrete, testable result before moving forward.</p>
+<!-- How It Works -->
+<h2 id="how-it-works">How It Works</h2>
+<p>Your investment research engine has two halves: data ingestion (scraping financial documents from 300+ company websites) and data processing (synthesizing analysis, filtering news, and routing updates through human approval). This system handles both as one unified pipeline.</p>
+
+<div class="zones">
+    <div class="zone zone-blue">
+        <div class="zone-icon">&#128229;</div>
+        <div class="zone-title">Data In</div>
+        <div class="zone-sub">Where raw data enters the system</div>
+        <ul class="zone-items">
+            <li>Google Sheets company registry</li>
+            <li>Investor relations web pages</li>
+            <li>AlphaVantage / SerpAPI / RSS</li>
+            <li>Google Drive file watcher</li>
+        </ul>
+    </div>
+    <div class="zone zone-purple">
+        <div class="zone-icon">&#129302;</div>
+        <div class="zone-title">AI Processing</div>
+        <div class="zone-sub">LLM extraction, classification, and synthesis</div>
+        <ul class="zone-items">
+            <li>HTML link extraction + classification</li>
+            <li>Multi-document thesis synthesis</li>
+            <li>News relevance scoring</li>
+            <li>Material deviation detection</li>
+        </ul>
+    </div>
+    <div class="zone zone-green">
+        <div class="zone-icon">&#9989;</div>
+        <div class="zone-title">Intelligence Out</div>
+        <div class="zone-sub">Curated output with human approval</div>
+        <ul class="zone-items">
+            <li>Cloud storage (organized by ticker)</li>
+            <li>Thesis updates (markdown)</li>
+            <li>Curated news digest (JSON)</li>
+            <li>HITL email approval</li>
+        </ul>
+    </div>
+</div>
+
+<div class="callout orange">
+    <div class="callout-title">The real challenge</div>
+    <p>This looks like two separate projects, but it is one system with one hard problem: extracting structured data from unstructured sources. Whether it is parsing PDF links from an investor relations page or synthesizing thesis notes from five markdown files, the pattern is identical. LLM reads messy input, produces structured output, human approves. Designing it as one system means one storage layer, one error handling pattern, and one place to debug.</p>
+</div>
+
+<!-- Solution -->
+<h2 id="solution">What We Build</h2>
+<p>Five pipelines that share a common company registry, storage layer, and error handling infrastructure. Two handle data ingestion, three handle intelligence processing.</p>
+
+<div class="solution-grid">
+    <a href="/clients/alpha-research/solution#pipeline-1" class="sol-card">
+        <div class="sol-num">1</div>
+        <div class="sol-info"><div class="sol-title">Web Scraping Dispatcher</div><div class="sol-desc">Reads 300+ companies from Google Sheets, dispatches to scraping sub-workflows in controlled batches.</div></div>
+    </a>
+    <a href="/clients/alpha-research/solution#pipeline-2" class="sol-card">
+        <div class="sol-num">2</div>
+        <div class="sol-info"><div class="sol-title">Modular Document Scrapers</div><div class="sol-desc">AI-powered link extraction from IR pages. Classifies and downloads financial documents to cloud storage.</div></div>
+    </a>
+    <a href="/clients/alpha-research/solution#pipeline-3" class="sol-card">
+        <div class="sol-num">3</div>
+        <div class="sol-info"><div class="sol-title">Thesis Synthesis</div><div class="sol-desc">Detects new analysis files, fetches 4 thesis docs, LLM synthesizes what needs updating.</div></div>
+    </a>
+    <a href="/clients/alpha-research/solution#pipeline-4" class="sol-card">
+        <div class="sol-num">4</div>
+        <div class="sol-info"><div class="sol-title">News Intelligence Filter</div><div class="sol-desc">Daily news scraping compared against Core Thesis. Flags material deviations, ignores noise.</div></div>
+    </a>
+    <a href="/clients/alpha-research/solution#pipeline-5" class="sol-card">
+        <div class="sol-num">5</div>
+        <div class="sol-info"><div class="sol-title">HITL Email Approval</div><div class="sol-desc">Nothing overwrites core files automatically. Email with Approve/Reject buttons and clean markdown append.</div></div>
+    </a>
+    <a href="/clients/alpha-research/solution#shared" class="sol-card">
+        <div class="sol-num">&#8734;</div>
+        <div class="sol-info"><div class="sol-title">Shared Infrastructure</div><div class="sol-desc">Company registry, cloud storage, error handling, retry logic, execution logging across all pipelines.</div></div>
+    </a>
+</div>
+
+<!-- Artifacts -->
+<h2 id="artifacts">Your Starter Templates</h2>
+<p>Two working n8n workflow templates, one for each project scope. Import them into your n8n instance, plug in your API keys, and they run. Yours to keep regardless of whether we work together.</p>
+
+<div style="border:2px solid var(--blue);border-radius:12px;padding:24px;margin:24px 0;background:var(--blue-bg);">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--blue);margin-bottom:16px;">Template 1: Web Scraping Dispatcher</div>
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:20px;font-size:13px;">
+        <span style="background:var(--blue);color:#fff;padding:4px 10px;border-radius:6px;font-weight:600;">Schedule Trigger</span>
+        <span style="color:var(--text2);">&rarr;</span>
+        <span style="background:var(--surface);border:1px solid var(--border);padding:4px 10px;border-radius:6px;font-weight:600;color:var(--text-strong);">Google Sheets</span>
+        <span style="color:var(--text2);">&rarr;</span>
+        <span style="background:var(--surface);border:1px solid var(--border);padding:4px 10px;border-radius:6px;font-weight:600;color:var(--text-strong);">Split in Batches</span>
+        <span style="color:var(--text2);">&rarr;</span>
+        <span style="background:var(--purple);color:#fff;padding:4px 10px;border-radius:6px;font-weight:600;">Execute Sub-Workflow</span>
+        <span style="color:var(--text2);">&rarr;</span>
+        <span style="background:var(--green);color:#fff;padding:4px 10px;border-radius:6px;font-weight:600;">Cloud Storage</span>
+    </div>
+    <a href="/clients/alpha-research/alpha-research-web-scraping-dispatcher.json" download style="display:inline-flex;align-items:center;gap:8px;background:var(--blue);color:#fff;padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none;transition:background .15s;">&#128190; Download Dispatcher Workflow</a>
+    <p style="margin-top:12px;margin-bottom:0;font-size:12px;color:var(--blue-dark);">Includes sub-workflow with HTTP scraper, AI link extraction, and dedup logic. Color-coded zone sticky notes.</p>
+</div>
+
+<div style="border:2px solid var(--purple);border-radius:12px;padding:24px;margin:24px 0;background:var(--purple-bg);">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--purple);margin-bottom:16px;">Template 2: Thesis Synthesis + News + HITL</div>
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:20px;font-size:13px;">
+        <span style="background:var(--purple);color:#fff;padding:4px 10px;border-radius:6px;font-weight:600;">File Watcher</span>
+        <span style="color:var(--text2);">&rarr;</span>
+        <span style="background:var(--surface);border:1px solid var(--border);padding:4px 10px;border-radius:6px;font-weight:600;color:var(--text-strong);">Fetch Thesis Files</span>
+        <span style="color:var(--text2);">&rarr;</span>
+        <span style="background:var(--purple);color:#fff;padding:4px 10px;border-radius:6px;font-weight:600;">LLM Synthesis</span>
+        <span style="color:var(--text2);">&rarr;</span>
+        <span style="background:var(--orange);color:#fff;padding:4px 10px;border-radius:6px;font-weight:600;">HITL Email</span>
+        <span style="color:var(--text2);">&rarr;</span>
+        <span style="background:var(--green);color:#fff;padding:4px 10px;border-radius:6px;font-weight:600;">Wait + Approve</span>
+    </div>
+    <a href="/clients/alpha-research/alpha-research-thesis-news-hitl.json" download style="display:inline-flex;align-items:center;gap:8px;background:var(--purple);color:#fff;padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none;transition:background .15s;">&#128190; Download HITL Workflow</a>
+    <p style="margin-top:12px;margin-bottom:0;font-size:12px;color:var(--purple-dark);">Includes thesis synthesis, news filter, and email approval with Wait/Webhook pattern. Color-coded zone sticky notes.</p>
+</div>
+
+<p style="text-align:center"><a href="/clients/alpha-research/workflow">See live demo + full architecture &rarr;</a></p>
+
+<!-- Timeline -->
+<h2 id="timeline">Timeline</h2>
+<p>Fifteen working days (three weeks), three phases. Each phase delivers tested, working functionality in the sandbox environment.</p>
 
 <div class="timeline-strip">
     <div class="tl-card">
-        <div class="tl-badge">Days 1-6</div>
+        <div class="tl-badge">Days 1-5</div>
         <div class="tl-title">Foundation</div>
         <div class="tl-price">Data ingestion pipelines</div>
         <ul class="tl-items">
@@ -307,7 +470,7 @@ tr:hover td { background: var(--blue-bg); }
         </ul>
     </div>
     <div class="tl-card phase2">
-        <div class="tl-badge">Days 7-11</div>
+        <div class="tl-badge">Days 6-9</div>
         <div class="tl-title">Intelligence</div>
         <div class="tl-price">Processing pipelines</div>
         <ul class="tl-items">
@@ -318,7 +481,7 @@ tr:hover td { background: var(--blue-bg); }
         </ul>
     </div>
     <div class="tl-card phase3">
-        <div class="tl-badge">Days 12-15</div>
+        <div class="tl-badge">Days 10-12</div>
         <div class="tl-title">Test + Deliver</div>
         <div class="tl-price">Production ready</div>
         <ul class="tl-items">
@@ -329,243 +492,32 @@ tr:hover td { background: var(--blue-bg); }
         </ul>
     </div>
 </div>
+<p style="text-align:center"><a href="/clients/alpha-research/timeline">See day-by-day breakdown &rarr;</a></p>
 
-<div class="callout green">
-    <div class="callout-title">Iterative delivery</div>
-    <p>Each phase delivers testable functionality. You can review results after each phase and adjust priorities before the next one starts.</p>
+<!-- Investment -->
+<h2 id="investment">Investment</h2>
+
+<div class="invest-total">
+    <div class="invest-amount">Two Options</div>
+    <div class="invest-label">Fixed initial phase + hourly ongoing, or full project fixed</div>
 </div>
 
 <div class="callout">
-    <div class="callout-title">Why 3 weeks</div>
-    <p>The estimate accounts for pipeline complexity: 5 interconnected workflows, 4 external API integrations, AI-powered extraction with prompt tuning, and a HITL approval flow that requires email + webhook coordination. Each phase builds on the previous one and includes testing plus buffer for API integration issues and edge cases in 300+ website structures. Typical agency timelines for comparable AI automation projects are 4&ndash;8 weeks. The shorter timeline is possible because we use proven n8n pipeline patterns and pre-built Claude AI integration templates.</p>
+    <div class="callout-title">Why two options</div>
+    <p>The first 5-10 site types establish the scraping patterns. Each additional site type is incremental work, not a new build. Option A lets you control ongoing costs. Option B gives you a predictable total.</p>
 </div>
 
-<!-- Phase 1 -->
-<h2 id="phase-1">Phase 1: Foundation (Days 1-6)</h2>
-<p>Data ingestion pipelines. This phase builds the core scraping infrastructure: how companies get queued, how pages get fetched, how documents get extracted and stored.</p>
-
-<div class="pipeline-block blue">
-    <h3 style="color:var(--blue-dark);">Days 1-2: Registry + Dispatcher Skeleton</h3>
-    <ul>
-        <li><strong>Google Sheets company registry setup</strong> &mdash; columns for ticker, company name, IR page URL, scrape status, last run timestamp</li>
-        <li><strong>Dispatcher workflow skeleton</strong> &mdash; Schedule Trigger reads the registry, splits into controlled batches, passes each company to the scraper sub-workflow</li>
-        <li><strong>Schedule Trigger configuration</strong> &mdash; configurable frequency (daily/weekly), batch size limits to avoid rate limiting</li>
-    </ul>
-</div>
-
-<div class="pipeline-block blue">
-    <h3 style="color:var(--blue-dark);">Days 3-4: Scraper Sub-Workflow</h3>
-    <ul>
-        <li><strong>HTTP scraper sub-workflow</strong> &mdash; receives company data from dispatcher, fetches the investor relations page via HTTP Request node</li>
-        <li><strong>Code node HTML parsing</strong> &mdash; extracts all links from the page, normalizes relative URLs, filters by file extension and path patterns</li>
-        <li><strong>AI link extraction with Claude</strong> &mdash; LLM classifies each link (annual report, quarterly filing, presentation, other), assigns confidence score, handles ambiguous naming</li>
-    </ul>
-</div>
-
-<div class="pipeline-block blue">
-    <h3 style="color:var(--blue-dark);">Days 5-6: Browser API + Storage + Integration Testing</h3>
-    <ul>
-        <li><strong>Browser API integration (ScrapingBee/Bright Data)</strong> &mdash; fallback for JavaScript-rendered investor relations pages that HTTP Request cannot handle</li>
-        <li><strong>Deduplication logic</strong> &mdash; hash-based dedup to avoid re-downloading documents already in storage, comparison against previous scrape results</li>
-        <li><strong>Cloud storage integration</strong> &mdash; organized folder structure by ticker symbol, automatic file naming conventions, metadata tagging</li>
-    </ul>
-</div>
-
-<div class="deliverable-box blue">
-    <strong>Phase 1 Deliverable:</strong>&nbsp;Working dispatcher that scrapes 5-10 test companies end-to-end. Registry reads, pages fetch, links extract, documents download to cloud storage.
-</div>
-
-<!-- Phase 2 -->
-<h2 id="phase-2">Phase 2: Intelligence (Days 7-11)</h2>
-<p>Processing pipelines. This phase builds the analytical layer: thesis synthesis, news filtering, and the human-in-the-loop approval flow that prevents any automated overwrites.</p>
-
-<div class="pipeline-block purple">
-    <h3 style="color:var(--purple-dark);">Days 7-8: Thesis Synthesis Pipeline</h3>
-    <ul>
-        <li><strong>File watcher trigger</strong> &mdash; monitors cloud storage for new analysis files uploaded by the research team</li>
-        <li><strong>Multi-document fetch</strong> &mdash; retrieves the four core thesis documents (Core Thesis, Supporting Evidence, Risk Factors, Valuation Notes) for the affected company</li>
-        <li><strong>Claude synthesis prompt</strong> &mdash; LLM reads new analysis against existing thesis, identifies what needs updating, what contradicts, what reinforces</li>
-        <li><strong>Section-targeted markdown append</strong> &mdash; proposed changes written as structured markdown diffs, ready for human review before merging into thesis files</li>
-    </ul>
-</div>
-
-<div class="pipeline-block purple">
-    <h3 style="color:var(--purple-dark);">Day 9: News Intelligence Filter</h3>
-    <ul>
-        <li><strong>Multi-source news aggregation</strong> &mdash; Tavily + AlphaVantage + SerpAPI + RSS feeds, each queried per company in the registry</li>
-        <li><strong>Merge + deduplication</strong> &mdash; combines results from all sources, removes duplicates by URL and headline similarity</li>
-        <li><strong>Claude relevance scoring</strong> &mdash; LLM scores each article against the company's Core Thesis, flags material deviations, filters noise below configurable threshold</li>
-    </ul>
-</div>
-
-<div class="pipeline-block purple">
-    <h3 style="color:var(--purple-dark);">Days 10-11: HITL Email Approval Flow</h3>
-    <ul>
-        <li><strong>HTML email generation</strong> &mdash; formatted email showing proposed changes with full context (source documents, confidence scores, diff preview)</li>
-        <li><strong>Signed webhook URLs</strong> &mdash; unique Approve/Reject links embedded in the email, cryptographically signed to prevent tampering</li>
-        <li><strong>Wait node integration</strong> &mdash; n8n Wait node pauses execution until the analyst clicks Approve or Reject in the email</li>
-        <li><strong>Approve/reject handling</strong> &mdash; Approve merges changes into thesis files, Reject logs the decision with optional analyst notes for future reference</li>
-    </ul>
-</div>
-
-<div class="deliverable-box purple">
-    <strong>Phase 2 Deliverable:</strong>&nbsp;All 5 pipelines functional in sandbox with test data. Thesis synthesis triggers on file upload, news filter scores articles against thesis, HITL emails send and process responses.
-</div>
-
-<!-- Phase 3 -->
-<h2 id="phase-3">Phase 3: Test + Deliver (Days 12-15)</h2>
-<p>Production readiness. This phase hardens everything: real data, edge cases, prompt quality, error handling, and documentation for handoff.</p>
-
-<div class="pipeline-block green">
-    <h3 style="color:var(--green-dark);">Days 12-13: End-to-End Testing</h3>
-    <ul>
-        <li><strong>Full pipeline test with 5-10 real companies</strong> &mdash; dispatcher through to cloud storage, thesis synthesis through to email approval</li>
-        <li><strong>Edge case handling</strong> &mdash; broken investor relations pages, HTTP timeouts, missing documents, malformed HTML, empty search results</li>
-        <li><strong>Error recovery</strong> &mdash; failed companies retry on next run, partial failures do not block the batch, error states logged to the registry</li>
-    </ul>
-</div>
-
-<div class="pipeline-block green">
-    <h3 style="color:var(--green-dark);">Day 14: LLM Prompt Tuning</h3>
-    <ul>
-        <li><strong>Extraction accuracy</strong> &mdash; review AI link classification results across all test companies, adjust prompts for edge cases (sites with unusual naming, multi-language pages)</li>
-        <li><strong>Relevance scoring thresholds</strong> &mdash; calibrate the news filter cutoff so material news passes through while routine press releases get filtered</li>
-        <li><strong>Synthesis quality</strong> &mdash; review thesis update proposals for accuracy, specificity, and actionability against analyst expectations</li>
-    </ul>
-</div>
-
-<div class="pipeline-block green">
-    <h3 style="color:var(--green-dark);">Day 15: Handoff</h3>
-    <ul>
-        <li><strong>Error handling audit</strong> &mdash; every failure path has a handler, every timeout has a fallback, every error logs context for debugging</li>
-        <li><strong>Execution logging</strong> &mdash; run history with per-company success/failure, timing data, API call counts for cost tracking</li>
-        <li><strong>Documentation</strong> &mdash; operations guide covering configuration, troubleshooting, adding new companies, adjusting thresholds</li>
-        <li><strong>JSON export of both workflows</strong> &mdash; two complete n8n workflow files ready to import into any n8n instance</li>
-    </ul>
-</div>
-
-<div class="deliverable-box green">
-    <strong>Phase 3 Deliverable:</strong>&nbsp;Two tested n8n workflow JSON exports, operations documentation, and handoff. Production-ready system processing real companies with tuned prompts and full error handling.
-</div>
-
-<!-- Day-by-Day Table -->
-<h2 id="deliverables">Day-by-Day Breakdown</h2>
-<p>Detailed view of what gets built each day across all three phases.</p>
-
-<table>
-    <thead>
-        <tr>
-            <th>Day</th>
-            <th>Phase</th>
-            <th>Focus</th>
-            <th>Output</th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr>
-            <td><strong>1</strong></td>
-            <td><span class="phase-tag blue">Foundation</span></td>
-            <td>Google Sheets registry setup, dispatcher skeleton</td>
-            <td>Registry reading companies, dispatcher triggering</td>
-        </tr>
-        <tr>
-            <td><strong>2</strong></td>
-            <td><span class="phase-tag blue">Foundation</span></td>
-            <td>Batch logic, Schedule Trigger config</td>
-            <td>Controlled batch processing with configurable frequency</td>
-        </tr>
-        <tr>
-            <td><strong>3</strong></td>
-            <td><span class="phase-tag blue">Foundation</span></td>
-            <td>HTTP scraper sub-workflow, HTML parsing</td>
-            <td>Pages fetching and links extracting from HTML</td>
-        </tr>
-        <tr>
-            <td><strong>4</strong></td>
-            <td><span class="phase-tag blue">Foundation</span></td>
-            <td>AI link extraction + classification with Claude</td>
-            <td>Links classified by document type with confidence scores</td>
-        </tr>
-        <tr>
-            <td><strong>5</strong></td>
-            <td><span class="phase-tag blue">Foundation</span></td>
-            <td>Browser API fallback, dedup, cloud storage</td>
-            <td>JS-rendered pages handled, documents deduplicated</td>
-        </tr>
-        <tr>
-            <td><strong>6</strong></td>
-            <td><span class="phase-tag blue">Foundation</span></td>
-            <td>Integration testing, edge cases, API rate limit tuning</td>
-            <td>Complete ingestion pipeline for 5-10 test companies</td>
-        </tr>
-        <tr>
-            <td><strong>7</strong></td>
-            <td><span class="phase-tag purple">Intelligence</span></td>
-            <td>File watcher, multi-doc fetch</td>
-            <td>Thesis synthesis trigger detecting new files</td>
-        </tr>
-        <tr>
-            <td><strong>8</strong></td>
-            <td><span class="phase-tag purple">Intelligence</span></td>
-            <td>Claude synthesis prompt, markdown append</td>
-            <td>LLM producing structured thesis update proposals</td>
-        </tr>
-        <tr>
-            <td><strong>9</strong></td>
-            <td><span class="phase-tag purple">Intelligence</span></td>
-            <td>News APIs (Tavily, AlphaVantage, SerpAPI, RSS), merge + dedup, relevance scoring</td>
-            <td>Filtered news digest scored against thesis</td>
-        </tr>
-        <tr>
-            <td><strong>10</strong></td>
-            <td><span class="phase-tag purple">Intelligence</span></td>
-            <td>HTML email, signed webhooks, Wait node</td>
-            <td>HITL email approval flow skeleton</td>
-        </tr>
-        <tr>
-            <td><strong>11</strong></td>
-            <td><span class="phase-tag purple">Intelligence</span></td>
-            <td>HITL approve/reject handling, timeout + reminders</td>
-            <td>Working HITL approval flow end-to-end</td>
-        </tr>
-        <tr>
-            <td><strong>12</strong></td>
-            <td><span class="phase-tag green">Test + Deliver</span></td>
-            <td>E2E testing with real companies</td>
-            <td>All pipelines processing real data successfully</td>
-        </tr>
-        <tr>
-            <td><strong>13</strong></td>
-            <td><span class="phase-tag green">Test + Deliver</span></td>
-            <td>Edge case handling, error recovery</td>
-            <td>Broken pages, timeouts, missing docs handled gracefully</td>
-        </tr>
-        <tr>
-            <td><strong>14</strong></td>
-            <td><span class="phase-tag green">Test + Deliver</span></td>
-            <td>Prompt tuning (extraction, scoring, synthesis)</td>
-            <td>Calibrated thresholds and accurate classifications</td>
-        </tr>
-        <tr>
-            <td><strong>15</strong></td>
-            <td><span class="phase-tag green">Test + Deliver</span></td>
-            <td>Error handling audit, logging, docs, JSON export</td>
-            <td>Two workflow JSONs + operations documentation</td>
-        </tr>
-    </tbody>
-</table>
-
-<div class="callout">
-    <div class="callout-title">Flexible phasing</div>
-    <p>Each phase delivers testable functionality. You can review results after each phase and adjust priorities before the next one starts. If the scraping patterns take longer to stabilize on day 5, we shift intelligence work rather than cutting quality.</p>
-</div>
+<p style="text-align:center"><a href="/clients/alpha-research/investment">See full pricing breakdown &rarr;</a></p>
 
 <!-- CTA -->
 <section class="cta-section" id="next-steps">
-    <h2>See the Investment Breakdown</h2>
-    <p>Three weeks, two pricing options. Fixed initial phase with hourly ongoing, or full project fixed.</p>
-    <a href="/clients/alpha-research/investment" class="cta-btn">View Investment &rarr;</a>
+    <h2>Ready to get started?</h2>
+    <p>Reply on Upwork to discuss, or check the onboarding page for the day-1 kickoff checklist.</p>
+    <a href="/clients/alpha-research/onboarding" class="cta-btn">View Onboarding Checklist</a>
 </section>
+
+<h2 id="about" style="border:none;text-align:center;margin-top:48px">About UnpauseAI</h2>
+<p style="text-align:center;max-width:560px;margin:0 auto 16px">We build automation infrastructure for businesses running at scale. Our systems process thousands of automated operations monthly. We work with n8n daily, and Claude API is our primary AI tool. Based in Europe, remote worldwide.</p>
 
 <footer class="footer" style="border-top: 1px solid var(--border); padding: 24px 0 40px;">
     <p>Built and maintained by <a href="https://unpauseai.com" target="_blank" rel="noopener">UnpauseAI</a></p>

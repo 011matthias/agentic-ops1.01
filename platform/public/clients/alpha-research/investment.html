@@ -174,7 +174,7 @@ li { margin-bottom: 6px; }
     color: var(--text); line-height: 1.4; border-bottom: 1px solid var(--border);
 }
 .option-list li:last-child { border-bottom: none; }
-.option-list li::before { content: '&#10003;'; color: var(--green); flex-shrink: 0; margin-top: 1px; font-size: 14px; }
+.option-list li::before { content: '\2713'; color: var(--green); flex-shrink: 0; margin-top: 1px; font-size: 14px; }
 
 /* Investment */
 .invest-total {
@@ -198,8 +198,8 @@ li { margin-bottom: 6px; }
 .ie-list { list-style: none; padding: 0; }
 .ie-list li { font-size: 13px; padding: 4px 0; display: flex; align-items: flex-start; gap: 8px; color: var(--text); line-height: 1.4; }
 .ie-list li::before { flex-shrink: 0; margin-top: 2px; font-size: 14px; }
-.ie-card.included .ie-list li::before { content: '&#10003;'; color: var(--green); }
-.ie-card.excluded .ie-list li::before { content: '&#8722;'; color: var(--text2); }
+.ie-card.included .ie-list li::before { content: '\2713'; color: var(--green); }
+.ie-card.excluded .ie-list li::before { content: '\2212'; color: var(--text2); }
 
 /* Comparison table */
 table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
@@ -342,7 +342,7 @@ tr:hover td { background: var(--blue-bg); }
 <div class="option-card recommended">
     <div class="option-badge blue">Foundation Phase (Fixed)</div>
     <div class="option-price">$3,800</div>
-    <div class="option-desc">Phases 1&ndash;3 (12 working days): all 5 pipelines built and tested for your first 5&ndash;10 site types in a sandbox environment.</div>
+    <div class="option-desc">Phases 1&ndash;3 (15 working days): all 5 pipelines built and tested for your first 5&ndash;10 site types in a sandbox environment.</div>
     <ul class="option-list">
         <li>5 n8n workflow pipelines (fully configured)</li>
         <li>5&ndash;10 site types configured and tested</li>
@@ -379,13 +379,14 @@ tr:hover td { background: var(--blue-bg); }
 
 <div class="option-card">
     <div class="option-badge blue">Full Project (Fixed)</div>
-    <div class="option-price">$6,500</div>
-    <div class="option-desc">Complete delivery: all 5 pipelines, 50 site types configured, 2 weeks of prompt tuning, and 30 days of post-delivery support.</div>
+    <div class="option-price">$7,200</div>
+    <div class="option-desc">Complete delivery: all 5 pipelines, 50 site types configured, 2 weeks of prompt tuning, 60 days of priority support, and 2 custom news source integrations.</div>
     <ul class="option-list">
         <li>All 5 n8n workflow pipelines (fully configured)</li>
         <li>50 site types configured and tested</li>
         <li>2 weeks of prompt tuning included</li>
-        <li>30 days post-delivery support</li>
+        <li>60 days post-delivery priority support (48-hour response SLA)</li>
+        <li>2 custom news source integrations included</li>
         <li>Google Sheets company registry template</li>
         <li>Cloud storage folder structure</li>
         <li>Error handling + retry logic</li>
@@ -397,7 +398,7 @@ tr:hover td { background: var(--blue-bg); }
 
 <div class="callout">
     <div class="callout-title">Why this option</div>
-    <p>Predictable total cost with no hourly tracking. Best if you know you need 50 site types from day one and want the prompt tuning and support period bundled in. One invoice, one scope, one delivery.</p>
+    <p>Predictable total cost with no hourly tracking. If you need 30+ site types, Option B saves you approximately $1,500&ndash;$2,000 compared to building the same scope at hourly rates under Option A. Plus you get priority support and 2 news source integrations that would be $500+/month and $500 as add-ons. One invoice, one scope, one delivery.</p>
 </div>
 
 <!-- Comparison -->
@@ -409,7 +410,8 @@ tr:hover td { background: var(--blue-bg); }
     <tr><td><strong>Foundation (5 pipelines)</strong></td><td>Included</td><td>Included</td></tr>
     <tr><td><strong>Site types configured</strong></td><td>5&ndash;10</td><td>50</td></tr>
     <tr><td><strong>Prompt tuning</strong></td><td>Hourly</td><td>2 weeks included</td></tr>
-    <tr><td><strong>Support period</strong></td><td>Hourly</td><td>30 days included</td></tr>
+    <tr><td><strong>Support period</strong></td><td>Hourly</td><td>60 days + priority (48hr SLA)</td></tr>
+    <tr><td><strong>News source integrations</strong></td><td>Add-on ($250/source)</td><td>2 included</td></tr>
     <tr><td><strong>Additional site types</strong></td><td>Hourly rate</td><td>Included (up to 50)</td></tr>
     <tr><td><strong>Best for</strong></td><td>Starting lean, scaling gradually</td><td>Full rollout from day 1</td></tr>
 </table>
