@@ -69,6 +69,12 @@ TBD_PATTERNS = [
     r'\{loom.*?pending\}',
 ]
 
+# Public platform directories to scan for client name leaks
+PUBLIC_PLATFORM_DIRS = [
+    "platform/src/app",
+    "platform/src/components",
+]
+
 
 # ── Data ────────────────────────────────────────────────────────────────
 
@@ -433,8 +439,15 @@ def check_video_script(report: ValidationReport, client_dir: Path, site_headings
             else:
                 report.add(f"SAY/>> interleaving{suffix}", "PASS")
         else:
-            report.add(f"SAY/>> interleaving{suffix}", "SKIP",
-                       "Not enough SAY/>> lines to check interleaving")
+            report.add(f"SAY/>> interleaving{suffix}", "FAIL",
+                       "No SAY:/>> markers found -- video script must use SAY: for speech and >> for screen actions")
+
+        # Check for LOOM NOTES VERSION section (required for teleprompter)
+        if "LOOM NOTES" in content.upper():
+            report.add(f"Loom Notes section{suffix}", "PASS")
+        else:
+            report.add(f"Loom Notes section{suffix}", "FAIL",
+                       "Missing ## LOOM NOTES VERSION section -- required for teleprompter/Loom Notes")
 
         # Cross-check >> page/section references against actual HTML headings
         # Only check "Scroll to" and "Click {nav item}" -- skip UI interactions
@@ -684,6 +697,215 @@ def check_html_site(report: ValidationReport, client_dir: Path, fm: dict) -> dic
     return site_headings
 
 
+def check_pricing_not_tbd(report: ValidationReport, client_dir: Path):
+    """Verify investment page has actual pricing, not placeholders."""
+    investment = client_dir / "investment.html"
+    if not investment.exists():
+        report.add("Pricing: actual numbers present", "SKIP", "No investment.html")
+        return
+
+    content = investment.read_text(encoding="utf-8")
+    # Strip script/style blocks to avoid false positives from JS variables
+    stripped = re.sub(r'<script[^>]*>.*?</script>', '', content, flags=re.DOTALL | re.I)
+    stripped = re.sub(r'<style[^>]*>.*?</style>', '', stripped, flags=re.DOTALL | re.I)
+
+    # Look for at least one actual price ($ or EUR followed by digit)
+    has_price = bool(re.search(r'[\$\u20AC]\s*[\d,]+', stripped)) or \
+                bool(re.search(r'EUR\s*[\d,]+', stripped, re.I))
+    if has_price:
+        report.add("Pricing: actual numbers present", "PASS")
+    else:
+        report.add("Pricing: actual numbers present", "FAIL",
+                    "investment.html has no price ($X or EUR X). Never ship $TBD pricing.")
+
+
+def check_pricing_bridge(report: ValidationReport, client_dir: Path, fm: dict):
+    """Warn if cover letter lacks pricing bridge language for Upwork proposals."""
+    if not fm or fm.get("source") != "upwork":
+        return  # Only relevant for Upwork proposals
+
+    letter = client_dir / "cover-letter.md"
+    if not letter.exists():
+        return
+
+    content = letter.read_text(encoding="utf-8").lower()
+
+    # Look for pricing bridge language
+    bridge_patterns = [
+        r"hourly",
+        r"fixed[- ]price",
+        r"above the .{0,30}range",
+        r"above .{0,30}budget",
+        r"listed (this )?as hourly",
+        r"realize .{0,30}\$",
+        r"pricing (format|structure|model)",
+        r"prefer hourly",
+        r"open to .{0,20}(hourly|rate)",
+    ]
+    has_bridge = any(re.search(p, content) for p in bridge_patterns)
+
+    if has_bridge:
+        report.add("Pricing bridge language", "PASS")
+    else:
+        report.add("Pricing bridge language", "WARN",
+                    "Upwork proposal but no pricing bridge in cover letter. "
+                    "If the job asks hourly or states a budget range, acknowledge the discrepancy.")
+
+
+def check_client_name_leaks(report: ValidationReport, fm: dict, slug: str):
+    """Check that prospect name doesn't appear on public platform pages."""
+    if not fm or "prospect" not in fm:
+        report.add("Privacy: no client name leaks", "SKIP", "No prospect name in frontmatter")
+        return
+
+    prospect = fm["prospect"]
+    if not prospect or len(prospect) < 3:
+        report.add("Privacy: no client name leaks", "SKIP", "Prospect name too short to scan")
+        return
+
+    # Build patterns: prospect name as a standalone word (not inside a slug/URL path)
+    # e.g. "Menovia" in visible text is a leak, but "menovia-patient-journey" in a slug is not
+    prospect_lower = prospect.lower()
+
+    leaks = []
+    for dir_path in PUBLIC_PLATFORM_DIRS:
+        scan_dir = ROOT / dir_path
+        if not scan_dir.exists():
+            continue
+        for f in scan_dir.rglob("*"):
+            if not f.is_file():
+                continue
+            if f.suffix not in (".tsx", ".ts", ".jsx", ".js", ".html", ".md", ".json"):
+                continue
+            try:
+                text = f.read_text(encoding="utf-8")
+            except Exception:
+                continue
+            # Find all occurrences and check context
+            for m in re.finditer(re.escape(prospect_lower), text.lower()):
+                start, end = m.start(), m.end()
+                # Check surrounding characters -- if embedded in a slug/path, skip
+                before = text[max(0, start-1):start] if start > 0 else " "
+                after = text[end:end+1] if end < len(text) else " "
+                # Slug context: preceded/followed by hyphen, slash, or quote+hyphen
+                if before in ("-", "/") or after in ("-", "/"):
+                    continue
+                # Inside a string that looks like a slug comparison (e.g., === "menovia-...")
+                ctx = text[max(0, start-30):end+30]
+                if re.search(r'["\'][\w-]*' + re.escape(prospect_lower) + r'[\w-]*["\']', ctx, re.I):
+                    # Check if it's just a slug string, not user-visible text
+                    if "-" in ctx[ctx.lower().find(prospect_lower)-5:ctx.lower().find(prospect_lower)+len(prospect)+5]:
+                        continue
+                rel = f.relative_to(ROOT)
+                leaks.append(str(rel))
+                break  # One leak per file is enough
+
+    if leaks:
+        report.add("Privacy: no client name leaks", "FAIL",
+                    f"'{prospect}' found in public files: {', '.join(leaks[:5])}")
+    else:
+        report.add("Privacy: no client name leaks", "PASS")
+
+
+def check_template3_structure(report: ValidationReport, client_dir: Path, fm: dict):
+    """Verify Track 2 cover letters follow Template 3 structure."""
+    track = fm.get("track", 1) if fm else 1
+    if track != 2:
+        return
+
+    letter_files = list(client_dir.glob("cover-letter*.md"))
+    if not letter_files:
+        return  # Already caught by cover letter existence check
+
+    for letter_path in letter_files:
+        suffix = f" ({letter_path.name})" if len(letter_files) > 1 else ""
+        content = letter_path.read_text(encoding="utf-8")
+        lower = content.lower()
+
+        issues = []
+
+        # Check for URL in first 5 lines
+        lines = [l for l in content.strip().split("\n") if l.strip() and not l.strip().startswith("#")]
+        first_5 = "\n".join(lines[:5])
+        if not re.search(r'https?://\S+', first_5):
+            issues.append("no URL in first 5 lines")
+
+        # "The site includes:" bullet list
+        if "the site includes:" not in lower and "site includes:" not in lower:
+            issues.append("missing 'The site includes:' section")
+
+        # Optionality close (already checked elsewhere but part of T3 structure)
+        has_optionality = any(p in lower for p in [
+            "if we move forward", "if we work together",
+            "if you'd like to move forward", "if this direction",
+            "if this aligns", "happy to answer", "happy to discuss",
+        ])
+        if not has_optionality:
+            issues.append("missing optionality close")
+
+        if issues:
+            report.add(f"Template 3 structure{suffix}", "WARN",
+                       f"Structural drift: {'; '.join(issues)}")
+        else:
+            report.add(f"Template 3 structure{suffix}", "PASS")
+
+
+def check_n8n_sticky_containment(report: ValidationReport, client_dir: Path):
+    """Check that n8n workflow JSON sticky notes contain their labeled nodes."""
+    import json
+    json_files = list(client_dir.glob("*.json"))
+    if not json_files:
+        return
+
+    for json_path in json_files:
+        try:
+            data = json.loads(json_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        # Must be an n8n workflow (has nodes array)
+        nodes = data.get("nodes", [])
+        if not nodes:
+            continue
+
+        stickies = [n for n in nodes if n.get("type") == "n8n-nodes-base.stickyNote"]
+        non_stickies = [n for n in nodes if n.get("type") != "n8n-nodes-base.stickyNote"]
+
+        if not stickies:
+            continue
+
+        containment_issues = []
+        for sticky in stickies:
+            sp = sticky.get("position", [0, 0])
+            params = sticky.get("parameters", {})
+            sw = params.get("width", 300)
+            sh = params.get("height", 240)
+            sx1, sy1 = sp[0], sp[1]
+            sx2, sy2 = sx1 + sw, sy1 + sh
+
+            # Find nodes that are CLOSE to this sticky (within 100px buffer)
+            # but not fully contained
+            for node in non_stickies:
+                np = node.get("position", [0, 0])
+                nx, ny = np[0], np[1]
+                # Node is "near" sticky if within 100px of its boundaries
+                near = (sx1 - 100 <= nx <= sx2 + 100 and
+                        sy1 - 100 <= ny <= sy2 + 100)
+                # Node is inside sticky
+                inside = (sx1 <= nx <= sx2 and sy1 <= ny <= sy2)
+                if near and not inside:
+                    containment_issues.append(
+                        f"'{node.get('name', '?')}' near but outside sticky "
+                        f"'{sticky.get('name', '?')}'")
+
+        if containment_issues:
+            report.add(f"n8n sticky containment ({json_path.name})", "WARN",
+                       f"{len(containment_issues)} node(s) outside stickies: "
+                       f"{'; '.join(containment_issues[:3])}")
+        else:
+            report.add(f"n8n sticky containment ({json_path.name})", "PASS")
+
+
 def check_tbd_in_text_files(report: ValidationReport, client_dir: Path):
     """Scan cover letters and video scripts for TBD placeholders."""
     for md_path in client_dir.glob("*.md"):
@@ -750,14 +972,30 @@ def validate_proposal(slug: str, verbose: bool = False) -> ValidationReport:
     # Cover letter
     check_cover_letter(report, client_dir, fm or {})
 
+    # Template 3 structural check (Track 2 only)
+    check_template3_structure(report, client_dir, fm or {})
+
     # HTML site
     site_headings = check_html_site(report, client_dir, fm or {})
+
+    # Pricing validation (investment page)
+    check_pricing_not_tbd(report, client_dir)
+
+    # Pricing bridge check (Upwork proposals)
+    check_pricing_bridge(report, client_dir, fm or {})
 
     # Video script (needs site headings for cross-check)
     check_video_script(report, client_dir, site_headings)
 
     # TBD in text files
     check_tbd_in_text_files(report, client_dir)
+
+    # n8n workflow JSON layout validation
+    check_n8n_sticky_containment(report, client_dir)
+
+    # Client name leak detection (public platform pages)
+    if fm:
+        check_client_name_leaks(report, fm, slug)
 
     return report
 
