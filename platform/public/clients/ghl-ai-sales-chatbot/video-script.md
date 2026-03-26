@@ -7,15 +7,17 @@
 
 ## BEAT 1: Reframe + Authority (20 seconds)
 
->> Camera on, clean desktop
+>> Camera on, clean desktop, browser ready
 
-SAY: Hi there, Nico here. I build AI-powered automation systems, primarily with n8n, Claude API, and Make.com.
+SAY: Hi there, Nico here. I build AI-powered automation systems with n8n, Claude API, and Make.com.
 
-SAY: I put together a full proposal site for your AI sales chatbot project. Let me walk you through it.
+>> Open browser to Overview page, pause on hero
 
-SAY: The key thing about this project: most proposals you are getting will configure GHL's built-in Conversations AI. That is an FAQ bot. It handles trained Q&A but freezes on real sales objections. What you actually need is an external AI brain that follows a sales flow, handles pushback, and sounds like your brand. That is what this proposal covers.
+SAY: I put together a full proposal site for your AI sales chatbot project. Let me walk you through it quickly.
 
->> Open browser to Overview page
+>> Scroll down slowly past hero stats
+
+SAY: Most proposals you are getting will configure GHL's built-in Conversations AI. That is an FAQ bot. It freezes on real objections. What you need is an external AI brain that follows a sales flow. That is what this covers.
 
 ---
 
@@ -23,75 +25,103 @@ SAY: The key thing about this project: most proposals you are getting will confi
 
 ### Overview (30 seconds)
 
->> Scroll to four-zone architecture diagram
+>> Scroll to four-zone architecture diagram, hover over zone 1
 
-SAY: This is the overview. Eight components, four-zone architecture, three to four week delivery.
+SAY: Four zones. Leads come in from GHL on the left.
 
-SAY: The four-zone diagram shows the flow: leads come in from GHL on the left, the external AI brain handles conversation intelligence in the middle, voice and multimedia on the third layer, and everything routes back to GHL for tracking and follow-ups on the right.
+>> Move cursor to zone 2
 
->> Point out each zone column
+SAY: External AI brain handles conversation intelligence in the middle.
 
-SAY: The core design decision is keeping the AI engine external. GHL is excellent for CRM, messaging, and pipelines. But the conversation intelligence, the part that actually closes, lives outside GHL where we have full control over the prompts, the sales playbook, and the conversation memory.
+>> Move cursor to zone 3
+
+SAY: Voice and multimedia on the third layer.
+
+>> Move cursor to zone 4
+
+SAY: Everything routes back to GHL for tracking and follow-ups on the right. The key decision is keeping the AI engine external so we control the prompts, the playbook, and the conversation memory.
+
+>> Scroll to the 8-card solution grid
+
+SAY: Eight components, one for each requirement in your brief. Let me show you the details.
 
 ### Solution (40 seconds)
 
->> Click "Solution" in nav
+>> Click "Solution" in nav, scroll to AI Conversations section
 
-SAY: The solution page maps to your eight requirements one-to-one.
+SAY: AI sales conversations. External engine with a sales playbook and objection library. When a prospect says "I cannot afford it right now," it does not freeze. It runs the objection handling flow.
 
->> Scroll to "AI Conversations" section
+>> Point to the flow strip diagram
 
-SAY: AI sales conversations: this is the external engine with a sales playbook, objection library, and conversation state machine. When a prospect says "I cannot afford it right now," the AI does not freeze. It runs the objection handling flow from the playbook.
+SAY: This strip shows the round trip. Message in through GHL, n8n receives, AI engine generates the response, sends it back through GHL. Under three seconds.
 
->> Scroll to "Voice Capabilities" section
+>> Scroll to Voice section, point to the voice pipeline strip
 
-SAY: Voice capabilities: ElevenLabs clones your brand voice and generates voice notes. Twilio delivers them. The AI decides when a voice note would be more effective than text. For example, after two unanswered text messages, switch to a voice note.
+SAY: Voice pipeline. AI generates text, ElevenLabs converts to audio in your brand voice, Twilio delivers it as a voice note.
 
->> Scroll to "Snapshot System" section
+>> Scroll to Follow-Up section, point to the 3-column behavior grid
 
-SAY: The snapshot system is section seven. GHL's snapshot captures the CRM config. But you also need to provision the external stack for each new client: AI engine config, voice persona, Twilio number, n8n webhook URLs. We build a provisioning script that handles both sides.
+SAY: Three follow-up tracks. Ghost on the left, clicked but did not buy in the middle, asked questions but went cold on the right. Each track has different timing and messaging. All AI-generated, not templates.
+
+>> Scroll to Snapshot section, point to side-by-side comparison cards
+
+SAY: Snapshot system. Two parts. GHL snapshot captures CRM config on the left. Provisioning script handles the external stack on the right. Under thirty minutes to clone to a new client.
 
 ### Workflow (20 seconds)
 
->> Click "Workflow" in nav
+>> Click "Workflow" in nav, scroll to architecture diagram
 
-SAY: The workflow page shows the full architecture. Conversation flow from inbound message to AI response, voice pipeline from text to ElevenLabs to Twilio delivery, and the follow-up engine with three behavior tracks.
+SAY: The workflow page shows the full architecture. How every component connects end to end.
 
->> Scroll through architecture diagrams
+>> Scroll through the conversation flow steps
 
-SAY: No live demo on this one since we do not have a GHL instance to demo against. But the diagrams show exactly how every component connects.
+SAY: No live demo on this one since we do not have a GHL instance to demo against. But the diagrams map every step from inbound message to AI response to CRM update.
 
-### Timeline + Investment (30 seconds)
+### Timeline (15 seconds)
 
->> Click "Timeline" in nav
+>> Click "Timeline" in nav, scroll to 5-phase strip
 
-SAY: Five phases across three to four weeks. Week one is foundation. Weeks one to two are the AI brain. Weeks two to three add voice and multimedia. Week three handles follow-ups and tracking. Week three to four is snapshot creation, testing, documentation, and handoff.
+SAY: Five phases across three to four weeks. Foundation, AI brain, voice and media, follow-ups and tracking, then snapshot and polish.
 
->> Click "Investment" in nav
+>> Scroll to phase 2 detail
 
-SAY: Three thousand five hundred dollars across two milestones. This is eight major components across a three to four week build. The breakdown shows what is included in each milestone, what the monthly running costs look like, and what each new client clone costs to provision.
+SAY: By end of week two you have a working conversation engine responding to real messages.
 
->> Scroll to included/excluded sections
+### Investment (20 seconds)
 
-SAY: I also list what is NOT included so there are no surprises. Ongoing maintenance, additional niche adaptations, and third-party subscription costs are separate.
+>> Click "Investment" in nav, pause on total
+
+SAY: Three thousand five hundred across two milestones.
+
+>> Scroll to market comparison table
+
+SAY: The comparison table puts it in context. Template bots at five hundred to fifteen hundred. GHL specialists at fifteen to twenty-five hundred. Agencies at five to fifteen thousand. We are at thirty-five hundred with the external AI brain, voice, and snapshot system.
+
+>> Scroll to included list
+
+SAY: Full breakdown of what is and is not included so there are no surprises.
 
 ### Onboarding (10 seconds)
 
->> Click "Onboarding" in nav
+>> Click "Onboarding" in nav, scroll through form
 
-SAY: The onboarding page is a live form. Fill it out and we can start with no delays. It covers your GHL account details, sales process, brand voice samples, and which integrations you already have in place. Takes about ten minutes.
+SAY: Onboarding form. Your GHL account details, sales process, brand voice samples, integrations. Fill it out and we start with no delays.
 
 ---
 
 ## BEAT 3: Close (20 seconds)
 
+>> Scroll back to top of Overview page
+
+SAY: Eight components. External AI brain. Snapshot-ready for cloning across your clients.
+
+>> Pause on hero
+
+SAY: The difference from a template bot: this one actually follows your sales flow, handles objections, and stops selling when someone buys. That is what separates a chatbot from a sales agent.
+
 >> Camera on
 
-SAY: So that is the full proposal. Eight components, external AI brain architecture, snapshot-ready for cloning across your clients.
-
-SAY: The thing that makes this different from a template bot: the AI actually follows your sales flow. It handles objections. It remembers what a prospect said two messages ago. And when a prospect buys, it stops selling and starts onboarding. That is what separates a chatbot from a sales agent.
-
-SAY: If this direction makes sense, the onboarding page has everything needed to get started. Happy to jump on a call first if you want to walk through your GHL setup together.
+SAY: If this makes sense, the onboarding page has everything to get started. Happy to jump on a call first if you want to walk through your GHL setup.
 
 SAY: Thanks for watching.
 
@@ -99,41 +129,47 @@ SAY: Thanks for watching.
 
 ## LOOM NOTES VERSION
 
-Hi there, Nico here. I build AI-powered automation systems, primarily with n8n, Claude API, and Make.com.
+Hi there, Nico here. I build AI-powered automation systems with n8n, Claude API, and Make.com.
 
-I put together a full proposal site for your AI sales chatbot project. Let me walk you through it.
+I put together a full proposal site for your AI sales chatbot project. Let me walk you through it quickly.
 
-The key thing about this project: most proposals you are getting will configure GHL's built-in Conversations AI. That is an FAQ bot. It handles trained Q&A but freezes on real sales objections. What you actually need is an external AI brain that follows a sales flow, handles pushback, and sounds like your brand. That is what this proposal covers.
+Most proposals you are getting will configure GHL's built-in Conversations AI. That is an FAQ bot. It freezes on real objections. What you need is an external AI brain that follows a sales flow. That is what this covers.
 
-This is the overview. Eight components, four-zone architecture, three to four week delivery.
+Four zones. Leads come in from GHL on the left. External AI brain handles conversation intelligence in the middle. Voice and multimedia on the third layer. Everything routes back to GHL for tracking and follow-ups on the right. The key decision is keeping the AI engine external so we control the prompts, the playbook, and the conversation memory.
 
-The four-zone diagram shows the flow: leads come in from GHL on the left, the external AI brain handles conversation intelligence in the middle, voice and multimedia on the third layer, and everything routes back to GHL for tracking and follow-ups on the right.
+Eight components, one for each requirement in your brief. Let me show you the details.
 
-The core design decision is keeping the AI engine external. GHL is excellent for CRM, messaging, and pipelines. But the conversation intelligence, the part that actually closes, lives outside GHL where we have full control over the prompts, the sales playbook, and the conversation memory.
+AI sales conversations. External engine with a sales playbook and objection library. When a prospect says "I cannot afford it right now," it does not freeze. It runs the objection handling flow.
 
-The solution page maps to your eight requirements one-to-one.
+This strip shows the round trip. Message in through GHL, n8n receives, AI engine generates the response, sends it back through GHL. Under three seconds.
 
-AI sales conversations: this is the external engine with a sales playbook, objection library, and conversation state machine. When a prospect says "I cannot afford it right now," the AI does not freeze. It runs the objection handling flow from the playbook.
+Voice pipeline. AI generates text, ElevenLabs converts to audio in your brand voice, Twilio delivers it as a voice note.
 
-Voice capabilities: ElevenLabs clones your brand voice and generates voice notes. Twilio delivers them. The AI decides when a voice note would be more effective than text. For example, after two unanswered text messages, switch to a voice note.
+Three follow-up tracks. Ghost on the left, clicked but did not buy in the middle, asked questions but went cold on the right. Each track has different timing and messaging. All AI-generated, not templates.
 
-The snapshot system is section seven. GHL's snapshot captures the CRM config. But you also need to provision the external stack for each new client: AI engine config, voice persona, Twilio number, n8n webhook URLs. We build a provisioning script that handles both sides.
+Snapshot system. Two parts. GHL snapshot captures CRM config on the left. Provisioning script handles the external stack on the right. Under thirty minutes to clone to a new client.
 
-The workflow page shows the full architecture. Conversation flow from inbound message to AI response, voice pipeline from text to ElevenLabs to Twilio delivery, and the follow-up engine with three behavior tracks.
+The workflow page shows the full architecture. How every component connects end to end.
 
-Five phases across three to four weeks. Week one is foundation. Weeks one to two are the AI brain. Weeks two to three add voice and multimedia. Week three handles follow-ups and tracking. Week three to four is snapshot creation, testing, documentation, and handoff.
+No live demo on this one since we do not have a GHL instance to demo against. But the diagrams map every step from inbound message to AI response to CRM update.
 
-Three thousand five hundred dollars across two milestones. This is eight major components across a three to four week build. The breakdown shows what is included in each milestone, what the monthly running costs look like, and what each new client clone costs to provision.
+Five phases across three to four weeks. Foundation, AI brain, voice and media, follow-ups and tracking, then snapshot and polish.
 
-I also list what is NOT included so there are no surprises. Ongoing maintenance, additional niche adaptations, and third-party subscription costs are separate.
+By end of week two you have a working conversation engine responding to real messages.
 
-The onboarding page is a live form. Fill it out and we can start with no delays. It covers your GHL account details, sales process, brand voice samples, and which integrations you already have in place. Takes about ten minutes.
+Three thousand five hundred across two milestones.
 
-So that is the full proposal. Eight components, external AI brain architecture, snapshot-ready for cloning across your clients.
+The comparison table puts it in context. Template bots at five hundred to fifteen hundred. GHL specialists at fifteen to twenty-five hundred. Agencies at five to fifteen thousand. We are at thirty-five hundred with the external AI brain, voice, and snapshot system.
 
-The thing that makes this different from a template bot: the AI actually follows your sales flow. It handles objections. It remembers what a prospect said two messages ago. And when a prospect buys, it stops selling and starts onboarding. That is what separates a chatbot from a sales agent.
+Full breakdown of what is and is not included so there are no surprises.
 
-If this direction makes sense, the onboarding page has everything needed to get started. Happy to jump on a call first if you want to walk through your GHL setup together.
+Onboarding form. Your GHL account details, sales process, brand voice samples, integrations. Fill it out and we start with no delays.
+
+Eight components. External AI brain. Snapshot-ready for cloning across your clients.
+
+The difference from a template bot: this one actually follows your sales flow, handles objections, and stops selling when someone buys. That is what separates a chatbot from a sales agent.
+
+If this makes sense, the onboarding page has everything to get started. Happy to jump on a call first if you want to walk through your GHL setup.
 
 Thanks for watching.
 
@@ -143,7 +179,8 @@ Thanks for watching.
 
 - [ ] Proposal site loaded and access gate passed
 - [ ] All 7 pages load correctly (Overview, Solution, Workflow, Timeline, Investment, FAQ, Onboarding)
-- [ ] Architecture diagrams render correctly on workflow page
+- [ ] Solution page: flow strip, voice pipeline, behavior grid, snapshot cards all visible
+- [ ] Investment page: market comparison table visible
 - [ ] Clean desktop, no sensitive tabs
 - [ ] Loom: screen + camera, 720p minimum
 - [ ] Teleprompter or Loom Notes visible with clean copy above
