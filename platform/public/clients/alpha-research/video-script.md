@@ -6,7 +6,7 @@
 
 ### Beat 1 -- Hook [0:00-0:25]
 
-Hi, I'm Nico. I build n8n data pipelines with AI-powered extraction and processing.
+Hi there, Nico here. I build n8n data pipelines with AI-powered extraction and processing.
 
 I saw both your job postings -- the web scraping pipeline and the AI document processing with HITL. I built a combined proposal because these are not two separate projects. They are one data extraction engine with five modes.
 
