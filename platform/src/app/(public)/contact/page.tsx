@@ -37,7 +37,10 @@ export default function ContactPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-20">
-      <h1 className="mb-4 text-3xl font-bold tracking-tight sm:text-4xl">
+      <span className="mb-3 inline-block text-xs font-semibold uppercase tracking-wider text-muted">
+        Contact
+      </span>
+      <h1 className="mb-4 text-3xl font-extrabold tracking-tight sm:text-4xl">
         Get in touch
       </h1>
       <p className="mb-10 text-muted">
@@ -46,8 +49,8 @@ export default function ContactPage() {
       </p>
 
       {status === "sent" ? (
-        <div className="rounded-lg border border-accent/30 bg-accent/5 p-6">
-          <p className="font-medium">Message sent.</p>
+        <div className="rounded-xl border border-green/20 border-l-4 border-l-green bg-green-bg p-6">
+          <p className="font-semibold text-green">Message sent.</p>
           <p className="mt-1 text-sm text-muted">
             We&rsquo;ll get back to you within 24 hours.
           </p>
@@ -134,7 +137,7 @@ export default function ContactPage() {
           <button
             type="submit"
             disabled={status === "sending"}
-            className="mt-2 self-start rounded-full bg-accent px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-accent-light disabled:opacity-50"
+            className="mt-2 self-start rounded-full bg-accent px-6 py-3 text-sm font-medium text-white shadow-[0_2px_8px_rgba(37,99,235,.3)] transition-all hover:bg-accent-light hover:-translate-y-0.5 disabled:opacity-50"
           >
             {status === "sending" ? "Sending..." : "Send Message"}
           </button>

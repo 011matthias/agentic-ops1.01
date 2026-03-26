@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import ThemeToggle from "./ThemeToggle";
@@ -17,33 +18,41 @@ const navLinks = [
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { data: session } = useSession();
+  const pathname = usePathname();
 
   return (
-    <header className="border-b border-border">
-      <nav className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+    <header className="sticky top-0 z-50 border-b border-border bg-background/95 shadow-[var(--card-shadow)] backdrop-blur-sm">
+      <nav className="mx-auto flex h-14 max-w-5xl items-center justify-between px-6">
         <Logo size="md" />
 
         {/* Desktop nav */}
-        <ul className="hidden gap-8 sm:flex items-center">
-          {navLinks.map((link) => (
-            <li key={link.href}>
-              <Link
-                href={link.href}
-                className="text-sm text-muted transition-colors hover:text-foreground"
-              >
-                {link.label}
-              </Link>
-            </li>
-          ))}
-          <li>
+        <ul className="hidden gap-1 sm:flex items-center">
+          {navLinks.map((link) => {
+            const isActive = pathname === link.href;
+            return (
+              <li key={link.href}>
+                <Link
+                  href={link.href}
+                  className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                    isActive
+                      ? "bg-blue-bg font-semibold text-blue"
+                      : "text-muted hover:bg-surface-hover hover:text-foreground"
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              </li>
+            );
+          })}
+          <li className="ml-4">
             <ThemeToggle />
           </li>
-          <li>
+          <li className="ml-2">
             {session ? (
               <div className="flex items-center gap-4">
                 <Link
                   href="/portal"
-                  className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                  className="text-sm font-medium text-accent hover:text-accent-light"
                 >
                   Portal
                 </Link>
@@ -91,17 +100,24 @@ export default function Header() {
       {/* Mobile nav */}
       {menuOpen && (
         <ul className="border-t border-border px-6 py-4 sm:hidden">
-          {navLinks.map((link) => (
-            <li key={link.href}>
-              <Link
-                href={link.href}
-                className="block py-2 text-sm text-muted transition-colors hover:text-foreground"
-                onClick={() => setMenuOpen(false)}
-              >
-                {link.label}
-              </Link>
-            </li>
-          ))}
+          {navLinks.map((link) => {
+            const isActive = pathname === link.href;
+            return (
+              <li key={link.href}>
+                <Link
+                  href={link.href}
+                  className={`block rounded-lg px-3 py-2 text-sm transition-colors ${
+                    isActive
+                      ? "bg-blue-bg font-semibold text-blue"
+                      : "text-muted hover:text-foreground"
+                  }`}
+                  onClick={() => setMenuOpen(false)}
+                >
+                  {link.label}
+                </Link>
+              </li>
+            );
+          })}
           <li className="pt-2">
             <ThemeToggle className="w-full justify-start" />
           </li>
@@ -110,7 +126,7 @@ export default function Header() {
               <>
                 <Link
                   href="/portal"
-                  className="block py-2 text-sm font-medium text-blue-600 dark:text-blue-400"
+                  className="block py-2 text-sm font-medium text-accent"
                   onClick={() => setMenuOpen(false)}
                 >
                   Portal

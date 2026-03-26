@@ -11,8 +11,28 @@
   --border: #e4e4e7;
   --surface: #ffffff;
   --surface-hover: #f4f4f5;
+  --surface2: #f1f5f9;
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+
+  /* Extended palette — matches proposal sites */
+  --blue: #2563eb;
+  --blue-dark: #1e40af;
+  --blue-light: #dbeafe;
+  --blue-bg: #eff6ff;
+  --purple: #7c3aed;
+  --purple-dark: #5b21b6;
+  --purple-light: #ede9fe;
+  --purple-bg: #f5f3ff;
+  --green: #059669;
+  --green-dark: #047857;
+  --green-light: #d1fae5;
+  --green-bg: #ecfdf5;
+  --orange: #d97706;
+  --orange-dark: #b45309;
+  --orange-light: #fef3c7;
+  --orange-bg: #fffbeb;
 }
 
 @theme inline {
@@ -24,6 +44,23 @@
   --color-border: var(--border);
   --color-surface: var(--surface);
   --color-surface-hover: var(--surface-hover);
+  --color-surface2: var(--surface2);
+  --color-blue: var(--blue);
+  --color-blue-dark: var(--blue-dark);
+  --color-blue-light: var(--blue-light);
+  --color-blue-bg: var(--blue-bg);
+  --color-purple: var(--purple);
+  --color-purple-dark: var(--purple-dark);
+  --color-purple-light: var(--purple-light);
+  --color-purple-bg: var(--purple-bg);
+  --color-green: var(--green);
+  --color-green-dark: var(--green-dark);
+  --color-green-light: var(--green-light);
+  --color-green-bg: var(--green-bg);
+  --color-orange: var(--orange);
+  --color-orange-dark: var(--orange-dark);
+  --color-orange-light: var(--orange-light);
+  --color-orange-bg: var(--orange-bg);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -37,8 +74,28 @@
   --border: #27272a;
   --surface: #18181b;
   --surface-hover: #27272a;
+  --surface2: #1e293b;
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.2);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.2);
+  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+
+  /* Extended palette — dark mode */
+  --blue: #3b82f6;
+  --blue-dark: #93c5fd;
+  --blue-light: #1e3a5f;
+  --blue-bg: #172554;
+  --purple: #a78bfa;
+  --purple-dark: #c4b5fd;
+  --purple-light: #2e1065;
+  --purple-bg: #1e1040;
+  --green: #34d399;
+  --green-dark: #6ee7b7;
+  --green-light: #064e3b;
+  --green-bg: #022c22;
+  --orange: #fbbf24;
+  --orange-dark: #fcd34d;
+  --orange-light: #78350f;
+  --orange-bg: #451a03;
 }
 
 body {

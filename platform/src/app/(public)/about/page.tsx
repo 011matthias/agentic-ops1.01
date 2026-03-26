@@ -11,22 +11,48 @@ const orchestrators = [
   {
     name: "Make.com",
     description: "Visual workflow automation for complex multi-step processes",
+    color: "blue" as const,
   },
   {
     name: "n8n",
     description: "Self-hosted workflow engine for data-heavy integrations",
+    color: "purple" as const,
   },
   {
     name: "Trigger.dev",
     description: "Code-first automation for custom logic and AI workflows",
+    color: "green" as const,
   },
 ];
+
+const colorStyles = {
+  blue: { border: "border-l-blue", bg: "bg-blue-bg", text: "text-blue" },
+  purple: { border: "border-l-purple", bg: "bg-purple-bg", text: "text-purple" },
+  green: { border: "border-l-green", bg: "bg-green-bg", text: "text-green" },
+};
+
+const processSteps = [
+  { step: "01", title: "Discovery", description: "We learn your tools, your pain points, and your workflow gaps.", color: "blue" as const },
+  { step: "02", title: "Proposal", description: "Detailed scope, architecture diagram, timeline, and investment breakdown.", color: "purple" as const },
+  { step: "03", title: "Build & Test", description: "We build with real data, test every path, and iterate until it works.", color: "green" as const },
+  { step: "04", title: "Handoff", description: "You own the system. Documentation, monitoring, and independent operation.", color: "orange" as const },
+];
+
+const stepColors = {
+  blue: { circle: "bg-blue text-white", line: "bg-blue/20" },
+  purple: { circle: "bg-purple text-white", line: "bg-purple/20" },
+  green: { circle: "bg-green text-white", line: "bg-green/20" },
+  orange: { circle: "bg-orange text-white", line: "bg-orange/20" },
+};
 
 export default function AboutPage() {
   return (
     <div className="flex flex-col">
       <section className="mx-auto max-w-3xl px-6 py-20">
-        <h1 className="mb-6 text-3xl font-bold tracking-tight sm:text-4xl">
+        <span className="mb-3 inline-block text-xs font-semibold uppercase tracking-wider text-muted">
+          Who We Are
+        </span>
+        <h1 className="mb-6 text-3xl font-extrabold tracking-tight sm:text-4xl">
           About UnpauseAI
         </h1>
 
@@ -52,23 +78,63 @@ export default function AboutPage() {
         </div>
       </section>
 
+      {/* How we work */}
       <section className="border-t border-border">
         <div className="mx-auto max-w-3xl px-6 py-16">
-          <h2 className="mb-2 text-xl font-semibold">Our approach</h2>
+          <span className="mb-3 inline-block text-xs font-semibold uppercase tracking-wider text-muted">
+            Process
+          </span>
+          <h2 className="mb-2 text-xl font-bold">How we work</h2>
+          <p className="mb-10 text-muted">
+            Four phases from first conversation to independent operation.
+          </p>
+
+          <div className="grid gap-6 sm:grid-cols-2">
+            {processSteps.map((item) => {
+              const sc = stepColors[item.color];
+              return (
+                <div
+                  key={item.step}
+                  className="flex gap-4 rounded-xl border border-border bg-surface p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
+                >
+                  <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${sc.circle} text-sm font-bold`}>
+                    {item.step}
+                  </div>
+                  <div>
+                    <h3 className="mb-1 font-semibold">{item.title}</h3>
+                    <p className="text-sm text-muted">{item.description}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* Orchestrators */}
+      <section className="border-t border-border">
+        <div className="mx-auto max-w-3xl px-6 py-16">
+          <span className="mb-3 inline-block text-xs font-semibold uppercase tracking-wider text-muted">
+            Technology
+          </span>
+          <h2 className="mb-2 text-xl font-bold">Our approach</h2>
           <p className="mb-8 text-muted">
             We pick the right tool for the job, not the tool we know best.
           </p>
 
           <div className="grid gap-6 sm:grid-cols-3">
-            {orchestrators.map((orch) => (
-              <div
-                key={orch.name}
-                className="rounded-lg border border-border p-5"
-              >
-                <h3 className="mb-1 font-medium">{orch.name}</h3>
-                <p className="text-sm text-muted">{orch.description}</p>
-              </div>
-            ))}
+            {orchestrators.map((orch) => {
+              const styles = colorStyles[orch.color];
+              return (
+                <div
+                  key={orch.name}
+                  className={`rounded-xl border border-border ${styles.border} border-l-4 ${styles.bg} p-5 transition-all hover:-translate-y-0.5`}
+                >
+                  <h3 className={`mb-1 font-semibold ${styles.text}`}>{orch.name}</h3>
+                  <p className="text-sm text-muted">{orch.description}</p>
+                </div>
+              );
+            })}
           </div>
 
           <p className="mt-8 text-sm text-muted">
@@ -79,15 +145,16 @@ export default function AboutPage() {
         </div>
       </section>
 
+      {/* CTA */}
       <section className="border-t border-border">
         <div className="mx-auto flex max-w-3xl flex-col items-center gap-4 px-6 py-16 text-center">
-          <h2 className="text-xl font-semibold">Want to work together?</h2>
+          <h2 className="text-xl font-bold">Want to work together?</h2>
           <p className="text-muted">
             Tell us about the workflow you want to automate.
           </p>
           <Link
             href="/contact"
-            className="mt-2 rounded-full bg-accent px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-accent-light"
+            className="mt-2 rounded-full bg-accent px-6 py-3 text-sm font-medium text-white shadow-[0_2px_8px_rgba(37,99,235,.3)] transition-all hover:bg-accent-light hover:-translate-y-0.5"
           >
             Get in Touch
           </Link>
