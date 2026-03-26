@@ -88,3 +88,11 @@ export function getAllProposals(): Proposal[] {
         new Date(a.frontmatter.created).getTime()
     );
 }
+
+/** Returns proposals suitable for public display (excludes samples/drafts without real prospect data) */
+export function getDisplayableProposals(): Proposal[] {
+  const excludeSlugs = ["sample-crm-automation"];
+  return getAllProposals().filter(
+    (p) => !excludeSlugs.includes(p.frontmatter.slug)
+  );
+}

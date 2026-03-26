@@ -33,6 +33,12 @@ export default function Footer() {
                 Services
               </Link>
               <Link
+                href="/work"
+                className="text-sm text-muted transition-colors hover:text-foreground"
+              >
+                Work
+              </Link>
+              <Link
                 href="/contact"
                 className="text-sm text-muted transition-colors hover:text-foreground"
               >

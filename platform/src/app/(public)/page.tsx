@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Card from "@/components/ui/Card";
+import { getDisplayableProposals } from "@/lib/proposals";
 
 const iconStyles = {
   blue: "bg-blue/10 text-blue",
@@ -69,12 +70,36 @@ const orchestrators = [
 ];
 
 const stats = [
-  { value: "3", label: "Orchestrators" },
-  { value: "10+", label: "Integrations" },
-  { value: "24/7", label: "Always On" },
+  { value: "3", label: "Client Systems" },
+  { value: "12+", label: "Automations Built" },
+  { value: "4", label: "Industries" },
 ];
 
+const tagLabels: Record<string, string> = {
+  "n8n": "n8n",
+  "make.com": "Make.com",
+  "claude-api": "Claude AI",
+  "hubspot": "HubSpot",
+  "crm": "CRM",
+  "healthcare": "Healthcare",
+  "ai-classification": "AI",
+  "web-scraping": "Web Scraping",
+  "google-sheets": "Google Sheets",
+  "webhooks": "Webhooks",
+  "gdpr": "GDPR",
+  "automation": "Automation",
+  "slack": "Slack",
+  "calendly": "Calendly",
+  "hitl": "Human-in-the-Loop",
+  "news-filtering": "News Filtering",
+  "document-processing": "Document Processing",
+  "mollie": "Mollie",
+  "google-drive": "Google Drive",
+};
+
 export default function Home() {
+  const projects = getDisplayableProposals();
+
   return (
     <div className="flex flex-col">
       {/* Hero */}
@@ -176,6 +201,79 @@ export default function Home() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Recent Projects */}
+      {projects.length > 0 && (
+        <section className="mx-auto max-w-4xl px-6 py-20">
+          <div className="mb-12 text-center">
+            <span className="mb-3 inline-block text-xs font-semibold uppercase tracking-wider text-muted">
+              Recent Work
+            </span>
+            <h2 className="text-2xl font-bold tracking-tight">
+              Projects we&rsquo;ve delivered
+            </h2>
+            <p className="mt-3 text-muted">
+              Real solutions built for real businesses.
+            </p>
+          </div>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {projects.map((project) => {
+              const fm = project.frontmatter;
+              const displayTags = fm.tags
+                .filter((t) => !["automation", "crm"].includes(t))
+                .slice(0, 3);
+              return (
+                <Link
+                  key={fm.slug}
+                  href={`/proposals/${fm.slug}`}
+                  className="group rounded-xl border border-border bg-surface p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
+                >
+                  <div className="mb-3 text-xs font-medium uppercase tracking-wider text-muted">
+                    {fm.prospect}
+                  </div>
+                  <h3 className="mb-2 font-semibold group-hover:text-accent transition-colors">
+                    {fm.project_title}
+                  </h3>
+                  <p className="mb-4 text-sm text-muted">
+                    {fm.timeline} &middot; {fm.tags.find(t => ["n8n", "make.com"].includes(t)) ? tagLabels[fm.tags.find(t => ["n8n", "make.com"].includes(t))!] : "Custom"}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {displayTags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="rounded-full bg-blue-bg px-2.5 py-0.5 text-xs text-blue"
+                      >
+                        {tagLabels[tag] || tag}
+                      </span>
+                    ))}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+          <div className="mt-10 text-center">
+            <Link
+              href="/work"
+              className="text-sm font-medium text-accent hover:text-accent-light"
+            >
+              View all projects &rarr;
+            </Link>
+          </div>
+        </section>
+      )}
+
+      {/* Founder */}
+      <section className="border-t border-border">
+        <div className="mx-auto max-w-3xl px-6 py-10 text-center">
+          <p className="text-sm text-muted">
+            Founded by{" "}
+            <Link href="/about" className="font-medium text-foreground hover:text-accent transition-colors">
+              Nicolas Neumann
+            </Link>
+            {" "}&mdash; building automation infrastructure for businesses that want to move faster.
+          </p>
         </div>
       </section>
 
