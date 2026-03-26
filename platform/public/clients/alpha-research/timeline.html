@@ -335,6 +335,11 @@ tr:hover td { background: var(--blue-bg); }
     <p>Each phase delivers testable functionality. You can review results after each phase and adjust priorities before the next one starts.</p>
 </div>
 
+<div class="callout">
+    <div class="callout-title">Why 12 days</div>
+    <p>The estimate is based on pipeline complexity: 5 interconnected workflows, 4 external API integrations, AI-powered extraction with prompt tuning, and a HITL approval flow that requires email + webhook coordination. Each phase builds on the previous one and includes testing. Typical agency timelines for comparable AI automation projects are 4&ndash;8 weeks. The shorter timeline is possible because we use proven n8n pipeline patterns and pre-built Claude AI integration templates.</p>
+</div>
+
 <!-- Phase 1 -->
 <h2 id="phase-1">Phase 1: Foundation (Days 1-5)</h2>
 <p>Data ingestion pipelines. This phase builds the core scraping infrastructure: how companies get queued, how pages get fetched, how documents get extracted and stored.</p>

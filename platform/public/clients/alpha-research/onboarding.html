@@ -363,43 +363,49 @@ li { margin-bottom: 6px; }
 <h2 id="api-access">API Access</h2>
 <div class="form-card">
     <h3>Which API keys do you already have?</h3>
-    <p style="font-size:14px;color:var(--text2);margin-bottom:20px;">Check the box if you have the key, then paste it in the field. We will store these securely in the n8n credentials vault.</p>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:20px;">Check the services you already have accounts for. We will set up credentials together securely during the kickoff call.</p>
 
     <div class="checkbox-row">
-        <input type="checkbox" id="api-alphavantage" onchange="toggleApiInput(this, 'input-alphavantage')" />
+        <input type="checkbox" id="api-alphavantage" />
         <div style="flex:1;">
-            <label class="checkbox-label" for="api-alphavantage"><strong>AlphaVantage API key</strong></label>
-            <input type="text" id="input-alphavantage" class="checkbox-input" placeholder="Paste your AlphaVantage key" disabled />
+            <label class="checkbox-label" for="api-alphavantage"><strong>AlphaVantage</strong> &mdash; Financial data and news API</label>
         </div>
     </div>
 
     <div class="checkbox-row">
-        <input type="checkbox" id="api-serpapi" onchange="toggleApiInput(this, 'input-serpapi')" />
+        <input type="checkbox" id="api-serpapi" />
         <div style="flex:1;">
-            <label class="checkbox-label" for="api-serpapi"><strong>SerpAPI key</strong></label>
-            <input type="text" id="input-serpapi" class="checkbox-input" placeholder="Paste your SerpAPI key" disabled />
+            <label class="checkbox-label" for="api-serpapi"><strong>SerpAPI</strong> &mdash; Google News search results</label>
         </div>
     </div>
 
     <div class="checkbox-row">
-        <input type="checkbox" id="api-tavily" onchange="toggleApiInput(this, 'input-tavily')" />
+        <input type="checkbox" id="api-tavily" />
         <div style="flex:1;">
-            <label class="checkbox-label" for="api-tavily"><strong>Tavily API key</strong></label>
-            <input type="text" id="input-tavily" class="checkbox-input" placeholder="Paste your Tavily key" disabled />
+            <label class="checkbox-label" for="api-tavily"><strong>Tavily</strong> &mdash; AI-optimized web search</label>
         </div>
     </div>
 
     <div class="checkbox-row">
-        <input type="checkbox" id="api-browser" onchange="toggleApiInput(this, 'input-browser')" />
+        <input type="checkbox" id="api-browser" />
         <div style="flex:1;">
-            <label class="checkbox-label" for="api-browser"><strong>Browser API account</strong> (ScrapingBee, Bright Data, or Apify)</label>
-            <input type="text" id="input-browser" class="checkbox-input" placeholder="Paste your browser API key" disabled />
+            <label class="checkbox-label" for="api-browser"><strong>Browser API</strong> &mdash; ScrapingBee, Bright Data, or Apify</label>
         </div>
     </div>
 
-    <div class="callout green" style="margin-top:20px;margin-bottom:0;">
+    <div class="callout" style="margin-top:20px;margin-bottom:0;">
+        <div class="callout-title">How we handle API credentials</div>
+        <p>We never ask you to paste API keys in a web form. During our kickoff call, we configure credentials directly in your n8n instance's encrypted credential vault. If you prefer asynchronous setup, we support:</p>
+        <ul style="margin:8px 0 0;padding-left:20px;font-size:13px;color:var(--blue-dark);">
+            <li><strong>n8n Credential Vault</strong> &mdash; enter keys directly in n8n's UI (encrypted at rest)</li>
+            <li><strong>Password manager</strong> &mdash; shared vault via 1Password, Bitwarden, or similar</li>
+            <li><strong>Upwork secure message</strong> &mdash; sent directly through the platform's encrypted messaging</li>
+        </ul>
+    </div>
+
+    <div class="callout green" style="margin-top:16px;margin-bottom:0;">
         <div class="callout-title">No keys yet?</div>
-        <p>No problem. We can set them up together during Phase 1.</p>
+        <p>No problem. We can set up accounts together during Phase 1. Most services have free tiers that are sufficient for initial testing.</p>
     </div>
 </div>
 

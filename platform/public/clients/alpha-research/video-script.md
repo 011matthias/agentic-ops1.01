@@ -23,10 +23,10 @@ The Overview shows the full system at a glance. Five pipelines, 300+ companies, 
 
 The three zones -- Data In, AI Processing, Intelligence Out -- show how everything connects. Your company registry feeds into scraping and news monitoring. Claude handles the extraction and scoring. Output goes to cloud storage with human approval on anything that touches your thesis files.
 
-**Brief [0:55-1:10]**
-[Screen: Brief page]
+**Brief [0:55-1:15]**
+[Screen: Brief page, scroll slowly to bottom]
 
-The Brief maps your requirements from both job postings. Every "To Apply" question is listed with a link to exactly where it is answered on the site.
+The Brief maps your requirements from both job postings. Scroll down to the bottom -- every single "To Apply" question from both postings is listed here, with a direct link to where it is answered in the proposal. Nine questions, nine answers, all cross-referenced.
 
 **Solution [1:10-1:55]**
 [Screen: Solution page, scroll through pipeline blocks]
