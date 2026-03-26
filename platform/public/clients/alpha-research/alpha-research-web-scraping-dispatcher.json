@@ -218,7 +218,7 @@
       "parameters": {
         "content": "**INPUT ZONE**\n\nSchedule trigger reads company registry and filters for companies due for scraping.",
         "height": 340,
-        "width": 580,
+        "width": 860,
         "color": 2
       },
       "id": "sticky-input",
@@ -231,7 +231,7 @@
       "parameters": {
         "content": "**PROCESSING ZONE**\n\nBatch splitting, HTTP fetch, HTML parsing, AI classification, deduplication.",
         "height": 340,
-        "width": 980,
+        "width": 1260,
         "color": 6
       },
       "id": "sticky-process",
@@ -243,8 +243,8 @@
     {
       "parameters": {
         "content": "**OUTPUT ZONE**\n\nDownload classified documents and upload to cloud storage. Update registry with last scraped date.",
-        "height": 340,
-        "width": 500,
+        "height": 400,
+        "width": 620,
         "color": 5
       },
       "id": "sticky-output",
@@ -256,7 +256,7 @@
     {
       "parameters": {
         "content": "**ERROR HANDLING**\n\nCatches failures and logs to error sheet for retry on next run.",
-        "height": 180,
+        "height": 280,
         "width": 500,
         "color": 3
       },

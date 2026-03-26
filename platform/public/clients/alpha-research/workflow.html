@@ -134,6 +134,8 @@ li { margin-bottom: 6px; }
 .callout.green .callout-title, .callout.green p { color: var(--green-dark); }
 .callout.purple { border-color: var(--purple); background: var(--purple-bg); }
 .callout.purple .callout-title, .callout.purple p { color: var(--purple-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
 .demo-interactive { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 24px 0; }
 .demo-panel { padding: 20px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); }
 .demo-panel h3 { font-size: 15px; margin-bottom: 12px; color: var(--text-strong); margin-top: 0; }
@@ -142,18 +144,64 @@ li { margin-bottom: 6px; }
 .demo-btn:hover { background: var(--purple-dark); }
 .demo-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .demo-output-pre { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-size: 12px; font-family: 'SF Mono', 'Fira Code', monospace; white-space: pre-wrap; word-break: break-word; color: var(--text); min-height: 260px; max-height: 500px; overflow: auto; }
-.arch-diagram {
-    display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 12px; align-items: center;
-    margin: 32px 0; padding: 24px; background: var(--surface); border-radius: 12px; border: 1px solid var(--border);
+
+/* Pipeline Flow Infographic */
+.pipeline-flow {
+    display: flex; align-items: center; gap: 0;
+    margin: 24px 0; padding: 20px; background: var(--surface); border-radius: 12px;
+    border: 1px solid var(--border); overflow-x: auto;
 }
-.arch-box {
-    padding: 16px; border-radius: 10px; text-align: center; font-size: 13px; font-weight: 600;
+.pipeline-node {
+    flex-shrink: 0; padding: 12px 16px; border-radius: 10px;
+    text-align: center; min-width: 100px; border: 2px solid;
 }
-.arch-box.input { background: var(--blue-bg); border: 2px solid var(--blue); color: var(--blue-dark); }
-.arch-box.process { background: var(--purple-bg); border: 2px solid var(--purple); color: var(--purple-dark); }
-.arch-box.output { background: var(--green-bg); border: 2px solid var(--green); color: var(--green-dark); }
-.arch-box small { display: block; font-weight: 400; font-size: 11px; margin-top: 4px; opacity: 0.8; }
-.arch-arrow { font-size: 20px; color: var(--text2); text-align: center; }
+.pipeline-node .pn-label { font-size: 12px; font-weight: 700; line-height: 1.3; }
+.pipeline-node .pn-sub { font-size: 10px; font-weight: 400; opacity: .75; margin-top: 2px; }
+.pipeline-node.input { background: var(--blue-bg); border-color: var(--blue); }
+.pipeline-node.input .pn-label { color: var(--blue-dark); }
+.pipeline-node.input .pn-sub { color: var(--blue-dark); }
+.pipeline-node.process { background: var(--purple-bg); border-color: var(--purple); }
+.pipeline-node.process .pn-label { color: var(--purple-dark); }
+.pipeline-node.process .pn-sub { color: var(--purple-dark); }
+.pipeline-node.ai { background: var(--orange-bg); border-color: var(--orange); }
+.pipeline-node.ai .pn-label { color: var(--orange-dark); }
+.pipeline-node.ai .pn-sub { color: var(--orange-dark); }
+.pipeline-node.output { background: var(--green-bg); border-color: var(--green); }
+.pipeline-node.output .pn-label { color: var(--green-dark); }
+.pipeline-node.output .pn-sub { color: var(--green-dark); }
+.pipeline-arrow { flex-shrink: 0; font-size: 18px; color: var(--text2); padding: 0 6px; }
+
+/* Pipeline Lanes (multi-pipeline infographic) */
+.pipeline-lanes {
+    margin: 24px 0; border: 1px solid var(--border); border-radius: 12px;
+    overflow: hidden; background: var(--surface);
+}
+.pipeline-lane {
+    display: flex; align-items: center; gap: 0;
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+}
+.pipeline-lane:last-child { border-bottom: none; }
+.lane-label {
+    flex-shrink: 0; width: 120px; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .04em; padding-right: 12px;
+}
+.lane-label small { display: block; font-weight: 500; text-transform: none; letter-spacing: 0; margin-top: 2px; font-size: 10px; opacity: .7; }
+.lane-flow { display: flex; align-items: center; gap: 0; flex: 1; overflow-x: auto; }
+.lane-node {
+    flex-shrink: 0; padding: 8px 12px; border-radius: 8px;
+    text-align: center; min-width: 80px; border: 2px solid; font-size: 11px; font-weight: 600;
+}
+.lane-node.blue { background: var(--blue-bg); border-color: var(--blue); color: var(--blue-dark); }
+.lane-node.purple { background: var(--purple-bg); border-color: var(--purple); color: var(--purple-dark); }
+.lane-node.orange { background: var(--orange-bg); border-color: var(--orange); color: var(--orange-dark); }
+.lane-node.green { background: var(--green-bg); border-color: var(--green); color: var(--green-dark); }
+.lane-arrow { flex-shrink: 0; font-size: 14px; color: var(--text2); padding: 0 4px; }
+.lane-merge {
+    flex-shrink: 0; padding: 6px 10px; border-radius: 6px; font-size: 10px; font-weight: 600;
+    background: var(--surface2); border: 1px dashed var(--border); color: var(--text2);
+}
+
+/* Download cards */
 .download-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 24px 0; }
 .download-card {
     padding: 24px; border-radius: 12px; border: 2px solid var(--border);
@@ -176,6 +224,28 @@ li { margin-bottom: 6px; }
 .dl-btn:hover { opacity: 0.9; text-decoration: none; }
 .dl-btn.blue { background: var(--blue); }
 .dl-btn.purple { background: var(--purple); }
+
+/* Section download inline */
+.section-download {
+    display: flex; align-items: center; gap: 12px;
+    padding: 16px 20px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--surface); margin: 24px 0;
+}
+.section-download .sd-text { flex: 1; font-size: 13px; color: var(--text2); }
+.section-download .sd-text strong { color: var(--text-strong); }
+
+.arch-diagram {
+    display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 12px; align-items: center;
+    margin: 32px 0; padding: 24px; background: var(--surface); border-radius: 12px; border: 1px solid var(--border);
+}
+.arch-box {
+    padding: 16px; border-radius: 10px; text-align: center; font-size: 13px; font-weight: 600;
+}
+.arch-box.input { background: var(--blue-bg); border: 2px solid var(--blue); color: var(--blue-dark); }
+.arch-box.process { background: var(--purple-bg); border: 2px solid var(--purple); color: var(--purple-dark); }
+.arch-box.output { background: var(--green-bg); border: 2px solid var(--green); color: var(--green-dark); }
+.arch-box small { display: block; font-weight: 400; font-size: 11px; margin-top: 4px; opacity: 0.8; }
+.arch-arrow { font-size: 20px; color: var(--text2); text-align: center; }
 .cta-section {
     text-align: center; padding: 40px 0; margin-top: 48px;
     border-top: 1px solid var(--border);
@@ -207,6 +277,10 @@ li { margin-bottom: 6px; }
     .arch-diagram { grid-template-columns: 1fr; text-align: center; }
     .arch-arrow { transform: rotate(90deg); }
     .hero h1 { font-size: 24px; }
+    .pipeline-flow { flex-wrap: wrap; gap: 4px; }
+    .pipeline-lanes .pipeline-lane { flex-direction: column; align-items: flex-start; }
+    .lane-label { width: auto; margin-bottom: 8px; }
+    .lane-flow { flex-wrap: wrap; gap: 4px; }
 }
 </style>
 <script>
@@ -254,15 +328,15 @@ li { margin-bottom: 6px; }
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#dispatcher" class="step-link"><span class="step-num">2</span> Dispatcher Pattern</a>
+            <a href="#wf1" class="step-link"><span class="step-num">2</span> WF1: Dispatcher</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#hitl-flow" class="step-link"><span class="step-num">3</span> HITL Flow</a>
+            <a href="#wf2" class="step-link"><span class="step-num">3</span> WF2: Thesis + News</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#downloads" class="step-link"><span class="step-num">4</span> Download Templates</a>
+            <a href="#downloads" class="step-link"><span class="step-num">4</span> Download All</a>
         </li>
     </ul>
 </aside>
@@ -275,12 +349,18 @@ li { margin-bottom: 6px; }
 <section class="hero">
     <div class="hero-badge">Interactive Demo</div>
     <h1>See the AI in Action</h1>
-    <p class="hero-sub">Paste HTML from any investor relations page and watch Claude extract, classify, and score document links in real time. This is the actual AI logic, not a simulation.</p>
+    <p class="hero-sub">Three deliverables on this page: a live AI demo, and two complete n8n workflow templates you can download and import. Each one explained below.</p>
 </section>
 
 <!-- Live Demo -->
 <h2 id="demo">Live Demo: Document Link Extraction</h2>
-<p>This demonstrates Pipeline 2's core capability: AI-powered link extraction from investor relations pages. Paste any HTML and Claude will identify financial documents, classify their type, and score confidence.</p>
+
+<div class="callout orange">
+    <div class="callout-title">The core problem this solves</div>
+    <p>You have 300+ companies, each with a different investor relations page structure. Rule-based scrapers break when a site redesigns. The AI adapts to any page layout, extracting and classifying document links regardless of HTML structure. This demo runs the exact same Claude API logic that powers Pipeline 2 in the full system.</p>
+</div>
+
+<p>Paste HTML from any investor relations page and watch Claude extract, classify, and score document links in real time. This is the actual AI logic, not a simulation.</p>
 
 <div class="demo-interactive">
     <div class="demo-panel">
@@ -332,9 +412,9 @@ The AI will:
     <p>This is the hardest technical requirement in the project: given arbitrary HTML from 300+ different investor relations pages, reliably extract and classify financial document links. The AI handles structural variation that would break rule-based scrapers. Each company's page is different, but the AI adapts.</p>
 </div>
 
-<!-- Architecture -->
+<!-- Architecture Overview -->
 <h2 id="architecture">System Architecture</h2>
-<p>The complete system has two main workflows that share infrastructure. Data flows left to right: from input sources through AI processing to structured output.</p>
+<p>You receive <strong>two complete n8n workflow files</strong>. Together they cover all 5 pipelines. Here's how they connect:</p>
 
 <div class="arch-diagram">
     <div class="arch-box input">
@@ -353,13 +433,63 @@ The AI will:
     </div>
 </div>
 
-<h3>Two Workflows, Five Pipelines</h3>
-<p><strong>Workflow 1 (Web Scraping Dispatcher):</strong> Pipelines 1 + 2. Handles data ingestion: reading the company registry, dispatching scraping jobs, extracting and classifying documents, deduplicating, and storing results. Runs on a schedule.</p>
-<p><strong>Workflow 2 (Thesis + News + HITL):</strong> Pipelines 3 + 4 + 5. Handles intelligence processing: synthesizing thesis updates from new documents, filtering news by relevance, and routing changes through email approval before modifying core files.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0;">
+    <div style="padding:16px;border-radius:10px;background:var(--blue-bg);border:1px solid var(--blue);">
+        <div style="font-size:13px;font-weight:700;color:var(--blue-dark);margin-bottom:4px;">Workflow 1: Web Scraping Dispatcher</div>
+        <div style="font-size:12px;color:var(--blue-dark);opacity:.85;">Pipelines 1 + 2. Handles data ingestion: reads 300+ companies from Google Sheets, dispatches scraping jobs in batches, uses Claude to extract and classify document links, deduplicates, stores in cloud storage.</div>
+    </div>
+    <div style="padding:16px;border-radius:10px;background:var(--purple-bg);border:1px solid var(--purple);">
+        <div style="font-size:13px;font-weight:700;color:var(--purple-dark);margin-bottom:4px;">Workflow 2: Thesis + News + HITL</div>
+        <div style="font-size:12px;color:var(--purple-dark);opacity:.85;">Pipelines 3 + 4 + 5. Handles intelligence: synthesizes thesis updates from new documents, filters daily news by relevance, and routes all changes through email approval before modifying any files.</div>
+    </div>
+</div>
 
-<!-- Dispatcher Pattern -->
-<h2 id="dispatcher">Dispatcher Pattern</h2>
-<p>The dispatcher-worker pattern is how we handle 300+ companies without a single failure blocking everything.</p>
+<!-- Workflow 1: Dispatcher -->
+<h2 id="wf1">Workflow 1: Web Scraping Dispatcher</h2>
+<p>The dispatcher-worker pattern handles 300+ companies without a single failure blocking everything. Companies are batched, scraped independently, and failures are isolated and retried.</p>
+
+<h3>Data Flow</h3>
+<div class="pipeline-flow">
+    <div class="pipeline-node input">
+        <div class="pn-label">Schedule<br>Trigger</div>
+        <div class="pn-sub">Daily/weekly</div>
+    </div>
+    <div class="pipeline-arrow">&rarr;</div>
+    <div class="pipeline-node input">
+        <div class="pn-label">Company<br>Registry</div>
+        <div class="pn-sub">Google Sheets</div>
+    </div>
+    <div class="pipeline-arrow">&rarr;</div>
+    <div class="pipeline-node input">
+        <div class="pn-label">Filter<br>Due</div>
+        <div class="pn-sub">Frequency check</div>
+    </div>
+    <div class="pipeline-arrow">&rarr;</div>
+    <div class="pipeline-node process">
+        <div class="pn-label">Batch<br>Split</div>
+        <div class="pn-sub">10-20 per batch</div>
+    </div>
+    <div class="pipeline-arrow">&rarr;</div>
+    <div class="pipeline-node process">
+        <div class="pn-label">Fetch IR<br>Page</div>
+        <div class="pn-sub">HTTP + browser API</div>
+    </div>
+    <div class="pipeline-arrow">&rarr;</div>
+    <div class="pipeline-node ai">
+        <div class="pn-label">Claude: Extract<br>+ Classify</div>
+        <div class="pn-sub">AI link detection</div>
+    </div>
+    <div class="pipeline-arrow">&rarr;</div>
+    <div class="pipeline-node process">
+        <div class="pn-label">Dedup<br>Filter</div>
+        <div class="pn-sub">Skip known docs</div>
+    </div>
+    <div class="pipeline-arrow">&rarr;</div>
+    <div class="pipeline-node output">
+        <div class="pn-label">Cloud<br>Storage</div>
+        <div class="pn-sub">By ticker folder</div>
+    </div>
+</div>
 
 <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin:24px 0;">
     <h3 style="margin-top:0;color:var(--text-strong);">How it works</h3>
@@ -368,15 +498,68 @@ The AI will:
         <li><strong>Google Sheets</strong> node reads the company registry (ticker, URL, site type, last scraped)</li>
         <li><strong>Filter</strong> selects companies due for scraping based on their frequency setting</li>
         <li><strong>Split in Batches</strong> groups companies into batches of 10-20</li>
-        <li><strong>Execute Sub-Workflow</strong> dispatches each batch to the scraper workflow</li>
-        <li>Each batch runs independently with its own error handling</li>
-        <li>Failed companies are logged and retried next run</li>
+        <li><strong>Fetch IR Page</strong> downloads each company's investor relations page via HTTP (with browser API fallback for JavaScript-heavy sites)</li>
+        <li><strong>Claude AI</strong> extracts all links, classifies them (Annual Report, Quarterly Filing, Investor Presentation, etc.), and scores confidence</li>
+        <li><strong>Dedup Filter</strong> removes documents already in cloud storage</li>
+        <li><strong>Cloud Storage</strong> downloads new documents and organizes by ticker/document type</li>
     </ol>
     <p style="margin-bottom:0;font-size:13px;color:var(--text2);"><strong>Why batching?</strong> Rate limiting, error isolation, and memory management. If company #47 has a broken IR page, companies 1-46 and 48-300 are unaffected.</p>
 </div>
 
-<!-- HITL Flow -->
-<h2 id="hitl-flow">HITL Approval Flow</h2>
+<div class="section-download">
+    <div class="sd-text"><strong>Download Workflow 1</strong> - Complete n8n template with color-coded zones, error handling, and descriptive node names.</div>
+    <a href="/clients/alpha-research/alpha-research-web-scraping-dispatcher.json" download class="dl-btn blue">&#128190; Download JSON</a>
+</div>
+
+<!-- Workflow 2: Thesis + News + HITL -->
+<h2 id="wf2">Workflow 2: Thesis + News + HITL</h2>
+<p>Three pipelines that work together: thesis synthesis watches for new documents, news intelligence monitors 3 API sources daily, and the HITL approval chain ensures nothing modifies your files without your explicit sign-off.</p>
+
+<h3>Data Flow: Three Pipelines</h3>
+<div class="pipeline-lanes">
+    <div class="pipeline-lane" style="background:var(--purple-bg);">
+        <div class="lane-label" style="color:var(--purple-dark);">Pipeline 3<small>Thesis Synthesis</small></div>
+        <div class="lane-flow">
+            <div class="lane-node purple">File Watcher</div>
+            <div class="lane-arrow">&rarr;</div>
+            <div class="lane-node purple">Fetch Thesis</div>
+            <div class="lane-arrow">&rarr;</div>
+            <div class="lane-node orange">Claude: Synthesize</div>
+            <div class="lane-arrow">&darr;</div>
+        </div>
+    </div>
+    <div class="pipeline-lane" style="background:var(--blue-bg);">
+        <div class="lane-label" style="color:var(--blue-dark);">Pipeline 4<small>News Intelligence</small></div>
+        <div class="lane-flow">
+            <div class="lane-node blue">Daily Schedule</div>
+            <div class="lane-arrow">&rarr;</div>
+            <div class="lane-node blue">Tavily + AlphaVantage + SerpAPI</div>
+            <div class="lane-arrow">&rarr;</div>
+            <div class="lane-node blue">Merge + Dedup</div>
+            <div class="lane-arrow">&rarr;</div>
+            <div class="lane-node orange">Claude: Score</div>
+            <div class="lane-arrow">&rarr;</div>
+            <div class="lane-node blue">Filter &ge; 60</div>
+            <div class="lane-arrow">&darr;</div>
+        </div>
+    </div>
+    <div class="pipeline-lane" style="background:var(--green-bg);">
+        <div class="lane-label" style="color:var(--green-dark);">Pipeline 5<small>HITL Approval</small></div>
+        <div class="lane-flow">
+            <div class="lane-merge">Both pipelines feed in</div>
+            <div class="lane-arrow">&rarr;</div>
+            <div class="lane-node green">Generate Email</div>
+            <div class="lane-arrow">&rarr;</div>
+            <div class="lane-node green">Send Email</div>
+            <div class="lane-arrow">&rarr;</div>
+            <div class="lane-node orange">Wait (7 days)</div>
+            <div class="lane-arrow">&rarr;</div>
+            <div class="lane-node green">Approve / Reject</div>
+        </div>
+    </div>
+</div>
+
+<h3>HITL Approval Flow (Detail)</h3>
 <p>The human-in-the-loop pattern ensures no AI-generated content modifies your core research files without explicit approval.</p>
 
 <div style="margin:32px 0;">
@@ -441,28 +624,31 @@ The AI will:
     </div>
 </div>
 
-<p>The approval email includes: the proposed change (before/after), the source document that triggered it, and signed Approve/Reject URLs. Clicking either button hits an n8n webhook that resumes the paused execution. Timeout: 7 days with a reminder at day 3.</p>
+<div class="section-download">
+    <div class="sd-text"><strong>Download Workflow 2</strong> - Three pipelines with color-coded zones (purple = thesis, blue = news, green = HITL approval). Error handling included.</div>
+    <a href="/clients/alpha-research/alpha-research-thesis-news-hitl.json" download class="dl-btn purple">&#128190; Download JSON</a>
+</div>
 
-<!-- Downloads -->
-<h2 id="downloads">Download Starter Templates</h2>
+<!-- Downloads Summary -->
+<h2 id="downloads">Download Both Templates</h2>
 <p>Two complete n8n workflow templates. Import into your n8n instance, add your API credentials, and they run. Free to keep regardless of whether we work together.</p>
 
 <div class="download-grid">
     <div class="download-card blue">
         <h3>Web Scraping Dispatcher</h3>
-        <p>Pipelines 1 + 2: Company registry reader, batch dispatcher, HTTP scraper, AI link extraction, dedup, cloud storage. Color-coded sticky notes.</p>
+        <p>Pipelines 1 + 2: Company registry, batch dispatcher, AI link extraction, dedup, cloud storage. 11 nodes with color-coded zones.</p>
         <a href="/clients/alpha-research/alpha-research-web-scraping-dispatcher.json" download class="dl-btn blue">&#128190; Download Workflow 1</a>
     </div>
     <div class="download-card purple">
         <h3>Thesis + News + HITL</h3>
-        <p>Pipelines 3 + 4 + 5: File watcher, thesis synthesis, news filter with relevance scoring, email approval with Wait/Webhook. Color-coded sticky notes.</p>
+        <p>Pipelines 3 + 4 + 5: File watcher, 3 news APIs, relevance scoring, email approval with Wait/Webhook. 17 nodes with color-coded zones.</p>
         <a href="/clients/alpha-research/alpha-research-thesis-news-hitl.json" download class="dl-btn purple">&#128190; Download Workflow 2</a>
     </div>
 </div>
 
 <div class="callout green">
     <div class="callout-title">What you get</div>
-    <p>Both templates include color-coded sticky notes (blue = input zone, yellow = processing zone, green = output zone) explaining each section. Every node has a descriptive name. Error handling is built in. This is not a sketch, it is a working starting point.</p>
+    <p>Both templates include color-coded sticky notes (blue = input, purple = processing, green = output, orange = error handling) explaining each section. Every node has a descriptive name. Error handling is built in. These are working starting points, not sketches.</p>
 </div>
 
 <!-- CTA -->
