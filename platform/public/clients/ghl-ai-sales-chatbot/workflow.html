@@ -386,22 +386,18 @@ li { margin-bottom: 6px; }
     <div class="arch-col">
         <div class="arch-col-label">GHL Frontend</div>
         <div class="arch-node blue">
-            <div class="arch-node-icon">&#128101;</div>
             <div class="arch-node-name">Contacts</div>
             <div class="arch-node-sub">Lead records + profiles</div>
         </div>
         <div class="arch-node blue">
-            <div class="arch-node-icon">&#128172;</div>
             <div class="arch-node-name">Conversations</div>
             <div class="arch-node-sub">SMS, web chat, social</div>
         </div>
         <div class="arch-node blue">
-            <div class="arch-node-icon">&#128200;</div>
             <div class="arch-node-name">Pipelines</div>
             <div class="arch-node-sub">Stage tracking</div>
         </div>
         <div class="arch-node blue">
-            <div class="arch-node-icon">&#127991;</div>
             <div class="arch-node-name">Tags/Fields</div>
             <div class="arch-node-sub">Lead classification</div>
         </div>
@@ -419,7 +415,6 @@ li { margin-bottom: 6px; }
     <div class="arch-col">
         <div class="arch-col-label">n8n Orchestration</div>
         <div class="arch-node purple" style="flex:1;justify-content:center;">
-            <div class="arch-node-icon">&#9881;</div>
             <div class="arch-node-name" style="font-size:15px;">n8n</div>
             <div class="arch-node-sub">Orchestration layer</div>
             <div style="margin-top:12px;width:100%;">
@@ -446,22 +441,18 @@ li { margin-bottom: 6px; }
     <div class="arch-col">
         <div class="arch-col-label">AI Brain</div>
         <div class="arch-node green">
-            <div class="arch-node-icon">&#129302;</div>
             <div class="arch-node-name">Claude/OpenAI</div>
             <div class="arch-node-sub">Conversation engine</div>
         </div>
         <div class="arch-node green">
-            <div class="arch-node-icon">&#128214;</div>
             <div class="arch-node-name">Sales Playbook</div>
             <div class="arch-node-sub">Tone, flow, offers</div>
         </div>
         <div class="arch-node green">
-            <div class="arch-node-icon">&#128170;</div>
             <div class="arch-node-name">Objection Lib</div>
             <div class="arch-node-sub">10&ndash;15 handlers</div>
         </div>
         <div class="arch-node green">
-            <div class="arch-node-icon">&#128451;</div>
             <div class="arch-node-name">Conv. Memory</div>
             <div class="arch-node-sub">Full history per lead</div>
         </div>
@@ -479,17 +470,14 @@ li { margin-bottom: 6px; }
     <div class="arch-col">
         <div class="arch-col-label">Voice + Media</div>
         <div class="arch-node orange">
-            <div class="arch-node-icon">&#127908;</div>
             <div class="arch-node-name">ElevenLabs</div>
             <div class="arch-node-sub">Voice persona</div>
         </div>
         <div class="arch-node orange">
-            <div class="arch-node-icon">&#128222;</div>
             <div class="arch-node-name">Twilio</div>
             <div class="arch-node-sub">MMS delivery</div>
         </div>
         <div class="arch-node orange">
-            <div class="arch-node-icon">&#127912;</div>
             <div class="arch-node-name">Media Library</div>
             <div class="arch-node-sub">Testimonials, assets</div>
         </div>
@@ -587,32 +575,32 @@ li { margin-bottom: 6px; }
 <h3>Outbound Voice Notes</h3>
 <div class="pipeline-flow">
     <div class="pipe-step">
-        <div class="pipe-icon">&#129302;</div>
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--blue);color:#fff;font-size:12px;font-weight:700;">1</span>
         <div class="pipe-text">AI generates text response</div>
     </div>
     <div class="pipe-arrow">&darr;</div>
     <div class="pipe-step">
-        <div class="pipe-icon">&#127908;</div>
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--blue);color:#fff;font-size:12px;font-weight:700;">2</span>
         <div class="pipe-text">ElevenLabs API (brand voice, tone settings)</div>
     </div>
     <div class="pipe-arrow">&darr;</div>
     <div class="pipe-step">
-        <div class="pipe-icon">&#127925;</div>
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--blue);color:#fff;font-size:12px;font-weight:700;">3</span>
         <div class="pipe-text">Audio file generated (MP3)</div>
     </div>
     <div class="pipe-arrow">&darr;</div>
     <div class="pipe-step">
-        <div class="pipe-icon">&#9729;</div>
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--blue);color:#fff;font-size:12px;font-weight:700;">4</span>
         <div class="pipe-text">Hosted on CDN (signed URL, 24hr expiry)</div>
     </div>
     <div class="pipe-arrow">&darr;</div>
     <div class="pipe-step">
-        <div class="pipe-icon">&#128222;</div>
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--blue);color:#fff;font-size:12px;font-weight:700;">5</span>
         <div class="pipe-text">Sent via Twilio MMS to prospect</div>
     </div>
     <div class="pipe-arrow">&darr;</div>
     <div class="pipe-step">
-        <div class="pipe-icon">&#128172;</div>
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--blue);color:#fff;font-size:12px;font-weight:700;">6</span>
         <div class="pipe-text">GHL conversation updated with voice note record</div>
     </div>
 </div>
@@ -620,27 +608,27 @@ li { margin-bottom: 6px; }
 <h3>Inbound Voice Messages</h3>
 <div class="pipeline-flow">
     <div class="pipe-step">
-        <div class="pipe-icon">&#128227;</div>
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--blue);color:#fff;font-size:12px;font-weight:700;">1</span>
         <div class="pipe-text">Prospect sends voice message</div>
     </div>
     <div class="pipe-arrow">&darr;</div>
     <div class="pipe-step">
-        <div class="pipe-icon">&#128222;</div>
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--blue);color:#fff;font-size:12px;font-weight:700;">2</span>
         <div class="pipe-text">Twilio receives and transcribes (speech-to-text)</div>
     </div>
     <div class="pipe-arrow">&darr;</div>
     <div class="pipe-step">
-        <div class="pipe-icon">&#9881;</div>
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--blue);color:#fff;font-size:12px;font-weight:700;">3</span>
         <div class="pipe-text">Transcript sent to n8n via webhook</div>
     </div>
     <div class="pipe-arrow">&darr;</div>
     <div class="pipe-step">
-        <div class="pipe-icon">&#129302;</div>
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--blue);color:#fff;font-size:12px;font-weight:700;">4</span>
         <div class="pipe-text">AI engine processes as text (same pipeline as text messages)</div>
     </div>
     <div class="pipe-arrow">&darr;</div>
     <div class="pipe-step">
-        <div class="pipe-icon">&#128172;</div>
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--blue);color:#fff;font-size:12px;font-weight:700;">5</span>
         <div class="pipe-text">Response generated (text or voice note, based on context)</div>
     </div>
 </div>
@@ -706,6 +694,11 @@ li { margin-bottom: 6px; }
 <div class="callout green">
     <div class="callout-title">Under 30 minutes</div>
     <p>Once the template exists, deploying to a new client takes under 30 minutes. The GHL snapshot handles the CRM config. The provisioning script handles the external stack. The only manual work is customizing the sales playbook for the new offer.</p>
+</div>
+
+<div class="callout">
+    <div class="callout-title">Architecture documentation</div>
+    <p>This page documents the system architecture. Unlike our n8n-based proposals, GHL workflows are not exportable as JSON files, so there is no downloadable artifact or live demo for this proposal. The working system is built during the engagement.</p>
 </div>
 
 <!-- CTA -->

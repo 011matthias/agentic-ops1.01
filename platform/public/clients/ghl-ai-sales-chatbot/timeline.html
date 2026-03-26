@@ -161,9 +161,9 @@ li { margin-bottom: 6px; }
 .callout.purple .callout-title, .callout.purple p { color: var(--purple-dark); }
 
 /* Timeline Strip */
-.timeline-strip { display: flex; gap: 16px; margin: 24px 0; flex-wrap: wrap; }
+.timeline-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin: 24px 0; }
 .tl-card {
-    flex: 1; min-width: 140px; padding: 20px; border-radius: 10px; border: 1px solid var(--border);
+    padding: 20px; border-radius: 10px; border: 1px solid var(--border);
     border-left: 4px solid var(--blue); background: var(--surface);
     transition: transform .15s, box-shadow .15s;
 }
@@ -227,7 +227,10 @@ li { margin-bottom: 6px; }
     padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border);
     background: var(--surface); margin-bottom: 8px;
 }
-.prereq-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+.prereq-icon {
+    width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; color: #fff; background: var(--blue); flex-shrink: 0; margin-top: 1px;
+}
 .prereq-text { flex: 1; }
 .prereq-name { font-size: 13px; font-weight: 700; color: var(--text-strong); }
 .prereq-desc { font-size: 12px; color: var(--text2); margin-top: 2px; line-height: 1.4; }
@@ -269,7 +272,7 @@ li { margin-bottom: 6px; }
     .stats-row { gap: 8px; }
     .stat-card { min-width: 100px; padding: 12px 16px; }
     .stat-value { font-size: 20px; }
-    .timeline-strip { flex-direction: column; }
+    .timeline-strip { grid-template-columns: 1fr; }
     .day-grid { grid-template-columns: 1fr; }
 }
 </style>
@@ -587,49 +590,49 @@ li { margin-bottom: 6px; }
 
 <ul class="prereq-list">
     <li class="prereq-item">
-        <div class="prereq-icon">&#128187;</div>
+        <div class="prereq-icon">1</div>
         <div class="prereq-text">
             <div class="prereq-name">GoHighLevel agency account (or sub-account access)</div>
             <div class="prereq-desc">We build inside a sub-account. Agency-level access lets us create and configure everything.</div>
         </div>
     </li>
     <li class="prereq-item">
-        <div class="prereq-icon">&#128176;</div>
+        <div class="prereq-icon">2</div>
         <div class="prereq-text">
             <div class="prereq-name">Credit repair offer details (pricing, community access, etc.)</div>
             <div class="prereq-desc">The AI needs to know what it is selling: pricing, packages, onboarding steps, and community access details.</div>
         </div>
     </li>
     <li class="prereq-item">
-        <div class="prereq-icon">&#127908;</div>
+        <div class="prereq-icon">3</div>
         <div class="prereq-text">
             <div class="prereq-name">Brand voice recording (60 seconds for ElevenLabs cloning) OR pick a preset voice</div>
             <div class="prereq-desc">A 60-second recording of you speaking naturally. We use this to create a voice clone for voice notes. Alternatively, pick from ElevenLabs preset voices.</div>
         </div>
     </li>
     <li class="prereq-item">
-        <div class="prereq-icon">&#128221;</div>
+        <div class="prereq-icon">4</div>
         <div class="prereq-text">
             <div class="prereq-name">Existing sales scripts or objection handling notes</div>
             <div class="prereq-desc">We build the playbook from these. The more you can share about your current sales process, the better the AI performs from Day 1.</div>
         </div>
     </li>
     <li class="prereq-item">
-        <div class="prereq-icon">&#128222;</div>
+        <div class="prereq-icon">5</div>
         <div class="prereq-text">
             <div class="prereq-name">Twilio account (or we set one up on Day 1)</div>
             <div class="prereq-desc">For voice note delivery via MMS. If you do not have one, we create it during Phase 1.</div>
         </div>
     </li>
     <li class="prereq-item">
-        <div class="prereq-icon">&#129302;</div>
+        <div class="prereq-icon">6</div>
         <div class="prereq-text">
             <div class="prereq-name">OpenAI or Anthropic API key (for the AI engine)</div>
             <div class="prereq-desc">The AI conversation engine runs on your API key. We configure it during setup.</div>
         </div>
     </li>
     <li class="prereq-item">
-        <div class="prereq-icon">&#128172;</div>
+        <div class="prereq-icon">7</div>
         <div class="prereq-text">
             <div class="prereq-name">Sample lead messages (5&ndash;10 real conversations to train and test against)</div>
             <div class="prereq-desc">Real conversation screenshots or exports. We use these to test and tune the AI's responses before going live.</div>

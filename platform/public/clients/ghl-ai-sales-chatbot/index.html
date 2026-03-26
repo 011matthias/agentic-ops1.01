@@ -169,7 +169,14 @@ li { margin-bottom: 6px; }
 .zone-purple { background: var(--purple-bg); border-color: color-mix(in srgb, var(--purple) 20%, var(--border)); }
 .zone-green { background: var(--green-bg); border-color: color-mix(in srgb, var(--green) 20%, var(--border)); }
 .zone-orange { background: var(--orange-bg); border-color: color-mix(in srgb, var(--orange) 20%, var(--border)); }
-.zone-icon { font-size: 28px; margin-bottom: 8px; }
+.zone-icon {
+    width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 8px;
+}
+.zone-blue .zone-icon { background: var(--blue); }
+.zone-purple .zone-icon { background: var(--purple); }
+.zone-orange .zone-icon { background: var(--orange); }
+.zone-green .zone-icon { background: var(--green); }
 .zone-title { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
 .zone-blue .zone-title { color: var(--blue-dark); }
 .zone-purple .zone-title { color: var(--purple-dark); }
@@ -205,9 +212,9 @@ li { margin-bottom: 6px; }
 .sol-desc { font-size: 12px; color: var(--text2); line-height: 1.5; }
 
 /* Timeline Strip */
-.timeline-strip { display: flex; gap: 16px; margin: 24px 0; }
+.timeline-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin: 24px 0; }
 .tl-card {
-    flex: 1; padding: 20px; border-radius: 10px; border: 1px solid var(--border);
+    padding: 20px; border-radius: 10px; border: 1px solid var(--border);
     border-left: 4px solid var(--blue); background: var(--surface);
     transition: transform .15s, box-shadow .15s;
 }
@@ -285,7 +292,7 @@ tr:hover td { background: var(--blue-bg); }
     .nav-links { display: none; }
     .zones { grid-template-columns: 1fr; }
     .solution-grid { grid-template-columns: 1fr; }
-    .timeline-strip { flex-direction: column; }
+    .timeline-strip { grid-template-columns: 1fr; }
     .hero h1 { font-size: 24px; }
     .stats-row { gap: 8px; }
     .stat-card { min-width: 100px; padding: 12px 16px; }
@@ -349,10 +356,6 @@ tr:hover td { background: var(--blue-bg); }
         </li>
         <li class="step-item">
             <a href="#investment" class="step-link"><span class="step-num">6</span> Investment Preview</a>
-            <div class="step-line"></div>
-        </li>
-        <li class="step-item">
-            <a href="#next-steps" class="step-link"><span class="step-num">7</span> Next Steps</a>
         </li>
     </ul>
 </aside>
@@ -380,7 +383,7 @@ tr:hover td { background: var(--blue-bg); }
 
 <div class="zones">
     <div class="zone zone-blue">
-        <div class="zone-icon">&#128229;</div>
+        <div class="zone-icon">1</div>
         <div class="zone-title">Leads In</div>
         <div class="zone-sub">Where prospects enter the system</div>
         <ul class="zone-items">
@@ -391,7 +394,7 @@ tr:hover td { background: var(--blue-bg); }
         </ul>
     </div>
     <div class="zone zone-purple">
-        <div class="zone-icon">&#129302;</div>
+        <div class="zone-icon">2</div>
         <div class="zone-title">AI Brain</div>
         <div class="zone-sub">External engine drives the conversation</div>
         <ul class="zone-items">
@@ -402,7 +405,7 @@ tr:hover td { background: var(--blue-bg); }
         </ul>
     </div>
     <div class="zone zone-orange">
-        <div class="zone-icon">&#127908;</div>
+        <div class="zone-icon">3</div>
         <div class="zone-title">Voice + Media</div>
         <div class="zone-sub">Personalized outreach at scale</div>
         <ul class="zone-items">
@@ -413,7 +416,7 @@ tr:hover td { background: var(--blue-bg); }
         </ul>
     </div>
     <div class="zone zone-green">
-        <div class="zone-icon">&#9989;</div>
+        <div class="zone-icon">4</div>
         <div class="zone-title">Actions Out</div>
         <div class="zone-sub">Automated updates and handoffs</div>
         <ul class="zone-items">

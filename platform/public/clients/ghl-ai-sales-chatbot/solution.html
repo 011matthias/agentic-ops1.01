@@ -185,6 +185,8 @@ li { margin-bottom: 6px; }
     .mobile-nav-toggle { display: block; }
     .nav-links { display: none; }
     .hero h1 { font-size: 24px; }
+    [style*="grid-template-columns:1fr 1fr 1fr"] { grid-template-columns: 1fr !important; }
+    [style*="grid-template-columns:1fr 1fr"] { grid-template-columns: 1fr !important; }
 }
 </style>
 <script>
@@ -284,6 +286,18 @@ li { margin-bottom: 6px; }
     <p>GHL inbound message webhook &rarr; n8n receives &rarr; AI engine (Claude/OpenAI) generates response using conversation history + sales playbook + prospect profile &rarr; n8n sends reply via GHL Conversations API. Round trip: under 3 seconds for text.</p>
 </div>
 
+<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:24px 0;font-size:13px;">
+    <span style="background:var(--blue);color:#fff;padding:6px 14px;border-radius:6px;font-weight:600;">Inbound Message</span>
+    <span style="color:var(--text2);">&rarr;</span>
+    <span style="background:var(--surface);border:1px solid var(--border);padding:6px 14px;border-radius:6px;font-weight:600;color:var(--text-strong);">n8n Receives</span>
+    <span style="color:var(--text2);">&rarr;</span>
+    <span style="background:var(--purple);color:#fff;padding:6px 14px;border-radius:6px;font-weight:600;">AI Engine</span>
+    <span style="color:var(--text2);">&rarr;</span>
+    <span style="background:var(--surface);border:1px solid var(--border);padding:6px 14px;border-radius:6px;font-weight:600;color:var(--text-strong);">Response Generated</span>
+    <span style="color:var(--text2);">&rarr;</span>
+    <span style="background:var(--green);color:#fff;padding:6px 14px;border-radius:6px;font-weight:600;">GHL Sends Reply</span>
+</div>
+
 <!-- 2. Voice Capabilities -->
 <h2 id="voice">2. Voice Capabilities</h2>
 <p>Three voice capabilities: outbound voice notes, inbound voice transcription, and optional live voice calls.</p>
@@ -293,6 +307,18 @@ li { margin-bottom: 6px; }
     <li><strong>Inbound voice transcription:</strong> Prospect sends voice message &rarr; Twilio transcribes &rarr; AI engine processes text &rarr; responds with text or voice note (configurable).</li>
     <li><strong>Live voice (optional):</strong> Twilio ConversationRelay with ElevenLabs as TTS provider. Real-time two-way conversation. Latency is 1-2 seconds per turn &ndash; acceptable for most sales calls, but not instant.</li>
 </ul>
+
+<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:24px 0;font-size:13px;">
+    <span style="background:var(--purple);color:#fff;padding:6px 14px;border-radius:6px;font-weight:600;">AI Text</span>
+    <span style="color:var(--text2);">&rarr;</span>
+    <span style="background:var(--orange);color:#fff;padding:6px 14px;border-radius:6px;font-weight:600;">ElevenLabs</span>
+    <span style="color:var(--text2);">&rarr;</span>
+    <span style="background:var(--surface);border:1px solid var(--border);padding:6px 14px;border-radius:6px;font-weight:600;color:var(--text-strong);">Audio MP3</span>
+    <span style="color:var(--text2);">&rarr;</span>
+    <span style="background:var(--blue);color:#fff;padding:6px 14px;border-radius:6px;font-weight:600;">Twilio MMS</span>
+    <span style="color:var(--text2);">&rarr;</span>
+    <span style="background:var(--green);color:#fff;padding:6px 14px;border-radius:6px;font-weight:600;">Prospect Receives</span>
+</div>
 
 <div class="callout orange">
     <div class="callout-title">Honest limitation</div>
@@ -339,6 +365,37 @@ li { margin-bottom: 6px; }
 </ul>
 
 <p>n8n tracks each prospect's behavior state via GHL tags and custom fields. Each follow-up is AI-generated and personalized, not a template blast.</p>
+
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin:32px 0;">
+    <div style="border-radius:12px;padding:20px;border:1px solid var(--border);background:var(--blue-bg);border-left:4px solid var(--blue);">
+        <div style="font-size:14px;font-weight:700;color:var(--blue-dark);margin-bottom:8px;">Track 1: Ghost</div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:12px;">No response at all</div>
+        <ul style="list-style:none;padding:0;font-size:13px;">
+            <li style="padding:4px 0;color:var(--text);">Day 1: Casual check-in</li>
+            <li style="padding:4px 0;color:var(--text);">Day 3: Value hook + voice note</li>
+            <li style="padding:4px 0;color:var(--text);">Day 7: Direct close attempt</li>
+            <li style="padding:4px 0;color:var(--text);">Day 14: Breakup message</li>
+        </ul>
+    </div>
+    <div style="border-radius:12px;padding:20px;border:1px solid var(--border);background:var(--purple-bg);border-left:4px solid var(--purple);">
+        <div style="font-size:14px;font-weight:700;color:var(--purple-dark);margin-bottom:8px;">Track 2: Clicked</div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:12px;">Showed interest, did not buy</div>
+        <ul style="list-style:none;padding:0;font-size:13px;">
+            <li style="padding:4px 0;color:var(--text);">Day 1: Address top objection</li>
+            <li style="padding:4px 0;color:var(--text);">Day 3: Social proof</li>
+            <li style="padding:4px 0;color:var(--text);">Day 5: Limited incentive</li>
+        </ul>
+    </div>
+    <div style="border-radius:12px;padding:20px;border:1px solid var(--border);background:var(--green-bg);border-left:4px solid var(--green);">
+        <div style="font-size:14px;font-weight:700;color:var(--green-dark);margin-bottom:8px;">Track 3: Asked</div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:12px;">Engaged then went cold</div>
+        <ul style="list-style:none;padding:0;font-size:13px;">
+            <li style="padding:4px 0;color:var(--text);">Day 1: Pick up where they left off</li>
+            <li style="padding:4px 0;color:var(--text);">Day 3: New angle</li>
+            <li style="padding:4px 0;color:var(--text);">Day 7: Direct close</li>
+        </ul>
+    </div>
+</div>
 
 <div class="callout purple">
     <div class="callout-title">Personalized, not generic</div>
@@ -405,6 +462,29 @@ li { margin-bottom: 6px; }
 </ul>
 
 <p>New client deployment: apply GHL snapshot to new sub-account (API or UI), run provisioning script (5-10 minutes), send test message. Total setup time per new client: under 30 minutes once the template exists.</p>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0;">
+    <div style="border-radius:10px;padding:20px;border:1px solid var(--border);background:var(--blue-bg);">
+        <div style="font-size:14px;font-weight:700;color:var(--blue-dark);margin-bottom:12px;">GHL Snapshot Captures</div>
+        <ul style="list-style:none;padding:0;font-size:13px;">
+            <li style="padding:4px 0;display:flex;align-items:center;gap:8px;color:var(--text);"><span style="color:var(--blue);">&#10003;</span> Pipelines and stages</li>
+            <li style="padding:4px 0;display:flex;align-items:center;gap:8px;color:var(--text);"><span style="color:var(--blue);">&#10003;</span> Custom fields and tags</li>
+            <li style="padding:4px 0;display:flex;align-items:center;gap:8px;color:var(--text);"><span style="color:var(--blue);">&#10003;</span> Workflows and triggers</li>
+            <li style="padding:4px 0;display:flex;align-items:center;gap:8px;color:var(--text);"><span style="color:var(--blue);">&#10003;</span> Email/SMS templates</li>
+            <li style="padding:4px 0;display:flex;align-items:center;gap:8px;color:var(--text);"><span style="color:var(--blue);">&#10003;</span> Conversation channels</li>
+        </ul>
+    </div>
+    <div style="border-radius:10px;padding:20px;border:1px solid var(--border);background:var(--green-bg);">
+        <div style="font-size:14px;font-weight:700;color:var(--green-dark);margin-bottom:12px;">Provisioning Script Handles</div>
+        <ul style="list-style:none;padding:0;font-size:13px;">
+            <li style="padding:4px 0;display:flex;align-items:center;gap:8px;color:var(--text);"><span style="color:var(--green);">&#10003;</span> Twilio phone number</li>
+            <li style="padding:4px 0;display:flex;align-items:center;gap:8px;color:var(--text);"><span style="color:var(--green);">&#10003;</span> ElevenLabs voice persona</li>
+            <li style="padding:4px 0;display:flex;align-items:center;gap:8px;color:var(--text);"><span style="color:var(--green);">&#10003;</span> n8n webhook URLs</li>
+            <li style="padding:4px 0;display:flex;align-items:center;gap:8px;color:var(--text);"><span style="color:var(--green);">&#10003;</span> AI engine config per client</li>
+            <li style="padding:4px 0;display:flex;align-items:center;gap:8px;color:var(--text);"><span style="color:var(--green);">&#10003;</span> End-to-end verification</li>
+        </ul>
+    </div>
+</div>
 
 <div class="callout green">
     <div class="callout-title">Scalable from day one</div>
