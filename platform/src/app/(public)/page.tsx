@@ -1,6 +1,5 @@
 import Link from "next/link";
 import Card from "@/components/ui/Card";
-import { getDisplayableProposals } from "@/lib/proposals";
 
 const iconStyles = {
   blue: "bg-blue/10 text-blue",
@@ -69,37 +68,8 @@ const orchestrators = [
   { name: "Trigger.dev", description: "Code-first AI workflows", color: "green" as const },
 ];
 
-const stats = [
-  { value: "3", label: "Client Systems" },
-  { value: "12+", label: "Automations Built" },
-  { value: "4", label: "Industries" },
-];
-
-const tagLabels: Record<string, string> = {
-  "n8n": "n8n",
-  "make.com": "Make.com",
-  "claude-api": "Claude AI",
-  "hubspot": "HubSpot",
-  "crm": "CRM",
-  "healthcare": "Healthcare",
-  "ai-classification": "AI",
-  "web-scraping": "Web Scraping",
-  "google-sheets": "Google Sheets",
-  "webhooks": "Webhooks",
-  "gdpr": "GDPR",
-  "automation": "Automation",
-  "slack": "Slack",
-  "calendly": "Calendly",
-  "hitl": "Human-in-the-Loop",
-  "news-filtering": "News Filtering",
-  "document-processing": "Document Processing",
-  "mollie": "Mollie",
-  "google-drive": "Google Drive",
-};
 
 export default function Home() {
-  const projects = getDisplayableProposals();
-
   return (
     <div className="flex flex-col">
       {/* Hero */}
@@ -132,18 +102,6 @@ export default function Home() {
             </Link>
           </div>
 
-          {/* Stat cards */}
-          <div className="mt-4 grid w-full max-w-md grid-cols-3 gap-4">
-            {stats.map((stat) => (
-              <div
-                key={stat.label}
-                className="rounded-xl border border-border bg-surface px-4 py-3 text-center"
-              >
-                <div className="text-xl font-bold text-accent">{stat.value}</div>
-                <div className="text-xs text-muted">{stat.label}</div>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
@@ -203,66 +161,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-
-      {/* Recent Projects */}
-      {projects.length > 0 && (
-        <section className="mx-auto max-w-4xl px-6 py-20">
-          <div className="mb-12 text-center">
-            <span className="mb-3 inline-block text-xs font-semibold uppercase tracking-wider text-muted">
-              Recent Work
-            </span>
-            <h2 className="text-2xl font-bold tracking-tight">
-              Projects we&rsquo;ve delivered
-            </h2>
-            <p className="mt-3 text-muted">
-              Real solutions built for real businesses.
-            </p>
-          </div>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {projects.map((project) => {
-              const fm = project.frontmatter;
-              const displayTags = fm.tags
-                .filter((t) => !["automation", "crm"].includes(t))
-                .slice(0, 3);
-              return (
-                <Link
-                  key={fm.slug}
-                  href={`/proposals/${fm.slug}`}
-                  className="group rounded-xl border border-border bg-surface p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
-                >
-                  <div className="mb-3 text-xs font-medium uppercase tracking-wider text-muted">
-                    {fm.prospect}
-                  </div>
-                  <h3 className="mb-2 font-semibold group-hover:text-accent transition-colors">
-                    {fm.project_title}
-                  </h3>
-                  <p className="mb-4 text-sm text-muted">
-                    {fm.timeline} &middot; {fm.tags.find(t => ["n8n", "make.com"].includes(t)) ? tagLabels[fm.tags.find(t => ["n8n", "make.com"].includes(t))!] : "Custom"}
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {displayTags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="rounded-full bg-blue-bg px-2.5 py-0.5 text-xs text-blue"
-                      >
-                        {tagLabels[tag] || tag}
-                      </span>
-                    ))}
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-          <div className="mt-10 text-center">
-            <Link
-              href="/work"
-              className="text-sm font-medium text-accent hover:text-accent-light"
-            >
-              View all projects &rarr;
-            </Link>
-          </div>
-        </section>
-      )}
 
       {/* Founder */}
       <section className="border-t border-border">
