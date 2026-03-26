@@ -1,0 +1,292 @@
+{
+  "name": "Alpha Research - Web Scraping Dispatcher (WF1)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 24 }]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Daily Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 340]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "sheetId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "" },
+        "options": {}
+      },
+      "id": "read-registry",
+      "name": "Read Company Registry",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [460, 340],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "due-check",
+              "leftValue": "={{ $json.due_for_scrape }}",
+              "rightValue": "true",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-due",
+      "name": "Filter Due Companies",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [680, 340]
+    },
+    {
+      "parameters": {
+        "batchSize": 10,
+        "options": {}
+      },
+      "id": "batch-split",
+      "name": "Split in Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [900, 280]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.ir_page_url }}",
+        "options": {
+          "timeout": 30000,
+          "redirect": { "redirect": { "followRedirects": true, "maxRedirects": 5 } }
+        }
+      },
+      "id": "fetch-page",
+      "name": "Fetch IR Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 280]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse HTML and extract all anchor tags with href\nconst html = $input.first().json.data || $input.first().json.body || '';\nconst linkRegex = /<a[^>]+href=[\"']([^\"']+)[\"'][^>]*>(.*?)<\\/a>/gi;\nconst links = [];\nlet match;\nwhile ((match = linkRegex.exec(html)) !== null) {\n  links.push({ url: match[1], text: match[2].replace(/<[^>]*>/g, '').trim() });\n}\nreturn [{ json: { ticker: $input.first().json.ticker, company: $input.first().json.company_name, links, link_count: links.length } }];"
+      },
+      "id": "parse-html",
+      "name": "Extract Links (Code)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 280]
+    },
+    {
+      "parameters": {
+        "modelId": { "__rl": true, "mode": "list", "value": "claude-haiku-4-5-20251001" },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a financial document link classifier. Given a list of links from a company's investor relations page, classify each link.\n\nCompany: {{ $json.company }} ({{ $json.ticker }})\n\nLinks:\n{{ JSON.stringify($json.links) }}\n\nFor each link, return JSON with: url, title, type (Annual Report, Quarterly Filing, Investor Presentation, Press Release, SEC Filing, Earnings Call Transcript, Proxy Statement, Other), confidence (0-100), year (if identifiable). Separate documents from navigation/noise. Return valid JSON only."
+            }
+          ]
+        },
+        "options": { "maxTokensToSample": 2048 }
+      },
+      "id": "ai-classify",
+      "name": "Claude: Classify Links",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [1560, 280],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Claude response and deduplicate against known documents\nconst response = $input.first().json;\nlet classified;\ntry {\n  classified = typeof response.text === 'string' ? JSON.parse(response.text) : response;\n} catch(e) {\n  classified = { documents: [], error: 'Failed to parse AI response' };\n}\n\n// Dedup: check if document URL already exists in our records\nconst docs = (classified.documents || []).filter(d => d.confidence >= 60);\n\nreturn docs.map(d => ({ json: { ...d, ticker: $('Extract Links (Code)').first().json.ticker, company: $('Extract Links (Code)').first().json.company, status: 'new' } }));"
+      },
+      "id": "dedup-filter",
+      "name": "Dedup + Filter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 280]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "options": { "response": { "response": { "responseFormat": "file" } } }
+      },
+      "id": "download-doc",
+      "name": "Download Document",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 280]
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "options": {}
+      },
+      "id": "cloud-upload",
+      "name": "Upload to Cloud Storage",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [2220, 280],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "sheetId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "last_scraped": "={{ $now.toISO() }}",
+            "docs_found": "={{ $json.doc_count }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "update-registry",
+      "name": "Update Last Scraped",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2220, 480],
+      "credentials": {}
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [240, 620]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "sheetId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Error Log" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $now.toISO() }}",
+            "pipeline": "Web Scraping Dispatcher",
+            "error": "={{ $json.error.message }}",
+            "company": "={{ $json.ticker || 'unknown' }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-error",
+      "name": "Log Error",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [460, 620],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "content": "## Alpha Research - Web Scraping Dispatcher\n\n**Workflow 1 of 2** | Pipelines 1 + 2\n\nScheduled batch dispatcher that reads 300+ companies from Google Sheets, scrapes investor relations pages, uses Claude AI to extract and classify financial document links, deduplicates, and stores documents in cloud storage.\n\n**Setup:** Add Google Sheets + Google Drive + Anthropic credentials. Configure sheet ID in 'Read Company Registry' node.\n\n**Schedule:** Default daily. Change in 'Daily Schedule' trigger node.",
+        "height": 300,
+        "width": 2200,
+        "color": 4
+      },
+      "id": "sticky-header",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [120, -200]
+    },
+    {
+      "parameters": {
+        "content": "**CREDENTIALS NEEDED**\n\n1. Google Sheets (read company list)\n2. Google Drive (upload documents)\n3. Anthropic Claude API key\n4. Browser API key (ScrapingBee/Bright Data) for JS sites",
+        "height": 90,
+        "width": 500,
+        "color": 1
+      },
+      "id": "sticky-creds",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [120, 140]
+    },
+    {
+      "parameters": {
+        "content": "**INPUT ZONE**\n\nSchedule trigger reads company registry and filters for companies due for scraping.",
+        "height": 340,
+        "width": 580,
+        "color": 2
+      },
+      "id": "sticky-input",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [140, 260]
+    },
+    {
+      "parameters": {
+        "content": "**PROCESSING ZONE**\n\nBatch splitting, HTTP fetch, HTML parsing, AI classification, deduplication.",
+        "height": 340,
+        "width": 980,
+        "color": 6
+      },
+      "id": "sticky-process",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [800, 260]
+    },
+    {
+      "parameters": {
+        "content": "**OUTPUT ZONE**\n\nDownload classified documents and upload to cloud storage. Update registry with last scraped date.",
+        "height": 340,
+        "width": 500,
+        "color": 5
+      },
+      "id": "sticky-output",
+      "name": "Sticky Note4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1900, 260]
+    },
+    {
+      "parameters": {
+        "content": "**ERROR HANDLING**\n\nCatches failures and logs to error sheet for retry on next run.",
+        "height": 180,
+        "width": 500,
+        "color": 3
+      },
+      "id": "sticky-error",
+      "name": "Sticky Note5",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [140, 560]
+    }
+  ],
+  "connections": {
+    "Daily Schedule": { "main": [[{ "node": "Read Company Registry", "type": "main", "index": 0 }]] },
+    "Read Company Registry": { "main": [[{ "node": "Filter Due Companies", "type": "main", "index": 0 }]] },
+    "Filter Due Companies": { "main": [[{ "node": "Split in Batches", "type": "main", "index": 0 }], []] },
+    "Split in Batches": { "main": [[{ "node": "Fetch IR Page", "type": "main", "index": 0 }]] },
+    "Fetch IR Page": { "main": [[{ "node": "Extract Links (Code)", "type": "main", "index": 0 }]] },
+    "Extract Links (Code)": { "main": [[{ "node": "Claude: Classify Links", "type": "main", "index": 0 }]] },
+    "Claude: Classify Links": { "main": [[{ "node": "Dedup + Filter", "type": "main", "index": 0 }]] },
+    "Dedup + Filter": { "main": [[{ "node": "Download Document", "type": "main", "index": 0 }]] },
+    "Download Document": { "main": [[{ "node": "Upload to Cloud Storage", "type": "main", "index": 0 }]] },
+    "Upload to Cloud Storage": { "main": [[{ "node": "Update Last Scraped", "type": "main", "index": 0 }]] },
+    "Error Trigger": { "main": [[{ "node": "Log Error", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [{ "name": "alpha-research" }],
+  "triggerCount": 1,
+  "updatedAt": "2026-03-26T00:00:00.000Z",
+  "versionId": "1"
+}

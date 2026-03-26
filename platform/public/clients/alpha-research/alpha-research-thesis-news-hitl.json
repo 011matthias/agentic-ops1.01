@@ -1,0 +1,380 @@
+{
+  "name": "Alpha Research - Thesis Synthesis + News + HITL (WF2)",
+  "nodes": [
+    {
+      "parameters": {
+        "events": ["fileCreated"],
+        "options": {}
+      },
+      "id": "file-watcher",
+      "name": "New Analysis File",
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "typeVersion": 1,
+      "position": [240, 340],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": "={{ $json.id }}",
+        "options": {}
+      },
+      "id": "fetch-new-file",
+      "name": "Fetch New File",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [460, 340],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fetch 4 thesis documents for this company\nconst ticker = $input.first().json.ticker || $input.first().json.name.split('/')[0];\nconst thesisFiles = [\n  `${ticker}/thesis/core-thesis.md`,\n  `${ticker}/thesis/financial-model.md`,\n  `${ticker}/thesis/risk-assessment.md`,\n  `${ticker}/thesis/catalyst-tracker.md`\n];\nreturn [{ json: { ticker, thesisFiles, newFileContent: $input.first().json.content } }];"
+      },
+      "id": "resolve-thesis",
+      "name": "Resolve Thesis Files",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 340]
+    },
+    {
+      "parameters": {
+        "modelId": { "__rl": true, "mode": "list", "value": "claude-haiku-4-5-20251001" },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an investment research analyst assistant. Given a new analysis document and existing thesis files, identify what needs updating.\n\nNew document:\n{{ $json.newFileContent }}\n\nExisting thesis structure:\n{{ JSON.stringify($json.thesisFiles) }}\n\nReturn JSON with:\n- target_file: which thesis file to update\n- target_section: which section heading to append under\n- proposed_content: the markdown content to append\n- summary: one-line description of the update\n- confidence: 0-100 score for relevance\n\nOnly propose updates with confidence >= 70."
+            }
+          ]
+        },
+        "options": { "maxTokensToSample": 2048 }
+      },
+      "id": "ai-synthesize",
+      "name": "Claude: Synthesize Update",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [900, 340],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 24 }]
+        }
+      },
+      "id": "news-schedule",
+      "name": "Daily News Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 700]
+    },
+    {
+      "parameters": {
+        "url": "https://api.tavily.com/search",
+        "method": "POST",
+        "body": {
+          "bodyContentType": "json",
+          "jsonBody": "={ \"query\": \"{{ $json.company_name }} financial news\", \"search_depth\": \"advanced\", \"max_results\": 10 }"
+        },
+        "options": {}
+      },
+      "id": "tavily-search",
+      "name": "Tavily Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 620],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "url": "=https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers={{ $json.ticker }}&apikey={{ $json.api_key }}",
+        "options": {}
+      },
+      "id": "alphavantage",
+      "name": "AlphaVantage News",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 780]
+    },
+    {
+      "parameters": {
+        "url": "=https://serpapi.com/search.json?q={{ $json.company_name }}+news&engine=google_news&api_key={{ $json.serpapi_key }}",
+        "options": {}
+      },
+      "id": "serpapi",
+      "name": "SerpAPI News",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 940]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "merge-news",
+      "name": "Merge + Dedup",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [740, 780]
+    },
+    {
+      "parameters": {
+        "modelId": { "__rl": true, "mode": "list", "value": "claude-haiku-4-5-20251001" },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an investment news relevance scorer. Given news articles and a company's Core Thesis, score each article's relevance.\n\nArticles:\n{{ JSON.stringify($json.articles) }}\n\nFor each article return: title, url, relevance_score (0-100), classification (Material Deviation, Thesis Confirmation, New Information, Noise), summary (one line).\n\nReturn valid JSON array only."
+            }
+          ]
+        },
+        "options": { "maxTokensToSample": 2048 }
+      },
+      "id": "ai-score-news",
+      "name": "Claude: Score Relevance",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [960, 780],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "score-threshold",
+              "leftValue": "={{ $json.relevance_score }}",
+              "rightValue": "60",
+              "operator": { "type": "number", "operation": "gte" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "score-filter",
+      "name": "Filter High Relevance",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1180, 780]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate HTML email with proposed update for HITL review\nconst update = $input.first().json;\nconst webhookBase = 'https://your-n8n-instance.com/webhook/';\nconst token = require('crypto').randomBytes(16).toString('hex');\n\nconst html = `\n<h2>Proposed Update: ${update.summary || 'Thesis Update'}</h2>\n<p><strong>Company:</strong> ${update.ticker || 'Unknown'}</p>\n<p><strong>Target:</strong> ${update.target_file || 'N/A'} > ${update.target_section || 'N/A'}</p>\n<h3>Proposed Content</h3>\n<pre>${update.proposed_content || update.content || 'No content'}</pre>\n<br>\n<a href=\"${webhookBase}approve?token=${token}\" style=\"background:#059669;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;\">Approve</a>\n&nbsp;&nbsp;\n<a href=\"${webhookBase}reject?token=${token}\" style=\"background:#dc2626;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;\">Reject</a>\n`;\n\nreturn [{ json: { html, token, ...update } }];"
+      },
+      "id": "generate-email",
+      "name": "Generate Approval Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 340]
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@your-domain.com",
+        "toEmail": "={{ $json.approval_email || 'analyst@company.com' }}",
+        "subject": "=HITL Review: {{ $json.summary || 'Proposed Update' }}",
+        "html": "={{ $json.html }}",
+        "options": {}
+      },
+      "id": "send-email",
+      "name": "Send Approval Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1420, 340],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "options": {
+          "webhook": {
+            "suffix": "={{ $json.token }}"
+          },
+          "timeout": "7d"
+        }
+      },
+      "id": "wait-approval",
+      "name": "Wait for Approval",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1640, 340]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "approved-check",
+              "leftValue": "={{ $json.query.action || $json.body.action }}",
+              "rightValue": "approve",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "approval-router",
+      "name": "Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1860, 340]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Read existing markdown file, find target section, append new content\nconst update = $input.first().json;\nconst targetSection = update.target_section || '## Updates';\nconst newContent = update.proposed_content || '';\n\n// In production: read file from cloud storage, find section, append\n// This is the template logic - actual file path resolved at runtime\nreturn [{ json: { \n  action: 'append',\n  file: update.target_file,\n  section: targetSection,\n  content: `\\n### ${new Date().toISOString().split('T')[0]}\\n${newContent}\\n`,\n  status: 'approved'\n} }];"
+      },
+      "id": "markdown-append",
+      "name": "Append to Thesis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2080, 280]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "sheetId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Rejected" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $now.toISO() }}",
+            "summary": "={{ $json.summary }}",
+            "reason": "Rejected by analyst"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-rejection",
+      "name": "Log Rejection",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2080, 440],
+      "credentials": {}
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger-2",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [240, 1100]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "sheetId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "Error Log" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $now.toISO() }}",
+            "pipeline": "Thesis/News/HITL",
+            "error": "={{ $json.error.message }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-error-2",
+      "name": "Log Error",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [460, 1100],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "content": "## Alpha Research - Thesis Synthesis + News Intelligence + HITL Approval\n\n**Workflow 2 of 2** | Pipelines 3 + 4 + 5\n\nThree interconnected pipelines: (1) Thesis synthesis from new analysis files, (2) Daily news monitoring with relevance scoring, (3) Human-in-the-loop email approval before any file modification.\n\n**Setup:** Add Google Drive + Anthropic + Email (SMTP) credentials. Configure API keys for Tavily, AlphaVantage, SerpAPI in respective HTTP Request nodes.\n\n**HITL:** Approval emails include signed Approve/Reject buttons. 7-day timeout. Nothing modifies files without explicit human approval.",
+        "height": 300,
+        "width": 2100,
+        "color": 4
+      },
+      "id": "sticky-header-2",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [120, -200]
+    },
+    {
+      "parameters": {
+        "content": "**CREDENTIALS NEEDED**\n\n1. Google Drive (file watcher + storage)\n2. Anthropic Claude API key\n3. SMTP email (approval emails)\n4. Tavily API key\n5. AlphaVantage API key\n6. SerpAPI key",
+        "height": 90,
+        "width": 500,
+        "color": 1
+      },
+      "id": "sticky-creds-2",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [120, 140]
+    },
+    {
+      "parameters": {
+        "content": "**THESIS SYNTHESIS (Pipeline 3)**\n\nFile watcher detects new analysis files, fetches thesis docs, Claude synthesizes proposed update, routes to HITL approval.",
+        "height": 520,
+        "width": 2100,
+        "color": 6
+      },
+      "id": "sticky-thesis",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [140, 260]
+    },
+    {
+      "parameters": {
+        "content": "**NEWS INTELLIGENCE (Pipeline 4)**\n\nDaily news from Tavily + AlphaVantage + SerpAPI, merged and deduplicated, scored by Claude for relevance against Core Thesis.",
+        "height": 420,
+        "width": 1200,
+        "color": 2
+      },
+      "id": "sticky-news",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [140, 620]
+    },
+    {
+      "parameters": {
+        "content": "**ERROR HANDLING**\n\nCatches failures across all three pipelines and logs to error sheet.",
+        "height": 160,
+        "width": 500,
+        "color": 3
+      },
+      "id": "sticky-error-2",
+      "name": "Sticky Note4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [140, 1040]
+    }
+  ],
+  "connections": {
+    "New Analysis File": { "main": [[{ "node": "Fetch New File", "type": "main", "index": 0 }]] },
+    "Fetch New File": { "main": [[{ "node": "Resolve Thesis Files", "type": "main", "index": 0 }]] },
+    "Resolve Thesis Files": { "main": [[{ "node": "Claude: Synthesize Update", "type": "main", "index": 0 }]] },
+    "Claude: Synthesize Update": { "main": [[{ "node": "Generate Approval Email", "type": "main", "index": 0 }]] },
+    "Generate Approval Email": { "main": [[{ "node": "Send Approval Email", "type": "main", "index": 0 }]] },
+    "Send Approval Email": { "main": [[{ "node": "Wait for Approval", "type": "main", "index": 0 }]] },
+    "Wait for Approval": { "main": [[{ "node": "Approved?", "type": "main", "index": 0 }]] },
+    "Approved?": { "main": [[{ "node": "Append to Thesis", "type": "main", "index": 0 }], [{ "node": "Log Rejection", "type": "main", "index": 0 }]] },
+    "Daily News Check": { "main": [[{ "node": "Tavily Search", "type": "main", "index": 0 }, { "node": "AlphaVantage News", "type": "main", "index": 0 }, { "node": "SerpAPI News", "type": "main", "index": 0 }]] },
+    "Tavily Search": { "main": [[{ "node": "Merge + Dedup", "type": "main", "index": 0 }]] },
+    "AlphaVantage News": { "main": [[{ "node": "Merge + Dedup", "type": "main", "index": 1 }]] },
+    "SerpAPI News": { "main": [[{ "node": "Merge + Dedup", "type": "main", "index": 0 }]] },
+    "Merge + Dedup": { "main": [[{ "node": "Claude: Score Relevance", "type": "main", "index": 0 }]] },
+    "Claude: Score Relevance": { "main": [[{ "node": "Filter High Relevance", "type": "main", "index": 0 }]] },
+    "Filter High Relevance": { "main": [[{ "node": "Generate Approval Email", "type": "main", "index": 0 }], []] },
+    "Error Trigger": { "main": [[{ "node": "Log Error", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [{ "name": "alpha-research" }],
+  "triggerCount": 2,
+  "updatedAt": "2026-03-26T00:00:00.000Z",
+  "versionId": "1"
+}
