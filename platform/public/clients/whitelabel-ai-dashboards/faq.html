@@ -223,10 +223,32 @@ tr:nth-child(even) td { background: var(--surface); }
 tr:hover td { background: var(--blue-bg); }
 .footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; }
 /* FAQ styles */
-.faq-item { border-bottom: 1px solid var(--border); padding: 20px 0; }
-.faq-item:last-child { border-bottom: none; }
-.faq-item h3 { color: var(--text-strong); font-size: 16px; margin-top: 0; margin-bottom: 8px; }
-.faq-item p { color: var(--text); font-size: 14px; margin-bottom: 0; line-height: 1.7; }
+.faq-item {
+    border: 1px solid var(--border); border-radius: 12px; margin-bottom: 16px;
+    background: var(--surface); overflow: hidden;
+    transition: box-shadow .15s;
+}
+.faq-item:hover { box-shadow: var(--card-shadow); }
+.faq-q {
+    padding: 18px 20px; font-size: 15px; font-weight: 700; color: var(--text-strong);
+    cursor: pointer; display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 12px; user-select: none;
+}
+.faq-q:hover { background: var(--surface2); }
+.faq-toggle {
+    width: 22px; height: 22px; border-radius: 50%; background: var(--blue-light);
+    color: var(--blue); display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 700; flex-shrink: 0; line-height: 1;
+    transition: transform .2s, background .15s;
+}
+.faq-item.open .faq-toggle { transform: rotate(45deg); background: var(--blue); color: #fff; }
+.faq-a {
+    display: none; padding: 0 20px 20px; font-size: 14px; color: var(--text); line-height: 1.7;
+    border-top: 1px solid var(--border);
+}
+.faq-item.open .faq-a { display: block; }
+.faq-a p { margin: 12px 0 0; }
+.faq-a p:last-child { margin-bottom: 0; }
 @media (max-width: 1100px) {
     .nav-links a { font-size: 12px; padding: 5px 8px; }
     .nav-status { display: none; }
@@ -314,78 +336,143 @@ tr:hover td { background: var(--blue-bg); }
 <!-- White-Label -->
 <h2 id="white-label">White-Label</h2>
 
-<div class="faq-item">
-    <h3>Do my clients ever see UnpauseAI?</h3>
-    <p>No. Every system is delivered under your brand. Your domain, your logo, your colors. We do not appear in any client-facing materials. If you need us on a call, we join as part of your team.</p>
+<div class="faq-item open">
+    <div class="faq-q" onclick="toggleFaq(this)">
+        <span>Do my clients ever see UnpauseAI?</span>
+        <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">
+        <p>No. Every system is delivered under your brand. Your domain, your logo, your colors. We do not appear in any client-facing materials. If you need us on a call, we join as part of your team.</p>
+    </div>
 </div>
 
 <div class="faq-item">
-    <h3>Who owns the code and workflows?</h3>
-    <p>You do. Every n8n workflow is exported as JSON and delivered to you. Every dashboard is hosted on your infrastructure or ours under your control. There is no proprietary lock-in. If the partnership ends, you keep everything.</p>
+    <div class="faq-q" onclick="toggleFaq(this)">
+        <span>Who owns the code and workflows?</span>
+        <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">
+        <p>You do. Every n8n workflow is exported as JSON and delivered to you. Every dashboard is hosted on your infrastructure or ours under your control. There is no proprietary lock-in. If the partnership ends, you keep everything.</p>
+    </div>
 </div>
 
 <div class="faq-item">
-    <h3>Can I resell the systems at my own price?</h3>
-    <p>Yes. The per-build price is your cost. You set whatever margin makes sense for your business. Most partners charge 2-3x the build cost to end clients.</p>
+    <div class="faq-q" onclick="toggleFaq(this)">
+        <span>Can I resell the systems at my own price?</span>
+        <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">
+        <p>Yes. The per-build price is your cost. You set whatever margin makes sense for your business. Most partners charge 2-3x the build cost to end clients.</p>
+    </div>
 </div>
 
 <!-- Technical -->
 <h2 id="technical">Technical</h2>
 
-<div class="faq-item">
-    <h3>What if a client needs tools you have not integrated before?</h3>
-    <p>If it has a REST API, we can integrate it. Standard integrations (Google, Slack, HubSpot, etc.) are included. Exotic or custom APIs may add 1-2 days to the build timeline.</p>
+<div class="faq-item open">
+    <div class="faq-q" onclick="toggleFaq(this)">
+        <span>What if a client needs tools you have not integrated before?</span>
+        <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">
+        <p>If it has a REST API, we can integrate it. Standard integrations (Google, Slack, HubSpot, etc.) are included. Exotic or custom APIs may add 1-2 days to the build timeline.</p>
+    </div>
 </div>
 
 <div class="faq-item">
-    <h3>How do you handle AI model updates and prompt changes?</h3>
-    <p>Claude API updates are backward compatible. When model improvements are released, we test existing prompts and update if needed. This is covered under the monthly retainer.</p>
+    <div class="faq-q" onclick="toggleFaq(this)">
+        <span>How do you handle AI model updates and prompt changes?</span>
+        <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">
+        <p>Claude API updates are backward compatible. When model improvements are released, we test existing prompts and update if needed. This is covered under the monthly retainer.</p>
+    </div>
 </div>
 
 <div class="faq-item">
-    <h3>What happens if a system breaks at 2am?</h3>
-    <p>N8n has built-in execution logging and we configure Slack alerts for failures. Most issues self-recover (API timeouts retry automatically). For critical failures, the retainer includes priority response within 4 hours during business hours.</p>
+    <div class="faq-q" onclick="toggleFaq(this)">
+        <span>What happens if a system breaks at 2am?</span>
+        <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">
+        <p>N8n has built-in execution logging and we configure Slack alerts for failures. Most issues self-recover (API timeouts retry automatically). For critical failures, the retainer includes priority response within 4 hours during business hours.</p>
+    </div>
 </div>
 
 <div class="faq-item">
-    <h3>Can you use tools other than n8n and Claude?</h3>
-    <p>Yes. We also work with Make.com for simpler workflows and can integrate any AI model via API (OpenAI, Perplexity, etc.). We recommend n8n + Claude as the default because they offer the best combination of flexibility, cost, and quality for this type of work.</p>
+    <div class="faq-q" onclick="toggleFaq(this)">
+        <span>Can you use tools other than n8n and Claude?</span>
+        <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">
+        <p>Yes. We also work with Make.com for simpler workflows and can integrate any AI model via API (OpenAI, Perplexity, etc.). We recommend n8n + Claude as the default because they offer the best combination of flexibility, cost, and quality for this type of work.</p>
+    </div>
 </div>
 
 <!-- Process -->
 <h2 id="process-faq">Process</h2>
 
-<div class="faq-item">
-    <h3>How do we communicate during a build?</h3>
-    <p>Slack or email, async by default. We share progress updates at each phase boundary. No unnecessary meetings. For complex builds, we may schedule a 15-minute sync at the spec stage.</p>
+<div class="faq-item open">
+    <div class="faq-q" onclick="toggleFaq(this)">
+        <span>How do we communicate during a build?</span>
+        <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">
+        <p>Slack or email, async by default. We share progress updates at each phase boundary. No unnecessary meetings. For complex builds, we may schedule a 15-minute sync at the spec stage.</p>
+    </div>
 </div>
 
 <div class="faq-item">
-    <h3>What if the client's requirements change mid-build?</h3>
-    <p>Minor adjustments (different dashboard panels, additional integrations) are absorbed. Major scope changes (entirely new agent types, different architecture) are handled as a change order with a revised timeline and price.</p>
+    <div class="faq-q" onclick="toggleFaq(this)">
+        <span>What if the client's requirements change mid-build?</span>
+        <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">
+        <p>Minor adjustments (different dashboard panels, additional integrations) are absorbed. Major scope changes (entirely new agent types, different architecture) are handled as a change order with a revised timeline and price.</p>
+    </div>
 </div>
 
 <div class="faq-item">
-    <h3>How many systems can you build per month?</h3>
-    <p>After the pilot, typically 2-3 standard builds per month. Complex builds with custom agents may take more time. We will be transparent about capacity.</p>
+    <div class="faq-q" onclick="toggleFaq(this)">
+        <span>How many systems can you build per month?</span>
+        <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">
+        <p>After the pilot, typically 2-3 standard builds per month. Complex builds with custom agents may take more time. We will be transparent about capacity.</p>
+    </div>
 </div>
 
 <!-- Pricing -->
 <h2 id="pricing-faq">Pricing</h2>
 
-<div class="faq-item">
-    <h3>Why fixed-price instead of hourly?</h3>
-    <p>Our AI-augmented workflow means we build faster than hourly billing reflects. Fixed-price aligns incentives: we are rewarded for efficiency, and you get predictable costs. If a build takes us 40 hours instead of 80, you still pay the same price - and we deliver in half the time.</p>
+<div class="faq-item open">
+    <div class="faq-q" onclick="toggleFaq(this)">
+        <span>Why fixed-price instead of hourly?</span>
+        <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">
+        <p>Our AI-augmented workflow means we build faster than hourly billing reflects. Fixed-price aligns incentives: we are rewarded for efficiency, and you get predictable costs. If a build takes us 40 hours instead of 80, you still pay the same price - and we deliver in half the time.</p>
+    </div>
 </div>
 
 <div class="faq-item">
-    <h3>What if the pilot does not work out?</h3>
-    <p>The pilot is specifically designed to test the partnership at a reduced rate ($2,000 vs. $2,500-3,500). If the output does not meet expectations, there is no obligation to continue. You keep the system we built.</p>
+    <div class="faq-q" onclick="toggleFaq(this)">
+        <span>What if the pilot does not work out?</span>
+        <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">
+        <p>The pilot is specifically designed to test the partnership at a reduced rate ($2,000 vs. $2,500-3,500). If the output does not meet expectations, there is no obligation to continue. You keep the system we built.</p>
+    </div>
 </div>
 
 <div class="faq-item">
-    <h3>Is the retainer required?</h3>
-    <p>Not strictly, but recommended. Without it, support requests are billed separately and response times are not guaranteed. The retainer ensures you have priority access and ongoing maintenance included.</p>
+    <div class="faq-q" onclick="toggleFaq(this)">
+        <span>Is the retainer required?</span>
+        <span class="faq-toggle">+</span>
+    </div>
+    <div class="faq-a">
+        <p>Not strictly, but recommended. Without it, support requests are billed separately and response times are not guaranteed. The retainer ensures you have priority access and ongoing maintenance included.</p>
+    </div>
 </div>
 
 <!-- CTA -->
@@ -405,6 +492,11 @@ tr:hover td { background: var(--blue-bg); }
 </div>
 
 <script>
+function toggleFaq(el) {
+    var item = el.closest('.faq-item');
+    item.classList.toggle('open');
+}
+
 function toggleTheme() {
     var el = document.documentElement;
     var t = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';

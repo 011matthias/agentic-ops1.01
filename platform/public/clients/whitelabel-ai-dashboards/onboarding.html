@@ -238,8 +238,8 @@ tr:hover td { background: var(--blue-bg); }
 .radio-option input[type="radio"] { accent-color: var(--blue); }
 .form-submit {
     padding: 12px 28px; border: none; border-radius: 8px;
-    background: var(--surface2); color: var(--text2); font-weight: 600; font-size: 14px;
-    cursor: not-allowed; opacity: 0.6;
+    background: var(--blue); color: #fff; font-weight: 600; font-size: 14px;
+    cursor: pointer;
 }
 .form-note { font-size: 12px; color: var(--text2); margin-top: 8px; }
 @media (max-width: 1100px) {
@@ -332,27 +332,27 @@ tr:hover td { background: var(--blue-bg); }
 <div class="form-section">
     <div class="form-group">
         <label class="form-label">Full name</label>
-        <input type="text" class="form-input" placeholder="Your full name" disabled />
+        <input type="text" class="form-input" placeholder="Your full name" />
     </div>
     <div class="form-group">
         <label class="form-label">Company name</label>
-        <input type="text" class="form-input" placeholder="Your company or agency name" disabled />
+        <input type="text" class="form-input" placeholder="Your company or agency name" />
     </div>
     <div class="form-group">
         <label class="form-label">Email</label>
-        <input type="text" class="form-input" placeholder="you@company.com" disabled />
+        <input type="text" class="form-input" placeholder="you@company.com" />
     </div>
     <div class="form-group">
         <label class="form-label">Preferred communication</label>
         <div class="radio-group">
-            <label class="radio-option"><input type="radio" name="comms" disabled /> Slack</label>
-            <label class="radio-option"><input type="radio" name="comms" disabled /> Email</label>
-            <label class="radio-option"><input type="radio" name="comms" disabled /> Both</label>
+            <label class="radio-option"><input type="radio" name="comms" /> Slack</label>
+            <label class="radio-option"><input type="radio" name="comms" /> Email</label>
+            <label class="radio-option"><input type="radio" name="comms" /> Both</label>
         </div>
     </div>
     <div class="form-group">
         <label class="form-label">Timezone</label>
-        <input type="text" class="form-input" placeholder="e.g., EST, GMT+1, Pacific Time" disabled />
+        <input type="text" class="form-input" placeholder="e.g., EST, GMT+1, Pacific Time" />
     </div>
 </div>
 
@@ -362,7 +362,7 @@ tr:hover td { background: var(--blue-bg); }
 <div class="form-section">
     <div class="form-group">
         <label class="form-label">Client type</label>
-        <select class="form-select" disabled>
+        <select class="form-select">
             <option>Select client type...</option>
             <option>Real Estate Agent</option>
             <option>Startup Founder</option>
@@ -373,19 +373,19 @@ tr:hover td { background: var(--blue-bg); }
     </div>
     <div class="form-group">
         <label class="form-label">Client industry</label>
-        <input type="text" class="form-input" placeholder="e.g., Real estate, SaaS, Financial services" disabled />
+        <input type="text" class="form-input" placeholder="e.g., Real estate, SaaS, Financial services" />
     </div>
     <div class="form-group">
         <label class="form-label">Tools they currently use</label>
-        <textarea class="form-textarea" placeholder="e.g., Google Calendar, HubSpot, Notion, Slack" disabled></textarea>
+        <textarea class="form-textarea" placeholder="e.g., Google Calendar, HubSpot, Notion, Slack"></textarea>
     </div>
     <div class="form-group">
         <label class="form-label">Key workflows needed</label>
-        <textarea class="form-textarea" placeholder="e.g., Daily briefing, follow-up reminders, research summaries" disabled></textarea>
+        <textarea class="form-textarea" placeholder="e.g., Daily briefing, follow-up reminders, research summaries"></textarea>
     </div>
     <div class="form-group">
         <label class="form-label">Any specific requirements</label>
-        <textarea class="form-textarea" placeholder="e.g., Must integrate with existing CRM, needs mobile-friendly dashboard" disabled></textarea>
+        <textarea class="form-textarea" placeholder="e.g., Must integrate with existing CRM, needs mobile-friendly dashboard"></textarea>
     </div>
 </div>
 
@@ -396,29 +396,29 @@ tr:hover td { background: var(--blue-bg); }
     <div class="form-group">
         <label class="form-label">Branding assets ready?</label>
         <div class="radio-group">
-            <label class="radio-option"><input type="radio" name="branding" disabled /> Yes, I have logo and brand colors</label>
-            <label class="radio-option"><input type="radio" name="branding" disabled /> Not yet, will provide before handoff</label>
+            <label class="radio-option"><input type="radio" name="branding" /> Yes, I have logo and brand colors</label>
+            <label class="radio-option"><input type="radio" name="branding" /> Not yet, will provide before handoff</label>
         </div>
     </div>
     <div class="form-group">
         <label class="form-label">Hosting preference</label>
         <div class="radio-group">
-            <label class="radio-option"><input type="radio" name="hosting" disabled /> You host on our behalf</label>
-            <label class="radio-option"><input type="radio" name="hosting" disabled /> We have our own server</label>
-            <label class="radio-option"><input type="radio" name="hosting" disabled /> Need recommendation</label>
+            <label class="radio-option"><input type="radio" name="hosting" /> You host on our behalf</label>
+            <label class="radio-option"><input type="radio" name="hosting" /> We have our own server</label>
+            <label class="radio-option"><input type="radio" name="hosting" /> Need recommendation</label>
         </div>
     </div>
     <div class="form-group">
         <label class="form-label">NDA required?</label>
         <div class="radio-group">
-            <label class="radio-option"><input type="radio" name="nda" disabled /> Yes</label>
-            <label class="radio-option"><input type="radio" name="nda" disabled /> No</label>
-            <label class="radio-option"><input type="radio" name="nda" disabled /> Already have one to share</label>
+            <label class="radio-option"><input type="radio" name="nda" /> Yes</label>
+            <label class="radio-option"><input type="radio" name="nda" /> No</label>
+            <label class="radio-option"><input type="radio" name="nda" /> Already have one to share</label>
         </div>
     </div>
     <div class="form-group">
         <label class="form-label">Expected volume</label>
-        <select class="form-select" disabled>
+        <select class="form-select">
             <option>Select expected volume...</option>
             <option>1 client/month</option>
             <option>2-3 clients/month</option>
@@ -432,8 +432,11 @@ tr:hover td { background: var(--blue-bg); }
 <h2 id="submit">Submit</h2>
 
 <div class="form-section">
-    <button class="form-submit" disabled>Submit Onboarding Form</button>
-    <p class="form-note">This form is for reference. To start the pilot, reply to our Upwork message with these details or share via Slack.</p>
+    <button type="button" onclick="copyForm()" style="padding: 12px 28px; border: none; border-radius: 8px; background: var(--blue); color: #fff; font-weight: 600; font-size: 14px; cursor: pointer; transition: background .15s;">
+        Copy to Clipboard
+    </button>
+    <span id="copy-feedback" style="margin-left: 12px; font-size: 13px; color: var(--green); display: none;">Copied!</span>
+    <p class="form-note">Fill in the fields, then copy to clipboard and paste into your Upwork message or email.</p>
 </div>
 
 <div class="callout green">
@@ -493,6 +496,32 @@ links.forEach(function(a) {
         document.querySelector('.sidebar').classList.remove('open');
     });
 });
+
+function copyForm() {
+    var fields = [];
+    var inputs = document.querySelectorAll('.form-input, .form-select, .form-textarea');
+    inputs.forEach(function(el) {
+        var label = el.closest('.form-group').querySelector('.form-label');
+        if (label && el.value) {
+            fields.push(label.textContent + ': ' + el.value);
+        }
+    });
+    var radios = document.querySelectorAll('input[type="radio"]:checked');
+    radios.forEach(function(el) {
+        var group = el.closest('.form-group');
+        var label = group.querySelector('.form-label');
+        var optLabel = el.closest('.radio-option');
+        if (label && optLabel) {
+            fields.push(label.textContent + ': ' + optLabel.textContent.trim());
+        }
+    });
+    var text = 'ONBOARDING DETAILS\n' + '='.repeat(30) + '\n\n' + fields.join('\n\n');
+    navigator.clipboard.writeText(text).then(function() {
+        var fb = document.getElementById('copy-feedback');
+        fb.style.display = 'inline';
+        setTimeout(function() { fb.style.display = 'none'; }, 2000);
+    });
+}
 </script>
 
 <!-- Access Gate -->

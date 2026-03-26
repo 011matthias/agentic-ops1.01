@@ -20,7 +20,7 @@ You asked for five things. Here they are:
 
 2) Tools and platforms: Claude Code and n8n are my primary stack. Claude handles research, content generation, and classification. n8n handles the automation workflows (open source, self-hosted, JSON-exportable). I also work with Make.com for simpler flows, and can integrate any AI model via API (OpenAI, Perplexity, etc.). Dashboards are built as lightweight HTML/JS or Retool depending on complexity.
 
-3) Pricing: I work fixed-price per client system, not hourly. A standard build (dashboard + agents + integrations + docs) runs $2,500-3,500. Monthly retainer for ongoing support, iterations, and priority availability is $1,500/mo. The first build is a pilot at $2,000 so we can test the partnership without a large commitment.
+3) Pricing: I work fixed-price per client system, not hourly. A standard build (dashboard + agents + integrations + docs) runs $2,500-3,500. Monthly retainer of $1,500/mo covers ongoing support for every system we build together, prompt updates, new integrations, and priority availability. The first build is a pilot at $2,000 so we can test the partnership without a large commitment.
 
 I know you listed this as hourly at $15-35. For white-label builds, fixed-price makes more sense for both sides. You know the cost upfront and can set your own margin to end clients. If you prefer hourly for the initial phase, open to discussing.
 

@@ -327,15 +327,15 @@ tr:hover td { background: var(--blue-bg); }
     <div class="sidebar-label">Workflow sections</div>
     <ul class="step-list">
         <li class="step-item">
-            <a href="#process" class="step-link active"><span class="step-num">1</span> The Process</a>
+            <a href="#demo" class="step-link active"><span class="step-num">1</span> Live Demo</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#steps" class="step-link"><span class="step-num">2</span> Step-by-Step</a>
+            <a href="#process" class="step-link"><span class="step-num">2</span> The Process</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#demo" class="step-link"><span class="step-num">3</span> Live Demo</a>
+            <a href="#steps" class="step-link"><span class="step-num">3</span> Step-by-Step</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
@@ -349,13 +349,47 @@ tr:hover td { background: var(--blue-bg); }
 <div class="content-inner">
 
 <!-- Hero -->
-<section class="hero" id="process">
+<section class="hero">
     <div class="hero-badge">Build Process</div>
     <h1>How We Build Each System</h1>
     <p class="hero-sub">A repeatable five-step process from client brief to white-label handoff. The first build creates the base. Every build after that is faster.</p>
 </section>
 
+<!-- Live Demo -->
+<h2 id="demo">Live Demo: System Configurator</h2>
+<p>Select a client type below and see what a tailored system looks like. This uses the Claude API to generate a real configuration in real time.</p>
+
+<div style="border: 1px solid var(--border); border-radius: 12px; padding: 24px; background: var(--surface); margin: 24px 0;">
+    <div style="margin-bottom: 16px;">
+        <label style="font-size: 13px; font-weight: 600; color: var(--text-strong); display: block; margin-bottom: 8px;">Select client type</label>
+        <select id="demo-select" style="width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 15px; background: var(--bg); color: var(--text);">
+            <option value="">Choose a client type...</option>
+            <option value="real-estate">Real Estate Agent</option>
+            <option value="startup-founder">Startup Founder</option>
+            <option value="consultant">Business Consultant</option>
+            <option value="coach">Executive Coach</option>
+        </select>
+    </div>
+    <button id="demo-btn" onclick="runDemo()" style="padding: 10px 24px; border: none; border-radius: 8px; background: var(--blue); color: #fff; font-weight: 600; font-size: 14px; cursor: pointer; transition: background .15s;" disabled>Configure System</button>
+    <div id="demo-loading" style="display:none; margin-top: 16px; text-align: center;">
+        <div style="display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+        <span style="margin-left: 8px; font-size: 13px; color: var(--text2);">Claude is configuring your system...</span>
+    </div>
+    <div id="demo-result" style="display:none; margin-top: 20px;"></div>
+    <div id="demo-error" style="display:none; margin-top: 12px; padding: 12px 16px; background: var(--red-bg); border-radius: 8px; color: var(--red); font-size: 13px;"></div>
+</div>
+
+<div style="margin-top: 20px; padding: 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); display: flex; align-items: center; justify-content: space-between;">
+    <div>
+        <div style="font-size: 14px; font-weight: 600; color: var(--text-strong);">Sample System Spec</div>
+        <div style="font-size: 12px; color: var(--text2);">See what a complete system specification looks like</div>
+    </div>
+    <a href="/clients/whitelabel-ai-dashboards/whitelabel-ai-dashboards-sample-spec.json" download style="padding: 8px 16px; background: var(--blue); color: #fff; border-radius: 6px; font-size: 13px; font-weight: 600; text-decoration: none;">Download JSON</a>
+</div>
+
 <!-- The Process -->
+<h2 id="process">The Process</h2>
+
 <div class="zones">
     <div class="zone zone-blue">
         <div class="zone-icon">&#128229;</div>
@@ -534,30 +568,6 @@ tr:hover td { background: var(--blue-bg); }
             <div class="flow-step-text">Direct support channel for the first 2 weeks</div>
         </div>
     </div>
-</div>
-
-<!-- Live Demo -->
-<h2 id="demo">Live Demo: System Configurator</h2>
-<p>Select a client type below and see what a tailored system looks like. This uses the Claude API to generate a real configuration in real time.</p>
-
-<div style="border: 1px solid var(--border); border-radius: 12px; padding: 24px; background: var(--surface); margin: 24px 0;">
-    <div style="margin-bottom: 16px;">
-        <label style="font-size: 13px; font-weight: 600; color: var(--text-strong); display: block; margin-bottom: 8px;">Select client type</label>
-        <select id="demo-select" style="width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 15px; background: var(--bg); color: var(--text);">
-            <option value="">Choose a client type...</option>
-            <option value="real-estate">Real Estate Agent</option>
-            <option value="startup-founder">Startup Founder</option>
-            <option value="consultant">Business Consultant</option>
-            <option value="coach">Executive Coach</option>
-        </select>
-    </div>
-    <button id="demo-btn" onclick="runDemo()" style="padding: 10px 24px; border: none; border-radius: 8px; background: var(--blue); color: #fff; font-weight: 600; font-size: 14px; cursor: pointer; transition: background .15s;" disabled>Configure System</button>
-    <div id="demo-loading" style="display:none; margin-top: 16px; text-align: center;">
-        <div style="display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
-        <span style="margin-left: 8px; font-size: 13px; color: var(--text2);">Claude is configuring your system...</span>
-    </div>
-    <div id="demo-result" style="display:none; margin-top: 20px;"></div>
-    <div id="demo-error" style="display:none; margin-top: 12px; padding: 12px 16px; background: var(--red-bg); border-radius: 8px; color: var(--red); font-size: 13px;"></div>
 </div>
 
 <!-- What You Receive -->

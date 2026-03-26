@@ -84,7 +84,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const parsed = JSON.parse(textBlock.text);
+    let text = textBlock.text.trim();
+    // Claude sometimes wraps JSON in markdown code fences
+    if (text.startsWith("```")) {
+      text = text
+        .replace(/^```(?:json)?\s*\n?/, "")
+        .replace(/\n?```\s*$/, "");
+    }
+    const parsed = JSON.parse(text);
     return NextResponse.json(parsed);
   } catch (err) {
     if (err instanceof SyntaxError) {
