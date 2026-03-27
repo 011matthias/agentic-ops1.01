@@ -6,10 +6,11 @@ contact: "Raphael"
 source: upwork
 source_url: "https://www.upwork.com/jobs/~022037459187581558171"
 project_title: "Make.com Migration, Stabilization & Ongoing Maintenance"
-status: draft
+status: sent
 track: 2
 created: "2026-03-27"
-sent: null
+sent: "2026-03-27"
+reviewed: "2026-03-27"
 value_estimate: "$30/hr, ~$3,000-5,000/month"
 timeline: "Ongoing, start within 1 week"
 tags: [make-com, migration, lexoffice, hero-software, maintenance, germany]
