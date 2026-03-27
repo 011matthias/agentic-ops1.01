@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FAQ | Accessibility Audit Pipeline | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+
+/* Access Gate */
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+
+/* Navigation */
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+
+/* Sidebar */
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+
+/* Main Content */
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+
+/* Hero */
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 560px; margin: 0 auto 32px; line-height: 1.6; }
+
+/* Sections */
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+
+/* Callout */
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+
+/* FAQ Accordion */
+.faq-list { margin: 32px 0; }
+
+details.faq-item {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 10px;
+    background: var(--surface);
+    transition: box-shadow .15s;
+    scroll-margin-top: 80px;
+}
+details.faq-item[open] {
+    box-shadow: var(--card-shadow);
+}
+details.faq-item summary {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 20px;
+    cursor: pointer;
+    list-style: none;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--text-strong);
+    user-select: none;
+    transition: background .15s;
+    border-radius: 10px;
+}
+details.faq-item[open] summary {
+    border-radius: 10px 10px 0 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--blue-bg);
+    color: var(--blue-dark);
+}
+details.faq-item summary::-webkit-details-marker { display: none; }
+details.faq-item summary::marker { display: none; }
+
+.faq-num {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--blue-light); color: var(--blue);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; flex-shrink: 0;
+}
+details.faq-item[open] .faq-num {
+    background: var(--blue); color: #fff;
+}
+
+.faq-chevron {
+    margin-left: auto;
+    color: var(--text2);
+    transition: transform .2s;
+    flex-shrink: 0;
+}
+details.faq-item[open] .faq-chevron {
+    transform: rotate(180deg);
+    color: var(--blue);
+}
+
+.faq-body {
+    padding: 20px 20px 20px 60px;
+    font-size: 14px;
+    color: var(--text);
+    line-height: 1.7;
+}
+.faq-body p { margin-bottom: 12px; color: var(--text); }
+.faq-body p:last-child { margin-bottom: 0; }
+.faq-body ul { margin-bottom: 12px; }
+.faq-body li { margin-bottom: 4px; font-size: 14px; }
+
+/* CTA */
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+
+/* Footer */
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); }
+
+/* Tablet */
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+
+/* Mobile */
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .hero h1 { font-size: 24px; }
+    .faq-body { padding: 16px 16px 16px 16px; }
+}
+</style>
+<script>
+(function(){var t=localStorage.getItem('accessibility-audit-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<!-- Access Gate -->
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared for your agency. Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/accessibility-audit-cold-email/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Accessibility Audit Pipeline</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/accessibility-audit-cold-email/">Overview</a>
+        <a href="/clients/accessibility-audit-cold-email/solution">Solution</a>
+        <a href="/clients/accessibility-audit-cold-email/timeline">Timeline</a>
+        <a href="/clients/accessibility-audit-cold-email/investment">Investment</a>
+        <a href="/clients/accessibility-audit-cold-email/faq" class="active">FAQ</a>
+        <a href="/clients/accessibility-audit-cold-email/onboarding">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">Questions</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#tool-choices" class="step-link active"><span class="step-num">1</span> Tool Choices</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#hosting" class="step-link"><span class="step-num">2</span> Hosting</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#scale" class="step-link"><span class="step-num">3</span> Scale &amp; Reliability</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#working" class="step-link"><span class="step-num">4</span> Working Together</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<!-- Hero -->
+<section class="hero" id="faq-top">
+    <div class="hero-badge">FAQ</div>
+    <h1>Common Questions</h1>
+    <p class="hero-sub">Straight answers about the pipeline, the tech stack, and working together.</p>
+</section>
+
+<h2 id="tool-choices">Tool Choices</h2>
+
+<div class="faq-list">
+
+    <details class="faq-item">
+        <summary>
+            <span class="faq-num">1</span>
+            Why axe-core and not WAVE API or Lighthouse?
+            <svg class="faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="faq-body">
+            <p>You chose axe-core, and it's a solid choice. axe-core runs inside the page DOM via Puppeteer, which means it catches violations that external API-based tools miss -- dynamic content, JavaScript-rendered elements, and interactive components. It's also open source, so there are no per-scan API costs. The WCAG 2.1 AA ruleset is well-maintained by Deque Systems.</p>
+        </div>
+    </details>
+
+    <details class="faq-item">
+        <summary>
+            <span class="faq-num">2</span>
+            Can I swap Instantly.ai for another email tool later?
+            <svg class="faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="faq-body">
+            <p>The workflow is built for Instantly.ai's API endpoints specifically, as you requested. If you wanted to switch to a different tool in the future, the integration layer (HTTP Request node in n8n) would need to be reconfigured for the new tool's API. It's doable but isn't a drop-in swap -- the API payloads and authentication differ between platforms.</p>
+        </div>
+    </details>
+
+    <details class="faq-item">
+        <summary>
+            <span class="faq-num">3</span>
+            Why n8n instead of Make or Zapier?
+            <svg class="faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="faq-body">
+            <p>Because you asked for it, and it's the right call for this use case. n8n runs self-hosted on your own server, which means no per-execution costs, full control over the workflow, and no third-party platform holding your automation hostage. For a batch job processing 500 URLs, the self-hosted model avoids the per-operation pricing that Make or Zapier would charge.</p>
+        </div>
+    </details>
+
+</div>
+
+<h2 id="hosting">Hosting</h2>
+
+<div class="faq-list">
+
+    <details class="faq-item">
+        <summary>
+            <span class="faq-num">4</span>
+            Will Puppeteer actually run on NameHero shared hosting?
+            <svg class="faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="faq-body">
+            <p>This is the biggest technical risk in the project. Shared hosting typically restricts long-running processes and headless browser execution. I'll verify this during Phase 1 (Days 1-2) before any workflow work begins. If NameHero's server can't run Puppeteer reliably, the fallback is to offload just the auditing step to a cloud function (AWS Lambda or Google Cloud Function). n8n still orchestrates everything from NameHero -- the cloud function handles only the CPU-intensive browser work. This adds a small per-URL cost (roughly $0.001-0.005 per URL) but keeps the pipeline reliable.</p>
+        </div>
+    </details>
+
+    <details class="faq-item">
+        <summary>
+            <span class="faq-num">5</span>
+            What if NameHero blocks n8n or Node.js processes?
+            <svg class="faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="faq-body">
+            <p>Some shared hosting providers restrict persistent Node.js processes. If NameHero doesn't support PM2 or background Node.js, the alternative is running n8n in a lightweight VPS (like a $5/month DigitalOcean droplet) that connects to your NameHero-hosted data. I'll test this on day one and flag it immediately if it's an issue -- no surprises mid-project.</p>
+        </div>
+    </details>
+
+    <details class="faq-item">
+        <summary>
+            <span class="faq-num">6</span>
+            Do I need SSH access or just cPanel?
+            <svg class="faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="faq-body">
+            <p>SSH access is strongly preferred for installing n8n and Puppeteer. If only cPanel terminal is available, it's workable but more limited. I'll need your NameHero credentials during onboarding to assess what's possible on your specific plan.</p>
+        </div>
+    </details>
+
+</div>
+
+<h2 id="scale">Scale &amp; Reliability</h2>
+
+<div class="faq-list">
+
+    <details class="faq-item">
+        <summary>
+            <span class="faq-num">7</span>
+            Can it really handle 500 URLs in one run?
+            <svg class="faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="faq-body">
+            <p>Yes. At 2-4 seconds per URL (your own estimate, which is accurate for axe-core), 500 URLs takes 20-30 minutes. The workflow processes URLs sequentially with batch writes to Google Sheets every 10-20 rows to avoid rate limits. Memory usage stays flat because each URL is processed and discarded before the next one starts.</p>
+        </div>
+    </details>
+
+    <details class="faq-item">
+        <summary>
+            <span class="faq-num">8</span>
+            What happens when a site blocks the headless browser?
+            <svg class="faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="faq-body">
+            <p>Three layers of defense. First, user-agent rotation so the browser doesn't look like a bot. Second, puppeteer-extra-plugin-stealth to bypass common detection scripts. Third, if both fail, the URL is logged as BLOCKED in the sheet, the error reason is recorded, and the pipeline moves to the next row. It never stops the run.</p>
+        </div>
+    </details>
+
+    <details class="faq-item">
+        <summary>
+            <span class="faq-num">9</span>
+            What if my Google Sheet has more than 500 rows?
+            <svg class="faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="faq-body">
+            <p>The workflow can process larger batches. The 500-URL target is about single-run duration (30 minutes). For larger lists, the simplest approach is a scheduled trigger that processes in chunks -- 500 per run, multiple runs per day. The sheet tracks which rows have been processed so nothing gets audited twice.</p>
+        </div>
+    </details>
+
+</div>
+
+<h2 id="working">Working Together</h2>
+
+<div class="faq-list">
+
+    <details class="faq-item">
+        <summary>
+            <span class="faq-num">10</span>
+            What do you need from me to get started?
+            <svg class="faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="faq-body">
+            <p>Four things: (1) NameHero cPanel/SSH access so I can install n8n, (2) your Google account or a shared Google Sheet, (3) your Instantly.ai API key, and (4) 5-10 sample URLs for initial testing. The onboarding page collects all of this.</p>
+        </div>
+    </details>
+
+    <details class="faq-item">
+        <summary>
+            <span class="faq-num">11</span>
+            How does the Loom walkthrough work?
+            <svg class="faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="faq-body">
+            <p>After the workflow is built and tested, I'll record a 10-15 minute screen recording walking through every node in the n8n workflow. You'll see what each node does, what the error handling catches, and how to modify the Google Sheet columns or Instantly.ai email templates. It's your maintenance manual in video form.</p>
+        </div>
+    </details>
+
+    <details class="faq-item">
+        <summary>
+            <span class="faq-num">12</span>
+            What if something breaks after handoff?
+            <svg class="faq-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="faq-body">
+            <p>The written troubleshooting docs cover the most common failure modes: expired credentials, Google Sheets API rate limits, Instantly.ai API changes, and NameHero server restarts. For anything else, I'm available for follow-up questions via Upwork after handoff.</p>
+        </div>
+    </details>
+
+</div>
+
+<!-- CTA -->
+<section class="cta-section">
+    <h2>Still have a question?</h2>
+    <p>Reply on Upwork. Or if you're ready, the onboarding page collects everything I need.</p>
+    <a href="/clients/accessibility-audit-cold-email/onboarding" class="cta-btn">Start Onboarding</a>
+</section>
+
+<footer class="footer">
+    <p>Prepared by <strong>UnpauseAI</strong> &middot; <a href="mailto:nico@unpauseai.com">nico@unpauseai.com</a> &middot; 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+// Access gate
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='accessibility-2026'){
+        localStorage.setItem('accessibility-audit-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.';
+    }
+}
+(function(){if(localStorage.getItem('accessibility-audit-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+
+// Theme toggle
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('accessibility-audit-theme',t);
+}
+
+// Sidebar active state via IntersectionObserver on section headings
+(function(){
+    var links=document.querySelectorAll('.step-link');
+    var sections=[];
+    links.forEach(function(l){
+        var id=l.getAttribute('href');
+        if(id&&id.startsWith('#')){
+            var el=document.querySelector(id);
+            if(el)sections.push({el:el,link:l});
+        }
+    });
+    if(!sections.length)return;
+    var observer=new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+            if(e.isIntersecting){
+                links.forEach(function(l){l.classList.remove('active')});
+                sections.forEach(function(s){
+                    if(s.el===e.target)s.link.classList.add('active');
+                });
+            }
+        });
+    },{rootMargin:'-80px 0px -50% 0px'});
+    sections.forEach(function(s){observer.observe(s.el)});
+})();
+</script>
+</body>
+</html>
