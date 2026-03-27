@@ -48,7 +48,7 @@ BEAT 4 -- PRICING AND TIMELINE
 
 >> Nav: Investment page / Pricing heading
 
-SAY: The price is $500 fixed, single milestone. That covers n8n installation, the complete workflow, Google Sheet template, Instantly.ai integration, Loom walkthrough, written docs, and full-scale testing on 500 URLs. Payment isn't released until you've tested it yourself on a live batch of 20 URLs -- your requirement, and I'm good with that.
+SAY: The price is $650 fixed, single milestone. That covers n8n installation, the complete workflow, Google Sheet template, Instantly.ai integration, Loom walkthrough, written docs, and full-scale testing on 500 URLs. Payment isn't released until you've tested it yourself on a live batch of 20 URLs -- your requirement, and I'm good with that.
 
 >> Nav: Timeline page / 9-Day Build Plan heading
 
@@ -98,7 +98,7 @@ BEAT 3 -- EDGE CASES
 
 BEAT 4 -- PRICING
 - Investment, Pricing
-- $500 fixed, single milestone
+- $650 fixed, single milestone
 - Payment after client tests on 20 live URLs
 - Timeline, 9-Day Build Plan
 - 4 phases, results at end of each

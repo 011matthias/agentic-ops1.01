@@ -10,7 +10,7 @@ status: draft
 track: 2
 created: "2026-03-27"
 sent: null
-value_estimate: "$500 fixed"
+value_estimate: "$650 fixed"
 timeline: "9 days"
 tags: [n8n, accessibility-testing, cold-email, google-sheets, instantly-ai, puppeteer, axe-core]
 access_code: "accessibility-2026"
@@ -45,7 +45,7 @@ research:
   relevant_proof_points:
     - "n8n workflow design -- production self-hosted workflows with custom code nodes"
     - "Marketing analytics pipeline -- understands lead gen and cold email context"
-  budget_gap: "$10 placeholder budget, avg bid $427 -- proposed $500"
+  budget_gap: "$10 placeholder budget, avg bid $427 -- proposed $650"
   profile_cherry_picks:
     - "n8n primary -- exact match for self-hosted n8n requirement"
     - "Google Sheets data layer -- direct experience"
@@ -76,7 +76,7 @@ A 4-phase n8n workflow with error handling at every step:
 
 ## Investment
 
-$500 fixed price, single milestone. Includes n8n installation, complete workflow, Google Sheet template, Instantly.ai integration, Loom walkthrough (10-15 min), written troubleshooting documentation, and all credentials stored in n8n credentials manager.
+$650 fixed price, single milestone. Includes n8n installation, complete workflow, Google Sheet template, Instantly.ai integration, Loom walkthrough (10-15 min), written troubleshooting documentation, and all credentials stored in n8n credentials manager.
 
 ## About UnpauseAI
 
