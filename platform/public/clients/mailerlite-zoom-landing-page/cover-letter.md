@@ -2,21 +2,27 @@ mailerlite-2026
 https://unpauseai.com/clients/mailerlite-zoom-landing-page/
 Loom walkthrough: [will record before sending]
 
-I build email automation workflows. Your MailerLite setup -- domain authentication, landing page, Stripe, GDPR consent, and automated Zoom link delivery -- is exactly what I do for clients regularly.
+I build email automation workflows -- MailerLite domain authentication, Stripe payment flows, and GDPR-compliant signup forms are setups I handle regularly. I put together a full proposal site walking through exactly how I would build yours.
 
-I put together a full proposal site for you. The access code is above. The site includes:
+What you asked for, and how I would handle each piece:
 
-1. How the 5-step signup flow works (landing page to Zoom link email)
-2. Technical details on each component (domain auth, Stripe, GDPR consent, automation)
-3. A 4-day delivery timeline with daily checkpoints
-4. Fixed pricing at $200 with a breakdown of what is and is not included
-5. An onboarding form that collects everything I need to start
+1. Domain authentication -- DKIM, SPF, and DMARC records added to your DNS, verified in MailerLite. Usually done in under 30 minutes once I have registrar access.
 
-Everything stays inside MailerLite's native toolset. Stripe connects with a one-click integration, GDPR consent uses their built-in compliance fields, and the email automation triggers on form submission with no middleware. The landing page is saved as a reusable template so launching a new Zoom session is a 5-minute duplication.
+2. Reusable landing page template -- built in MailerLite's drag-and-drop builder with your branding. Saved as a template so duplicating it for a new Zoom session takes 5 minutes: swap the title, date, and link.
 
-I am proposing $200 instead of $150 because the Stripe integration and GDPR consent setup require careful configuration that adds about 2 hours of work. That $50 pays for itself after your second Zoom session since you will never rebuild the page from scratch.
+3. Signup form with terms checkbox -- required checkbox that cannot be pre-checked, terms text displayed in a popup overlay so users do not leave the page, link to your full terms page.
 
-If we move forward, the onboarding form on the proposal site takes about 5 minutes. I will confirm receipt and start Day 1 within 24 hours.
+4. GDPR compliance -- MailerLite automatically logs IP address, timestamp, subscription source, and consent text for every signup. Each subscriber profile stores the full consent history.
+
+5. Stripe integration -- native MailerLite-Stripe connection (one-click OAuth, no Zapier). Product created in Stripe, payment block embedded directly on the landing page.
+
+6. Automated Zoom link email -- MailerLite automation triggers on form submission, sends a branded confirmation email with your Zoom link, session details, and a calendar add link. No delay, no manual step.
+
+The proposal site breaks all of this down with technical details, a 4-day timeline, pricing at $200, and an onboarding form that collects everything I need to start. The access code is in the first line of this message.
+
+I am proposing $200 instead of $150 because the Stripe + GDPR + reusable template combination requires about 2 extra hours of careful configuration. That $50 difference pays for itself after your second Zoom session since you never rebuild the page from scratch.
+
+If we move forward, I will confirm receipt of the onboarding form and start Day 1 within 24 hours.
 
 Nico
 UnpauseAI
