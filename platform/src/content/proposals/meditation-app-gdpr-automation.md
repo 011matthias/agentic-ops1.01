@@ -96,21 +96,28 @@ This is a separate engagement if you're interested, but we mention it because it
 
 ## Investment
 
-**Compliance Scanner: $300 fixed**
+Two options. Both start with a free scan of your existing documents.
 
-That's less than two hours of the legal counsel you'd otherwise need. And unlike a one-time review, you can run the scanner every time your policies change.
+**Option 1: Build and Hand Off -- $300 one-time**
 
-What's included:
-- Full scan of your existing ToS and privacy policy
+We build the scanner, configure it for your app and 5 markets, hand it over with documentation. You run it yourself going forward. The regulatory checklists are frozen at the time of build.
+
+**Option 2: Build + Maintain -- $300 setup + $75/month**
+
+Same build as Option 1, plus we keep the regulatory checklists current. When EDPB publishes new guidance, the ICO updates its position, or PIPEDA gets amended, those changes are reflected in your scanner. You still run it yourself. Cancel anytime.
+
+Both options include:
+- Full scan of your existing ToS and privacy policy (free, before you commit)
 - Regulatory checklists for all 5 target jurisdictions
 - Flagged report with specific article references and suggested fixes
 - Meditation-app-specific checks (Article 9 health data, push consent, cross-border transfers, app store privacy labels)
 - Documentation so you can run future scans yourself
 - One round of follow-up after you've reviewed the results
+- Unlimited scans
 
 **Prospect Finder (optional add-on): $150 fixed**
 
-Automated outreach pipeline for finding beta testers and meditation app users.
+Automated outreach pipeline for finding beta testers and meditation app users. Independent from the scanner.
 
 **Important note:** This tool flags potential compliance issues for review. It does not constitute legal advice. We recommend using the scanner output as a briefing document for qualified legal counsel to review and approve.
 

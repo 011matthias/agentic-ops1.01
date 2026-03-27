@@ -38,9 +38,13 @@ SAY: The output gives each flagged clause a risk rating, the regulatory referenc
 
 ## BEAT 4 -- Extension
 
->> Nav: Investment page / Pricing heading
+>> Nav: Investment page / Two Options heading
 
-SAY: The scanner costs $300 fixed, which is less than two hours of the legal counsel you'd otherwise need for a multi-jurisdiction review. And unlike a one-time review, you can run it every time your policies change. I also noticed you have open jobs for app testers and virtual assistants -- there's an optional prospect finder automation that handles that outreach, but that's a separate conversation.
+SAY: There are two ways to go with this. Option one: $300 fixed, I build the scanner, hand it over, and it's yours. You run it yourself whenever you want. Option two: same $300 build, plus $75 a month to keep the regulatory checklists up to date. Laws change, enforcement guidance gets updated, and with the maintenance plan those changes are reflected in your scanner automatically. You still run it yourself either way -- the difference is whether the checklists stay current or freeze at the time of build.
+
+>> Nav: Investment page / How This Compares heading
+
+SAY: Either option is less than two hours of a lawyer's hourly rate, and you get unlimited scans. There's also an optional prospect finder automation for $150 if you want to automate the search for beta testers and app users -- but that's completely separate.
 
 ## BEAT 5 -- Close
 
@@ -81,10 +85,12 @@ BEAT 3 -- EDGE CASES
 - Repeat: not legal advice, structured briefing document for lawyer
 
 BEAT 4 -- PRICING
-- Show: Investment page > Pricing
-- $300 fixed, less than 2 hours of legal counsel
-- Reusable on every policy change
-- Optional: prospect finder for beta testers (separate)
+- Show: Investment page > Two Options
+- Option 1: $300 one-time, build and hand off, yours to keep
+- Option 2: $300 + $75/mo, checklists stay current as laws change
+- Both: you run it yourself, unlimited scans
+- Scroll to comparison table: both cheaper than 2 hours of counsel
+- Optional: prospect finder $150 (separate, mention briefly)
 
 BEAT 5 -- CLOSE
 - Show: Onboarding page > Get Started

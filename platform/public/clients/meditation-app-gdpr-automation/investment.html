@@ -179,6 +179,16 @@ li { margin-bottom: 6px; }
 .callout.orange { border-color: var(--orange); background: var(--orange-bg); }
 .callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
 
+/* Zones (pricing tiers) */
+.zones { display: grid; gap: 16px; margin: 32px 0; }
+.zone {
+    border-radius: 12px; padding: 20px; border: 1px solid var(--border);
+    transition: transform .15s, box-shadow .15s;
+}
+.zone:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.zone-blue { background: var(--blue-bg); border-color: color-mix(in srgb, var(--blue) 20%, var(--border)); }
+.zone-green { background: var(--green-bg); border-color: color-mix(in srgb, var(--green) 20%, var(--border)); }
+
 /* Checklist */
 .checklist { list-style: none; padding: 0; margin: 24px 0; }
 .checklist li {
@@ -295,7 +305,7 @@ tr:hover td { background: var(--blue-bg); }
     <div class="sidebar-label">Investment</div>
     <ul class="step-list">
         <li class="step-item">
-            <a href="#pricing" class="step-link active"><span class="step-num">1</span> Pricing</a>
+            <a href="#pricing" class="step-link active"><span class="step-num">1</span> Two Options</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
@@ -323,20 +333,51 @@ tr:hover td { background: var(--blue-bg); }
 <!-- Hero / Pricing -->
 <section class="hero" id="pricing">
     <div class="hero-badge">Investment</div>
-    <h1>Simple, Fixed Pricing</h1>
-    <p class="hero-sub">Filip, one price for the complete compliance scanner. No hourly billing, no scope creep.</p>
+    <h1>Two Options, Your Call</h1>
+    <p class="hero-sub">Filip, both options start with a free scan of your existing documents. The difference is what happens after.</p>
 </section>
 
-<div class="rate-display">
-    <div class="rate-value">$300</div>
-    <div class="rate-label">Fixed price for the complete compliance scanner</div>
-    <div class="rate-note">Less than 2 hours of legal counsel for multi-jurisdiction coverage that you can run unlimited times.</div>
+<div class="zones" style="grid-template-columns: 1fr 1fr; margin: 32px 0;">
+    <div class="zone zone-blue" style="padding: 28px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--blue);margin-bottom:12px;">Option 1</div>
+        <div style="font-size:28px;font-weight:800;color:var(--blue);margin-bottom:4px;">$300</div>
+        <div style="font-size:14px;font-weight:600;color:var(--text-strong);margin-bottom:4px;">Build and Hand Off</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:16px;">One-time. The scanner is yours.</div>
+        <ul style="list-style:none;padding:0;margin:0;">
+            <li style="font-size:13px;padding:5px 0;color:var(--text);">&#10003; Free initial scan of your existing docs</li>
+            <li style="font-size:13px;padding:5px 0;color:var(--text);">&#10003; Scanner configured for your 5 markets</li>
+            <li style="font-size:13px;padding:5px 0;color:var(--text);">&#10003; Meditation-specific compliance checks</li>
+            <li style="font-size:13px;padding:5px 0;color:var(--text);">&#10003; Full documentation to run it yourself</li>
+            <li style="font-size:13px;padding:5px 0;color:var(--text);">&#10003; One round of follow-up</li>
+            <li style="font-size:13px;padding:5px 0;color:var(--text2);">&#10007; Regulatory checklists stay as-is</li>
+        </ul>
+    </div>
+    <div class="zone zone-green" style="padding: 28px; position: relative;">
+        <div style="position:absolute;top:-10px;right:16px;background:var(--green);color:#fff;font-size:10px;font-weight:700;padding:3px 10px;border-radius:10px;text-transform:uppercase;letter-spacing:.04em;">Recommended</div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--green);margin-bottom:12px;">Option 2</div>
+        <div style="font-size:28px;font-weight:800;color:var(--green);margin-bottom:4px;">$300 + $75/mo</div>
+        <div style="font-size:14px;font-weight:600;color:var(--text-strong);margin-bottom:4px;">Build + Maintain</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:16px;">Scanner stays current. Cancel anytime.</div>
+        <ul style="list-style:none;padding:0;margin:0;">
+            <li style="font-size:13px;padding:5px 0;color:var(--text);">&#10003; Everything in Option 1</li>
+            <li style="font-size:13px;padding:5px 0;color:var(--text);">&#10003; Regulatory checklists updated when laws change</li>
+            <li style="font-size:13px;padding:5px 0;color:var(--text);">&#10003; New EDPB opinions and ICO guidance reflected</li>
+            <li style="font-size:13px;padding:5px 0;color:var(--text);">&#10003; New markets added if you expand further</li>
+            <li style="font-size:13px;padding:5px 0;color:var(--text);">&#10003; You run the scanner yourself, anytime</li>
+            <li style="font-size:13px;padding:5px 0;color:var(--text);">&#10003; No minimum commitment, cancel anytime</li>
+        </ul>
+    </div>
+</div>
+
+<div class="callout green">
+    <div class="callout-title">Why Option 2 exists</div>
+    <p>GDPR enforcement guidance changes. The EDPB publishes new opinions. The ICO updates its position on health data. Canada amends PIPEDA. With Option 1, your checklists are frozen at the time of build. With Option 2, they stay current -- so the scanner catches issues that didn't exist when it was first built. You still run it yourself; we just keep the regulatory engine up to date.</p>
 </div>
 
 <!-- What's Included -->
-<h2 id="included">What's Included</h2>
+<h2 id="included">What Both Options Include</h2>
 
-<p>Everything below is included in the $300 fixed price. Nothing is treated as an add-on or billed separately.</p>
+<p>The $300 base covers the full scanner build. Everything below ships regardless of which option you choose.</p>
 
 <ul class="checklist">
     <li>
@@ -365,69 +406,83 @@ tr:hover td { background: var(--blue-bg); }
     </li>
     <li>
         <div class="check-icon"></div>
-        <span><strong>One round of follow-up</strong> after you've reviewed the results -- questions, clarifications, adjustments</span>
+        <span><strong>One round of follow-up</strong> after you've reviewed the results</span>
     </li>
     <li>
         <div class="check-icon"></div>
-        <span><strong>All future scans at no additional cost</strong> -- the tool is yours to keep and run as many times as needed</span>
+        <span><strong>Unlimited scans</strong> -- the tool is yours to run as many times as needed</span>
     </li>
 </ul>
 
 <!-- Comparison -->
 <h2 id="comparison">How This Compares</h2>
 
-<p>Three realistic ways to approach multi-jurisdiction compliance for a meditation app, with honest trade-offs for each.</p>
+<p>Three realistic approaches to multi-jurisdiction compliance, with honest trade-offs.</p>
 
 <table>
     <thead>
         <tr>
             <th></th>
             <th>One-Time Legal Review</th>
-            <th>Compliance Scanner</th>
+            <th>Scanner (Build + Hand Off)</th>
+            <th>Scanner (Build + Maintain)</th>
         </tr>
     </thead>
     <tbody>
         <tr>
             <td><strong>Cost</strong></td>
-            <td>$2,000-5,000 for multi-jurisdiction</td>
-            <td><strong>$300 fixed</strong></td>
+            <td>$2,000-5,000</td>
+            <td><strong>$300 one-time</strong></td>
+            <td><strong>$300 + $75/mo</strong></td>
         </tr>
         <tr>
             <td><strong>Coverage</strong></td>
-            <td>Depends on lawyer's jurisdiction expertise</td>
-            <td>All 5 markets in one scan</td>
+            <td>Depends on lawyer's expertise</td>
+            <td>All 5 markets</td>
+            <td>All 5 markets + new ones</td>
         </tr>
         <tr>
             <td><strong>Reusability</strong></td>
             <td>New review = new invoice</td>
-            <td>Run unlimited times</td>
+            <td>Unlimited scans</td>
+            <td>Unlimited scans</td>
         </tr>
         <tr>
             <td><strong>Turnaround</strong></td>
             <td>1-3 weeks</td>
-            <td>Minutes per scan</td>
+            <td>Minutes</td>
+            <td>Minutes</td>
         </tr>
         <tr>
-            <td><strong>App-specific flags</strong></td>
-            <td>Depends on lawyer's tech knowledge</td>
-            <td>Built-in meditation app checklist</td>
-        </tr>
-        <tr>
-            <td><strong>Ongoing updates</strong></td>
+            <td><strong>Regulatory updates</strong></td>
             <td>Not included</td>
-            <td>Checklist updates as regulations change</td>
+            <td>Frozen at build time</td>
+            <td>Updated as laws change</td>
+        </tr>
+        <tr>
+            <td><strong>New markets</strong></td>
+            <td>Separate engagement</td>
+            <td>Separate engagement</td>
+            <td>Included in maintenance</td>
+        </tr>
+        <tr>
+            <td><strong>Who runs it</strong></td>
+            <td>The lawyer</td>
+            <td>You, Filip</td>
+            <td>You, Filip</td>
         </tr>
         <tr class="highlight-row">
             <td><strong>Still need a lawyer?</strong></td>
             <td>Yes (the lawyer)</td>
-            <td>Yes -- for final sign-off on flagged items</td>
+            <td>Yes, for final sign-off</td>
+            <td>Yes, for final sign-off</td>
         </tr>
     </tbody>
 </table>
 
 <div class="callout">
     <div class="callout-title">The scanner reduces legal cost, not legal need</div>
-    <p>We're not saying skip the lawyer. We're saying the scanner does the heavy lifting so the lawyer spends 2-3 hours instead of 20. Your total cost (scanner + focused legal review) will likely be lower than a full review from scratch.</p>
+    <p>We're not saying skip the lawyer. We're saying the scanner does the heavy lifting so the lawyer spends 2-3 hours instead of 20. Your total cost (scanner + focused legal review) will likely be lower than a full review from scratch. The difference between the two scanner options: with Build + Maintain, the checklists stay current as regulations evolve. With Build + Hand Off, you get a powerful tool that works perfectly today but won't automatically reflect future regulatory changes.</p>
 </div>
 
 <!-- Optional Add-On -->

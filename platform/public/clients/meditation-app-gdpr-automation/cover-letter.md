@@ -10,7 +10,7 @@ The difference between this and a one-time legal review: a lawyer gives you a sn
 
 I ran a preliminary check of common meditation app privacy issues across your five target jurisdictions. The main flags: health data classification under GDPR Article 9 (if the app tracks meditation sessions, mood, or sleep), push notification consent requirements that differ between UK and Canada, and cross-border data transfer documentation that most apps skip entirely.
 
-The proposal site has the full breakdown, a sample compliance report, and pricing. I know the listing is hourly, but the scanner is a fixed-price deliverable -- $300 total, less than two hours of legal counsel.
+The proposal site has the full breakdown, a sample compliance report, and pricing. I know the listing is hourly, but the scanner is a fixed-price deliverable. Two options: $300 one-time (build it, hand it over, it's yours) or $300 + $75/month (same build, but the regulatory checklists stay current as laws change). Both are less than two hours of legal counsel.
 
 If we move forward, I'll start with a free scan of your existing AI-generated drafts so you can see the output quality before committing. The report is yours to keep either way.
 
