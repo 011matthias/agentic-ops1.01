@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Onboarding | Make.com Migration | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+
+/* Access Gate */
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+
+/* Navigation */
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+
+/* Sidebar */
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+
+/* Main Content */
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+
+/* Hero */
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 560px; margin: 0 auto 32px; line-height: 1.6; }
+
+/* Sections */
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+
+/* Callout */
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+
+/* Table */
+table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+th { background: var(--th-bg); color: #fff; text-align: left; padding: 10px 14px; font-weight: 600; }
+td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:nth-child(even) td { background: var(--surface); }
+tr:hover td { background: var(--blue-bg); }
+
+/* Footer */
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); }
+
+/* Tablet */
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+
+/* Mobile */
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .hero h1 { font-size: 24px; }
+}
+
+/* Form styles */
+.form-section {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 28px 32px; margin: 32px 0;
+}
+.form-group-title {
+    font-size: 13px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .05em; color: var(--blue); margin-bottom: 20px;
+    padding-bottom: 8px; border-bottom: 1px solid var(--border);
+}
+.field-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;
+}
+.field-row.full { grid-template-columns: 1fr; }
+.field {
+    display: flex; flex-direction: column; gap: 5px;
+}
+.field label {
+    font-size: 13px; font-weight: 600; color: var(--text-strong);
+}
+.field label .req { color: #ef4444; margin-left: 2px; }
+.field input[type="text"],
+.field input[type="email"],
+.field input[type="number"],
+.field select,
+.field textarea {
+    padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 7px;
+    font-size: 14px; background: var(--bg); color: var(--text);
+    font-family: inherit; outline: none; transition: border-color .15s, box-shadow .15s;
+    width: 100%;
+}
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+}
+.field textarea { resize: vertical; min-height: 80px; }
+.field .hint { font-size: 12px; color: var(--text2); }
+
+/* Radio groups */
+.radio-group { display: flex; gap: 20px; align-items: center; padding: 4px 0; }
+.radio-group label {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 14px; font-weight: 400; color: var(--text); cursor: pointer;
+}
+.radio-group input[type="radio"] { accent-color: var(--blue); width: 15px; height: 15px; cursor: pointer; }
+
+.form-divider { height: 1px; background: var(--border); margin: 28px 0; }
+
+.submit-row { margin-top: 28px; display: flex; align-items: center; gap: 16px; }
+.submit-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; border: none; cursor: pointer;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3); font-family: inherit;
+}
+.submit-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); }
+.submit-note { font-size: 12px; color: var(--text2); }
+.form-success {
+    display: none; background: var(--green-bg); border: 1px solid var(--green-light);
+    border-radius: 8px; padding: 16px 20px; color: var(--green-dark); font-size: 14px;
+    font-weight: 500; margin-top: 16px;
+}
+.form-success.visible { display: block; }
+
+/* Day 1 checklist */
+.checklist-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 24px 0; }
+.check-card {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 16px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--surface); transition: transform .15s, box-shadow .15s;
+}
+.check-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.check-icon {
+    width: 28px; height: 28px; border-radius: 50%; background: var(--green-light);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0; color: var(--green);
+}
+.check-info { flex: 1; }
+.check-title { font-size: 14px; font-weight: 600; color: var(--text-strong); margin-bottom: 2px; }
+.check-desc { font-size: 12px; color: var(--text2); line-height: 1.5; }
+
+@media (max-width: 768px) {
+    .field-row { grid-template-columns: 1fr; }
+    .checklist-grid { grid-template-columns: 1fr; }
+    .form-section { padding: 20px 16px; }
+    .submit-row { flex-direction: column; align-items: flex-start; }
+}
+</style>
+<script>
+(function(){var t=localStorage.getItem('warme-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<!-- Access Gate -->
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared specifically for your team. Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/warme-wimmer-make-migration/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Make.com Migration</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/warme-wimmer-make-migration/">Overview</a>
+        <a href="/clients/warme-wimmer-make-migration/solution">Solution</a>
+        <a href="/clients/warme-wimmer-make-migration/timeline">Timeline</a>
+        <a href="/clients/warme-wimmer-make-migration/investment">Investment</a>
+        <a href="/clients/warme-wimmer-make-migration/faq">FAQ</a>
+        <a href="/clients/warme-wimmer-make-migration/onboarding" class="active">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">On this page</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#getting-started" class="step-link active"><span class="step-num">1</span> What We Need</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#onboarding-form" class="step-link"><span class="step-num">2</span> Onboarding Form</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#day-one" class="step-link"><span class="step-num">3</span> Day 1 Checklist</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<!-- Hero -->
+<section class="hero" id="getting-started">
+    <div class="hero-badge">Kickoff Onboarding</div>
+    <h1>Let's get the audit started</h1>
+    <p class="hero-sub">To begin the audit phase, we need access to a few things. This checklist covers everything for day 1 so there's no back-and-forth once we kick off.</p>
+</section>
+
+<!-- What We Need -->
+<h2 id="what-we-need">What We Need to Get Started</h2>
+
+<p>The audit can only begin once we have a clear picture of your current scenario landscape and confirmed access to each connected system. Fill out the form below and we'll review it before the first working session. Nothing here is used for any purpose outside this project.</p>
+
+<div class="callout green">
+    <div class="callout-title">What happens after you submit</div>
+    <p>We'll review your responses and reach out within one business day to confirm access details and schedule the first working session. The audit itself starts from there.</p>
+</div>
+
+<!-- Onboarding Form -->
+<h2 id="onboarding-form">Onboarding Form</h2>
+
+<form id="onboardingForm" onsubmit="handleSubmit(event)" novalidate>
+
+    <!-- Group 1: Contact Information -->
+    <div class="form-section">
+        <div class="form-group-title">Contact information</div>
+
+        <div class="field-row">
+            <div class="field">
+                <label for="contact-name">Your name <span class="req">*</span></label>
+                <input type="text" id="contact-name" name="contact_name" placeholder="e.g. Max Mustermann" autocomplete="name">
+            </div>
+            <div class="field">
+                <label for="contact-email">Email address <span class="req">*</span></label>
+                <input type="email" id="contact-email" name="contact_email" placeholder="you@yourcompany.de" autocomplete="email">
+            </div>
+        </div>
+
+        <div class="field-row">
+            <div class="field">
+                <label for="contact-role">Role / title</label>
+                <input type="text" id="contact-role" name="contact_role" placeholder="e.g. Operations Manager">
+            </div>
+            <div class="field">
+                <label for="contact-channel">Preferred communication channel</label>
+                <select id="contact-channel" name="contact_channel">
+                    <option value="">Select one</option>
+                    <option value="upwork">Upwork</option>
+                    <option value="email">Email</option>
+                    <option value="slack">Slack</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Group 2: Make.com Access -->
+    <div class="form-section">
+        <div class="form-group-title">Make.com access</div>
+
+        <div class="field-row">
+            <div class="field">
+                <label for="make-current-url">Current Make.com organization URL</label>
+                <input type="text" id="make-current-url" name="make_current_url" placeholder="https://eu1.make.com/org/...">
+                <span class="hint">The URL you see when logged in to your existing account</span>
+            </div>
+            <div class="field">
+                <label for="make-scenario-count">Number of active scenarios (approximate)</label>
+                <input type="number" id="make-scenario-count" name="make_scenario_count" placeholder="e.g. 12" min="0">
+            </div>
+        </div>
+
+        <div class="field-row full">
+            <div class="field">
+                <label>Can you grant editor access to the current account?</label>
+                <div class="radio-group">
+                    <label><input type="radio" name="make_editor_access" value="yes"> Yes</label>
+                    <label><input type="radio" name="make_editor_access" value="no"> No</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="field-row full">
+            <div class="field">
+                <label for="make-new-url">New Make.com organization URL (if already created)</label>
+                <input type="text" id="make-new-url" name="make_new_url" placeholder="https://eu1.make.com/org/... or leave blank">
+                <span class="hint">Leave blank if the new account hasn't been set up yet</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Group 3: System Access -->
+    <div class="form-section">
+        <div class="form-group-title">System access</div>
+
+        <p style="font-size:13px;color:var(--text2);margin-bottom:20px;">Let us know which credentials are ready. We don't need the keys themselves at this stage, just confirmation of what's available so we can plan the re-authentication steps.</p>
+
+        <div class="field-row">
+            <div class="field">
+                <label>Hero Software API access available?</label>
+                <div class="radio-group">
+                    <label><input type="radio" name="access_hero" value="yes"> Yes</label>
+                    <label><input type="radio" name="access_hero" value="no"> No</label>
+                </div>
+            </div>
+            <div class="field">
+                <label>LexOffice API key available?</label>
+                <div class="radio-group">
+                    <label><input type="radio" name="access_lexoffice" value="yes"> Yes</label>
+                    <label><input type="radio" name="access_lexoffice" value="no"> No</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="field-row">
+            <div class="field">
+                <label>Mailgun SMTP credentials available?</label>
+                <div class="radio-group">
+                    <label><input type="radio" name="access_mailgun" value="yes"> Yes</label>
+                    <label><input type="radio" name="access_mailgun" value="no"> No</label>
+                </div>
+            </div>
+            <div class="field">
+                <label>S3 bucket access details available?</label>
+                <div class="radio-group">
+                    <label><input type="radio" name="access_s3" value="yes"> Yes</label>
+                    <label><input type="radio" name="access_s3" value="no"> No</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="field-row full">
+            <div class="field">
+                <label>OpenAI API key available?</label>
+                <div class="radio-group">
+                    <label><input type="radio" name="access_openai" value="yes"> Yes</label>
+                    <label><input type="radio" name="access_openai" value="no"> No</label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Group 4: Team Coordination -->
+    <div class="form-section">
+        <div class="form-group-title">Team coordination</div>
+
+        <div class="field-row">
+            <div class="field">
+                <label for="sysadmin-name">Sysadmin contact name for webhook cutover</label>
+                <input type="text" id="sysadmin-name" name="sysadmin_name" placeholder="e.g. Thomas Meier">
+                <span class="hint">The person who can update webhook URLs on the sending systems</span>
+            </div>
+            <div class="field">
+                <label for="sysadmin-contact">Sysadmin email or Slack handle</label>
+                <input type="text" id="sysadmin-contact" name="sysadmin_contact" placeholder="e.g. t.meier@yourcompany.de or @tmeier">
+            </div>
+        </div>
+
+        <div class="field-row">
+            <div class="field">
+                <label for="timezone">Preferred timezone for sync calls</label>
+                <select id="timezone" name="timezone">
+                    <option value="">Select one</option>
+                    <option value="CET">CET (Central European Time)</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+            <div class="field">
+                <!-- spacer -->
+            </div>
+        </div>
+
+        <div class="field-row full">
+            <div class="field">
+                <label for="blackout-periods">Any upcoming deadlines or blackout periods?</label>
+                <textarea id="blackout-periods" name="blackout_periods" placeholder="e.g. End-of-month invoicing runs on the 28th, avoid changes that week. Team holiday 15-22 April."></textarea>
+                <span class="hint">Anything that would make a bad time for a cutover or parallel run</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="submit-row">
+        <button type="submit" class="submit-btn">Submit onboarding form</button>
+        <span class="submit-note">We'll follow up within one business day via your preferred channel.</span>
+    </div>
+
+    <div class="form-success" id="formSuccess">
+        Your form has been submitted. We'll be in touch shortly to confirm the details and schedule the first session.
+    </div>
+
+</form>
+
+<!-- Day 1 Checklist -->
+<h2 id="day-one">Day 1 Checklist</h2>
+
+<p>Here's what we cover in the first working session. You don't need to prepare anything beyond what's in the form above.</p>
+
+<div class="checklist-grid">
+    <div class="check-card">
+        <div class="check-icon">&#10003;</div>
+        <div class="check-info">
+            <div class="check-title">Access granted to current account</div>
+            <div class="check-desc">Editor access confirmed so we can view scenario configurations, data stores, and connection details.</div>
+        </div>
+    </div>
+    <div class="check-card">
+        <div class="check-icon">&#10003;</div>
+        <div class="check-info">
+            <div class="check-title">First blueprint exports started</div>
+            <div class="check-desc">Every active scenario exported as a JSON blueprint. This is the source of truth for the audit.</div>
+        </div>
+    </div>
+    <div class="check-card">
+        <div class="check-icon">&#10003;</div>
+        <div class="check-info">
+            <div class="check-title">Initial dependency mapping begun</div>
+            <div class="check-desc">Which scenarios talk to which systems, which share data stores, and which have live webhook dependencies.</div>
+        </div>
+    </div>
+    <div class="check-card">
+        <div class="check-icon">&#10003;</div>
+        <div class="check-info">
+            <div class="check-title">Communication channel established</div>
+            <div class="check-desc">Primary contact confirmed, response time agreed on, and a shared space for questions and updates set up.</div>
+        </div>
+    </div>
+</div>
+
+<div class="callout orange">
+    <div class="callout-title">On webhook cutovers</div>
+    <p>Webhook URL changes are the highest-risk step of any migration. We schedule them in coordination with your sysadmin during a low-traffic window. No cutover happens without a confirmed rollback plan and a monitoring window afterwards.</p>
+</div>
+
+<footer class="footer">
+    <p>Prepared by <strong>UnpauseAI</strong> &middot; <a href="mailto:nico@unpauseai.com">nico@unpauseai.com</a> &middot; 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+// Access gate
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='warme-2026'){
+        localStorage.setItem('warme-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.';
+    }
+}
+(function(){if(localStorage.getItem('warme-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+
+// Theme toggle
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('warme-theme',t);
+}
+
+// Sidebar active state
+(function(){
+    var links=document.querySelectorAll('.step-link');
+    var sections=[];
+    links.forEach(function(l){
+        var id=l.getAttribute('href');
+        if(id&&id.startsWith('#')){
+            var el=document.querySelector(id);
+            if(el)sections.push({el:el,link:l});
+        }
+    });
+    if(!sections.length)return;
+    var observer=new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+            if(e.isIntersecting){
+                links.forEach(function(l){l.classList.remove('active')});
+                sections.forEach(function(s){
+                    if(s.el===e.target)s.link.classList.add('active');
+                });
+            }
+        });
+    },{rootMargin:'-80px 0px -60% 0px'});
+    sections.forEach(function(s){observer.observe(s.el)});
+})();
+
+// Form submit
+function handleSubmit(e){
+    e.preventDefault();
+    var form=document.getElementById('onboardingForm');
+    var name=document.getElementById('contact-name').value.trim();
+    var email=document.getElementById('contact-email').value.trim();
+    if(!name||!email){
+        alert('Please fill in your name and email address before submitting.');
+        return;
+    }
+    // In production, POST to an endpoint. For now, show confirmation.
+    form.querySelectorAll('input, select, textarea, button').forEach(function(el){ el.disabled=true; });
+    document.getElementById('formSuccess').classList.add('visible');
+    form.querySelector('.submit-row').style.display='none';
+}
+</script>
+</body>
+</html>
