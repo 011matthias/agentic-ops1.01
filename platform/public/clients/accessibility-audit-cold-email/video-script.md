@@ -1,6 +1,6 @@
 BEAT 1 -- REFRAME
 
-Hi there, Nico here. I saw your posting for an n8n automation expert to build an accessibility audit and cold email outreach pipeline. You've written one of the most detailed job descriptions I've seen on Upwork -- guard rails included -- so I know you've thought this through.
+SAY: Hi there, Nico here. I saw your posting for an n8n automation expert to build an accessibility audit and cold email outreach pipeline. You've written one of the most detailed job descriptions I've seen on Upwork -- guard rails included -- so I know you've thought this through.
 
 >> Show job posting (highlight "500 URLs in one run" and "guard rails and caveats")
 
@@ -79,31 +79,31 @@ AUTHORITY
 - CET timezone, 6hr overlap with Mississauga
 
 BEAT 2 -- SHOW SOLUTION
-- Show: Overview > The Pipeline (4 stages)
-- Show: Solution > axe-core Audit Engine
+- Overview, The Pipeline (4 stages)
+- Solution, axe-core Audit Engine
 - Puppeteer headless, 15s timeout, axe-core injection, violation array
-- Show: Solution > n8n Self-Hosting on NameHero
+- Solution, n8n Self-Hosting on NameHero
 - Be upfront: shared hosting risk with Puppeteer
 - Fallback: cloud function for audit step only
-- Show: Solution > Error Handling
+- Solution, Error Handling
 - Every error caught and logged, pipeline never stops
 
 BEAT 3 -- EDGE CASES
-- Show: Solution > Instantly.ai Email Integration
+- Solution, Instantly.ai Email Integration
 - Only FAIL sites trigger email, PASS and BLOCKED skip
 - Email log sheet: timestamp, campaign ID, recipient
-- Show: FAQ > Will Puppeteer actually run on NameHero?
+- FAQ, Will Puppeteer actually run on NameHero?
 - Three scenarios: works, cloud function, lightweight VPS
 - Phase 1 resolves this before any code
 
 BEAT 4 -- PRICING
-- Show: Investment > Pricing
+- Investment, Pricing
 - $500 fixed, single milestone
 - Payment after client tests on 20 live URLs
-- Show: Timeline > 9-Day Build Plan
+- Timeline, 9-Day Build Plan
 - 4 phases, results at end of each
 
 BEAT 5 -- CLOSE
-- Show: Onboarding > Get Started
+- Onboarding, Get Started
 - Need: NameHero access, Google Sheet, Instantly key, sample URLs
 - n8n installed within 48 hours
