@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stack Audit Proposal &ndash; Timeline | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+    h2 { page-break-before: always; }
+    h2:first-of-type { page-break-before: avoid; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+
+/* Navigation */
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+
+/* Sidebar */
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+
+/* Main Content */
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+
+/* Hero */
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 560px; margin: 0 auto 32px; line-height: 1.6; }
+
+/* Sections */
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+
+/* Callout */
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+
+/* Timeline phases grid */
+.phases-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 32px 0;
+}
+.phase-card {
+    border-radius: 12px; padding: 20px; border: 1px solid var(--border);
+    transition: transform .15s, box-shadow .15s;
+}
+.phase-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.phase-blue { background: var(--blue-bg); border-color: color-mix(in srgb, var(--blue) 20%, var(--border)); }
+.phase-purple { background: var(--purple-bg); border-color: color-mix(in srgb, var(--purple) 20%, var(--border)); }
+.phase-green { background: var(--green-bg); border-color: color-mix(in srgb, var(--green) 20%, var(--border)); }
+.phase-orange { background: var(--orange-bg); border-color: color-mix(in srgb, var(--orange) 20%, var(--border)); }
+.phase-badge {
+    display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; padding: 3px 8px; border-radius: 20px; margin-bottom: 8px;
+}
+.phase-blue .phase-badge { background: var(--blue-light); color: var(--blue-dark); }
+.phase-purple .phase-badge { background: var(--purple-light); color: var(--purple-dark); }
+.phase-green .phase-badge { background: var(--green-light); color: var(--green-dark); }
+.phase-orange .phase-badge { background: var(--orange-light); color: var(--orange-dark); }
+.phase-title { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+.phase-blue .phase-title { color: var(--blue-dark); }
+.phase-purple .phase-title { color: var(--purple-dark); }
+.phase-green .phase-title { color: var(--green-dark); }
+.phase-orange .phase-title { color: var(--orange-dark); }
+.phase-days { font-size: 12px; color: var(--text2); margin-bottom: 12px; font-weight: 500; }
+.phase-items { list-style: none; padding: 0; }
+.phase-items li {
+    font-size: 13px; padding: 5px 0; color: var(--text);
+    display: flex; align-items: flex-start; gap: 8px;
+}
+.phase-items li::before { content: ''; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-top: 6px; }
+.phase-blue .phase-items li::before { background: var(--blue); }
+.phase-purple .phase-items li::before { background: var(--purple); }
+.phase-green .phase-items li::before { background: var(--green); }
+.phase-orange .phase-items li::before { background: var(--orange); }
+
+/* Requirements box */
+.req-box {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px; margin: 24px 0;
+}
+.req-box h3 { margin-top: 0; color: var(--text-strong); font-size: 16px; margin-bottom: 16px; }
+.req-list { list-style: none; padding: 0; }
+.req-list li {
+    display: flex; align-items: flex-start; gap: 10px; padding: 10px 0;
+    border-bottom: 1px solid var(--border); font-size: 14px; color: var(--text);
+}
+.req-list li:last-child { border-bottom: none; }
+.req-icon {
+    width: 20px; height: 20px; border-radius: 50%; background: var(--blue-light);
+    color: var(--blue-dark); display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; flex-shrink: 0; margin-top: 1px;
+}
+
+/* CTA */
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+
+/* Footer */
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; }
+
+/* Access gate */
+.access-gate {
+    position: fixed; inset: 0; background: var(--bg); z-index: 2000;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+}
+.access-box {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    padding: 40px; max-width: 400px; width: 100%; text-align: center;
+    box-shadow: 0 8px 32px rgba(0,0,0,.12);
+}
+.access-logo { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+.access-logo span { color: var(--blue); }
+.access-title { font-size: 20px; font-weight: 700; color: var(--text-strong); margin-bottom: 8px; }
+.access-sub { font-size: 14px; color: var(--text2); margin-bottom: 24px; }
+.access-input {
+    width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 14px; background: var(--bg); color: var(--text); font-family: inherit;
+    margin-bottom: 12px; text-align: center;
+}
+.access-btn {
+    width: 100%; padding: 10px 14px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-btn:hover { background: var(--blue-dark); }
+.access-error { font-size: 13px; color: #dc2626; margin-top: 8px; display: none; }
+
+/* Tablet */
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+    .phases-grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* Mobile */
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .hero h1 { font-size: 24px; }
+    .phases-grid { grid-template-columns: 1fr; }
+}
+</style>
+<script>
+(function(){
+    var t = localStorage.getItem('stackaudit-theme');
+    if(t === 'dark') document.documentElement.setAttribute('data-theme','dark');
+})();
+</script>
+</head>
+<body>
+
+<!-- Access Gate -->
+<div class="access-gate" id="access-gate">
+    <div class="access-box">
+        <div class="access-logo">Unpause<span>AI</span></div>
+        <div class="access-title">Stack Audit Proposal</div>
+        <div class="access-sub">Enter the access code to view this proposal.</div>
+        <input class="access-input" type="text" id="access-input" placeholder="Access code" autocomplete="off">
+        <button class="access-btn" onclick="checkAccess()">View Proposal</button>
+        <div class="access-error" id="access-error">Incorrect code. Check your message from Nico.</div>
+    </div>
+</div>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/automation-ai-stack-audit/index.html" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Stack Audit Proposal</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/automation-ai-stack-audit/index.html">Overview</a>
+        <a href="/clients/automation-ai-stack-audit/solution.html">Solution</a>
+        <a href="/clients/automation-ai-stack-audit/workflow.html">Architecture</a>
+        <a href="/clients/automation-ai-stack-audit/timeline.html" class="active">Timeline</a>
+        <a href="/clients/automation-ai-stack-audit/investment.html">Investment</a>
+        <a href="/clients/automation-ai-stack-audit/faq.html">FAQ</a>
+        <a href="/clients/automation-ai-stack-audit/onboarding.html">Get Started</a>
+        <a href="/clients/automation-ai-stack-audit/brief.html">Brief</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">Proposal pages</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="/clients/automation-ai-stack-audit/index.html" class="step-link"><span class="step-num">1</span> Overview</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="/clients/automation-ai-stack-audit/solution.html" class="step-link"><span class="step-num">2</span> Solution</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="/clients/automation-ai-stack-audit/workflow.html" class="step-link"><span class="step-num">3</span> Architecture</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="/clients/automation-ai-stack-audit/timeline.html" class="step-link active"><span class="step-num">4</span> Timeline</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="/clients/automation-ai-stack-audit/investment.html" class="step-link"><span class="step-num">5</span> Investment</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="/clients/automation-ai-stack-audit/faq.html" class="step-link"><span class="step-num">6</span> FAQ</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="/clients/automation-ai-stack-audit/onboarding.html" class="step-link"><span class="step-num">7</span> Get Started</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="/clients/automation-ai-stack-audit/brief.html" class="step-link"><span class="step-num">8</span> Your Stack</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<!-- Hero -->
+<section class="hero" id="top">
+    <div class="hero-badge">Timeline</div>
+    <h1>Audit Timeline: 5&ndash;7 Business Days</h1>
+    <p class="hero-sub">Four phases from system access to final report. Each phase builds on the last. You get a structured deliverable at the end, not a raw notes dump.</p>
+</section>
+
+<!-- Phases -->
+<h2 id="phases">Audit Phases</h2>
+
+<div class="phases-grid">
+    <div class="phase-card phase-blue">
+        <div class="phase-badge">Phase 1</div>
+        <div class="phase-title">Discovery</div>
+        <div class="phase-days">Days 1&ndash;2</div>
+        <ul class="phase-items">
+            <li>System access and credential setup</li>
+            <li>Workflow and scenario inventory</li>
+            <li>Initial architecture scan</li>
+            <li>Document current state</li>
+        </ul>
+    </div>
+    <div class="phase-card phase-purple">
+        <div class="phase-badge">Phase 2</div>
+        <div class="phase-title">Deep Analysis</div>
+        <div class="phase-days">Days 3&ndash;4</div>
+        <ul class="phase-items">
+            <li>Workflow tracing and error path testing</li>
+            <li>AI pipeline quality assessment</li>
+            <li>Chatbot flow logic review</li>
+            <li>Integration point verification</li>
+        </ul>
+    </div>
+    <div class="phase-card phase-green">
+        <div class="phase-badge">Phase 3</div>
+        <div class="phase-title">Synthesis</div>
+        <div class="phase-days">Days 5&ndash;6</div>
+        <ul class="phase-items">
+            <li>Pattern identification across systems</li>
+            <li>Dependency mapping</li>
+            <li>Risk assessment compilation</li>
+            <li>Quick win identification</li>
+        </ul>
+    </div>
+    <div class="phase-card phase-orange">
+        <div class="phase-badge">Phase 4</div>
+        <div class="phase-title">Delivery</div>
+        <div class="phase-days">Day 7</div>
+        <ul class="phase-items">
+            <li>Structured audit report</li>
+            <li>Architecture diagrams</li>
+            <li>Prioritized recommendations</li>
+            <li>Optional walkthrough call</li>
+        </ul>
+    </div>
+</div>
+
+<!-- What we need -->
+<h2 id="requirements">What We Need From You</h2>
+
+<div class="req-box">
+    <h3>Access checklist</h3>
+    <ul class="req-list">
+        <li>
+            <div class="req-icon">1</div>
+            <div><strong>n8n instance access</strong> &mdash; Viewer or editor role. We need to trace workflow execution paths and inspect node configurations.</div>
+        </li>
+        <li>
+            <div class="req-icon">2</div>
+            <div><strong>Make.com organization access</strong> &mdash; Viewer role is enough. We'll review scenario structure, data mapping, and error handling.</div>
+        </li>
+        <li>
+            <div class="req-icon">3</div>
+            <div><strong>Tier 2+: Chatbot platform and AI integration docs</strong> &mdash; Access to the chatbot platform admin and any documentation on your LLM or RAG setup.</div>
+        </li>
+        <li>
+            <div class="req-icon">4</div>
+            <div><strong>Tier 3: Django codebase access</strong> &mdash; Read-only GitHub access works. We won't need production credentials or database access.</div>
+        </li>
+        <li>
+            <div class="req-icon">5</div>
+            <div><strong>30-minute kickoff call</strong> &mdash; To understand your priorities and what's causing the most pain. This sets the audit focus.</div>
+        </li>
+    </ul>
+</div>
+
+<div class="callout">
+    <div class="callout-title">We never need admin credentials</div>
+    <p>Viewer access is enough for the audit. We don't touch production data or make configuration changes during the review. Everything we do is read-only.</p>
+</div>
+
+<!-- After the audit -->
+<h2 id="after">After the Audit</h2>
+
+<p>The audit report is the starting point, not the end. If you want us to implement the fixes, we can scope that as a follow-up engagement based on the audit findings. Implementation pricing is separate and based on the actual work identified.</p>
+
+<p>We won't pad the audit with findings that require our services to fix. The report is structured to give you enough context to act independently or decide whether to bring us in for implementation.</p>
+
+<div class="callout green">
+    <div class="callout-title">What you can do with the report</div>
+    <p>Hand it to your existing dev team, use it to scope work independently, or ask us to implement the priority items. The report gives you that choice with real data, not guesswork.</p>
+</div>
+
+<!-- CTA -->
+<section class="cta-section">
+    <h2>Ready to get started?</h2>
+    <p>Pick a tier and we'll kick off within 24 hours of system access.</p>
+    <a href="/clients/automation-ai-stack-audit/onboarding.html" class="cta-btn">Request the Audit</a>
+</section>
+
+<div class="footer">
+    <p>UnpauseAI &mdash; nico@unpauseai.com</p>
+</div>
+
+</div>
+</div>
+
+<script>
+// Access gate
+var ACCESS_CODE = 'stackaudit-2026';
+var STORAGE_KEY = 'access_stackaudit';
+
+function checkAccess() {
+    var val = document.getElementById('access-input').value.trim();
+    if (val === ACCESS_CODE) {
+        localStorage.setItem(STORAGE_KEY, '1');
+        document.getElementById('access-gate').style.display = 'none';
+    } else {
+        document.getElementById('access-error').style.display = 'block';
+    }
+}
+
+document.getElementById('access-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') checkAccess();
+});
+
+(function() {
+    if (localStorage.getItem(STORAGE_KEY) === '1') {
+        document.getElementById('access-gate').style.display = 'none';
+    }
+})();
+
+// Theme
+function toggleTheme() {
+    var html = document.documentElement;
+    var next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+    localStorage.setItem('stackaudit-theme', next);
+}
+</script>
+</body>
+</html>

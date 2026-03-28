@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stack Audit Proposal &ndash; Solution | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+.access-gate {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: var(--bg); z-index: 2000;
+    display: flex; align-items: center; justify-content: center;
+}
+.access-box {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    padding: 48px 40px; text-align: center; max-width: 400px; width: 90%;
+    box-shadow: 0 4px 24px rgba(0,0,0,.08);
+}
+.access-box h2 { font-size: 20px; color: var(--text-strong); margin-bottom: 8px; border: none; margin-top: 0; padding-bottom: 0; }
+.access-box p { font-size: 14px; color: var(--text2); margin-bottom: 24px; }
+.access-input {
+    width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 14px; background: var(--bg); color: var(--text); margin-bottom: 12px;
+    outline: none; transition: border-color .15s;
+}
+.access-input:focus { border-color: var(--blue); }
+.access-btn {
+    width: 100%; padding: 10px 14px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-btn:hover { background: var(--blue-dark); }
+.access-error { font-size: 13px; color: #ef4444; margin-top: 8px; display: none; }
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 560px; margin: 0 auto 0; line-height: 1.6; }
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+.zones { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 16px; margin: 32px 0; }
+.zone {
+    border-radius: 12px; padding: 20px; border: 1px solid var(--border);
+    transition: transform .15s, box-shadow .15s;
+}
+.zone:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.zone-blue { background: var(--blue-bg); border-color: color-mix(in srgb, var(--blue) 20%, var(--border)); }
+.zone-purple { background: var(--purple-bg); border-color: color-mix(in srgb, var(--purple) 20%, var(--border)); }
+.zone-green { background: var(--green-bg); border-color: color-mix(in srgb, var(--green) 20%, var(--border)); }
+.zone-orange { background: var(--orange-bg); border-color: color-mix(in srgb, var(--orange) 20%, var(--border)); }
+.zone-icon {
+    width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 8px;
+}
+.zone-blue .zone-icon { background: var(--blue); }
+.zone-purple .zone-icon { background: var(--purple); }
+.zone-orange .zone-icon { background: var(--orange); }
+.zone-green .zone-icon { background: var(--green); }
+.zone-title { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
+.zone-blue .zone-title { color: var(--blue-dark); }
+.zone-purple .zone-title { color: var(--purple-dark); }
+.zone-green .zone-title { color: var(--green-dark); }
+.zone-orange .zone-title { color: var(--orange-dark); }
+.zone-sub { font-size: 11px; color: var(--text2); margin-bottom: 12px; }
+.zone-items { list-style: none; padding: 0; }
+.zone-items li {
+    font-size: 13px; padding: 5px 0; color: var(--text);
+    display: flex; align-items: center; gap: 8px;
+}
+.zone-items li::before { content: ''; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.zone-blue .zone-items li::before { background: var(--blue); }
+.zone-purple .zone-items li::before { background: var(--purple); }
+.zone-green .zone-items li::before { background: var(--green); }
+.zone-orange .zone-items li::before { background: var(--orange); }
+.solution-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 24px 0; }
+.sol-card {
+    display: flex; gap: 12px; padding: 16px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--surface);
+    transition: transform .15s, box-shadow .15s;
+    text-decoration: none; color: inherit;
+}
+.sol-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); text-decoration: none; }
+.sol-num {
+    width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; background: var(--blue-light); color: var(--blue); flex-shrink: 0;
+}
+.sol-info { flex: 1; }
+.sol-title { font-size: 14px; font-weight: 600; color: var(--text-strong); margin-bottom: 2px; }
+.sol-desc { font-size: 12px; color: var(--text2); line-height: 1.5; }
+.systems-list {
+    display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0;
+}
+.sys-tag {
+    display: inline-flex; align-items: center; padding: 5px 12px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
+    font-size: 13px; font-weight: 500; color: var(--text);
+}
+table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+th { background: var(--th-bg); color: #fff; text-align: left; padding: 10px 14px; font-weight: 600; }
+td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:nth-child(even) td { background: var(--surface); }
+tr:hover td { background: var(--blue-bg); }
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; }
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .zones { grid-template-columns: 1fr; }
+    .solution-grid { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 24px; }
+}
+</style>
+<script>
+(function(){
+    var t = localStorage.getItem('stackaudit-theme');
+    if (t === 'dark') document.documentElement.setAttribute('data-theme','dark');
+})();
+</script>
+</head>
+<body>
+
+<!-- Access Gate -->
+<div class="access-gate" id="accessGate">
+    <div class="access-box">
+        <h2>Stack Audit Proposal</h2>
+        <p>This proposal is private. Enter the access code to continue.</p>
+        <input type="password" class="access-input" id="accessInput" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+        <button class="access-btn" onclick="checkAccess()">View Proposal</button>
+        <div class="access-error" id="accessError">Incorrect code. Please try again.</div>
+    </div>
+</div>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/automation-ai-stack-audit/index.html" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent"> | AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Stack Audit Proposal</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/automation-ai-stack-audit/index.html">Overview</a>
+        <a href="/clients/automation-ai-stack-audit/solution.html" class="active">Solution</a>
+        <a href="/clients/automation-ai-stack-audit/workflow.html">Architecture</a>
+        <a href="/clients/automation-ai-stack-audit/timeline.html">Timeline</a>
+        <a href="/clients/automation-ai-stack-audit/investment.html">Investment</a>
+        <a href="/clients/automation-ai-stack-audit/faq.html">FAQ</a>
+        <a href="/clients/automation-ai-stack-audit/onboarding.html">Get Started</a>
+        <a href="/clients/automation-ai-stack-audit/brief.html">Your Stack</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">Proposal sections</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="/clients/automation-ai-stack-audit/index.html" class="step-link"><span class="step-num">1</span> Overview</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="/clients/automation-ai-stack-audit/solution.html" class="step-link active"><span class="step-num">2</span> Solution</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="/clients/automation-ai-stack-audit/workflow.html" class="step-link"><span class="step-num">3</span> Architecture</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="/clients/automation-ai-stack-audit/timeline.html" class="step-link"><span class="step-num">4</span> Timeline</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="/clients/automation-ai-stack-audit/investment.html" class="step-link"><span class="step-num">5</span> Investment</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="/clients/automation-ai-stack-audit/faq.html" class="step-link"><span class="step-num">6</span> FAQ</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="/clients/automation-ai-stack-audit/onboarding.html" class="step-link"><span class="step-num">7</span> Get Started</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="/clients/automation-ai-stack-audit/brief.html" class="step-link"><span class="step-num">8</span> Your Stack</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<section class="hero">
+    <div class="hero-badge">Audit Approach</div>
+    <h1>What Gets Reviewed and What You Receive</h1>
+    <p class="hero-sub">Four audit zones, six structured deliverables, and a focus on the connections between your systems rather than just what's inside each one.</p>
+</section>
+
+<!-- What Gets Audited -->
+<h2 id="what-gets-audited">What Gets Audited</h2>
+<p>The audit covers four zones. Each one maps to a specific failure category we see repeatedly in automation-heavy stacks.</p>
+
+<div class="zones">
+    <div class="zone zone-blue">
+        <div class="zone-icon">1</div>
+        <div class="zone-title">Workflow Automation</div>
+        <div class="zone-sub">n8n and Make.com layers</div>
+        <ul class="zone-items">
+            <li>Trigger reliability</li>
+            <li>Error handling paths</li>
+            <li>Data routing logic</li>
+            <li>Module configuration</li>
+            <li>Retry and fallback setup</li>
+        </ul>
+    </div>
+    <div class="zone zone-purple">
+        <div class="zone-icon">2</div>
+        <div class="zone-title">AI and Chatbot Layer</div>
+        <div class="zone-sub">LLM, RAG, and conversation logic</div>
+        <ul class="zone-items">
+            <li>Chatbot flow structure</li>
+            <li>Prompt design quality</li>
+            <li>Context window handling</li>
+            <li>RAG retrieval accuracy</li>
+            <li>Fallback and edge cases</li>
+        </ul>
+    </div>
+    <div class="zone zone-green">
+        <div class="zone-icon">3</div>
+        <div class="zone-title">Integration Points</div>
+        <div class="zone-sub">System handoffs and API connections</div>
+        <ul class="zone-items">
+            <li>Auth patterns and expiry</li>
+            <li>Payload validation</li>
+            <li>Webhook reliability</li>
+            <li>Data format consistency</li>
+            <li>Cross-system handoffs</li>
+        </ul>
+    </div>
+    <div class="zone zone-orange">
+        <div class="zone-icon">4</div>
+        <div class="zone-title">Architecture Review</div>
+        <div class="zone-sub">Python, Django, and system structure</div>
+        <ul class="zone-items">
+            <li>AI integration code</li>
+            <li>Cross-system dependencies</li>
+            <li>Performance bottlenecks</li>
+            <li>Credential and config hygiene</li>
+            <li>Scalability considerations</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Deliverables -->
+<h2 id="deliverables">What You Receive</h2>
+<p>Six structured deliverables. Not a list of observations, but a set of documents you can act on directly.</p>
+
+<div class="solution-grid">
+    <div class="sol-card">
+        <div class="sol-num">1</div>
+        <div class="sol-info"><div class="sol-title">Issue Inventory</div><div class="sol-desc">Categorized by severity: critical, high, and medium. Each issue includes the affected system, the failure mode, and the effort to fix it.</div></div>
+    </div>
+    <div class="sol-card">
+        <div class="sol-num">2</div>
+        <div class="sol-info"><div class="sol-title">Architecture Map</div><div class="sol-desc">A visual diagram of your current automation state and data flows. Shows how your systems connect, not just what each one does.</div></div>
+    </div>
+    <div class="sol-card">
+        <div class="sol-num">3</div>
+        <div class="sol-info"><div class="sol-title">Optimization Report</div><div class="sol-desc">Quick wins vs. strategic improvements, prioritized by impact. Identifies what you can fix this week vs. what needs a sprint.</div></div>
+    </div>
+    <div class="sol-card">
+        <div class="sol-num">4</div>
+        <div class="sol-info"><div class="sol-title">Implementation Roadmap</div><div class="sol-desc">Recommended next steps with effort estimates. Sequenced so you tackle dependencies before the changes that depend on them.</div></div>
+    </div>
+    <div class="sol-card">
+        <div class="sol-num">5</div>
+        <div class="sol-info"><div class="sol-title">Dependency Map</div><div class="sol-desc">How your automation, AI, and integration layers connect. Surfaces the cross-system dependencies that individual auditors miss.</div></div>
+    </div>
+    <div class="sol-card">
+        <div class="sol-num">6</div>
+        <div class="sol-info"><div class="sol-title">Risk Assessment</div><div class="sol-desc">Single points of failure, missing redundancy, and mitigation recommendations. Ordered by likelihood and business impact.</div></div>
+    </div>
+</div>
+
+<!-- Systems We'll Review -->
+<h2 id="systems">Systems We'll Review</h2>
+<p>We identified these from your current hiring activity. During the audit, we'll map the actual connections between them rather than treating each one in isolation.</p>
+
+<div class="systems-list">
+    <span class="sys-tag">n8n</span>
+    <span class="sys-tag">Make.com</span>
+    <span class="sys-tag">Python</span>
+    <span class="sys-tag">Django</span>
+    <span class="sys-tag">OpenAI</span>
+    <span class="sys-tag">HubSpot</span>
+    <span class="sys-tag">Shopify</span>
+    <span class="sys-tag">Microsoft Teams</span>
+    <span class="sys-tag">SharePoint</span>
+    <span class="sys-tag">Dynamics 365</span>
+    <span class="sys-tag">Power BI</span>
+    <span class="sys-tag">React / Next.js</span>
+</div>
+
+<div class="callout green">
+    <div class="callout-title">Why Our Perspective Is Different</div>
+    <p>We work with n8n and Make.com daily. We've built production AI classification systems with Claude API. This isn't theoretical. We audit from the perspective of people who build and maintain these systems, which means we know what breaks in practice, not just what looks wrong in a diagram.</p>
+</div>
+
+<footer class="footer" style="border-top: 1px solid var(--border); padding: 24px 0 40px; margin-top: 48px;">
+    <p>Built and maintained by <a href="https://unpauseai.com" target="_blank" rel="noopener">UnpauseAI</a></p>
+    <p style="margin-top:4px;"><a href="https://unpauseai.com/privacy">Privacy Policy</a> &middot; <a href="https://unpauseai.com/terms">Terms of Service</a></p>
+    <p style="margin-top:4px; font-size: 12px;">Last updated: March 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+var ACCESS_KEY = 'access_stackaudit';
+var ACCESS_CODE = 'stackaudit-2026';
+
+function checkAccess() {
+    var val = document.getElementById('accessInput').value.trim();
+    if (val === ACCESS_CODE) {
+        localStorage.setItem(ACCESS_KEY, '1');
+        document.getElementById('accessGate').style.display = 'none';
+    } else {
+        document.getElementById('accessError').style.display = 'block';
+    }
+}
+
+(function() {
+    if (localStorage.getItem(ACCESS_KEY) === '1') {
+        document.getElementById('accessGate').style.display = 'none';
+    }
+})();
+
+function toggleTheme() {
+    var el = document.documentElement;
+    var t = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    el.setAttribute('data-theme', t);
+    localStorage.setItem('stackaudit-theme', t);
+}
+</script>
+
+</body>
+</html>
