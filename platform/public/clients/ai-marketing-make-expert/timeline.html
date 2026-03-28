@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Timeline | AI Marketing System | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 560px; margin: 0 auto 32px; line-height: 1.6; }
+.stats-row { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
+.stat-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 24px; text-align: center; min-width: 140px;
+    transition: transform .15s, box-shadow .15s;
+}
+.stat-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.stat-value { font-size: 24px; font-weight: 800; color: var(--blue); }
+.stat-label { font-size: 12px; color: var(--text2); font-weight: 500; margin-top: 2px; }
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+.callout.purple { border-color: var(--purple); background: var(--purple-bg); }
+.callout.purple .callout-title, .callout.purple p { color: var(--purple-dark); }
+.tl-card {
+    padding: 20px; border-radius: 10px; border: 1px solid var(--border);
+    border-left: 4px solid var(--blue); background: var(--surface);
+    margin-bottom: 12px;
+    transition: transform .15s, box-shadow .15s;
+}
+.tl-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.tl-card.phase2 { border-left-color: var(--purple); }
+.tl-badge {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    padding: 3px 10px; border-radius: 20px; margin-bottom: 8px;
+}
+.tl-card .tl-badge { background: var(--blue-light); color: var(--blue); }
+.tl-card.phase2 .tl-badge { background: var(--purple-light); color: var(--purple); }
+.tl-header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 10px; flex-wrap: wrap; }
+.tl-title { font-size: 15px; font-weight: 700; color: var(--text-strong); }
+.tl-scenario { font-size: 12px; color: var(--text2); }
+.tl-body { font-size: 13px; color: var(--text); line-height: 1.6; }
+.tl-body strong { color: var(--text-strong); }
+table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+th { background: var(--th-bg); color: #fff; text-align: left; padding: 10px 14px; font-weight: 600; }
+td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:nth-child(even) td { background: var(--surface); }
+tr:hover td { background: var(--blue-bg); }
+.badge-blue { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 700; background: var(--blue-light); color: var(--blue); }
+.badge-purple { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 700; background: var(--purple-light); color: var(--purple); }
+.badge-green { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 700; background: var(--green-light); color: var(--green); }
+.badge-orange { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 700; background: var(--orange-light); color: var(--orange); }
+.cadence-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 24px 0; }
+.cadence-card {
+    padding: 18px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface);
+}
+.cadence-card-title { font-size: 13px; font-weight: 700; color: var(--text-strong); margin-bottom: 10px; }
+.cadence-card ul { padding-left: 18px; margin: 0; }
+.cadence-card li { font-size: 13px; color: var(--text); margin-bottom: 5px; }
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); }
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .hero h1 { font-size: 24px; }
+    .stats-row { gap: 8px; }
+    .stat-card { min-width: 100px; padding: 12px 16px; }
+    .stat-value { font-size: 20px; }
+    .cadence-row { grid-template-columns: 1fr; }
+    .tl-header { flex-direction: column; gap: 4px; }
+}
+</style>
+<script>
+(function(){var t=localStorage.getItem('aimarketing-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<!-- Access Gate -->
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared specifically for your team. Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/ai-marketing-make-expert/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">AI Marketing System</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/ai-marketing-make-expert/">Overview</a>
+        <a href="/clients/ai-marketing-make-expert/solution">Solution</a>
+        <a href="/clients/ai-marketing-make-expert/workflow">Workflow</a>
+        <a href="/clients/ai-marketing-make-expert/timeline" class="active">Timeline</a>
+        <a href="/clients/ai-marketing-make-expert/investment">Investment</a>
+        <a href="/clients/ai-marketing-make-expert/faq">FAQ</a>
+        <a href="/clients/ai-marketing-make-expert/onboarding">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">On this page</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#phase-1" class="step-link active"><span class="step-num">1</span> Phase 1: Analysis</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#phase-2" class="step-link"><span class="step-num">2</span> Phase 2: Execution</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#milestones" class="step-link"><span class="step-num">3</span> Key Milestones</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#weekly-cadence" class="step-link"><span class="step-num">4</span> Weekly Cadence</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<!-- Hero -->
+<section class="hero" id="phase-1">
+    <div class="hero-badge">16-Week Build Plan</div>
+    <h1>Week-by-Week Timeline</h1>
+    <p class="hero-sub">Phase 1 builds the analysis layer (scenarios 1-10, weeks 1-8). Phase 2 adds controlled execution (scenarios 11-16, weeks 9-16). Each week produces something testable.</p>
+    <div class="stats-row">
+        <div class="stat-card"><div class="stat-value">16</div><div class="stat-label">Weeks Total</div></div>
+        <div class="stat-card"><div class="stat-value">10</div><div class="stat-label">Phase 1 Scenarios</div></div>
+        <div class="stat-card"><div class="stat-value">6</div><div class="stat-label">Phase 2 Scenarios</div></div>
+        <div class="stat-card"><div class="stat-value">15-20</div><div class="stat-label">Hours/Week</div></div>
+    </div>
+</section>
+
+<!-- Phase 1 -->
+<h2 id="phase-1">Phase 1: Analysis Layer (Weeks 1-8)</h2>
+
+<p>Phase 1 is read-only. Every scenario this phase pulls data, reasons about it via Claude, and produces structured output - but nothing writes back to ad platforms yet. The goal is a reliable intelligence layer before we touch anything with financial consequences.</p>
+
+<div class="callout green">
+    <div class="callout-title">Phase 1 exit criteria</div>
+    <p>By the end of week 8, the system is pulling live data from all three ad platforms, running it through Claude with your exact prompts, producing validated JSON output, creating ClickUp tasks, posting Slack briefings, and enforcing all Phase 1 guardrails - for every client in the KB, on a real schedule.</p>
+</div>
+
+<div class="tl-card">
+    <div class="tl-header">
+        <span class="tl-badge">Week 1</span>
+        <span class="tl-scenario">Scenario 1</span>
+    </div>
+    <div class="tl-title">Environment Setup + Google Ads Ingestion</div>
+    <div class="tl-body">
+        <p>We start with infrastructure, not code. Google Sheets KB is configured: client config tab, data tabs, schema validated against your design doc. All Make.com connections are established and authenticated. Then we build scenario 1: Google Ads data pull using GAQL queries defined in your spec. Output writes to the KB. Test gate: real data from a single client, output matches expected schema, execution log confirms no rate limit violations.</p>
+    </div>
+</div>
+
+<div class="tl-card">
+    <div class="tl-header">
+        <span class="tl-badge">Week 2</span>
+        <span class="tl-scenario">Scenarios 2-3</span>
+    </div>
+    <div class="tl-title">Meta + LinkedIn Ingestion, Rate Limit Handling</div>
+    <div class="tl-body">
+        <p>Scenario 2 pulls Meta Ads via Marketing API. Scenario 3 pulls LinkedIn Ads via REST API. Both use the same KB write pattern as scenario 1. Rate limit handling gets built here - not added later. We test the backoff logic by deliberately triggering 429 responses and confirming the retry chain works before either scenario goes to a test gate. Multi-client loop is also tested this week: all KB clients run through both scenarios without one client's failure cascading.</p>
+    </div>
+</div>
+
+<div class="tl-card">
+    <div class="tl-header">
+        <span class="tl-badge">Week 3</span>
+        <span class="tl-scenario">Scenario 4</span>
+    </div>
+    <div class="tl-title">Claude API Integration + JSON Parser</div>
+    <div class="tl-body">
+        <p>This is the most technically sensitive scenario in Phase 1. We connect the Claude API and implement the JSON parse chain: markdown fence stripping, JSON.parse, schema validation. The prompts come from your design doc verbatim - we don't rewrite them. Error handling covers the two failure modes you care about most: Claude returning free-form text instead of JSON, and Claude returning JSON that doesn't match the expected schema. Both paths route to the dead letter store and trigger a retry with correction prompt. Test gate includes deliberately malformed Claude responses.</p>
+    </div>
+</div>
+
+<div class="tl-card">
+    <div class="tl-header">
+        <span class="tl-badge">Week 4</span>
+        <span class="tl-scenario">Scenario 5</span>
+    </div>
+    <div class="tl-title">First Agent Synthesis Scenario</div>
+    <div class="tl-body">
+        <p>The first agent scenario reads from the KB (populated by scenarios 1-3), constructs a structured prompt using your client context injection pattern, calls Claude, parses the response, and writes structured output back to the KB. This is the first end-to-end run of the ingestion-to-reasoning chain. We test with a single client first, then run the multi-client loop once the single-client test gate passes.</p>
+    </div>
+</div>
+
+<div class="tl-card">
+    <div class="tl-header">
+        <span class="tl-badge">Week 5</span>
+        <span class="tl-scenario">Scenarios 6-7</span>
+    </div>
+    <div class="tl-title">Additional Agent Scenarios + ClickUp Integration</div>
+    <div class="tl-body">
+        <p>Scenarios 6 and 7 are additional agent synthesis scenarios covering the other analysis types in your spec. ClickUp integration also goes in this week: the output from agent scenarios maps to ClickUp task creation using the field structure you defined. We confirm task routing, assignee logic, and priority mapping against your design doc before the test gate.</p>
+    </div>
+</div>
+
+<div class="tl-card">
+    <div class="tl-header">
+        <span class="tl-badge">Week 6</span>
+        <span class="tl-scenario">Scenario 8</span>
+    </div>
+    <div class="tl-title">Slack Briefing Scenario + Multi-Client Iteration</div>
+    <div class="tl-body">
+        <p>Scenario 8 takes agent output and formats it into Slack briefing messages. Message structure follows your spec. We also run the first full multi-client iteration this week: all scenarios 1-8 running in sequence for every client in the KB. The goal is to find any interaction effects between scenarios before adding guardrails - it's easier to debug now than after the conditional logic is in place.</p>
+    </div>
+</div>
+
+<div class="tl-card">
+    <div class="tl-header">
+        <span class="tl-badge">Week 7</span>
+        <span class="tl-scenario">Scenario 9</span>
+    </div>
+    <div class="tl-title">Guardrail Implementation</div>
+    <div class="tl-body">
+        <p>Scenario 9 implements the Phase 1 guardrails as Make.com conditional modules. Budget ceiling, keyword lock, data threshold, delete lock - all four are structural conditionals in Make.com, not instructions in the Claude prompt. This is deliberate: a guardrail that lives only in the prompt can be reasoned around or ignored when Claude produces unexpected output. A conditional module in Make.com can't be. We test each guardrail by constructing test data that should trigger it and confirming the scenario halts correctly.</p>
+    </div>
+</div>
+
+<div class="tl-card">
+    <div class="tl-header">
+        <span class="tl-badge">Week 8</span>
+        <span class="tl-scenario">Scenario 10 + Integration Test</span>
+    </div>
+    <div class="tl-title">Phase-Level Guardrails + Phase 1 Integration Test</div>
+    <div class="tl-body">
+        <p>Scenario 10 adds the phase-level guardrails from your spec. Then we run a full Phase 1 integration test: all 10 scenarios, all clients in the KB, on the production schedule. We're looking for timing conflicts, rate limit collisions across scenarios running concurrently, and any KB write conflicts. Blueprint exports for all 10 scenarios are done this week. Week 8 ends with a check-in where we review the full Phase 1 test results together before starting Phase 2.</p>
+    </div>
+</div>
+
+<!-- Phase 2 -->
+<h2 id="phase-2">Phase 2: Controlled Execution (Weeks 9-16)</h2>
+
+<p>Phase 2 introduces write operations. The system stops being read-only. Every scenario this phase has an approval gate before anything changes on an ad platform - you confirm before execution runs. We add full autonomy only after the approval-gate versions have passed their test gates.</p>
+
+<div class="callout purple">
+    <div class="callout-title">The approval gate pattern</div>
+    <p>For every Phase 2 scenario, we build two versions: one that requires approval (routes a proposed action to Slack or ClickUp for your sign-off before executing) and one that runs autonomously once you've confirmed the scenario is stable. You control when each scenario graduates from approval-required to autonomous. We don't flip that switch without your explicit instruction.</p>
+</div>
+
+<div class="tl-card phase2">
+    <div class="tl-header">
+        <span class="tl-badge">Weeks 9-10</span>
+        <span class="tl-scenario">Scenarios 11-12</span>
+    </div>
+    <div class="tl-title">Ad Platform Write Operations - Google Ads + Meta</div>
+    <div class="tl-body">
+        <p>Scenario 11 writes to Google Ads. Scenario 12 writes to Meta Ads. Both start in approval-gate mode: the scenario generates a proposed change, posts it to Slack with an approve/reject button, and only executes after approval. We test write operations with small budget adjustments on a test campaign before running against live campaigns. The guardrails from Phase 1 are active throughout - a proposed action that violates a guardrail is rejected by the scenario before it even reaches the approval gate.</p>
+    </div>
+</div>
+
+<div class="tl-card phase2">
+    <div class="tl-header">
+        <span class="tl-badge">Weeks 11-12</span>
+        <span class="tl-scenario">Scenarios 13-14</span>
+    </div>
+    <div class="tl-title">Mailchimp Campaign Automation + WordPress Content Updates</div>
+    <div class="tl-body">
+        <p>Scenario 13 handles Mailchimp: segment selection, campaign creation, and scheduling based on agent output. Scenario 14 handles WordPress content updates. Both use the approval gate pattern. Mailchimp test gate includes confirming that campaign content generated by Claude matches the template structure you've defined and that list segmentation logic is correctly applied. WordPress test gate confirms content updates don't overwrite metadata or custom fields.</p>
+    </div>
+</div>
+
+<div class="tl-card phase2">
+    <div class="tl-header">
+        <span class="tl-badge">Weeks 13-14</span>
+        <span class="tl-scenario">Scenario 15</span>
+    </div>
+    <div class="tl-title">Cross-Agent Coordination + Full Multi-Client Testing</div>
+    <div class="tl-body">
+        <p>Scenario 15 handles cross-agent coordination: cases where the output of one agent scenario needs to inform the behavior of another in the same run cycle. This is where the system starts to behave more like an integrated intelligence layer than a collection of independent scenarios. We run full multi-client tests across all 15 scenarios this week, specifically looking for timing and state conflicts that only appear at scale. Any issues found here get fixed before week 15.</p>
+    </div>
+</div>
+
+<div class="tl-card phase2">
+    <div class="tl-header">
+        <span class="tl-badge">Weeks 15-16</span>
+        <span class="tl-scenario">Scenario 16 + Go-Live</span>
+    </div>
+    <div class="tl-title">Production Hardening + Documentation Finalization + Go-Live</div>
+    <div class="tl-body">
+        <p>Scenario 16 is the final orchestration layer - the scenario that coordinates the run order and handles inter-scenario dependencies. Production hardening this week means: schedule conflicts resolved, data store cleanup jobs configured, execution log retention confirmed, and every scenario tested under realistic load. Documentation is finalized: all environment variables, all webhook URLs, all API connections, all blueprint exports. The week 16 check-in is the go-live review. We don't go live until both of us have signed off on the full integration test results.</p>
+    </div>
+</div>
+
+<!-- Milestones -->
+<h2 id="milestones">Key Milestones</h2>
+
+<p>These are the moments that matter - what's working, what's been handed off, and what the test gate covers at each stage.</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Week</th>
+            <th>Milestone</th>
+            <th>Deliverable</th>
+            <th>Test Gate</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><span class="badge-blue">Wk 1</span></td>
+            <td>KB live, Google Ads pulling</td>
+            <td>Scenario 1 blueprint + test results</td>
+            <td>Real data in KB, schema validated</td>
+        </tr>
+        <tr>
+            <td><span class="badge-blue">Wk 2</span></td>
+            <td>All 3 ad platforms ingesting</td>
+            <td>Scenarios 2-3 blueprints, rate limit test log</td>
+            <td>Multi-client loop completes without cascade failures</td>
+        </tr>
+        <tr>
+            <td><span class="badge-blue">Wk 3</span></td>
+            <td>Claude API integrated</td>
+            <td>Scenario 4 blueprint, JSON parser documented</td>
+            <td>Malformed Claude responses caught, schema check passes</td>
+        </tr>
+        <tr>
+            <td><span class="badge-blue">Wk 4</span></td>
+            <td>First agent synthesis running</td>
+            <td>Scenario 5 blueprint + sample output</td>
+            <td>End-to-end chain: ingestion to Claude to KB write</td>
+        </tr>
+        <tr>
+            <td><span class="badge-blue">Wk 6</span></td>
+            <td>ClickUp + Slack live</td>
+            <td>Scenarios 6-8 blueprints</td>
+            <td>Tasks created in ClickUp, Slack messages formatted correctly</td>
+        </tr>
+        <tr>
+            <td><span class="badge-blue">Wk 7</span></td>
+            <td>Guardrails active</td>
+            <td>Scenario 9 blueprint, guardrail test log</td>
+            <td>All 4 guardrails trigger correctly on boundary test data</td>
+        </tr>
+        <tr>
+            <td><span class="badge-blue">Wk 8</span></td>
+            <td><strong>Phase 1 complete</strong></td>
+            <td>All 10 blueprints, full integration test report</td>
+            <td>All scenarios, all clients, on production schedule</td>
+        </tr>
+        <tr>
+            <td><span class="badge-purple">Wk 10</span></td>
+            <td>Ad write operations live (approval-gated)</td>
+            <td>Scenarios 11-12 blueprints + approval flow docs</td>
+            <td>Proposed changes post to Slack, guardrails block violations</td>
+        </tr>
+        <tr>
+            <td><span class="badge-purple">Wk 12</span></td>
+            <td>Mailchimp + WordPress live</td>
+            <td>Scenarios 13-14 blueprints</td>
+            <td>Campaign content validates against template, WordPress metadata intact</td>
+        </tr>
+        <tr>
+            <td><span class="badge-purple">Wk 14</span></td>
+            <td>Cross-agent coordination tested</td>
+            <td>Scenario 15 blueprint, multi-client stress test report</td>
+            <td>No timing conflicts across 15 scenarios at full client load</td>
+        </tr>
+        <tr>
+            <td><span class="badge-purple">Wk 16</span></td>
+            <td><strong>Full system go-live</strong></td>
+            <td>All 16 blueprints, complete documentation, blueprint archive</td>
+            <td>Full integration test, both parties sign off</td>
+        </tr>
+    </tbody>
+</table>
+
+<!-- Weekly Cadence -->
+<h2 id="weekly-cadence">Weekly Cadence</h2>
+
+<p>Here's what a typical build week looks like. The rhythm doesn't change much week to week - predictability is the point.</p>
+
+<div class="cadence-row">
+    <div class="cadence-card">
+        <div class="cadence-card-title">Monday - Thursday: Build</div>
+        <ul>
+            <li>Scenario implementation against spec</li>
+            <li>Error handler construction and testing</li>
+            <li>Multi-client loop testing where relevant</li>
+            <li>Test gate execution on completing scenarios</li>
+            <li>Documentation updated as work proceeds</li>
+        </ul>
+    </div>
+    <div class="cadence-card">
+        <div class="cadence-card-title">Friday: Test + Handoff Prep</div>
+        <ul>
+            <li>Full test gate run on week's scenarios</li>
+            <li>Execution log review for rate limit timing</li>
+            <li>Blueprint export for completed scenarios</li>
+            <li>Weekly summary drafted for check-in</li>
+            <li>Next week's scope confirmed against timeline</li>
+        </ul>
+    </div>
+    <div class="cadence-card">
+        <div class="cadence-card-title">Check-in Meeting</div>
+        <ul>
+            <li>Review what shipped and test results</li>
+            <li>Walk through any edge cases found</li>
+            <li>Confirm next week's scope</li>
+            <li>Raise any spec ambiguities before building</li>
+            <li>You can request scope adjustments here</li>
+        </ul>
+    </div>
+    <div class="cadence-card">
+        <div class="cadence-card-title">Hours and Pace</div>
+        <ul>
+            <li>15-20 hours per week during active build</li>
+            <li>Heavier weeks: integration tests (wks 8, 14)</li>
+            <li>Lighter weeks: documentation catch-up</li>
+            <li>No billable hours without a completed test gate</li>
+            <li>If a scenario slips, it moves to the next week - timeline doesn't compress</li>
+        </ul>
+    </div>
+</div>
+
+<div class="callout">
+    <div class="callout-title">On timeline flexibility</div>
+    <p>If a scenario takes longer than planned, it shifts the week it completes - it doesn't get shipped without passing its test gate. We'd rather deliver week 8's milestone in week 9 than deliver a scenario that hasn't been properly tested. You'll always know the real status in the weekly check-in, not a polished version of it.</p>
+</div>
+
+<section class="cta-section">
+    <h2>Ready to kick things off?</h2>
+    <p>The onboarding page covers what we need from you to start week 1: API credentials, KB access, and a first check-in to align on scope.</p>
+    <a href="/clients/ai-marketing-make-expert/onboarding" class="cta-btn">View Onboarding Checklist &rarr;</a>
+</section>
+
+<footer class="footer">
+    <p>Prepared by <strong>UnpauseAI</strong> &middot; <a href="mailto:nico@unpauseai.com">nico@unpauseai.com</a> &middot; 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='aimarketing-2026'){
+        localStorage.setItem('aimarketing-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.';
+    }
+}
+(function(){if(localStorage.getItem('aimarketing-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('aimarketing-theme',t);
+}
+(function(){
+    var links=document.querySelectorAll('.step-link');
+    var sections=Array.from(links).map(function(l){return document.querySelector(l.getAttribute('href'))}).filter(Boolean);
+    function onScroll(){
+        var top=window.scrollY+100;
+        var active=sections[0];
+        sections.forEach(function(s){if(s.offsetTop<=top)active=s;});
+        links.forEach(function(l){
+            l.classList.toggle('active',l.getAttribute('href')==='#'+active.id);
+        });
+    }
+    window.addEventListener('scroll',onScroll,{passive:true});
+    onScroll();
+})();
+</script>
+</body>
+</html>

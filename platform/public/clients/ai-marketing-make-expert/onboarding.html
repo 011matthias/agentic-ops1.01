@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Onboarding | AI Marketing System | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 560px; margin: 0 auto; line-height: 1.6; }
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text-strong); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+
+/* Checklist */
+.checklist { list-style: none; padding: 0; margin: 20px 0; }
+.checklist li {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px 16px; border-radius: 8px; margin-bottom: 6px;
+    border: 1px solid var(--border); background: var(--surface);
+    font-size: 14px; color: var(--text);
+    transition: background .15s;
+}
+.checklist li:hover { background: var(--surface2); }
+.checklist-box {
+    width: 18px; height: 18px; border-radius: 4px; border: 2px solid var(--border);
+    flex-shrink: 0; margin-top: 1px; background: var(--bg);
+}
+.checklist li.required .checklist-box { border-color: var(--blue); }
+.checklist li.optional .checklist-box { border-color: var(--text2); }
+.checklist-label { flex: 1; line-height: 1.5; }
+.checklist-label strong { display: block; color: var(--text-strong); margin-bottom: 1px; }
+.checklist-label span { font-size: 12px; color: var(--text2); }
+.checklist-tag {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    padding: 2px 8px; border-radius: 10px; flex-shrink: 0; margin-top: 2px;
+    background: var(--blue-light); color: var(--blue);
+}
+.checklist li.optional .checklist-tag { background: var(--surface2); color: var(--text2); }
+
+/* Day plan */
+.day-plan { margin: 24px 0; }
+.day-block {
+    display: flex; gap: 16px; padding: 16px 0;
+    border-bottom: 1px solid var(--border);
+}
+.day-block:last-child { border-bottom: none; }
+.day-label {
+    font-size: 12px; font-weight: 700; color: var(--blue); text-transform: uppercase;
+    letter-spacing: .04em; min-width: 72px; padding-top: 2px; flex-shrink: 0;
+}
+.day-content { flex: 1; }
+.day-content p { margin: 0; font-size: 14px; color: var(--text); }
+
+/* Comms grid */
+.comms-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 20px 0; }
+.comms-card {
+    padding: 16px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--surface); transition: transform .15s, box-shadow .15s;
+}
+.comms-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.comms-title { font-size: 14px; font-weight: 600; color: var(--text-strong); margin-bottom: 4px; }
+.comms-desc { font-size: 13px; color: var(--text2); line-height: 1.5; }
+
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); margin-top: 48px; }
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .hero h1 { font-size: 24px; }
+    .comms-grid { grid-template-columns: 1fr; }
+}
+</style>
+<script>
+(function(){var t=localStorage.getItem('aimarketing-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<!-- Access Gate -->
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared specifically for your team. Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/ai-marketing-make-expert/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">AI Marketing System</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/ai-marketing-make-expert/">Overview</a>
+        <a href="/clients/ai-marketing-make-expert/solution">Solution</a>
+        <a href="/clients/ai-marketing-make-expert/workflow">Workflow</a>
+        <a href="/clients/ai-marketing-make-expert/timeline">Timeline</a>
+        <a href="/clients/ai-marketing-make-expert/investment">Investment</a>
+        <a href="/clients/ai-marketing-make-expert/faq">FAQ</a>
+        <a href="/clients/ai-marketing-make-expert/onboarding" class="active">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">Onboarding</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#what-we-need" class="step-link active"><span class="step-num">1</span> What We Need</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#week-1-plan" class="step-link"><span class="step-num">2</span> Week 1 Plan</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#communication" class="step-link"><span class="step-num">3</span> Communication</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<!-- Hero -->
+<section class="hero">
+    <div class="hero-badge">Onboarding</div>
+    <h1>Getting Started</h1>
+    <p class="hero-sub">What we need from you before Day 1, what happens in Week 1, and how we'll communicate throughout the build.</p>
+</section>
+
+<h2 id="what-we-need">What We Need to Start</h2>
+<p>Most of this you already have. We need access, not work from you. The two documents at the top of the list are the most important - without them, we can't map dependencies or validate our understanding of the architecture before writing a single module.</p>
+
+<ul class="checklist">
+    <li class="required">
+        <div class="checklist-box"></div>
+        <div class="checklist-label">
+            <strong>System design document (1,300+ paragraphs)</strong>
+            <span>The full spec - agent prompts, schemas, guardrail definitions. This is what we implement from.</span>
+        </div>
+        <div class="checklist-tag">Required</div>
+    </li>
+    <li class="required">
+        <div class="checklist-box"></div>
+        <div class="checklist-label">
+            <strong>Week-by-week build plan with technical notes</strong>
+            <span>Your planned sequencing for the 16 scenarios, including any notes on dependencies or ordering constraints.</span>
+        </div>
+        <div class="checklist-tag">Required</div>
+    </li>
+    <li class="required">
+        <div class="checklist-box"></div>
+        <div class="checklist-label">
+            <strong>Make.com organization access</strong>
+            <span>Team member invite to the org where scenarios will live.</span>
+        </div>
+        <div class="checklist-tag">Required</div>
+    </li>
+    <li class="required">
+        <div class="checklist-box"></div>
+        <div class="checklist-label">
+            <strong>Google Sheets KB template (shared with edit access)</strong>
+            <span>The knowledge base spreadsheet - or we set one up together in the first call based on your config schema.</span>
+        </div>
+        <div class="checklist-tag">Required</div>
+    </li>
+    <li class="required">
+        <div class="checklist-box"></div>
+        <div class="checklist-label">
+            <strong>API credentials: Google Ads, Meta, LinkedIn, Mailchimp, WordPress</strong>
+            <span>Shared via a secure method you're comfortable with. We don't need production access immediately - a test account works for Week 1.</span>
+        </div>
+        <div class="checklist-tag">Required</div>
+    </li>
+    <li class="required">
+        <div class="checklist-box"></div>
+        <div class="checklist-label">
+            <strong>ClickUp workspace access</strong>
+            <span>For testing task creation in the task management scenarios.</span>
+        </div>
+        <div class="checklist-tag">Required</div>
+    </li>
+    <li class="required">
+        <div class="checklist-box"></div>
+        <div class="checklist-label">
+            <strong>Slack workspace access</strong>
+            <span>For testing briefing post delivery in the communication scenarios.</span>
+        </div>
+        <div class="checklist-tag">Required</div>
+    </li>
+    <li class="required">
+        <div class="checklist-box"></div>
+        <div class="checklist-label">
+            <strong>Claude API key (or Anthropic account access)</strong>
+            <span>Used in every scenario that involves AI reasoning. If you're using your own Anthropic account, an API key is all we need.</span>
+        </div>
+        <div class="checklist-tag">Required</div>
+    </li>
+</ul>
+
+<div class="callout orange">
+    <div class="callout-title">On credential sharing</div>
+    <p>We'll agree on a secure transfer method before contract. Options include a shared password manager entry, an encrypted message, or scoped API keys with read-only access where the platform supports it. We don't store credentials outside Make.com's connection manager.</p>
+</div>
+
+<h2 id="week-1-plan">Week 1 Plan</h2>
+<p>The goal for Week 1 is a working end-to-end path for a single test client through the first data ingestion scenario. Nothing in production, but real API calls against real credentials.</p>
+
+<div class="day-plan">
+    <div class="day-block">
+        <div class="day-label">Days 1-2</div>
+        <div class="day-content">
+            <p>Read the system design document end-to-end. Map scenario dependencies against your build plan. Set up the Make.com workspace with folder structure and naming conventions. Document any questions from the spec before touching any modules.</p>
+        </div>
+    </div>
+    <div class="day-block">
+        <div class="day-label">Days 3-4</div>
+        <div class="day-content">
+            <p>Configure the Google Sheets KB with a test client row. Build the first data ingestion scenario against that test client. Connect Google Ads or Meta (whichever is simpler to test with) and confirm real data is coming through before connecting Claude.</p>
+        </div>
+    </div>
+    <div class="day-block">
+        <div class="day-label">Day 5</div>
+        <div class="day-content">
+            <p>Run the first scenario end-to-end with the test client. Document environment variables, webhook URLs, and connection inventory for that scenario. First weekly check-in call - review what's working, surface any spec questions, confirm the Week 2 target.</p>
+        </div>
+    </div>
+</div>
+
+<div class="callout">
+    <div class="callout-title">Why we read before we build</div>
+    <p>Days 1-2 aren't billable prep time - they're part of the engagement. A spec as detailed as yours has dependencies that aren't obvious until you've read it fully. Building before understanding the full picture means rework later. We don't skip this step.</p>
+</div>
+
+<h2 id="communication">Communication</h2>
+<p>Everything async-first, with one synchronous checkpoint per week. You shouldn't need to monitor Make.com to know what's been delivered.</p>
+
+<div class="comms-grid">
+    <div class="comms-card">
+        <div class="comms-title">Weekly check-in calls</div>
+        <div class="comms-desc">Your preferred day and time. We review what shipped, run through the test results, and confirm the next scenario target.</div>
+    </div>
+    <div class="comms-card">
+        <div class="comms-title">Scenario delivery notifications</div>
+        <div class="comms-desc">When a scenario passes its test gate, you get a written summary: what it does, how to test it, and the blueprint export location.</div>
+    </div>
+    <div class="comms-card">
+        <div class="comms-title">Async updates via Slack or Upwork</div>
+        <div class="comms-desc">Day-to-day questions and blockers handled async. Responses within a few hours on weekdays during US business hours.</div>
+    </div>
+    <div class="comms-card">
+        <div class="comms-title">Blueprint exports at every milestone</div>
+        <div class="comms-desc">At each phase boundary, a full export of all scenarios built to date. Stored somewhere you control, not just in Make.com.</div>
+    </div>
+</div>
+
+<footer class="footer">
+    <p>Prepared by <strong>UnpauseAI</strong> &middot; <a href="mailto:nico@unpauseai.com">nico@unpauseai.com</a> &middot; 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='aimarketing-2026'){
+        localStorage.setItem('aimarketing-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.';
+    }
+}
+(function(){if(localStorage.getItem('aimarketing-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('aimarketing-theme',t);
+}
+(function(){
+    var links=document.querySelectorAll('.step-link');
+    var sections=[];
+    links.forEach(function(l){
+        var id=l.getAttribute('href');
+        if(id&&id.startsWith('#')){
+            var el=document.querySelector(id);
+            if(el)sections.push({el:el,link:l});
+        }
+    });
+    if(!sections.length)return;
+    var observer=new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+            if(e.isIntersecting){
+                links.forEach(function(l){l.classList.remove('active')});
+                sections.forEach(function(s){
+                    if(s.el===e.target)s.link.classList.add('active');
+                });
+            }
+        });
+    },{rootMargin:'-20% 0px -70% 0px'});
+    sections.forEach(function(s){observer.observe(s.el)});
+})();
+</script>
+</body>
+</html>
