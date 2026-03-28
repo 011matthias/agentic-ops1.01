@@ -22,7 +22,7 @@ export default async function BuyPage({ params }: Props) {
   const { slug } = await params
   const item = catalog.find((i) => i.slug === slug)
 
-  if (!item || item.type !== "ready-setup") {
+  if (!item || item.tier !== "marketplace") {
     notFound()
   }
 
@@ -30,8 +30,8 @@ export default async function BuyPage({ params }: Props) {
     <div className="mx-auto max-w-2xl px-6 py-20">
       {/* Breadcrumb */}
       <div className="mb-8 text-sm text-muted">
-        <Link href="/automations" className="hover:text-foreground">
-          Automations
+        <Link href="/work" className="hover:text-foreground">
+          Marketplace
         </Link>
         <span className="mx-2">/</span>
         <span>{item.name}</span>
@@ -49,10 +49,10 @@ export default async function BuyPage({ params }: Props) {
       {/* Description */}
       <p className="mb-8 leading-relaxed text-muted">{item.description}</p>
 
-      {/* What you get */}
-      <div className="mb-8 rounded-lg border border-border p-6">
+      {/* Self-service tier */}
+      <div className="mb-6 rounded-lg border border-border p-6">
         <h2 className="mb-4 text-sm font-medium uppercase tracking-wide">
-          What&rsquo;s included
+          Self-Service &mdash; What&rsquo;s included
         </h2>
         <ul className="space-y-3">
           {item.whatYouGet.map((benefit) => (
@@ -62,6 +62,38 @@ export default async function BuyPage({ params }: Props) {
             </li>
           ))}
         </ul>
+        <div className="mt-6 flex items-baseline gap-2 border-t border-border pt-4">
+          <span className="text-3xl font-bold">{item.selfServicePrice}</span>
+          <span className="text-sm text-muted">one-time</span>
+        </div>
+        <div className="mt-4">
+          <CheckoutButton slug={item.slug} />
+        </div>
+      </div>
+
+      {/* Premium tier */}
+      <div className="mb-8 rounded-lg border-2 border-accent/20 bg-gradient-to-br from-blue-bg/50 to-transparent p-6">
+        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-accent">
+          Premium &mdash; We implement it for you
+        </h2>
+        <ul className="space-y-3">
+          {item.premiumIncludes.map((benefit) => (
+            <li key={benefit} className="flex items-start gap-3 text-sm">
+              <span className="mt-0.5 text-accent font-bold">&#10003;</span>
+              <span>{benefit}</span>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-6 flex items-baseline gap-2 border-t border-border pt-4">
+          <span className="text-3xl font-bold text-accent">{item.premiumPrice}</span>
+          <span className="text-sm text-muted">full implementation</span>
+        </div>
+        <Link
+          href={`/contact?package=${item.slug}&tier=premium`}
+          className="mt-4 inline-block rounded-full bg-accent px-6 py-3 text-sm font-medium text-white shadow-[0_2px_8px_rgba(37,99,235,.3)] transition-all hover:bg-accent-light hover:-translate-y-0.5"
+        >
+          Request Premium Implementation
+        </Link>
       </div>
 
       {/* Tools */}
@@ -81,17 +113,9 @@ export default async function BuyPage({ params }: Props) {
         </div>
       </div>
 
-      {/* Price + CTA */}
-      <div className="rounded-lg border border-border p-6">
-        <div className="mb-4 flex items-baseline gap-2">
-          <span className="text-3xl font-bold">{item.startingFrom}</span>
-          <span className="text-sm text-muted">one-time</span>
-        </div>
-        <CheckoutButton slug={item.slug} />
-        <p className="mt-3 text-xs text-muted">
-          Secure checkout via Stripe. You&rsquo;ll receive setup instructions by email after purchase.
-        </p>
-      </div>
+      <p className="text-xs text-muted">
+        Secure checkout via Stripe. You&rsquo;ll receive setup instructions by email after purchase.
+      </p>
     </div>
   )
 }

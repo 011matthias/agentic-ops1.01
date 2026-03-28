@@ -1,12 +1,12 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { customItems, readyItems } from "@/content/catalog"
+import { customItems, marketplaceItems } from "@/content/catalog"
 import { CatalogCard } from "@/components/catalog/CatalogCard"
 
 export const metadata: Metadata = {
   title: "Automation Services",
   description:
-    "Custom-built automations tailored to your workflow, plus ready-to-use templates and systems you can start with today.",
+    "Custom-built automations tailored to your workflow, plus battle-tested marketplace blueprints you can deploy today.",
 }
 
 export default function AutomationsPage() {
@@ -29,10 +29,10 @@ export default function AutomationsPage() {
             Custom Built &rarr;
           </a>
           <a
-            href="#ready-setup"
+            href="#marketplace"
             className="text-sm font-medium text-accent hover:text-accent-light"
           >
-            Ready Setup &rarr;
+            Marketplace &rarr;
           </a>
         </div>
       </section>
@@ -60,23 +60,22 @@ export default function AutomationsPage() {
         </div>
       </section>
 
-      {/* Section 2: Ready Setup */}
-      <section id="ready-setup" className="border-t border-border">
+      {/* Section 2: Marketplace */}
+      <section id="marketplace" className="border-t border-border">
         <div className="mx-auto max-w-5xl px-6 py-16">
           <div className="mb-10">
             <div className="mb-2 text-xs font-medium uppercase tracking-widest text-muted">
-              Ready Setup
+              Marketplace
             </div>
             <h2 className="mb-3 text-2xl font-semibold tracking-tight">
-              Ready when you are
+              Battle-tested blueprints
             </h2>
             <p className="max-w-2xl text-muted">
-              Self-guided systems and templates you can use immediately. No
-              waiting for a build.
+              Automation blueprints from real projects. Self-service or we implement for you.
             </p>
           </div>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {readyItems.map((item) => (
+            {marketplaceItems.map((item) => (
               <CatalogCard key={item.id} item={item} />
             ))}
           </div>
@@ -90,14 +89,13 @@ export default function AutomationsPage() {
             Not sure which is right for you?
           </h2>
           <p className="text-muted">
-            Book a free 20-minute call and we&rsquo;ll tell you exactly what
-            would have the most impact.
+            Get a personalized assessment of your automation needs for just $1.
           </p>
           <Link
-            href="/contact"
-            className="mt-2 rounded-full bg-accent px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-accent-light"
+            href="/assessment"
+            className="mt-2 rounded-full bg-accent px-6 py-3 text-sm font-medium text-white shadow-[0_2px_8px_rgba(37,99,235,.3)] transition-all hover:bg-accent-light hover:-translate-y-0.5"
           >
-            Book a call
+            Request Assessment &mdash; $1
           </Link>
         </div>
       </section>

@@ -11,24 +11,17 @@ export async function POST(request: NextRequest) {
   const session = await auth()
   // Allow unauthenticated checkout — they can create an account post-purchase
 
-  const body = await request.json() as { slug?: string }
-  const { slug } = body
+  const body = await request.json() as { slug?: string; tier?: "self-service" | "premium" }
+  const { slug, tier = "self-service" } = body
   const item = catalog.find((i) => i.slug === slug)
 
-  if (!item || item.type !== "ready-setup") {
+  if (!item || item.tier !== "marketplace") {
     return NextResponse.json({ error: "Product not found" }, { status: 404 })
   }
 
-  if (item.startingFrom === "Free") {
-    return NextResponse.json(
-      { error: "This item is free — no checkout needed" },
-      { status: 400 }
-    )
-  }
-
-  // Parse price: "$49" → 4900 cents
-  const priceMatch = item.startingFrom.match(/\$(\d+)/)
-  const priceUsd = priceMatch ? parseInt(priceMatch[1]) * 100 : 0
+  const priceStr = tier === "premium" ? item.premiumPrice : item.selfServicePrice
+  const priceMatch = priceStr.match(/\$?([\d,]+)/)
+  const priceUsd = priceMatch ? parseInt(priceMatch[1].replace(",", "")) * 100 : 0
 
   if (!priceUsd) {
     return NextResponse.json(
@@ -37,7 +30,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const origin = request.headers.get("origin") ?? "http://localhost:3000"
+  const origin = request.headers.get("origin") ?? "https://unpauseai.com"
 
   const checkoutSession = await stripe.checkout.sessions.create({
     mode: "payment",
@@ -48,7 +41,7 @@ export async function POST(request: NextRequest) {
           currency: "usd",
           unit_amount: priceUsd,
           product_data: {
-            name: item.name,
+            name: `${item.name} (${tier === "premium" ? "Premium" : "Self-Service"})`,
             description: item.tagline,
           },
         },
@@ -57,10 +50,11 @@ export async function POST(request: NextRequest) {
     ],
     metadata: {
       catalogSlug: item.slug,
+      tier,
       userId: session?.user?.id ?? "",
     },
-    success_url: `${origin}/buy/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${origin}/automations#ready-setup`,
+    success_url: `${origin}/work?purchased=${item.slug}`,
+    cancel_url: `${origin}/work`,
   })
 
   return NextResponse.json({ url: checkoutSession.url })

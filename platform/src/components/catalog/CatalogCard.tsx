@@ -6,8 +6,7 @@ interface CatalogCardProps {
 }
 
 export function CatalogCard({ item }: CatalogCardProps) {
-  const isPurchasable =
-    item.type === "ready-setup" && item.startingFrom !== "Free"
+  const isMarketplace = item.tier === "marketplace"
 
   return (
     <div className="flex flex-col rounded-lg border border-border p-6">
@@ -38,36 +37,20 @@ export function CatalogCard({ item }: CatalogCardProps) {
       </div>
 
       <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
-        <span className="text-sm font-medium">
-          {item.startingFrom === "Free" ? (
-            <span className="text-accent">Free</span>
+        <div className="text-sm">
+          {isMarketplace ? (
+            <span className="font-medium">From {item.selfServicePrice}</span>
           ) : (
-            item.startingFrom
+            <span className="font-medium text-accent">{item.premiumPrice}</span>
           )}
-        </span>
+        </div>
 
-        {isPurchasable ? (
-          <Link
-            href={`/buy/${item.slug}`}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:opacity-90"
-          >
-            Buy now &rarr;
-          </Link>
-        ) : item.startingFrom === "Free" ? (
-          <Link
-            href={`/contact?package=${item.slug}`}
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-border/30"
-          >
-            Get access
-          </Link>
-        ) : (
-          <Link
-            href={`/contact?package=${item.slug}`}
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-border/30"
-          >
-            Request access
-          </Link>
-        )}
+        <Link
+          href={isMarketplace ? `/buy/${item.slug}` : `/contact?package=${item.slug}`}
+          className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:opacity-90"
+        >
+          {isMarketplace ? "View details" : "Get in touch"} &rarr;
+        </Link>
       </div>
     </div>
   )

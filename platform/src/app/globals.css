@@ -103,6 +103,72 @@ body {
   color: var(--foreground);
 }
 
+/* ─── Animations ─── */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes staggerFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s ease-out both;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out both;
+}
+
+.animate-stagger-1 { animation: staggerFadeIn 0.5s ease-out 0.1s both; }
+.animate-stagger-2 { animation: staggerFadeIn 0.5s ease-out 0.2s both; }
+.animate-stagger-3 { animation: staggerFadeIn 0.5s ease-out 0.3s both; }
+.animate-stagger-4 { animation: staggerFadeIn 0.5s ease-out 0.4s both; }
+.animate-stagger-5 { animation: staggerFadeIn 0.5s ease-out 0.5s both; }
+
+/* Scroll reveal — starts hidden, animated when .revealed is added */
+.scroll-reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+}
+.scroll-reveal.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ─── Glow utilities ─── */
+
+.glow-blue { box-shadow: 0 0 20px rgba(37, 99, 235, 0.15); }
+.glow-purple { box-shadow: 0 0 20px rgba(124, 58, 237, 0.15); }
+.glow-green { box-shadow: 0 0 20px rgba(5, 150, 105, 0.15); }
+.glow-orange { box-shadow: 0 0 20px rgba(217, 119, 6, 0.15); }
+
+.dark .glow-blue { box-shadow: 0 0 20px rgba(59, 130, 246, 0.2); }
+.dark .glow-purple { box-shadow: 0 0 20px rgba(167, 139, 250, 0.2); }
+.dark .glow-green { box-shadow: 0 0 20px rgba(52, 211, 153, 0.2); }
+.dark .glow-orange { box-shadow: 0 0 20px rgba(251, 191, 36, 0.2); }
+
 /* Smooth transitions for theme changes */
 * {
   transition-property: background-color, border-color;

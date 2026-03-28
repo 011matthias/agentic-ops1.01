@@ -4,13 +4,13 @@ import Logo from "./Logo";
 export default function Footer() {
   return (
     <footer className="border-t border-border">
-      <div className="mx-auto max-w-5xl px-6 py-10">
+      <div className="mx-auto max-w-6xl px-6 py-10">
         <div className="flex flex-col gap-8 sm:flex-row sm:justify-between">
           {/* Brand */}
           <div className="flex flex-col gap-2">
             <Logo size="sm" href="/" />
             <p className="text-sm text-muted">
-              Custom automation solutions for your business.
+              Built to stay done. EU-based automation consultancy.
             </p>
           </div>
 
@@ -37,6 +37,12 @@ export default function Footer() {
                 className="text-sm text-muted transition-colors hover:text-foreground"
               >
                 Work
+              </Link>
+              <Link
+                href="/assessment"
+                className="text-sm text-muted transition-colors hover:text-foreground"
+              >
+                Assessment
               </Link>
               <Link
                 href="/contact"
