@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Timeline | GHL + Retell AI Technical Implementer | UnpauseAI</title>
+<script>
+(function(){var t=localStorage.getItem('ghl-retellai-implementer-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 580px; margin: 0 auto 32px; line-height: 1.6; }
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 8px; scroll-margin-top: 80px;
+}
+.phase-subtitle {
+    font-size: 13px; font-weight: 600; color: var(--text2); text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 20px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+.callout.blue { border-color: var(--blue); background: var(--blue-bg); }
+.callout.blue .callout-title, .callout.blue p { color: var(--blue-dark); }
+.flow-diagram { display: flex; flex-direction: column; gap: 0; margin: 28px 0; }
+.flow-step {
+    display: flex; gap: 16px; align-items: flex-start;
+    padding: 20px; border-radius: 10px; background: var(--surface);
+    border: 1px solid var(--border); margin-bottom: 8px;
+    transition: transform .15s, box-shadow .15s;
+}
+.flow-step:hover { transform: translateX(4px); box-shadow: var(--card-shadow); }
+.flow-num {
+    width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; flex-shrink: 0;
+    background: var(--blue-light); color: var(--blue);
+}
+.flow-content { flex: 1; }
+.flow-title { font-size: 15px; font-weight: 700; color: var(--text-strong); margin-bottom: 4px; }
+.flow-desc { font-size: 13px; color: var(--text2); line-height: 1.5; margin: 0; }
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); margin-top: 24px; }
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .hero h1 { font-size: 24px; }
+}
+</style>
+</head>
+<body>
+
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared for you. Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+        </button>
+        <a href="/clients/ghl-retellai-implementer/" class="nav-logo">
+            <span class="logo-bold">Unpause</span><span class="logo-accent">AI</span>
+        </a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">VoiceAI Agency</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/ghl-retellai-implementer/">Overview</a>
+        <a href="/clients/ghl-retellai-implementer/solution">Solution</a>
+        <a href="/clients/ghl-retellai-implementer/timeline" class="active">Timeline</a>
+        <a href="/clients/ghl-retellai-implementer/investment">Investment</a>
+        <a href="/clients/ghl-retellai-implementer/faq">FAQ</a>
+        <a href="/clients/ghl-retellai-implementer/onboarding">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<aside class="sidebar">
+    <div class="sidebar-label">On this page</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#phase-1-test-setup" class="step-link active"><span class="step-num">1</span> Test Setup</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#phase-2-first-live-clients" class="step-link"><span class="step-num">2</span> First Live Clients</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#phase-3-ongoing-operations" class="step-link"><span class="step-num">3</span> Ongoing Operations</a>
+        </li>
+    </ul>
+</aside>
+
+<div class="main-content">
+<div class="content-inner">
+
+<section class="hero" id="hero">
+    <div class="hero-badge">Timeline</div>
+    <h1>From First Setup to Ongoing Operations</h1>
+    <p class="hero-sub">How we'd go from introduction to live client coverage for VoiceAI Agency, with a clear evaluation gate before any ongoing commitment.</p>
+</section>
+
+<h2 id="phase-1-test-setup">Phase 1: Test Setup</h2>
+<div class="phase-subtitle">Week 1</div>
+
+<p>The first week is about getting me up to speed on your stack and proving I can execute a full client setup without hand-holding. No ongoing commitment until you're satisfied with the output.</p>
+
+<div class="flow-diagram">
+    <div class="flow-step">
+        <div class="flow-num">1</div>
+        <div class="flow-content">
+            <div class="flow-title">Receive access and SOPs</div>
+            <p class="flow-desc">You share Loom walkthroughs, written SOPs, and access to GoHighLevel, n8n, and Retell AI. I work through these before touching anything live.</p>
+        </div>
+    </div>
+    <div class="flow-step">
+        <div class="flow-num">2</div>
+        <div class="flow-content">
+            <div class="flow-title">Study the master snapshot structure</div>
+            <p class="flow-desc">I review the master GHL snapshot and your existing n8n workflows to understand the patterns before I start cloning anything. This is where questions surface early rather than mid-setup.</p>
+        </div>
+    </div>
+    <div class="flow-step">
+        <div class="flow-num">3</div>
+        <div class="flow-content">
+            <div class="flow-title">Set up one client environment end-to-end</div>
+            <p class="flow-desc">Snapshot clone, post-snapshot reconfiguration, Retell AI agent configuration, n8n workflow instances. The full sequence on one real or sandbox client.</p>
+        </div>
+    </div>
+    <div class="flow-step">
+        <div class="flow-num">4</div>
+        <div class="flow-content">
+            <div class="flow-title">Test the full call flow</div>
+            <p class="flow-desc">Create a test lead in GoHighLevel, move it through the relevant pipeline stage, and verify: webhook fires, Retell call runs, GHL contact record updates correctly. Pass or document exactly where it broke.</p>
+        </div>
+    </div>
+    <div class="flow-step">
+        <div class="flow-num">5</div>
+        <div class="flow-content">
+            <div class="flow-title">Document blockers and process notes</div>
+            <p class="flow-desc">Anything that took longer than expected, any step in the SOPs that was ambiguous, any patterns I'd want to template. This becomes useful input whether or not we continue.</p>
+        </div>
+    </div>
+</div>
+
+<div class="callout blue">
+    <div class="callout-title">Evaluation phase</div>
+    <p>This is where you see how I work, how I communicate, and whether the output meets your bar. No ongoing commitment until you're satisfied with what comes out of Week 1.</p>
+</div>
+
+<h2 id="phase-2-first-live-clients">Phase 2: First Live Clients</h2>
+<div class="phase-subtitle">Weeks 2-3</div>
+
+<p>After the test setup clears your bar, we move to live client environments. This phase is about establishing the working rhythm before volume picks up.</p>
+
+<p><strong>Transitioning from test to live.</strong> The first live setups may surface differences between the sandbox and real client accounts. GoHighLevel sub-account configs vary. I document these as they appear so the process gets tighter with each one.</p>
+
+<p><strong>Establishing the change request workflow.</strong> We agree on how requests come in (async message, shared doc, ticketing tool, whatever works for your team), how I confirm scope, and how I close and communicate completion. Getting this right early prevents ambiguity at higher volume.</p>
+
+<p><strong>Handling 2-3 change requests per active client per week.</strong> Retell prompt refinements, n8n workflow updates, GHL pipeline adjustments. I work through these in the background and report back with what changed and why.</p>
+
+<p><strong>Refining n8n workflow templates.</strong> After two or three setups, patterns emerge. Steps that always need adjustment, variables that differ per client, error-prone configuration points. I'll flag these and propose template improvements that reduce setup time going forward.</p>
+
+<h2 id="phase-3-ongoing-operations">Phase 3: Ongoing Operations</h2>
+<div class="phase-subtitle">Week 4 onward</div>
+
+<p>Steady state. New client setups as your VoiceAI Agency adds clients, ongoing maintenance across all active accounts.</p>
+
+<p><strong>New client setups</strong> follow the refined process from Phase 2. Each one should take less time than the last as the templates and process notes accumulate.</p>
+
+<p><strong>Per-setup fee ($415) plus a monthly retainer per active client</strong> covers the ongoing change request volume. The retainer scales with the number of active clients you're running.</p>
+
+<p><strong>Proactive monitoring.</strong> I check n8n execution logs, watch for webhook failures, and review Retell API response patterns. Issues I catch before you notice them don't turn into urgent support requests.</p>
+
+<p><strong>Continuous improvement.</strong> When the same type of change request comes up repeatedly, that's a signal that something upstream could be templated or automated. I'll surface these observations and propose fixes rather than quietly doing the same manual task every week.</p>
+
+<section class="cta-section">
+    <h2>Review the pricing structure</h2>
+    <p>Per-setup fee, monthly retainer per active client, and what's included in each.</p>
+    <a href="/clients/ghl-retellai-implementer/investment" class="cta-btn">View Investment &rarr;</a>
+</section>
+
+<div class="footer">
+    <p>Prepared by UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
+</div>
+
+</div>
+</div>
+
+<script>
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('ghl-retellai-implementer-theme',t);
+}
+
+var links = document.querySelectorAll('.step-link');
+var sections = [];
+links.forEach(function(a) {
+    var id = a.getAttribute('href').replace('#','');
+    var el = document.getElementById(id);
+    if (el) sections.push({ el: el, link: a });
+});
+
+function updateActive() {
+    var scrollY = window.scrollY + 120;
+    var active = sections[0];
+    for (var i = 0; i < sections.length; i++) {
+        if (sections[i].el.offsetTop <= scrollY) active = sections[i];
+    }
+    links.forEach(function(l) { l.classList.remove('active'); });
+    if (active) active.link.classList.add('active');
+}
+window.addEventListener('scroll', updateActive);
+updateActive();
+
+links.forEach(function(a) {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        var id = this.getAttribute('href').replace('#','');
+        var el = document.getElementById(id);
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+        document.querySelector('.sidebar').classList.remove('open');
+    });
+});
+
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='ghl-retellai-2026'){
+        localStorage.setItem('ghl-retellai-implementer-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.';
+    }
+}
+(function(){if(localStorage.getItem('ghl-retellai-implementer-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+</script>
+</body>
+</html>

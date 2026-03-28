@@ -1,64 +1,105 @@
-### Beat 1: Reframe
+### BEAT 1: The Integration Layer
 
->> Show the job posting title on screen
-SAY: Hi there, Nico here.
-SAY: I saw your posting for a GHL and Retell AI technical implementer, and I want to be upfront about something.
+>> Their Upwork job posting on screen
 
-SAY: I'm not coming in as a GHL specialist. Where I'm strongest is n8n, which is the automation backbone of your stack, and the integration layer that connects everything together.
+SAY: Hi there, Nico here. I saw your posting for a GHL and Retell AI technical implementer.
+
+SAY: I want to be upfront: I haven't worked with GoHighLevel or Retell AI directly. But here's what caught my attention about your stack.
+
+SAY: The bottleneck in scaling client setups isn't configuring individual tools. It's the integration layer between them. When a GHL pipeline stage changes, that fires a webhook to n8n. n8n calls the Retell API with dynamic variables. Retell sends back three webhook events per call. n8n filters for call_analyzed, updates the GHL contact, and triggers the SMS follow-up via Twilio.
+
+SAY: That orchestration layer is n8n. And that's where I'm strongest.
 
 ---
 
 ### Authority
 
 >> Show Upwork profile
-SAY: Quick context on why that matters for your setup.
-SAY: I'm based in Germany, CET timezone, so I'm right in your preferred European window. English and German are both native.
-SAY: I manage production n8n workflows across multiple client accounts with structured error handling, monitoring, and logging built in from the start.
+
+SAY: Quick context. I'm based in Germany, CET timezone, which fits your European preference. English and German are both native.
+SAY: I build and maintain production n8n workflows across multiple client accounts with Supabase, Airtable, and webhook integrations. I also manage 50+ Make.com scenarios with structured error handling and monitoring.
 
 ---
 
-### Beat 2: How the Skills Transfer
+### BEAT 2: Site Walkthrough
 
-SAY: Here's why I think this still works for what you need.
+>> Nav: Overview
 
-SAY: Your setup is SOP-driven with Loom walkthroughs. That's exactly how I onboard onto new platforms.
-SAY: The core patterns, building workflows, configuring routing logic, handling edge cases, setting up webhook integrations, those are the same whether it's n8n, GHL pipelines, or Retell AI agent routing.
+SAY: I put together a proposal site to walk through how I'd fit into your stack. Let me run through the key parts.
 
->> Show an n8n workflow example on screen
-SAY: On the n8n side specifically, I've built workflows that pull from databases like Supabase, sync with Airtable, handle SMS and email triggers, and route data through validation and error handling layers.
-SAY: That's the plumbing your client setups depend on.
+>> Sidebar: Your Stack, As I Understand It
 
-SAY: For GHL and Retell, I'd ramp up fast through your SOPs. I also build with AI dev tools daily (Cursor, Claude Code), which means I can move quickly on custom tooling and website tweaks too.
+SAY: On the overview page, I've mapped your seven systems into four zones. GoHighLevel handles CRM and pipelines. Retell AI and ElevenLabs handle the voice agents. n8n is the automation backbone connecting everything. And Supabase, Airtable, and Twilio fill in the data and messaging layers.
 
 ---
 
-### Beat 3: Working Style
+### (Solution page)
 
-SAY: A few things about how I work that match what you're looking for.
+>> Nav: Solution
 
-SAY: I'm async by default. Clear written updates, blockers flagged early, no surprises.
-SAY: I'm used to handling ongoing maintenance across multiple accounts. Change requests, debugging, keeping things running.
-SAY: I'm self-sufficient. If you hand me an SOP and a Loom, I'll execute cleanly and come back with questions only when something's genuinely unclear.
+SAY: The solution page breaks down three things: the data flow, client onboarding, and ongoing maintenance.
+
+>> Sidebar: The Data Flow
+
+SAY: The data flow section traces the full loop. GHL pipeline event fires a webhook to n8n. n8n validates and routes by stage. For qualified leads, it calls the Retell API with client-specific dynamic variables like the client name, available services, and appointment slots.
+
+SAY: After the call, Retell sends three webhook events back to n8n. The key one is call_analyzed, which has the transcript and outcome. An IF node filters for that event, then n8n updates the GHL contact record and triggers follow-up actions.
+
+>> Sidebar: Client Onboarding Flow
+
+SAY: The onboarding section covers the snapshot-to-live process. Cloning the master GHL snapshot is the easy part. The manual work is what comes after: webhook URLs don't carry over, integrations need re-auth, and credential mappings need updating. That's 3-4 hours per client right now.
+
+SAY: I've mapped out each reconfiguration step and where n8n templates can reduce that time.
+
+>> Sidebar: n8n Workflow Template
+
+SAY: There's also a downloadable n8n workflow you can import right now. It includes the GHL webhook trigger, the pipeline stage filter, the Retell API call with dynamic variables, the callback webhook receiver, the call_analyzed filter, and the GHL contact update. Sticky notes explain each zone.
 
 ---
 
-### Beat 4: Close
+### (Timeline and Investment)
 
-SAY: So the honest pitch is this: I'm not checking every box on day one, but the automation layer is my home turf, and the rest I'll pick up fast through your SOPs.
-SAY: I'm looking for steady ongoing work, and the per-setup plus retainer structure is exactly the kind of arrangement I want.
+>> Nav: Timeline
 
-SAY: Happy to do a test setup so you can see how I work before committing to anything.
-SAY: Thanks for watching.
+SAY: The timeline has three phases.
+
+>> Sidebar: Phase 1: Test Setup
+
+SAY: Phase 1 is a test setup in Week 1. I get your SOPs, your Loom walkthroughs, and access to your tools. I set up one client environment end-to-end so you can evaluate my work before committing to anything ongoing.
+
+>> Nav: Investment
+
+SAY: On pricing, I'm matching the posted $415 per client setup. The monthly retainer covers ongoing maintenance, 2-3 change requests per week per client, monitoring, and debugging. Post-go-live support is included, not time-limited.
+
+>> Sidebar: Comparison
+
+SAY: There's a comparison table showing the per-setup plus retainer model against hiring full-time or billing hourly. The short version: you only pay for active clients, and if a client churns, the retainer adjusts.
+
+---
+
+### BEAT 3: Close
+
+>> Nav: Onboarding
+
+SAY: The onboarding page collects everything I'd need for the test setup. Platform access, SOPs, your master snapshot details, and the first client to set up.
+
+SAY: Your posting says you want someone reliable, self-sufficient, and who executes cleanly and flags blockers early. That's how I work. Async by default, structured updates, no surprises.
+
+SAY: Happy to start with the test setup so you can see the output before committing. Thanks for watching.
 
 ---
 
 ### LOOM NOTES VERSION
 
-- Upfront: not a GHL specialist, strongest on n8n (automation backbone of their stack)
-- Authority: Germany/CET, native English/German, production n8n across multiple clients
-- Transfer: SOP-driven onboarding is exactly how I learn, automation patterns are universal (workflows, routing, webhooks, edge cases)
-- n8n specifics: Supabase, Airtable, SMS/email triggers, validation layers
-- GHL/Retell: ramp via SOPs, AI dev tools (Cursor, Claude Code) for speed
-- Working style: async default, blockers flagged early, self-sufficient, handles maintenance across accounts
-- Close: honest about gaps, automation layer is home turf, want steady ongoing work
-- Offer: test setup before committing
+- Open job posting. "The bottleneck isn't individual tools. It's the integration layer between GHL, Retell, and n8n."
+- Upfront: no direct GHL/Retell experience, but the orchestration layer (n8n) is my primary platform.
+- Profile: Germany/CET, native English/German. Production n8n, 50+ Make.com scenarios.
+- Overview page: 4 zones mapping their 7 systems. GHL (CRM/pipelines), Retell+ElevenLabs (voice), n8n (backbone), Supabase+Airtable+Twilio (data/messaging).
+- Solution page, 3 sections:
+  - Data flow: GHL webhook to n8n, Retell API call with dynamic vars, 3 callback events, IF filter for call_analyzed, GHL update.
+  - Client onboarding: snapshot clone is fast, post-snapshot reconfiguration is the pain (webhook URLs, credentials, integrations). 3-4 hrs/client.
+  - Downloadable n8n workflow template: full pipeline with sticky notes.
+- Timeline: Phase 1 (Week 1 test setup), Phase 2 (first live clients), Phase 3 (ongoing ops).
+- Investment: $415/setup, monthly retainer per active client. Comparison table. Post-go-live support included.
+- Onboarding: collects platform access, SOPs, snapshot details, first client info.
+- Close: "Execute cleanly, flag blockers early." Test setup before committing.
