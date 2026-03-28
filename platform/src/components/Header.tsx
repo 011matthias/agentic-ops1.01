@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
 import ThemeToggle from "./ThemeToggle";
 import Logo from "./Logo";
@@ -17,13 +17,24 @@ const navLinks = [
 
 export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const { data: session } = useSession();
   const pathname = usePathname();
 
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   return (
-    <header className="sticky top-0 z-50 border-b border-border bg-background/95 shadow-[var(--card-shadow)] backdrop-blur-sm">
-      <nav className="mx-auto flex h-14 max-w-5xl items-center justify-between px-6">
-        <Logo size="md" />
+    <header
+      className={`sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur-sm transition-shadow duration-300 ${
+        scrolled ? "shadow-md" : "shadow-[var(--card-shadow)]"
+      }`}
+    >
+      <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+        <Logo size="md" showTagline />
 
         {/* Desktop nav */}
         <ul className="hidden gap-1 sm:flex items-center">
@@ -36,7 +47,7 @@ export default function Header() {
                   className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
                     isActive
                       ? "bg-blue-bg font-semibold text-blue"
-                      : "text-muted hover:bg-surface-hover hover:text-foreground"
+                      : "font-medium text-muted hover:bg-surface-hover hover:text-foreground"
                   }`}
                 >
                   {link.label}
@@ -66,7 +77,7 @@ export default function Header() {
             ) : (
               <Link
                 href="/login"
-                className="text-sm px-4 py-1.5 rounded-lg bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-gray-700 dark:hover:bg-gray-100 transition-colors"
+                className="text-sm px-4 py-1.5 rounded-lg border border-border font-medium text-muted hover:text-foreground hover:bg-surface-hover transition-colors"
               >
                 Login
               </Link>
@@ -109,7 +120,7 @@ export default function Header() {
                   className={`block rounded-lg px-3 py-2 text-sm transition-colors ${
                     isActive
                       ? "bg-blue-bg font-semibold text-blue"
-                      : "text-muted hover:text-foreground"
+                      : "font-medium text-muted hover:text-foreground"
                   }`}
                   onClick={() => setMenuOpen(false)}
                 >

@@ -1,5 +1,8 @@
 import Link from "next/link";
 import Card from "@/components/ui/Card";
+import ScrollReveal from "@/components/ScrollReveal";
+
+/* ─── Data ─── */
 
 const iconStyles = {
   blue: "bg-blue/10 text-blue",
@@ -8,17 +11,11 @@ const iconStyles = {
   orange: "bg-orange/10 text-orange",
 } as const;
 
-const orchStyles = {
-  blue: "border-blue/20 bg-blue-bg text-blue",
-  purple: "border-purple/20 bg-purple-bg text-purple",
-  green: "border-green/20 bg-green-bg text-green",
-} as const;
-
 const services = [
   {
-    title: "Lead & Inquiry Automation",
+    title: "Healthcare & Patient Journey Automation",
     description:
-      "Instant auto-responses, AI-personalized follow-up sequences, multi-factor lead scoring, and smart routing to your team.",
+      "GDPR-compliant patient workflows, consent tracking, multi-step routing, and full audit trails for regulated environments.",
     color: "blue" as const,
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -30,7 +27,7 @@ const services = [
   {
     title: "CRM & ERP Integration",
     description:
-      "Bidirectional sync between your CRM and ERP. Deal notifications, automated invoicing, and status-driven workflows.",
+      "Bidirectional sync between your CRM and ERP. Deduplication, automated invoicing, conflict resolution, and status-driven workflows.",
     color: "purple" as const,
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -39,9 +36,9 @@ const services = [
     ),
   },
   {
-    title: "Sales Campaign Operations",
+    title: "AI-Powered Outreach & Classification",
     description:
-      "Campaign dashboards, data aggregation, AI sentiment scoring on replies, and weekly trend tracking across your tools.",
+      "Claude API integration, confidence-threshold routing, smart follow-up sequences, and AI-driven lead scoring.",
     color: "green" as const,
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -50,9 +47,9 @@ const services = [
     ),
   },
   {
-    title: "Custom Workflow Automation",
+    title: "Migration & Platform Consolidation",
     description:
-      "Database polling, data enrichment pipelines, task intelligence, and any SaaS-to-SaaS connection you need.",
+      "Make.com and n8n migrations, zero-downtime cutovers, legacy system replacement, and platform consolidation.",
     color: "orange" as const,
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -62,137 +59,230 @@ const services = [
   },
 ];
 
-const orchestrators = [
+const trustSignals = [
+  { label: "EUR 2,500 \u2013 5,500", sublabel: "typical project scope" },
+  { label: "3 \u2013 7 weeks", sublabel: "average delivery" },
+  { label: "GDPR-compliant", sublabel: "by design" },
+  { label: "EU-based", sublabel: "CET timezone" },
+];
+
+const processSteps = [
+  { step: "01", title: "Discovery", description: "We learn your tools, pain points, and workflow gaps.", color: "blue" as const },
+  { step: "02", title: "Proposal", description: "Detailed scope, architecture, timeline, and investment breakdown.", color: "purple" as const },
+  { step: "03", title: "Build & Test", description: "Built with real data, tested every path, iterated until solid.", color: "green" as const },
+  { step: "04", title: "Handoff", description: "You own it. Documentation, monitoring, independent operation.", color: "orange" as const },
+];
+
+const stepColors = {
+  blue: "bg-blue text-white",
+  purple: "bg-purple text-white",
+  green: "bg-green text-white",
+  orange: "bg-orange text-white",
+};
+
+const platforms = [
   { name: "Make.com", description: "Visual workflow automation", color: "blue" as const },
   { name: "n8n", description: "Self-hosted data pipelines", color: "purple" as const },
   { name: "Trigger.dev", description: "Code-first AI workflows", color: "green" as const },
+  { name: "Claude API", description: "Agentic AI & classification", color: "orange" as const },
 ];
 
+const platformStyles = {
+  blue: "border-blue/20 bg-gradient-to-br from-blue-bg to-transparent text-blue hover:glow-blue",
+  purple: "border-purple/20 bg-gradient-to-br from-purple-bg to-transparent text-purple hover:glow-purple",
+  green: "border-green/20 bg-gradient-to-br from-green-bg to-transparent text-green hover:glow-green",
+  orange: "border-orange/20 bg-gradient-to-br from-orange-bg to-transparent text-orange hover:glow-orange",
+};
+
+/* ─── Page ─── */
 
 export default function Home() {
   return (
     <div className="flex flex-col">
-      {/* Hero */}
+
+      {/* ── Section 1: Hero ── */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-accent/5 via-transparent to-transparent" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,var(--color-border)_1px,transparent_0)] bg-[length:24px_24px] opacity-40" />
-        <div className="relative mx-auto flex max-w-3xl flex-col items-center gap-6 px-6 py-24 text-center sm:py-32">
-          <span className="inline-flex items-center rounded-full bg-blue-bg px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-blue">
-            Automation Infrastructure
+        <div className="relative mx-auto flex max-w-3xl flex-col items-center gap-5 px-6 py-28 text-center sm:py-36">
+          <span className="animate-stagger-1 inline-flex items-center rounded-full bg-blue-bg px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-blue">
+            EU-Based Automation Consultancy
           </span>
-          <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
-            We build automations that run your business
+          <h1 className="animate-stagger-2 text-5xl font-extrabold tracking-tight sm:text-6xl">
+            Custom automation for businesses that can&rsquo;t afford to get it wrong
           </h1>
-          <p className="max-w-xl text-lg leading-relaxed text-muted">
-            Lead follow-up, CRM sync, sales dashboards, and custom workflows.
-            Connected to your existing tools, running on autopilot.
+          <p className="animate-stagger-3 text-xl font-semibold text-accent">
+            Built to stay done.
           </p>
-          <div className="flex gap-4">
+          <p className="animate-stagger-4 max-w-xl text-lg leading-relaxed text-muted">
+            Compliant, production-grade workflow automation for regulated
+            industries and scaling operations. GDPR-aware. Platform-agnostic.
+            Delivered in weeks, not months.
+          </p>
+          <div className="animate-stagger-5 flex flex-col gap-3 sm:flex-row sm:gap-4">
             <Link
-              href="/contact"
-              className="rounded-full bg-accent px-6 py-3 text-sm font-medium text-white shadow-[0_2px_8px_rgba(37,99,235,.3)] transition-all hover:bg-accent-light hover:-translate-y-0.5"
+              href="/assessment"
+              className="rounded-full bg-accent px-7 py-3 text-sm font-medium text-white shadow-[0_2px_8px_rgba(37,99,235,.3)] transition-all hover:bg-accent-light hover:-translate-y-0.5"
             >
-              Get in Touch
+              Get Your $1 Assessment
             </Link>
             <Link
-              href="/services"
-              className="rounded-full border border-border px-6 py-3 text-sm font-medium transition-all hover:bg-surface-hover hover:-translate-y-0.5"
+              href="#process"
+              className="rounded-full border border-border px-7 py-3 text-sm font-medium transition-all hover:bg-surface-hover hover:-translate-y-0.5"
             >
-              See Services
+              See How We Work
             </Link>
           </div>
-
         </div>
       </section>
 
-      {/* Services overview */}
-      <section className="mx-auto max-w-4xl px-6 py-20">
-        <div className="mb-12 text-center">
-          <span className="mb-3 inline-block text-xs font-semibold uppercase tracking-wider text-muted">
-            Capabilities
-          </span>
-          <h2 className="text-2xl font-bold tracking-tight">
-            What we automate
-          </h2>
-          <p className="mt-3 text-muted">
-            Every business has repetitive workflows. We turn them into reliable,
-            always-on systems.
-          </p>
-        </div>
-        <div className="grid gap-6 sm:grid-cols-2">
-          {services.map((service) => (
-            <Card key={service.title} color={service.color}>
-              <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-lg ${iconStyles[service.color]}`}>
-                {service.icon}
-              </div>
-              <h3 className="mb-2 font-semibold">{service.title}</h3>
-              <p className="text-sm leading-relaxed text-muted">
-                {service.description}
-              </p>
-            </Card>
-          ))}
-        </div>
-        <div className="mt-12 text-center">
-          <Link
-            href="/services"
-            className="text-sm font-medium text-accent hover:text-accent-light"
-          >
-            Learn more about our services &rarr;
-          </Link>
-        </div>
-      </section>
-
-      {/* Orchestrators */}
-      <section className="border-y border-border">
-        <div className="mx-auto max-w-3xl px-6 py-12">
-          <p className="mb-8 text-center text-xs font-semibold uppercase tracking-wider text-muted">
-            Built on proven platforms
-          </p>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            {orchestrators.map((orch) => (
-              <div
-                key={orch.name}
-                className={`flex flex-col items-center gap-1 rounded-xl border ${orchStyles[orch.color]} px-6 py-4 text-center transition-all hover:-translate-y-0.5`}
-              >
-                <span className="text-sm font-bold">{orch.name}</span>
-                <span className="text-xs text-muted">{orch.description}</span>
+      {/* ── Section 2: Trust Signals Strip ── */}
+      <ScrollReveal>
+        <section className="border-y border-border bg-surface/50">
+          <div className="mx-auto flex max-w-4xl flex-col items-center gap-6 px-6 py-10 sm:flex-row sm:justify-between sm:gap-0">
+            {trustSignals.map((signal, i) => (
+              <div key={signal.label} className="flex flex-col items-center text-center">
+                <span className="text-lg font-bold tracking-tight">{signal.label}</span>
+                <span className="text-xs text-muted">{signal.sublabel}</span>
+                {i < trustSignals.length - 1 && (
+                  <div className="mt-6 h-px w-12 bg-border sm:hidden" />
+                )}
               </div>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
+      </ScrollReveal>
 
-      {/* Founder */}
-      <section className="border-t border-border">
-        <div className="mx-auto max-w-3xl px-6 py-10 text-center">
-          <p className="text-sm text-muted">
-            Founded by{" "}
-            <Link href="/about" className="font-medium text-foreground hover:text-accent transition-colors">
-              Nicolas Neumann
+      {/* ── Section 3: What We Build ── */}
+      <ScrollReveal>
+        <section className="mx-auto max-w-4xl px-6 py-20 sm:py-24">
+          <div className="mb-12 text-center">
+            <span className="mb-3 inline-block text-xs font-semibold uppercase tracking-wider text-muted">
+              Capabilities
+            </span>
+            <h2 className="text-3xl font-bold tracking-tight">
+              What we build
+            </h2>
+            <p className="mt-3 text-muted">
+              Production-grade automations for businesses where reliability is non-negotiable.
+            </p>
+          </div>
+          <div className="grid gap-6 sm:grid-cols-2">
+            {services.map((service) => (
+              <Card key={service.title} color={service.color}>
+                <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-lg ${iconStyles[service.color]}`}>
+                  {service.icon}
+                </div>
+                <h3 className="mb-2 font-semibold">{service.title}</h3>
+                <p className="text-sm leading-relaxed text-muted">
+                  {service.description}
+                </p>
+              </Card>
+            ))}
+          </div>
+          <div className="mt-12 text-center">
+            <Link
+              href="/services"
+              className="text-sm font-medium text-accent hover:text-accent-light"
+            >
+              Learn more about our services &rarr;
             </Link>
-            {" "}&mdash; building automation infrastructure for businesses that want to move faster.
-          </p>
-        </div>
-      </section>
+          </div>
+        </section>
+      </ScrollReveal>
 
-      {/* CTA */}
-      <section>
-        <div className="mx-auto flex max-w-3xl flex-col items-center gap-4 px-6 py-20 text-center">
-          <h2 className="text-2xl font-bold tracking-tight">
-            Ready to automate?
-          </h2>
-          <p className="text-muted">
-            Tell us about your workflow. We&rsquo;ll show you what&rsquo;s
-            possible.
+      {/* ── Section 4: How We Work ── */}
+      <ScrollReveal>
+        <section id="process" className="border-y border-border">
+          <div className="mx-auto max-w-4xl px-6 py-20 sm:py-24">
+            <div className="mb-12 text-center">
+              <span className="mb-3 inline-block text-xs font-semibold uppercase tracking-wider text-muted">
+                Process
+              </span>
+              <h2 className="text-3xl font-bold tracking-tight">
+                How we work
+              </h2>
+              <p className="mt-3 text-muted">
+                Four phases from first conversation to independent operation.
+              </p>
+            </div>
+
+            {/* Timeline */}
+            <div className="relative grid gap-8 sm:grid-cols-4">
+              {/* Connecting line (desktop only) */}
+              <div className="absolute left-0 right-0 top-5 hidden h-0.5 bg-gradient-to-r from-blue/30 via-purple/30 to-orange/30 sm:block" />
+
+              {processSteps.map((item) => (
+                <div key={item.step} className="relative flex flex-col items-center text-center">
+                  <div className={`relative z-10 flex h-10 w-10 items-center justify-center rounded-full ${stepColors[item.color]} text-sm font-bold shadow-md`}>
+                    {item.step}
+                  </div>
+                  <h3 className="mt-4 font-semibold">{item.title}</h3>
+                  <p className="mt-1 text-sm text-muted">{item.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      </ScrollReveal>
+
+      {/* ── Section 5: Platform Expertise ── */}
+      <ScrollReveal>
+        <section className="mx-auto max-w-4xl px-6 py-20 sm:py-24">
+          <p className="mb-8 text-center text-xs font-semibold uppercase tracking-wider text-muted">
+            We pick the right platform for your workflow
           </p>
-          <Link
-            href="/contact"
-            className="mt-2 rounded-full bg-accent px-6 py-3 text-sm font-medium text-white shadow-[0_2px_8px_rgba(37,99,235,.3)] transition-all hover:bg-accent-light hover:-translate-y-0.5"
-          >
-            Start a Conversation
-          </Link>
-        </div>
-      </section>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {platforms.map((platform) => (
+              <div
+                key={platform.name}
+                className={`flex flex-col items-center gap-1 rounded-xl border ${platformStyles[platform.color]} px-4 py-5 text-center transition-all hover:-translate-y-0.5`}
+              >
+                <span className="text-sm font-bold">{platform.name}</span>
+                <span className="text-xs text-muted">{platform.description}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      </ScrollReveal>
+
+      {/* ── Section 6: Founder ── */}
+      <ScrollReveal>
+        <section className="border-t border-border">
+          <div className="mx-auto max-w-3xl px-6 py-12 text-center">
+            <p className="text-muted">
+              Founded by{" "}
+              <Link href="/about" className="font-medium text-foreground hover:text-accent transition-colors">
+                Nicolas Neumann
+              </Link>
+              , based in Karlsruhe, Germany. We work with businesses across
+              Europe that need automation infrastructure they can trust.
+            </p>
+          </div>
+        </section>
+      </ScrollReveal>
+
+      {/* ── Section 7: CTA ── */}
+      <ScrollReveal>
+        <section className="bg-gradient-to-b from-transparent via-accent/[0.03] to-transparent">
+          <div className="mx-auto flex max-w-3xl flex-col items-center gap-4 px-6 py-20 sm:py-24 text-center">
+            <h2 className="text-3xl font-bold tracking-tight">
+              Tell us what you&rsquo;re automating
+            </h2>
+            <p className="max-w-lg text-muted">
+              Describe your workflow. Within 24 hours, you&rsquo;ll receive a
+              written assessment: what we&rsquo;d build, how long it takes, and
+              what it costs. $1 to filter serious inquiries.
+            </p>
+            <Link
+              href="/assessment"
+              className="mt-2 rounded-full bg-accent px-7 py-3 text-sm font-medium text-white shadow-[0_2px_8px_rgba(37,99,235,.3)] transition-all hover:bg-accent-light hover:-translate-y-0.5"
+            >
+              Request Assessment &mdash; $1
+            </Link>
+          </div>
+        </section>
+      </ScrollReveal>
     </div>
   );
 }

@@ -1,17 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { readyItems, customItems } from "@/content/catalog";
+import { marketplaceItems, customItems } from "@/content/catalog";
+import ScrollReveal from "@/components/ScrollReveal";
 
 export const metadata: Metadata = {
-  title: "What We Build - UnpauseAI",
+  title: "Automation Marketplace - UnpauseAI",
   description:
-    "Automation templates and custom solutions: lead follow-up, CRM sync, reporting, webhook routing, database polling, and more.",
+    "Battle-tested automation workflows from real projects. Self-service blueprints or we implement for you. Lead follow-up, CRM sync, AI classification, database polling, and more.",
 };
 
 const zones = [
   {
     color: "blue" as const,
-    icon: "\u{1F4E5}",
     title: "Data In",
     subtitle: "Capture and ingest",
     items: [
@@ -24,7 +24,6 @@ const zones = [
   },
   {
     color: "purple" as const,
-    icon: "\u{2699}\u{FE0F}",
     title: "Processing",
     subtitle: "Transform and decide",
     items: [
@@ -37,7 +36,6 @@ const zones = [
   },
   {
     color: "green" as const,
-    icon: "\u{1F4E4}",
     title: "Output",
     subtitle: "Act and notify",
     items: [
@@ -51,9 +49,9 @@ const zones = [
 ];
 
 const zoneStyles = {
-  blue: "border-blue/30 bg-blue-bg",
-  purple: "border-purple/30 bg-purple-bg",
-  green: "border-green/30 bg-green-bg",
+  blue: "border-blue/30 bg-gradient-to-br from-blue-bg to-transparent",
+  purple: "border-purple/30 bg-gradient-to-br from-purple-bg to-transparent",
+  green: "border-green/30 bg-gradient-to-br from-green-bg to-transparent",
 } as const;
 
 const zoneTitleStyles = {
@@ -72,13 +70,15 @@ const tools = [
   "Make.com",
   "n8n",
   "Trigger.dev",
+  "Claude API",
   "Google Sheets",
   "HubSpot",
   "Slack",
   "Gmail",
-  "OpenAI",
   "MySQL",
   "Postgres",
+  "Fortnox",
+  "Pipedrive",
 ];
 
 export default function WorkPage() {
@@ -89,155 +89,190 @@ export default function WorkPage() {
         <div className="absolute inset-0 bg-gradient-to-b from-accent/5 via-transparent to-transparent" />
         <div className="relative mx-auto max-w-3xl px-6 py-20 text-center">
           <span className="mb-4 inline-flex items-center rounded-full bg-blue-bg px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-blue">
-            Automation Library
+            Automation Marketplace
           </span>
           <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
-            What We Build
+            Battle-tested workflows
           </h1>
-          <p className="mt-4 max-w-xl mx-auto text-lg leading-relaxed text-muted">
-            Ready-made automation templates and custom solutions.
-            Every system follows the same pattern: ingest data, process it
-            intelligently, and deliver the right output.
+          <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-muted">
+            Every automation here was built for a real project, tested with real
+            data, and refined until it stayed done. Buy the blueprint or let us
+            implement it for you.
           </p>
         </div>
       </section>
 
-      {/* Zone Cards */}
-      <section className="mx-auto max-w-4xl px-6 py-16">
-        <div className="mb-10 text-center">
-          <span className="mb-3 inline-block text-xs font-semibold uppercase tracking-wider text-muted">
-            Architecture
-          </span>
-          <h2 className="text-2xl font-bold tracking-tight">
-            How every automation works
-          </h2>
-          <p className="mt-3 text-muted">
-            Three layers. One reliable pattern.
-          </p>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-3">
-          {zones.map((zone) => (
-            <div
-              key={zone.title}
-              className={`rounded-xl border p-5 transition-all hover:-translate-y-0.5 ${zoneStyles[zone.color]}`}
-            >
-              <div className="mb-2 text-2xl">{zone.icon}</div>
-              <div className={`text-sm font-bold ${zoneTitleStyles[zone.color]}`}>
-                {zone.title}
-              </div>
-              <div className="mb-3 text-xs text-muted">{zone.subtitle}</div>
-              <ul className="space-y-1.5">
-                {zone.items.map((item) => (
-                  <li key={item} className="flex items-center gap-2 text-sm">
-                    <span
-                      className={`inline-block h-1.5 w-1.5 rounded-full ${zoneDotStyles[zone.color]}`}
-                    />
-                    {item}
-                  </li>
-                ))}
-              </ul>
+      {/* Assessment Banner */}
+      <ScrollReveal>
+        <section className="border-y border-border bg-gradient-to-r from-blue-bg/50 via-purple-bg/30 to-blue-bg/50">
+          <div className="mx-auto flex max-w-4xl flex-col items-center gap-3 px-6 py-8 text-center sm:flex-row sm:justify-between sm:text-left">
+            <div>
+              <p className="font-semibold">Not sure which automation fits?</p>
+              <p className="text-sm text-muted">
+                Get a personalized assessment of what we&rsquo;d build for your workflow.
+              </p>
             </div>
-          ))}
-        </div>
-      </section>
+            <Link
+              href="/assessment"
+              className="shrink-0 rounded-full bg-accent px-6 py-2.5 text-sm font-medium text-white shadow-[0_2px_8px_rgba(37,99,235,.3)] transition-all hover:bg-accent-light hover:-translate-y-0.5"
+            >
+              $1 Assessment
+            </Link>
+          </div>
+        </section>
+      </ScrollReveal>
 
-      {/* Solution Grid */}
-      <section className="border-t border-border">
-        <div className="mx-auto max-w-4xl px-6 py-16">
-          <div className="mb-10 text-center">
+      {/* Marketplace Products */}
+      <ScrollReveal>
+        <section className="mx-auto max-w-5xl px-6 py-20">
+          <div className="mb-12 text-center">
             <span className="mb-3 inline-block text-xs font-semibold uppercase tracking-wider text-muted">
-              Templates
+              Marketplace
             </span>
-            <h2 className="text-2xl font-bold tracking-tight">
-              Ready-made automations
+            <h2 className="text-3xl font-bold tracking-tight">
+              Ready-to-deploy automations
             </h2>
             <p className="mt-3 text-muted">
-              Pre-built systems you can deploy immediately. Each includes setup,
-              documentation, and 30 days of support.
+              Two options for each: self-service blueprint or full implementation by our team.
             </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {readyItems.map((item, i) => (
+
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {marketplaceItems.map((item) => (
               <div
                 key={item.id}
-                className="group flex gap-4 rounded-xl border border-border bg-surface p-4 transition-all hover:-translate-y-0.5 hover:shadow-md"
+                className="flex flex-col rounded-xl border border-border bg-surface p-6 transition-all hover:-translate-y-0.5 hover:shadow-lg"
               >
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-bg text-xs font-bold text-blue">
-                  {i + 1}
+                {/* Category tag */}
+                <span className="mb-3 inline-block self-start rounded-full bg-blue-bg px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-blue">
+                  {item.category}
+                </span>
+
+                <h3 className="mb-1 text-lg font-bold">{item.name}</h3>
+                <p className="mb-4 text-sm leading-relaxed text-muted">
+                  {item.tagline}
+                </p>
+
+                {/* Pricing tiers */}
+                <div className="mt-auto space-y-3 border-t border-border pt-4">
+                  <div className="flex items-baseline justify-between">
+                    <div>
+                      <span className="text-xs font-medium text-muted">Self-service</span>
+                      <p className="text-xs text-muted">Blueprint + docs</p>
+                    </div>
+                    <span className="text-lg font-bold">{item.selfServicePrice}</span>
+                  </div>
+                  <div className="flex items-baseline justify-between rounded-lg bg-accent/5 px-3 py-2">
+                    <div>
+                      <span className="text-xs font-semibold text-accent">Premium</span>
+                      <p className="text-xs text-muted">We implement it</p>
+                    </div>
+                    <span className="text-lg font-bold text-accent">{item.premiumPrice}</span>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <div className="font-semibold text-sm">{item.name}</div>
-                  <div className="mt-0.5 text-xs leading-relaxed text-muted">
-                    {item.tagline}
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {item.tools.map((tool) => (
-                      <span
-                        key={tool}
-                        className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted"
-                      >
-                        {tool}
-                      </span>
-                    ))}
-                  </div>
+
+                {/* Tools */}
+                <div className="mt-4 flex flex-wrap gap-1.5">
+                  {item.tools.map((tool) => (
+                    <span
+                      key={tool}
+                      className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted"
+                    >
+                      {tool}
+                    </span>
+                  ))}
                 </div>
               </div>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
+      </ScrollReveal>
 
-      {/* Custom + Audit */}
-      <section className="border-t border-border">
-        <div className="mx-auto max-w-4xl px-6 py-16">
-          <div className="mb-10 text-center">
-            <span className="mb-3 inline-block text-xs font-semibold uppercase tracking-wider text-muted">
-              Custom Solutions
-            </span>
-            <h2 className="text-2xl font-bold tracking-tight">
-              Need something specific?
-            </h2>
+      {/* Custom Work */}
+      <ScrollReveal>
+        <section className="border-t border-border">
+          <div className="mx-auto max-w-4xl px-6 py-20">
+            <div className="mb-10 text-center">
+              <span className="mb-3 inline-block text-xs font-semibold uppercase tracking-wider text-muted">
+                Custom Solutions
+              </span>
+              <h2 className="text-3xl font-bold tracking-tight">
+                Need something specific?
+              </h2>
+              <p className="mt-3 text-muted">
+                For workflows that don&rsquo;t fit a template. Fully scoped, fully built, fully yours.
+              </p>
+            </div>
+            {customItems.map((item) => (
+              <div
+                key={item.id}
+                className="rounded-xl border-l-4 border-l-accent bg-gradient-to-r from-blue-bg/50 to-transparent border border-border p-6"
+              >
+                <div className="mb-1 text-sm font-bold text-accent">{item.premiumPrice}</div>
+                <h3 className="mb-2 text-xl font-bold">{item.name}</h3>
+                <p className="mb-4 text-sm leading-relaxed text-muted">
+                  {item.description}
+                </p>
+                <ul className="grid gap-2 sm:grid-cols-2">
+                  {item.premiumIncludes.map((point) => (
+                    <li
+                      key={point}
+                      className="flex items-start gap-2 text-sm text-muted"
+                    >
+                      <svg className="mt-0.5 h-4 w-4 shrink-0 text-accent" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      {point}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {customItems.map((item) => {
-              const isAudit = item.slug === "automation-audit";
-              const borderColor = isAudit
-                ? "border-l-green"
-                : "border-l-blue";
-              const bgColor = isAudit ? "bg-green-bg/50" : "bg-blue-bg/50";
-              const accentColor = isAudit ? "text-green" : "text-blue";
+        </section>
+      </ScrollReveal>
 
-              return (
+      {/* Zone Architecture */}
+      <ScrollReveal>
+        <section className="border-t border-border">
+          <div className="mx-auto max-w-4xl px-6 py-20">
+            <div className="mb-10 text-center">
+              <span className="mb-3 inline-block text-xs font-semibold uppercase tracking-wider text-muted">
+                Architecture
+              </span>
+              <h2 className="text-3xl font-bold tracking-tight">
+                How every automation works
+              </h2>
+              <p className="mt-3 text-muted">
+                Three layers. One reliable pattern.
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              {zones.map((zone) => (
                 <div
-                  key={item.id}
-                  className={`rounded-r-xl rounded-l border-l-4 ${borderColor} ${bgColor} p-5`}
+                  key={zone.title}
+                  className={`rounded-xl border p-5 transition-all hover:-translate-y-0.5 ${zoneStyles[zone.color]}`}
                 >
-                  <div
-                    className={`mb-1 text-xs font-bold uppercase tracking-wider ${accentColor}`}
-                  >
-                    {item.startingFrom}
+                  <div className={`text-sm font-bold ${zoneTitleStyles[zone.color]}`}>
+                    {zone.title}
                   </div>
-                  <h3 className="mb-2 font-bold">{item.name}</h3>
-                  <p className="mb-3 text-sm leading-relaxed text-muted">
-                    {item.description}
-                  </p>
-                  <ul className="space-y-1">
-                    {item.whatYouGet.slice(0, 3).map((point) => (
-                      <li
-                        key={point}
-                        className="flex items-start gap-2 text-xs text-muted"
-                      >
-                        <span className="mt-1 inline-block h-1 w-1 shrink-0 rounded-full bg-muted" />
-                        {point}
+                  <div className="mb-3 text-xs text-muted">{zone.subtitle}</div>
+                  <ul className="space-y-1.5">
+                    {zone.items.map((item) => (
+                      <li key={item} className="flex items-center gap-2 text-sm">
+                        <span
+                          className={`inline-block h-1.5 w-1.5 rounded-full ${zoneDotStyles[zone.color]}`}
+                        />
+                        {item}
                       </li>
                     ))}
                   </ul>
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </ScrollReveal>
 
       {/* Tools strip */}
       <section className="border-y border-border">
@@ -261,18 +296,17 @@ export default function WorkPage() {
       {/* CTA */}
       <section>
         <div className="mx-auto flex max-w-3xl flex-col items-center gap-4 px-6 py-20 text-center">
-          <h2 className="text-2xl font-bold tracking-tight">
+          <h2 className="text-3xl font-bold tracking-tight">
             Have a workflow to automate?
           </h2>
           <p className="text-muted">
-            Tell us what you&rsquo;re doing manually. We&rsquo;ll tell you
-            what&rsquo;s possible.
+            Describe it. We&rsquo;ll tell you what&rsquo;s possible within 24 hours.
           </p>
           <Link
-            href="/contact"
-            className="mt-2 rounded-full bg-accent px-6 py-3 text-sm font-medium text-white shadow-[0_2px_8px_rgba(37,99,235,.3)] transition-all hover:bg-accent-light hover:-translate-y-0.5"
+            href="/assessment"
+            className="mt-2 rounded-full bg-accent px-7 py-3 text-sm font-medium text-white shadow-[0_2px_8px_rgba(37,99,235,.3)] transition-all hover:bg-accent-light hover:-translate-y-0.5"
           >
-            Start a Conversation
+            Request Assessment &mdash; $1
           </Link>
         </div>
       </section>

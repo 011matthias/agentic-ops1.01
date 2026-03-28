@@ -1,5 +1,6 @@
 {
   "permissions": {
+    "defaultMode": "bypassPermissions",
     "allow": [
       "Bash",
       "Edit",
@@ -7,7 +8,13 @@
       "Read",
       "Glob",
       "Grep",
-      "WebFetch(domain:github.com)"
+      "WebFetch",
+      "WebSearch",
+      "Agent",
+      "mcp__claude_ai_Make",
+      "mcp__make-meji-media",
+      "mcp__n8n-kunde-inc",
+      "mcp__claude_ai_Canva"
     ]
   },
   "enabledPlugins": {
@@ -15,6 +22,54 @@
     "playground@claude-plugins-official": true
   },
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python C:/Users/neuma/Downloads/agentic-ops-main/.claude/hooks/input-classifier.py",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python C:/Users/neuma/Downloads/agentic-ops-main/.claude/hooks/post-action-gate.py",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python C:/Users/neuma/Downloads/agentic-ops-main/.claude/hooks/reference-anchor-gate.py",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python C:/Users/neuma/Downloads/agentic-ops-main/.claude/hooks/stop-b1-gate.py",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
     "PreCompact": [
       {
         "matcher": "auto",
