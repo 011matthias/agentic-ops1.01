@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solution | B2B Marketing Automation | UnpauseAI</title>
+<script>
+(function(){var t=localStorage.getItem('soren-b2b-marketing-automation-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+.page-intro {
+    padding: 40px 0 32px; border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.page-intro h1 { font-size: 28px; font-weight: 800; color: var(--text-strong); margin-bottom: 10px; }
+.page-intro p { font-size: 16px; color: var(--text2); max-width: 560px; margin: 0; line-height: 1.6; }
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+.callout.purple { border-color: var(--purple); background: var(--purple-bg); }
+.callout.purple .callout-title, .callout.purple p { color: var(--purple-dark); }
+table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px; }
+thead th {
+    background: var(--th-bg); color: #fff; text-align: left;
+    padding: 10px 14px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+}
+tbody td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: var(--surface2); }
+.badge {
+    display: inline-block; padding: 2px 9px; border-radius: 20px;
+    font-size: 11px; font-weight: 700;
+}
+.badge-blue { background: var(--blue-light); color: var(--blue-dark); }
+.badge-green { background: var(--green-light); color: var(--green-dark); }
+.badge-orange { background: var(--orange-light); color: var(--orange-dark); }
+.badge-purple { background: var(--purple-light); color: var(--purple-dark); }
+.badge-gray { background: var(--surface2); color: var(--text2); }
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); margin-top: 24px; }
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .hero h1 { font-size: 24px; }
+    table { font-size: 13px; }
+}
+</style>
+</head>
+<body>
+
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared for you. Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+        </button>
+        <a href="/clients/soren-b2b-marketing-automation/" class="nav-logo">
+            <span class="logo-bold">Unpause</span><span class="logo-accent">AI</span>
+        </a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">B2B Marketing Automation</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/soren-b2b-marketing-automation/">Overview</a>
+        <a href="/clients/soren-b2b-marketing-automation/solution" class="active">Solution</a>
+        <a href="/clients/soren-b2b-marketing-automation/workflow">Workflow</a>
+        <a href="/clients/soren-b2b-marketing-automation/timeline">Timeline</a>
+        <a href="/clients/soren-b2b-marketing-automation/investment">Investment</a>
+        <a href="/clients/soren-b2b-marketing-automation/faq">FAQ</a>
+        <a href="/clients/soren-b2b-marketing-automation/onboarding">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<aside class="sidebar">
+    <div class="sidebar-label">On this page</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#platform-architecture" class="step-link active"><span class="step-num">1</span> Platform Architecture</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#lead-capture" class="step-link"><span class="step-num">2</span> Lead Capture</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#outbound-automation" class="step-link"><span class="step-num">3</span> Outbound Automation</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#lead-scoring" class="step-link"><span class="step-num">4</span> Lead Scoring</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#integration-points" class="step-link"><span class="step-num">5</span> Integration Points</a>
+        </li>
+    </ul>
+</aside>
+
+<div class="main-content">
+<div class="content-inner">
+
+<div class="page-intro">
+    <h1>The Automation Layer</h1>
+    <p>How Make.com and n8n handle the infrastructure behind Soren's B2B marketing pipeline.</p>
+</div>
+
+<h2 id="platform-architecture">Platform Architecture</h2>
+<p>Two platforms, each doing what it's best at. Make.com is the integration layer: it handles HTTP connections between your tools, API calls to Apollo and HeyReach, CRM sync, and webhook listeners for inbound leads. It's reliable, visual, and easy to audit when something isn't flowing the way you expect.</p>
+<p>n8n is the logic layer: it handles anything that needs custom code, conditional branching based on lead attributes, scoring calculations, or retry logic for unreliable third-party APIs. Where Make.com connects A to B reliably, n8n decides what B should actually do when the data arrives.</p>
+<p>The two platforms pass data to each other via webhooks. Make.com captures and normalizes incoming leads, then fires a webhook to n8n for scoring and routing. n8n sends results back to Make.com to update the CRM and trigger the right sequence.</p>
+
+<div class="callout green">
+    <div class="callout-title">Not theoretical</div>
+    <p>I've built 50+ Make.com scenarios across client projects. These are production pipelines processing real data, not demo environments. The patterns I use here come directly from what's working in production.</p>
+</div>
+
+<h2 id="lead-capture">Lead Capture</h2>
+<p>Leads arrive from multiple places: LinkedIn connection replies, Reddit engagement, web form submissions, Apollo prospecting lists, and inbound ad clicks. Each source has a different data format. The capture layer normalizes everything into one schema before anything else happens.</p>
+
+<h3>Per-source webhook endpoints</h3>
+<p>Each source gets its own Make.com webhook. LinkedIn reply triggers from HeyReach come in on one endpoint. Form submissions come in on another. Apollo list exports are pulled on a schedule. This separation makes it easy to debug when one source stops working without touching the others.</p>
+
+<h3>Data normalization</h3>
+<p>LinkedIn gives you a first name, last name, and company. Apollo gives you an enriched record with firmographic data. Web forms give you whatever the prospect typed. The normalization step maps all of these to a consistent schema: first name, last name, company name, title, company size, industry, source channel, and capture timestamp.</p>
+
+<h3>Deduplication</h3>
+<p>Before a lead gets written to your CRM, Make.com checks whether that email or LinkedIn profile URL already exists. Duplicates get flagged and routed to a review queue rather than creating double records or re-triggering sequences for existing contacts.</p>
+
+<h3>Enrichment via Apollo</h3>
+<p>If a lead arrives without full firmographic data (common with LinkedIn and form submissions), Make.com calls the Apollo API to fill in the gaps: company size, industry, decision-maker role, technology stack. Enriched leads score higher and route into more targeted sequences.</p>
+
+<h2 id="outbound-automation">Outbound Automation</h2>
+<p>The outbound layer runs in n8n. It handles the sequences that run after a lead is captured and scored: cold email, LinkedIn follow-up, and response management.</p>
+
+<h3>Cold email sequences</h3>
+<p>n8n manages the send schedule for outbound email campaigns. Day 1 sends the initial message. Days 3 and 7 send follow-ups if there's no reply. n8n monitors the email thread for replies using IMAP polling, and when a reply arrives, it cancels any remaining follow-ups automatically. No manual intervention needed to stop sequences for active conversations.</p>
+
+<h3>LinkedIn outreach via HeyReach</h3>
+<p>HeyReach handles the LinkedIn connection requests and messages. n8n triggers the outreach campaign via the HeyReach API when a lead meets the threshold for LinkedIn contact (based on scoring). Reply data from HeyReach flows back into n8n via webhook, updating the lead record and routing hot responses to your team immediately.</p>
+
+<h3>Follow-up cadence</h3>
+<p>Timing is configurable per campaign. You set the day offsets, the channel order (email first vs LinkedIn first), and the stopping conditions. These settings live in a Google Sheet, so you can adjust cadence for a new campaign without editing the workflow.</p>
+
+<div class="callout orange">
+    <div class="callout-title">About Comet Browser</div>
+    <p>Your posting mentions Comet Browser specifically. I haven't used it directly, but I've integrated similar browser-based outreach tools via their APIs and webhooks. If Comet Browser has API access or webhook capabilities, I can wire it into the same pipeline. If it relies on a manual browser session, we can discuss workarounds during onboarding.</p>
+</div>
+
+<h2 id="lead-scoring">Lead Scoring</h2>
+<p>Scoring runs in n8n as a custom code node. It takes the normalized lead record and produces a numeric score. That score determines which sequence the lead enters and how urgently your team gets notified.</p>
+
+<h3>Engagement scoring</h3>
+<p>Points are added for each engagement signal: email opened, link clicked, replied, visited the proposal site, replied to a LinkedIn message. Higher engagement means a warmer lead, even if the firmographic fit is average.</p>
+
+<h3>Firmographic scoring</h3>
+<p>Company size, industry match, and decision-maker seniority each contribute points. A VP of Marketing at a 200-person SaaS company scores higher than a coordinator at a 10-person agency, even with identical engagement.</p>
+
+<h3>Routing thresholds</h3>
+<p>Three tiers, each with a different action:</p>
+<ul>
+    <li><strong>Hot (75+):</strong> Immediate Slack alert to your team, moved to priority pipeline stage in CRM</li>
+    <li><strong>Warm (40-74):</strong> Enters active nurture sequence, weekly summary to your team</li>
+    <li><strong>Cold (below 40):</strong> Enters long-term drip, no active outreach until score changes</li>
+</ul>
+<p>Thresholds are yours to adjust. The scoring model gets documented so you can reason about why a lead is where it is.</p>
+
+<h2 id="integration-points">Integration Points</h2>
+<p>Here's how each tool in Soren's stack connects to the pipeline:</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Tool</th>
+            <th>Integration Method</th>
+            <th>What It Does</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>Apollo</strong></td>
+            <td><span class="badge badge-blue">REST API via Make.com</span></td>
+            <td>Lead enrichment, prospecting list ingestion</td>
+        </tr>
+        <tr>
+            <td><strong>HeyReach</strong></td>
+            <td><span class="badge badge-blue">Webhook + API via n8n</span></td>
+            <td>LinkedIn outreach triggers, response capture and routing</td>
+        </tr>
+        <tr>
+            <td><strong>LinkedIn Ads</strong></td>
+            <td><span class="badge badge-green">Sheets export + Make.com</span></td>
+            <td>Campaign data ingestion for lead source attribution</td>
+        </tr>
+        <tr>
+            <td><strong>Google Ads</strong></td>
+            <td><span class="badge badge-green">API via Make.com</span></td>
+            <td>Campaign performance data for scoring context</td>
+        </tr>
+        <tr>
+            <td><strong>Ahrefs / SEMrush</strong></td>
+            <td><span class="badge badge-gray">CSV export + Make.com</span></td>
+            <td>Organic lead source tracking, keyword-to-conversion data</td>
+        </tr>
+        <tr>
+            <td><strong>CRM (your choice)</strong></td>
+            <td><span class="badge badge-blue">Native Make.com module</span></td>
+            <td>Lead storage, pipeline stage management, sequence tracking</td>
+        </tr>
+        <tr>
+            <td><strong>Email (SMTP/Gmail)</strong></td>
+            <td><span class="badge badge-green">n8n email node</span></td>
+            <td>Outbound sequences, reply detection, team notifications</td>
+        </tr>
+        <tr>
+            <td><strong>Google Sheets</strong></td>
+            <td><span class="badge badge-green">Native Make.com module</span></td>
+            <td>Rule configuration, scoring thresholds, activity log</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="callout purple">
+    <div class="callout-title">The point isn't replacing your tools</div>
+    <p>Every tool in that table stays. What changes is that they talk to each other automatically. A lead that enters via LinkedIn Ads gets enriched by Apollo, scored in n8n, and routed to HeyReach for follow-up, all without anyone touching a keyboard.</p>
+</div>
+
+<section class="cta-section">
+    <h2>See how the data flows</h2>
+    <p>The Workflow page maps each stage visually, from first touch to qualified pipeline.</p>
+    <a href="/clients/soren-b2b-marketing-automation/workflow" class="cta-btn">View Workflow &rarr;</a>
+</section>
+
+<div class="footer">
+    <p>Prepared by UnpauseAI for Soren's B2B marketing automation project.</p>
+</div>
+
+</div>
+</div>
+
+<script>
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('soren-b2b-marketing-automation-theme',t);
+}
+
+var links = document.querySelectorAll('.step-link');
+var sections = [];
+links.forEach(function(a) {
+    var id = a.getAttribute('href').replace('#','');
+    var el = document.getElementById(id);
+    if (el) sections.push({ el: el, link: a });
+});
+
+function updateActive() {
+    var scrollY = window.scrollY + 120;
+    var active = sections[0];
+    for (var i = 0; i < sections.length; i++) {
+        if (sections[i].el.offsetTop <= scrollY) active = sections[i];
+    }
+    links.forEach(function(l) { l.classList.remove('active'); });
+    if (active) active.link.classList.add('active');
+}
+window.addEventListener('scroll', updateActive);
+updateActive();
+
+links.forEach(function(a) {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        var id = this.getAttribute('href').replace('#','');
+        var el = document.getElementById(id);
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+        document.querySelector('.sidebar').classList.remove('open');
+    });
+});
+
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='soren-2026'){
+        localStorage.setItem('soren-b2b-marketing-automation-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.';
+    }
+}
+(function(){if(localStorage.getItem('soren-b2b-marketing-automation-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+</script>
+</body>
+</html>

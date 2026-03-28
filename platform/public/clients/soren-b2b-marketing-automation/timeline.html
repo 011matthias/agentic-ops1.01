@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Timeline | B2B Marketing Automation | UnpauseAI</title>
+<script>
+(function(){var t=localStorage.getItem('soren-b2b-marketing-automation-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+.page-intro { margin-bottom: 40px; }
+.page-intro h1 { font-size: 28px; font-weight: 800; color: var(--text-strong); margin-bottom: 10px; }
+.page-intro p { font-size: 16px; color: var(--text2); max-width: 600px; }
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+.callout.purple { border-color: var(--purple); background: var(--purple-bg); }
+.callout.purple .callout-title, .callout.purple p { color: var(--purple-dark); }
+.flow-diagram {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px; margin: 24px 0;
+}
+.flow-step {
+    display: flex; align-items: flex-start; gap: 16px; padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+}
+.flow-step:last-child { border-bottom: none; padding-bottom: 0; }
+.flow-step:first-child { padding-top: 0; }
+.flow-num {
+    width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; background: var(--blue); color: #fff;
+    flex-shrink: 0; margin-top: 2px;
+}
+.flow-num.green { background: var(--green); }
+.flow-num.orange { background: var(--orange); }
+.flow-num.purple { background: var(--purple); }
+.flow-body { flex: 1; }
+.flow-title { font-size: 14px; font-weight: 700; color: var(--text-strong); margin-bottom: 4px; }
+.flow-desc { font-size: 13px; color: var(--text2); line-height: 1.5; }
+/* Phase header badge */
+.phase-header {
+    display: flex; align-items: center; gap: 14px; margin-bottom: 20px;
+}
+.phase-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;
+}
+.phase-badge.blue { background: var(--blue-light); color: var(--blue-dark); }
+.phase-badge.purple { background: var(--purple-light); color: var(--purple-dark); }
+.phase-badge.green { background: var(--green-light); color: var(--green-dark); }
+.phase-badge.orange { background: var(--orange-light); color: var(--orange-dark); }
+.phase-duration { font-size: 13px; color: var(--text2); }
+/* Ongoing cards */
+.ongoing-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0;
+}
+.ongoing-card {
+    border: 1px solid var(--border); border-radius: 10px; padding: 16px;
+    background: var(--surface);
+}
+.ongoing-card-title { font-size: 13px; font-weight: 700; color: var(--text-strong); margin-bottom: 4px; }
+.ongoing-card-desc { font-size: 12px; color: var(--text2); line-height: 1.5; }
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); }
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .ongoing-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared for you. Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+        </button>
+        <a href="/clients/soren-b2b-marketing-automation/" class="nav-logo">
+            <span class="logo-bold">Unpause</span><span class="logo-accent">AI</span>
+        </a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">B2B Marketing Automation</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/soren-b2b-marketing-automation/">Overview</a>
+        <a href="/clients/soren-b2b-marketing-automation/solution">Solution</a>
+        <a href="/clients/soren-b2b-marketing-automation/workflow">Workflow</a>
+        <a href="/clients/soren-b2b-marketing-automation/timeline" class="active">Timeline</a>
+        <a href="/clients/soren-b2b-marketing-automation/investment">Investment</a>
+        <a href="/clients/soren-b2b-marketing-automation/faq">FAQ</a>
+        <a href="/clients/soren-b2b-marketing-automation/onboarding">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="animation:navpulse 2s infinite">&#9679;</span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<aside class="sidebar">
+    <div class="sidebar-label">On this page</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#phase-1" class="step-link active">
+                <span class="step-num">1</span>
+                Phase 1
+            </a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#phase-2" class="step-link">
+                <span class="step-num">2</span>
+                Phase 2
+            </a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#phase-3" class="step-link">
+                <span class="step-num">3</span>
+                Phase 3
+            </a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#ongoing" class="step-link">
+                <span class="step-num">4</span>
+                Ongoing
+            </a>
+        </li>
+    </ul>
+</aside>
+
+<main class="main-content">
+<div class="content-inner">
+
+<div class="page-intro">
+    <h1>Timeline</h1>
+    <p>A phased approach. Each phase delivers working automation you can test before moving to the next.</p>
+</div>
+
+<h2 id="phase-1">Phase 1 &mdash; Audit and Foundation</h2>
+
+<div class="phase-header">
+    <span class="phase-badge blue">Week 1-2</span>
+    <span class="phase-duration">First working pipeline live by end of week 2</span>
+</div>
+
+<p>Before writing any automation, we need to understand what you've already got and where it breaks down. This phase ends with something real running, not a deck of recommendations.</p>
+
+<div class="flow-diagram">
+    <div class="flow-step">
+        <div class="flow-num">1</div>
+        <div class="flow-body">
+            <div class="flow-title">Stack audit</div>
+            <div class="flow-desc">Map your current tools (Apollo, HeyReach, LinkedIn, CRM) and how data flows between them today. Where do leads arrive manually? Where do they fall out? Which steps happen in spreadsheets?</div>
+        </div>
+    </div>
+    <div class="flow-step">
+        <div class="flow-num">2</div>
+        <div class="flow-body">
+            <div class="flow-title">Gap analysis</div>
+            <div class="flow-desc">Identify where manual steps exist and which connections between tools are missing. This produces a ranked list of automation opportunities sorted by time saved per week.</div>
+        </div>
+    </div>
+    <div class="flow-step">
+        <div class="flow-num">3</div>
+        <div class="flow-body">
+            <div class="flow-title">Pipeline design</div>
+            <div class="flow-desc">Design the Make.com and n8n architecture for your specific stack. Which tool handles which stage, where the data lives, and how each integration connects. You review and confirm before any build starts.</div>
+        </div>
+    </div>
+    <div class="flow-step">
+        <div class="flow-num green">4</div>
+        <div class="flow-body">
+            <div class="flow-title">First pipeline live</div>
+            <div class="flow-desc">Build and deploy the lead capture pipeline for your highest-volume source. If that's HeyReach/LinkedIn, that's what goes first. If it's Apollo prospecting lists, we start there. Real leads flowing through real automation by end of week 2.</div>
+        </div>
+    </div>
+</div>
+
+<div class="callout blue">
+    <div class="callout-title">Phase 1 ends with a working pipeline</div>
+    <p>Not a document, not a plan. A live automation you can test with real leads. Every phase after this builds on something that's already running.</p>
+</div>
+
+<h2 id="phase-2">Phase 2 &mdash; Outbound and Scoring</h2>
+
+<div class="phase-header">
+    <span class="phase-badge purple">Week 3-4</span>
+    <span class="phase-duration">Lead scoring and outbound sequences live</span>
+</div>
+
+<p>With capture running, Phase 2 adds the intelligence layer. Leads stop being a flat list and start being a scored, routed pipeline.</p>
+
+<div class="flow-diagram">
+    <div class="flow-step">
+        <div class="flow-num purple">1</div>
+        <div class="flow-body">
+            <div class="flow-title">Outbound workflows</div>
+            <div class="flow-desc">Build cold email and LinkedIn outreach sequences in n8n. Configurable timing, reply detection to stop sequences automatically, and event logging so you can see what's working.</div>
+        </div>
+    </div>
+    <div class="flow-step">
+        <div class="flow-num purple">2</div>
+        <div class="flow-body">
+            <div class="flow-title">Lead scoring model</div>
+            <div class="flow-desc">Deploy the scoring algorithm with thresholds calibrated to your ICP. The initial weights are a starting point based on typical B2B signals. After two weeks of data, we'll tune them to your actual conversion patterns.</div>
+        </div>
+    </div>
+    <div class="flow-step">
+        <div class="flow-num purple">3</div>
+        <div class="flow-body">
+            <div class="flow-title">CRM integration</div>
+            <div class="flow-desc">Connect the pipeline to your CRM with bidirectional sync. Lead scores, source channels, sequence history, and enrichment data all land in the right fields. No manual data entry.</div>
+        </div>
+    </div>
+    <div class="flow-step">
+        <div class="flow-num purple">4</div>
+        <div class="flow-body">
+            <div class="flow-title">Reporting setup</div>
+            <div class="flow-desc">Google Sheets dashboard with conversion funnel by source, sequence open and reply rates, and weekly summaries. The data is already being logged from Phase 1, so this is mostly about surfacing it clearly.</div>
+        </div>
+    </div>
+</div>
+
+<h2 id="phase-3">Phase 3 &mdash; Optimization and Scale</h2>
+
+<div class="phase-header">
+    <span class="phase-badge green">Week 5-8</span>
+    <span class="phase-duration">Full pipeline running across all channels</span>
+</div>
+
+<p>By Phase 3, you have four weeks of real conversion data. That's enough to make the scoring model accurate rather than assumed.</p>
+
+<div class="flow-diagram">
+    <div class="flow-step">
+        <div class="flow-num green">1</div>
+        <div class="flow-body">
+            <div class="flow-title">Performance tuning</div>
+            <div class="flow-desc">Adjust scoring weights based on actual conversion data. Which signals actually predict a reply or a meeting booked? The model gets recalibrated against your real results, not generic B2B benchmarks.</div>
+        </div>
+    </div>
+    <div class="flow-step">
+        <div class="flow-num green">2</div>
+        <div class="flow-body">
+            <div class="flow-title">New source integration</div>
+            <div class="flow-desc">Add remaining channels to the capture pipeline (Reddit monitoring, additional ad platforms, any other sources from the Phase 1 gap analysis that weren't in the first wave).</div>
+        </div>
+    </div>
+    <div class="flow-step">
+        <div class="flow-num green">3</div>
+        <div class="flow-body">
+            <div class="flow-title">A/B testing infrastructure</div>
+            <div class="flow-desc">Automated split testing for email sequences. n8n routes leads to variant A or variant B, tracks outcomes per variant, and the reporting dashboard shows which performs better. No manual tracking needed.</div>
+        </div>
+    </div>
+    <div class="flow-step">
+        <div class="flow-num green">4</div>
+        <div class="flow-body">
+            <div class="flow-title">Alerting and monitoring</div>
+            <div class="flow-desc">Anomaly detection for pipeline health. If lead volume drops by more than 30% week-over-week, or if error rates spike on any integration, you get a Slack alert before it becomes a problem you notice manually.</div>
+        </div>
+    </div>
+</div>
+
+<h2 id="ongoing">Ongoing</h2>
+
+<div class="phase-header">
+    <span class="phase-badge orange">Post Phase 3</span>
+    <span class="phase-duration">Monthly retainer</span>
+</div>
+
+<p>After Phase 3, the pipeline is built and running. The ongoing retainer covers keeping it working, extending it as your stack changes, and refining it as you learn more about what converts.</p>
+
+<div class="ongoing-grid">
+    <div class="ongoing-card">
+        <div class="ongoing-card-title">Pipeline monitoring</div>
+        <div class="ongoing-card-desc">Regular health checks on all integrations. Errors get caught and fixed before they affect lead flow. You don't have to watch the automations yourself.</div>
+    </div>
+    <div class="ongoing-card">
+        <div class="ongoing-card-title">New source integrations</div>
+        <div class="ongoing-card-desc">As your marketing stack evolves, new channels get wired into the pipeline. Each new source follows the same capture-normalize-enrich-score-route pattern so it's not starting from scratch.</div>
+    </div>
+    <div class="ongoing-card">
+        <div class="ongoing-card-title">Scoring model refinement</div>
+        <div class="ongoing-card-desc">Quarterly reviews of the scoring weights against conversion data. The model should get more accurate over time, not stay frozen at the week-5 calibration.</div>
+    </div>
+    <div class="ongoing-card">
+        <div class="ongoing-card-title">Ad hoc automation requests</div>
+        <div class="ongoing-card-desc">One-off workflows that come up as your processes change. New sequences, integrations with tools you add to the stack, reporting changes, or anything that's currently being done manually.</div>
+    </div>
+</div>
+
+<div class="callout orange">
+    <div class="callout-title">Phases are flexible</div>
+    <p>If you want to start with outbound automation instead of lead capture, we can reorder. If there's a specific bottleneck you're feeling right now, that's where we start. The phases above are the default sequence, not a fixed contract.</p>
+</div>
+
+<div class="cta-section">
+    <h2>See the investment</h2>
+    <p>The Investment page covers what's included, how the pricing is structured, and how it compares to the alternatives.</p>
+    <a href="/clients/soren-b2b-marketing-automation/investment" class="cta-btn">View Investment &#8594;</a>
+</div>
+
+<div class="footer">
+    <p>Prepared by UnpauseAI for Soren's B2B marketing automation project.</p>
+</div>
+
+</div>
+</main>
+
+<script>
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('soren-b2b-marketing-automation-theme',t);
+}
+(function(){
+    var links=document.querySelectorAll('.step-link');
+    var sections=[];
+    links.forEach(function(l){
+        var id=l.getAttribute('href');
+        if(id&&id.startsWith('#')){
+            var el=document.querySelector(id);
+            if(el)sections.push({el:el,link:l});
+        }
+    });
+    if(!sections.length)return;
+    var observer=new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+            if(e.isIntersecting){
+                links.forEach(function(l){l.classList.remove('active')});
+                sections.forEach(function(s){
+                    if(s.el===e.target)s.link.classList.add('active');
+                });
+            }
+        });
+    },{rootMargin:'-80px 0px -60% 0px'});
+    sections.forEach(function(s){observer.observe(s.el)});
+})();
+
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='soren-2026'){
+        localStorage.setItem('soren-b2b-marketing-automation-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.';
+    }
+}
+(function(){if(localStorage.getItem('soren-b2b-marketing-automation-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+</script>
+</body>
+</html>
