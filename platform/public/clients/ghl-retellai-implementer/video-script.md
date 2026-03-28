@@ -37,7 +37,7 @@ SAY: On the overview page, I've mapped your seven systems into four zones. GoHig
 
 >> Nav: Solution
 
-SAY: The solution page breaks down three things: the data flow, client onboarding, and ongoing maintenance.
+SAY: The solution page walks through the full architecture: the data flow from GHL to Retell and back, a webhook reference table, client onboarding, and what ongoing maintenance looks like week to week.
 
 >> Sidebar: The Data Flow
 
@@ -95,9 +95,11 @@ SAY: Happy to start with the test setup so you can see the output before committ
 - Upfront: no direct GHL/Retell experience, but the orchestration layer (n8n) is my primary platform.
 - Profile: Germany/CET, native English/German. Production n8n, 50+ Make.com scenarios.
 - Overview page: 4 zones mapping their 7 systems. GHL (CRM/pipelines), Retell+ElevenLabs (voice), n8n (backbone), Supabase+Airtable+Twilio (data/messaging).
-- Solution page, 3 sections:
+- Solution page, 5 sections:
   - Data flow: GHL webhook to n8n, Retell API call with dynamic vars, 3 callback events, IF filter for call_analyzed, GHL update.
-  - Client onboarding: snapshot clone is fast, post-snapshot reconfiguration is the pain (webhook URLs, credentials, integrations). 3-4 hrs/client.
+  - Webhook architecture: table of all 5 webhooks (source, destination, payload, constraints). Retell 10s timeout / 3 retries.
+  - Client onboarding: snapshot clone is fast, post-snapshot reconfiguration is the pain (webhook URLs, credentials, integrations). 3-4 hrs/client. Carries-over table.
+  - Ongoing maintenance: 4 sub-sections (prompt refinements, workflow updates, GHL adjustments, debugging). Typical week callout.
   - Downloadable n8n workflow template: full pipeline with sticky notes.
 - Timeline: Phase 1 (Week 1 test setup), Phase 2 (first live clients), Phase 3 (ongoing ops).
 - Investment: $415/setup, monthly retainer per active client. Comparison table. Post-go-live support included.

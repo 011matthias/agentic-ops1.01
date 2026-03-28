@@ -349,11 +349,15 @@ li { margin-bottom: 6px; }
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#comparison" class="step-link"><span class="step-num">2</span> Comparison</a>
+            <a href="#whats-included" class="step-link"><span class="step-num">2</span> What's Included</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#whats-not-included" class="step-link"><span class="step-num">3</span> Not Included</a>
+            <a href="#comparison" class="step-link"><span class="step-num">3</span> Comparison</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#whats-not-included" class="step-link"><span class="step-num">4</span> Not Included</a>
         </li>
     </ul>
 </aside>
@@ -422,13 +426,89 @@ li { margin-bottom: 6px; }
 </div>
 
 <div class="callout green">
-    <div class="callout-title">How the model scales</div>
-    <p>The per-setup fee only applies when you onboard a new client. The monthly retainer adjusts with your active client count. If a client churns, that retainer drops. You're only paying for active environments, not fixed overhead.</p>
+    <div class="callout-title">Cost tracks your revenue</div>
+    <p>You only pay the setup fee when you add a client. The monthly retainer only covers active clients. If a client churns, that cost disappears. Your automation cost scales directly with your active client count, not with headcount or hourly billing.</p>
 </div>
+
+<h2 id="whats-included">What's Included</h2>
+
+<p>A breakdown of what each component covers, so there's no ambiguity about scope.</p>
+
+<table class="comparison-table">
+    <thead>
+        <tr>
+            <th>Deliverable</th>
+            <th>Per Setup ($415)</th>
+            <th>Monthly Retainer</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>GHL snapshot clone and reconfiguration</strong></td>
+            <td>Included</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td><strong>Webhook URL setup (GHL to n8n)</strong></td>
+            <td>Included</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td><strong>Retell AI agent configuration</strong></td>
+            <td>Included</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td><strong>n8n workflow creation</strong></td>
+            <td>Included</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td><strong>End-to-end call flow test</strong></td>
+            <td>Included</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td><strong>Setup documentation</strong></td>
+            <td>Included</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td><strong>Retell prompt refinements</strong></td>
+            <td></td>
+            <td>Included (2-3/week per client)</td>
+        </tr>
+        <tr>
+            <td><strong>n8n workflow updates</strong></td>
+            <td></td>
+            <td>Included</td>
+        </tr>
+        <tr>
+            <td><strong>GHL pipeline adjustments</strong></td>
+            <td></td>
+            <td>Included</td>
+        </tr>
+        <tr>
+            <td><strong>Debugging and error resolution</strong></td>
+            <td></td>
+            <td>Included</td>
+        </tr>
+        <tr>
+            <td><strong>Proactive monitoring</strong></td>
+            <td></td>
+            <td>Included</td>
+        </tr>
+        <tr>
+            <td><strong>Template improvements</strong></td>
+            <td></td>
+            <td>Included (proposals surfaced monthly)</td>
+        </tr>
+    </tbody>
+</table>
 
 <h2 id="comparison">Comparison</h2>
 
-<p>There are three realistic ways to staff this role. Here's how they compare on the factors that matter most for ongoing technical work at a VoiceAI agency.</p>
+<p>There are three realistic ways to staff this role. Here's how they compare on the factors that matter most for ongoing technical work at your scale.</p>
 
 <table class="comparison-table">
     <thead>
@@ -463,6 +543,18 @@ li { margin-bottom: 6px; }
             <td>High upfront commitment. Severance, benefits, and notice periods make it expensive to correct a bad hire.</td>
             <td>Low formal risk, but no long-term alignment. Contractors optimise for billable hours, not your client retention.</td>
             <td class="highlight">Test first, commit after. One setup fee, one client environment, full evaluation before ongoing retainer.</td>
+        </tr>
+        <tr>
+            <td><strong>Stack coverage</strong></td>
+            <td>Ramps slowly on a 7-system stack. May know GHL but not n8n, or vice versa. Integration knowledge takes months.</td>
+            <td>Typically knows 2-3 tools well. Gaps in the integration layer (webhooks, API chaining, error handling) are common.</td>
+            <td class="highlight">n8n and API integration patterns are my daily work. GHL and Retell are new UIs, not new architectures. The learning curve is the interface, not the plumbing.</td>
+        </tr>
+        <tr>
+            <td><strong>Documentation</strong></td>
+            <td>Varies by person. Often deprioritised under workload pressure. Knowledge stays in one head.</td>
+            <td>Rarely documented. When a contractor leaves, the context leaves with them.</td>
+            <td class="highlight">Every change is documented: what was modified, why, and what to watch for. Setup documentation includes webhook URLs, workflow IDs, and credential references.</td>
         </tr>
     </tbody>
 </table>

@@ -250,27 +250,15 @@ details[open] summary { color: var(--blue-dark); }
     <div class="sidebar-label">On this page</div>
     <ul class="step-list">
         <li class="step-item">
-            <a href="#ghl-retell-experience" class="step-link active"><span class="step-num">1</span> GHL/Retell Experience</a>
+            <a href="#experience-and-fit" class="step-link active"><span class="step-num">1</span> Experience and Fit</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#timezone" class="step-link"><span class="step-num">2</span> Timezone</a>
+            <a href="#communication-and-availability" class="step-link"><span class="step-num">2</span> Communication</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#urgent-issues" class="step-link"><span class="step-num">3</span> Urgent Issues</a>
-            <div class="step-line"></div>
-        </li>
-        <li class="step-item">
-            <a href="#change-requests" class="step-link"><span class="step-num">4</span> Change Requests</a>
-            <div class="step-line"></div>
-        </li>
-        <li class="step-item">
-            <a href="#sops" class="step-link"><span class="step-num">5</span> SOPs</a>
-            <div class="step-line"></div>
-        </li>
-        <li class="step-item">
-            <a href="#trial-period" class="step-link"><span class="step-num">6</span> Trial Period</a>
+            <a href="#working-together" class="step-link"><span class="step-num">3</span> Working Together</a>
         </li>
     </ul>
 </aside>
@@ -281,10 +269,10 @@ details[open] summary { color: var(--blue-dark); }
 <section class="hero" id="hero">
     <div class="hero-badge">FAQ</div>
     <h1>Common Questions</h1>
-    <p class="hero-sub">The questions most VoiceAI Agency hiring managers ask before committing to a technical contractor. Answered directly.</p>
+    <p class="hero-sub">The questions that come up most often when evaluating a technical contractor for ongoing integration work. Answered directly.</p>
 </section>
 
-<h2 id="ghl-retell-experience">GHL and Retell AI Experience</h2>
+<h2 id="experience-and-fit">Experience and Fit</h2>
 
 <details>
     <summary>You don't have direct GHL or Retell AI experience. How does that work?</summary>
@@ -294,45 +282,6 @@ details[open] summary { color: var(--blue-dark); }
     </div>
 </details>
 
-<h2 id="timezone">Timezone and Communication</h2>
-
-<details>
-    <summary>What timezone are you in? How does async communication work?</summary>
-    <div class="faq-body">
-        <p>I'm in Karlsruhe, Germany (CET/CEST), which is 7 hours ahead of Austin. In practice, this works well for async: requests you send at the end of your business day are on my desk first thing in my morning. You often have completed work waiting when you start your day.</p>
-        <p>I communicate via written updates. If I hit a blocker, I flag it immediately rather than waiting for a scheduled check-in. I don't need meetings to raise issues or confirm decisions. If a quick call is useful, I'm available in the overlap window (your late morning, my early evening).</p>
-    </div>
-</details>
-
-<h2 id="urgent-issues">Urgent Issues</h2>
-
-<details>
-    <summary>How do you handle urgent issues?</summary>
-    <div class="faq-body">
-        <p>For production-critical issues (broken webhook, failed call flow, Retell agent not triggering), I respond within the same business day. My working hours cover your morning, so most issues raised at your start of day get a response before your afternoon.</p>
-        <p>Structured error handling and logging in n8n means most failures are diagnosable from the execution log without needing live access to the client account. I can usually identify root cause, propose a fix, and push it within a few hours of the report coming in.</p>
-    </div>
-</details>
-
-<h2 id="change-requests">Change Requests</h2>
-
-<details>
-    <summary>What does a typical change request look like?</summary>
-    <div class="faq-body">
-        <p>Most requests fall into one of these categories:</p>
-        <ul>
-            <li>Updating a Retell agent's system prompt to handle a new edge case or objection</li>
-            <li>Adding a new data field to an n8n workflow (capturing a new GHL custom field, passing it to Supabase)</li>
-            <li>Modifying a GHL sequence trigger (changing the pipeline stage that kicks off the voice call)</li>
-            <li>Debugging a webhook that stopped firing after a GHL platform update</li>
-            <li>Adjusting call_analyzed event filtering logic when a new outcome type appears</li>
-        </ul>
-        <p>Most of these take 30-90 minutes. I document every change with what was modified, why, and what to watch for. That keeps your team informed even when I'm the one making the edits.</p>
-    </div>
-</details>
-
-<h2 id="sops">Working from SOPs and Loom Recordings</h2>
-
 <details>
     <summary>Can you work from our existing SOPs and Loom recordings?</summary>
     <div class="faq-body">
@@ -340,8 +289,6 @@ details[open] summary { color: var(--blue-dark); }
         <p>I won't ask you to explain something that's already in a SOP. If it's documented, I'll read it. Questions I do ask will be specific: a field name that's ambiguous, a step that has two interpretations, a credential I need access to.</p>
     </div>
 </details>
-
-<h2 id="trial-period">Trial Period and Fit</h2>
 
 <details>
     <summary>What happens if this doesn't work out?</summary>
@@ -352,6 +299,57 @@ details[open] summary { color: var(--blue-dark); }
     </div>
 </details>
 
+<h2 id="communication-and-availability">Communication and Availability</h2>
+
+<details>
+    <summary>What timezone are you in? How does async communication work?</summary>
+    <div class="faq-body">
+        <p>I'm in Karlsruhe, Germany (CET/CEST), which is 7 hours ahead of Austin. In practice, this works well for async: requests you send at the end of your business day are on my desk first thing in my morning. You often have completed work waiting when you start your day.</p>
+        <p>I communicate via written updates. If I hit a blocker, I flag it immediately rather than waiting for a scheduled check-in. I don't need meetings to raise issues or confirm decisions. If a quick call is useful, I'm available in the overlap window (your late morning, my early evening).</p>
+    </div>
+</details>
+
+<details>
+    <summary>How do you handle urgent issues?</summary>
+    <div class="faq-body">
+        <p>For production-critical issues (broken webhook, failed call flow, Retell agent not triggering), I respond within the same business day. My working hours cover your morning, so most issues raised at your start of day get a response before your afternoon.</p>
+        <p>Structured error handling and logging in n8n means most failures are diagnosable from the execution log without needing live access to the client account. I can usually identify root cause, propose a fix, and push it within a few hours of the report coming in.</p>
+    </div>
+</details>
+
+<h2 id="working-together">Working Together</h2>
+
+<details>
+    <summary>What does a typical change request look like?</summary>
+    <div class="faq-body">
+        <p>Most requests fall into one of these categories:</p>
+        <ul>
+            <li>Updating a Retell agent's system prompt to handle a new edge case or objection</li>
+            <li>Adding a new data field to an n8n workflow (capturing a new GHL custom field, passing it to Supabase)</li>
+            <li>Modifying a GHL sequence trigger (changing the pipeline stage that kicks off the voice call)</li>
+            <li>Debugging a webhook that stopped firing after a GHL platform update</li>
+            <li>Adjusting <code>call_analyzed</code> event filtering logic when a new outcome type appears</li>
+        </ul>
+        <p>Most of these take 30-90 minutes. I document every change with what was modified, why, and what to watch for. That keeps your team informed even when I'm the one making the edits.</p>
+    </div>
+</details>
+
+<details>
+    <summary>How do you document changes?</summary>
+    <div class="faq-body">
+        <p>Every change gets a written update: what was modified, why, and what to watch for. For workflow changes, that includes the n8n workflow name, the specific nodes edited, and the expected behavior after the change. For prompt refinements, it includes the edge case that triggered the change and how the updated prompt handles it.</p>
+        <p>Setup documentation is more detailed: webhook URLs, workflow IDs, credential references, Retell agent IDs, and the GHL sub-account configuration. This means if I'm unavailable for any reason, someone else can pick up where I left off without reverse-engineering anything.</p>
+    </div>
+</details>
+
+<details>
+    <summary>What does a typical weekly update look like?</summary>
+    <div class="faq-body">
+        <p>A written summary at the end of each week covering: changes completed (with per-change detail), any issues caught proactively, pending items waiting on input from your side, and observations about patterns that could be improved. The format stays consistent so you can scan it quickly without reading a wall of text.</p>
+        <p>If something needs your attention mid-week (a blocker, a scope question, a credential expiry), I flag it immediately rather than batching it into the weekly update. The weekly summary is for context, not for surfacing urgent items.</p>
+    </div>
+</details>
+
 <div class="callout green">
     <div class="callout-title">Still have a question?</div>
     <p>Reply directly on Upwork. I check messages daily and will respond within one business day.</p>
@@ -359,7 +357,7 @@ details[open] summary { color: var(--blue-dark); }
 
 <section class="cta-section">
     <h2>Ready to start?</h2>
-    <p>The Onboarding page covers what the first week looks like in practice for VoiceAI Agency.</p>
+    <p>The Onboarding page covers what I need to get the test setup running in Week 1.</p>
     <a href="/clients/ghl-retellai-implementer/onboarding" class="cta-btn">View Onboarding &rarr;</a>
 </section>
 

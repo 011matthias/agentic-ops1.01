@@ -227,6 +227,16 @@ li { margin-bottom: 6px; }
     box-shadow: 0 2px 8px rgba(37,99,235,.3);
 }
 .cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+.comparison-table { width: 100%; border-collapse: collapse; margin: 24px 0; font-size: 14px; }
+.comparison-table th {
+    background: var(--th-bg); color: #fff; padding: 12px 16px;
+    text-align: left; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+}
+.comparison-table th:first-child { border-radius: 8px 0 0 0; }
+.comparison-table th:last-child { border-radius: 0 8px 0 0; }
+.comparison-table td { padding: 12px 16px; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--text); }
+.comparison-table tr:last-child td { border-bottom: none; }
+.comparison-table tr:nth-child(even) td { background: var(--surface); }
 .footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); margin-top: 24px; }
 @media (max-width: 1100px) {
     .nav-links a { font-size: 12px; padding: 5px 8px; }
@@ -288,15 +298,19 @@ li { margin-bottom: 6px; }
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#client-onboarding-flow" class="step-link"><span class="step-num">2</span> Client Onboarding</a>
+            <a href="#webhook-architecture" class="step-link"><span class="step-num">2</span> Webhook Architecture</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#ongoing-maintenance" class="step-link"><span class="step-num">3</span> Ongoing Maintenance</a>
+            <a href="#client-onboarding-flow" class="step-link"><span class="step-num">3</span> Client Onboarding</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#downloadable-artifact" class="step-link"><span class="step-num">4</span> Download Template</a>
+            <a href="#ongoing-maintenance" class="step-link"><span class="step-num">4</span> Ongoing Maintenance</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#downloadable-artifact" class="step-link"><span class="step-num">5</span> Download Template</a>
         </li>
     </ul>
 </aside>
@@ -307,137 +321,273 @@ li { margin-bottom: 6px; }
 <section class="hero" id="hero">
     <div class="hero-badge">Solution</div>
     <h1>How the Stack Fits Together</h1>
-    <p class="hero-sub">A walkthrough of the GoHighLevel to Retell AI data flow, the client onboarding process, and what ongoing maintenance looks like week to week for VoiceAI Agency.</p>
+    <p class="hero-sub">The complete data flow from GoHighLevel pipeline event to Retell AI voice call and back, plus what client onboarding and ongoing maintenance look like in practice.</p>
+    <div class="stats-row">
+        <div class="stat-card">
+            <div class="stat-value">7</div>
+            <div class="stat-label">Steps in the call flow</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">5</div>
+            <div class="stat-label">Webhooks in the system</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">3-4h</div>
+            <div class="stat-label">Per-client setup time</div>
+        </div>
+    </div>
 </section>
 
 <h2 id="the-data-flow">The Data Flow</h2>
-<p>Each call your VoiceAI Agency delivers starts with a GoHighLevel pipeline event and ends with a contact record update, an SMS follow-up, and a row in Airtable. Here's each step in that chain.</p>
+<p>Each voice call your agency delivers follows the same path: a GoHighLevel pipeline event triggers an n8n workflow, which calls Retell AI, which calls back with results, which n8n routes into GHL updates and follow-up actions. Here's each step with enough detail to evaluate whether I understand your architecture.</p>
 
 <div class="flow-diagram">
     <div class="flow-step">
         <div class="flow-num">1</div>
         <div class="flow-content">
             <div class="flow-title">GHL Pipeline Event</div>
-            <p class="flow-desc">A contact reaches a pipeline stage in GoHighLevel. GHL fires an outbound webhook to an n8n webhook URL with the contact's data and the stage that triggered it.</p>
+            <p class="flow-desc">A contact hits a pipeline stage in GoHighLevel. GHL fires an outbound webhook to an n8n webhook URL with the contact payload: name, phone, email, custom field values, and the pipeline stage that triggered it. The webhook URL is configured per pipeline stage in GHL's automation settings, which means each client sub-account needs its own URL pointed at the correct n8n instance.</p>
         </div>
     </div>
     <div class="flow-step">
         <div class="flow-num">2</div>
         <div class="flow-content">
             <div class="flow-title">n8n Receives and Routes</div>
-            <p class="flow-desc">The Webhook node catches the incoming payload, validates that required fields are present, and routes by pipeline stage. Different stages can trigger different Retell agents or skip the call entirely.</p>
+            <p class="flow-desc">The n8n Webhook node catches the incoming payload. A validation step checks that required fields are present (phone number, pipeline stage, contact ID). Then a Switch or IF node routes by stage name: some stages trigger a Retell voice call, others trigger an SMS-only sequence, and some skip automation entirely. GHL has a native n8n node, so contact lookups and updates use structured fields rather than raw HTTP requests.</p>
         </div>
     </div>
     <div class="flow-step">
         <div class="flow-num">3</div>
         <div class="flow-content">
             <div class="flow-title">Retell API Call</div>
-            <p class="flow-desc">n8n calls Retell's create-call endpoint with dynamic variables pulled from the GHL contact record: client name, services they've expressed interest in, and available appointment slots.</p>
+            <p class="flow-desc">n8n calls Retell's <code>create-call</code> endpoint via HTTP Request node with the contact's phone number and a set of dynamic variables: client name, services they've expressed interest in, available appointment slots, and any client-specific context. These variables are injected into Retell's <code>general_prompt</code> field, which means the voice agent's script adapts per call without needing a separate agent per scenario.</p>
         </div>
     </div>
     <div class="flow-step">
         <div class="flow-num">4</div>
         <div class="flow-content">
             <div class="flow-title">Voice Agent Executes</div>
-            <p class="flow-desc">The Retell AI agent handles the call using an ElevenLabs voice, following a system prompt that has the injected variables baked in. The agent navigates objections, qualifies the lead, and attempts to book.</p>
+            <p class="flow-desc">The Retell AI agent runs the call using a configured ElevenLabs voice. The system prompt has the injected variables baked in, so the agent speaks with context about the specific lead. The agent navigates objections, qualifies the lead against criteria defined in the prompt, and attempts to book or hand off. Voice selection and conversation style are configured per client in the Retell dashboard.</p>
         </div>
     </div>
     <div class="flow-step">
         <div class="flow-num">5</div>
         <div class="flow-content">
             <div class="flow-title">Webhook Callback</div>
-            <p class="flow-desc">Retell sends three events back to the n8n webhook: <code>call_started</code>, <code>call_ended</code>, and <code>call_analyzed</code>. All three arrive at the same endpoint.</p>
+            <p class="flow-desc">Retell sends three separate webhook events back to n8n for every call: <code>call_started</code> (call initiated), <code>call_ended</code> (call finished, includes duration), and <code>call_analyzed</code> (transcript, outcome classification, structured data from the conversation). All three arrive at the same n8n webhook endpoint. Retell enforces a 10-second timeout on webhook delivery and retries up to 3 times on failure, so the n8n endpoint needs to respond quickly.</p>
         </div>
     </div>
     <div class="flow-step">
         <div class="flow-num">6</div>
         <div class="flow-content">
             <div class="flow-title">Filter and Update</div>
-            <p class="flow-desc">An IF node filters for <code>call_analyzed</code> only. n8n extracts the transcript, outcome, and any structured data from the analysis, then updates the GHL contact record with the call result.</p>
+            <p class="flow-desc">An IF node filters for <code>call_analyzed</code> events only, ignoring the other two. From the analyzed payload, n8n extracts the full transcript, the outcome classification (booked, not interested, voicemail, callback requested), and any structured data the agent captured during the conversation. The GHL native node then updates the contact record: call outcome in a custom field, transcript in notes, and pipeline stage moved to reflect the result.</p>
         </div>
     </div>
     <div class="flow-step">
         <div class="flow-num">7</div>
         <div class="flow-content">
             <div class="flow-title">Follow-up Actions</div>
-            <p class="flow-desc">Depending on the outcome, n8n triggers a Twilio SMS sequence, updates the Supabase state record for the contact, and syncs a row to the Airtable reporting table. Each branch is configurable per client.</p>
+            <p class="flow-desc">Based on the call outcome, n8n branches into follow-up paths. A booked appointment triggers a Twilio confirmation SMS with the appointment details. A callback request updates the Supabase state record and schedules a re-trigger. Every call, regardless of outcome, syncs a row to the Airtable reporting table with timestamp, duration, outcome, and client ID. Each branch is configurable per client without touching the core workflow logic.</p>
         </div>
     </div>
 </div>
 
+<div class="callout">
+    <div class="callout-title">Why n8n is the right backbone here</div>
+    <p>n8n gives you execution-level visibility into every step. When a call doesn't fire or a contact doesn't update, the execution log shows exactly which node failed and what data it received. That's the difference between "something broke" and "the GHL webhook sent an empty phone field on contact #4521 at 2:14pm." I can diagnose issues from the log without asking you to reproduce anything.</p>
+</div>
+
+<h2 id="webhook-architecture">Webhook Architecture</h2>
+<p>There are five webhooks in the system. Understanding where each one lives and what constraints it operates under is what makes debugging fast and setup reliable.</p>
+
+<table class="comparison-table">
+    <thead>
+        <tr>
+            <th>Webhook</th>
+            <th>Source</th>
+            <th>Destination</th>
+            <th>Payload</th>
+            <th>Constraint</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>Pipeline stage trigger</strong></td>
+            <td>GoHighLevel</td>
+            <td>n8n Webhook node</td>
+            <td>Contact data + pipeline stage + custom fields</td>
+            <td>URL is per sub-account. Does not carry over from snapshot clone.</td>
+        </tr>
+        <tr>
+            <td><strong>call_started</strong></td>
+            <td>Retell AI</td>
+            <td>n8n Webhook node</td>
+            <td>Call ID, agent ID, phone number</td>
+            <td>10s timeout, 3 retries. Filtered out by IF node.</td>
+        </tr>
+        <tr>
+            <td><strong>call_ended</strong></td>
+            <td>Retell AI</td>
+            <td>n8n Webhook node</td>
+            <td>Call ID, duration, end reason</td>
+            <td>10s timeout, 3 retries. Filtered out by IF node.</td>
+        </tr>
+        <tr>
+            <td><strong>call_analyzed</strong></td>
+            <td>Retell AI</td>
+            <td>n8n Webhook node</td>
+            <td>Transcript, outcome classification, structured data</td>
+            <td>10s timeout, 3 retries. This is the event n8n acts on.</td>
+        </tr>
+        <tr>
+            <td><strong>Error notification</strong></td>
+            <td>n8n error trigger</td>
+            <td>Slack or email</td>
+            <td>Workflow name, error message, failed node, execution ID</td>
+            <td>Fires on any workflow execution failure. Separate workflow.</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="callout orange">
+    <div class="callout-title">The 10-second constraint</div>
+    <p>Retell's webhooks time out after 10 seconds and retry up to 3 times. That means the n8n workflow receiving callbacks needs to respond with a 200 status immediately and process the payload asynchronously if any downstream step (GHL update, Airtable sync) might be slow. In practice, n8n handles this naturally because each node executes sequentially after the webhook responds. But if you add a slow external call before the response, you'll see duplicate events from retries. I'll set this up correctly from the start.</p>
+</div>
+
 <h2 id="client-onboarding-flow">Client Onboarding Flow</h2>
-<p>Each new client in your VoiceAI Agency starts from a master GoHighLevel snapshot. The clone is fast. What takes time is everything that doesn't carry over.</p>
+<p>Each new client starts from a master GoHighLevel snapshot. The clone itself takes minutes. What takes 3-4 hours is everything that doesn't carry over.</p>
+
+<h3>What carries over vs. what doesn't</h3>
+
+<table class="comparison-table">
+    <thead>
+        <tr>
+            <th>Component</th>
+            <th>Carries over</th>
+            <th>Notes</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>Pipelines and stages</strong></td>
+            <td style="color:var(--green);font-weight:700">Yes</td>
+            <td>Full pipeline structure transfers intact.</td>
+        </tr>
+        <tr>
+            <td><strong>Sequences and timing</strong></td>
+            <td style="color:var(--green);font-weight:700">Yes</td>
+            <td>Email/SMS sequences transfer with timing rules.</td>
+        </tr>
+        <tr>
+            <td><strong>Custom fields</strong></td>
+            <td style="color:var(--green);font-weight:700">Yes</td>
+            <td>Field definitions transfer. Values don't (expected).</td>
+        </tr>
+        <tr>
+            <td><strong>Funnel structure</strong></td>
+            <td style="color:var(--green);font-weight:700">Yes</td>
+            <td>Page layout and forms transfer.</td>
+        </tr>
+        <tr>
+            <td><strong>Webhook URLs</strong></td>
+            <td style="color:var(--orange);font-weight:700">No</td>
+            <td>Every webhook URL must be reconfigured to point at the new n8n workflow instance.</td>
+        </tr>
+        <tr>
+            <td><strong>Integration credentials</strong></td>
+            <td style="color:var(--orange);font-weight:700">No</td>
+            <td>OAuth connections, API keys, and third-party auth need re-setup under the new sub-account.</td>
+        </tr>
+        <tr>
+            <td><strong>Custom field mappings</strong></td>
+            <td style="color:var(--orange);font-weight:700">Partial</td>
+            <td>If the client's data structure differs from the master, field mappings in n8n need updating.</td>
+        </tr>
+    </tbody>
+</table>
 
 <div class="flow-diagram">
     <div class="flow-step">
         <div class="flow-num">1</div>
         <div class="flow-content">
             <div class="flow-title">Clone Master GHL Snapshot</div>
-            <p class="flow-desc">The master snapshot is cloned into a new sub-account. Pipelines, sequences, custom fields, and funnel structure all transfer over.</p>
+            <p class="flow-desc">The master snapshot is cloned into a new sub-account. Pipelines, sequences, custom fields, and funnel structure all transfer over. This step takes a few minutes and is handled in the GHL admin panel.</p>
         </div>
     </div>
     <div class="flow-step">
         <div class="flow-num">2</div>
         <div class="flow-content">
             <div class="flow-title">Post-Snapshot Reconfiguration</div>
-            <p class="flow-desc">Webhook URLs don't carry over. Integrations need re-auth under the new sub-account credentials. Custom field mappings may differ if the client's data structure doesn't match the master. Each of these needs to be confirmed individually.</p>
+            <p class="flow-desc">This is where the 3-4 hours go. Each webhook URL needs to be reconfigured to point at a new n8n endpoint. Integration credentials (OAuth for GHL API, Retell API key, Twilio SID) need to be set up under the new sub-account. If the client has non-standard custom fields, the n8n field mappings need adjusting. Each item is individually verified after configuration.</p>
         </div>
     </div>
     <div class="flow-step">
         <div class="flow-num">3</div>
         <div class="flow-content">
             <div class="flow-title">Configure Retell Agent</div>
-            <p class="flow-desc">A new Retell AI agent is configured for the client with a client-specific system prompt, the correct dynamic variables, and routing logic that matches their pipeline stages.</p>
+            <p class="flow-desc">A new Retell AI agent is set up for the client: system prompt tailored to their industry and services, ElevenLabs voice selected, dynamic variable mappings defined (which GHL fields feed into the call context), and the callback webhook URL pointed at the correct n8n instance.</p>
         </div>
     </div>
     <div class="flow-step">
         <div class="flow-num">4</div>
         <div class="flow-content">
             <div class="flow-title">Create n8n Workflow Instances</div>
-            <p class="flow-desc">n8n workflows are created or cloned for the new client: unique webhook paths, fresh credentials, GHL node configuration pointing to the correct sub-account.</p>
+            <p class="flow-desc">n8n workflows are cloned from a template and configured for the new client: unique webhook paths (so callbacks route correctly), fresh credential bindings for GHL and Retell, Airtable base ID pointed at the client's reporting table, and Supabase table references updated. Each workflow gets a client-prefixed name for easy identification.</p>
         </div>
     </div>
     <div class="flow-step">
         <div class="flow-num">5</div>
         <div class="flow-content">
-            <div class="flow-title">Test the Full Loop</div>
-            <p class="flow-desc">A test lead is created in GHL and moved through the relevant pipeline stage. The webhook fires, the Retell call runs, and the GHL contact record is checked for the correct update. Pass or document blockers.</p>
+            <div class="flow-title">End-to-End Test</div>
+            <p class="flow-desc">A test lead is created in GHL and moved through the trigger pipeline stage. The webhook fires, the Retell call executes (to a test number), and n8n processes the callback. The GHL contact record is checked for the correct custom field update, the Airtable reporting row is verified, and the Twilio SMS is confirmed delivered. Pass, or document exactly which step failed and why.</p>
         </div>
     </div>
 </div>
 
 <div class="callout orange">
-    <div class="callout-title">Where the time actually goes</div>
-    <p>The post-snapshot reconfiguration step is where most of the manual time goes. Webhook URLs, credentials, and integration configs don't carry over from the master snapshot. This is 3-4 hours per client that could be reduced with structured n8n templates. I'll flag these patterns as I work through setups.</p>
+    <div class="callout-title">Reducing setup time over time</div>
+    <p>The 3-4 hour reconfiguration is the current baseline. As I work through multiple setups, I'll build n8n workflow templates with parameterized credential bindings and webhook paths. The goal is to reduce the manual reconfiguration to a checklist of values to fill in rather than a sequence of steps to remember. I'll flag these template improvements as I find them.</p>
 </div>
 
 <h2 id="ongoing-maintenance">Ongoing Maintenance</h2>
-<p>Your posting mentions 2-3 change requests per client per week. Here's what that volume actually looks like in practice.</p>
+<p>Your posting mentions 2-3 change requests per client per week. Here's what that volume actually looks like broken down by category, with the typical turnaround for each.</p>
 
-<p><strong>Retell prompt refinements</strong> are the most common request. A call surfaces an edge case the prompt didn't handle well. The agent routed incorrectly, or used the wrong framing for a specific objection. These are quick iterations: update the system prompt, test with a sample call, confirm behavior.</p>
+<h3>Prompt refinements</h3>
+<p>The most common request. A call recording surfaces an edge case: the agent mishandled a specific objection, used the wrong framing for a particular industry, or failed to capture a piece of information. The fix cycle is short: listen to the call or read the transcript, identify the gap in the system prompt, update the prompt text, trigger a test call to verify the new behavior, and confirm. Most prompt refinements take 30-60 minutes including the test call.</p>
 
-<p><strong>n8n workflow updates</strong> cover the rest: new trigger conditions, additional data fields being written to GHL or Airtable, modified routing rules when a client adjusts their pipeline, adding a new SMS branch via Twilio.</p>
+<h3>Workflow updates</h3>
+<p>New business logic that changes how n8n processes calls. Adding a new trigger condition (a pipeline stage that didn't previously trigger a call), capturing an additional data field from GHL and writing it to Airtable, modifying routing rules when a client changes their pipeline structure, or adding a new SMS branch via Twilio for a specific call outcome. These involve editing the n8n workflow, testing with a sample payload, and verifying the downstream data lands correctly.</p>
 
-<p><strong>GHL pipeline and sequence adjustments</strong> come up as clients refine their sales process. A stage gets renamed, a sequence timing changes, a new custom field needs to be pulled into the Retell variables.</p>
+<h3>GHL pipeline and sequence adjustments</h3>
+<p>Clients refine their sales process, which means GHL changes. A pipeline stage gets renamed (which breaks the n8n Switch node if it matches on stage name), a sequence timing changes, or a new custom field needs to be added and pulled into the Retell dynamic variables. These require coordinated changes across GHL and n8n to keep them in sync.</p>
 
-<p><strong>Debugging</strong> is its own category. Failed webhooks, expired GoHighLevel OAuth sessions, Retell API timeouts. These need tracing end-to-end from the GHL event log through n8n execution history to the Retell API response.</p>
+<h3>Debugging</h3>
+<p>Failed webhooks, expired GoHighLevel OAuth sessions, Retell API timeouts, or a Twilio delivery failure. Debugging follows the data path: check the GHL event log for the outbound webhook, check the n8n execution log for the receiving workflow, check the Retell API response for the call attempt, and check the callback event for the result. Each system has its own log, and the contact ID ties them together. Most issues are identifiable within 15-20 minutes of the report.</p>
 
 <div class="callout green">
-    <div class="callout-title">Structured error handling</div>
-    <p>Structured error handling and logging in n8n means I can trace failures to their source without asking you to check anything. Execution logs, error branches, and Retell API response codes tell the full story. You'll get a clear diagnosis with the fix, not a request to reproduce the issue.</p>
+    <div class="callout-title">What a typical week looks like</div>
+    <p>Monday: prompt refinement for an appointment setter that didn't handle a scheduling conflict. Wednesday: add a new custom field from GHL to the Airtable sync for a client who started tracking lead source. Thursday: debug an expired OAuth token on a client sub-account that stopped webhook delivery. Friday: update a Switch node after a client renamed their "Qualified" pipeline stage to "Ready to Call." Each of these is handled async with a written update on what changed and why.</p>
 </div>
 
 <h2 id="downloadable-artifact">n8n Workflow Template</h2>
-<p>The JSON below is a starting-point n8n workflow for the GHL-to-Retell call pipeline. It includes the Webhook trigger, an IF node filtering for <code>call_analyzed</code>, and placeholder HTTP Request nodes for the Retell create-call and GHL contact update endpoints. Import it into n8n to see the structure before our test setup.</p>
+<p>This is a starting-point n8n workflow for the GHL-to-Retell call pipeline. It contains the core structure you'd see in a production setup:</p>
+<ul>
+    <li><strong>Webhook trigger node</strong> configured to receive GHL pipeline events</li>
+    <li><strong>IF node</strong> filtering for <code>call_analyzed</code> events from Retell callbacks</li>
+    <li><strong>HTTP Request nodes</strong> as placeholders for the Retell <code>create-call</code> endpoint and GHL contact update</li>
+    <li><strong>Sticky notes</strong> marking the input, processing, and output zones</li>
+</ul>
+<p>Import it into your n8n instance to see the structure before we start the test setup. The placeholder nodes show where credentials and endpoint URLs get filled in during configuration.</p>
 
 <div style="text-align:center;margin:32px 0">
     <a href="/clients/ghl-retellai-implementer/ghl-retellai-n8n-pipeline.json" download class="cta-btn" style="background:var(--green);box-shadow:0 2px 8px rgba(5,150,105,.3)">Download n8n Workflow Template &darr;</a>
-    <p style="margin-top:12px;font-size:13px;color:var(--text2)">Import into n8n to see the GHL-to-Retell pipeline structure. Includes webhook trigger, IF filtering, and placeholder API calls.</p>
+    <p style="margin-top:12px;font-size:13px;color:var(--text2)">JSON file. Import into n8n via Settings > Import Workflow.</p>
 </div>
 
 <section class="cta-section">
     <h2>Want to see the timeline?</h2>
-    <p>How the test setup week works, what the first live clients look like, and how ongoing operations run for VoiceAI Agency.</p>
+    <p>How the test setup week works, what the first live clients look like, and how ongoing operations settle into a rhythm.</p>
     <a href="/clients/ghl-retellai-implementer/timeline" class="cta-btn">View Timeline &rarr;</a>
 </section>
 

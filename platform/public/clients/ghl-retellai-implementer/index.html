@@ -330,8 +330,9 @@ li { margin-bottom: 6px; }
 
 <h2 id="the-integration-challenge">The Integration Challenge</h2>
 <p>You're running a VoiceAI agency with a standardized stack: GoHighLevel for CRM and pipelines, Retell AI for voice agents, n8n for automation, and Supabase, Airtable, and Twilio filling in the data and messaging layers.</p>
-<p>The individual tools aren't the bottleneck. The bottleneck is what happens between them. When a GHL pipeline stage changes, a webhook fires to n8n. n8n calls the Retell API with client-specific dynamic variables. Retell sends back three webhook events per call (call_started, call_ended, call_analyzed). n8n needs to filter for the right event, update the GHL contact record, and trigger the follow-up SMS sequence via Twilio.</p>
-<p>That orchestration layer is what makes or breaks client setups at scale. And it's exactly what I build every day.</p>
+<p>The individual tools aren't the bottleneck. The bottleneck is what happens between them. When a GHL pipeline stage changes, a webhook fires to n8n. n8n calls the Retell API with client-specific dynamic variables. Retell sends back three webhook events per call (<code>call_started</code>, <code>call_ended</code>, <code>call_analyzed</code>). n8n needs to filter for the right event, update the GHL contact record, and trigger the follow-up SMS sequence via Twilio.</p>
+<p>And then there's the scaling problem: every new client starts from a GoHighLevel snapshot clone, but webhook URLs, integration credentials, and custom field mappings don't carry over. That's 3-4 hours of manual reconfiguration per client that needs to be done correctly every time, or the call flow breaks silently.</p>
+<p>That orchestration and onboarding layer is what makes or breaks client setups at scale. And it's exactly what I build every day.</p>
 
 <h2 id="your-stack">Your Stack, As I Understand It</h2>
 <div class="zones">
@@ -378,13 +379,14 @@ li { margin-bottom: 6px; }
 </div>
 
 <h2 id="what-i-bring">What I Bring</h2>
-<p><strong>n8n is my primary platform.</strong> I build and maintain production workflows with webhook triggers, API integrations, Supabase and Airtable data layers, structured error handling, and monitoring. I also manage 50+ Make.com scenarios across client accounts, so I'm used to working at scale with multiple environments.</p>
-<p><strong>On GHL and Retell AI specifically:</strong> I haven't configured them directly. But your setup runs from SOPs and Loom walkthroughs, which is exactly how I onboard onto new platforms. The integration patterns (webhooks, API calls, event filtering, data mapping) are the same patterns I work with in n8n every day. The learning curve is the UI, not the architecture.</p>
+<p><strong>n8n is my primary platform.</strong> I build and maintain production workflows with webhook triggers, API integrations, Supabase and Airtable data layers, structured error handling, and monitoring. I also manage 50+ Make.com scenarios across client accounts, so I'm used to working at scale with multiple environments and keeping them running reliably.</p>
+<p><strong>On GHL and Retell AI specifically:</strong> I haven't configured them directly. But your setup runs from SOPs and Loom walkthroughs, which is exactly how I onboard onto new platforms. The integration patterns (webhooks, API calls, event filtering, data mapping) are the same patterns I work with in n8n every day. The learning curve is the UI, not the architecture. The test setup in Week 1 is where I prove that.</p>
 <p><strong>AI dev tools are part of my daily workflow.</strong> I build with Cursor and Claude Code, which maps directly to how your team ships. Quick iterations, clean code, fast debugging.</p>
+<p><strong>How I work:</strong> Async by default, written updates per change, documented setups so nothing lives in one person's head. Change requests get a turnaround within 24 hours during business days. If I hit a blocker, I flag it immediately with the specific question, not a vague status update. You won't need to chase me for progress.</p>
 
 <div class="callout green">
     <div class="callout-title">Location fit</div>
-    <p>I'm based in Karlsruhe, Germany (CET timezone). English and German are both native. Your posting lists Europe as a preferred location, and async communication is how I work by default.</p>
+    <p>I'm based in Karlsruhe, Germany (CET timezone). English and German are both native. Your posting lists Europe as a preferred location. The 7-hour offset from Austin means requests sent at your end of day are on my desk first thing in my morning. You often have completed work waiting when you start yours.</p>
 </div>
 
 <h2 id="next-steps">Next Steps</h2>
