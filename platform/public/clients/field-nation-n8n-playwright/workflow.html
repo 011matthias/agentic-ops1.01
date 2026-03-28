@@ -39,7 +39,27 @@ body {
     color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
     transition: background .2s, color .2s;
 }
-.access-gate { display: none; }
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
 .site-nav {
     position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
     background: var(--nav-bg); border-bottom: 1px solid var(--border);
@@ -236,7 +256,13 @@ tr:hover { background: var(--surface); }
 </head>
 <body>
 
-<div class="access-gate hidden" id="accessGate"></div>
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared for you. Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
 
 <nav class="site-nav">
     <div class="nav-left">
@@ -538,6 +564,17 @@ function toggleTheme(){
     },{rootMargin:'-80px 0px -60% 0px'});
     sections.forEach(function(s){observer.observe(s.el)});
 })();
+
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='fieldnation-2026'){
+        localStorage.setItem('field-nation-n8n-playwright-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.';
+    }
+}
+(function(){if(localStorage.getItem('field-nation-n8n-playwright-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
 </script>
 </body>
 </html>
