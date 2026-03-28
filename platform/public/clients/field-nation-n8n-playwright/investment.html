@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Investment | Field Nation Automation | UnpauseAI</title>
+<script>
+(function(){var t=localStorage.getItem('field-nation-n8n-playwright-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+.access-gate { display: none; }
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+.callout.purple { border-color: var(--purple); background: var(--purple-bg); }
+.callout.purple .callout-title, .callout.purple p { color: var(--purple-dark); }
+table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px; }
+th { background: var(--th-bg); color: #fff; padding: 10px 14px; text-align: left; font-size: 13px; font-weight: 600; }
+td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:hover td { background: var(--surface); }
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); }
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+/* Price display */
+.price-block {
+    background: var(--green-bg); border: 2px solid var(--green-light);
+    border-radius: 16px; padding: 28px 32px; margin: 24px 0;
+    display: flex; align-items: center; gap: 24px;
+}
+.price-amount {
+    font-size: 52px; font-weight: 800; color: var(--green-dark);
+    line-height: 1; flex-shrink: 0;
+}
+.price-label { font-size: 15px; font-weight: 600; color: var(--green-dark); margin-bottom: 4px; }
+.price-sub { font-size: 13px; color: var(--green); line-height: 1.5; }
+/* Included table row highlight */
+.included-table td:first-child { font-weight: 600; color: var(--text-strong); white-space: nowrap; }
+.included-table td:last-child { color: var(--text2); font-size: 13px; }
+/* Comparison table */
+.comparison-table tr.highlight-row td {
+    background: var(--green-bg);
+    font-weight: 600;
+}
+.comparison-table tr.highlight-row td:first-child {
+    color: var(--green-dark);
+}
+.comparison-table .tag {
+    display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; padding: 2px 7px; border-radius: 4px;
+    background: var(--green-light); color: var(--green-dark);
+}
+/* Ongoing items */
+.ongoing-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 20px 0;
+}
+.ongoing-card {
+    border: 1px solid var(--border); border-radius: 10px; padding: 16px;
+    background: var(--surface);
+}
+.ongoing-card-title { font-size: 13px; font-weight: 700; color: var(--text-strong); margin-bottom: 4px; }
+.ongoing-card-desc { font-size: 12px; color: var(--text2); line-height: 1.5; }
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .price-block { flex-direction: column; gap: 12px; padding: 20px; }
+    .price-amount { font-size: 40px; }
+    .ongoing-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="access-gate hidden" id="accessGate"></div>
+
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+        </button>
+        <a href="/clients/field-nation-n8n-playwright/" class="nav-logo">
+            <span class="logo-bold">Unpause</span><span class="logo-accent">AI</span>
+        </a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Field Nation Automation</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/field-nation-n8n-playwright/">Overview</a>
+        <a href="/clients/field-nation-n8n-playwright/solution">Solution</a>
+        <a href="/clients/field-nation-n8n-playwright/workflow">Workflow</a>
+        <a href="/clients/field-nation-n8n-playwright/brief">Brief</a>
+        <a href="/clients/field-nation-n8n-playwright/timeline">Timeline</a>
+        <a href="/clients/field-nation-n8n-playwright/investment" class="active">Investment</a>
+        <a href="/clients/field-nation-n8n-playwright/faq">FAQ</a>
+        <a href="/clients/field-nation-n8n-playwright/onboarding">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="animation:navpulse 2s infinite">&#9679;</span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<aside class="sidebar">
+    <div class="sidebar-label">On this page</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#pricing" class="step-link active">
+                <span class="step-num">1</span>
+                Pricing
+            </a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#whats-included" class="step-link">
+                <span class="step-num">2</span>
+                What's Included
+            </a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#market-comparison" class="step-link">
+                <span class="step-num">3</span>
+                Market Comparison
+            </a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#ongoing-work" class="step-link">
+                <span class="step-num">4</span>
+                Ongoing Work
+            </a>
+        </li>
+    </ul>
+</aside>
+
+<main class="main-content">
+<div class="content-inner">
+
+<h2 id="pricing">Pricing</h2>
+
+<div class="price-block">
+    <div class="price-amount">$150</div>
+    <div>
+        <div class="price-label">Fixed price -- complete system</div>
+        <div class="price-sub">Email pipeline + Claude API parsing + Playwright browser automation + VPS deployment + documentation + 1 week of bug fixes. No hourly surprises.</div>
+    </div>
+</div>
+
+<p>I'm proposing $150 instead of the posted $120 because the deliverable includes production-grade error handling, session persistence for Playwright, and a documented n8n workflow you can maintain yourself. The $30 difference pays for itself the first time the automation recovers from a session timeout instead of failing silently at 2 AM.</p>
+
+<p>At $45/hr for a Field Nation job, that's less than one hour of work that the automation finds and accepts for you while you're doing something else. The system pays for itself in the first week.</p>
+
+<div class="callout green">
+    <div class="callout-title">Fixed price means no surprises</div>
+    <p>You pay $150 for the complete working system, regardless of how many hours it takes. The scope is defined, the deliverables are specific, and there's no meter running while I debug Playwright on your VPS.</p>
+</div>
+
+<h2 id="whats-included">What's Included</h2>
+
+<table class="included-table">
+    <thead>
+        <tr>
+            <th>Deliverable</th>
+            <th>Details</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>n8n workflow</td>
+            <td>IMAP email trigger, Claude API extraction node, decision engine with your business rules, routing logic for accept / request / skip</td>
+        </tr>
+        <tr>
+            <td>Playwright automation</td>
+            <td>Login flow with session cookie persistence, accept and counter-offer actions, screenshot receipts after each browser action</td>
+        </tr>
+        <tr>
+            <td>VPS deployment</td>
+            <td>Installed and running on your server via SSH -- n8n workflow active, Playwright configured, headless Chromium ready</td>
+        </tr>
+        <tr>
+            <td>Business rules config</td>
+            <td>Editable Google Sheet for pay thresholds, distance limits, and work type filters -- no code changes needed for rule updates</td>
+        </tr>
+        <tr>
+            <td>Decision logging</td>
+            <td>Every email received, every parse result, every decision, and every browser action outcome written to Google Sheets</td>
+        </tr>
+        <tr>
+            <td>Error handling</td>
+            <td>Session expiry recovery, race condition handling (job taken before bot clicks), MFA detection with pause-and-notify, site downtime retry</td>
+        </tr>
+        <tr>
+            <td>PM2 process management</td>
+            <td>Auto-restart on crash, persistent across VPS reboots, process status monitoring</td>
+        </tr>
+        <tr>
+            <td>Documentation</td>
+            <td>Written guide for updating rules, restarting the automation, reading logs, and understanding error states</td>
+        </tr>
+        <tr>
+            <td>Bug fixes</td>
+            <td>1 week post-delivery support for anything that breaks during normal operation</td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="market-comparison">Market Comparison</h2>
+
+<p>Here's how the options stack up if you're evaluating what to spend and what you get.</p>
+
+<table class="comparison-table">
+    <thead>
+        <tr>
+            <th>Approach</th>
+            <th>Cost</th>
+            <th>Delivery</th>
+            <th>Maintenance</th>
+            <th>Reliability</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>DIY -- learn n8n + Playwright yourself</td>
+            <td>Free (plus your time)</td>
+            <td>Weeks to months</td>
+            <td>You maintain everything</td>
+            <td>Depends on experience -- browser automation has a steep debugging curve</td>
+        </tr>
+        <tr>
+            <td>Generic freelancer ($95-$120 range)</td>
+            <td>$95-$120</td>
+            <td>3-7 days</td>
+            <td>Varies -- often no docs</td>
+            <td>Usually missing edge cases: session recovery, race conditions, MFA detection</td>
+        </tr>
+        <tr class="highlight-row">
+            <td>This proposal <span class="tag">&#10003; Selected</span></td>
+            <td>$150</td>
+            <td>3 days</td>
+            <td>Documented + configurable rules</td>
+            <td>Production-grade error handling built in from day one</td>
+        </tr>
+        <tr>
+            <td>Agency or specialist firm</td>
+            <td>$500-$2,000+</td>
+            <td>1-3 weeks</td>
+            <td>Usually included</td>
+            <td>High -- but overkill for a single-platform automation at this scope</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="callout orange">
+    <div class="callout-title">What the $30 premium actually buys</div>
+    <p>Most proposals at the $95-$120 range will get you a working prototype -- it'll accept jobs when everything goes right. The difference at $150 is what happens when things go wrong: Field Nation logs you out mid-session, a job gets claimed 3 seconds before the bot clicks Accept, or the email format changes after a platform update. Those are the scenarios that break prototypes at inconvenient times. This proposal handles all of them explicitly.</p>
+</div>
+
+<h2 id="ongoing-work">Ongoing Work</h2>
+
+<p>You mentioned this is a contract-to-hire test. The system is built to extend, not just to run once. Here's what's available as follow-on work if things go well:</p>
+
+<div class="ongoing-grid">
+    <div class="ongoing-card">
+        <div class="ongoing-card-title">New business rules</div>
+        <div class="ongoing-card-desc">Simple threshold changes (pay rate, distance) need no code -- edit the Google Sheet. More complex logic branches (multi-tier pricing, schedule-based rules) are quick follow-on work.</div>
+    </div>
+    <div class="ongoing-card">
+        <div class="ongoing-card-title">Additional job platforms</div>
+        <div class="ongoing-card-desc">Workmarket, Dice, or any other marketplace that sends email notifications. The email trigger and decision engine pattern applies directly -- it's mostly configuration, not new architecture.</div>
+    </div>
+    <div class="ongoing-card">
+        <div class="ongoing-card-title">Reporting dashboard</div>
+        <div class="ongoing-card-desc">Weekly or monthly stats built on top of the Google Sheets log -- jobs accepted vs. missed, average pay rate, revenue impact, peak activity hours.</div>
+    </div>
+    <div class="ongoing-card">
+        <div class="ongoing-card-title">Mobile notifications</div>
+        <div class="ongoing-card-desc">Push alerts when a job hits the manual review queue -- MFA triggered, high-value job that needs your eyes, or parse failure. Telegram, Slack, or SMS depending on your preference.</div>
+    </div>
+</div>
+
+<p>If the test goes well, we can discuss hourly terms for ongoing development and maintenance. Nothing is locked in at delivery -- you'll have the documented system and can take it anywhere you want.</p>
+
+<div class="callout">
+    <div class="callout-title">On the contract-to-hire structure</div>
+    <p>A fixed-price test project is a sensible way to evaluate a developer before committing to ongoing work. The $150 scope is small enough to be low-risk and large enough to see how I actually work -- code quality, communication, whether I handle edge cases or leave them for you to find.</p>
+</div>
+
+<div class="cta-section">
+    <h2>Ready to get started?</h2>
+    <p>Fill out the onboarding form with your details and I can start Day 1 as soon as credentials are in hand.</p>
+    <a href="/clients/field-nation-n8n-playwright/onboarding" class="cta-btn">Start Onboarding &#8594;</a>
+</div>
+
+<div class="footer">
+    <p>Prepared by UnpauseAI for Jamiane's Field Nation automation project.</p>
+</div>
+
+</div>
+</main>
+
+<script>
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('field-nation-n8n-playwright-theme',t);
+}
+(function(){
+    var links=document.querySelectorAll('.step-link');
+    var sections=[];
+    links.forEach(function(l){
+        var id=l.getAttribute('href');
+        if(id&&id.startsWith('#')){
+            var el=document.querySelector(id);
+            if(el)sections.push({el:el,link:l});
+        }
+    });
+    if(!sections.length)return;
+    var observer=new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+            if(e.isIntersecting){
+                links.forEach(function(l){l.classList.remove('active')});
+                sections.forEach(function(s){
+                    if(s.el===e.target)s.link.classList.add('active');
+                });
+            }
+        });
+    },{rootMargin:'-80px 0px -60% 0px'});
+    sections.forEach(function(s){observer.observe(s.el)});
+})();
+</script>
+</body>
+</html>

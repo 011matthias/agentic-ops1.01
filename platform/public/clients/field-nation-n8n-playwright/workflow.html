@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Workflow | Field Nation Automation | UnpauseAI</title>
+<script>
+(function(){var t=localStorage.getItem('field-nation-n8n-playwright-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+.access-gate { display: none; }
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+.callout.purple { border-color: var(--purple); background: var(--purple-bg); }
+.callout.purple .callout-title, .callout.purple p { color: var(--purple-dark); }
+.flow-diagram {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px; margin: 24px 0;
+}
+.flow-step {
+    display: flex; align-items: flex-start; gap: 16px; padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+}
+.flow-step:last-child { border-bottom: none; padding-bottom: 0; }
+.flow-step:first-child { padding-top: 0; }
+.flow-num {
+    width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; background: var(--blue); color: #fff;
+    flex-shrink: 0; margin-top: 2px;
+}
+.flow-num.green { background: var(--green); }
+.flow-num.orange { background: var(--orange); }
+.flow-num.purple { background: var(--purple); }
+.flow-body { flex: 1; }
+.flow-title { font-size: 14px; font-weight: 700; color: var(--text-strong); margin-bottom: 4px; }
+.flow-desc { font-size: 13px; color: var(--text2); line-height: 1.5; }
+table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px; }
+th { background: var(--th-bg); color: #fff; padding: 10px 14px; text-align: left; font-size: 13px; font-weight: 600; }
+td { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+tr:hover { background: var(--surface); }
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); }
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+/* Architecture diagram */
+.arch-diagram {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 28px 24px; margin: 24px 0; overflow-x: auto;
+}
+.arch-pipeline {
+    display: flex; align-items: center; gap: 0; flex-wrap: nowrap;
+    min-width: 600px; margin-bottom: 20px;
+}
+.arch-node {
+    display: flex; flex-direction: column; align-items: center; text-align: center;
+    padding: 12px 10px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--bg); min-width: 90px; flex: 1;
+}
+.arch-node-icon { font-size: 22px; margin-bottom: 6px; }
+.arch-node-label { font-size: 11px; font-weight: 700; color: var(--text-strong); line-height: 1.3; }
+.arch-node-sub { font-size: 10px; color: var(--text2); margin-top: 2px; }
+.arch-arrow {
+    font-size: 18px; color: var(--text2); padding: 0 4px; flex-shrink: 0;
+}
+.arch-node.blue { background: var(--blue-bg); border-color: var(--blue-light); }
+.arch-node.blue .arch-node-label { color: var(--blue-dark); }
+.arch-node.green { background: var(--green-bg); border-color: var(--green-light); }
+.arch-node.green .arch-node-label { color: var(--green-dark); }
+.arch-node.purple { background: var(--purple-bg); border-color: var(--purple-light); }
+.arch-node.purple .arch-node-label { color: var(--purple-dark); }
+.arch-log-bar {
+    border: 1px dashed var(--border); border-radius: 8px; padding: 10px 16px;
+    font-size: 12px; color: var(--text2); text-align: center; margin-top: 8px;
+    background: var(--surface2);
+}
+.arch-log-bar strong { color: var(--text); }
+/* Code block */
+.code-block {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px 20px; font-family: "Courier New", Courier, monospace; font-size: 13px;
+    color: var(--text); line-height: 1.7; overflow-x: auto; margin: 16px 0;
+    white-space: pre;
+}
+.code-key { color: var(--blue); }
+.code-str { color: var(--green); }
+.code-bool { color: var(--purple); }
+/* Download button */
+.download-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--green); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(5,150,105,.3);
+}
+.download-btn:hover { background: var(--green-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(5,150,105,.4); text-decoration: none; }
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .arch-pipeline { min-width: 540px; }
+}
+</style>
+</head>
+<body>
+
+<div class="access-gate hidden" id="accessGate"></div>
+
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+        </button>
+        <a href="/clients/field-nation-n8n-playwright/" class="nav-logo">
+            <span class="logo-bold">Unpause</span><span class="logo-accent">AI</span>
+        </a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Field Nation Automation</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/field-nation-n8n-playwright/">Overview</a>
+        <a href="/clients/field-nation-n8n-playwright/solution">Solution</a>
+        <a href="/clients/field-nation-n8n-playwright/workflow" class="active">Workflow</a>
+        <a href="/clients/field-nation-n8n-playwright/brief">Brief</a>
+        <a href="/clients/field-nation-n8n-playwright/timeline">Timeline</a>
+        <a href="/clients/field-nation-n8n-playwright/investment">Investment</a>
+        <a href="/clients/field-nation-n8n-playwright/faq">FAQ</a>
+        <a href="/clients/field-nation-n8n-playwright/onboarding">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="animation:navpulse 2s infinite">&#9679;</span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<aside class="sidebar">
+    <div class="sidebar-label">On this page</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#system-architecture" class="step-link active">
+                <span class="step-num">1</span>
+                System Architecture
+            </a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#data-flow" class="step-link">
+                <span class="step-num">2</span>
+                Data Flow
+            </a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#error-handling" class="step-link">
+                <span class="step-num">3</span>
+                Error Handling
+            </a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#download-workflow" class="step-link">
+                <span class="step-num">4</span>
+                Download Workflow
+            </a>
+        </li>
+    </ul>
+</aside>
+
+<main class="main-content">
+<div class="content-inner">
+
+<h2 id="system-architecture">System Architecture</h2>
+
+<p>The automation runs as a pipeline across three layers: an email trigger in n8n, an AI parsing layer using the Claude API, and a browser action layer using Playwright. A logging branch captures every decision to Google Sheets so you can audit what happened and why.</p>
+
+<div class="arch-diagram">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin-bottom:14px;">Main pipeline</div>
+    <div class="arch-pipeline">
+        <div class="arch-node blue">
+            <div class="arch-node-icon">&#128231;</div>
+            <div class="arch-node-label">Email Provider</div>
+            <div class="arch-node-sub">IMAP trigger</div>
+        </div>
+        <div class="arch-arrow">&#8594;</div>
+        <div class="arch-node blue">
+            <div class="arch-node-icon">&#9881;</div>
+            <div class="arch-node-label">n8n</div>
+            <div class="arch-node-sub">Trigger + router</div>
+        </div>
+        <div class="arch-arrow">&#8594;</div>
+        <div class="arch-node purple">
+            <div class="arch-node-icon">&#129302;</div>
+            <div class="arch-node-label">Claude API</div>
+            <div class="arch-node-sub">Email parser</div>
+        </div>
+        <div class="arch-arrow">&#8594;</div>
+        <div class="arch-node blue">
+            <div class="arch-node-icon">&#128200;</div>
+            <div class="arch-node-label">n8n</div>
+            <div class="arch-node-sub">Decision engine</div>
+        </div>
+        <div class="arch-arrow">&#8594;</div>
+        <div class="arch-node green">
+            <div class="arch-node-icon">&#127760;</div>
+            <div class="arch-node-label">Playwright</div>
+            <div class="arch-node-sub">Browser action</div>
+        </div>
+        <div class="arch-arrow">&#8594;</div>
+        <div class="arch-node green">
+            <div class="arch-node-icon">&#127959;</div>
+            <div class="arch-node-label">Field Nation</div>
+            <div class="arch-node-sub">Accept / request</div>
+        </div>
+    </div>
+    <div class="arch-log-bar">
+        <strong>Logging layer (all stages)</strong> -- every decision, parse result, and browser action is written to Google Sheets / SQLite on your VPS
+    </div>
+</div>
+
+<h3>What each layer does</h3>
+
+<div class="flow-diagram">
+    <div class="flow-step">
+        <div class="flow-num">1</div>
+        <div class="flow-body">
+            <div class="flow-title">n8n IMAP trigger</div>
+            <div class="flow-desc">Polls your email inbox every 1-2 minutes for new messages from Field Nation. Fires only for unread messages matching the sender pattern, so personal email isn't touched.</div>
+        </div>
+    </div>
+    <div class="flow-step">
+        <div class="flow-num purple">2</div>
+        <div class="flow-body">
+            <div class="flow-title">Claude API -- email parser</div>
+            <div class="flow-desc">Receives the raw email body and extracts structured fields: job title, location, distance, pay rate, work type, scheduled date, and whether a counter-offer is available. Returns clean JSON every time, even when Field Nation changes email formatting.</div>
+        </div>
+    </div>
+    <div class="flow-step">
+        <div class="flow-num">3</div>
+        <div class="flow-body">
+            <div class="flow-title">n8n decision engine</div>
+            <div class="flow-desc">Evaluates the parsed fields against your business rules (minimum pay rate, maximum travel distance, preferred work types). Outputs one of three actions: ACCEPT, REQUEST (counter-offer), or SKIP.</div>
+        </div>
+    </div>
+    <div class="flow-step">
+        <div class="flow-num green">4</div>
+        <div class="flow-body">
+            <div class="flow-title">Playwright -- browser action</div>
+            <div class="flow-desc">Opens a headless Chromium browser, logs into Field Nation using your stored session, navigates to the specific work order, and performs the action n8n decided. Takes a screenshot as a receipt. Handles session expiry and race conditions automatically.</div>
+        </div>
+    </div>
+    <div class="flow-step">
+        <div class="flow-num orange">5</div>
+        <div class="flow-body">
+            <div class="flow-title">Logging layer</div>
+            <div class="flow-desc">Every step writes to Google Sheets: timestamp, job ID, title, pay rate, decision, action taken, and outcome. You get a full audit trail and can spot patterns over time (which types of jobs you're accepting most, average pay, etc.).</div>
+        </div>
+    </div>
+</div>
+
+<h2 id="data-flow">Data Flow</h2>
+
+<p>Here's what happens with a real example. A new email arrives from notifications@fieldnation.com with subject "New Work Order: Network Switch Installation in Miami, FL".</p>
+
+<h3>Step 1 -- Claude API parses the email</h3>
+
+<p>The raw email body is sent to Claude with a structured extraction prompt. It returns clean JSON regardless of how Field Nation formats the message:</p>
+
+<div class="code-block"><span class="code-key">{
+  "title"</span>: <span class="code-str">"Network Switch Installation"</span>,
+  <span class="code-key">"location"</span>: <span class="code-str">"Miami, FL"</span>,
+  <span class="code-key">"distance"</span>: <span class="code-str">"23 miles"</span>,
+  <span class="code-key">"pay_rate"</span>: <span class="code-str">"$45/hr"</span>,
+  <span class="code-key">"work_type"</span>: <span class="code-str">"Installation"</span>,
+  <span class="code-key">"date"</span>: <span class="code-str">"2026-03-30 09:00"</span>,
+  <span class="code-key">"counter_offer_available"</span>: <span class="code-bool">true</span>
+}</div>
+
+<h3>Step 2 -- Decision engine evaluates the job</h3>
+
+<p>n8n runs the parsed data through your business rules. With a minimum pay threshold of $40/hr and a maximum distance of 30 miles, this job clears both filters:</p>
+
+<ul>
+    <li>Pay rate: $45/hr -- above $40 threshold <strong>&#10003; PASS</strong></li>
+    <li>Distance: 23 miles -- within 30 mile limit <strong>&#10003; PASS</strong></li>
+    <li>Work type: Installation -- on accepted list <strong>&#10003; PASS</strong></li>
+    <li>Decision: <strong>ACCEPT</strong></li>
+</ul>
+
+<h3>Step 3 -- Playwright executes the action</h3>
+
+<p>Playwright opens Field Nation in a headless browser, finds the work order using the job ID extracted from the email link, and clicks Accept. The screenshot is saved to your VPS and the result is logged to Google Sheets within about 20 seconds of the email arriving.</p>
+
+<div class="callout green">
+    <div class="callout-title">End-to-end latency</div>
+    <p>From email arrival to browser action completed: roughly 15-25 seconds. n8n polls every 60 seconds, so worst-case latency is around 85 seconds. That's still faster than you'll manually refresh your inbox.</p>
+</div>
+
+<h2 id="error-handling">Error Handling</h2>
+
+<p>Browser automation breaks in predictable ways. Here's what the system does in each scenario so you're not getting surprise failures at 2 AM:</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Scenario</th>
+            <th>Detection</th>
+            <th>Response</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>Session expired</strong></td>
+            <td>Login page detected instead of dashboard</td>
+            <td>Auto re-authenticate using stored credentials, retry the action</td>
+        </tr>
+        <tr>
+            <td><strong>Work order already taken</strong></td>
+            <td>"No longer available" message on page</td>
+            <td>Log as MISSED, move to next queued job</td>
+        </tr>
+        <tr>
+            <td><strong>Email parse failure</strong></td>
+            <td>Claude API returns incomplete or malformed data</td>
+            <td>Fall back to regex extraction; flag for manual review if both fail</td>
+        </tr>
+        <tr>
+            <td><strong>Field Nation site down</strong></td>
+            <td>Page load timeout after 30 seconds</td>
+            <td>Retry once after 60 seconds, then log ERROR and notify you</td>
+        </tr>
+        <tr>
+            <td><strong>VPS resource issue</strong></td>
+            <td>Playwright process crash detected by PM2</td>
+            <td>PM2 auto-restarts the process; alert sent to you</td>
+        </tr>
+        <tr>
+            <td><strong>MFA or CAPTCHA</strong></td>
+            <td>Challenge page detected before dashboard</td>
+            <td>Pause automation, notify you to complete manually, then resume</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="callout orange">
+    <div class="callout-title">On MFA</div>
+    <p>If Field Nation ever prompts for MFA during a session, the automation detects it and pauses rather than getting stuck in a loop. You'll get a notification with a link to log in manually. Once you do, the automation picks up where it left off.</p>
+</div>
+
+<h2 id="download-workflow">Download Workflow</h2>
+
+<p>Here's a starter n8n workflow you can import right now. It includes the email trigger, Claude API parsing, and decision engine nodes. The Playwright automation layer is added after onboarding since it requires your Field Nation credentials.</p>
+
+<p style="margin-bottom:20px;">Import this into your n8n instance to see the email parsing and decision logic before we start. It runs against sample data so you can test it immediately -- no live credentials needed at this stage.</p>
+
+<p>
+    <a href="/clients/field-nation-n8n-playwright/field-nation-starter-workflow.json" class="download-btn">
+        &#8595; Download n8n Workflow (.json)
+    </a>
+</p>
+
+<div class="callout green">
+    <div class="callout-title">What this file contains</div>
+    <p>The workflow JSON includes: IMAP trigger node (configured for Gmail -- swap credentials for your provider), Claude API HTTP node with the extraction prompt, a Switch node for ACCEPT / REQUEST / SKIP routing, and a Google Sheets logging node. Everything except the Playwright layer.</p>
+</div>
+
+<div class="cta-section">
+    <h2>See how this fits your schedule</h2>
+    <p>The Timeline page breaks down what gets built each day and what you'll have at each milestone.</p>
+    <a href="/clients/field-nation-n8n-playwright/timeline" class="cta-btn">View Timeline &#8594;</a>
+</div>
+
+<div class="footer">
+    <p>Prepared by UnpauseAI for Jamiane's Field Nation automation project.</p>
+</div>
+
+</div>
+</main>
+
+<script>
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('field-nation-n8n-playwright-theme',t);
+}
+(function(){
+    var links=document.querySelectorAll('.step-link');
+    var sections=[];
+    links.forEach(function(l){
+        var id=l.getAttribute('href');
+        if(id&&id.startsWith('#')){
+            var el=document.querySelector(id);
+            if(el)sections.push({el:el,link:l});
+        }
+    });
+    if(!sections.length)return;
+    var observer=new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+            if(e.isIntersecting){
+                links.forEach(function(l){l.classList.remove('active')});
+                sections.forEach(function(s){
+                    if(s.el===e.target)s.link.classList.add('active');
+                });
+            }
+        });
+    },{rootMargin:'-80px 0px -60% 0px'});
+    sections.forEach(function(s){observer.observe(s.el)});
+})();
+</script>
+</body>
+</html>

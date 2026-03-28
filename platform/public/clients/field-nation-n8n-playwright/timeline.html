@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Timeline | Field Nation Automation | UnpauseAI</title>
+<script>
+(function(){var t=localStorage.getItem('field-nation-n8n-playwright-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+.access-gate { display: none; }
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+.callout.purple { border-color: var(--purple); background: var(--purple-bg); }
+.callout.purple .callout-title, .callout.purple p { color: var(--purple-dark); }
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); }
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+/* Day cards */
+.day-card {
+    border: 1px solid var(--border); border-radius: 12px;
+    margin-bottom: 20px; overflow: hidden;
+}
+.day-card-header {
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+}
+.day-badge {
+    width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 800; color: #fff; flex-shrink: 0;
+}
+.day-badge-1 { background: var(--blue); }
+.day-badge-2 { background: var(--purple); }
+.day-badge-3 { background: var(--green); }
+.day-card-title { font-size: 16px; font-weight: 700; color: var(--text-strong); }
+.day-card-sub { font-size: 13px; color: var(--text2); margin-top: 1px; }
+.day-card-body { padding: 16px 20px; }
+.day-task-list { list-style: none; padding: 0; margin: 0 0 14px; }
+.day-task-list li {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 6px 0; font-size: 14px; color: var(--text);
+    border-bottom: 1px solid var(--border);
+}
+.day-task-list li:last-child { border-bottom: none; }
+.day-task-check {
+    width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border);
+    flex-shrink: 0; margin-top: 2px;
+}
+.day-deliverable {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--green-bg); border: 1px solid var(--green-light);
+    border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--green-dark); font-weight: 600;
+}
+/* Requirements checklist */
+.req-list { list-style: none; padding: 0; margin: 0; }
+.req-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 14px;
+}
+.req-item:last-child { border-bottom: none; }
+.req-icon {
+    width: 28px; height: 28px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0; margin-top: 1px;
+    background: var(--blue-bg);
+}
+.req-body { flex: 1; }
+.req-label { font-weight: 600; color: var(--text-strong); margin-bottom: 2px; }
+.req-note { font-size: 13px; color: var(--text2); }
+/* After delivery */
+.after-item {
+    display: flex; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--border);
+}
+.after-item:last-child { border-bottom: none; }
+.after-icon { font-size: 20px; flex-shrink: 0; margin-top: 2px; }
+.after-label { font-size: 14px; font-weight: 600; color: var(--text-strong); margin-bottom: 3px; }
+.after-desc { font-size: 13px; color: var(--text2); line-height: 1.5; }
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="access-gate hidden" id="accessGate"></div>
+
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+        </button>
+        <a href="/clients/field-nation-n8n-playwright/" class="nav-logo">
+            <span class="logo-bold">Unpause</span><span class="logo-accent">AI</span>
+        </a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Field Nation Automation</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/field-nation-n8n-playwright/">Overview</a>
+        <a href="/clients/field-nation-n8n-playwright/solution">Solution</a>
+        <a href="/clients/field-nation-n8n-playwright/workflow">Workflow</a>
+        <a href="/clients/field-nation-n8n-playwright/brief">Brief</a>
+        <a href="/clients/field-nation-n8n-playwright/timeline" class="active">Timeline</a>
+        <a href="/clients/field-nation-n8n-playwright/investment">Investment</a>
+        <a href="/clients/field-nation-n8n-playwright/faq">FAQ</a>
+        <a href="/clients/field-nation-n8n-playwright/onboarding">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="animation:navpulse 2s infinite">&#9679;</span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<aside class="sidebar">
+    <div class="sidebar-label">On this page</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#delivery-schedule" class="step-link active">
+                <span class="step-num">1</span>
+                Delivery Schedule
+            </a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#what-you-need-first" class="step-link">
+                <span class="step-num">2</span>
+                What You Need First
+            </a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#after-delivery" class="step-link">
+                <span class="step-num">3</span>
+                After Delivery
+            </a>
+        </li>
+    </ul>
+</aside>
+
+<main class="main-content">
+<div class="content-inner">
+
+<h2 id="delivery-schedule">Delivery Schedule</h2>
+
+<p>The project runs over 3 focused days. Each day ends with a working deliverable you can test -- not just progress reports.</p>
+
+<div class="day-card">
+    <div class="day-card-header">
+        <div class="day-badge day-badge-1">1</div>
+        <div>
+            <div class="day-card-title">Email Pipeline + Decision Engine</div>
+            <div class="day-card-sub">n8n email trigger, Claude API parsing, business rule routing</div>
+        </div>
+    </div>
+    <div class="day-card-body">
+        <ul class="day-task-list">
+            <li>
+                <div class="day-task-check"></div>
+                Set up n8n IMAP trigger scoped to Field Nation sender address
+            </li>
+            <li>
+                <div class="day-task-check"></div>
+                Configure Claude API integration with structured extraction prompt
+            </li>
+            <li>
+                <div class="day-task-check"></div>
+                Build decision engine with your business rules -- minimum pay rate, max distance, work type filters
+            </li>
+            <li>
+                <div class="day-task-check"></div>
+                Test against 2-3 sample emails you provide (real ones give the most accurate result)
+            </li>
+            <li>
+                <div class="day-task-check"></div>
+                Connect Google Sheets logging for every decision
+            </li>
+        </ul>
+        <div class="day-deliverable">
+            &#10003; Working email-to-decision pipeline -- parse any Field Nation email and route it correctly
+        </div>
+    </div>
+</div>
+
+<div class="day-card">
+    <div class="day-card-header">
+        <div class="day-badge day-badge-2">2</div>
+        <div>
+            <div class="day-card-title">Playwright Browser Automation</div>
+            <div class="day-card-sub">Login flow, accept/request actions, edge case handling</div>
+        </div>
+    </div>
+    <div class="day-card-body">
+        <ul class="day-task-list">
+            <li>
+                <div class="day-task-check"></div>
+                Build Field Nation login flow with session cookie persistence (avoids re-login on every run)
+            </li>
+            <li>
+                <div class="day-task-check"></div>
+                Implement accept, counter-offer request, and skip actions
+            </li>
+            <li>
+                <div class="day-task-check"></div>
+                Handle edge cases: expired sessions, already-taken jobs, MFA challenge detection
+            </li>
+            <li>
+                <div class="day-task-check"></div>
+                Save a screenshot after each browser action as an audit receipt
+            </li>
+            <li>
+                <div class="day-task-check"></div>
+                Connect Playwright output back to Google Sheets log (action taken, outcome, screenshot path)
+            </li>
+        </ul>
+        <div class="day-deliverable">
+            &#10003; End-to-end automation -- email in, browser action out, full audit trail
+        </div>
+    </div>
+</div>
+
+<div class="day-card">
+    <div class="day-card-header">
+        <div class="day-badge day-badge-3">3</div>
+        <div>
+            <div class="day-card-title">VPS Deployment + Live Testing</div>
+            <div class="day-card-sub">Production install, PM2 process management, handover</div>
+        </div>
+    </div>
+    <div class="day-card-body">
+        <ul class="day-task-list">
+            <li>
+                <div class="day-task-check"></div>
+                Deploy n8n workflow to your VPS via SSH
+            </li>
+            <li>
+                <div class="day-task-check"></div>
+                Install Playwright and headless Chromium in the server environment
+            </li>
+            <li>
+                <div class="day-task-check"></div>
+                Set up PM2 to keep everything running and auto-restart on crash
+            </li>
+            <li>
+                <div class="day-task-check"></div>
+                Run a live test with real Field Nation work orders to confirm end-to-end behavior
+            </li>
+            <li>
+                <div class="day-task-check"></div>
+                Write the system documentation -- how to update business rules, restart the automation, and read logs
+            </li>
+        </ul>
+        <div class="day-deliverable">
+            &#10003; Production-ready system running on your VPS with documentation and handover
+        </div>
+    </div>
+</div>
+
+<h2 id="what-you-need-first">What You Need First</h2>
+
+<p>I can start on Day 1 as soon as these are in hand. Most of it takes under 10 minutes to put together on your side.</p>
+
+<ul class="req-list">
+    <li class="req-item">
+        <div class="req-icon">&#128274;</div>
+        <div class="req-body">
+            <div class="req-label">Field Nation login credentials</div>
+            <div class="req-note">Username and password for your Field Nation technician account. These stay on your VPS -- they're not stored anywhere else.</div>
+        </div>
+    </li>
+    <li class="req-item">
+        <div class="req-icon">&#128421;</div>
+        <div class="req-body">
+            <div class="req-label">VPS access</div>
+            <div class="req-note">SSH credentials or remote desktop access. Ubuntu/Debian preferred -- most VPS providers default to this.</div>
+        </div>
+    </li>
+    <li class="req-item">
+        <div class="req-icon">&#128231;</div>
+        <div class="req-body">
+            <div class="req-label">2-3 sample work order emails</div>
+            <div class="req-note">Forward a few real Field Nation notification emails. These let me calibrate the Claude API extraction prompt to your actual email format before Day 1 testing.</div>
+        </div>
+    </li>
+    <li class="req-item">
+        <div class="req-icon">&#128200;</div>
+        <div class="req-body">
+            <div class="req-label">Your business rules</div>
+            <div class="req-note">Minimum pay rate you'll accept, maximum travel distance, any work types to always skip or always accept. A quick message or voice note is fine -- I'll translate it into decision engine logic.</div>
+        </div>
+    </li>
+    <li class="req-item">
+        <div class="req-icon">&#128140;</div>
+        <div class="req-body">
+            <div class="req-label">Email provider details</div>
+            <div class="req-note">Which email service receives your Field Nation notifications (Gmail, Outlook, etc.) and whether you have IMAP access enabled. Gmail users may need to create an app password.</div>
+        </div>
+    </li>
+    <li class="req-item">
+        <div class="req-icon">&#129302;</div>
+        <div class="req-body">
+            <div class="req-label">Claude API key (optional)</div>
+            <div class="req-note">If you have one, great. If not, I'll use mine during development and hand over the configuration so you can swap in your own key at delivery.</div>
+        </div>
+    </li>
+</ul>
+
+<div class="callout green">
+    <div class="callout-title">Fastest path to Day 1</div>
+    <p>Fill out the onboarding form and I can start the same day. The sample emails are the most useful thing -- they let me test the parsing logic against your real data before writing a line of browser automation code.</p>
+</div>
+
+<h2 id="after-delivery">After Delivery</h2>
+
+<p>Day 3 isn't the end -- it's when the system starts earning its keep. Here's what comes with the handover and what's available after.</p>
+
+<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px 24px;margin:24px 0;">
+    <div class="after-item">
+        <div class="after-icon">&#128216;</div>
+        <div>
+            <div class="after-label">System documentation</div>
+            <div class="after-desc">A written guide covering how to update business rules in the Google Sheet, how to restart the automation if it stops, how to read the decision log, and what each error state means.</div>
+        </div>
+    </div>
+    <div class="after-item">
+        <div class="after-icon">&#128736;</div>
+        <div>
+            <div class="after-label">1 week of bug fixes</div>
+            <div class="after-desc">If something breaks during normal operation in the 7 days after delivery, I'll fix it at no extra charge. This covers Field Nation UI changes, unexpected email formats, and anything that slips through testing.</div>
+        </div>
+    </div>
+    <div class="after-item">
+        <div class="after-icon">&#128200;</div>
+        <div>
+            <div class="after-label">Business rule updates</div>
+            <div class="after-desc">The decision engine is built so you can change pay thresholds, distance limits, and work type filters by editing a Google Sheet -- no code changes needed. Bigger rule changes (new logic branches) are available as follow-on work.</div>
+        </div>
+    </div>
+    <div class="after-item">
+        <div class="after-icon">&#127758;</div>
+        <div>
+            <div class="after-label">Additional marketplace support</div>
+            <div class="after-desc">The same pattern applies to other job platforms -- Workmarket, Dice, etc. If you work across multiple marketplaces, the architecture is already designed to add new sources without rewriting the core.</div>
+        </div>
+    </div>
+    <div class="after-item">
+        <div class="after-icon">&#128202;</div>
+        <div>
+            <div class="after-label">Reporting dashboard</div>
+            <div class="after-desc">Weekly or monthly stats on jobs accepted, missed, revenue impact, average pay rate -- built on top of the existing Google Sheets log. Available as an optional add-on after delivery.</div>
+        </div>
+    </div>
+    <div class="after-item">
+        <div class="after-icon">&#128241;</div>
+        <div>
+            <div class="after-label">Mobile notifications</div>
+            <div class="after-desc">Push alerts when a job hits the manual review queue (MFA triggered, parse failure, unusually high-value job). Available via Telegram, Slack, or SMS depending on your preference.</div>
+        </div>
+    </div>
+</div>
+
+<div class="callout">
+    <div class="callout-title">On the contract-to-hire question</div>
+    <p>The system I'm delivering is built to extend, not just to work once. If the test goes well and you want ongoing development -- new rules, new sources, reporting -- we can discuss hourly terms. Nothing is locked in at delivery.</p>
+</div>
+
+<div class="cta-section">
+    <h2>Ready to talk pricing?</h2>
+    <p>The Investment page covers what's included, how $150 compares to the alternatives, and what ongoing work looks like.</p>
+    <a href="/clients/field-nation-n8n-playwright/investment" class="cta-btn">View Investment &#8594;</a>
+</div>
+
+<div class="footer">
+    <p>Prepared by UnpauseAI for Jamiane's Field Nation automation project.</p>
+</div>
+
+</div>
+</main>
+
+<script>
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('field-nation-n8n-playwright-theme',t);
+}
+(function(){
+    var links=document.querySelectorAll('.step-link');
+    var sections=[];
+    links.forEach(function(l){
+        var id=l.getAttribute('href');
+        if(id&&id.startsWith('#')){
+            var el=document.querySelector(id);
+            if(el)sections.push({el:el,link:l});
+        }
+    });
+    if(!sections.length)return;
+    var observer=new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+            if(e.isIntersecting){
+                links.forEach(function(l){l.classList.remove('active')});
+                sections.forEach(function(s){
+                    if(s.el===e.target)s.link.classList.add('active');
+                });
+            }
+        });
+    },{rootMargin:'-80px 0px -60% 0px'});
+    sections.forEach(function(s){observer.observe(s.el)});
+})();
+</script>
+</body>
+</html>
