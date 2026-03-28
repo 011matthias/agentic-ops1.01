@@ -1,107 +1,60 @@
-### BEAT 1: The Integration Layer
+### BEAT 1: The Insight
 
->> Their Upwork job posting on screen
+>> Job posting on screen briefly, then face/screen share
 
-SAY: Hi there, Nico here. I saw your posting for a GHL and Retell AI technical implementer.
+SAY: Elephant. Hi there, Nico here.
 
-SAY: I want to be upfront: I haven't worked with GoHighLevel or Retell AI directly. But here's what caught my attention about your stack.
+SAY: I read through your posting carefully, and what stood out to me is the scaling problem hiding inside your stack. You've got seven systems that all work individually. GoHighLevel handles the CRM. Retell AI handles the voice calls. n8n ties everything together. The individual tools aren't the hard part.
 
-SAY: The bottleneck in scaling client setups isn't configuring individual tools. It's the integration layer between them. When a GHL pipeline stage changes, that fires a webhook to n8n. n8n calls the Retell API with dynamic variables. Retell sends back three webhook events per call. n8n filters for call_analyzed, updates the GHL contact, and triggers the SMS follow-up via Twilio.
+SAY: The hard part is what happens between them. When a GHL pipeline stage changes, that fires a webhook to n8n. n8n calls the Retell API with dynamic variables pulled from the contact record. Retell runs the call and sends back three webhook events. n8n has to filter for the right one, update the GHL contact, and trigger the SMS follow-up via Twilio. That entire chain has to work correctly for every client, and when something breaks, you need to trace it across three different systems.
 
-SAY: That orchestration layer is n8n. And that's where I'm strongest.
+SAY: That orchestration layer is n8n. And n8n is what I build every day.
 
----
-
-### Authority
-
->> Show Upwork profile
-
-SAY: Quick context. I'm based in Germany, CET timezone, which fits your European preference. English and German are both native.
-SAY: I build and maintain production n8n workflows across multiple client accounts with Supabase, Airtable, and webhook integrations. I also manage 50+ Make.com scenarios with structured error handling and monitoring.
+SAY: Now, I want to be honest. I haven't configured GHL or Retell AI directly. But the integration patterns, the webhooks, the API calls, the event filtering, the data mapping, those are the same patterns I work with in production n8n workflows across multiple client accounts. The gap is the UI, not the architecture. And your SOP-driven onboarding model is exactly how I learn new platforms.
 
 ---
 
-### BEAT 2: Site Walkthrough
+### BEAT 2: The Proposal
 
->> Nav: Overview
+>> Show proposal site briefly (overview page), then back to talking
 
-SAY: I put together a proposal site to walk through how I'd fit into your stack. Let me run through the key parts.
+SAY: Let me walk you through how I'd actually handle this.
 
->> Sidebar: Your Stack, As I Understand It
+SAY: The biggest time sink in your operation right now is client onboarding. Cloning a GHL snapshot takes minutes. But the reconfiguration after the clone takes 3 to 4 hours, because webhook URLs, integration credentials, and custom field mappings don't carry over. Every new client needs those set up from scratch. That's where errors happen, and that's where the real cost is.
 
-SAY: On the overview page, I've mapped your seven systems into four zones. GoHighLevel handles CRM and pipelines. Retell AI and ElevenLabs handle the voice agents. n8n is the automation backbone connecting everything. And Supabase, Airtable, and Twilio fill in the data and messaging layers.
+SAY: My approach is to build structured n8n workflow templates with parameterized webhook paths and credential bindings. Instead of remembering a sequence of manual steps for each client, you fill in a checklist of values and the template handles the wiring. Each setup gets faster as the templates improve.
 
----
+SAY: For ongoing maintenance, your posting mentions 2 to 3 change requests per client per week. That's mostly prompt refinements when a Retell agent mishandles an edge case, workflow updates when a client changes their pipeline, and debugging when a webhook stops firing or an OAuth token expires. I handle these async with a written update per change: what was modified, why, and what to watch for. You get a changelog, not a status meeting.
 
-### (Solution page)
+SAY: The key thing is that n8n gives you execution-level visibility into every step. When something breaks, the execution log shows exactly which node failed and what data it received. I can diagnose issues from the log without asking you to reproduce anything or check anything on your end.
 
->> Nav: Solution
+>> Show solution page briefly (webhook architecture table visible)
 
-SAY: The solution page walks through the full architecture: the data flow from GHL to Retell and back, a webhook reference table, client onboarding, and what ongoing maintenance looks like week to week.
-
->> Sidebar: The Data Flow
-
-SAY: The data flow section traces the full loop. GHL pipeline event fires a webhook to n8n. n8n validates and routes by stage. For qualified leads, it calls the Retell API with client-specific dynamic variables like the client name, available services, and appointment slots.
-
-SAY: After the call, Retell sends three webhook events back to n8n. The key one is call_analyzed, which has the transcript and outcome. An IF node filters for that event, then n8n updates the GHL contact record and triggers follow-up actions.
-
->> Sidebar: Client Onboarding Flow
-
-SAY: The onboarding section covers the snapshot-to-live process. Cloning the master GHL snapshot is the easy part. The manual work is what comes after: webhook URLs don't carry over, integrations need re-auth, and credential mappings need updating. That's 3-4 hours per client right now.
-
-SAY: I've mapped out each reconfiguration step and where n8n templates can reduce that time.
-
->> Sidebar: n8n Workflow Template
-
-SAY: There's also a downloadable n8n workflow you can import right now. It includes the GHL webhook trigger, the pipeline stage filter, the Retell API call with dynamic variables, the callback webhook receiver, the call_analyzed filter, and the GHL contact update. Sticky notes explain each zone.
+SAY: I've put together a proposal site with the full architecture breakdown. There's a webhook reference table showing all five webhooks in the system, a table showing what carries over from a GHL snapshot clone and what doesn't, and a downloadable n8n workflow template you can import right now to see the pipeline structure. The link and access code are in my cover letter.
 
 ---
 
-### (Timeline and Investment)
+### BEAT 3: Investment and Close
 
->> Nav: Timeline
+SAY: On pricing. I've scoped the setup at $450 per client environment. That covers the full sequence: snapshot clone, post-snapshot reconfiguration, Retell agent setup, n8n workflow creation, end-to-end testing, and documentation. Slightly above your posted rate because the scope includes structured documentation and template work that reduces cost on every subsequent setup.
 
-SAY: The timeline has three phases.
+SAY: For ongoing maintenance, a retainer of $350 to $500 per month per active client, depending on how many clients you're running. That covers the 2 to 3 change requests per week, proactive monitoring, and debugging. The retainer scales with your active client count. If a client churns, that cost drops. Your automation cost tracks your revenue.
 
->> Sidebar: Phase 1: Test Setup
+SAY: Here's what I'd suggest as a starting point. One test setup in Week 1. I get your SOPs, your Loom walkthroughs, and access to GHL, n8n, and Retell. I set up one client environment end-to-end. You evaluate the output. If it meets your bar, we move to live clients. If it doesn't, you have a fully documented environment as a usable artifact, not a sunk cost.
 
-SAY: Phase 1 is a test setup in Week 1. I get your SOPs, your Loom walkthroughs, and access to your tools. I set up one client environment end-to-end so you can evaluate my work before committing to anything ongoing.
-
->> Nav: Investment
-
-SAY: On pricing, I'm matching the posted $415 per client setup. The monthly retainer covers ongoing maintenance, 2-3 change requests per week per client, monitoring, and debugging. Post-go-live support is included, not time-limited.
-
->> Sidebar: Comparison
-
-SAY: There's a comparison table showing the per-setup plus retainer model against hiring full-time or billing hourly. The short version: you only pay for active clients, and if a client churns, the retainer adjusts.
+SAY: I'm based in Germany, CET timezone, which fits your European preference. Async by default, structured updates, no surprises. Happy to start with that test setup so you can see the work before committing to anything ongoing. Thanks for watching.
 
 ---
 
-### BEAT 3: Close
+### LOOM NOTES
 
->> Nav: Onboarding
-
-SAY: The onboarding page collects everything I'd need for the test setup. Platform access, SOPs, your master snapshot details, and the first client to set up.
-
-SAY: Your posting says you want someone reliable, self-sufficient, and who executes cleanly and flags blockers early. That's how I work. Async by default, structured updates, no surprises.
-
-SAY: Happy to start with the test setup so you can see the output before committing. Thanks for watching.
-
----
-
-### LOOM NOTES VERSION
-
-- Open job posting. "The bottleneck isn't individual tools. It's the integration layer between GHL, Retell, and n8n."
-- Upfront: no direct GHL/Retell experience, but the orchestration layer (n8n) is my primary platform.
-- Profile: Germany/CET, native English/German. Production n8n, 50+ Make.com scenarios.
-- Overview page: 4 zones mapping their 7 systems. GHL (CRM/pipelines), Retell+ElevenLabs (voice), n8n (backbone), Supabase+Airtable+Twilio (data/messaging).
-- Solution page, 5 sections:
-  - Data flow: GHL webhook to n8n, Retell API call with dynamic vars, 3 callback events, IF filter for call_analyzed, GHL update.
-  - Webhook architecture: table of all 5 webhooks (source, destination, payload, constraints). Retell 10s timeout / 3 retries.
-  - Client onboarding: snapshot clone is fast, post-snapshot reconfiguration is the pain (webhook URLs, credentials, integrations). 3-4 hrs/client. Carries-over table.
-  - Ongoing maintenance: 4 sub-sections (prompt refinements, workflow updates, GHL adjustments, debugging). Typical week callout.
-  - Downloadable n8n workflow template: full pipeline with sticky notes.
-- Timeline: Phase 1 (Week 1 test setup), Phase 2 (first live clients), Phase 3 (ongoing ops).
-- Investment: $415/setup, monthly retainer per active client. Comparison table. Post-go-live support included.
-- Onboarding: collects platform access, SOPs, snapshot details, first client info.
-- Close: "Execute cleanly, flag blockers early." Test setup before committing.
+- Open with "Elephant" (keyword from posting)
+- Lead with integration layer insight, not the experience gap
+- The bottleneck: GHL webhook -> n8n -> Retell API -> callback -> n8n -> GHL update + Twilio SMS. Seven systems, one orchestration layer.
+- Honest about GHL/Retell gap: UI familiarity, not architecture. SOPs close that.
+- Setup problem: snapshot clone is fast, reconfiguration is 3-4 hrs (webhooks, credentials, field mappings don't carry over)
+- Solution: parameterized n8n templates, structured error handling, execution-level logging
+- Maintenance: 2-3 requests/week per client. Async, written updates per change, changelog not meetings.
+- Reference the site: webhook table, carries-over table, downloadable n8n template. Don't walk through it.
+- Pricing: $450/setup (above posted $415, justified by documentation + template work). $350-500/mo retainer per active client.
+- Close: Week 1 test setup, evaluate before committing. Germany/CET, async.
