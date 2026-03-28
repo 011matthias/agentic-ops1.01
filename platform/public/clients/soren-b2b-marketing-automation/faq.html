@@ -28,17 +28,6 @@
     --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
     --th-bg: #1e3a5f;
 }
-@media print {
-    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section, .access-gate { display: none !important; }
-    .main-content { margin-left: 0 !important; }
-    body { padding-top: 0 !important; }
-}
-* { box-sizing: border-box; margin: 0; }
-body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
-    transition: background .2s, color .2s;
-}
 .access-gate {
     position: fixed; inset: 0; z-index: 9999;
     background: var(--bg); display: flex; align-items: center; justify-content: center;
@@ -60,6 +49,17 @@ body {
 }
 .access-gate button:hover { background: var(--blue-dark); }
 .access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
 .site-nav {
     position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
     background: var(--nav-bg); border-bottom: 1px solid var(--border);
@@ -126,17 +126,41 @@ body {
 .step-item:last-child .step-line { display: none; }
 .main-content { margin-left: 220px; padding: 56px 0 0 0; }
 .content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+.page-intro {
+    padding: 40px 0 32px; border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.page-intro h1 { font-size: 28px; font-weight: 800; color: var(--text-strong); margin-bottom: 10px; }
+.page-intro p { font-size: 16px; color: var(--text2); max-width: 560px; margin: 0; line-height: 1.6; }
 h2 {
     font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
     padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
 }
-h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
 p { margin-bottom: 16px; color: var(--text); }
 a { color: var(--blue); text-decoration: none; }
 a:hover { text-decoration: underline; }
 strong { color: var(--text-strong); }
 ul, ol { padding-left: 24px; margin-bottom: 16px; }
 li { margin-bottom: 6px; }
+.faq-item {
+    border: 1px solid var(--border); border-radius: 8px; margin: 12px 0;
+    overflow: hidden; transition: box-shadow .15s;
+}
+.faq-item:hover { box-shadow: var(--card-shadow); }
+.faq-q {
+    padding: 14px 20px; cursor: pointer; display: flex; justify-content: space-between;
+    align-items: center; background: var(--surface); font-weight: 600; font-size: 14px;
+    color: var(--text-strong); user-select: none;
+}
+.faq-q:hover { background: var(--surface2); }
+.faq-arrow { font-size: 16px; color: var(--text2); transition: transform .2s; flex-shrink: 0; margin-left: 12px; }
+.faq-item.open .faq-arrow { transform: rotate(180deg); }
+.faq-a {
+    display: none; padding: 0 20px 16px; font-size: 14px; line-height: 1.65; color: var(--text);
+}
+.faq-item.open .faq-a { display: block; }
+.faq-a p { margin-bottom: 10px; font-size: 14px; }
+.faq-a p:last-child { margin-bottom: 0; }
+.faq-a ul { font-size: 14px; }
 .callout {
     border-left: 4px solid var(--blue); background: var(--blue-bg);
     padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
@@ -145,14 +169,6 @@ li { margin-bottom: 6px; }
 .callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
 .callout.green { border-color: var(--green); background: var(--green-bg); }
 .callout.green .callout-title, .callout.green p { color: var(--green-dark); }
-.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
-.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
-.callout.purple { border-color: var(--purple); background: var(--purple-bg); }
-.callout.purple .callout-title, .callout.purple p { color: var(--purple-dark); }
-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px; }
-th { background: var(--th-bg); color: #fff; padding: 10px 14px; text-align: left; font-size: 13px; font-weight: 600; }
-td { padding: 10px 14px; border-bottom: 1px solid var(--border); }
-tr:hover { background: var(--surface); }
 .cta-section {
     text-align: center; padding: 40px 0; margin-top: 48px;
     border-top: 1px solid var(--border);
@@ -167,7 +183,7 @@ tr:hover { background: var(--surface); }
     box-shadow: 0 2px 8px rgba(37,99,235,.3);
 }
 .cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
-.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); }
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); margin-top: 24px; }
 @media (max-width: 1100px) {
     .nav-links a { font-size: 12px; padding: 5px 8px; }
     .nav-status { display: none; }
@@ -178,38 +194,6 @@ tr:hover { background: var(--surface); }
     .main-content { margin-left: 0 !important; }
     .mobile-nav-toggle { display: block; }
     .nav-links { display: none; }
-}
-
-/* FAQ accordion */
-details {
-    border: 1px solid var(--border); border-radius: 8px;
-    margin-bottom: 12px; overflow: hidden;
-}
-details summary {
-    padding: 14px 18px; font-weight: 600; font-size: 14px;
-    cursor: pointer; background: var(--surface); color: var(--text-strong);
-    list-style: none; display: flex; justify-content: space-between; align-items: center;
-}
-details summary::-webkit-details-marker { display: none; }
-details summary::after { content: '+'; font-size: 18px; color: var(--text2); transition: transform .2s; }
-details[open] summary::after { content: '-'; }
-details[open] summary { border-bottom: 1px solid var(--border); }
-.faq-answer { padding: 14px 18px; font-size: 14px; color: var(--text); }
-.faq-answer p { margin-bottom: 10px; }
-.faq-answer p:last-child { margin-bottom: 0; }
-
-.page-intro {
-    padding: 32px 0 8px;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 8px;
-}
-.page-intro h1 {
-    font-size: 28px; font-weight: 800; color: var(--text-strong);
-    margin-bottom: 8px; line-height: 1.2;
-}
-.page-intro p {
-    font-size: 15px; color: var(--text2); max-width: 580px;
-    margin-bottom: 0;
 }
 </style>
 </head>
@@ -225,7 +209,7 @@ details[open] summary { border-bottom: 1px solid var(--border); }
 
 <nav class="site-nav">
     <div class="nav-left">
-        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
             <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
         </button>
         <a href="/clients/soren-b2b-marketing-automation/" class="nav-logo">
@@ -244,40 +228,32 @@ details[open] summary { border-bottom: 1px solid var(--border); }
         <a href="/clients/soren-b2b-marketing-automation/onboarding">Onboarding</a>
     </div>
     <div class="nav-right">
-        <span class="nav-status"><span style="animation:navpulse 2s infinite"></span> Proposal</span>
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;animation:navpulse 2s infinite"></span> Proposal</span>
         <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
     </div>
 </nav>
 
 <aside class="sidebar">
-    <div class="sidebar-label">Questions</div>
+    <div class="sidebar-label">On this page</div>
     <ul class="step-list">
         <li class="step-item">
-            <a href="#automation-approach" class="step-link">
-                <span class="step-num">1</span>
-                Automation Approach
-            </a>
+            <a href="#scope" class="step-link active"><span class="step-num">1</span> Scope</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#tool-coverage" class="step-link">
-                <span class="step-num">2</span>
-                Tool Coverage
-            </a>
+            <a href="#gaps" class="step-link"><span class="step-num">2</span> Gap Handling</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#working-together" class="step-link">
-                <span class="step-num">3</span>
-                Working Together
-            </a>
+            <a href="#working-together" class="step-link"><span class="step-num">3</span> Working Together</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#pricing-faq" class="step-link">
-                <span class="step-num">4</span>
-                Pricing
-            </a>
+            <a href="#technical" class="step-link"><span class="step-num">4</span> Technical</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#pricing-faq" class="step-link"><span class="step-num">5</span> Pricing</a>
         </li>
     </ul>
 </aside>
@@ -285,97 +261,236 @@ details[open] summary { border-bottom: 1px solid var(--border); }
 <div class="main-content">
 <div class="content-inner">
 
-    <div class="page-intro">
-        <h1>Frequently Asked Questions</h1>
-        <p>Common questions about the automation approach, tool coverage, and how the engagement works.</p>
+<div class="page-intro">
+    <h1>Frequently Asked Questions</h1>
+    <p>Honest answers about scope, gaps, logistics, and pricing. If your question isn't here, the <a href="/clients/soren-b2b-marketing-automation/onboarding">onboarding form</a> has a free-text field for anything else.</p>
+</div>
+
+<h2 id="scope">Scope and Approach</h2>
+
+<div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+        How is this different from hiring a marketing generalist?
+        <span class="faq-arrow">&#9660;</span>
     </div>
-
-    <h2 id="automation-approach">Automation Approach</h2>
-
-    <details>
-        <summary>How is this different from hiring a marketing generalist?</summary>
-        <div class="faq-answer">
-            <p>A marketing generalist handles strategy, content creation, ad management, and campaign execution. I focus specifically on the automation infrastructure: the Make.com scenarios and n8n workflows that connect your tools and run your processes without manual intervention.</p>
-            <p>Think of it as hiring someone to build the engine, not someone to drive the car. Both are important, but they're different skills.</p>
-        </div>
-    </details>
-
-    <details>
-        <summary>Can you handle the marketing strategy side too?</summary>
-        <div class="faq-answer">
-            <p>My strength is building the automation, not designing the marketing strategy. If you already have a strategy (which channels to use, what messaging works, how to position your product), I can build the infrastructure to execute it at scale.</p>
-            <p>If you need help with strategy, I'd recommend pairing this engagement with a marketing strategist who handles the "what to do" while I handle the "how to do it automatically."</p>
-        </div>
-    </details>
-
-    <h2 id="tool-coverage">Tool Coverage</h2>
-
-    <details>
-        <summary>What about Comet Browser? You mentioned it specifically.</summary>
-        <div class="faq-answer">
-            <p>I haven't used Comet Browser directly. If it has an API or webhook capabilities, I can integrate it into the same pipeline as your other tools. If it's purely a browser-based tool without API access, we can explore workarounds like browser automation (Playwright) or manual data export into Make.com.</p>
-            <p>I'd want to look at how you're using it before committing to a specific approach.</p>
-        </div>
-    </details>
-
-    <details>
-        <summary>Can you manage LinkedIn Ads and Google Ads?</summary>
-        <div class="faq-answer">
-            <p>I can build the automation around your ad campaigns: pulling performance data into dashboards, triggering alerts when metrics hit thresholds, syncing lead data from ad forms into your CRM, and adjusting budgets via API.</p>
-            <p>The creative and strategic side of ad management (writing copy, choosing audiences, A/B testing creatives) is outside my core focus. I'd handle the infrastructure, and you or a specialist would handle the strategy.</p>
-        </div>
-    </details>
-
-    <details>
-        <summary>What about SEO tools like Ahrefs and SEMrush?</summary>
-        <div class="faq-answer">
-            <p>I can integrate the data these tools produce into your automation pipeline. For example: pulling keyword ranking data into a Make.com scenario that alerts you when rankings drop, or importing backlink data into a lead scoring model.</p>
-            <p>I wouldn't be managing your SEO strategy, but I can make sure the data from your SEO tools feeds into your broader marketing automation.</p>
-        </div>
-    </details>
-
-    <h2 id="working-together">Working Together</h2>
-
-    <details>
-        <summary>How do you handle the time zone difference?</summary>
-        <div class="faq-answer">
-            <p>I'm based in Germany (CET), which is 1 hour behind Tallinn (EET). That's essentially the same working day. I'm available for real-time communication during European business hours.</p>
-        </div>
-    </details>
-
-    <details>
-        <summary>Is this suitable for long-term collaboration?</summary>
-        <div class="faq-answer">
-            <p>Yes. The retainer model is specifically designed for ongoing work. After the initial pipeline is built, there's always optimization, new integrations, and new automation to build as your marketing stack evolves. I've maintained client automation infrastructure for months at a time.</p>
-        </div>
-    </details>
-
-    <h2 id="pricing-faq">Pricing</h2>
-
-    <details>
-        <summary>Why is your rate higher than the posted range?</summary>
-        <div class="faq-answer">
-            <p>The $10-15/hr range works well for general marketing tasks that require manual execution. What I build is automation infrastructure that replaces those manual hours. A Make.com pipeline that captures and scores leads automatically saves 15-20 hours per week of manual work. The math works out in your favor within the first month.</p>
-            <p>The monthly retainer ($1,500-2,000/mo) is the better comparison point than the hourly rate.</p>
-        </div>
-    </details>
-
-    <details>
-        <summary>Can I start with a smaller scope to test?</summary>
-        <div class="faq-answer">
-            <p>Absolutely. We can start with a single pipeline (e.g., Apollo lead capture into CRM) as a paid test project. If it works well, we expand from there. No commitment beyond the initial scope.</p>
-        </div>
-    </details>
-
-    <div class="cta-section">
-        <h2>Ready to get started?</h2>
-        <p>Fill out the onboarding form and we can kick things off.</p>
-        <a href="/clients/soren-b2b-marketing-automation/onboarding" class="cta-btn">Go to Onboarding</a>
+    <div class="faq-a">
+        <p>A marketing generalist manages campaigns, writes copy, runs ads, and does pipeline work manually. I build the infrastructure that automates the pipeline work so the generalist (or your team) can focus on strategy and creative.</p>
+        <p>The output is different too. A generalist gives you hours of labor. I give you automation that runs 24/7 after it's built. When the engagement ends, the automation keeps running. A generalist's output stops when they stop working.</p>
     </div>
+</div>
 
-    <div class="footer">
-        Prepared by UnpauseAI for Soren's B2B marketing automation project.
+<div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+        Can you handle the marketing strategy side too?
+        <span class="faq-arrow">&#9660;</span>
     </div>
+    <div class="faq-a">
+        <p>No, and I think that's actually better for you. Marketing strategy needs someone who understands your market, your positioning, and your competitive landscape. That's domain expertise I don't have for your specific industry.</p>
+        <p>What I can do is make your strategist's decisions execute faster. They decide which audience to target, what messaging to use, and which channels to prioritize. I build the automation that runs those decisions at scale without manual intervention.</p>
+    </div>
+</div>
+
+<div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+        What if we already have some automation running?
+        <span class="faq-arrow">&#9660;</span>
+    </div>
+    <div class="faq-a">
+        <p>Phase 1 starts with a stack audit specifically to map what's already automated. If you have Make.com scenarios or n8n workflows running, I'll review them, document what they do, and build the new pipeline to work alongside them rather than replacing something that's already working.</p>
+        <p>If existing automation is doing part of the job but has gaps (e.g., capture works but there's no scoring), I'll extend rather than rebuild.</p>
+    </div>
+</div>
+
+<div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+        Do we own everything you build?
+        <span class="faq-arrow">&#9660;</span>
+    </div>
+    <div class="faq-a">
+        <p>Yes. Make.com scenarios live in your account. n8n workflows run on your infrastructure. Google Sheets are in your Drive. Documentation is in files you control. Everything exports as JSON if you want backups or want to move to a different platform later.</p>
+        <p>There's no proprietary tooling, no vendor lock-in, and no "you can only use this if you keep paying me." The automation works with or without me.</p>
+    </div>
+</div>
+
+<h2 id="gaps">Gap Handling</h2>
+
+<div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+        What about Comet Browser?
+        <span class="faq-arrow">&#9660;</span>
+    </div>
+    <div class="faq-a">
+        <p>Comet Browser doesn't have a documented public API, so the integration path depends on how your team actually uses it. There are three options, covered in detail on the <a href="/clients/soren-b2b-marketing-automation/solution#integration-map">Solution page</a>: webhook callbacks (if supported), scheduled data exports, or browser automation via Playwright as a last resort.</p>
+        <p>The <a href="/clients/soren-b2b-marketing-automation/onboarding">onboarding form</a> asks specifically about your Comet Browser usage so I can scope the right approach before we start.</p>
+    </div>
+</div>
+
+<div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+        Can you manage LinkedIn Ads and Google Ads?
+        <span class="faq-arrow">&#9660;</span>
+    </div>
+    <div class="faq-a">
+        <p>I don't manage ad creative, audience targeting, or campaign strategy. That's a separate specialization.</p>
+        <p>What I do build is the automation around ad data: lead form sync (LinkedIn Ads lead gen forms -> CRM), campaign performance data feeding into the scoring model (leads from high-performing campaigns get a scoring boost), budget alerts, and conversion tracking that flows into the weekly digest. Your ads team keeps managing campaigns; the data flows into the pipeline automatically.</p>
+    </div>
+</div>
+
+<div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+        What about SEO tools (Ahrefs, SEMrush, Screaming Frog)?
+        <span class="faq-arrow">&#9660;</span>
+    </div>
+    <div class="faq-a">
+        <p>I can pull data from these tools into Make.com scenarios. Concrete example: a weekly Ahrefs ranking change alert that fires a Slack notification when a target keyword drops more than 5 positions. Or a monthly SEMrush backlink report that auto-populates a Google Sheet.</p>
+        <p>I don't do the SEO work itself (keyword research, content optimization, link building). But the data from these tools can feed into the pipeline. Organic visitors who convert through a tracked landing page can get a scoring boost in the lead scoring model.</p>
+        <p>Screaming Frog is trickier since it's a desktop app. If you run scheduled crawls, I can import the output files into Make.com. The onboarding form asks about this.</p>
+    </div>
+</div>
+
+<div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+        Can you integrate Google Analytics and Search Console?
+        <span class="faq-arrow">&#9660;</span>
+    </div>
+    <div class="faq-a">
+        <p>Yes. GA4 and Search Console both have APIs that Make.com can connect to. Use cases: pull conversion data into the scoring model (organic visitors who convert score higher), surface traffic anomalies in the weekly digest, or trigger alerts when a key landing page's conversion rate drops.</p>
+        <p>This is Phase 3 work. It adds value once the core pipeline is running and you want to enrich scoring with organic traffic signals.</p>
+    </div>
+</div>
+
+<div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+        What if a tool in our stack doesn't have an API?
+        <span class="faq-arrow">&#9660;</span>
+    </div>
+    <div class="faq-a">
+        <p>Three fallback paths, in order of preference:</p>
+        <ul>
+            <li><strong>CSV/data export:</strong> If the tool can export data files, Make.com can import them on a schedule. Most tools support this even without an API.</li>
+            <li><strong>Email parsing:</strong> Some tools send notification emails. Make.com can monitor an inbox and parse those emails to extract data. Not elegant, but reliable.</li>
+            <li><strong>Browser automation:</strong> As a last resort, Playwright can automate browser interactions to extract data. This is more fragile (breaks if the UI changes) and slower, so I only recommend it when there's no alternative.</li>
+        </ul>
+    </div>
+</div>
+
+<h2 id="working-together">Working Together</h2>
+
+<div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+        How do you handle the timezone difference?
+        <span class="faq-arrow">&#9660;</span>
+    </div>
+    <div class="faq-a">
+        <p>I'm in CET (Central European Time), one hour behind Tallinn (EET). That's close enough for real-time collaboration when needed, and I work async by default so timezone isn't usually a bottleneck.</p>
+        <p>Deliverables come with written summaries. Questions and decisions happen over Upwork messages or whatever channel you prefer. If you need a live call, our windows overlap almost completely.</p>
+    </div>
+</div>
+
+<div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+        Is this suitable for a long-term engagement?
+        <span class="faq-arrow">&#9660;</span>
+    </div>
+    <div class="faq-a">
+        <p>Yes, and the retainer is designed for it. After the build phases (8 weeks), the ongoing work shifts to: monitoring and maintenance, scoring refinement based on conversion data, new integrations as your stack evolves, and sequence optimization.</p>
+        <p>A typical retainer month at 10-15 hours covers all of that. The pipeline gets better over time as we learn what converts for your specific audience. That learning loop is the real value of long-term collaboration.</p>
+    </div>
+</div>
+
+<div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+        What does communication look like week to week?
+        <span class="faq-arrow">&#9660;</span>
+    </div>
+    <div class="faq-a">
+        <p>Async by default. Each week you get a written summary of what was done, what's next, and any decisions that need your input. I send these at the end of each work week.</p>
+        <p>For questions and decisions during the week, I use whatever channel you prefer: Upwork messages, Slack, or email. Response time is typically same-day during CET business hours.</p>
+        <p>Live calls are available if you want them but never required. I've found that good written summaries eliminate most of the need for status meetings.</p>
+    </div>
+</div>
+
+<h2 id="technical">Technical Questions</h2>
+
+<div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+        What happens if Make.com or n8n goes down?
+        <span class="faq-arrow">&#9660;</span>
+    </div>
+    <div class="faq-a">
+        <p>Both platforms have their own uptime guarantees (Make.com: 99.9% SLA on Business plan, n8n Cloud: similar). Outages are rare but happen.</p>
+        <p>The pipeline is designed so a temporary outage doesn't lose data. Webhook payloads that arrive during a Make.com outage get queued and processed when the service recovers. n8n has built-in retry logic for failed executions.</p>
+        <p>If an outage lasts long enough to matter, the error alerting system sends you a Slack notification so you know. And because the two platforms are independent, one being down doesn't take the other offline.</p>
+    </div>
+</div>
+
+<div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+        How do you handle data privacy (GDPR)?
+        <span class="faq-arrow">&#9660;</span>
+    </div>
+    <div class="faq-a">
+        <p>Both Make.com and n8n offer EU-hosted instances. Since you're based in Tallinn, we'd use EU data centers so lead data stays within the EU. Make.com's EU zone is eu1.make.com. n8n Cloud has an EU region option.</p>
+        <p>The pipeline processes contact data (names, emails, company info) which is personal data under GDPR. The key considerations: legitimate interest basis for B2B prospecting, data minimization (we only store what's needed for scoring and routing), and your existing privacy policy should cover automated processing. I can help configure data retention policies in the CRM and Make.com data stores if needed.</p>
+    </div>
+</div>
+
+<div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+        Can our team modify the automations ourselves?
+        <span class="faq-arrow">&#9660;</span>
+    </div>
+    <div class="faq-a">
+        <p>That's the whole point of using Make.com and n8n instead of custom code. Both are visual platforms where you can see every step of the workflow, trace data flow, and make changes by dragging modules around.</p>
+        <p>Every scenario and workflow comes with documentation explaining what it does and how to modify common settings. Scoring weights, sequence timing, and routing thresholds live in Google Sheets specifically so your team can adjust them without opening Make.com or n8n at all.</p>
+        <p>For structural changes (adding a new source, changing the scoring algorithm), that's what the retainer covers. But day-to-day configuration is designed to be self-service.</p>
+    </div>
+</div>
+
+<h2 id="pricing-faq">Pricing</h2>
+
+<div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+        Why is your rate higher than the posted budget?
+        <span class="faq-arrow">&#9660;</span>
+    </div>
+    <div class="faq-a">
+        <p>The posted range is $10-15/hr, and my rate is $35.63/hr. The gap reflects the difference between general marketing tasks and specialized automation infrastructure work.</p>
+        <p>At the retainer level ($1,500-2,000/mo for 10-15 hrs/week), the effective rate drops to $25-33/hr. And the output is different from hourly labor: automation that runs independently after it's built. The <a href="/clients/soren-b2b-marketing-automation/investment#roi">ROI math</a> on the Investment page shows how the retainer pays for itself through labor savings.</p>
+    </div>
+</div>
+
+<div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+        Can we start with a smaller scope to test?
+        <span class="faq-arrow">&#9660;</span>
+    </div>
+    <div class="faq-a">
+        <p>Yes. A good test project: one Apollo-to-CRM pipeline. Webhook capture, normalization, enrichment, deduplication, CRM write. Roughly $500-700 at hourly rate, delivered in about a week.</p>
+        <p>That gives you a working piece of the full pipeline and a chance to evaluate the work before committing to the retainer. If it works well, Phase 2 picks up from there. If it doesn't, you have a functional automation that cost less than two days of an agency's time.</p>
+    </div>
+</div>
+
+<div class="faq-item">
+    <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">
+        What's the minimum commitment?
+        <span class="faq-arrow">&#9660;</span>
+    </div>
+    <div class="faq-a">
+        <p>Month-to-month. No multi-month contracts. No cancellation fees. If the first month doesn't deliver value, you stop.</p>
+        <p>Realistically, the build phases (Phase 1-2) take about 4 weeks to get the core pipeline running. I'd recommend committing to at least that initial build period to see the full value. But the retainer structure doesn't force you to.</p>
+    </div>
+</div>
+
+<section class="cta-section">
+    <h2>Ready to Start?</h2>
+    <p>The onboarding form takes about 10 minutes. Fill it out and the first call is already productive.</p>
+    <a href="/clients/soren-b2b-marketing-automation/onboarding" class="cta-btn">Start Onboarding &rarr;</a>
+</section>
+
+<div class="footer">
+    <p>Prepared by UnpauseAI for Soren's B2B marketing automation project.</p>
+</div>
 
 </div>
 </div>

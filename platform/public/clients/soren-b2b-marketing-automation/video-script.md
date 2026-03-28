@@ -27,54 +27,54 @@ SAY: I've built over 50 Make.com scenarios across client projects, including a B
 SAY: I put together a proposal site that walks through exactly what I'd build. Let me show you the key parts.
 
 >> Nav: Solution
+>> Scroll to Platform Split
 
-SAY: The solution page breaks down the two-platform approach. Make.com handles your API integrations, things like pulling leads from Apollo, syncing with your CRM, and triggering email sequences. n8n handles the custom logic, like lead scoring algorithms and conditional routing.
+SAY: The solution page breaks down the two-platform approach. Make.com handles your API integrations: pulling leads from Apollo, syncing with your CRM, triggering email sequences. n8n handles the custom logic: lead scoring algorithms, conditional routing, retry handling.
 
->> Scroll to Integration Points
+>> Scroll to Integration Map
 
-SAY: Down here you can see how each tool in your stack connects. Apollo for enrichment, HeyReach for LinkedIn outreach, your CRM for pipeline management. Each one plugs into the automation layer through APIs or webhooks.
+SAY: The integration map covers every tool you mentioned in your posting. Apollo, HeyReach, LinkedIn, Google Ads, Ahrefs, SEMrush, even Comet Browser. Each one has a status showing whether it's ready to wire today or needs discovery first.
 
 >> Nav: Workflow
+>> Scroll to Worked Example: LinkedIn Lead via HeyReach
 
-SAY: The workflow page shows how a lead actually moves through the pipeline. Capture, normalize, enrich, score, and route. Every stage logs its input and output, so if something gets stuck, you can trace exactly where.
+SAY: The workflow page traces actual data through the pipeline. Here's a LinkedIn lead coming in via HeyReach. You can see the raw webhook payload, the Apollo enrichment response, and the exact scoring math that produces a 65 out of 100, landing her in the Warm band.
 
->> Scroll to Scoring Stage
+>> Scroll to Scoring Model
 
-SAY: The scoring model is configurable. You set the thresholds for what counts as a hot lead versus warm versus cold, and the automation routes accordingly. Hot leads get an immediate notification. Warm leads enter a nurture sequence. You're not manually triaging every lead that comes in.
+SAY: The scoring model is fully configurable. Engagement signals like replies and connection accepts combine with firmographic signals like seniority and company size. You edit the weights in a Google Sheet. Hot leads get an immediate Slack alert. Warm leads enter a nurture sequence. No manual triaging.
 
 ---
 
 ### BEAT 3 - Gaps and Honesty (~45s)
 
 >> Nav: FAQ
+>> Scroll to Gap Handling
 
-SAY: I also want to address the gaps directly. Your posting mentions Comet Browser, SEO tools like Ahrefs and SEMrush, and LinkedIn Ads management.
+SAY: I also want to address the gaps directly. Your posting mentions Comet Browser, SEO tools like Ahrefs and SEMrush, and ad campaign management.
 
->> Scroll to Tool Coverage
+SAY: Comet Browser doesn't have a public API, so the integration depends on how you use it. I've outlined three paths on the solution page: webhooks if it supports them, scheduled data exports, or browser automation as a last resort. The onboarding form asks about this specifically so I can scope it right.
 
-SAY: I haven't used Comet Browser. If it has an API, I can integrate it. If it's browser-only, we can discuss workarounds.
-
-SAY: For SEO and ad tools, I can build automation around the data they produce. Pulling ranking data into dashboards, triggering alerts when metrics change. But the strategic side of SEO and ad management isn't my focus.
-
-SAY: I think the value here is being clear about what I do and don't cover, rather than claiming I can do everything.
+SAY: For SEO and ad tools, I build automation around the data they produce. Ranking change alerts from Ahrefs, conversion data from Google Ads feeding into the scoring model. But the strategic side, keyword research, ad creative, campaign management, that stays with your marketing team.
 
 ---
 
 ### BEAT 4 - Investment (~30s)
 
 >> Nav: Investment
+>> Scroll to Pricing Structure
 
 SAY: On pricing, my hourly rate is above your posted range. I know that. The monthly retainer is the better comparison. $1,500 to $2,000 a month for 10 to 15 hours per week. That covers building new pipelines, optimizing existing ones, and ongoing maintenance.
 
 >> Scroll to Market Comparison
 
-SAY: The comparison table puts this next to other options. A junior in-house marketer or a marketing agency costs more per month and usually includes less automation depth.
+SAY: The comparison table puts this next to other options. A junior hire, a marketing agency, or an in-house engineer. Year 1 costs are broken down so you can see where the retainer sits.
 
 ---
 
 ### BEAT 5 - Close (~20s)
 
-SAY: Soren, if this sounds like the right fit, there's an onboarding form on the site where you can fill in your current stack and goals. Happy to start with a small test project to see how the automation works with your tools before committing to a retainer.
+SAY: Soren, if this sounds like the right fit, there's an onboarding form on the site where you can fill in your current stack and goals. I'm also open to starting with a small test project, one Apollo-to-CRM pipeline for about $500-700, to see how the automation works with your tools before committing to a retainer.
 
 SAY: Thanks for watching. Talk soon.
 
@@ -85,9 +85,8 @@ SAY: Thanks for watching. Talk soon.
 - Transparency: not a marketing generalist, I build automation infrastructure
 - Make.com (50+ scenarios) + n8n for custom logic
 - 600K+ impressions pipeline, Germany/CET timezone
-- Show Solution page: two-platform approach, integration table
-- Show Workflow: 5-stage pipeline, scoring model, configurable thresholds
-- FAQ: address Comet Browser gap, SEO/ads integration vs management
-- Investment: $35.63/hr but retainer ($1,500-2,000/mo) is better comparison
-- Market comparison table
-- Close: onboarding form, open to test project first
+- Show Solution page: Platform Split, Integration Map (14 tools mapped)
+- Show Workflow: worked example with real JSON data, scoring math (65/100 = Warm)
+- FAQ: Gap Handling section: Comet Browser (3 paths), SEO/ads (data integration vs management)
+- Investment: Pricing Structure, retainer ($1,500-2,000/mo), Market Comparison with Year 1 totals
+- Close: onboarding form, test project option ($500-700)
