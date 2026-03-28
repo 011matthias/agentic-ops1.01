@@ -258,6 +258,10 @@ tbody tr:hover td { background: var(--surface2); }
         </li>
         <li class="step-item">
             <a href="#integration-points" class="step-link"><span class="step-num">5</span> Integration Points</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#download" class="step-link"><span class="step-num">6</span> Download Blueprint</a>
         </li>
     </ul>
 </aside>
@@ -388,6 +392,14 @@ tbody tr:hover td { background: var(--surface2); }
 <div class="callout purple">
     <div class="callout-title">The point isn't replacing your tools</div>
     <p>Every tool in that table stays. What changes is that they talk to each other automatically. A lead that enters via LinkedIn Ads gets enriched by Apollo, scored in n8n, and routed to HeyReach for follow-up, all without anyone touching a keyboard.</p>
+</div>
+
+<h2 id="download">Download: Make.com Blueprint</h2>
+<p>Here's a starter Make.com blueprint for the lead capture pipeline described above. It covers the webhook listener, Apollo enrichment API call, and CRM push. Import it into any Make.com account to see the structure firsthand.</p>
+<p><a href="/clients/soren-b2b-marketing-automation/b2b-lead-pipeline-blueprint.json" download class="cta-btn" style="margin-bottom:16px">Download Blueprint (JSON) &darr;</a></p>
+<div class="callout green">
+    <div class="callout-title">How to use this</div>
+    <p>In Make.com, go to Scenarios, click the three-dot menu, and select "Import Blueprint." Upload this JSON file. You'll need to connect your own Apollo and CRM credentials, but the scenario structure and routing logic are ready to go.</p>
 </div>
 
 <section class="cta-section">
