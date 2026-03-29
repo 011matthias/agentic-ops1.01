@@ -4,21 +4,15 @@
 
 ---
 
-### BEAT 1 - Reframe (~30s)
+### BEAT 1 - Hook (~30s)
 
 >> Nav: Overview
 
-SAY: Hi there, Nico here. Soren, I read through your posting for a B2B marketing automation expert, and I want to be upfront about something.
+SAY: Hi there, Nico here. Soren, I read through your posting for a B2B marketing automation expert and this is right in my wheelhouse.
 
-SAY: I'm not a marketing generalist. I don't run ad campaigns or write SEO strategy. What I do is build the automation layer that connects your tools and runs your lead pipeline without someone manually moving data between them.
+SAY: I build marketing automation infrastructure on Make.com and n8n. Lead capture, enrichment, scoring, nurture sequences, the full pipeline. I've managed 50+ Make.com scenarios in production and built a B2B marketing pipeline that processed over 600,000 impressions across multiple channels.
 
-SAY: You keep the marketing strategy. I build the engine that executes it.
-
----
-
-### Authority (~15s)
-
-SAY: Quick context: I've built over 50 Make.com scenarios in production, including a B2B pipeline that processed over 600,000 impressions. I'm in Germany, one hour behind Tallinn, so timezone is basically a non-issue.
+SAY: I'm in Germany, one hour behind Tallinn, so we're practically on the same clock.
 
 ---
 
@@ -48,16 +42,14 @@ SAY: All the scoring weights live in a Google Sheet. You can adjust them without
 
 ---
 
-### BEAT 3 - Gaps and Honesty (~40s)
+### BEAT 3 - Scope and Gaps (~30s)
 
 >> Nav: FAQ
 >> Scroll to Gap Handling
 
-SAY: Let me address the gaps. Your posting covers SEO, ads, and tools I haven't worked with directly like Comet Browser. I think honesty is more useful here than claiming I can do everything.
+SAY: Quick note on scope. The core of what you're looking for, the automation funnels, I cover fully. For the SEO and ad management side, I integrate the data those tools produce into the pipeline. Ahrefs ranking alerts, Google Ads conversion data feeding into the scoring model. But if you need someone running ad creative or keyword strategy day-to-day, that's a separate role.
 
-SAY: For SEO and ad tools, I build automation around the data they produce. Ahrefs ranking alerts, Google Ads conversion data feeding into the scoring model. But the strategic work, keyword research, ad creative, campaign management, that stays with your marketing team or a specialist.
-
-SAY: For Comet Browser specifically, the integration depends on whether it supports webhooks, data exports, or if we'd need browser automation. The onboarding form asks about this so I can scope the right approach.
+SAY: Comet Browser, I haven't used directly, but the integration depends on whether it supports webhooks or data exports. The onboarding form asks about this so I can scope the right approach before we start.
 
 ---
 
@@ -84,12 +76,11 @@ SAY: Thanks for watching. Talk soon.
 
 ## LOOM NOTES VERSION
 
-- Upfront: not a marketing generalist, I build the automation layer
-- Make.com (50+ scenarios) + n8n for custom logic. 600K+ impressions pipeline.
-- Germany/CET, 1hr from Tallinn
-- The proposal: Make.com for integrations, n8n for logic. 14 tools mapped. Comet Browser: 3 integration paths.
-- Concrete example: LinkedIn lead via HeyReach, Apollo enrichment, scoring math (65/100 = Warm), auto-nurture sequence, reclassify on reply
+- This is right in my wheelhouse: Make.com + n8n marketing automation
+- 50+ Make.com scenarios, 600K+ impressions B2B pipeline, Germany/CET
+- The proposal: Make.com for integrations, n8n for logic. 14 tools mapped.
+- Concrete example: LinkedIn lead via HeyReach, Apollo enrichment, scoring math (65/100 = Warm), auto-nurture, reclassify on reply
 - Scoring weights in Google Sheet, fully editable
-- Gaps: SEO/ads = data integration not management, Comet Browser = needs discovery
-- Pricing: $1,500-2,000/mo retainer, $25-33 effective rate. Test option: $500-700 single pipeline.
-- Close: proposal site has full details, onboarding form for productive first call
+- Scope: automation funnels fully covered. SEO/ads = data integration, not day-to-day management. Comet Browser = needs discovery.
+- Pricing: $1,500-2,000/mo retainer, $25-33 effective rate. Test option: $500-700.
+- Close: proposal site, onboarding form

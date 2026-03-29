@@ -14,9 +14,9 @@ The site includes:
 - A phased timeline (audit, build, optimize)
 - Pricing with a monthly retainer option
 
-I should be upfront: I'm not a marketing generalist. I don't manage ad campaigns or write SEO content. What I build is the automation infrastructure that connects your marketing tools and runs your workflows without manual intervention. I've built 50+ Make.com scenarios and managed pipelines processing 600K+ impressions for B2B clients.
+This is right in my wheelhouse. I build marketing automation infrastructure on Make.com and n8n, and I've managed 50+ Make.com scenarios in production, including a B2B pipeline that processed 600K+ impressions across multiple channels.
 
-Your posting mentions Comet Browser specifically. I haven't used it, but if it has API or webhook access, I can wire it into the same pipeline. Happy to discuss during a quick call.
+Your posting mentions Comet Browser. I haven't used it directly, but if it has API or webhook access, I can wire it into the same pipeline. The proposal site outlines three integration paths depending on how your team uses it.
 
 On pricing: my rate is above the posted range. The retainer option ($1,500-2,000/mo for 10-15 hrs/week) is the better comparison point. The automation I build replaces 15-20 hours of manual marketing work per week, so the net cost drops fast.
 
