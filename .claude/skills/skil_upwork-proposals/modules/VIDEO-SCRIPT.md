@@ -79,4 +79,4 @@ The visual is the anchor. Your voice explains the reasoning behind it.
 
 ## Live Reference
 
-See `platform/public/clients/menovia/proposal-video-script.md` for a full production example -- includes screen directions, demo triggers, and GDPR compliance handling. Adapt the pattern, not the specifics.
+See `workspace/proposals/menovia/proposal-video-script.md` for a full production example -- includes screen directions, demo triggers, and GDPR compliance handling. Adapt the pattern, not the specifics.

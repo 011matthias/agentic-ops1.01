@@ -8,7 +8,7 @@
 
 >> Nav: Overview
 
-SAY: Hi Soren, Nico here. I read through your posting for a B2B marketing automation expert, and I want to be upfront about something.
+SAY: Hi there, Nico here. Soren, I read through your posting for a B2B marketing automation expert, and I want to be upfront about something.
 
 SAY: I'm not a marketing generalist. I don't run ad campaigns or write SEO strategy. What I do is build the automation layer that connects your tools and runs your lead pipeline without someone manually moving data between them.
 

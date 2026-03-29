@@ -14,7 +14,8 @@ Usage:
     uv run tools/validate-proposal.py alpha-research --verbose
 
 Expects:
-    platform/public/clients/{slug}/   -- site files, cover letter, video script
+    platform/public/clients/{slug}/   -- site HTML files and downloadable artifacts
+    workspace/proposals/{slug}/       -- cover letter, video script (working docs)
     platform/src/content/proposals/   -- proposal markdown with frontmatter
 """
 
@@ -31,6 +32,7 @@ from html.parser import HTMLParser
 ROOT = Path(__file__).resolve().parent.parent
 CLIENTS_DIR = ROOT / "platform" / "public" / "clients"
 PROPOSALS_DIR = ROOT / "platform" / "src" / "content" / "proposals"
+WORKING_DOCS_DIR = ROOT / "workspace" / "proposals"
 
 REQUIRED_PAGES = ["index.html", "solution.html", "timeline.html",
                   "investment.html", "faq.html", "onboarding.html"]
@@ -216,7 +218,7 @@ def check_frontmatter(report: ValidationReport, fm: dict | None, slug: str):
         report.add("Sent date consistency", "PASS")
 
 
-def check_deliverables_match(report: ValidationReport, fm: dict, client_dir: Path):
+def check_deliverables_match(report: ValidationReport, fm: dict, client_dir: Path, working_dir: Path):
     """Verify deliverables flags match actual files."""
     if not fm or "deliverables" not in fm:
         report.add("Deliverables consistency", "SKIP", "No deliverables in frontmatter")
@@ -224,8 +226,9 @@ def check_deliverables_match(report: ValidationReport, fm: dict, client_dir: Pat
 
     deliverables = fm["deliverables"]
 
-    # Check cover letter
-    has_letter_file = any(client_dir.glob("cover-letter*"))
+    # Check cover letter (in working docs dir or legacy client dir)
+    has_letter_file = (any(working_dir.glob("cover-letter*")) if working_dir.exists() else False) or \
+                      any(client_dir.glob("cover-letter*"))
     letter_flag = deliverables.get("letter", False)
     if letter_flag and not has_letter_file:
         report.add("Deliverables: letter flag", "FAIL",
@@ -236,8 +239,9 @@ def check_deliverables_match(report: ValidationReport, fm: dict, client_dir: Pat
     else:
         report.add("Deliverables: letter flag", "PASS")
 
-    # Check video script
-    has_video_file = any(client_dir.glob("video-script*"))
+    # Check video script (in working docs dir or legacy client dir)
+    has_video_file = (any(working_dir.glob("video-script*")) if working_dir.exists() else False) or \
+                     any(client_dir.glob("video-script*"))
     video_flag = deliverables.get("video", False)
     if video_flag and not has_video_file:
         report.add("Deliverables: video flag", "FAIL",
@@ -261,9 +265,12 @@ def check_deliverables_match(report: ValidationReport, fm: dict, client_dir: Pat
         report.add("Deliverables: site flag", "PASS")
 
 
-def check_cover_letter(report: ValidationReport, client_dir: Path, fm: dict):
+def check_cover_letter(report: ValidationReport, client_dir: Path, fm: dict, working_dir: Path | None = None):
     """Validate cover letter against template rules."""
-    letter_files = list(client_dir.glob("cover-letter*.md"))
+    letter_files = list((working_dir or client_dir).glob("cover-letter*.md"))
+    if not letter_files:
+        # Fallback to client_dir for legacy proposals
+        letter_files = list(client_dir.glob("cover-letter*.md"))
     if not letter_files:
         report.add("Cover letter exists", "SKIP", "No cover letter found")
         return
@@ -372,9 +379,12 @@ def check_cover_letter(report: ValidationReport, client_dir: Path, fm: dict):
             report.add(f"No em dashes{suffix}", "PASS")
 
 
-def check_video_script(report: ValidationReport, client_dir: Path, site_headings: dict[str, list[str]]):
+def check_video_script(report: ValidationReport, client_dir: Path, site_headings: dict[str, list[str]], working_dir: Path | None = None):
     """Validate video script against established patterns."""
-    script_files = list(client_dir.glob("*video-script*.md"))
+    script_files = list((working_dir or client_dir).glob("*video-script*.md"))
+    if not script_files:
+        # Fallback to client_dir for legacy proposals
+        script_files = list(client_dir.glob("*video-script*.md"))
     if not script_files:
         report.add("Video script exists", "SKIP", "No video script found")
         return
@@ -719,12 +729,14 @@ def check_pricing_not_tbd(report: ValidationReport, client_dir: Path):
                     "investment.html has no price ($X or EUR X). Never ship $TBD pricing.")
 
 
-def check_pricing_bridge(report: ValidationReport, client_dir: Path, fm: dict):
+def check_pricing_bridge(report: ValidationReport, client_dir: Path, fm: dict, working_dir: Path | None = None):
     """Warn if cover letter lacks pricing bridge language for Upwork proposals."""
     if not fm or fm.get("source") != "upwork":
         return  # Only relevant for Upwork proposals
 
-    letter = client_dir / "cover-letter.md"
+    letter = (working_dir or client_dir) / "cover-letter.md"
+    if not letter.exists():
+        letter = client_dir / "cover-letter.md"  # Fallback
     if not letter.exists():
         return
 
@@ -807,13 +819,15 @@ def check_client_name_leaks(report: ValidationReport, fm: dict, slug: str):
         report.add("Privacy: no client name leaks", "PASS")
 
 
-def check_template3_structure(report: ValidationReport, client_dir: Path, fm: dict):
+def check_template3_structure(report: ValidationReport, client_dir: Path, fm: dict, working_dir: Path | None = None):
     """Verify Track 2 cover letters follow Template 3 structure."""
     track = fm.get("track", 1) if fm else 1
     if track != 2:
         return
 
-    letter_files = list(client_dir.glob("cover-letter*.md"))
+    letter_files = list((working_dir or client_dir).glob("cover-letter*.md"))
+    if not letter_files:
+        letter_files = list(client_dir.glob("cover-letter*.md"))
     if not letter_files:
         return  # Already caught by cover letter existence check
 
@@ -906,9 +920,32 @@ def check_n8n_sticky_containment(report: ValidationReport, client_dir: Path):
             report.add(f"n8n sticky containment ({json_path.name})", "PASS")
 
 
-def check_tbd_in_text_files(report: ValidationReport, client_dir: Path):
-    """Scan cover letters and video scripts for TBD placeholders."""
+def check_tbd_in_text_files(report: ValidationReport, client_dir: Path, working_dir: Path | None = None):
+    """Scan cover letters, video scripts, and other .md files for TBD placeholders."""
+    scanned = set()
+    # Scan working docs dir first (cover letters, video scripts)
+    if working_dir and working_dir.exists():
+        for md_path in working_dir.glob("*.md"):
+            scanned.add(md_path.name)
+            try:
+                content = md_path.read_text(encoding="utf-8")
+            except Exception:
+                continue
+            findings = []
+            for i, line in enumerate(content.split("\n"), 1):
+                for pattern in TBD_PATTERNS:
+                    if re.search(pattern, line, re.I):
+                        findings.append(f"line {i}")
+                        break
+            if findings:
+                report.add(f"No TBD placeholders ({md_path.name})", "FAIL",
+                           f"Found at {', '.join(findings[:5])}")
+            else:
+                report.add(f"No TBD placeholders ({md_path.name})", "PASS")
+    # Then scan client dir for remaining .md files (e.g., blueprint-walkthrough.md)
     for md_path in client_dir.glob("*.md"):
+        if md_path.name in scanned:
+            continue
         try:
             content = md_path.read_text(encoding="utf-8")
         except Exception:
@@ -947,6 +984,7 @@ def validate_proposal(slug: str, verbose: bool = False) -> ValidationReport:
     """Run all validation checks for a proposal."""
     report = ValidationReport(slug=slug)
     client_dir = CLIENTS_DIR / slug
+    working_dir = WORKING_DOCS_DIR / slug
 
     if not client_dir.exists():
         report.add("Client directory exists", "FAIL",
@@ -967,13 +1005,13 @@ def validate_proposal(slug: str, verbose: bool = False) -> ValidationReport:
 
     # Deliverables consistency
     if fm:
-        check_deliverables_match(report, fm, client_dir)
+        check_deliverables_match(report, fm, client_dir, working_dir)
 
     # Cover letter
-    check_cover_letter(report, client_dir, fm or {})
+    check_cover_letter(report, client_dir, fm or {}, working_dir)
 
     # Template 3 structural check (Track 2 only)
-    check_template3_structure(report, client_dir, fm or {})
+    check_template3_structure(report, client_dir, fm or {}, working_dir)
 
     # HTML site
     site_headings = check_html_site(report, client_dir, fm or {})
@@ -982,13 +1020,13 @@ def validate_proposal(slug: str, verbose: bool = False) -> ValidationReport:
     check_pricing_not_tbd(report, client_dir)
 
     # Pricing bridge check (Upwork proposals)
-    check_pricing_bridge(report, client_dir, fm or {})
+    check_pricing_bridge(report, client_dir, fm or {}, working_dir)
 
     # Video script (needs site headings for cross-check)
-    check_video_script(report, client_dir, site_headings)
+    check_video_script(report, client_dir, site_headings, working_dir)
 
     # TBD in text files
-    check_tbd_in_text_files(report, client_dir)
+    check_tbd_in_text_files(report, client_dir, working_dir)
 
     # n8n workflow JSON layout validation
     check_n8n_sticky_containment(report, client_dir)
