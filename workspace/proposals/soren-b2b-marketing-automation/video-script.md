@@ -34,11 +34,13 @@ SAY: I've mapped all 14 tools from your posting. Apollo, HeyReach, LinkedIn, you
 
 SAY: Let me walk through a concrete example. A prospect accepts a LinkedIn connection through one of your HeyReach campaigns. That fires a webhook with their name, email, and company. Make.com normalizes it, calls Apollo for enrichment, gets back company size, industry, seniority. Then it passes the enriched record to n8n.
 
->> Scroll to Scoring Model
+>> Scroll slowly through the scoring calculation
 
-SAY: n8n runs the scoring. Engagement signals, like a connection accept, plus firmographic signals, like VP title at a 300-person SaaS company. In this example, the lead scores 65 out of 100, landing in the Warm band. That automatically starts a 5-touch nurture sequence. If she replies to any email, the sequence stops and she gets reclassified as Hot with an instant Slack alert to your team.
+SAY: n8n runs the scoring. Engagement signals, like a connection accept, plus firmographic signals, like VP title at a 300-person SaaS company. You can see the math here: engagement 20 plus firmographic 45 gives a total of 65 out of 100. That lands in the Warm band, which automatically starts a 5-touch nurture sequence.
 
-SAY: All the scoring weights live in a Google Sheet. You can adjust them without touching the workflows.
+>> Scroll to Stage 5: Route
+
+SAY: If she replies to any email, the sequence stops and she gets reclassified as Hot with an instant Slack alert to your team. All the scoring weights live in a Google Sheet, so you can adjust them without touching the workflows.
 
 ---
 
