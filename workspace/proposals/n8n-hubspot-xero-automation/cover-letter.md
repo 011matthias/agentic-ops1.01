@@ -5,7 +5,7 @@
 Hi there,
 
 I put together a proposal site for this: https://unpauseai.com/clients/n8n-hubspot-xero-automation/ (access code: n8n-hubspot-2026)
-https://www.loom.com/share/pending
+https://www.loom.com/share/8b641b518978415c9153b690fb70e506
 
 The site includes:
 - Full breakdown of both automations (invoice + folder creation)
