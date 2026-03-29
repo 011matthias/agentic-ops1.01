@@ -1093,34 +1093,34 @@ body {
         <div class="status-mini-title" style="color:var(--blue-dark)">A0 &mdash; MySQL Poller</div>
         <div class="status-mini-row"><span>Status</span><span class="status-mini-val" style="color:var(--green)">Active</span></div>
         <div class="status-mini-row"><span>Trigger</span><span class="status-mini-val">Polling / 30min</span></div>
-        <div class="status-mini-row"><span>Executions</span><span class="status-mini-val">762</span></div>
+        <div class="status-mini-row"><span>Executions</span><span class="status-mini-val">932</span></div>
         <div class="status-mini-row"><span>Errors (lifetime)</span><span class="status-mini-val">11</span></div>
       </div>
       <div class="status-mini-card status-a1">
         <div class="status-mini-title" style="color:var(--green)">A1 &mdash; Enquiry Sequence</div>
         <div class="status-mini-row"><span>Status</span><span class="status-mini-val" style="color:var(--green)">Active</span></div>
         <div class="status-mini-row"><span>Trigger</span><span class="status-mini-val">Webhook</span></div>
-        <div class="status-mini-row"><span>Executions</span><span class="status-mini-val">47</span></div>
+        <div class="status-mini-row"><span>Executions</span><span class="status-mini-val">48</span></div>
         <div class="status-mini-row"><span>Errors (lifetime)</span><span class="status-mini-val">0</span></div>
       </div>
       <div class="status-mini-card status-a2">
         <div class="status-mini-title" style="color:var(--purple)">A2 &mdash; Reply Detection</div>
         <div class="status-mini-row"><span>Status</span><span class="status-mini-val" style="color:var(--green)">Active</span></div>
         <div class="status-mini-row"><span>Trigger</span><span class="status-mini-val">Polling / 10min</span></div>
-        <div class="status-mini-row"><span>Executions</span><span class="status-mini-val">1247</span></div>
+        <div class="status-mini-row"><span>Executions</span><span class="status-mini-val">1755</span></div>
         <div class="status-mini-row"><span>Errors (lifetime)</span><span class="status-mini-val">0</span></div>
       </div>
       <div class="status-mini-card status-a3">
         <div class="status-mini-title" style="color:var(--amber)">A3 &mdash; Scheduled Follow-Ups</div>
         <div class="status-mini-row"><span>Status</span><span class="status-mini-val" style="color:var(--green)">Active</span></div>
         <div class="status-mini-row"><span>Trigger</span><span class="status-mini-val">Polling / 60min</span></div>
-        <div class="status-mini-row"><span>Executions</span><span class="status-mini-val">291</span></div>
+        <div class="status-mini-row"><span>Executions</span><span class="status-mini-val">376</span></div>
         <div class="status-mini-row"><span>Errors (lifetime)</span><span class="status-mini-val">0</span></div>
       </div>
     </div>
     <div class="health-footer">
-      <span>Last health check: <strong>2026-03-25</strong></span>
-      <span>Ops budget: <strong>~51% of 30k</strong></span>
+      <span>Last health check: <strong>2026-03-29</strong></span>
+      <span>Ops budget: <strong>~67% of 30k</strong></span>
       <span class="health-badge"><span class="badge-dot" style="width:6px;height:6px;"></span> GREEN</span>
     </div>
   </div>
@@ -1318,6 +1318,22 @@ body {
           <summary>Details</summary>
           <div class="tl-details-content">
             Full production health check via MCP. All 4 scenarios active with zero recent errors. MySQL database at 65 rows (max id 14285), 4 new enquiries since last check. Latest enquiry (Metalor, id 14285) processed at 09:44 UTC. Operations at 51.1% (15,326/30,000). All data stores verified: Pipeline Config (1 record, 35+ fields), Email Templates (10 records with venue-corrected content), Venue Config (3 records with Jess-approved corrections). Documentation hub updated with latest results.
+          </div>
+        </details>
+      </div>
+
+      <!-- 2026-03-29 Health check -->
+      <div class="tl-entry tl-entry-border-multi">
+        <div class="tl-header">
+          <span class="tl-date">2026-03-29</span>
+          <span class="tl-scope">Health check</span>
+          <span class="tl-result tl-result-pass">PASS</span>
+        </div>
+        <div class="tl-desc">All pass &mdash; 66 MySQL rows, 1 new enquiry, ops 67.2% (20,151/30,000), zero errors</div>
+        <details class="tl-details">
+          <summary>Details</summary>
+          <div class="tl-details-content">
+            Full production health check via MCP. All 4 scenarios active with zero recent errors. A0: 932 executions, A1: 48, A2: 1,755, A3: 376. MySQL database at 66 rows (max id 14286), 1 new enquiry since last check (Endoscopy/Hannah Clarke, processed 28 March). Operations at 67.2% (20,151/30,000). All data stores verified: Pipeline Config (1 record), Email Templates (10 records), Venue Config (3 records). A3 running 46 ops per hourly execution. Documentation hub and portal updated.
           </div>
         </details>
       </div>
