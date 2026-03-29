@@ -2,7 +2,7 @@ Elephant.
 
 https://unpauseai.com/clients/ghl-retellai-implementer/
 (access code: ghl-retellai-2026)
-Loom walkthrough: (attached below)
+Loom walkthrough: https://www.loom.com/share/b08f7e81f3ef419784f20208a1a5a724
 
 I put together a proposal site that breaks down how I'd fit into your stack. The site covers:
 - How n8n orchestrates the data flow between GHL, Retell AI, Supabase, and Twilio
