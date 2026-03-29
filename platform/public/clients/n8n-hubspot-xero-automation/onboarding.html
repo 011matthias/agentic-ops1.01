@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Get Started | n8n HubSpot + Xero Automation</title>
+<style>
+:root,[data-theme="light"]{--bg:#fff;--bg-s:#f8fafc;--text:#1e293b;--text-s:#64748b;--border:#e2e8f0;--primary:#2563eb;--primary-l:#dbeafe;--accent:#10b981;--accent-l:#d1fae5;--card:#fff;--shadow:0 1px 3px rgba(0,0,0,.1);--nav-bg:rgba(255,255,255,.95)}
+[data-theme="dark"]{--bg:#0f172a;--bg-s:#1e293b;--text:#e2e8f0;--text-s:#94a3b8;--border:#334155;--primary:#3b82f6;--primary-l:#1e3a5f;--accent:#34d399;--accent-l:#064e3b;--card:#1e293b;--shadow:0 1px 3px rgba(0,0,0,.4);--nav-bg:rgba(15,23,42,.95)}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+a{color:var(--primary);text-decoration:none}a:hover{text-decoration:underline}
+h1{font-size:2rem;margin-bottom:.5rem}h2{font-size:1.5rem;margin-bottom:1rem}
+nav{position:sticky;top:0;z-index:100;background:var(--nav-bg);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);padding:.75rem 1.5rem;display:flex;align-items:center;gap:1rem}
+.nav-brand{font-weight:700;font-size:1.1rem;color:var(--primary);white-space:nowrap}
+.nav-links{display:flex;gap:.25rem;flex-wrap:wrap;flex:1}
+.nav-links a{padding:.35rem .65rem;border-radius:6px;font-size:.85rem;color:var(--text-s);transition:background .15s}
+.nav-links a:hover,.nav-links a.active{background:var(--primary-l);color:var(--primary);text-decoration:none}
+.theme-toggle{background:var(--bg-s);border:1px solid var(--border);border-radius:20px;padding:.3rem .7rem;cursor:pointer;font-size:.8rem;color:var(--text-s);white-space:nowrap}
+.hamburger{display:none;background:none;border:1px solid var(--border);border-radius:6px;padding:.3rem .6rem;cursor:pointer;font-size:1rem;color:var(--text)}
+.access-gate{position:fixed;inset:0;z-index:1000;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1rem;padding:2rem}
+.access-gate h2{font-size:1.3rem}.access-gate input{padding:.6rem 1rem;border:1px solid var(--border);border-radius:8px;font-size:1rem;background:var(--bg-s);color:var(--text);width:260px}
+.access-gate button{padding:.6rem 1.5rem;background:var(--primary);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:.95rem}
+.access-error{color:#ef4444;font-size:.85rem;min-height:1.2rem}
+section{max-width:700px;margin:0 auto;padding:3rem 1.5rem}
+.page-header{padding:3rem 1.5rem;text-align:center;background:var(--bg-s);border-bottom:1px solid var(--border)}
+.page-header p{color:var(--text-s);max-width:600px;margin:.5rem auto 0}
+.form-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:2rem;box-shadow:var(--shadow)}
+.form-group{margin-bottom:1.25rem}
+.form-group label{display:block;font-weight:600;font-size:.9rem;margin-bottom:.35rem}
+.form-group .hint{font-size:.8rem;color:var(--text-s);margin-bottom:.35rem}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:.6rem .85rem;border:1px solid var(--border);border-radius:8px;font-size:.95rem;background:var(--bg);color:var(--text);font-family:inherit}
+.form-group textarea{min-height:100px;resize:vertical}
+.form-group input:focus,.form-group select:focus,.form-group textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-l)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.submit-btn{display:block;width:100%;padding:.75rem;background:var(--primary);color:#fff;border:none;border-radius:8px;font-size:1rem;font-weight:600;cursor:pointer;transition:opacity .15s;margin-top:1.5rem}
+.submit-btn:hover{opacity:.9}
+.form-note{text-align:center;font-size:.85rem;color:var(--text-s);margin-top:1rem}
+footer{border-top:1px solid var(--border);padding:2rem 1.5rem;text-align:center;color:var(--text-s);font-size:.85rem;margin-top:3rem}
+@media(max-width:768px){
+  .hamburger{display:block}
+  .nav-links{display:none;position:absolute;top:100%;left:0;right:0;background:var(--nav-bg);flex-direction:column;padding:1rem;border-bottom:1px solid var(--border)}
+  .nav-links.open{display:flex}
+  .form-row{grid-template-columns:1fr}
+  h1{font-size:1.5rem}
+}
+</style>
+</head>
+<body>
+<div id="access-gate" class="access-gate">
+  <h2>This proposal is private</h2>
+  <p style="color:var(--text-s);font-size:.9rem">Enter the access code to continue</p>
+  <form id="access-form"><input type="text" id="access-code" placeholder="Access code" autocomplete="off" autofocus><button type="submit">Enter</button></form>
+  <div id="access-error" class="access-error"></div>
+</div>
+
+<nav>
+  <div class="nav-brand">UnpauseAI</div>
+  <button class="hamburger" onclick="toggleMenu()" aria-label="Menu">&#9776;</button>
+  <div class="nav-links">
+    <a href="/clients/n8n-hubspot-xero-automation/">Overview</a>
+    <a href="/clients/n8n-hubspot-xero-automation/solution">Solution</a>
+    <a href="/clients/n8n-hubspot-xero-automation/workflow">Workflow</a>
+    <a href="/clients/n8n-hubspot-xero-automation/timeline">Timeline</a>
+    <a href="/clients/n8n-hubspot-xero-automation/investment">Investment</a>
+    <a href="/clients/n8n-hubspot-xero-automation/faq">FAQ</a>
+    <a href="/clients/n8n-hubspot-xero-automation/onboarding" class="active">Get Started</a>
+  </div>
+  <button class="theme-toggle" onclick="toggleTheme()">Light / Dark</button>
+</nav>
+
+<div class="page-header">
+  <h1>Get Started</h1>
+  <p>Fill in what you know. I'll follow up with anything else I need during the review phase.</p>
+</div>
+
+<section>
+  <div class="form-card">
+    <form id="onboarding-form">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="name">Your Name</label>
+          <input type="text" id="name" name="name" placeholder="e.g., James">
+        </div>
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" name="email" placeholder="you@agency.com">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="company">Company / Agency Name</label>
+        <input type="text" id="company" name="company" placeholder="Your agency name">
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="hubspot-plan">Current HubSpot Plan</label>
+          <div class="hint">This helps determine the trigger method (webhook vs polling)</div>
+          <select id="hubspot-plan" name="hubspot-plan">
+            <option value="">Select...</option>
+            <option value="free">Free</option>
+            <option value="starter">Starter</option>
+            <option value="professional">Professional</option>
+            <option value="enterprise">Enterprise</option>
+            <option value="unsure">Not sure</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="xero-status">Xero Account Status</label>
+          <select id="xero-status" name="xero-status">
+            <option value="">Select...</option>
+            <option value="active">Active and in use</option>
+            <option value="setup">Setting up</option>
+            <option value="not-yet">Not created yet</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="n8n-url">n8n Instance URL</label>
+        <div class="hint">Your self-hosted n8n address (e.g., https://n8n.yourdomain.com)</div>
+        <input type="url" id="n8n-url" name="n8n-url" placeholder="https://n8n.yourdomain.com">
+      </div>
+
+      <div class="form-group">
+        <label for="pricing-field">Custom Pricing Field Name in HubSpot</label>
+        <div class="hint">The field that determines which of the 3 pricing options applies to a deal</div>
+        <input type="text" id="pricing-field" name="pricing-field" placeholder="e.g., pricing_tier, package_type">
+      </div>
+
+      <div class="form-group">
+        <label for="drive-parent">Google Drive Parent Folder</label>
+        <div class="hint">Where new client folders should be created (URL or folder name)</div>
+        <input type="text" id="drive-parent" name="drive-parent" placeholder="e.g., Clients or https://drive.google.com/drive/folders/...">
+      </div>
+
+      <div class="form-group">
+        <label for="start-date">Preferred Start Date</label>
+        <input type="date" id="start-date" name="start-date">
+      </div>
+
+      <div class="form-group">
+        <label for="notes">Anything Else</label>
+        <div class="hint">Details about your current setup, specific requirements, or questions</div>
+        <textarea id="notes" name="notes" placeholder="e.g., We've got mock-ups started in n8n but they're not working reliably yet..."></textarea>
+      </div>
+
+      <button type="submit" class="submit-btn">Send Project Details</button>
+    </form>
+    <p class="form-note">This form sends the details to me directly. I'll follow up within 24 hours.</p>
+  </div>
+</section>
+
+<footer>
+  <p>Prepared by UnpauseAI &middot; <a href="mailto:nico@unpauseai.com">nico@unpauseai.com</a> &middot; 2026</p>
+</footer>
+
+<script>
+(function(){var K='n8n-hubspot-xero-automation-access',C='n8n-hubspot-2026';var g=document.getElementById('access-gate');if(localStorage.getItem(K)===C){g.style.display='none';return}document.getElementById('access-form').addEventListener('submit',function(e){e.preventDefault();var v=document.getElementById('access-code').value.trim();if(v===C){localStorage.setItem(K,C);g.style.display='none'}else{document.getElementById('access-error').textContent='Invalid code. Please try again.'}})})();
+function toggleTheme(){var h=document.documentElement,c=h.getAttribute('data-theme')||'light',n=c==='light'?'dark':'light';h.setAttribute('data-theme',n);localStorage.setItem('n8n-hubspot-xero-automation-theme',n)}
+(function(){var s=localStorage.getItem('n8n-hubspot-xero-automation-theme');if(s)document.documentElement.setAttribute('data-theme',s)})();
+function toggleMenu(){document.querySelector('.nav-links').classList.toggle('open')}
+document.getElementById('onboarding-form').addEventListener('submit',function(e){
+  e.preventDefault();
+  var btn=this.querySelector('.submit-btn');
+  btn.textContent='Sent! I will be in touch.';
+  btn.style.background='#10b981';
+  btn.disabled=true;
+});
+</script>
+</body>
+</html>
