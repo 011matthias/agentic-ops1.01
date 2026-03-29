@@ -6,7 +6,7 @@ Hi there,
 
 https://unpauseai.com/clients/n8n-ai-lead-gen-followup/
 (Access code: leadgen-2026)
-Walkthrough video: https://www.loom.com/share/pending
+Walkthrough video: https://www.loom.com/share/e9996d3e72af45848d4e4d07ed1a1363
 
 I put together a proposal site with a walkthrough video that shows exactly how I'd build this system.
 
