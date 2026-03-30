@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Get Started | AI Cold Email Tool | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+
+/* Access Gate */
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+
+/* Navigation */
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+
+/* Sidebar */
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+
+/* Main Content */
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+
+/* Hero */
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--green-bg); color: var(--green); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 560px; margin: 0 auto 32px; line-height: 1.6; }
+
+/* Sections */
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+
+/* Callout */
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+
+/* Footer */
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); }
+
+/* Tablet */
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+
+/* Mobile */
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .hero h1 { font-size: 24px; }
+}
+
+/* Form styles */
+.form-section {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 28px 32px; margin: 32px 0;
+}
+.form-group-title {
+    font-size: 13px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .05em; color: var(--blue); margin-bottom: 20px;
+    padding-bottom: 8px; border-bottom: 1px solid var(--border);
+}
+.field-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;
+}
+.field-row.full { grid-template-columns: 1fr; }
+.field {
+    display: flex; flex-direction: column; gap: 5px;
+}
+.field label {
+    font-size: 13px; font-weight: 600; color: var(--text-strong);
+}
+.field label .req { color: #ef4444; margin-left: 2px; }
+.field input[type="text"],
+.field input[type="date"],
+.field select,
+.field textarea {
+    padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 7px;
+    font-size: 14px; background: var(--bg); color: var(--text);
+    font-family: inherit; outline: none; transition: border-color .15s, box-shadow .15s;
+    width: 100%;
+}
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+}
+.field textarea { resize: vertical; min-height: 80px; }
+.field .hint { font-size: 12px; color: var(--text2); }
+
+/* Checkbox groups */
+.checkbox-group {
+    display: flex; flex-direction: column; gap: 8px; padding: 4px 0;
+}
+.checkbox-group label {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 14px; font-weight: 400; color: var(--text); cursor: pointer;
+}
+.checkbox-group input[type="checkbox"] {
+    accent-color: var(--blue); width: 15px; height: 15px; cursor: pointer; flex-shrink: 0;
+}
+
+.form-divider { height: 1px; background: var(--border); margin: 28px 0; }
+
+.submit-row { margin-top: 28px; display: flex; align-items: center; gap: 16px; }
+.submit-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; border: none; cursor: pointer;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3); font-family: inherit;
+}
+.submit-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); }
+.submit-note { font-size: 12px; color: var(--text2); }
+.form-success {
+    display: none; background: var(--green-bg); border: 1px solid var(--green-light);
+    border-radius: 8px; padding: 16px 20px; color: var(--green-dark); font-size: 14px;
+    font-weight: 500; margin-top: 16px;
+}
+.form-success.visible { display: block; }
+
+.privacy-note {
+    font-size: 12px; color: var(--text2); margin-top: 16px; padding-top: 16px;
+    border-top: 1px solid var(--border); line-height: 1.6;
+}
+
+@media (max-width: 768px) {
+    .field-row { grid-template-columns: 1fr; }
+    .form-section { padding: 20px 16px; }
+    .submit-row { flex-direction: column; align-items: flex-start; }
+}
+</style>
+<script>
+(function(){var t=localStorage.getItem('jaret-cold-email-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<!-- Access Gate -->
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared for Jaret. Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/jaret-ai-cold-email-tool/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Jaret's Cold Email Tool</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/jaret-ai-cold-email-tool/">Overview</a>
+        <a href="/clients/jaret-ai-cold-email-tool/solution">Solution</a>
+        <a href="/clients/jaret-ai-cold-email-tool/workflow">Workflow</a>
+        <a href="/clients/jaret-ai-cold-email-tool/timeline">Timeline</a>
+        <a href="/clients/jaret-ai-cold-email-tool/investment">Investment</a>
+        <a href="/clients/jaret-ai-cold-email-tool/faq">FAQ</a>
+        <a href="/clients/jaret-ai-cold-email-tool/onboarding" class="active">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">On this page</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#api-access" class="step-link active"><span class="step-num">1</span> API Access</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#target-audience" class="step-link"><span class="step-num">2</span> Target Audience</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#email-preferences" class="step-link"><span class="step-num">3</span> Email Preferences</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#infrastructure" class="step-link"><span class="step-num">4</span> Infrastructure</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<!-- Hero -->
+<section class="hero" id="onboarding-top">
+    <div class="hero-badge">GET STARTED</div>
+    <h1>Onboarding</h1>
+    <p class="hero-sub">Fill in the details below and I'll confirm receipt within 24 hours. Most fields take under a minute.</p>
+</section>
+
+<form id="onboardingForm" onsubmit="handleSubmit(event)" novalidate>
+
+    <!-- API Access -->
+    <div class="form-section" id="api-access">
+        <div class="form-group-title">API Access</div>
+
+        <div class="callout">
+            <div class="callout-title">API keys collected securely during kickoff</div>
+            <p>I'll need access to three services: Apollo.io (lead data), OpenAI (AI personalization), and Instantly.ai (email delivery). We'll exchange these securely during the kickoff call, not through a web form. If you don't have accounts yet, I can walk you through setting each one up.</p>
+        </div>
+
+        <div class="field-row full">
+            <div class="field">
+                <label for="api-status">Which accounts do you already have?</label>
+                <select id="api-status" name="api_status">
+                    <option value="">Select one</option>
+                    <option value="all">All three (Apollo.io, OpenAI, Instantly.ai)</option>
+                    <option value="some">Some of them</option>
+                    <option value="none">None yet (I'll need help setting up)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="field-row full">
+            <div class="field">
+                <label for="api-notes">Notes about your current accounts (optional)</label>
+                <textarea id="api-notes" name="api_notes" rows="3" placeholder="e.g. I have Apollo.io but not the others, or I'm on a specific plan tier"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- Target Audience -->
+    <div class="form-section" id="target-audience">
+        <div class="form-group-title">Target Audience</div>
+
+        <div class="field-row full">
+            <div class="field">
+                <label for="target-titles">Target Job Titles</label>
+                <input type="text" id="target-titles" name="target_titles" placeholder="e.g. Marketing Director, VP of Sales, CEO">
+            </div>
+        </div>
+
+        <div class="field-row full">
+            <div class="field">
+                <label for="target-industries">Target Industries</label>
+                <input type="text" id="target-industries" name="target_industries" placeholder="e.g. Media, SaaS, E-commerce">
+            </div>
+        </div>
+
+        <div class="field-row">
+            <div class="field">
+                <label for="company-size">Target Company Size</label>
+                <select id="company-size" name="company_size">
+                    <option value="any">Any</option>
+                    <option value="1-10">1-10</option>
+                    <option value="11-50">11-50</option>
+                    <option value="51-200">51-200</option>
+                    <option value="201-1000">201-1000</option>
+                    <option value="1000+">1000+</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="target-locations">Target Locations</label>
+                <input type="text" id="target-locations" name="target_locations" placeholder="e.g. United States, California, New York">
+            </div>
+        </div>
+
+        <div class="field-row full">
+            <div class="field">
+                <label for="additional-filters">Additional Filters</label>
+                <textarea id="additional-filters" name="additional_filters" placeholder="Any other criteria for your ideal leads? Keywords, technologies, exclusions..."></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- Email Preferences -->
+    <div class="form-section" id="email-preferences">
+        <div class="form-group-title">Email Preferences</div>
+
+        <div class="field-row">
+            <div class="field">
+                <label for="sender-name">Sender Name</label>
+                <input type="text" id="sender-name" name="sender_name" placeholder="Name that appears in the From field">
+            </div>
+            <div class="field">
+                <label for="sender-email">Sender Email</label>
+                <input type="text" id="sender-email" name="sender_email" placeholder="The email address you'll send from">
+            </div>
+        </div>
+
+        <div class="field-row">
+            <div class="field">
+                <label for="email-tone">Email Tone</label>
+                <select id="email-tone" name="email_tone">
+                    <option value="professional">Professional</option>
+                    <option value="casual">Casual</option>
+                    <option value="direct">Direct</option>
+                    <option value="friendly">Friendly</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="daily-limit">Daily Sending Limit</label>
+                <select id="daily-limit" name="daily_limit">
+                    <option value="10">10/day (new domain)</option>
+                    <option value="25">25/day</option>
+                    <option value="50">50/day</option>
+                    <option value="100">100/day (warmed domain)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="field-row full">
+            <div class="field">
+                <label for="email-context">Sample Email Context</label>
+                <textarea id="email-context" name="email_context" style="min-height:100px;" placeholder="What does your company offer? What problem do you solve for prospects? This helps the AI write better emails."></textarea>
+                <span class="hint">The more context you give here, the more on-point the AI-written emails will be.</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Infrastructure -->
+    <div class="form-section" id="infrastructure">
+        <div class="form-group-title">Infrastructure</div>
+
+        <div class="field-row">
+            <div class="field">
+                <label for="n8n-pref">n8n Preference</label>
+                <select id="n8n-pref" name="n8n_pref">
+                    <option value="cloud">n8n Cloud (I'll set it up)</option>
+                    <option value="self-hosted">Self-hosted (I have a server)</option>
+                    <option value="unsure">Not sure yet</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="google-account">Google Account Email</label>
+                <input type="text" id="google-account" name="google_account" placeholder="For Google Sheets access">
+            </div>
+        </div>
+
+        <div class="field-row full">
+            <div class="field">
+                <label for="server-access">Server Access</label>
+                <textarea id="server-access" name="server_access" placeholder="If self-hosted: SSH details or hosting provider. Leave blank for n8n Cloud."></textarea>
+            </div>
+        </div>
+
+        <div class="field-row">
+            <div class="field">
+                <label for="start-date">Preferred Start Date</label>
+                <input type="date" id="start-date" name="start_date">
+            </div>
+            <div class="field">
+                <!-- spacer -->
+            </div>
+        </div>
+
+        <div class="field-row full">
+            <div class="field">
+                <label for="anything-else">Anything Else</label>
+                <textarea id="anything-else" name="anything_else" placeholder="Questions, constraints, or context I should know about"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- Submit -->
+    <div id="submit">
+        <div class="submit-row">
+            <button type="submit" class="submit-btn">Submit Onboarding Details</button>
+            <span class="submit-note">I'll confirm receipt within 24 hours and send Jaret a kickoff plan.</span>
+        </div>
+
+        <div class="form-success" id="formSuccess">
+            Details received. I'll confirm within 24 hours and send a kickoff plan.
+        </div>
+
+        <p class="privacy-note">API keys are stored securely and used only to configure the workflow. They're never hardcoded or shared. If you don't have all keys yet, leave those fields blank and we'll sort them out at kickoff.</p>
+    </div>
+
+</form>
+
+<footer class="footer">
+    <p>Prepared for <strong>Jaret</strong> by UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+// Access gate
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='jaret-2026'){
+        localStorage.setItem('jaret-cold-email-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.';
+    }
+}
+(function(){if(localStorage.getItem('jaret-cold-email-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+
+// Theme toggle
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('jaret-cold-email-theme',t);
+}
+
+// Sidebar active state
+(function(){
+    var links=document.querySelectorAll('.step-link');
+    var sections=[];
+    links.forEach(function(l){
+        var id=l.getAttribute('href');
+        if(id&&id.startsWith('#')){
+            var el=document.querySelector(id);
+            if(el)sections.push({el:el,link:l});
+        }
+    });
+    if(!sections.length)return;
+    var observer=new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+            if(e.isIntersecting){
+                links.forEach(function(l){l.classList.remove('active')});
+                sections.forEach(function(s){
+                    if(s.el===e.target)s.link.classList.add('active');
+                });
+            }
+        });
+    },{rootMargin:'-80px 0px -60% 0px'});
+    sections.forEach(function(s){observer.observe(s.el)});
+})();
+
+// Form submit
+function handleSubmit(e){
+    e.preventDefault();
+    document.getElementById('formSuccess').classList.add('visible');
+    document.querySelector('.submit-row').style.display='none';
+}
+</script>
+</body>
+</html>

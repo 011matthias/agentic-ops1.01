@@ -1,0 +1,732 @@
+{
+  "name": "AI Cold Email Pipeline",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 280]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 460]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
+      "id": "merge-trigger",
+      "name": "Merge Trigger",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [240, 360]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/v1/mixed_people/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "={{$env.APOLLO_API_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "person_titles",
+              "value": "[\"Marketing Manager\", \"Head of Marketing\", \"CMO\"]"
+            },
+            {
+              "name": "organization_num_employees_ranges",
+              "value": "[\"11,50\", \"51,200\"]"
+            },
+            {
+              "name": "person_locations",
+              "value": "[\"United States\"]"
+            },
+            {
+              "name": "page",
+              "value": "1"
+            },
+            {
+              "name": "per_page",
+              "value": "25"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "apollo-people-search",
+      "name": "Apollo People Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 360],
+      "notes": "Search Apollo.io for leads matching your target criteria"
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-leads",
+      "name": "Split Leads",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [740, 360]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-first-name",
+              "name": "first_name",
+              "value": "={{ $json.first_name }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-last-name",
+              "name": "last_name",
+              "value": "={{ $json.last_name }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-email",
+              "name": "email",
+              "value": "={{ $json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-title",
+              "name": "title",
+              "value": "={{ $json.title }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-company-name",
+              "name": "company_name",
+              "value": "={{ $json.organization?.name ?? $json.company }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-company-domain",
+              "name": "company_domain",
+              "value": "={{ $json.organization?.primary_domain ?? $json.company_domain }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-linkedin",
+              "name": "linkedin_url",
+              "value": "={{ $json.linkedin_url }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "normalize-lead-data",
+      "name": "Normalize Lead Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [980, 360]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "email-not-empty",
+              "leftValue": "={{ $json.email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "validate-email",
+      "name": "Validate Email",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1220, 360]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.OPENAI_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "gpt-4o-mini"
+            },
+            {
+              "name": "messages",
+              "value": "=[{\"role\": \"system\", \"content\": \"You are a B2B sales researcher. Given a company domain, return a JSON object with the following fields: industry (string), focus (string describing what the company does), size_estimate (string, e.g. '50-200 employees'), pain_points (array of 2-3 strings describing likely business pain points relevant to outbound sales and marketing). Return only valid JSON, no markdown.\"}, {\"role\": \"user\", \"content\": \"Research this company domain: \" + $json.company_domain + \" — Company name: \" + $json.company_name}]"
+            },
+            {
+              "name": "temperature",
+              "value": "0.3"
+            },
+            {
+              "name": "max_tokens",
+              "value": "400"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ai-company-research",
+      "name": "AI Company Research",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1460, 260],
+      "notes": "Research the lead's company using AI for email personalization"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-research",
+              "name": "research",
+              "value": "={{ JSON.parse($json.choices[0].message.content) }}",
+              "type": "object"
+            },
+            {
+              "id": "assign-industry",
+              "name": "industry",
+              "value": "={{ JSON.parse($json.choices[0].message.content).industry }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-focus",
+              "name": "company_focus",
+              "value": "={{ JSON.parse($json.choices[0].message.content).focus }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-pain-points",
+              "name": "pain_points",
+              "value": "={{ JSON.parse($json.choices[0].message.content).pain_points?.join('; ') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "parse-research",
+      "name": "Parse Research",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1700, 260]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.OPENAI_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "gpt-4o-mini"
+            },
+            {
+              "name": "messages",
+              "value": "=[{\"role\": \"system\", \"content\": \"You are a B2B cold email copywriter. Write a personalized cold email using the provided lead and company research data. Output a JSON object with three fields: subject (string), body (string), variant_b_subject (string — an alternative subject line for A/B testing). Keep the body under 150 words. Use a conversational, human tone. Reference something specific about the company. Do not use generic openers. Return only valid JSON, no markdown.\"}, {\"role\": \"user\", \"content\": \"Lead: \" + $json.first_name + \" \" + $json.last_name + \", \" + $json.title + \" at \" + $json.company_name + \". Company focus: \" + $json.company_focus + \". Industry: \" + $json.industry + \". Pain points: \" + $json.pain_points}]"
+            },
+            {
+              "name": "temperature",
+              "value": "0.7"
+            },
+            {
+              "name": "max_tokens",
+              "value": "500"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ai-write-email",
+      "name": "AI Write Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1940, 260],
+      "notes": "Generate personalized email copy using AI and company research"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-subject",
+              "name": "email_subject",
+              "value": "={{ JSON.parse($json.choices[0].message.content).subject }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-body",
+              "name": "email_body",
+              "value": "={{ JSON.parse($json.choices[0].message.content).body }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-variant-b",
+              "name": "variant_b_subject",
+              "value": "={{ JSON.parse($json.choices[0].message.content).variant_b_subject }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "parse-email",
+      "name": "Parse Email",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [2180, 260]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.instantly.ai/api/v1/lead/add",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "api_key",
+              "value": "={{$env.INSTANTLY_API_KEY}}"
+            },
+            {
+              "name": "campaign_id",
+              "value": "={{$env.INSTANTLY_CAMPAIGN_ID}}"
+            },
+            {
+              "name": "email",
+              "value": "={{ $json.email }}"
+            },
+            {
+              "name": "first_name",
+              "value": "={{ $json.first_name }}"
+            },
+            {
+              "name": "last_name",
+              "value": "={{ $json.last_name }}"
+            },
+            {
+              "name": "company_name",
+              "value": "={{ $json.company_name }}"
+            },
+            {
+              "name": "custom_variables",
+              "value": "={{ JSON.stringify({ personalized_subject: $json.email_subject, personalized_body: $json.email_body, variant_b_subject: $json.variant_b_subject, company_focus: $json.company_focus, industry: $json.industry }) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "add-to-instantly",
+      "name": "Add to Instantly Campaign",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2420, 260],
+      "notes": "Enroll lead in Instantly.ai campaign with personalized fields"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "sheetId": {
+          "__rl": true,
+          "value": "={{$env.PIPELINE_LOG_SHEET_ID}}",
+          "mode": "id"
+        },
+        "range": "Pipeline Log!A:I",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ new Date().toISOString() }}",
+            "first_name": "={{ $json.first_name }}",
+            "last_name": "={{ $json.last_name }}",
+            "email": "={{ $json.email }}",
+            "company": "={{ $json.company_name }}",
+            "title": "={{ $json.title }}",
+            "campaign": "={{$env.INSTANTLY_CAMPAIGN_ID}}",
+            "status": "={{ $json.email ? 'Enrolled' : 'Invalid Email' }}",
+            "personalization_data": "={{ JSON.stringify({ subject: $json.email_subject, body: $json.email_body, industry: $json.industry, pain_points: $json.pain_points }) }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-to-sheets",
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2660, 260],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      },
+      "notes": "Log every processed lead to Google Sheets for tracking"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "sheetId": {
+          "__rl": true,
+          "value": "={{$env.PIPELINE_LOG_SHEET_ID}}",
+          "mode": "id"
+        },
+        "range": "Pipeline Log!A:I",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ new Date().toISOString() }}",
+            "first_name": "={{ $json.first_name }}",
+            "last_name": "={{ $json.last_name }}",
+            "email": "={{ $json.email }}",
+            "company": "={{ $json.company_name }}",
+            "title": "={{ $json.title }}",
+            "campaign": "={{$env.INSTANTLY_CAMPAIGN_ID}}",
+            "status": "Invalid Email",
+            "personalization_data": ""
+          }
+        },
+        "options": {}
+      },
+      "id": "log-invalid-email",
+      "name": "Log Invalid Email",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1460, 520],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [2180, 640]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-error-ts",
+              "name": "error_timestamp",
+              "value": "={{ new Date().toISOString() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-error-node",
+              "name": "failed_node",
+              "value": "={{ $json.execution?.lastNodeExecuted ?? 'unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-error-message",
+              "name": "error_message",
+              "value": "={{ $json.error?.message ?? $json.message ?? 'Unknown error' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-error-workflow",
+              "name": "workflow_id",
+              "value": "={{ $json.execution?.id ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-error-stack",
+              "name": "stack_trace",
+              "value": "={{ $json.error?.stack ?? '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "format-error",
+      "name": "Format Error Details",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [2420, 640]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "sheetId": {
+          "__rl": true,
+          "value": "={{$env.PIPELINE_LOG_SHEET_ID}}",
+          "mode": "id"
+        },
+        "range": "Errors!A:E",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "error_timestamp": "={{ $json.error_timestamp }}",
+            "failed_node": "={{ $json.failed_node }}",
+            "error_message": "={{ $json.error_message }}",
+            "workflow_id": "={{ $json.workflow_id }}",
+            "stack_trace": "={{ $json.stack_trace }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "log-error",
+      "name": "Log Error",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2660, 640],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## SETUP\n\nConfigure the following in **n8n Settings > Environment Variables**:\n\n- `APOLLO_API_KEY` — Apollo.io API key\n- `OPENAI_API_KEY` — OpenAI API key\n- `INSTANTLY_API_KEY` — Instantly.ai API key\n- `INSTANTLY_CAMPAIGN_ID` — Target campaign ID\n- `PIPELINE_LOG_SHEET_ID` — Google Sheets spreadsheet ID\n\nAlso connect your **Google Sheets OAuth2** credential before activating.",
+        "height": 220,
+        "width": 380,
+        "color": 3
+      },
+      "id": "sticky-setup",
+      "name": "Sticky Note - Setup",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-120, 640]
+    },
+    {
+      "parameters": {
+        "content": "## STAGE 1: Lead Discovery\n\nApollo.io People Search fetches leads matching your target persona. Edit the body parameters to adjust title filters, company size, and location.",
+        "height": 140,
+        "width": 280,
+        "color": 4
+      },
+      "id": "sticky-stage1",
+      "name": "Sticky Note - Stage 1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [440, 160]
+    },
+    {
+      "parameters": {
+        "content": "## STAGE 2: AI Research + Personalization\n\nEach lead is individually researched via GPT-4o-mini. Company context is used to write a personalized email with subject line variants.",
+        "height": 140,
+        "width": 320,
+        "color": 5
+      },
+      "id": "sticky-stage2",
+      "name": "Sticky Note - Stage 2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1440, 80]
+    },
+    {
+      "parameters": {
+        "content": "## STAGE 3: Email Delivery\n\nPersonalized leads are enrolled in your Instantly.ai campaign with custom variables injected for subject and body. All leads are logged to Google Sheets.",
+        "height": 140,
+        "width": 320,
+        "color": 6
+      },
+      "id": "sticky-stage3",
+      "name": "Sticky Note - Stage 3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [2400, 80]
+    },
+    {
+      "parameters": {
+        "content": "## ERROR HANDLING\n\nAny node failure triggers the Error Handler. Error details (node name, message, stack trace) are appended to the **Errors** tab in your Google Sheet for visibility.",
+        "height": 140,
+        "width": 300,
+        "color": 2
+      },
+      "id": "sticky-errors",
+      "name": "Sticky Note - Errors",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [2160, 520]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [{"node": "Merge Trigger", "type": "main", "index": 0}]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [{"node": "Merge Trigger", "type": "main", "index": 1}]
+      ]
+    },
+    "Merge Trigger": {
+      "main": [
+        [{"node": "Apollo People Search", "type": "main", "index": 0}]
+      ]
+    },
+    "Apollo People Search": {
+      "main": [
+        [{"node": "Split Leads", "type": "main", "index": 0}]
+      ]
+    },
+    "Split Leads": {
+      "main": [
+        [{"node": "Normalize Lead Data", "type": "main", "index": 0}]
+      ]
+    },
+    "Normalize Lead Data": {
+      "main": [
+        [{"node": "Validate Email", "type": "main", "index": 0}]
+      ]
+    },
+    "Validate Email": {
+      "main": [
+        [{"node": "AI Company Research", "type": "main", "index": 0}],
+        [{"node": "Log Invalid Email", "type": "main", "index": 0}]
+      ]
+    },
+    "AI Company Research": {
+      "main": [
+        [{"node": "Parse Research", "type": "main", "index": 0}]
+      ]
+    },
+    "Parse Research": {
+      "main": [
+        [{"node": "AI Write Email", "type": "main", "index": 0}]
+      ]
+    },
+    "AI Write Email": {
+      "main": [
+        [{"node": "Parse Email", "type": "main", "index": 0}]
+      ]
+    },
+    "Parse Email": {
+      "main": [
+        [{"node": "Add to Instantly Campaign", "type": "main", "index": 0}]
+      ]
+    },
+    "Add to Instantly Campaign": {
+      "main": [
+        [{"node": "Log to Google Sheets", "type": "main", "index": 0}]
+      ]
+    },
+    "Log to Google Sheets": {
+      "main": [
+        [{"node": "Split Leads", "type": "main", "index": 0}]
+      ]
+    },
+    "Log Invalid Email": {
+      "main": [
+        [{"node": "Split Leads", "type": "main", "index": 0}]
+      ]
+    },
+    "Error Handler": {
+      "main": [
+        [{"node": "Format Error Details", "type": "main", "index": 0}]
+      ]
+    },
+    "Format Error Details": {
+      "main": [
+        [{"node": "Log Error", "type": "main", "index": 0}]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 2,
+  "updatedAt": "2026-03-30T00:00:00.000Z",
+  "versionId": "1"
+}

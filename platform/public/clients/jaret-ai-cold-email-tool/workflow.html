@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Workflow | AI Cold Email Pipeline for Jaret | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+
+/* Access Gate */
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+
+/* Navigation */
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+
+/* Sidebar */
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+
+/* Main Content */
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+
+/* Hero */
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 580px; margin: 0 auto 0; line-height: 1.6; }
+
+/* Sections */
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+
+/* Callout */
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+
+/* Download box */
+.download-box {
+    background: var(--green-bg); border: 1px solid color-mix(in srgb, var(--green) 25%, var(--border));
+    border-radius: 12px; padding: 28px; margin: 28px 0; text-align: center;
+}
+.download-box h3 { color: var(--green-dark); margin-top: 0; font-size: 18px; }
+.download-box p { color: var(--green-dark); font-size: 14px; margin-bottom: 20px; }
+.download-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--green); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s;
+    box-shadow: 0 2px 8px rgba(5,150,105,.3);
+}
+.download-btn:hover { background: var(--green-dark); transform: translateY(-1px); text-decoration: none; }
+
+/* CTA */
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+
+/* Footer */
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); }
+
+/* Tablet */
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+
+/* Mobile */
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .hero h1 { font-size: 24px; }
+}
+
+/* =====================
+   Simulator Styles
+   ===================== */
+.simulator {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 24px; margin: 24px 0;
+}
+.sim-progress {
+    display: flex; align-items: center; justify-content: center;
+    gap: 0; margin-bottom: 24px;
+}
+.sim-dot {
+    width: 36px; height: 36px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; border: 2px solid var(--border);
+    color: var(--text2); background: var(--bg); transition: all .3s; flex-shrink: 0;
+}
+.sim-dot.active { border-color: var(--blue); background: var(--blue); color: #fff; }
+.sim-dot.done { border-color: var(--green); background: var(--green); color: #fff; }
+.sim-line { width: 40px; height: 2px; background: var(--border); transition: background .3s; }
+.sim-line.done { background: var(--green); }
+.sim-stage-title { font-size: 16px; font-weight: 700; color: var(--text-strong); margin-bottom: 4px; }
+.sim-stage-desc { font-size: 13px; color: var(--text2); margin-bottom: 16px; }
+.sim-panels {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 16px; margin-bottom: 16px;
+}
+@media (max-width: 768px) { .sim-panels { grid-template-columns: 1fr; } }
+.sim-panel {
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px; background: var(--bg);
+}
+.sim-panel-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .05em; margin-bottom: 8px;
+}
+.sim-panel-label.input { color: var(--orange); }
+.sim-panel-label.output { color: var(--green); }
+.sim-data {
+    font-family: 'SF Mono', 'Consolas', monospace; font-size: 12px;
+    line-height: 1.6; color: var(--text); white-space: pre-wrap; word-break: break-word;
+}
+.sim-actions { display: flex; gap: 8px; justify-content: center; }
+.sim-btn {
+    padding: 10px 24px; border-radius: 8px; font-size: 14px;
+    font-weight: 600; cursor: pointer; border: none; transition: all .15s;
+}
+.sim-btn-primary { background: var(--blue); color: #fff; }
+.sim-btn-primary:hover { background: var(--blue-dark); }
+.sim-btn-secondary {
+    background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border);
+}
+.sim-btn-secondary:hover { background: var(--border); }
+.sim-highlight {
+    background: var(--blue-bg); padding: 2px 6px; border-radius: 4px;
+    color: var(--blue-dark); font-weight: 600;
+}
+.sim-summary {
+    background: var(--green-bg); border: 1px solid color-mix(in srgb, var(--green) 25%, var(--border));
+    border-radius: 10px; padding: 20px 24px; margin-bottom: 16px; text-align: center;
+}
+.sim-summary-title {
+    font-size: 15px; font-weight: 700; color: var(--green-dark); margin-bottom: 8px;
+}
+.sim-summary p { color: var(--green-dark); font-size: 14px; margin: 0; }
+</style>
+<script>
+(function(){var t=localStorage.getItem('jaret-cold-email-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<!-- Access Gate -->
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared for Jaret. Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/jaret-ai-cold-email-tool/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Jaret's Cold Email Tool</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/jaret-ai-cold-email-tool/">Overview</a>
+        <a href="/clients/jaret-ai-cold-email-tool/solution">Solution</a>
+        <a href="/clients/jaret-ai-cold-email-tool/workflow" class="active">Workflow</a>
+        <a href="/clients/jaret-ai-cold-email-tool/timeline">Timeline</a>
+        <a href="/clients/jaret-ai-cold-email-tool/investment">Investment</a>
+        <a href="/clients/jaret-ai-cold-email-tool/faq">FAQ</a>
+        <a href="/clients/jaret-ai-cold-email-tool/onboarding">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">On this page</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#simulator" class="step-link active"><span class="step-num">1</span> Pipeline Simulator</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#download" class="step-link"><span class="step-num">2</span> Download Workflow</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<!-- Hero -->
+<section class="hero" id="hero">
+    <div class="hero-badge">LIVE PIPELINE DEMO</div>
+    <h1>See the Pipeline in Action</h1>
+    <p class="hero-sub">Step through the full workflow with sample data. Each stage shows real input and output, so you can see exactly what happens at every step.</p>
+</section>
+
+<!-- Section 1: Simulator -->
+<h2 id="simulator">Pipeline Simulator</h2>
+<p>The pipeline runs 5 stages end-to-end for each lead. Click through below to see what goes in and what comes out at every step. The data is representative of a real run, not a simplified summary.</p>
+
+<div class="simulator" id="sim">
+
+    <!-- Progress dots -->
+    <div class="sim-progress" id="simProgress">
+        <div class="sim-dot active" id="dot-1">1</div>
+        <div class="sim-line" id="line-1"></div>
+        <div class="sim-dot" id="dot-2">2</div>
+        <div class="sim-line" id="line-2"></div>
+        <div class="sim-dot" id="dot-3">3</div>
+        <div class="sim-line" id="line-3"></div>
+        <div class="sim-dot" id="dot-4">4</div>
+        <div class="sim-line" id="line-4"></div>
+        <div class="sim-dot" id="dot-5">5</div>
+    </div>
+
+    <!-- Stage content -->
+    <div id="simContent">
+        <div class="sim-stage-title" id="simTitle">Stage 1: Apollo.io Lead Search</div>
+        <div class="sim-stage-desc" id="simDesc">Enter search criteria, get matched contacts with full details.</div>
+        <div class="sim-panels">
+            <div class="sim-panel">
+                <div class="sim-panel-label input">Input</div>
+                <div class="sim-data" id="simInput"></div>
+            </div>
+            <div class="sim-panel">
+                <div class="sim-panel-label output">Output</div>
+                <div class="sim-data" id="simOutput"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary (hidden until stage 5 complete) -->
+    <div class="sim-summary" id="simSummary" style="display:none;">
+        <div class="sim-summary-title">Pipeline complete.</div>
+        <p>5 leads scraped from Apollo.io, researched by AI, personalized, and enrolled in your Instantly.ai campaign. Total processing time: ~45 seconds per lead.</p>
+    </div>
+
+    <!-- Actions -->
+    <div class="sim-actions">
+        <button class="sim-btn sim-btn-secondary" id="btnRestart" onclick="simRestart()" style="display:none;">Start Over</button>
+        <button class="sim-btn sim-btn-primary" id="btnNext" onclick="simNext()">Next Step &rarr;</button>
+    </div>
+
+</div>
+
+<!-- Section 2: Download -->
+<h2 id="download">Download Workflow</h2>
+
+<div class="download-box">
+    <h3>Download the Full Pipeline Workflow</h3>
+    <p>This n8n workflow JSON contains the complete pipeline: Apollo.io lead search, AI company research, email personalization, Instantly.ai enrollment, and Google Sheets logging. Import it into n8n to see every node, connection, and error handler. You'll need your own API keys (Apollo.io, OpenAI, Instantly.ai) to run it live.</p>
+    <a href="/clients/jaret-ai-cold-email-tool/jaret-ai-cold-email-tool-full-pipeline.json" class="download-btn">&#11015;&#65039; Download n8n Workflow (.json)</a>
+</div>
+
+<p>The downloadable workflow includes 15 nodes with built-in error handling. If you'd like help configuring it or want to customize the pipeline for your specific use case, that's exactly what the project covers.</p>
+
+<div class="cta-section">
+    <h2>Want the full technical breakdown?</h2>
+    <p>The Solution page covers every stage in detail, including how the AI research step works and how errors are handled.</p>
+    <a href="/clients/jaret-ai-cold-email-tool/solution" class="cta-btn">View the Solution &rarr;</a>
+</div>
+
+<footer class="footer">
+    <p>Prepared for <strong>Jaret</strong> by UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+// Access gate
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='jaret-2026'){
+        localStorage.setItem('jaret-cold-email-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.';
+    }
+}
+(function(){if(localStorage.getItem('jaret-cold-email-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+
+// Theme toggle
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('jaret-cold-email-theme',t);
+}
+
+// Sidebar active state
+(function(){
+    var links=document.querySelectorAll('.step-link');
+    var sections=[];
+    links.forEach(function(l){
+        var id=l.getAttribute('href');
+        if(id&&id.startsWith('#')){
+            var el=document.querySelector(id);
+            if(el)sections.push({el:el,link:l});
+        }
+    });
+    if(!sections.length)return;
+    var observer=new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+            if(e.isIntersecting){
+                links.forEach(function(l){l.classList.remove('active')});
+                sections.forEach(function(s){
+                    if(s.el===e.target)s.link.classList.add('active');
+                });
+            }
+        });
+    },{rootMargin:'-80px 0px -60% 0px'});
+    sections.forEach(function(s){observer.observe(s.el)});
+})();
+
+// =====================
+// Pipeline Simulator
+// =====================
+
+var SIM_STAGES = [
+    {
+        title: 'Stage 1: Apollo.io Lead Search',
+        desc: 'Enter search criteria, get matched contacts with full details.',
+        input: '{\n  "search_filters": {\n    "job_titles": [\n      "Marketing Director",\n      "VP Marketing"\n    ],\n    "company_size": "11-50",\n    "industry": "Media & Entertainment",\n    "location": "United States"\n  },\n  "max_results": 5\n}',
+        output: '{\n  "leads_found": 5,\n  "leads": [\n    {\n      "name": "Sarah Chen",\n      "title": "Marketing Director",\n      "email": "sarah.chen@brightmedia.com",\n      "company": "Bright Media Group",\n      "linkedin": "linkedin.com/in/sarachen"\n    },\n    {\n      "name": "Marcus Rivera",\n      "title": "VP of Marketing",\n      "email": "m.rivera@coastalent.com",\n      "company": "Coastal Entertainment",\n      "linkedin": "linkedin.com/in/mrivera"\n    },\n    {\n      "name": "Jennifer Walsh",\n      "title": "Marketing Director",\n      "email": "jwalsh@summitmg.com",\n      "company": "Summit Media Group",\n      "linkedin": "linkedin.com/in/jenniferwalsh"\n    }\n  ],\n  "note": "... and 2 more"\n}'
+    },
+    {
+        title: 'Stage 2: AI Company Research',
+        desc: 'For each lead, the AI reads their company website and extracts context for personalization.',
+        input: '{\n  "lead": {\n    "name": "Sarah Chen",\n    "title": "Marketing Director",\n    "email": "sarah.chen@brightmedia.com",\n    "company": "Bright Media Group",\n    "linkedin": "linkedin.com/in/sarachen"\n  }\n}',
+        output: '{\n  "company": "Bright Media Group",\n  "domain": "brightmedia.com",\n  "research": {\n    "industry": "Digital media production",\n    "focus": "Video content for streaming platforms",\n    "size": "~35 employees",\n    "recent_activity": "Expanding into podcast production",\n    "pain_points": [\n      "Scaling content distribution",\n      "Managing multiple platform partnerships"\n    ]\n  }\n}'
+    },
+    {
+        title: 'Stage 3: AI Email Generation',
+        desc: 'Using the research data, the AI writes a personalized subject line and email body for each lead.',
+        input: '{\n  "company": "Bright Media Group",\n  "lead_name": "Sarah",\n  "research": {\n    "recent_activity": "Expanding into podcast production",\n    "pain_points": [\n      "Scaling content distribution",\n      "Managing multiple platform partnerships"\n    ]\n  }\n}',
+        output: '{\n  "to": "sarah.chen@brightmedia.com",\n  "subject": "Quick question about Bright Media\'s podcast expansion",\n  "body": "Hi Sarah,\\n\\nI noticed Bright Media Group is moving into podcast production alongside your video work. That\'s a smart move, but distributing across multiple platforms usually means a lot of manual coordination.\\n\\nI build automated distribution pipelines that handle multi-platform publishing, scheduling, and analytics tracking. One system I built processes 600K+ data points weekly across similar media workflows.\\n\\nWould it make sense to chat for 10 minutes about what that could look like for Bright Media?\\n\\nBest,\\nJaret",\n  "personalization_score": 0.92,\n  "variant_b_subject": "Podcast distribution at Bright Media"\n}'
+    },
+    {
+        title: 'Stage 4: Instantly.ai Campaign Enrollment',
+        desc: 'Each lead is enrolled in your Instantly.ai campaign with all personalized fields attached.',
+        input: '{\n  "to": "sarah.chen@brightmedia.com",\n  "subject": "Quick question about Bright Media\'s podcast expansion",\n  "personalization_score": 0.92,\n  "body": "Hi Sarah, I noticed Bright Media Group..."\n}',
+        output: '{\n  "campaign": "Q2 Media Outreach",\n  "lead_enrolled": true,\n  "email_address": "sarah.chen@brightmedia.com",\n  "personalized_fields": {\n    "first_name": "Sarah",\n    "company": "Bright Media Group",\n    "custom_subject": "Quick question about Bright Media\'s podcast expansion",\n    "custom_opener": "I noticed Bright Media Group is moving into podcast production..."\n  },\n  "scheduled_send": "2026-04-01 09:15 EST",\n  "warm_up_status": "Domain warmed (14 days)"\n}'
+    },
+    {
+        title: 'Stage 5: Activity Logging',
+        desc: 'Every processed lead is logged to Google Sheets with a full audit trail.',
+        input: '{\n  "campaign": "Q2 Media Outreach",\n  "lead_enrolled": true,\n  "email_address": "sarah.chen@brightmedia.com",\n  "scheduled_send": "2026-04-01 09:15 EST"\n}',
+        output: '{\n  "sheet": "Cold Email Pipeline Log",\n  "row_added": {\n    "timestamp": "2026-03-30 14:22:07",\n    "lead": "Sarah Chen",\n    "company": "Bright Media Group",\n    "email": "sarah.chen@brightmedia.com",\n    "campaign": "Q2 Media Outreach",\n    "status": "Enrolled",\n    "scheduled": "2026-04-01 09:15 EST",\n    "personalization_score": 0.92\n  },\n  "total_processed": "1 of 5"\n}'
+    }
+];
+
+var simCurrent = 1;
+
+function simRender(step) {
+    var stage = SIM_STAGES[step - 1];
+
+    // Update dots and lines
+    for (var i = 1; i <= 5; i++) {
+        var dot = document.getElementById('dot-' + i);
+        dot.classList.remove('active', 'done');
+        if (i < step) dot.classList.add('done');
+        else if (i === step) dot.classList.add('active');
+    }
+    for (var j = 1; j <= 4; j++) {
+        var line = document.getElementById('line-' + j);
+        line.classList.toggle('done', j < step);
+    }
+
+    // Update text
+    document.getElementById('simTitle').textContent = stage.title;
+    document.getElementById('simDesc').textContent = stage.desc;
+    document.getElementById('simInput').textContent = stage.input;
+    document.getElementById('simOutput').textContent = stage.output;
+
+    // Show/hide content vs summary
+    document.getElementById('simContent').style.display = 'block';
+    document.getElementById('simSummary').style.display = 'none';
+
+    // Button states
+    document.getElementById('btnRestart').style.display = step > 1 ? 'inline-flex' : 'none';
+    var btnNext = document.getElementById('btnNext');
+    btnNext.style.display = 'inline-flex';
+    btnNext.textContent = step < 5 ? 'Next Step \u2192' : 'Complete Pipeline \u2192';
+}
+
+function simNext() {
+    if (simCurrent < 5) {
+        simCurrent++;
+        simRender(simCurrent);
+    } else {
+        // Show summary
+        for (var i = 1; i <= 5; i++) {
+            var dot = document.getElementById('dot-' + i);
+            dot.classList.remove('active');
+            dot.classList.add('done');
+        }
+        for (var j = 1; j <= 4; j++) {
+            document.getElementById('line-' + j).classList.add('done');
+        }
+        document.getElementById('simContent').style.display = 'none';
+        document.getElementById('simSummary').style.display = 'block';
+        document.getElementById('btnNext').style.display = 'none';
+        document.getElementById('btnRestart').style.display = 'inline-flex';
+    }
+}
+
+function simRestart() {
+    simCurrent = 1;
+    simRender(1);
+}
+
+// Init
+simRender(1);
+</script>
+</body>
+</html>
