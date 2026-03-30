@@ -51,7 +51,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Ar
 .step-line{position:absolute;left:26px;top:38px;width:2px;height:calc(100% - 30px);background:var(--border)}
 .step-item:last-child .step-line{display:none}
 .main-content{margin-left:220px;padding:56px 0 0 0}
-.content-inner{max-width:800px;margin:0 auto;padding:40px 30px 60px}
+.content-inner{max-width:800px;margin:0 auto;padding:40px 30px 300px}
 .hero{text-align:center;padding:48px 0 40px;border-bottom:1px solid var(--border);margin-bottom:48px}
 .hero-badge{display:inline-flex;align-items:center;gap:6px;background:var(--blue-bg);color:var(--blue);border-radius:20px;padding:6px 16px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:16px}
 .hero h1{font-size:32px;font-weight:800;color:var(--text-strong);margin-bottom:12px;line-height:1.2}
@@ -151,19 +151,23 @@ li{margin-bottom:6px}
     <div class="sidebar-label">On this page</div>
     <ul class="step-list">
         <li class="step-item">
-            <a href="#meji-media" class="step-link active"><span class="step-num">1</span> Meji Media</a>
+            <a href="#events-company" class="step-link active"><span class="step-num">1</span> Events Company</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#menovia" class="step-link"><span class="step-num">2</span> Menovia</a>
+            <a href="#healthcare-startup" class="step-link"><span class="step-num">2</span> Healthcare Startup</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#stack" class="step-link"><span class="step-num">3</span> Stack Overview</a>
+            <a href="#ai-classification" class="step-link"><span class="step-num">3</span> AI Classification</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#download" class="step-link"><span class="step-num">4</span> Download</a>
+            <a href="#stack" class="step-link"><span class="step-num">4</span> Stack Overview</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#download" class="step-link"><span class="step-num">5</span> Download</a>
         </li>
     </ul>
 </aside>
@@ -174,12 +178,12 @@ li{margin-bottom:6px}
 <section class="hero" id="hero">
     <div class="hero-badge">Case Studies</div>
     <h1>Real Systems in Production</h1>
-    <p class="hero-sub">Two examples showing how I approach different industries and tool stacks. Prepared for AI Implementation Agency (NYC) to illustrate the kind of work I'd deliver for your clients.</p>
+    <p class="hero-sub">Three examples showing how I approach different industries, tool stacks, and problem types. Prepared for AI Implementation Agency (NYC) to illustrate the kind of work I'd deliver for your clients.</p>
 </section>
 
-<h2 id="meji-media">Meji Media: Events Industry on Make.com</h2>
+<h2 id="events-company">UK Events Company: Make.com Pipeline</h2>
 
-<p>Meji Media is a wedding and events venue company in the UK. They needed a full automation backbone to handle enquiry intake, qualification, personalized follow-up, and team routing. Before my work, their process was manual email triage with responses that took hours or days.</p>
+<p>A wedding and events venue company in the UK. They needed a full automation backbone to handle enquiry intake, qualification, personalized follow-up, and team routing. Before my work, their process was manual email triage with responses that took hours or days.</p>
 
 <h3>What I Built</h3>
 <p>15 production Make.com scenarios that form a connected pipeline:</p>
@@ -199,9 +203,9 @@ li{margin-bottom:6px}
     <p>This is the kind of multi-scenario Make.com architecture your clients might need. I've built it, maintained it, and iterated on it in production over multiple months. Error handling and monitoring aren't theoretical for me. They're things I debug at 8am when a scenario fails overnight.</p>
 </div>
 
-<h2 id="menovia">Menovia: Healthcare Startup on n8n</h2>
+<h2 id="healthcare-startup">EU Healthcare Startup: n8n Deployment</h2>
 
-<p>Menovia is a healthcare startup building patient journey automation. Different industry, different compliance requirements, different orchestrator. The methodology stays the same.</p>
+<p>A healthcare startup building patient journey automation. Different industry, different compliance requirements, different orchestrator. The methodology stays the same.</p>
 
 <h3>What I Built</h3>
 <ul>
@@ -218,6 +222,26 @@ li{margin-bottom:6px}
 <div class="callout green">
     <div class="callout-title">Different stack, same approach</div>
     <p>This shows I'm not locked into one tool. When the problem calls for n8n instead of Make.com, I switch orchestrators without changing how I think about system design. Your agency's clients won't all need the same platform. I can adapt.</p>
+</div>
+
+<h2 id="ai-classification">AI-Powered Classification Pipeline</h2>
+
+<p>A project where the core challenge was routing incoming messages to the right team without human triage. The client received hundreds of inbound messages daily across email, forms, and chat. Each one needed to go to sales, support, or billing based on content, not keywords.</p>
+
+<h3>What I Built</h3>
+<ul>
+    <li><strong>Confidence-threshold routing:</strong> Each message gets classified by AI with a confidence score. High-confidence messages route automatically. Low-confidence ones get flagged for human review. This means the system handles the easy 80% without intervention and only escalates the ambiguous 20%.</li>
+    <li><strong>Multi-channel intake:</strong> Webhooks capture messages from three sources into a unified format before classification. The AI doesn't care where the message came from.</li>
+    <li><strong>Feedback loop:</strong> When a human overrides a classification, that correction feeds back into prompt refinement. The system gets more accurate over time without retraining a model.</li>
+    <li><strong>Audit trail:</strong> Every classification decision is logged with the input, output, confidence score, and routing action. Useful for debugging and for demonstrating accuracy to stakeholders.</li>
+</ul>
+
+<h3>Systems Used</h3>
+<p>Make.com (orchestration), OpenAI API (classification), Google Sheets (audit log), webhooks (multi-channel intake).</p>
+
+<div class="callout orange">
+    <div class="callout-title">The pattern behind this</div>
+    <p>AI classification + confidence routing is one of the most common patterns I build. It applies to support tickets, lead qualification, content moderation, document routing. The structure is the same, the prompts change. If your clients have any "sort this pile of incoming stuff" problem, this is the solution.</p>
 </div>
 
 <h2 id="stack">Stack Overview</h2>

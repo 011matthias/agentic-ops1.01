@@ -10,7 +10,7 @@ https://unpauseai.com/clients/ai-automation-agency-partner/
 I put together a proposal site (+ walkthrough video) that shows how I work and what I've built.
 
 The site includes:
-- Two case studies from real production systems (Make.com + n8n)
+- Three case studies from real production systems (Make.com, n8n, AI classification)
 - A live AI demo you can try right now (email classifier)
 - A free n8n workflow you can import and use immediately
 - My approach to translating business problems into practical technical solutions
@@ -18,7 +18,7 @@ The site includes:
 
 Short background: I build automation systems for clients across Make.com, n8n, Python, and JavaScript, with AI/LLM integrations (OpenAI, Claude) woven in where they add real value. I currently manage 50+ Make.com scenarios across client accounts and have built production n8n workflows with custom code nodes, error handling, and monitoring.
 
-What I think makes this a fit: your posting asks for someone who can "actually build and implement from scratch" and "recommend solutions, not just follow instructions." That's exactly how I work. I've built systems for a German energy company (Make.com migration + stabilization), a healthcare startup (GDPR-compliant patient journey automation), and AI classification pipelines that route decisions by confidence level. Each one started from a business problem, not a tool choice.
+What I think makes this a fit: your posting asks for someone who can "actually build and implement from scratch" and "recommend solutions, not just follow instructions." That's exactly how I work. I've built systems for a UK events company (full Make.com automation backbone), a healthcare startup (GDPR-compliant patient journey on n8n), and AI classification pipelines that route decisions by confidence level. Each one started from a business problem, not a tool choice.
 
 Stack I'm strongest in:
 - Make.com and n8n (primary orchestrators)
