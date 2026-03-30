@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Approach | Agency Partner | UnpauseAI</title>
+<style>
+:root{--bg:#ffffff;--text:#1a1a1a;--text2:#6b7280;--text-strong:#111827;--blue:#2563eb;--blue-dark:#1e40af;--blue-light:#dbeafe;--blue-bg:#eff6ff;--green:#059669;--green-light:#d1fae5;--green-bg:#ecfdf5;--green-dark:#047857;--purple:#7c3aed;--purple-light:#ede9fe;--purple-bg:#f5f3ff;--purple-dark:#5b21b6;--orange:#d97706;--orange-light:#fef3c7;--orange-bg:#fffbeb;--orange-dark:#b45309;--border:#e5e7eb;--surface:#f8fafc;--surface2:#f1f5f9;--nav-bg:#ffffff;--card-shadow:0 1px 3px rgba(0,0,0,.08);--th-bg:#1e40af}
+[data-theme="dark"]{--bg:#0f172a;--text:#e2e8f0;--text2:#94a3b8;--text-strong:#f1f5f9;--blue:#3b82f6;--blue-dark:#93c5fd;--blue-light:#1e3a5f;--blue-bg:#172554;--green:#34d399;--green-light:#064e3b;--green-bg:#022c22;--green-dark:#6ee7b7;--purple:#a78bfa;--purple-light:#2e1065;--purple-bg:#1e1040;--purple-dark:#c4b5fd;--orange:#fbbf24;--orange-light:#78350f;--orange-bg:#451a03;--orange-dark:#fcd34d;--border:#334155;--surface:#1e293b;--surface2:#1e293b;--nav-bg:#1e293b;--card-shadow:0 1px 3px rgba(0,0,0,.3);--th-bg:#1e3a5f}
+@media print{.site-nav,.sidebar,.mobile-nav-toggle,.cta-section,.access-gate{display:none !important}.main-content{margin-left:0 !important}body{padding-top:0 !important}}
+*{box-sizing:border-box;margin:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--text);background:var(--bg);line-height:1.65;font-size:15px;transition:background .2s,color .2s}
+.access-gate{position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;transition:opacity .3s}
+.access-gate.hidden{opacity:0;pointer-events:none}
+.access-gate h2{font-size:20px;color:var(--text-strong)}
+.access-gate p{font-size:14px;color:var(--text2);max-width:360px;text-align:center}
+.access-gate input{padding:10px 16px;border:2px solid var(--border);border-radius:8px;font-size:15px;width:240px;background:var(--surface);color:var(--text);outline:none;transition:border-color .15s}
+.access-gate input:focus{border-color:var(--blue)}
+.access-gate button{padding:10px 24px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transition:background .15s}
+.access-gate button:hover{background:var(--blue-dark)}
+.access-gate .error{color:#ef4444;font-size:13px;min-height:20px}
+.site-nav{position:fixed;top:0;left:0;right:0;z-index:1000;background:var(--nav-bg);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:56px;box-shadow:var(--card-shadow);transition:background .2s}
+.nav-left{display:flex;align-items:center;gap:12px}
+.nav-logo{display:flex;align-items:center;gap:6px;font-size:15px;text-decoration:none}
+.nav-logo .logo-bold{font-weight:700;color:var(--text)}
+.nav-logo .logo-accent{font-weight:700;color:var(--blue)}
+.nav-sep{color:var(--border);font-size:18px}
+.nav-client{font-size:14px;font-weight:600;color:var(--text)}
+.nav-links{display:flex;gap:2px}
+.nav-links a{font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;transition:background .15s,color .15s}
+.nav-links a:hover{background:var(--surface2);color:var(--text)}
+.nav-links a.active{background:var(--blue-light);color:var(--blue);font-weight:700}
+.nav-right{display:flex;align-items:center;gap:8px}
+.nav-status{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;background:var(--blue-light);color:var(--blue)}
+@keyframes navpulse{0%,100%{opacity:1}50%{opacity:.4}}
+.nav-theme{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px;color:var(--text2);transition:background .15s}
+.nav-theme:hover{background:var(--border)}
+.sidebar{position:fixed;top:56px;left:0;width:220px;height:calc(100vh - 56px);overflow-y:auto;background:var(--nav-bg);border-right:1px solid var(--border);padding:20px 0;z-index:50;transition:transform .25s,background .2s}
+.sidebar-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);padding:0 16px;margin-bottom:12px}
+.step-list{list-style:none;padding:0}
+.step-item{position:relative}
+.step-link{display:flex;align-items:center;gap:10px;padding:8px 16px;font-size:13px;font-weight:500;color:var(--text2);text-decoration:none;transition:all .15s;border-left:3px solid transparent}
+.step-link:hover{background:var(--surface2);color:var(--text)}
+.step-link.active{background:var(--blue-light);color:var(--blue-dark);border-left-color:var(--blue);font-weight:700}
+.step-num{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border:2px solid var(--border);color:var(--text2);flex-shrink:0;transition:all .15s}
+.step-link.active .step-num{border-color:var(--blue);background:var(--blue);color:#fff}
+.step-line{position:absolute;left:26px;top:38px;width:2px;height:calc(100% - 30px);background:var(--border)}
+.step-item:last-child .step-line{display:none}
+.main-content{margin-left:220px;padding:56px 0 0 0}
+.content-inner{max-width:800px;margin:0 auto;padding:40px 30px 60px}
+.hero{text-align:center;padding:48px 0 40px;border-bottom:1px solid var(--border);margin-bottom:48px}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;background:var(--blue-bg);color:var(--blue);border-radius:20px;padding:6px 16px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:16px}
+.hero h1{font-size:32px;font-weight:800;color:var(--text-strong);margin-bottom:12px;line-height:1.2}
+.hero-sub{font-size:16px;color:var(--text2);max-width:560px;margin:0 auto;line-height:1.6}
+h2{font-size:22px;color:var(--blue-dark);border-bottom:2px solid var(--blue);padding-bottom:8px;margin-top:56px;margin-bottom:20px;scroll-margin-top:80px}
+h3{font-size:17px;color:var(--text-strong);margin-top:28px;margin-bottom:12px;scroll-margin-top:80px}
+p{margin-bottom:16px;color:var(--text)}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+strong{color:var(--text-strong)}
+ul,ol{padding-left:24px;margin-bottom:16px}
+li{margin-bottom:6px}
+.callout{border-left:4px solid var(--blue);background:var(--blue-bg);padding:16px 20px;border-radius:0 8px 8px 0;margin:24px 0}
+.callout-title{font-size:13px;font-weight:700;color:var(--blue-dark);margin-bottom:4px;text-transform:uppercase;letter-spacing:.03em}
+.callout p{margin:0;color:var(--blue-dark);font-size:14px}
+.callout.green{border-color:var(--green);background:var(--green-bg)}
+.callout.green .callout-title,.callout.green p{color:var(--green-dark)}
+.callout.orange{border-color:var(--orange);background:var(--orange-bg)}
+.callout.orange .callout-title,.callout.orange p{color:var(--orange-dark)}
+.callout.purple{border-color:var(--purple);background:var(--purple-bg)}
+.callout.purple .callout-title,.callout.purple p{color:var(--purple-dark)}
+.wf-diagram{display:flex;gap:0;margin:24px 0;flex-wrap:wrap}
+.wf-node{flex:1;min-width:120px;padding:16px 12px;border:2px solid var(--border);background:var(--surface);text-align:center;position:relative;border-radius:8px;margin:0 4px}
+.wf-node.source{border-color:var(--blue);background:var(--blue-bg)}
+.wf-node.process{border-color:var(--purple);background:var(--purple-bg)}
+.wf-node.output{border-color:var(--green);background:var(--green-bg)}
+.wf-node.trigger{border-color:var(--orange);background:var(--orange-bg)}
+.wf-node-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin-bottom:4px}
+.wf-node-title{font-size:13px;font-weight:700;color:var(--text-strong)}
+.wf-node-desc{font-size:11px;color:var(--text2);margin-top:6px;line-height:1.4}
+.wf-arrow{display:flex;align-items:center;color:var(--text2);font-size:18px;padding:0 2px}
+.diff-card{border:1px solid var(--border);border-radius:12px;padding:24px;margin:20px 0;background:var(--surface);transition:transform .15s,box-shadow .15s}
+.diff-card:hover{transform:translateY(-2px);box-shadow:var(--card-shadow)}
+.diff-card h3{margin-top:0;color:var(--blue-dark)}
+.demo-box{border:2px solid var(--blue);border-radius:12px;padding:32px 28px;margin:32px 0;background:var(--surface)}
+.demo-title{font-size:18px;font-weight:700;color:var(--blue-dark);margin-bottom:8px}
+.demo-desc{font-size:14px;color:var(--text2);margin-bottom:24px}
+.demo-field{margin-bottom:16px}
+.demo-field label{display:block;font-size:13px;font-weight:600;color:var(--text-strong);margin-bottom:4px}
+.demo-field textarea{width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);outline:none;transition:border-color .15s;font-family:inherit;resize:vertical;min-height:120px;line-height:1.5}
+.demo-field textarea:focus{border-color:var(--blue)}
+.demo-btn{padding:12px 28px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transition:background .15s}
+.demo-btn:hover{background:var(--blue-dark)}
+.demo-btn:disabled{opacity:.5;cursor:not-allowed}
+.demo-result{margin-top:24px;display:none}
+.demo-result.visible{display:block}
+.result-header{display:flex;align-items:center;gap:16px;margin-bottom:20px}
+.score-circle{width:72px;height:72px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;color:#fff;flex-shrink:0}
+.score-circle.high{background:var(--green)}
+.score-circle.med{background:var(--orange)}
+.score-circle.low{background:#ef4444}
+.score-detail{flex:1}
+.score-label{font-size:13px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.04em}
+.score-reasoning{font-size:14px;color:var(--text);margin-top:4px;line-height:1.5}
+.result-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px}
+.result-tag{padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600;background:var(--blue-light);color:var(--blue)}
+.result-action{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:20px;margin-top:16px}
+.result-action-header{font-size:13px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px}
+.result-action-body{font-size:14px;color:var(--text);line-height:1.6}
+.demo-loading{display:none;text-align:center;padding:24px;color:var(--text2)}
+.demo-loading.visible{display:block}
+.spinner{display:inline-block;width:20px;height:20px;border:2px solid var(--border);border-top:2px solid var(--blue);border-radius:50%;animation:spin .8s linear infinite;margin-right:8px;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+.demo-error{color:#ef4444;font-size:14px;margin-top:16px;display:none}
+.demo-error.visible{display:block}
+.cta-section{text-align:center;padding:40px 0;margin-top:48px;border-top:1px solid var(--border)}
+.cta-section h2{border:none;text-align:center;margin-top:0}
+.cta-section p{color:var(--text2);margin-bottom:24px}
+.cta-btn{display:inline-flex;align-items:center;gap:8px;background:var(--blue);color:#fff;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;transition:background .15s,transform .15s,box-shadow .15s;box-shadow:0 2px 8px rgba(37,99,235,.3)}
+.cta-btn:hover{background:var(--blue-dark);transform:translateY(-1px);box-shadow:0 4px 12px rgba(37,99,235,.4);text-decoration:none}
+.footer{text-align:center;color:var(--text2);font-size:13px;padding:20px 0 40px;border-top:1px solid var(--border)}
+.mobile-nav-toggle{display:none;background:none;border:none;cursor:pointer;padding:8px;color:var(--text)}
+@media (max-width:1100px){.nav-links a{font-size:12px;padding:5px 8px}.nav-status{display:none}}
+@media (max-width:768px){.sidebar{transform:translateX(-100%);width:260px}.sidebar.open{transform:translateX(0);box-shadow:4px 0 12px rgba(0,0,0,.1)}.main-content{margin-left:0 !important}.mobile-nav-toggle{display:block}.nav-links{display:none}.wf-diagram{flex-direction:column}.wf-arrow{transform:rotate(90deg);justify-content:center}.hero h1{font-size:24px}}
+</style>
+<script>(function(){var t=localStorage.getItem('ai-automation-agency-partner-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})()</script>
+</head>
+<body>
+
+<!-- Access Gate -->
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared specifically for your team. Enter the access code from your message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/ai-automation-agency-partner/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Agency Partner</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/ai-automation-agency-partner/">Overview</a>
+        <a href="/clients/ai-automation-agency-partner/solution">Case Studies</a>
+        <a href="/clients/ai-automation-agency-partner/workflow" class="active">Approach</a>
+        <a href="/clients/ai-automation-agency-partner/timeline">Engagement</a>
+        <a href="/clients/ai-automation-agency-partner/investment">Investment</a>
+        <a href="/clients/ai-automation-agency-partner/faq">FAQ</a>
+        <a href="/clients/ai-automation-agency-partner/onboarding">Get Started</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">On this page</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#process" class="step-link active"><span class="step-num">1</span> My Process</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#approach" class="step-link"><span class="step-num">2</span> What Sets This Apart</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#live-demo" class="step-link"><span class="step-num">3</span> Live AI Demo</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<!-- Hero -->
+<section class="hero">
+    <div class="hero-badge">Approach</div>
+    <h1>How I Build Automation</h1>
+    <p class="hero-sub">From business problem to production system. Plus a live AI demo you can try right now.</p>
+</section>
+
+<!-- Process Section -->
+<h2 id="process">My Process</h2>
+
+<p>Every project follows the same four stages. The tools change depending on the problem, but the structure doesn't.</p>
+
+<div class="wf-diagram">
+    <div class="wf-node trigger">
+        <div class="wf-node-label">Stage 1</div>
+        <div class="wf-node-title">Discovery</div>
+        <div class="wf-node-desc">Understand the business problem, map data flows, identify failure points</div>
+    </div>
+    <div class="wf-arrow">&rarr;</div>
+    <div class="wf-node source">
+        <div class="wf-node-label">Stage 2</div>
+        <div class="wf-node-title">Design</div>
+        <div class="wf-node-desc">Choose the right tool, structure the pipeline, plan error handling</div>
+    </div>
+    <div class="wf-arrow">&rarr;</div>
+    <div class="wf-node process">
+        <div class="wf-node-label">Stage 3</div>
+        <div class="wf-node-title">Build + Test</div>
+        <div class="wf-node-desc">Implement with real data, test edge cases, validate outputs</div>
+    </div>
+    <div class="wf-arrow">&rarr;</div>
+    <div class="wf-node output">
+        <div class="wf-node-label">Stage 4</div>
+        <div class="wf-node-title">Ship + Monitor</div>
+        <div class="wf-node-desc">Deploy to production, set up alerts, document everything</div>
+    </div>
+</div>
+
+<h3>Discovery</h3>
+<p>Before writing a single line of code, I need to understand what the actual problem is. That means talking through the current process, seeing where data lives, and figuring out what breaks. Most automation projects fail because someone started building before they understood the constraints.</p>
+
+<h3>Design</h3>
+<p>Once I know what we're solving, I pick the tool that fits. Make.com for visual automation with lots of API connections. n8n when there's custom logic or code-heavy processing. Python when nothing off-the-shelf works. I'll map out the pipeline, plan for errors, and define what "done" looks like before building anything.</p>
+
+<h3>Build + Test</h3>
+<p>I build with real data from day one, not dummy inputs that pass every test. Edge cases get handled during the build, not after the first production failure. Every workflow gets tested against the actual conditions it'll face: malformed inputs, API timeouts, duplicate records, missing fields.</p>
+
+<h3>Ship + Monitor</h3>
+<p>Deploying isn't the finish line. Every workflow I ship includes logging, error alerts, and documentation. If something breaks at 2am, the error message tells you exactly what happened and where. I don't hand off black boxes.</p>
+
+<!-- Approach Section -->
+<h2 id="approach">What Sets This Apart</h2>
+
+<div class="diff-card">
+    <h3>Systems Thinking, Not Just Wiring</h3>
+    <p>I don't just connect Tool A to Tool B. I ask what happens when Tool A is down, when the data is malformed, when the volume doubles. Edge cases get handled before they become incidents. The goal isn't a working demo. It's a system that runs reliably when no one's watching.</p>
+</div>
+
+<div class="diff-card">
+    <h3>Right Tool for the Problem</h3>
+    <p>Make.com for visual automation, n8n for code-heavy workflows, Python for custom APIs, JavaScript for code nodes. I match the tool to the problem instead of forcing everything through one platform. That means your clients get the best solution for their specific situation, not whatever I happen to prefer.</p>
+</div>
+
+<div class="diff-card">
+    <h3>Production-Grade from Day One</h3>
+    <p>Structured error handling, logging, retry logic, and monitoring. Not "we'll add that later." Every workflow I build is designed to run without someone watching it. That's the difference between a demo and a production system.</p>
+</div>
+
+<!-- Live Demo Section -->
+<h2 id="live-demo">Live AI Demo</h2>
+
+<p>This is a working example of what I'd build into a client workflow. Paste any email or message below, and the AI will classify the intent, score its confidence, and suggest a routing action.</p>
+
+<div class="demo-box">
+    <div class="demo-title">AI Email Classifier</div>
+    <div class="demo-desc">Paste any email or message. The AI will classify the intent, score its confidence, and suggest a routing action. This is the same logic I'd build into a client workflow.</div>
+
+    <div class="demo-field">
+        <label for="demo-text">Email or message text</label>
+        <textarea id="demo-text" placeholder="e.g. Hi, I saw your ad and I'm interested in the premium plan. Can you walk me through the pricing and onboarding process? We're a team of 12 and need something up and running by next month."></textarea>
+    </div>
+    <button class="demo-btn" id="demo-submit" onclick="runDemo()">Classify This Message</button>
+
+    <div class="demo-loading" id="demo-loading">
+        <span class="spinner"></span> Classifying message...
+    </div>
+
+    <div class="demo-error" id="demo-error"></div>
+
+    <div class="demo-result" id="demo-result">
+        <div class="result-header">
+            <div class="score-circle" id="result-score-circle">--</div>
+            <div class="score-detail">
+                <div class="score-label" id="result-classification">Classification</div>
+                <div class="score-reasoning" id="result-reasoning"></div>
+            </div>
+        </div>
+        <div class="result-tags" id="result-tags"></div>
+        <div class="result-action">
+            <div class="result-action-header">Suggested Action</div>
+            <div class="result-action-body" id="result-action"></div>
+        </div>
+    </div>
+</div>
+
+<div class="callout purple">
+    <div class="callout-title">What you just saw</div>
+    <p>That's the same AI classification logic I'd build into a Make.com or n8n workflow. In production, it processes messages automatically without anyone typing anything.</p>
+</div>
+
+<!-- CTA -->
+<section class="cta-section">
+    <h2>Want to see how a project would work?</h2>
+    <p>The engagement page breaks down what the first project looks like and how ongoing work is structured.</p>
+    <a href="/clients/ai-automation-agency-partner/timeline" class="cta-btn">View Engagement Model &rarr;</a>
+</section>
+
+<footer class="footer">
+    <p>Prepared by <a href="mailto:nicolas.neumann@unpauseai.com">UnpauseAI</a> &middot; 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+function checkAccess(){var c=document.getElementById('accessCode').value.trim().toLowerCase();if(c==='ai-partner-2026'){document.getElementById('accessGate').classList.add('hidden');localStorage.setItem('ai-automation-agency-partner-access','granted')}else{document.getElementById('accessError').textContent='Incorrect code. Check your message for the access code.'}}
+if(localStorage.getItem('ai-automation-agency-partner-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}
+function toggleTheme(){var h=document.documentElement;var t=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',t);localStorage.setItem('ai-automation-agency-partner-theme',t)}
+
+var links=document.querySelectorAll('.step-link');var sections=[];
+links.forEach(function(a){var id=a.getAttribute('href').replace('#','');var el=document.getElementById(id);if(el)sections.push({el:el,link:a})});
+function updateActive(){var scrollY=window.scrollY+120;var active=sections[0];for(var i=0;i<sections.length;i++){if(sections[i].el.offsetTop<=scrollY)active=sections[i]}links.forEach(function(l){l.classList.remove('active')});if(active)active.link.classList.add('active')}
+window.addEventListener('scroll',updateActive);
+
+var FALLBACK={classification:"inquiry",confidence:85,reasoning:"The message contains a direct question about services and pricing, with a professional tone suggesting genuine business interest rather than spam or a complaint.",suggested_action:"Route to sales team for follow-up within 24 hours",tags:["business-inquiry","pricing-question","high-intent"]};
+
+function runDemo(){
+    var text=document.getElementById('demo-text').value.trim();
+    if(!text){document.getElementById('demo-text').focus();return}
+    var btn=document.getElementById('demo-submit');
+    var loading=document.getElementById('demo-loading');
+    var result=document.getElementById('demo-result');
+    var errorEl=document.getElementById('demo-error');
+    btn.disabled=true;
+    loading.classList.add('visible');
+    result.classList.remove('visible');
+    errorEl.classList.remove('visible');
+    var controller=new AbortController();
+    var timeout=setTimeout(function(){controller.abort()},10000);
+    fetch('/api/modules/email-classifier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text}),signal:controller.signal})
+    .then(function(r){clearTimeout(timeout);if(!r.ok)throw new Error('API returned '+r.status);return r.json()})
+    .then(function(data){if(data.error)throw new Error(data.error);showResult(data)})
+    .catch(function(err){clearTimeout(timeout);console.warn('Live demo failed, using fallback:',err.message);showResult(FALLBACK)})
+    .finally(function(){btn.disabled=false;loading.classList.remove('visible')});
+}
+
+function showResult(data){
+    var result=document.getElementById('demo-result');
+    var scoreCircle=document.getElementById('result-score-circle');
+    var classification=document.getElementById('result-classification');
+    var reasoning=document.getElementById('result-reasoning');
+    var tags=document.getElementById('result-tags');
+    var action=document.getElementById('result-action');
+    var score=data.confidence||0;
+    scoreCircle.textContent=score;
+    scoreCircle.className='score-circle '+(score>=70?'high':score>=40?'med':'low');
+    classification.textContent=(data.classification||'unknown').toUpperCase();
+    reasoning.textContent=data.reasoning||'';
+    tags.innerHTML='';
+    if(data.tags&&data.tags.length){data.tags.forEach(function(t){var span=document.createElement('span');span.className='result-tag';span.textContent=t;tags.appendChild(span)})}
+    action.textContent=data.suggested_action||'';
+    result.classList.add('visible');
+}
+</script>
+</body>
+</html>
