@@ -1074,7 +1074,7 @@ body {
       </div>
       <div style="padding:12px 18px;background:var(--surface2);font-size:12px;color:var(--text2);">
         <strong>Placeholders (do not remove):</strong><br>
-        <code>##name##</code> &middot; <code>##topic##</code> &middot; <code>##organisation##</code> &middot; <code>##ai_opening##</code> &middot; <code>##signature##</code> &middot; <code>##venue_name##</code>
+        <code>##name##</code> &middot; <code>##theme_name##</code> &middot; <code>##venue_features_text##</code> &middot; <code>##venue_tiers_text##</code> &middot; <code>##venue_name##</code> &middot; <code>##venue_title##</code> &middot; <code>##venue_phone##</code> &middot; <code>##guests##</code> &middot; <code>##ai_opening##</code> &middot; <code>##signature##</code>
       </div>
     </div>
 
@@ -1338,6 +1338,22 @@ body {
         </details>
       </div>
 
+      <!-- 2026-03-30 Email template overhaul -->
+      <div class="tl-entry tl-entry-border-multi">
+        <div class="tl-header">
+          <span class="tl-date">2026-03-30</span>
+          <span class="tl-scope">Email template overhaul</span>
+          <span class="tl-result tl-result-pass">PASS</span>
+        </div>
+        <div class="tl-desc">All pass &mdash; signature, venue titles, theme names, single-paragraph format, all verified with test submissions</div>
+        <details class="tl-details">
+          <summary>Details</summary>
+          <div class="tl-details-content">
+            Major email template update per Jess's feedback. 5 changes: (1) Signature updated to Jess Harrar / Moonlight &amp; Mistletoe / christmasofficeparty.co.uk. (2) Venue titles shortened (ICC, ICB, Empire Banqueting Hall). (3) Theme names integrated via <code>##theme_name##</code> (Winter Carnival for Birmingham/Leicester, Winter Masquerade for Wolverhampton). (4) Features and tiers converted from bullet lists to single-paragraph format via new <code>##venue_features_text##</code> and <code>##venue_tiers_text##</code> placeholders. (5) Jess's own copy and subject line edits preserved. All 8 of 10 templates updated (step_4_a/b unchanged). A1 and A3 replace chains updated with 3 new placeholder replacements. Verified with test submissions for Birmingham and Wolverhampton venues. All placeholders resolved correctly.
+          </div>
+        </details>
+      </div>
+
     </div>
   </div>
 
@@ -1443,7 +1459,7 @@ const searchIndex = [
   { title: 'A/B Testing', desc: 'Split testing for email templates -- ab_testing_enabled toggle in Pipeline Config', id: 'ab' },
   { title: 'handoff_email', desc: 'Where hot lead team notifications are sent -- currently gurmej@mejimedia.com', id: 'config' },
   { title: 'Lead Scoring', desc: '9-factor weighted score -- hot >= 50, warm >= 25, standard below 25', id: 'a1' },
-  { title: 'Email Placeholders', desc: '##name## ##topic## ##organisation## ##ai_opening## ##signature## ##venue_name##', id: 'templates' },
+  { title: 'Email Placeholders', desc: '##name## ##theme_name## ##venue_features_text## ##venue_tiers_text## ##venue_name## ##venue_title## ##venue_phone## ##guests## ##ai_opening## ##signature##', id: 'templates' },
   { title: 'Cadence', desc: 'Hot: +6/24h, Warm: +12/48h, Standard: +24/72h between follow-ups', id: 'cadence' },
   { title: 'Pipeline Config', desc: 'All system settings in Make.com data store -- handoff, cadence, AI, A/B', id: 'config' },
   { title: 'Email Templates', desc: 'Edit subject and body_html in Make.com data store -- 8 active variants', id: 'templates' },

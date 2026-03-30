@@ -499,10 +499,11 @@ new -> following_up -> replied     (hot lead -- team notification + fastest cade
 <tr><td><code>##topic##</code></td><td>What they enquired about</td></tr>
 <tr><td><code>##organisation##</code></td><td>Their company name</td></tr>
 <tr><td><code>##guests##</code></td><td>Number of guests</td></tr>
-<tr><td><code>##venue_title##</code></td><td>Full venue name (e.g. &ldquo;The ICC&rdquo;)</td></tr>
+<tr><td><code>##venue_title##</code></td><td>Short venue name (e.g. &ldquo;ICC&rdquo;, &ldquo;ICB&rdquo;, &ldquo;Empire Banqueting Hall&rdquo;)</td></tr>
 <tr><td><code>##venue_name##</code></td><td>City name (e.g. &ldquo;Birmingham&rdquo;)</td></tr>
-<tr><td><code>##venue_features##</code></td><td>Venue-specific feature list (from Venue Config)</td></tr>
-<tr><td><code>##venue_tiers##</code></td><td>Venue-specific ticket tiers (from Venue Config)</td></tr>
+<tr><td><code>##theme_name##</code></td><td>Event theme (e.g. &ldquo;Winter Carnival&rdquo; or &ldquo;Winter Masquerade&rdquo;)</td></tr>
+<tr><td><code>##venue_features_text##</code></td><td>Venue features as a single paragraph (from Venue Config)</td></tr>
+<tr><td><code>##venue_tiers_text##</code></td><td>Ticket tier options as a single paragraph (from Venue Config)</td></tr>
 <tr><td><code>##venue_phone##</code></td><td>Venue phone number</td></tr>
 <tr><td><code>##ai_opening##</code></td><td>AI-generated personalised opening line</td></tr>
 <tr><td><code>##signature##</code></td><td>Email signature (from Pipeline Config)</td></tr>
@@ -602,9 +603,9 @@ new -> following_up -> replied     (hot lead -- team notification + fastest cade
 <tr><td>Email signature</td><td><code>email_signature_html</code></td><td>(HTML block)</td><td>The sign-off and company links at the bottom of every email. Edit this once to update all templates.</td></tr>
 <tr><td>A/B testing on/off</td><td><code>ab_testing_enabled</code></td><td>false</td><td>When enabled, new enquiries are randomly split between email Version A and Version B (see the A/B Testing Guide)</td></tr>
 <tr><td>Developer BCC</td><td><code>developer_bcc</code></td><td>client.meji-media@unpauseai.com</td><td>BCC address on all automated emails (for monitoring)</td></tr>
-<tr><td>Website URL</td><td><code>website_url</code></td><td>https://mejimedia.com</td><td>Used in email templates and links</td></tr>
-<tr><td>Portfolio URL</td><td><code>portfolio_url</code></td><td>https://mejimedia.com/portfolio</td><td>Used in email templates</td></tr>
-<tr><td>Booking URL</td><td><code>booking_url</code></td><td>https://mejimedia.com/book</td><td>Used in email templates</td></tr>
+<tr><td>Website URL</td><td><code>website_url</code></td><td>https://www.christmasofficeparty.co.uk/</td><td>Used in email templates and links</td></tr>
+<tr><td>Portfolio URL</td><td><code>portfolio_url</code></td><td>https://mejimedia.com/portfolio</td><td>Meji Media portfolio (not used in current templates)</td></tr>
+<tr><td>Booking URL</td><td><code>booking_url</code></td><td>https://www.christmasofficeparty.co.uk/</td><td>Used in email templates</td></tr>
 <tr><td>Scoring weights</td><td><code>weight_has_organisation</code>, <code>weight_business_email</code>, <code>weight_has_phone</code>, <code>weight_long_message</code>, <code>weight_budget_keywords</code>, <code>weight_business_hours</code>, <code>weight_form_completeness</code>, <code>topic_weight_corporate</code>, <code>topic_weight_wedding</code>, <code>topic_weight_festival</code>, <code>topic_weight_default</code></td><td>Various</td><td>How much each factor contributes to the lead score. See the <a href="/docs/meji-media/lead-scoring">Lead Scoring Guide</a> for details.</td></tr>
 </tbody>
 </table>
@@ -1158,8 +1159,9 @@ new -> following_up -> replied     (hot lead -- team notification + fastest cade
 <li>Keep the placeholders &ndash; they get replaced with real data:
 <ul>
 <li><code>##name##</code> &ndash; the enquirer&rsquo;s name</li>
-<li><code>##topic##</code> &ndash; what they enquired about</li>
-<li><code>##organisation##</code> &ndash; their company (initial emails only)</li>
+<li><code>##theme_name##</code> &ndash; event theme (Winter Carnival / Winter Masquerade)</li>
+<li><code>##venue_features_text##</code> &ndash; venue features paragraph</li>
+<li><code>##venue_tiers_text##</code> &ndash; ticket tier options paragraph</li>
 <li><code>##ai_opening##</code> &ndash; AI-generated personalised opening line</li>
 <li><code>##signature##</code> &ndash; your email signature</li>
 </ul>
