@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Onboarding | Fitness Coach n8n CRM | UnpauseAI</title>
+<script>
+(function(){var t=localStorage.getItem('fitness-coach-n8n-crm-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 580px; margin: 0 auto 32px; line-height: 1.6; }
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); margin-top: 24px; }
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .hero h1 { font-size: 24px; }
+}
+/* Form styles */
+.form-group { margin-bottom: 24px; }
+.form-label { display: block; font-size: 14px; font-weight: 600; color: var(--text-strong); margin-bottom: 6px; }
+.form-hint { font-size: 12px; color: var(--text2); margin-bottom: 8px; }
+.form-input, .form-select, .form-textarea {
+    width: 100%; padding: 10px 14px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 14px; background: var(--surface); color: var(--text);
+    font-family: inherit; outline: none; transition: border-color .15s;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--blue); }
+.form-textarea { min-height: 100px; resize: vertical; }
+.form-submit {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border: none; border-radius: 8px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s, transform .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.form-submit:hover { background: var(--blue-dark); transform: translateY(-1px); }
+/* Requirements list */
+.req-list { list-style: none; padding: 0; margin-bottom: 16px; }
+.req-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 14px 16px; border: 1px solid var(--border); border-radius: 8px;
+    margin-bottom: 10px; background: var(--surface);
+}
+.req-icon {
+    width: 32px; height: 32px; border-radius: 8px; background: var(--blue-light);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; font-size: 15px;
+}
+.req-body { flex: 1; }
+.req-title { font-size: 14px; font-weight: 600; color: var(--text-strong); margin-bottom: 3px; }
+.req-desc { font-size: 13px; color: var(--text2); margin: 0; }
+/* Next steps flow */
+.flow-steps { display: flex; flex-direction: column; gap: 0; margin: 24px 0; }
+.flow-step {
+    display: flex; align-items: flex-start; gap: 16px;
+    padding: 20px 0;
+}
+.flow-step:not(:last-child) { border-bottom: 1px solid var(--border); }
+.flow-num {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--blue); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; flex-shrink: 0;
+}
+.flow-body { flex: 1; padding-top: 4px; }
+.flow-title { font-size: 15px; font-weight: 700; color: var(--text-strong); margin-bottom: 4px; }
+.flow-desc { font-size: 14px; color: var(--text2); margin: 0; }
+</style>
+</head>
+<body>
+
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared for you. Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+        </button>
+        <a href="/clients/fitness-coach-n8n-crm/" class="nav-logo">
+            <span class="logo-bold">Unpause</span><span class="logo-accent">AI</span>
+        </a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Fitness Coach</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/fitness-coach-n8n-crm/">Overview</a>
+        <a href="/clients/fitness-coach-n8n-crm/solution">Solution</a>
+        <a href="/clients/fitness-coach-n8n-crm/workflow">Workflow</a>
+        <a href="/clients/fitness-coach-n8n-crm/timeline">Timeline</a>
+        <a href="/clients/fitness-coach-n8n-crm/investment">Investment</a>
+        <a href="/clients/fitness-coach-n8n-crm/faq">FAQ</a>
+        <a href="/clients/fitness-coach-n8n-crm/onboarding" class="active">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<aside class="sidebar">
+    <div class="sidebar-label">On this page</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#requirements" class="step-link active"><span class="step-num">1</span> Requirements</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#project-form" class="step-link"><span class="step-num">2</span> Project Form</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#next-steps" class="step-link"><span class="step-num">3</span> Next Steps</a>
+        </li>
+    </ul>
+</aside>
+
+<div class="main-content">
+<div class="content-inner">
+
+<section class="hero" id="hero">
+    <div class="hero-badge">Get Started</div>
+    <h1>Onboarding</h1>
+    <p class="hero-sub">Everything I need to get Phase 0 up and running. Fill this in when you're ready to start.</p>
+</section>
+
+<h2 id="requirements">What We Need</h2>
+
+<p>Phase 0 requires access to a few of your accounts. Here's what I'll need and why.</p>
+
+<ul class="req-list">
+    <li class="req-item">
+        <div class="req-icon" style="background:var(--purple-light);color:var(--purple);">IG</div>
+        <div class="req-body">
+            <div class="req-title">Instagram Business Account</div>
+            <p class="req-desc">To set up the lead capture webhook. Leads from your Instagram ad forms go directly into the CRM pipeline from here.</p>
+        </div>
+    </li>
+    <li class="req-item">
+        <div class="req-icon" style="background:var(--blue-light);color:var(--blue);">MA</div>
+        <div class="req-body">
+            <div class="req-title">Meta Ads Manager</div>
+            <p class="req-desc">To connect ad form submissions. This is where the webhook gets registered so new form fills trigger the workflow instantly.</p>
+        </div>
+    </li>
+    <li class="req-item">
+        <div class="req-icon" style="background:var(--green-light);color:var(--green);">GS</div>
+        <div class="req-body">
+            <div class="req-title">Google Account</div>
+            <p class="req-desc">For the CRM spreadsheet. I'll create the full sheet structure with your pipeline stages, dedup logic, and reporting tabs. You just need the account.</p>
+        </div>
+    </li>
+    <li class="req-item">
+        <div class="req-icon" style="background:var(--orange-light);color:var(--orange);">WA</div>
+        <div class="req-body">
+            <div class="req-title">WhatsApp Business (for Phase 1, not Phase 0)</div>
+            <p class="req-desc">You don't need this to start, but it's worth setting up early. Phase 1 adds outbound follow-up via WhatsApp, which requires WhatsApp Business API access. I'll guide you through it when we get there.</p>
+        </div>
+    </li>
+</ul>
+
+<div class="callout green">
+    <div class="callout-title">Phase 0 scope</div>
+    <p>This covers what's needed for the first build: lead capture webhook, CRM pipeline in Google Sheets, dedup logic, and new lead notifications. Nothing goes live until you've reviewed it.</p>
+</div>
+
+<h2 id="project-form">Project Details</h2>
+
+<p>Fill in what you can. I'll follow up on anything that needs more detail before we start.</p>
+
+<form id="onboardingForm" onsubmit="handleSubmit(event)">
+
+<div class="form-group">
+    <label class="form-label" for="full-name">Full Name</label>
+    <input class="form-input" type="text" id="full-name" name="full-name" placeholder="Your name">
+</div>
+
+<div class="form-group">
+    <label class="form-label" for="email">Email Address</label>
+    <input class="form-input" type="email" id="email" name="email" placeholder="you@example.com">
+</div>
+
+<div class="form-group">
+    <label class="form-label" for="business-name">Business Name</label>
+    <input class="form-input" type="text" id="business-name" name="business-name" placeholder="e.g., Your Fitness Coaching Brand">
+</div>
+
+<div class="form-group">
+    <label class="form-label" for="instagram-handle">Instagram Handle</label>
+    <input class="form-input" type="text" id="instagram-handle" name="instagram-handle" placeholder="@yourusername">
+</div>
+
+<div class="form-group">
+    <label class="form-label" for="ad-spend">Approximate Monthly Ad Spend</label>
+    <div class="form-hint">Helps me size the expected lead volume for the CRM pipeline</div>
+    <input class="form-input" type="text" id="ad-spend" name="ad-spend" placeholder="e.g., $500/month">
+</div>
+
+<div class="form-group">
+    <label class="form-label" for="lead-volume">Number of Leads Per Month (currently)</label>
+    <div class="form-hint">Rough estimate is fine. This shapes how I set up dedup and notification frequency.</div>
+    <input class="form-input" type="text" id="lead-volume" name="lead-volume" placeholder="e.g., 20-30">
+</div>
+
+<div class="form-group">
+    <label class="form-label" for="comms-channel">Preferred Communication Channel</label>
+    <select class="form-select" id="comms-channel" name="comms-channel">
+        <option value="">Select a channel</option>
+        <option value="whatsapp">WhatsApp</option>
+        <option value="email">Email</option>
+        <option value="both">Both</option>
+    </select>
+</div>
+
+<div class="form-group">
+    <label class="form-label" for="current-tools">Current Tools</label>
+    <div class="form-hint">List any tools you currently use for lead tracking, outreach, or scheduling</div>
+    <textarea class="form-textarea" id="current-tools" name="current-tools" placeholder="List any tools you currently use for lead tracking, outreach, or scheduling"></textarea>
+</div>
+
+<div class="form-group">
+    <label class="form-label" for="pipeline-stages">CRM Pipeline Stages</label>
+    <div class="form-hint">Do you have existing stages, or should I use the default 5-stage fitness coaching pipeline?</div>
+    <textarea class="form-textarea" id="pipeline-stages" name="pipeline-stages" placeholder="Do you have existing stages or should I use the default 5-stage pipeline?"></textarea>
+</div>
+
+<div class="form-group">
+    <label class="form-label" for="anything-else">Anything Else I Should Know</label>
+    <textarea class="form-textarea" id="anything-else" name="anything-else" placeholder="Anything specific about your leads, your offer, or your current process that's worth knowing before I start"></textarea>
+</div>
+
+<div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--border);">
+    <button type="submit" class="form-submit" id="submitBtn">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M2 8l5 5 7-9"/></svg>
+        Send Project Details
+    </button>
+    <p style="margin-top: 12px; font-size: 13px; color: var(--text2);">If you'd prefer, copy your answers and send them via Upwork message instead. Either way works.</p>
+</div>
+
+</form>
+
+<h2 id="next-steps">What Happens Next</h2>
+
+<p>Once I have the details above, here's how the first two weeks go.</p>
+
+<div class="flow-steps">
+    <div class="flow-step">
+        <div class="flow-num">1</div>
+        <div class="flow-body">
+            <div class="flow-title">You fill in the form above</div>
+            <p class="flow-desc">Or send the details via Upwork message if you prefer. I'll confirm receipt and flag anything I need before starting.</p>
+        </div>
+    </div>
+    <div class="flow-step">
+        <div class="flow-num">2</div>
+        <div class="flow-body">
+            <div class="flow-title">I build Phase 0 (3 to 4 days)</div>
+            <p class="flow-desc">Lead capture webhook, CRM pipeline in Google Sheets, dedup logic, and new lead notifications. You'll get a walkthrough before anything goes live.</p>
+        </div>
+    </div>
+    <div class="flow-step">
+        <div class="flow-num">3</div>
+        <div class="flow-body">
+            <div class="flow-title">You see leads flowing in</div>
+            <p class="flow-desc">Once live, leads from Instagram and Meta appear in your CRM automatically. From there we discuss Phase 1: outbound follow-up via WhatsApp so your fitness coaching pipeline runs without manual effort.</p>
+        </div>
+    </div>
+</div>
+
+<div class="callout">
+    <div class="callout-title">Questions before you fill this in?</div>
+    <p>Reply on Upwork and I'll answer the same day. There's no pressure to fill this out until you're ready.</p>
+</div>
+
+<div class="footer">
+    <p>Prepared by UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
+</div>
+
+</div>
+</div>
+
+<script>
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('fitness-coach-n8n-crm-theme',t);
+}
+
+var links = document.querySelectorAll('.step-link');
+var sections = [];
+links.forEach(function(a) {
+    var id = a.getAttribute('href').replace('#','');
+    var el = document.getElementById(id);
+    if (el) sections.push({ el: el, link: a });
+});
+
+function updateActive() {
+    var scrollY = window.scrollY + 120;
+    var active = sections[0];
+    for (var i = 0; i < sections.length; i++) {
+        if (sections[i].el.offsetTop <= scrollY) active = sections[i];
+    }
+    links.forEach(function(l) { l.classList.remove('active'); });
+    if (active) active.link.classList.add('active');
+}
+window.addEventListener('scroll', updateActive);
+updateActive();
+
+links.forEach(function(a) {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        var id = this.getAttribute('href').replace('#','');
+        var el = document.getElementById(id);
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+        document.querySelector('.sidebar').classList.remove('open');
+    });
+});
+
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='fitness-2026'){
+        localStorage.setItem('fitness-coach-n8n-crm-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.';
+    }
+}
+(function(){if(localStorage.getItem('fitness-coach-n8n-crm-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+
+function handleSubmit(e) {
+    e.preventDefault();
+    var btn = document.getElementById('submitBtn');
+    btn.innerHTML = '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M2 8l5 5 7-9"/></svg> Sent!';
+    btn.style.background = 'var(--green)';
+    btn.style.transform = 'none';
+    btn.style.cursor = 'default';
+}
+</script>
+</body>
+</html>

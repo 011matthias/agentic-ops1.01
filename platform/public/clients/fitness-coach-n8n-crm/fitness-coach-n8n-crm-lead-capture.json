@@ -1,0 +1,279 @@
+{
+  "name": "Fitness Coach - Lead Capture Pipeline (Phase 0)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "fitness-lead-capture",
+        "responseMode": "onReceived",
+        "responseData": "allEntries"
+      },
+      "id": "webhook-trigger",
+      "name": "Lead Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "fitness-lead-capture"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract and normalize lead data from Instagram or Meta ad form\nconst input = $input.first().json;\n\nconst lead = {\n  name: input.full_name || input.name || 'Unknown',\n  email: (input.email || '').toLowerCase().trim(),\n  phone: input.phone_number || input.phone || '',\n  source: input.leadgen_id ? 'Meta Ad' : 'Instagram',\n  ad_set: input.ad_set_name || input.adset_name || '',\n  form_name: input.form_name || '',\n  captured_at: new Date().toISOString(),\n  stage: 'New Lead',\n  last_contact: '',\n  notes: ''\n};\n\nreturn [{ json: lead }];"
+      },
+      "id": "normalize-data",
+      "name": "Normalize Lead Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [470, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "check-email",
+              "leftValue": "={{ $json.email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "validate-lead",
+      "name": "Has Valid Email?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [690, 300]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Leads"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "email",
+              "lookupValue": "={{ $json.email }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "check-duplicate",
+      "name": "Check Duplicate",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [910, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "is-new",
+              "leftValue": "={{ $json }}",
+              "rightValue": "",
+              "operator": {
+                "type": "array",
+                "operation": "empty"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "is-new-lead",
+      "name": "Is New Lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1130, 200]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Leads"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "name": "={{ $('Normalize Lead Data').item.json.name }}",
+            "email": "={{ $('Normalize Lead Data').item.json.email }}",
+            "phone": "={{ $('Normalize Lead Data').item.json.phone }}",
+            "source": "={{ $('Normalize Lead Data').item.json.source }}",
+            "ad_set": "={{ $('Normalize Lead Data').item.json.ad_set }}",
+            "captured_at": "={{ $('Normalize Lead Data').item.json.captured_at }}",
+            "stage": "New Lead",
+            "last_contact": "",
+            "notes": ""
+          }
+        },
+        "options": {}
+      },
+      "id": "add-to-crm",
+      "name": "Add to CRM Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1350, 100]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "Leads"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "last_contact": "={{ $('Normalize Lead Data').item.json.captured_at }}",
+            "notes": "Duplicate interaction detected"
+          }
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "id": "update-existing",
+      "name": "Update Existing Lead",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1350, 300]
+    },
+    {
+      "parameters": {
+        "sendTo": "",
+        "message": "New lead captured!\n\nName: {{ $('Normalize Lead Data').item.json.name }}\nEmail: {{ $('Normalize Lead Data').item.json.email }}\nPhone: {{ $('Normalize Lead Data').item.json.phone }}\nSource: {{ $('Normalize Lead Data').item.json.source }}\nAd Set: {{ $('Normalize Lead Data').item.json.ad_set }}\nCaptured: {{ $('Normalize Lead Data').item.json.captured_at }}"
+      },
+      "id": "whatsapp-notify",
+      "name": "WhatsApp Notification",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 2,
+      "position": [1570, 100],
+      "disabled": true
+    }
+  ],
+  "connections": {
+    "Lead Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Lead Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Lead Data": {
+      "main": [
+        [
+          {
+            "node": "Has Valid Email?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Valid Email?": {
+      "main": [
+        [
+          {
+            "node": "Check Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Duplicate": {
+      "main": [
+        [
+          {
+            "node": "Is New Lead?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is New Lead?": {
+      "main": [
+        [
+          {
+            "node": "Add to CRM Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Existing Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add to CRM Sheet": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "Fitness Coach",
+      "id": "1"
+    },
+    {
+      "name": "Lead Capture",
+      "id": "2"
+    }
+  ]
+}
