@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Timeline | Dae's Course Build | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+
+/* Access Gate */
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+
+/* Navigation */
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+
+/* Sidebar */
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+
+/* Main Content */
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+
+/* Hero */
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 580px; margin: 0 auto 32px; line-height: 1.6; }
+
+/* Sections */
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+
+/* Callout */
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+
+/* Milestone card */
+.milestone-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 28px; margin: 28px 0; position: relative; overflow: hidden;
+}
+.milestone-card::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 4px; background: var(--blue);
+}
+.milestone-card.m2::before { background: var(--purple); }
+.milestone-card.m3::before { background: var(--green); }
+.milestone-card.m4::before { background: var(--orange); }
+.milestone-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 16px; margin-bottom: 20px; flex-wrap: wrap;
+}
+.milestone-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--blue); margin-bottom: 4px;
+}
+.milestone-card.m2 .milestone-label { color: var(--purple); }
+.milestone-card.m3 .milestone-label { color: var(--green); }
+.milestone-card.m4 .milestone-label { color: var(--orange); }
+.milestone-title { font-size: 18px; font-weight: 700; color: var(--text-strong); }
+.milestone-meta {
+    display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0;
+}
+.milestone-tag {
+    font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: 20px;
+    background: var(--blue-light); color: var(--blue);
+}
+.milestone-card.m2 .milestone-tag { background: var(--purple-light); color: var(--purple); }
+.milestone-card.m3 .milestone-tag { background: var(--green-light); color: var(--green); }
+.milestone-card.m4 .milestone-tag { background: var(--orange-light); color: var(--orange); }
+.milestone-hours { font-size: 12px; color: var(--text2); }
+
+.deliverables-block, .review-block { margin-top: 16px; }
+.block-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--text2); margin-bottom: 10px;
+}
+.deliverable-list { list-style: none; padding: 0; }
+.deliverable-list li {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 14px; color: var(--text);
+}
+.deliverable-list li:last-child { border-bottom: none; }
+.d-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--blue);
+    flex-shrink: 0; margin-top: 5px;
+}
+.milestone-card.m2 .d-dot { background: var(--purple); }
+.milestone-card.m3 .d-dot { background: var(--green); }
+.milestone-card.m4 .d-dot { background: var(--orange); }
+
+.review-questions { list-style: none; padding: 0; margin: 0; }
+.review-questions li {
+    font-size: 13px; color: var(--text2); padding: 5px 0;
+    padding-left: 16px; position: relative;
+}
+.review-questions li::before {
+    content: '?'; position: absolute; left: 0; font-size: 11px;
+    font-weight: 700; color: var(--text2);
+}
+
+.divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+
+/* CTA */
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+
+/* Footer */
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); }
+
+/* Tablet */
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+
+/* Mobile */
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .hero h1 { font-size: 24px; }
+    .milestone-header { flex-direction: column; }
+    .milestone-meta { align-items: flex-start; }
+}
+</style>
+<script>
+(function(){var t=localStorage.getItem('dae-course-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<!-- Access Gate -->
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared for Dae. Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/dae-ai-course-workflows/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Dae's Course Build</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/dae-ai-course-workflows/">Overview</a>
+        <a href="/clients/dae-ai-course-workflows/solution">Solution</a>
+        <a href="/clients/dae-ai-course-workflows/workflow">Workflow</a>
+        <a href="/clients/dae-ai-course-workflows/timeline" class="active">Timeline</a>
+        <a href="/clients/dae-ai-course-workflows/investment">Investment</a>
+        <a href="/clients/dae-ai-course-workflows/faq">FAQ</a>
+        <a href="/clients/dae-ai-course-workflows/onboarding">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">Proposal sections</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#project-overview" class="step-link active"><span class="step-num">1</span> Project Overview</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#milestone-1" class="step-link"><span class="step-num">2</span> Milestone 1</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#milestone-2" class="step-link"><span class="step-num">3</span> Milestone 2</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#milestone-3" class="step-link"><span class="step-num">4</span> Milestone 3</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#milestone-4" class="step-link"><span class="step-num">5</span> Milestone 4</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<!-- Hero -->
+<section class="hero" id="hero">
+    <div class="hero-badge">PROJECT TIMELINE</div>
+    <h1>4 Milestones, Clear Checkpoints</h1>
+    <p class="hero-sub">Each milestone has defined deliverables and a review checkpoint. You approve the output before we move to the next stage. Continued work depends on quality at each stage.</p>
+</section>
+
+<!-- Project Overview -->
+<h2 id="project-overview">Project Overview</h2>
+<p>The project follows 4 milestones mapped directly to your posting. Each milestone is a fixed-price checkpoint. You review and approve the deliverables before the next stage begins.</p>
+<p>Estimated timeline: 4 to 6 weeks total. Exact dates depend on your review turnaround and access to brand materials.</p>
+
+<div class="callout">
+    <div class="callout-title">Quality Gate</div>
+    <p>Each milestone ends with a review checkpoint. You have full control over what moves forward and what needs revision.</p>
+</div>
+
+<!-- Milestone 1 -->
+<h2 id="milestone-1">Milestone 1: Course Outline + System Structure</h2>
+
+<div class="milestone-card">
+    <div class="milestone-header">
+        <div>
+            <div class="milestone-label">Milestone 1 of 4</div>
+            <div class="milestone-title">Course Outline + System Structure</div>
+        </div>
+        <div class="milestone-meta">
+            <span class="milestone-tag">Week 1 to 2</span>
+            <span class="milestone-hours">~7 hours</span>
+        </div>
+    </div>
+
+    <div class="deliverables-block">
+        <div class="block-label">Deliverables</div>
+        <ul class="deliverable-list">
+            <li><span class="d-dot"></span><span>Complete course outline with modules, lessons, and learning objectives</span></li>
+            <li><span class="d-dot"></span><span>System architecture diagrams for all four course areas</span></li>
+            <li><span class="d-dot"></span><span>Tool mapping showing which tools cover which modules</span></li>
+            <li><span class="d-dot"></span><span>Lesson flow sequence showing what students learn in what order</span></li>
+        </ul>
+    </div>
+
+    <hr class="divider">
+
+    <div class="review-block">
+        <div class="block-label">What Dae reviews at this checkpoint</div>
+        <ul class="review-questions">
+            <li>Does the structure match your vision for the course?</li>
+            <li>Are the systems practical enough for your audience?</li>
+            <li>Is the lesson progression logical?</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Milestone 2 -->
+<h2 id="milestone-2">Milestone 2: Workflows + Prompts</h2>
+
+<div class="milestone-card m2">
+    <div class="milestone-header">
+        <div>
+            <div class="milestone-label">Milestone 2 of 4</div>
+            <div class="milestone-title">Workflows + Prompts</div>
+        </div>
+        <div class="milestone-meta">
+            <span class="milestone-tag">Week 2 to 3</span>
+            <span class="milestone-hours">~9 hours</span>
+        </div>
+    </div>
+
+    <div class="deliverables-block">
+        <div class="block-label">Deliverables</div>
+        <ul class="deliverable-list">
+            <li><span class="d-dot"></span><span>AI prompt frameworks for each module, tested, annotated, and customizable</span></li>
+            <li><span class="d-dot"></span><span>Make.com and Zapier workflow blueprints, importable by students</span></li>
+            <li><span class="d-dot"></span><span>Visual workflow diagrams simple enough for non-technical learners</span></li>
+        </ul>
+    </div>
+
+    <hr class="divider">
+
+    <div class="review-block">
+        <div class="block-label">What Dae reviews at this checkpoint</div>
+        <ul class="review-questions">
+            <li>Do the prompts produce useful outputs for your audience?</li>
+            <li>Are the workflows simple enough to follow?</li>
+            <li>Do the visual diagrams communicate clearly?</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Milestone 3 -->
+<h2 id="milestone-3">Milestone 3: Slides + Demo Content</h2>
+
+<div class="milestone-card m3">
+    <div class="milestone-header">
+        <div>
+            <div class="milestone-label">Milestone 3 of 4</div>
+            <div class="milestone-title">Slides + Demo Content</div>
+        </div>
+        <div class="milestone-meta">
+            <span class="milestone-tag">Week 3 to 5</span>
+            <span class="milestone-hours">~10 hours</span>
+        </div>
+    </div>
+
+    <div class="deliverables-block">
+        <div class="block-label">Deliverables</div>
+        <ul class="deliverable-list">
+            <li><span class="d-dot"></span><span>Clean, modern slide decks for each module</span></li>
+            <li><span class="d-dot"></span><span>Screen recording demo walkthroughs showing each system in action</span></li>
+            <li><span class="d-dot"></span><span>Before and after examples for key workflows</span></li>
+        </ul>
+    </div>
+
+    <hr class="divider">
+
+    <div class="review-block">
+        <div class="block-label">What Dae reviews at this checkpoint</div>
+        <ul class="review-questions">
+            <li>Do the slides match your visual standards?</li>
+            <li>Are the demos clear and easy to follow?</li>
+            <li>Do the examples resonate with your audience?</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Milestone 4 -->
+<h2 id="milestone-4">Milestone 4: Workbook Draft</h2>
+
+<div class="milestone-card m4">
+    <div class="milestone-header">
+        <div>
+            <div class="milestone-label">Milestone 4 of 4</div>
+            <div class="milestone-title">Workbook Draft</div>
+        </div>
+        <div class="milestone-meta">
+            <span class="milestone-tag">Week 5 to 6</span>
+            <span class="milestone-hours">~5 hours</span>
+        </div>
+    </div>
+
+    <div class="deliverables-block">
+        <div class="block-label">Deliverables</div>
+        <ul class="deliverable-list">
+            <li><span class="d-dot"></span><span>Supporting workbook with exercises per module</span></li>
+            <li><span class="d-dot"></span><span>Quick-reference prompt sheets students can keep open while working</span></li>
+            <li><span class="d-dot"></span><span>Configuration checklists for each tool</span></li>
+        </ul>
+    </div>
+
+    <hr class="divider">
+
+    <div class="review-block">
+        <div class="block-label">What Dae reviews at this checkpoint</div>
+        <ul class="review-questions">
+            <li>Are the exercises practical and actionable?</li>
+            <li>Does the workbook complement the course content?</li>
+            <li>Is the language accessible for non-technical users?</li>
+        </ul>
+    </div>
+</div>
+
+<div class="callout green">
+    <div class="callout-title">What you have after Milestone 4</div>
+    <p>Everything needed to teach the course. I'll handle the systems, prompts, workflows, and materials. You refine the tone, positioning, and final messaging.</p>
+</div>
+
+<!-- CTA -->
+<div class="cta-section">
+    <h2>See the investment breakdown</h2>
+    <p>Fixed price, milestone-based payments. No surprises.</p>
+    <a href="/clients/dae-ai-course-workflows/investment" class="cta-btn">View the Investment &#8594;</a>
+</div>
+
+<footer class="footer">
+    <p>Prepared for <strong>Dae</strong> by UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+// Access gate
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='dae-2026'){
+        localStorage.setItem('dae-course-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.';
+    }
+}
+(function(){if(localStorage.getItem('dae-course-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+
+// Theme toggle
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('dae-course-theme',t);
+}
+
+// Sidebar active state
+(function(){
+    var links=document.querySelectorAll('.step-link');
+    var sections=[];
+    links.forEach(function(l){
+        var id=l.getAttribute('href');
+        if(id&&id.startsWith('#')){
+            var el=document.querySelector(id);
+            if(el)sections.push({el:el,link:l});
+        }
+    });
+    if(!sections.length)return;
+    var observer=new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+            if(e.isIntersecting){
+                links.forEach(function(l){l.classList.remove('active')});
+                sections.forEach(function(s){
+                    if(s.el===e.target)s.link.classList.add('active');
+                });
+            }
+        });
+    },{rootMargin:'-80px 0px -60% 0px'});
+    sections.forEach(function(s){observer.observe(s.el)});
+})();
+</script>
+</body>
+</html>
