@@ -16,7 +16,7 @@ The site includes:
 - Visual workflow diagrams showing how each system connects
 - A downloadable Make.com blueprint (working AI content pipeline you can import and test)
 - Milestone timeline mapped to your 4-phase structure
-- $1,500 fixed pricing with hours per milestone
+- $1,650 fixed pricing with hours per milestone
 - Onboarding form to collect kickoff info
 
 The Make.com blueprint on the site is real. It reads topics from a Google Sheet, sends them through ChatGPT for drafting, formats the output, and saves the finished content to Google Drive. The kind of system your students would learn to build in the course.
@@ -25,7 +25,7 @@ I manage 50+ Make.com scenarios across client accounts, so the workflows in your
 
 On the milestone structure: I'm on the same page. Start with the course outline, review it together, then move to workflows and prompts. Each stage has a checkpoint. If something needs to shift, we adjust before moving forward.
 
-$1,500 fixed for the full scope (outline, workflows, prompts, slides, demos, workbook). If it makes sense to start smaller, Milestone 1 alone (course outline + system structure) works as a standalone first step.
+$1,650 fixed for the full scope (outline, workflows, prompts, slides, demos, workbook). If it makes sense to start smaller, Milestone 1 alone (course outline + system structure) works as a standalone first step.
 
 Cheers,
 Nico

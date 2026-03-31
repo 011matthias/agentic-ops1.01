@@ -86,7 +86,7 @@ SAY: Milestone 1 is the course outline and system structure. Module breakdowns, 
 
 >> Sidebar: Scope Breakdown
 
-SAY: $1,500 fixed for the complete scope. That's about 31 hours across all four milestones. The table here breaks down the hours and deliverables per stage.
+SAY: $1,650 fixed for the complete scope. That's about 31 hours across all four milestones. The table here breaks down the hours and deliverables per stage.
 
 >> Sidebar: Pricing Note
 
@@ -121,5 +121,5 @@ SAY: Thanks for watching. Talk soon.
   - Automation system: lead to CRM to welcome sequence
 - Workflow page: content pipeline detail, sample module (5 lessons), downloadable blueprint
 - Timeline: 4 milestones with review checkpoints
-- Investment: $1,500 fixed, 31 hours, strategic partnership framing
+- Investment: $1,650 fixed, 31 hours, strategic partnership framing
 - Close: blueprint is free to keep, onboarding page for kickoff info

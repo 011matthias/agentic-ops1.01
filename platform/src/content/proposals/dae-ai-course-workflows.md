@@ -10,7 +10,7 @@ status: draft
 track: 2
 created: "2026-03-30"
 sent: null
-value_estimate: "$1,500"
+value_estimate: "$1,650"
 timeline: "4-6 weeks (milestone-based)"
 tags: [automation, make-com, chatgpt, course-design, content-systems, ai-workflows]
 access_code: "dae-2026"
@@ -58,8 +58,8 @@ research:
     hourly_rate: 65
     total_hours: 31
     calculated_price: 2015
-    proposed_price: 1500
-    pricing_rationale: "31h at $65/hr = $2,015 calculated. Proposed $1,500 as strategic fixed price. Course credit positions us for ongoing work and authority in AI education. Ongoing project type suggests follow-on work."
+    proposed_price: 1650
+    pricing_rationale: "31h at $65/hr = $2,015 calculated. Proposed $1,650 (slightly above posted $1,500 to signal independent scope evaluation). Strategic partnership pricing, below calculated rate. Course credit positions us for ongoing work and authority in AI education."
   competitor_research:
     - name: "VA / Course Assistant (Upwork)"
       url: ""
