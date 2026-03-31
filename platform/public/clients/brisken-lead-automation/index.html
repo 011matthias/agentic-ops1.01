@@ -226,6 +226,22 @@ li { margin-bottom: 6px; }
     border-top: none; border-left: none; transform: rotate(45deg) translateY(-1px);
 }
 
+/* Download box */
+.download-box {
+    background: var(--green-bg); border: 1px solid color-mix(in srgb, var(--green) 25%, var(--border));
+    border-radius: 12px; padding: 28px; margin: 28px 0; text-align: center;
+}
+.download-box h3 { color: var(--green-dark); margin-top: 0; font-size: 18px; }
+.download-box p { color: var(--green-dark); font-size: 14px; margin-bottom: 20px; }
+.download-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--green); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s;
+    box-shadow: 0 2px 8px rgba(5,150,105,.3);
+}
+.download-btn:hover { background: var(--green-dark); transform: translateY(-1px); text-decoration: none; }
+
 /* Next-steps link list */
 .page-links { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin: 28px 0; }
 .page-link-card {
@@ -338,7 +354,11 @@ li { margin-bottom: 6px; }
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#next-steps" class="step-link"><span class="step-num">4</span> Next Steps</a>
+            <a href="#download" class="step-link"><span class="step-num">4</span> Download Template</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#next-steps" class="step-link"><span class="step-num">5</span> Next Steps</a>
         </li>
     </ul>
 </aside>
@@ -452,6 +472,17 @@ li { margin-bottom: 6px; }
     <div class="callout-title">LinkedIn channel status</div>
     <p>The LinkedIn ingest (A0) is listed as unconfirmed. We will validate whether this is an active lead source during the scoping discussion before committing to the implementation.</p>
 </div>
+
+<!-- Download Template -->
+<h2 id="download">Download: Lead Scoring Template</h2>
+
+<div class="download-box">
+    <h3>n8n Workflow: Lead Scoring and Routing</h3>
+    <p>Import this n8n workflow to see the lead scoring pattern in action. It accepts lead data via webhook, normalizes it to the standard schema, scores based on information quality (company email, message detail, SAP Store source), and routes high-value leads to a review queue. Connect your destination system (Google Sheets, CRM, or email) after the routing step.</p>
+    <a href="/clients/brisken-lead-automation/brisken-lead-scoring-template.json" class="download-btn" download>Download n8n Template (.json)</a>
+</div>
+
+<p>This is a working template, not a mockup. Import it into any n8n instance via Settings > Import Workflow. The scoring logic matches the criteria from the project spec: free email addresses score low, company domains score high, and SAP Store leads get a bonus signal. Adjust the thresholds and free provider list to match your environment.</p>
 
 <!-- Next Steps -->
 <h2 id="next-steps">Next Steps</h2>

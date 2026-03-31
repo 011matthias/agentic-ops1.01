@@ -1,0 +1,125 @@
+{
+  "name": "Lead Scoring and Logging Template",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-ingest",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Lead Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "lead-ingest"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize incoming lead to standard schema\nconst input = $input.first().json;\n\nconst lead = {\n  source: input.source || 'unknown',\n  source_detail: input.source_detail || '',\n  first_name: input.first_name || '',\n  last_name: input.last_name || '',\n  email: input.email || '',\n  company: input.company || '',\n  job_title: input.job_title || '',\n  phone: input.phone || '',\n  message: input.message || '',\n  submitted_at: input.submitted_at || new Date().toISOString(),\n  received_at: new Date().toISOString()\n};\n\nreturn [{ json: lead }];"
+      },
+      "id": "normalize",
+      "name": "Normalize Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Lead scoring based on information quality\n// Scoring criteria from Dirk:\n//   - gmail/free email only, no other info = Very Low\n//   - company email domain = +High\n//   - company name provided = +Medium\n//   - additional comment/message = +Medium\n//   - SAP Store source = +Medium (higher value channel)\n\nconst lead = $input.first().json;\nlet score = 0;\nconst signals = [];\n\n// Email domain check\nconst email = lead.email.toLowerCase();\nconst freeProviders = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com', 'icloud.com', 'mail.com', 'protonmail.com'];\nconst domain = email.split('@')[1] || '';\nconst isFreeEmail = freeProviders.some(p => domain === p);\n\nif (!isFreeEmail && domain) {\n  score += 30;\n  signals.push('company_email');\n} else {\n  signals.push('free_email');\n}\n\n// Company name\nif (lead.company && lead.company.trim().length > 1) {\n  score += 20;\n  signals.push('has_company');\n}\n\n// Message content\nif (lead.message && lead.message.trim().length > 20) {\n  score += 20;\n  signals.push('has_message');\n}\n\n// Job title\nif (lead.job_title && lead.job_title.trim().length > 1) {\n  score += 10;\n  signals.push('has_job_title');\n}\n\n// Phone\nif (lead.phone && lead.phone.trim().length > 5) {\n  score += 5;\n  signals.push('has_phone');\n}\n\n// SAP Store bonus\nif (lead.source_detail === 'sap-store') {\n  score += 15;\n  signals.push('sap_store_source');\n}\n\n// Determine tier\nlet tier = 'low';\nif (score >= 50) tier = 'high';\nelse if (score >= 25) tier = 'medium';\n\nreturn [{\n  json: {\n    ...lead,\n    scoring: {\n      score,\n      tier,\n      signals,\n      scored_at: new Date().toISOString()\n    }\n  }\n}];"
+      },
+      "id": "score-lead",
+      "name": "Score Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "high-tier",
+              "leftValue": "={{ $json.scoring.tier }}",
+              "rightValue": "high",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "route-by-tier",
+      "name": "High Value?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'received', lead_id: $json.email, tier: $json.scoring.tier, score: $json.scoring.score, action: $json.scoring.tier === 'high' ? 'queued_for_review' : 'auto_processing' }) }}"
+      },
+      "id": "respond-webhook",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1120, 180]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'received', lead_id: $json.email, tier: $json.scoring.tier, score: $json.scoring.score, action: 'auto_processing' }) }}"
+      },
+      "id": "respond-webhook-auto",
+      "name": "Respond OK (Auto)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1120, 420]
+    }
+  ],
+  "connections": {
+    "Lead Webhook": {
+      "main": [
+        [{ "node": "Normalize Lead", "type": "main", "index": 0 }]
+      ]
+    },
+    "Normalize Lead": {
+      "main": [
+        [{ "node": "Score Lead", "type": "main", "index": 0 }]
+      ]
+    },
+    "Score Lead": {
+      "main": [
+        [{ "node": "High Value?", "type": "main", "index": 0 }]
+      ]
+    },
+    "High Value?": {
+      "main": [
+        [{ "node": "Respond OK", "type": "main", "index": 0 }],
+        [{ "node": "Respond OK (Auto)", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "template"
+  },
+  "_comment": "Template workflow for Brisken lead automation. Import into n8n to see the lead scoring pattern. The webhook accepts POST requests with lead data and scores them based on information quality. High-value leads route to a review queue, others process automatically. Connect your destination (Google Sheets, CRM, etc.) after the routing step."
+}
