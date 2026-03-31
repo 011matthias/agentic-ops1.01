@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FAQ | Brisken Lead Automation | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h2:first-of-type { margin-top: 0; }
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+details {
+    border: 1px solid var(--border); border-radius: 10px; margin-bottom: 12px;
+    background: var(--surface); transition: background .15s;
+}
+details[open] { background: var(--bg); }
+summary {
+    padding: 14px 20px; cursor: pointer; font-weight: 600; font-size: 14px;
+    color: var(--text-strong); list-style: none; display: flex; align-items: center; gap: 10px;
+    transition: background .15s;
+}
+summary:hover { background: var(--surface2); border-radius: 10px; }
+summary::before {
+    content: '+'; font-size: 16px; font-weight: 700; color: var(--blue);
+    width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+    border: 2px solid var(--blue); border-radius: 50%; flex-shrink: 0;
+    transition: transform .2s;
+}
+details[open] summary::before { content: '-'; }
+summary::-webkit-details-marker { display: none; }
+.faq-body { padding: 0 20px 16px 52px; font-size: 14px; color: var(--text); line-height: 1.7; }
+.faq-body p { margin-bottom: 10px; }
+.faq-body p:last-child { margin-bottom: 0; }
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); }
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+}
+</style>
+<script>
+(function(){var t=localStorage.getItem('brisken-lead-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared for Brisken. Enter the access code to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/brisken-lead-automation/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Lead Automation</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/brisken-lead-automation/">Overview</a>
+        <a href="/clients/brisken-lead-automation/solution">Solution</a>
+        <a href="/clients/brisken-lead-automation/timeline">Timeline</a>
+        <a href="/clients/brisken-lead-automation/investment">Investment</a>
+        <a href="/clients/brisken-lead-automation/faq" class="active">FAQ</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Scoping</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<aside class="sidebar">
+    <div class="sidebar-label">FAQ topics</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#technical" class="step-link active"><span class="step-num">1</span> Technical</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#process" class="step-link"><span class="step-num">2</span> Process</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#scope" class="step-link"><span class="step-num">3</span> Scope</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#data-privacy" class="step-link"><span class="step-num">4</span> Data and Privacy</a>
+        </li>
+    </ul>
+</aside>
+
+<div class="main-content">
+<div class="content-inner">
+
+<h2 id="technical">Technical</h2>
+
+<details>
+    <summary>Why n8n instead of Make.com or Zapier?</summary>
+    <div class="faq-body">
+        <p>n8n is a better fit for this project for three reasons. First, it has native code nodes that let us write custom scoring logic and parsing rules without workarounds. Second, its AI integration nodes handle multi-step LLM chains (like drafting a response that references specific product context) more cleanly than visual-only tools. Third, n8n can be self-hosted, giving you full control over where your lead data lives.</p>
+        <p>Make.com and Zapier are excellent tools for simpler automation. This project involves AI response composition, lead scoring with custom logic, and human-in-the-loop review gates, which benefit from the flexibility of a code-capable platform.</p>
+    </div>
+</details>
+
+<details>
+    <summary>Where does n8n run?</summary>
+    <div class="faq-body">
+        <p>Two options: <strong>n8n Cloud</strong> (hosted by n8n, no infrastructure to manage) or <strong>self-hosted</strong> on your own servers or a cloud provider like AWS, Azure, or Hetzner.</p>
+        <p>Self-hosted gives you full data sovereignty. All lead data, email content, and AI-drafted responses stay on your infrastructure. Cloud is simpler to maintain but data passes through n8n's servers. We will recommend the best option based on your data requirements and IT setup.</p>
+    </div>
+</details>
+
+<details>
+    <summary>What AI model is used for response drafting?</summary>
+    <div class="faq-body">
+        <p>OpenAI GPT-4o-mini for cost-effective drafting in most cases. Can be upgraded to GPT-4o for higher quality on complex responses. The AI operates within strict templates and constraints, not free-form generation. Every draft follows the structure you define: acknowledge the inquiry, reference the specific product interest, provide relevant information, and ask a follow-up question.</p>
+        <p>If you already use a different AI provider (Azure OpenAI, Anthropic, etc.), the system can be adapted. The AI node in n8n is provider-agnostic.</p>
+    </div>
+</details>
+
+<details>
+    <summary>How does the SAP email parsing work?</summary>
+    <div class="faq-body">
+        <p>SAP Discovery Center and SAP Store send email notifications when someone expresses interest. The system polls the designated inbox on a schedule (every 10 minutes by default), identifies SAP notification emails by sender and subject pattern, and extracts the lead fields (name, email, company, product interest) from the email body using pattern matching.</p>
+        <p>We need sample notification emails from both channels to build the parsing templates. SAP notification formats are consistent, so once the template is built it handles all future emails from that channel reliably.</p>
+    </div>
+</details>
+
+<h2 id="process">Process</h2>
+
+<details>
+    <summary>How does the human review work?</summary>
+    <div class="faq-body">
+        <p><strong>High-value leads:</strong> The AI-drafted response is held and sent to the designated reviewer via email or Slack. The reviewer sees the full lead context (source, company, inquiry, enrichment data) alongside the draft. They can approve as-is, edit the draft, or reject it for manual handling.</p>
+        <p><strong>Medium-value leads:</strong> The response is auto-sent, but the reviewer receives a notification with full context. They can review and follow up if needed.</p>
+        <p><strong>All replies:</strong> When a lead responds to the first message, the reply is routed to mandatory human review. No auto-response to second messages, regardless of lead quality. This is a hard rule in the system.</p>
+    </div>
+</details>
+
+<details>
+    <summary>Can I adjust the lead scoring criteria?</summary>
+    <div class="faq-body">
+        <p>Yes. The scoring rules are configured directly in the n8n workflow. You can add or remove scoring signals (for example, weighting SAP Store leads higher than Discovery Center leads), adjust the thresholds between quality tiers, and change the routing behavior for each tier. No code changes required for most adjustments.</p>
+    </div>
+</details>
+
+<details>
+    <summary>What happens when a lead comes from a new channel?</summary>
+    <div class="faq-body">
+        <p>We add a new ingest workflow that follows the same pattern as the existing ones (A0, A1, A2). It normalizes the new channel's data into the standard lead schema and feeds it into the existing pipeline (A3). The pipeline itself does not need to change because it works with normalized data, not raw channel formats. Adding a new channel is an isolated addition, not a system modification.</p>
+    </div>
+</details>
+
+<details>
+    <summary>What does the first response look like?</summary>
+    <div class="faq-body">
+        <p>The AI drafts a personalized email that follows a consistent structure: (1) acknowledge the inquiry and thank them for their interest, (2) reference the specific product or use case they asked about, (3) provide relevant additional information or documentation, (4) ask a clarifying question to move the conversation forward. The tone, style, and content guidelines are configured based on your preferences. You review and approve the templates and guidelines before the system goes live.</p>
+    </div>
+</details>
+
+<h2 id="scope">Scope</h2>
+
+<details>
+    <summary>Can we start with just Phase 1?</summary>
+    <div class="faq-body">
+        <p>Yes. Each phase is independently valuable and builds on the previous one. Phase 1 gives you automated lead capture from SAP and website channels, deduplication, and logging to your destination system. That alone eliminates manual inbox monitoring. Phase 2 adds intelligence (ranking, AI response, human review). Phase 3 adds reply monitoring. You approve each phase separately.</p>
+    </div>
+</details>
+
+<details>
+    <summary>What about the accounting automation?</summary>
+    <div class="faq-body">
+        <p>The accounting and invoice automation is noted as a separate future workstream (Phase 4). It involves different systems, different workflows, and a different scope. It will be scoped and proposed independently once the lead automation pipeline is running and stable. The two workstreams do not depend on each other.</p>
+    </div>
+</details>
+
+<details>
+    <summary>Is LinkedIn confirmed as a channel?</summary>
+    <div class="faq-body">
+        <p>Not yet. LinkedIn is included in the architecture as a planned channel (A0) but it has not been explicitly confirmed. If LinkedIn is not an active lead source, Phase 2 focuses on lead ranking and AI response drafting without the LinkedIn ingest component. The architecture supports adding it later with no changes to the pipeline.</p>
+    </div>
+</details>
+
+<h2 id="data-privacy">Data and Privacy</h2>
+
+<details>
+    <summary>Where is lead data stored?</summary>
+    <div class="faq-body">
+        <p>In your configured destination system: Google Sheets, a CRM (HubSpot, Pipedrive, etc.), or n8n's internal database. No lead data is stored in third-party systems beyond what you choose as the destination. If n8n is self-hosted, all processing happens on your infrastructure. The only external call is to the AI provider for response drafting (the lead's name, company, and inquiry text are sent to generate the draft).</p>
+    </div>
+</details>
+
+<details>
+    <summary>Is this GDPR compliant?</summary>
+    <div class="faq-body">
+        <p>The system processes B2B contact data for the purpose of responding to business inquiries, which falls under legitimate business interest. There is no personal data profiling, no behavioral tracking, and no data sharing with third parties beyond the AI provider. If n8n is self-hosted, data stays entirely on your infrastructure. For the AI drafting step, only the minimum necessary context (name, company, inquiry) is sent to the AI provider. We recommend including a data processing note in your SAP and website listings if you do not already have one.</p>
+    </div>
+</details>
+
+<details>
+    <summary>Can the AI be turned off?</summary>
+    <div class="faq-body">
+        <p>Yes. The AI response drafting step is a configurable part of the pipeline, not a hard dependency. If you prefer to use static email templates instead of AI-generated drafts, the system routes leads through the same scoring and review process but sends a template-based response instead. You can also run in "draft only" mode where the AI generates drafts but every response goes through human review before sending.</p>
+    </div>
+</details>
+
+<div class="cta-section">
+    <h2>Questions not covered here?</h2>
+    <p>Reach out directly and we can discuss any aspect of the project in more detail.</p>
+    <a href="mailto:nicolas.neumann@unpauseai.com" class="cta-btn">Get in touch &#8594;</a>
+</div>
+
+<footer class="footer">
+    <p>Prepared for <strong>Brisken</strong> by UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='brisken-2026'){
+        localStorage.setItem('brisken-lead-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Check your message for the code.';
+    }
+}
+(function(){if(localStorage.getItem('brisken-lead-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('brisken-lead-theme',t);
+}
+(function(){
+    var links=document.querySelectorAll('.step-link');
+    var sections=[];
+    links.forEach(function(l){
+        var id=l.getAttribute('href');
+        if(id&&id.startsWith('#')){
+            var el=document.querySelector(id);
+            if(el)sections.push({el:el,link:l});
+        }
+    });
+    if(!sections.length)return;
+    var observer=new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+            if(e.isIntersecting){
+                links.forEach(function(l){l.classList.remove('active')});
+                sections.forEach(function(s){
+                    if(s.el===e.target)s.link.classList.add('active');
+                });
+            }
+        });
+    },{rootMargin:'-80px 0px -60% 0px'});
+    sections.forEach(function(s){observer.observe(s.el)});
+})();
+</script>
+</body>
+</html>

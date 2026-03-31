@@ -1,0 +1,19 @@
+type: client
+
+platform:
+  tier: "unknown"              # confirm with client
+  feasibility: "unassessed"    # must complete before /build-automation
+  blockers: []
+  assessed: null
+  notes: "Switched to n8n (2026-03-30). Better fit for AI chains, code nodes, self-hosted data privacy. 4 lead sources planned: LinkedIn, website forms, SAP Discovery Center, SAP Store. Plus future accounting/invoice workstream."
+
+instances:
+  - type: n8n
+    name: n8n-brisken
+    hosting: TBD               # cloud or self-hosted — confirm with client
+    api_url: TBD               # n8n instance URL
+    api_key_env: "N8N_API_KEY_BRISKEN"
+    mcp_server: n8n-brisken    # MCP server name in .mcp.json
+    workflows: []
+    credentials: []
+    tags: []

@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System Architecture | Brisken Lead Automation | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text-strong); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+.callout.purple { border-color: var(--purple); background: var(--purple-bg); }
+.callout.purple .callout-title, .callout.purple p { color: var(--purple-dark); }
+
+/* Architecture diagram */
+.arch-diagram {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 28px; margin: 28px 0; font-family: monospace;
+}
+.arch-row { display: flex; align-items: center; gap: 0; margin: 4px 0; font-size: 13px; }
+.arch-node {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
+    white-space: nowrap;
+}
+.arch-node-blue { background: var(--blue-bg); color: var(--blue-dark); border: 1px solid color-mix(in srgb, var(--blue) 30%, var(--border)); }
+.arch-node-purple { background: var(--purple-bg); color: var(--purple-dark); border: 1px solid color-mix(in srgb, var(--purple) 30%, var(--border)); }
+.arch-node-green { background: var(--green-bg); color: var(--green-dark); border: 1px solid color-mix(in srgb, var(--green) 30%, var(--border)); }
+.arch-node-orange { background: var(--orange-bg); color: var(--orange-dark); border: 1px solid color-mix(in srgb, var(--orange) 30%, var(--border)); }
+.arch-connector { color: var(--text2); padding: 0 8px; font-size: 14px; }
+.arch-label { font-size: 11px; color: var(--text2); margin-top: 6px; }
+
+/* Flow diagram table */
+.arch-table {
+    width: 100%; border-collapse: collapse; margin: 24px 0; font-size: 13px;
+}
+.arch-table th {
+    background: var(--th-bg); color: #fff; padding: 10px 14px;
+    text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+}
+.arch-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.arch-table tr:last-child td { border-bottom: none; }
+.arch-table tr:nth-child(even) td { background: var(--surface); }
+
+/* Schema block */
+.schema-block {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px 20px; margin: 16px 0; font-family: 'Menlo', 'Consolas', monospace; font-size: 12px;
+    line-height: 1.7; color: var(--text); overflow-x: auto; position: relative;
+}
+.schema-block .sk { color: var(--blue); }
+.schema-block .sv { color: var(--green-dark); }
+.schema-block .sc { color: var(--text2); }
+
+/* Score tier badges */
+.tier-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin: 20px 0; }
+.tier-card {
+    border-radius: 10px; padding: 16px; border: 1px solid var(--border);
+}
+.tier-card.high { background: var(--green-bg); border-color: color-mix(in srgb, var(--green) 30%, var(--border)); }
+.tier-card.mid { background: var(--blue-bg); border-color: color-mix(in srgb, var(--blue) 30%, var(--border)); }
+.tier-card.low { background: var(--surface); }
+.tier-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+.tier-card.high .tier-label { color: var(--green-dark); }
+.tier-card.mid .tier-label { color: var(--blue-dark); }
+.tier-card.low .tier-label { color: var(--text2); }
+.tier-action { font-size: 12px; color: var(--text); }
+
+/* Ingest channel cards */
+.ingest-cards { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin: 24px 0; }
+.ingest-card {
+    border-radius: 10px; padding: 18px; border: 1px solid var(--border);
+}
+.ingest-card-blue { background: var(--blue-bg); border-color: color-mix(in srgb, var(--blue) 20%, var(--border)); }
+.ingest-card-green { background: var(--green-bg); border-color: color-mix(in srgb, var(--green) 20%, var(--border)); }
+.ingest-card-orange { background: var(--orange-bg); border-color: color-mix(in srgb, var(--orange) 20%, var(--border)); }
+.ingest-card .ic-id { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+.ingest-card-blue .ic-id { color: var(--blue); }
+.ingest-card-green .ic-id { color: var(--green-dark); }
+.ingest-card-orange .ic-id { color: var(--orange-dark); }
+.ingest-card .ic-name { font-size: 14px; font-weight: 700; color: var(--text-strong); margin-bottom: 6px; }
+.ingest-card .ic-trigger { font-size: 12px; color: var(--text2); margin-bottom: 10px; }
+.ingest-card ul { list-style: none; padding: 0; margin: 0; }
+.ingest-card ul li { font-size: 12px; color: var(--text); padding: 2px 0; }
+
+/* CTA */
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); }
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .ingest-cards { grid-template-columns: 1fr; }
+    .tier-grid { grid-template-columns: 1fr; }
+}
+</style>
+<script>
+(function(){var t=localStorage.getItem('brisken-lead-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<!-- Access Gate -->
+<div class="access-gate" id="accessGate">
+    <h2>Project Access</h2>
+    <p>This proposal was prepared for Brisken. Enter the access code to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/brisken-lead-automation/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Brisken Lead Automation</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/brisken-lead-automation/">Overview</a>
+        <a href="/clients/brisken-lead-automation/solution" class="active">Solution</a>
+        <a href="/clients/brisken-lead-automation/timeline">Timeline</a>
+        <a href="/clients/brisken-lead-automation/investment">Investment</a>
+        <a href="/clients/brisken-lead-automation/faq">FAQ</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Scoping</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">Architecture</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#arch-overview" class="step-link active"><span class="step-num">1</span> Architecture Overview</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#ingest-layer" class="step-link"><span class="step-num">2</span> Ingest Layer</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#pipeline" class="step-link"><span class="step-num">3</span> Follow-Up Pipeline</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#reply-monitoring" class="step-link"><span class="step-num">4</span> Reply Monitoring</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#data-flow" class="step-link"><span class="step-num">5</span> Data Flow</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<h2 id="arch-overview">Architecture Overview</h2>
+<p>The system is five n8n workflows organized into three layers: channel ingest (A0, A1, A2), the core follow-up pipeline (A3), and reply monitoring (A4). Each ingest workflow outputs a normalized lead record. A3 consumes those records and handles everything from scoring through first response. A4 watches for replies and escalates them.</p>
+
+<div class="arch-diagram">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+        <span class="arch-node arch-node-orange">A0 LinkedIn</span>
+        <span style="color:var(--text2);font-size:13px;">&#8628;</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+        <span class="arch-node arch-node-green">A1 Website</span>
+        <span style="color:var(--text2);padding:0 8px;font-size:18px;">&#8594;</span>
+        <span class="arch-node arch-node-blue">A3 Pipeline</span>
+        <span style="color:var(--text2);padding:0 8px;font-size:18px;">&#8594;</span>
+        <span class="arch-node arch-node-purple">A4 Reply Monitor</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span class="arch-node arch-node-blue">A2 SAP</span>
+        <span style="color:var(--text2);font-size:13px;">&#8629;</span>
+    </div>
+    <p class="arch-label" style="margin-top:14px;">A0, A1, A2 each normalize their source format into the standard lead schema. A3 receives all leads and handles scoring, drafting, and HITL routing. A4 monitors sent responses for replies and escalates to human review.</p>
+</div>
+
+<p>The design principle is separation of concerns: the ingest layer handles the messiness of each source channel (different email formats, different webhook payloads) so that A3 always works with clean, consistent data. Adding a new channel means adding a new ingest workflow - not changing the pipeline.</p>
+
+<!-- Ingest Layer -->
+<h2 id="ingest-layer">Ingest Layer (A0, A1, A2)</h2>
+<p>Three workflows handle lead capture from the active source channels. Each extracts the relevant fields from its source format and outputs a normalized lead record to A3.</p>
+
+<div class="ingest-cards">
+    <div class="ingest-card ingest-card-blue">
+        <div class="ic-id">A2</div>
+        <div class="ic-name">SAP Channels</div>
+        <div class="ic-trigger">Trigger: email polling</div>
+        <ul>
+            <li>SAP Discovery Center</li>
+            <li>SAP Store inquiries</li>
+            <li>Parses email body and headers</li>
+            <li>Detects source sub-channel</li>
+        </ul>
+    </div>
+    <div class="ingest-card ingest-card-green">
+        <div class="ic-id">A1</div>
+        <div class="ic-name">Website Forms</div>
+        <div class="ic-trigger">Trigger: webhook (form tool)</div>
+        <ul>
+            <li>Contact forms</li>
+            <li>Landing page forms</li>
+            <li>Article inquiry forms</li>
+            <li>Real-time via webhook</li>
+        </ul>
+    </div>
+    <div class="ingest-card ingest-card-orange">
+        <div class="ic-id">A0</div>
+        <div class="ic-name">LinkedIn</div>
+        <div class="ic-trigger">Trigger: Lead Gen Forms API (pending confirmation)</div>
+        <ul>
+            <li>Lead gen form submissions</li>
+            <li>Channel not yet confirmed</li>
+            <li>Same normalized output</li>
+            <li>Phase 2 implementation</li>
+        </ul>
+    </div>
+</div>
+
+<h3>Normalized Lead Schema</h3>
+<p>Every ingest workflow outputs a record in this format before passing it to A3. The schema is intentionally flat to keep A3 logic simple.</p>
+
+<div class="schema-block">
+<span class="sc">{</span><br>
+&nbsp;&nbsp;<span class="sk">"lead_id"</span>: <span class="sv">"uuid"</span>,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="sc">// generated on ingest</span><br>
+&nbsp;&nbsp;<span class="sk">"source"</span>: <span class="sv">"sap_discovery | sap_store | website | linkedin"</span>,<br>
+&nbsp;&nbsp;<span class="sk">"received_at"</span>: <span class="sv">"ISO 8601 timestamp"</span>,<br>
+&nbsp;&nbsp;<span class="sk">"contact_name"</span>: <span class="sv">"string"</span>,<br>
+&nbsp;&nbsp;<span class="sk">"contact_email"</span>: <span class="sv">"string"</span>,<br>
+&nbsp;&nbsp;<span class="sk">"company_name"</span>: <span class="sv">"string | null"</span>,<br>
+&nbsp;&nbsp;<span class="sk">"message"</span>: <span class="sv">"string"</span>,<br>
+&nbsp;&nbsp;<span class="sk">"raw_payload"</span>: <span class="sv">"object"</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="sc">// original source data</span><br>
+<span class="sc">}</span>
+</div>
+
+<!-- Follow-Up Pipeline -->
+<h2 id="pipeline">Follow-Up Pipeline (A3)</h2>
+<p>A3 is the core of the system. It receives normalized lead records and takes them from raw input to a sent (or queued-for-review) first response. Five stages run in sequence.</p>
+
+<h3>Stage 1 - Validation and Deduplication</h3>
+<p>Before any processing, A3 checks that the lead has a valid email address and that the same contact has not already been processed recently. Duplicates are logged and dropped. Invalid records (missing email, clearly spam) are flagged and skipped.</p>
+
+<h3>Stage 2 - Lead Ranking</h3>
+<p>Each lead is scored against a set of signals. The result is a tier: High, Medium, or Low. The tier determines what happens next.</p>
+
+<table class="arch-table">
+    <thead>
+        <tr><th>Signal</th><th>Weight</th><th>Rationale</th></tr>
+    </thead>
+    <tbody>
+        <tr><td>SAP Store source</td><td>High</td><td>Strongest intent signal - active product inquiry</td></tr>
+        <tr><td>Company email domain (non-Gmail)</td><td>Medium</td><td>Indicates a business contact, not a personal inquiry</td></tr>
+        <tr><td>Company name provided</td><td>Medium</td><td>More detail = more serious inquiry</td></tr>
+        <tr><td>Message length and specificity</td><td>Medium</td><td>A specific question signals genuine interest</td></tr>
+        <tr><td>SAP Discovery Center source</td><td>Low-medium</td><td>Higher volume, mixed quality</td></tr>
+        <tr><td>Gmail or generic email only</td><td>Negative</td><td>Lower confidence without company context</td></tr>
+    </tbody>
+</table>
+
+<div class="tier-grid">
+    <div class="tier-card high">
+        <div class="tier-label">High</div>
+        <div class="tier-action">Hold for human review before sending. Reviewer receives draft + full lead context via email or Slack notification.</div>
+    </div>
+    <div class="tier-card mid">
+        <div class="tier-label">Medium</div>
+        <div class="tier-action">Send automatically. Notify reviewer that a response was sent. Reviewer can follow up if needed.</div>
+    </div>
+    <div class="tier-card low">
+        <div class="tier-label">Low</div>
+        <div class="tier-action">Send automatically. Log to destination. No notification unless configured.</div>
+    </div>
+</div>
+
+<h3>Stage 3 - Contact Enrichment (optional)</h3>
+<p>For High and Medium leads, A3 can attempt a basic company lookup using the email domain or company name field. This gives the AI more context for drafting a relevant response. This step is optional and can be toggled per tier if the cost or latency is not acceptable.</p>
+
+<h3>Stage 4 - AI Response Drafting</h3>
+<p>GPT-4o-mini drafts a first response using a structured prompt. The prompt constrains the output to: acknowledge the specific inquiry, reference the lead's stated interest, provide relevant context about Brisken's offering, ask one qualifying question, and indicate that a follow-up will come. Docs or links can be attached based on the source channel.</p>
+
+<div class="callout green">
+    <div class="callout-title">AI constraints</div>
+    <p>The model is given a strict template and is not free-form. Responses are reviewed before sending for High-tier leads. Tone, length, and structure are all controlled in the prompt. This is not ChatGPT replying however it likes.</p>
+</div>
+
+<h3>Stage 5 - HITL Routing and Send</h3>
+<p>Based on the tier from Stage 2, the draft is either sent directly or routed to a review queue. The review interface is an email or Slack message with the full lead context, the AI draft, and approve / edit / reject options. Approved responses send immediately. Rejected responses log the reason for later review.</p>
+
+<!-- Reply Monitoring -->
+<h2 id="reply-monitoring">Reply Monitoring (A4)</h2>
+<p>A4 polls the sending inbox at a configurable interval and matches incoming emails to outbound leads using thread ID. When a reply is detected, two things happen immediately: any pending follow-up sequence for that lead is cancelled, and the reply is escalated to human review.</p>
+
+<div class="callout purple">
+    <div class="callout-title">Dirk's requirement - all second responses are human</div>
+    <p>There is no automated second response under any circumstances. When a lead replies, the conversation moves to human hands. A4 surfaces the full context - original lead record, first response sent, reply received - so the reviewer has everything needed to continue the conversation.</p>
+</div>
+
+<p>The escalation notification includes: the lead's original record, the first response that was sent, the reply text, and the recommended next action. The reviewer does not need to search for context.</p>
+
+<!-- Data Flow -->
+<h2 id="data-flow">Data Flow</h2>
+<p>End-to-end, a lead moves through the system as follows:</p>
+
+<table class="arch-table">
+    <thead>
+        <tr><th>Step</th><th>Workflow</th><th>What happens</th></tr>
+    </thead>
+    <tbody>
+        <tr><td>1. Arrive</td><td>A0 / A1 / A2</td><td>Lead arrives via email, webhook, or API. Raw payload is captured.</td></tr>
+        <tr><td>2. Normalize</td><td>A0 / A1 / A2</td><td>Source-specific parsing extracts fields. Standard lead record is created with a UUID.</td></tr>
+        <tr><td>3. Validate</td><td>A3</td><td>Email validity and deduplication check. Duplicates and invalids are dropped with a log entry.</td></tr>
+        <tr><td>4. Score</td><td>A3</td><td>Scoring signals are evaluated. Tier (High/Medium/Low) is assigned.</td></tr>
+        <tr><td>5. Enrich</td><td>A3</td><td>Optional company lookup for High/Medium leads. Appended to lead record.</td></tr>
+        <tr><td>6. Draft</td><td>A3</td><td>AI drafts a first response using lead context and channel-specific templates.</td></tr>
+        <tr><td>7. Route</td><td>A3</td><td>High: held for review. Medium/Low: sent automatically with optional notification.</td></tr>
+        <tr><td>8. Log</td><td>A3</td><td>Lead record, tier, draft, and send status written to destination (Sheets/CRM/DB).</td></tr>
+        <tr><td>9. Monitor</td><td>A4</td><td>Inbox polled for replies. Match found = cancel follow-up sequence.</td></tr>
+        <tr><td>10. Escalate</td><td>A4</td><td>Reply escalated to human reviewer with full context package. No auto-response.</td></tr>
+    </tbody>
+</table>
+
+<div class="cta-section">
+    <h2>See the delivery plan</h2>
+    <p>The Timeline page breaks this into four phases, each independently valuable. Phase 1 can be running within weeks of kickoff.</p>
+    <a href="/clients/brisken-lead-automation/timeline" class="cta-btn">View the Timeline &#8594;</a>
+</div>
+
+<footer class="footer">
+    <p>Prepared for <strong>Brisken</strong> by UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='brisken-2026'){
+        localStorage.setItem('brisken-lead-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Please check the code you were given.';
+    }
+}
+(function(){if(localStorage.getItem('brisken-lead-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('brisken-lead-theme',t);
+}
+(function(){
+    var links=document.querySelectorAll('.step-link');
+    var sections=[];
+    links.forEach(function(l){
+        var id=l.getAttribute('href');
+        if(id&&id.startsWith('#')){
+            var el=document.querySelector(id);
+            if(el)sections.push({el:el,link:l});
+        }
+    });
+    if(!sections.length)return;
+    var observer=new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+            if(e.isIntersecting){
+                links.forEach(function(l){l.classList.remove('active')});
+                sections.forEach(function(s){
+                    if(s.el===e.target)s.link.classList.add('active');
+                });
+            }
+        });
+    },{rootMargin:'-80px 0px -60% 0px'});
+    sections.forEach(function(s){observer.observe(s.el)});
+})();
+document.addEventListener('keydown',function(e){
+    if((e.metaKey||e.ctrlKey)&&e.key==='k'){
+        e.preventDefault();
+        var q=prompt('Search this page (browser find):');
+        if(q)window.find&&window.find(q);
+    }
+});
+</script>
+</body>
+</html>

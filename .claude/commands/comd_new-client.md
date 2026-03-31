@@ -14,11 +14,13 @@ Creates the complete folder structure for a new project within the Agentic Ops w
 
 ## Prerequisites
 
-Parse $ARGUMENTS:
-- **Project name** (required): the slug, e.g. `acme-corp`, `my-tool`
+Parse $ARGUMENTS to extract two values:
+- **`{name}`** (required): the project slug, e.g. `acme-corp`, `my-tool`. Extract only the first word/argument — ignore any trailing context or description the user may have provided alongside the name.
 - **`--type`** (optional): `client` | `internal` | `platform`. Default: `client`
 
 If project name is empty, ask the user for it. Name should be lowercase, kebab-case.
+
+**IMPORTANT:** Use `{name}` (the parsed slug) for ALL paths, file contents, and references below. Do NOT use raw `$ARGUMENTS` — it may contain extra context beyond the project name.
 
 **Resolve base directory based on type:**
 - `type: client` → `workspace/clients/{name}/`
@@ -76,7 +78,7 @@ Before creating any files, investigate the client's platform subscription to cat
 Create the following directories:
 
 ```
-workspace/clients/$ARGUMENTS/
+workspace/clients/{name}/
 ├── specs/
 │   ├── 1-spec/           # Planned, not started
 │   ├── 2-build/          # Actively being implemented
@@ -97,9 +99,9 @@ Based on the chosen orchestrator:
 
 **If Trigger.dev:**
 ```bash
-cp -r workspace/templates/client-trigger-dev/* workspace/clients/$ARGUMENTS/automations/
-cp -r workspace/templates/client-trigger-dev/.github workspace/clients/$ARGUMENTS/automations/
-cp workspace/templates/client-trigger-dev/.gitignore workspace/clients/$ARGUMENTS/automations/
+cp -r workspace/templates/client-trigger-dev/* workspace/clients/{name}/automations/
+cp -r workspace/templates/client-trigger-dev/.github workspace/clients/{name}/automations/
+cp workspace/templates/client-trigger-dev/.gitignore workspace/clients/{name}/automations/
 ```
 
 **If n8n:**
@@ -107,13 +109,13 @@ cp workspace/templates/client-trigger-dev/.gitignore workspace/clients/$ARGUMENT
 No template to copy. Workflows live in the n8n instance. Create a minimal automations folder:
 
 ```bash
-mkdir -p workspace/clients/$ARGUMENTS/automations
+mkdir -p workspace/clients/{name}/automations
 ```
 
-Create `workspace/clients/$ARGUMENTS/automations/README.md`:
+Create `workspace/clients/{name}/automations/README.md`:
 
 ```markdown
-# $ARGUMENTS — n8n Workflows
+# {name} — n8n Workflows
 
 Workflows are built and managed in the n8n UI and via n8n-mcp tools.
 
@@ -122,16 +124,16 @@ Workflows are built and managed in the n8n UI and via n8n-mcp tools.
 | — | — | — | — |
 ```
 
-Create `workspace/clients/$ARGUMENTS/infrastructure.yaml`:
+Create `workspace/clients/{name}/infrastructure.yaml`:
 
 ```yaml
 type: client
 
 instances:
   - type: n8n
-    name: n8n-$ARGUMENTS
+    name: n8n-{name}
     api_url: "https://<n8n-instance-url>"
-    api_key_env: "N8N_API_KEY_$ARGUMENTS"
+    api_key_env: "N8N_API_KEY_{name}"
 ```
 
 Ask the user for the n8n instance URL and API key.
@@ -141,7 +143,7 @@ Add MCP server entry to `.mcp.json` (create file if it doesn't exist):
 ```json
 {
   "mcpServers": {
-    "n8n-$ARGUMENTS": {
+    "n8n-{name}": {
       "command": "npx",
       "args": ["-y", "n8n-mcp", "--apiKey=<API_KEY>", "--baseUrl=<INSTANCE_URL>"]
     }
@@ -156,13 +158,13 @@ Tell the user to restart Claude Code for MCP tools to be available.
 No template to copy. Create a minimal automations folder:
 
 ```bash
-mkdir -p workspace/clients/$ARGUMENTS/automations/blueprints
+mkdir -p workspace/clients/{name}/automations/blueprints
 ```
 
-Create `workspace/clients/$ARGUMENTS/automations/README.md`:
+Create `workspace/clients/{name}/automations/README.md`:
 
 ```markdown
-# $ARGUMENTS — Make.com Scenarios
+# {name} — Make.com Scenarios
 
 Scenarios are built and managed in the Make.com UI and via MCP tools.
 Exported blueprints are stored in `blueprints/` for version control.
@@ -172,9 +174,9 @@ Exported blueprints are stored in `blueprints/` for version control.
 | — | — | — | — |
 ```
 
-Create `workspace/clients/$ARGUMENTS/automations/blueprints/.gitkeep` (empty file).
+Create `workspace/clients/{name}/automations/blueprints/.gitkeep` (empty file).
 
-Create `workspace/clients/$ARGUMENTS/infrastructure.yaml`:
+Create `workspace/clients/{name}/infrastructure.yaml`:
 
 ```yaml
 type: client
@@ -191,15 +193,15 @@ platform:
 
 instances:
   - type: make
-    name: make-$ARGUMENTS
+    name: make-{name}
     org_url: "https://us1.make.com/organization/<org-id>"
-    team: "$ARGUMENTS"
+    team: "{name}"
 ```
 
-Create `workspace/clients/$ARGUMENTS/context/test-fixtures.md`:
+Create `workspace/clients/{name}/context/test-fixtures.md`:
 
 ```markdown
-# Test Fixtures — $ARGUMENTS
+# Test Fixtures — {name}
 
 No fixtures created yet. After building the first automation, create
 observability (Sheet Reader) and control (Cell Writer) fixtures.
@@ -224,7 +226,7 @@ If the client has a Make.com paid plan with API/MCP access, also add MCP server 
 ```json
 {
   "mcpServers": {
-    "make-$ARGUMENTS": {
+    "make-{name}": {
       "command": "npx",
       "args": ["-y", "mcp-remote", "https://<MAKE_ZONE>/mcp/u/<MCP_TOKEN>/sse"]
     }
@@ -237,15 +239,15 @@ Tell the user to restart Claude Code for MCP tools to be available.
 
 **If Plain FastAPI:**
 ```bash
-cp -r workspace/templates/client-automation/* workspace/clients/$ARGUMENTS/automations/
+cp -r workspace/templates/client-automation/* workspace/clients/{name}/automations/
 ```
 
 ## Step 5: Create Specs README
 
-Create `workspace/clients/$ARGUMENTS/specs/README.md`:
+Create `workspace/clients/{name}/specs/README.md`:
 
 ```markdown
-# $ARGUMENTS — Work Items
+# {name} — Work Items
 
 ## Overview
 
@@ -288,10 +290,10 @@ Use `/skil_spec-creator` to add new work items.
 
 ## Step 6: Create Context README
 
-Create `workspace/clients/$ARGUMENTS/context/README.md`:
+Create `workspace/clients/{name}/context/README.md`:
 
 ```markdown
-# $ARGUMENTS Context
+# {name} Context
 
 ## Client Overview
 
@@ -312,8 +314,8 @@ Document API credentials, webhooks, and integration setup here.
 
 Create communication tracking files for the new client:
 
-1. Copy `.claude/skills/client-comms/templates/comms-log-template.md` → `workspace/clients/$ARGUMENTS/context/comms-log.md`
-2. Copy `.claude/skills/client-comms/templates/comms-profile-template.md` → `workspace/clients/$ARGUMENTS/context/comms-profile.md`
+1. Copy `.claude/skills/client-comms/templates/comms-log-template.md` → `workspace/clients/{name}/context/comms-log.md`
+2. Copy `.claude/skills/client-comms/templates/comms-profile-template.md` → `workspace/clients/{name}/context/comms-profile.md`
 3. Tell user: "Comms log and profile created. Fill in contact details in `context/comms-profile.md` when available."
 
 ## Step 7: Configure Environment
@@ -328,7 +330,7 @@ No local `.env` needed. All credentials are managed as Connections in the Make.c
 
 **If Plain FastAPI:**
 
-Create `workspace/clients/$ARGUMENTS/automations/.env` with placeholders:
+Create `workspace/clients/{name}/automations/.env` with placeholders:
 
 ```env
 # Dashboard Authentication
@@ -361,21 +363,21 @@ Check The Crucible's client_work folder for a matching client folder:
 ls "/c/Users/neuma/Coding/1. General Work/The Crucible/workspace/client_work/"
 ```
 
-Look for a folder name that matches `$ARGUMENTS` (case-insensitive, partial match OK — e.g., client name `herbox` should match `Herbox Sweden`).
+Look for a folder name that matches `{name}` (case-insensitive, partial match OK — e.g., client name `herbox` should match `Herbox Sweden`).
 
 **If exactly one match is found**, create the symlink automatically:
 ```bash
-ln -s "/c/Users/neuma/Coding/1. General Work/The Crucible/workspace/client_work/<matched-folder>" workspace/clients/$ARGUMENTS/reference
+ln -s "/c/Users/neuma/Coding/1. General Work/The Crucible/workspace/client_work/<matched-folder>" workspace/clients/{name}/reference
 ```
 
 **If multiple matches are found**, show the options and ask the user to pick one.
 
 **If no match is found**, inform the user and create an empty placeholder:
 ```markdown
-# workspace/clients/$ARGUMENTS/reference/README.md
+# workspace/clients/{name}/reference/README.md
 
 No matching folder found in The Crucible. Link manually when available:
-ln -s "/path/to/The Crucible/workspace/client_work/<folder>" workspace/clients/$ARGUMENTS/reference
+ln -s "/path/to/The Crucible/workspace/client_work/<folder>" workspace/clients/{name}/reference
 ```
 
 ## Step 9: Initialize Git Tracking
@@ -391,7 +393,7 @@ Do NOT commit yet - let the user decide when to commit.
 Report to user:
 
 ```
-✓ Client folder created: workspace/clients/$ARGUMENTS/
+✓ Client folder created: workspace/clients/{name}/
 
 Structure:
 ├── specs/

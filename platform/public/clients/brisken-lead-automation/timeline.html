@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delivery Timeline | Brisken Lead Automation | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text-strong); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+
+/* Callout */
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+.callout.purple { border-color: var(--purple); background: var(--purple-bg); }
+.callout.purple .callout-title, .callout.purple p { color: var(--purple-dark); }
+
+/* Vertical timeline */
+.timeline { position: relative; margin: 32px 0; }
+.timeline::before {
+    content: ''; position: absolute; left: 28px; top: 0; bottom: 0;
+    width: 2px; background: var(--border);
+}
+.phase-card {
+    position: relative; margin-bottom: 32px; padding-left: 72px;
+}
+.phase-marker {
+    position: absolute; left: 0; top: 0;
+    width: 56px; height: 56px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 800; border: 3px solid var(--border);
+    background: var(--bg); z-index: 1;
+}
+.phase-marker.p1 { border-color: var(--blue); color: var(--blue); background: var(--blue-bg); }
+.phase-marker.p2 { border-color: var(--purple); color: var(--purple); background: var(--purple-bg); }
+.phase-marker.p3 { border-color: var(--green); color: var(--green); background: var(--green-bg); }
+.phase-marker.p4 { border-color: var(--orange); color: var(--orange); background: var(--orange-bg); }
+.phase-body {
+    border: 1px solid var(--border); border-radius: 12px; padding: 22px 24px;
+    background: var(--surface);
+}
+.phase-header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.phase-title { font-size: 16px; font-weight: 700; color: var(--text-strong); }
+.phase-estimate {
+    font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 20px;
+}
+.p1 .phase-estimate { background: var(--blue-light); color: var(--blue-dark); }
+.p2 .phase-estimate { background: var(--purple-light); color: var(--purple-dark); }
+.p3 .phase-estimate { background: var(--green-light); color: var(--green-dark); }
+.p4 .phase-estimate { background: var(--orange-light); color: var(--orange-dark); }
+.phase-desc { font-size: 14px; color: var(--text); margin-bottom: 14px; }
+.phase-tasks { list-style: none; padding: 0; margin: 0 0 14px; }
+.phase-tasks li {
+    font-size: 13px; color: var(--text); padding: 5px 0;
+    border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; gap: 8px;
+}
+.phase-tasks li:last-child { border-bottom: none; }
+.task-dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 6px; flex-shrink: 0; }
+.p1 .task-dot { background: var(--blue); }
+.p2 .task-dot { background: var(--purple); }
+.p3 .task-dot { background: var(--green); }
+.p4 .task-dot { background: var(--orange); }
+.phase-deliverables {
+    font-size: 12px; color: var(--text2); background: var(--surface2);
+    border-radius: 6px; padding: 10px 14px;
+}
+.phase-deliverables strong { color: var(--text); }
+
+/* Checkpoint banner */
+.checkpoint-banner {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 16px; margin: 8px 0 32px;
+    font-size: 13px; color: var(--text2);
+}
+
+/* CTA */
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); }
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .phase-card { padding-left: 52px; }
+    .phase-marker { width: 40px; height: 40px; font-size: 11px; }
+    .timeline::before { left: 20px; }
+}
+</style>
+<script>
+(function(){var t=localStorage.getItem('brisken-lead-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<!-- Access Gate -->
+<div class="access-gate" id="accessGate">
+    <h2>Project Access</h2>
+    <p>This proposal was prepared for Brisken. Enter the access code to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/brisken-lead-automation/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Brisken Lead Automation</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/brisken-lead-automation/">Overview</a>
+        <a href="/clients/brisken-lead-automation/solution">Solution</a>
+        <a href="/clients/brisken-lead-automation/timeline" class="active">Timeline</a>
+        <a href="/clients/brisken-lead-automation/investment">Investment</a>
+        <a href="/clients/brisken-lead-automation/faq">FAQ</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Scoping</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">Timeline</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#approach" class="step-link active"><span class="step-num">1</span> Delivery Approach</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#phase1" class="step-link"><span class="step-num">2</span> Phase 1: Foundation</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#phase2" class="step-link"><span class="step-num">3</span> Phase 2: Intelligence</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#phase3" class="step-link"><span class="step-num">4</span> Phase 3: Monitoring</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#phase4" class="step-link"><span class="step-num">5</span> Phase 4: Future</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<h2 id="approach">Delivery Approach</h2>
+<p>The project is structured as four sequential phases. Each phase is independently valuable - meaning you get a working, useful system at the end of each one, not just at the end of the whole project. If priorities shift after Phase 1 or 2, the work already done has standalone value.</p>
+<p>There is a review checkpoint between each phase. We review what was built, confirm it is working as expected, and agree on scope before starting the next phase. This prevents scope drift and keeps the project aligned with your actual priorities as they evolve.</p>
+
+<div class="callout">
+    <div class="callout-title">Estimates are working estimates</div>
+    <p>The durations below are based on similar projects. They will be refined after the scoping discussion once we understand the exact email formats, form tools, and destination systems involved.</p>
+</div>
+
+<h2 id="phase1" style="margin-top:40px;">Phases</h2>
+
+<div class="timeline">
+
+    <!-- Phase 1 -->
+    <div class="phase-card p1" id="phase1-card">
+        <div class="phase-marker p1">P1</div>
+        <div class="phase-body">
+            <div class="phase-header">
+                <span class="phase-title">Phase 1 - Foundation</span>
+                <span class="phase-estimate p1">2-3 weeks</span>
+            </div>
+            <p class="phase-desc">Get leads flowing. SAP channel and website form ingest, basic normalization, and logging to your destination. No scoring or AI yet - just reliable, automated capture with a consistent data format.</p>
+            <ul class="phase-tasks">
+                <li><span class="task-dot"></span>n8n instance setup and environment configuration</li>
+                <li><span class="task-dot"></span>A2: SAP Discovery Center and SAP Store email ingest</li>
+                <li><span class="task-dot"></span>A1: Website form ingest via webhook</li>
+                <li><span class="task-dot"></span>Normalized lead schema and destination logging (Sheets, CRM, or n8n DB)</li>
+                <li><span class="task-dot"></span>Deduplication logic (same contact, same source, within N days)</li>
+                <li><span class="task-dot"></span>Basic error alerting (ingest failures notify by email)</li>
+            </ul>
+            <div class="phase-deliverables">
+                <strong>Deliverables:</strong> 2 working ingest workflows (A1, A2), lead destination configured and receiving data, error alerting active, handover documentation.
+            </div>
+        </div>
+    </div>
+
+    <div class="checkpoint-banner">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Review checkpoint - confirm Phase 1 is working, agree on Phase 2 scope
+    </div>
+
+    <!-- Phase 2 -->
+    <div class="phase-card p2" id="phase2-card">
+        <div class="phase-marker p2">P2</div>
+        <div class="phase-body">
+            <div class="phase-header">
+                <span class="phase-title">Phase 2 - Intelligence</span>
+                <span class="phase-estimate p2">2-3 weeks</span>
+            </div>
+            <p class="phase-desc">Add scoring, AI response drafting, and the human review gate. This is when the pipeline starts saving significant time - high-value leads get drafted responses automatically, routing logic keeps the right leads in front of a human.</p>
+            <ul class="phase-tasks">
+                <li><span class="task-dot"></span>Lead scoring logic (signals, weights, tier assignment)</li>
+                <li><span class="task-dot"></span>AI response drafting (GPT-4o-mini with channel-specific templates)</li>
+                <li><span class="task-dot"></span>HITL review gate - High tier held for approval, Medium/Low auto-send</li>
+                <li><span class="task-dot"></span>Review notification (email or Slack) with approve/edit/reject flow</li>
+                <li><span class="task-dot"></span>A0: LinkedIn ingest (if confirmed as active channel during Phase 1)</li>
+                <li><span class="task-dot"></span>Scoring threshold tuning based on real lead data from Phase 1</li>
+            </ul>
+            <div class="phase-deliverables">
+                <strong>Deliverables:</strong> Scoring logic live and tunable, AI drafting operational, HITL review workflow active, LinkedIn ingest (conditional), updated documentation.
+            </div>
+        </div>
+    </div>
+
+    <div class="checkpoint-banner">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Review checkpoint - confirm scoring thresholds, review sample AI drafts, agree on Phase 3 scope
+    </div>
+
+    <!-- Phase 3 -->
+    <div class="phase-card p3" id="phase3-card">
+        <div class="phase-marker p3">P3</div>
+        <div class="phase-body">
+            <div class="phase-header">
+                <span class="phase-title">Phase 3 - Reply Monitoring</span>
+                <span class="phase-estimate p3">1-2 weeks</span>
+            </div>
+            <p class="phase-desc">Close the loop. Once a first response has been sent, A4 monitors for replies. When a lead responds, the follow-up sequence stops and the reply is surfaced to a human reviewer with full context. No second message is ever automated.</p>
+            <ul class="phase-tasks">
+                <li><span class="task-dot"></span>A4: Inbox polling and thread ID matching</li>
+                <li><span class="task-dot"></span>Follow-up sequence cancellation on reply detected</li>
+                <li><span class="task-dot"></span>Human escalation notification with full context package</li>
+                <li><span class="task-dot"></span>SLA tracking (optional - flag leads that have not received a first response within X hours)</li>
+                <li><span class="task-dot"></span>End-to-end testing across all channels</li>
+            </ul>
+            <div class="phase-deliverables">
+                <strong>Deliverables:</strong> Reply monitoring live (A4), escalation workflow active, optional SLA alerting, full end-to-end test report, final documentation.
+            </div>
+        </div>
+    </div>
+
+    <div class="checkpoint-banner">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Full system live - post-launch support period begins (2 weeks per phase)
+    </div>
+
+    <!-- Phase 4 -->
+    <div class="phase-card p4" id="phase4-card">
+        <div class="phase-marker p4">P4</div>
+        <div class="phase-body">
+            <div class="phase-header">
+                <span class="phase-title">Phase 4 - Future: Accounting Automation</span>
+                <span class="phase-estimate p4">Not yet scoped</span>
+            </div>
+            <p class="phase-desc">The accounting side of the business - invoice handling, end-of-month workload, payment reconciliation - represents significant automation potential. This phase will be scoped separately once the lead pipeline is stable and running.</p>
+            <ul class="phase-tasks">
+                <li><span class="task-dot"></span>Invoice processing and routing</li>
+                <li><span class="task-dot"></span>End-of-month workflow automation</li>
+                <li><span class="task-dot"></span>Payment status tracking and notifications</li>
+                <li><span class="task-dot"></span>Scope to be defined based on actual accounting workflows</li>
+            </ul>
+            <div class="phase-deliverables" style="background:var(--orange-bg);color:var(--orange-dark);">
+                <strong>Note:</strong> This phase will be scoped separately once the lead pipeline is running. Different systems, different workflows, separate engagement.
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="cta-section">
+    <h2>See the investment breakdown</h2>
+    <p>The Investment page covers what is included in each phase, what is not included, and how pricing will be confirmed after the scoping discussion.</p>
+    <a href="/clients/brisken-lead-automation/investment" class="cta-btn">View Investment &#8594;</a>
+</div>
+
+<footer class="footer">
+    <p>Prepared for <strong>Brisken</strong> by UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='brisken-2026'){
+        localStorage.setItem('brisken-lead-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Please check the code you were given.';
+    }
+}
+(function(){if(localStorage.getItem('brisken-lead-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('brisken-lead-theme',t);
+}
+(function(){
+    var links=document.querySelectorAll('.step-link');
+    var sections=[];
+    links.forEach(function(l){
+        var id=l.getAttribute('href');
+        if(id&&id.startsWith('#')){
+            var el=document.querySelector(id);
+            if(el)sections.push({el:el,link:l});
+        }
+    });
+    if(!sections.length)return;
+    var observer=new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+            if(e.isIntersecting){
+                links.forEach(function(l){l.classList.remove('active')});
+                sections.forEach(function(s){
+                    if(s.el===e.target)s.link.classList.add('active');
+                });
+            }
+        });
+    },{rootMargin:'-80px 0px -60% 0px'});
+    sections.forEach(function(s){observer.observe(s.el)});
+})();
+document.addEventListener('keydown',function(e){
+    if((e.metaKey||e.ctrlKey)&&e.key==='k'){
+        e.preventDefault();
+        var q=prompt('Search this page (browser find):');
+        if(q)window.find&&window.find(q);
+    }
+});
+</script>
+</body>
+</html>
