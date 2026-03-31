@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Workflow | AI Cold Email Pipeline for Jaret | UnpauseAI</title>
+<title>Workflow | AI Cold Email Pipeline for Your Team | UnpauseAI</title>
 <style>
 :root {
     --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
@@ -298,7 +298,7 @@ li { margin-bottom: 6px; }
 <!-- Access Gate -->
 <div class="access-gate" id="accessGate">
     <h2>Proposal Access</h2>
-    <p>This proposal was prepared for Jaret. Enter the access code from your Upwork message to continue.</p>
+    <p>This proposal was prepared for your team. Enter the access code from your Upwork message to continue.</p>
     <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
     <button onclick="checkAccess()">Continue</button>
     <div class="error" id="accessError"></div>
@@ -312,7 +312,7 @@ li { margin-bottom: 6px; }
         </button>
         <a href="/clients/jaret-ai-cold-email-tool/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
         <span class="nav-sep">|</span>
-        <span class="nav-client">Jaret's Cold Email Tool</span>
+        <span class="nav-client">AI Cold Email Tool</span>
     </div>
     <div class="nav-links">
         <a href="/clients/jaret-ai-cold-email-tool/">Overview</a>
@@ -421,7 +421,7 @@ li { margin-bottom: 6px; }
 </div>
 
 <footer class="footer">
-    <p>Prepared for <strong>Jaret</strong> by UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
+    <p>Prepared by UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
 </footer>
 
 </div>
@@ -494,7 +494,7 @@ var SIM_STAGES = [
         title: 'Stage 3: AI Email Generation',
         desc: 'Using the research data, the AI writes a personalized subject line and email body for each lead.',
         input: '{\n  "company": "Bright Media Group",\n  "lead_name": "Sarah",\n  "research": {\n    "recent_activity": "Expanding into podcast production",\n    "pain_points": [\n      "Scaling content distribution",\n      "Managing multiple platform partnerships"\n    ]\n  }\n}',
-        output: '{\n  "to": "sarah.chen@brightmedia.com",\n  "subject": "Quick question about Bright Media\'s podcast expansion",\n  "body": "Hi Sarah,\\n\\nI noticed Bright Media Group is moving into podcast production alongside your video work. That\'s a smart move, but distributing across multiple platforms usually means a lot of manual coordination.\\n\\nI build automated distribution pipelines that handle multi-platform publishing, scheduling, and analytics tracking. One system I built processes 600K+ data points weekly across similar media workflows.\\n\\nWould it make sense to chat for 10 minutes about what that could look like for Bright Media?\\n\\nBest,\\nJaret",\n  "personalization_score": 0.92,\n  "variant_b_subject": "Podcast distribution at Bright Media"\n}'
+        output: '{\n  "to": "sarah.chen@brightmedia.com",\n  "subject": "Quick question about Bright Media\'s podcast expansion",\n  "body": "Hi Sarah,\\n\\nI noticed Bright Media Group is moving into podcast production alongside your video work. That\'s a smart move, but distributing across multiple platforms usually means a lot of manual coordination.\\n\\nI build automated distribution pipelines that handle multi-platform publishing, scheduling, and analytics tracking. One system I built processes 600K+ data points weekly across similar media workflows.\\n\\nWould it make sense to chat for 10 minutes about what that could look like for Bright Media?\\n\\nBest,\\n[Your Name]",\n  "personalization_score": 0.92,\n  "variant_b_subject": "Podcast distribution at Bright Media"\n}'
     },
     {
         title: 'Stage 4: Instantly.ai Campaign Enrollment',

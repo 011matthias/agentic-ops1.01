@@ -1,4 +1,4 @@
-# Video Script -- AI Cold Email Tool for Jaret
+# Video Script -- AI Cold Email Tool
 
 ## Target Duration: 4-5 minutes
 
@@ -24,7 +24,7 @@ SAY: I put together a full proposal site that breaks this down. I also built a d
 
 >> Sidebar: The Opportunity
 
-SAY: Jaret, here's how I'm reading this. You need a system that finds leads, writes personalized emails, and sends them without manual work at every step. Apollo.io handles the lead data, AI handles the personalization, and Instantly.ai handles the sending. The workflow I'd build connects all three.
+SAY: Here's how I'm reading this. You need a system that finds leads, writes personalized emails, and sends them without manual work at every step. Apollo.io handles the lead data, AI handles the personalization, and Instantly.ai handles the sending. The workflow I'd build connects all three.
 
 >> Scroll to the paragraph about the Sales Rep posting
 
@@ -116,7 +116,7 @@ SAY: I know the posted budget is $5 to $35 an hour. I'm proposing fixed-price be
 
 SAY: One more thing. That downloadable workflow on the site is real. 19 n8n nodes, full error handling, Apollo to Instantly. Import it, plug in your API keys, and test it. Whether or not we work together, it's yours to keep.
 
-SAY: Jaret, if this looks interesting, the onboarding page collects everything I need to get started. API keys, target audience, sending preferences. Takes about five minutes. I'll confirm within 24 hours.
+SAY: If this looks interesting, the onboarding page collects everything I need to get started. API keys, target audience, sending preferences. Takes about five minutes. I'll confirm within 24 hours.
 
 SAY: Thanks for watching. Talk soon.
 
