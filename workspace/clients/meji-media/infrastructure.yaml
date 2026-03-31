@@ -86,22 +86,30 @@ instances:
     note: "Client's org. Nicolas added as member. Different zone from dev (eu2 vs eu1)."
 
     scenarios:
+      - id: 8841775
+        name: "A0 - MySQL Enquiry Poller"
+        trigger: scheduled (1800s)
+        ship: true
+        status: active
+        note: "2026-03-30: Reconciled from live. 1003 executions, 11 errors."
       - id: 8804011
         name: "A1 - Enquiry Follow-Up Sequence"
         trigger: webhook
         ship: true
         status: active
-        note: "2026-03-24: v3.2.0 - Added portal reporting HTTP module (route 4). POSTs execution data to unpauseai.com/api/modules/meji-enquiry-followup. Error-safe (Resume on failure)."
+        note: "2026-03-31: Verified venue_key mapping from events table. All 19 IDs mapped via contains(): B=130,141-148 W=131,133-137 L=132,138-140. Fixed name/leader swap + guest grammar. Jess Leicester test (id 14294, event_id 138) processed successfully. Previously: 2026-03-30 replace chains update."
       - id: 8804012
         name: "A2 - Reply Detection & Stop"
-        trigger: scheduled (300s)
+        trigger: scheduled (600s)
         ship: true
-        status: inactive (activate after client Gmail connected)
+        status: active
+        note: "2026-03-30: Reconciled from live. Active, interval 600s (was 300s in YAML)."
       - id: 8804014
         name: "A3 - Scheduled Follow-Up Steps"
-        trigger: scheduled (900s)
+        trigger: scheduled (3600s)
         ship: true
-        status: inactive (activate after A2)
+        status: active
+        note: "2026-03-30: Updated replace chains for ##theme_name##, ##venue_features_text##, ##venue_tiers_text##. Active, interval 3600s (was 900s in YAML)."
 
     data_stores:
       - id: 153173
@@ -116,9 +124,9 @@ instances:
       - id: 154401
         name: "MM - Venue Config"
         records: 3  # birmingham, leicester, wolverhampton
-        fields: 6  # venue_name, venue_title, venue_features_html, venue_tiers_html, venue_phone, venue_dates_count
+        fields: 9  # venue_name, venue_title, theme_name, venue_features_html, venue_features_text, venue_tiers_html, venue_tiers_text, venue_phone, venue_dates_count
         ship: true
-        note: "2026-03-24: Audit found inaccuracies vs venue PDFs. Leicester venue title wrong, tier names wrong for Leicester. Drinks reception listed for venues that don't include it. Pending Jess approval to update."
+        note: "2026-03-30: Added theme_name, venue_features_text, venue_tiers_text fields. Shortened venue titles (ICC, ICB). Theme names: Birmingham=Winter Carnival, Wolverhampton=Winter Masquerade, Leicester=Winter Carnival. Text fields hold comma-separated plain text for single-paragraph email format."
       - id: 153982
         name: "A0 Cursor"
         records: 1

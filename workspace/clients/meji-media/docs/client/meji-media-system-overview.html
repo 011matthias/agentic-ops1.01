@@ -6,7 +6,6 @@
 <title>Meji Media &ndash; System Overview</title>
 <style>
 :root {
-  --header-height: 72px;
   --bg: #f8fafc;
   --surface: #ffffff;
   --surface2: #f1f5f9;
@@ -28,7 +27,6 @@
   --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05);
   --shadow-md: 0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.05);
   --sidebar-width: 200px;
-  --nav-bg: #ffffff;
 }
 [data-theme="dark"] {
   --bg: #0f172a;
@@ -51,7 +49,6 @@
   --red-light: #450a0a;
   --shadow: 0 1px 3px rgba(0,0,0,.3);
   --shadow-md: 0 4px 6px rgba(0,0,0,.4);
-  --nav-bg: #1e293b;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -64,31 +61,24 @@ body {
   line-height: 1.5;
   min-height: 100vh;
   transition: background .2s, color .2s;
-  padding-top: var(--header-height);
 }
 
 /* ── Header ── */
 .header {
-  background: var(--nav-bg);
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
-  padding: 16px 24px;
+  padding: 20px 40px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  z-index: 1000;
+  position: sticky;
+  top: 0;
+  z-index: 100;
   box-shadow: var(--shadow);
-  transition: background .2s;
 }
-.header-left { display: flex; align-items: center; gap: 16px; }
-.header-logo { display: flex; align-items: center; gap: 6px; font-size: 18px; letter-spacing: -0.025em; }
-.header-logo svg { flex-shrink: 0; }
-.header-logo .logo-text { font-weight: 700; color: var(--text); }
-.header-logo .logo-accent { font-weight: 700; color: var(--blue); }
-.header-title h1 { font-size: 18px; font-weight: 700; color: var(--text); }
-.header-title p { font-size: 13px; color: var(--text2); margin-top: 1px; }
-.header-right { display: flex; align-items: center; gap: 12px; }
+.header-left h1 { font-size: 20px; font-weight: 700; color: var(--text); }
+.header-left p { font-size: 13px; color: var(--text2); margin-top: 2px; }
+.header-right { display: flex; align-items: center; gap: 16px; }
 
 .theme-btn {
   background: var(--surface2);
@@ -117,13 +107,14 @@ body {
 /* ── Sidebar ── */
 .sidebar {
   position: fixed;
-  top: var(--header-height);
+  top: 0;
   left: 0;
   width: var(--sidebar-width);
-  height: calc(100vh - var(--header-height));
+  height: 100vh;
   background: var(--surface);
   border-right: 1px solid var(--border);
-  z-index: 50;
+  z-index: 150;
+  padding-top: 80px;
   overflow-y: auto;
   transition: transform .25s ease;
 }
@@ -152,7 +143,7 @@ body {
 .sidebar-nav .nav-icon { font-size: 16px; width: 20px; text-align: center; }
 
 /* ── Layout with sidebar ── */
-.header { padding-left: calc(var(--sidebar-width) + 24px); }
+.header { padding-left: calc(var(--sidebar-width) + 40px); }
 .page-layout { margin-left: var(--sidebar-width); }
 
 /* ── Hamburger (mobile) ── */
@@ -607,7 +598,6 @@ body {
   font-size: 11px; font-weight: 700;
   background: var(--green-light); color: var(--green);
 }
-
 </style>
 </head>
 <body>
@@ -638,29 +628,20 @@ body {
 </div>
 
 <!-- Header -->
-<header class="header">
-  <div class="header-left">
+<div class="header">
+  <div class="header-left" style="display:flex;align-items:center;gap:12px;">
     <button class="hamburger" id="hamburgerBtn" onclick="toggleSidebar()">&#9776;</button>
-    <div class="header-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></div>
-    <div class="header-title">
-      <h1>Meji Media</h1>
-      <p>Automation Documentation</p>
+    <div>
+      <h1>Meji Media &ndash; Enquiry Follow-Up System</h1>
+      <p>System overview &middot; All 4 automations &middot; Live as of 19 March 2026</p>
     </div>
-    <span style="color:var(--border);font-size:20px;margin:0 4px;">|</span>
-    <nav style="display:flex;gap:4px;">
-      <a href="/docs/meji-media/" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Hub</a>
-      <a href="/docs/meji-media/guide" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Guide</a>
-      <a href="/docs/meji-media/ab-testing" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">A/B Testing</a>
-      <a href="/docs/meji-media/lead-scoring" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Scoring</a>
-      <a href="/docs/meji-media/system-overview" style="font-size:13px;font-weight:700;padding:6px 12px;border-radius:6px;background:var(--blue-light);color:var(--blue);text-decoration:none;">Overview</a>
-    </nav>
   </div>
   <div class="header-right">
-    <span class="badge badge-green"><span class="badge-dot"></span> All Systems Live</span>
-    <button class="theme-btn" onclick="toggleTheme()"><span id="theme-icon">&#9790;</span> Theme</button>
+    <span class="badge badge-green"><span class="badge-dot"></span>All systems live</span>
+    <button class="theme-btn" onclick="toggleTheme()">&#9680; Toggle theme</button>
     <button class="theme-btn" onclick="openSearch()" title="Ctrl/Cmd+K">&#x2315; Search</button>
   </div>
-</header>
+</div>
 
 <div class="page-layout">
 <div class="main">
@@ -1074,7 +1055,7 @@ body {
       </div>
       <div style="padding:12px 18px;background:var(--surface2);font-size:12px;color:var(--text2);">
         <strong>Placeholders (do not remove):</strong><br>
-        <code>##name##</code> &middot; <code>##theme_name##</code> &middot; <code>##venue_features_text##</code> &middot; <code>##venue_tiers_text##</code> &middot; <code>##venue_name##</code> &middot; <code>##venue_title##</code> &middot; <code>##venue_phone##</code> &middot; <code>##guests##</code> &middot; <code>##ai_opening##</code> &middot; <code>##signature##</code>
+        <code>##name##</code> &middot; <code>##topic##</code> &middot; <code>##organisation##</code> &middot; <code>##ai_opening##</code> &middot; <code>##signature##</code> &middot; <code>##venue_name##</code>
       </div>
     </div>
 
@@ -1093,28 +1074,28 @@ body {
         <div class="status-mini-title" style="color:var(--blue-dark)">A0 &mdash; MySQL Poller</div>
         <div class="status-mini-row"><span>Status</span><span class="status-mini-val" style="color:var(--green)">Active</span></div>
         <div class="status-mini-row"><span>Trigger</span><span class="status-mini-val">Polling / 30min</span></div>
-        <div class="status-mini-row"><span>Executions</span><span class="status-mini-val">1,038</span></div>
+        <div class="status-mini-row"><span>Executions</span><span class="status-mini-val">644</span></div>
         <div class="status-mini-row"><span>Errors (lifetime)</span><span class="status-mini-val">11</span></div>
       </div>
       <div class="status-mini-card status-a1">
         <div class="status-mini-title" style="color:var(--green)">A1 &mdash; Enquiry Sequence</div>
         <div class="status-mini-row"><span>Status</span><span class="status-mini-val" style="color:var(--green)">Active</span></div>
         <div class="status-mini-row"><span>Trigger</span><span class="status-mini-val">Webhook</span></div>
-        <div class="status-mini-row"><span>Executions</span><span class="status-mini-val">55</span></div>
+        <div class="status-mini-row"><span>Executions</span><span class="status-mini-val">39</span></div>
         <div class="status-mini-row"><span>Errors (lifetime)</span><span class="status-mini-val">0</span></div>
       </div>
       <div class="status-mini-card status-a2">
         <div class="status-mini-title" style="color:var(--purple)">A2 &mdash; Reply Detection</div>
         <div class="status-mini-row"><span>Status</span><span class="status-mini-val" style="color:var(--green)">Active</span></div>
         <div class="status-mini-row"><span>Trigger</span><span class="status-mini-val">Polling / 10min</span></div>
-        <div class="status-mini-row"><span>Executions</span><span class="status-mini-val">2,066</span></div>
+        <div class="status-mini-row"><span>Executions</span><span class="status-mini-val">892</span></div>
         <div class="status-mini-row"><span>Errors (lifetime)</span><span class="status-mini-val">0</span></div>
       </div>
       <div class="status-mini-card status-a3">
         <div class="status-mini-title" style="color:var(--amber)">A3 &mdash; Scheduled Follow-Ups</div>
         <div class="status-mini-row"><span>Status</span><span class="status-mini-val" style="color:var(--green)">Active</span></div>
         <div class="status-mini-row"><span>Trigger</span><span class="status-mini-val">Polling / 60min</span></div>
-        <div class="status-mini-row"><span>Executions</span><span class="status-mini-val">427</span></div>
+        <div class="status-mini-row"><span>Executions</span><span class="status-mini-val">232</span></div>
         <div class="status-mini-row"><span>Errors (lifetime)</span><span class="status-mini-val">0</span></div>
       </div>
     </div>
@@ -1290,54 +1271,6 @@ body {
         </details>
       </div>
 
-      <!-- 2026-03-24 Health check + venue corrections -->
-      <div class="tl-entry tl-entry-border-green">
-        <div class="tl-header">
-          <span class="tl-date">2026-03-24</span>
-          <span class="tl-scope">Health check + venue corrections</span>
-          <span class="tl-result tl-result-pass">PASS</span>
-        </div>
-        <div class="tl-desc">All pass &mdash; All healthy, venue corrections applied, topic update in 10 templates</div>
-        <details class="tl-details">
-          <summary>Details</summary>
-          <div class="tl-details-content">
-            Production health check: all 4 scenarios active with zero errors on A1/A2/A3. 3 new enquiries in 24 hours, 61 MySQL rows total. Ops at 43.1% (12,938/30,000). Applied Jess-approved venue data corrections across all 3 Venue Config records (Leicester venue title, tier names, features for Leicester and Wolverhampton). Updated <code>##topic##</code> to "Christmas party" in all 10 email templates. All changes verified via data store queries.
-          </div>
-        </details>
-      </div>
-
-      <!-- 2026-03-25 Health check + docs update -->
-      <div class="tl-entry tl-entry-border-multi">
-        <div class="tl-header">
-          <span class="tl-date">2026-03-25</span>
-          <span class="tl-scope">Health check + docs update</span>
-          <span class="tl-result tl-result-pass">PASS</span>
-        </div>
-        <div class="tl-desc">All pass &mdash; 65 MySQL rows, 4 new enquiries, ops 51.1%, all data stores verified</div>
-        <details class="tl-details">
-          <summary>Details</summary>
-          <div class="tl-details-content">
-            Full production health check via MCP. All 4 scenarios active with zero recent errors. MySQL database at 65 rows (max id 14285), 4 new enquiries since last check. Latest enquiry (Metalor, id 14285) processed at 09:44 UTC. Operations at 51.1% (15,326/30,000). All data stores verified: Pipeline Config (1 record, 35+ fields), Email Templates (10 records with venue-corrected content), Venue Config (3 records with Jess-approved corrections). Documentation hub updated with latest results.
-          </div>
-        </details>
-      </div>
-
-      <!-- 2026-03-29 Health check -->
-      <div class="tl-entry tl-entry-border-multi">
-        <div class="tl-header">
-          <span class="tl-date">2026-03-29</span>
-          <span class="tl-scope">Health check</span>
-          <span class="tl-result tl-result-pass">PASS</span>
-        </div>
-        <div class="tl-desc">All pass &mdash; 66 MySQL rows, 1 new enquiry, ops 67.2% (20,151/30,000), zero errors</div>
-        <details class="tl-details">
-          <summary>Details</summary>
-          <div class="tl-details-content">
-            Full production health check via MCP. All 4 scenarios active with zero recent errors. A0: 932 executions, A1: 48, A2: 1,755, A3: 376. MySQL database at 66 rows (max id 14286), 1 new enquiry since last check (Endoscopy/Hannah Clarke, processed 28 March). Operations at 67.2% (20,151/30,000). All data stores verified: Pipeline Config (1 record), Email Templates (10 records), Venue Config (3 records). A3 running 46 ops per hourly execution. Documentation hub and portal updated.
-          </div>
-        </details>
-      </div>
-
       <!-- 2026-03-31 Venue routing fix -->
       <div class="tl-entry tl-entry-border-multi">
         <div class="tl-header">
@@ -1349,23 +1282,7 @@ body {
         <details class="tl-details">
           <summary>Details</summary>
           <div class="tl-details-content">
-            Critical venue routing update in A1. Previous mapping used if/else chain for 3 original event IDs (130/131/132). Website added 16 new event dates (~28 March) with IDs 133-148. Unknown IDs silently defaulted to Birmingham. Fixed with <code>contains()</code> pattern covering all 19 verified IDs: Birmingham (130, 141-148), Wolverhampton (131, 133-137), Leicester (132, 138-140). Event ID convention: <code>{venue_letter}{YY}{MM}{DD}</code>. Also fixed: (1) greeting field now uses person name (<code>leader</code>) with company fallback instead of company name, across modules 5, 55, 70, 54. (2) Guest count shows correct singular/plural ("1 guest" vs "3 guests"). (3) OpenAI prompt and hot lead notification field labels corrected. Verified with live Leicester test (event_id 140). MySQL at 67 rows (max id 14294). A0 cursor at 14294.
-          </div>
-        </details>
-      </div>
-
-      <!-- 2026-03-30 Email template overhaul -->
-      <div class="tl-entry tl-entry-border-multi">
-        <div class="tl-header">
-          <span class="tl-date">2026-03-30</span>
-          <span class="tl-scope">Email template overhaul</span>
-          <span class="tl-result tl-result-pass">PASS</span>
-        </div>
-        <div class="tl-desc">All pass &mdash; signature, venue titles, theme names, single-paragraph format, all verified with test submissions</div>
-        <details class="tl-details">
-          <summary>Details</summary>
-          <div class="tl-details-content">
-            Major email template update per Jess's feedback. 5 changes: (1) Signature updated to Jess Harrar / Moonlight &amp; Mistletoe / christmasofficeparty.co.uk. (2) Venue titles shortened (ICC, ICB, Empire Banqueting Hall). (3) Theme names integrated via <code>##theme_name##</code> (Winter Carnival for Birmingham/Leicester, Winter Masquerade for Wolverhampton). (4) Features and tiers converted from bullet lists to single-paragraph format via new <code>##venue_features_text##</code> and <code>##venue_tiers_text##</code> placeholders. (5) Jess's own copy and subject line edits preserved. All 8 of 10 templates updated (step_4_a/b unchanged). A1 and A3 replace chains updated with 3 new placeholder replacements. Verified with test submissions for Birmingham and Wolverhampton venues. All placeholders resolved correctly.
+            Critical venue routing update in A1. Previous mapping used if/else chain for 3 original event IDs. Website added 16 new event dates with IDs 133-148. Unknown IDs silently defaulted to Birmingham. Fixed with <code>contains()</code> pattern covering all 19 verified IDs across 3 venues. Also fixed: greeting now uses person name instead of company name, and guest count shows correct singular/plural. Verified with live Leicester test. MySQL at 67 rows (max id 14294).
           </div>
         </details>
       </div>
@@ -1419,15 +1336,11 @@ const root = document.documentElement;
 function toggleTheme() {
   const t = root.dataset.theme === 'dark' ? 'light' : 'dark';
   root.dataset.theme = t;
-  localStorage.setItem('meji-docs-theme', t);
-  document.getElementById('theme-icon').innerHTML = t === 'dark' ? '&#9788;' : '&#9790;';
+  localStorage.setItem('mm-theme', t);
 }
 (function() {
-  const saved = localStorage.getItem('meji-docs-theme');
-  if (saved) {
-    root.dataset.theme = saved;
-    if (saved === 'dark') document.getElementById('theme-icon').innerHTML = '&#9788;';
-  }
+  const saved = localStorage.getItem('mm-theme');
+  if (saved) root.dataset.theme = saved;
 })();
 
 // Sidebar
@@ -1475,14 +1388,14 @@ const searchIndex = [
   { title: 'A/B Testing', desc: 'Split testing for email templates -- ab_testing_enabled toggle in Pipeline Config', id: 'ab' },
   { title: 'handoff_email', desc: 'Where hot lead team notifications are sent -- currently gurmej@mejimedia.com', id: 'config' },
   { title: 'Lead Scoring', desc: '9-factor weighted score -- hot >= 50, warm >= 25, standard below 25', id: 'a1' },
-  { title: 'Email Placeholders', desc: '##name## ##theme_name## ##venue_features_text## ##venue_tiers_text## ##venue_name## ##venue_title## ##venue_phone## ##guests## ##ai_opening## ##signature##', id: 'templates' },
+  { title: 'Email Placeholders', desc: '##name## ##topic## ##organisation## ##ai_opening## ##signature## ##venue_name##', id: 'templates' },
   { title: 'Cadence', desc: 'Hot: +6/24h, Warm: +12/48h, Standard: +24/72h between follow-ups', id: 'cadence' },
   { title: 'Pipeline Config', desc: 'All system settings in Make.com data store -- handoff, cadence, AI, A/B', id: 'config' },
   { title: 'Email Templates', desc: 'Edit subject and body_html in Make.com data store -- 8 active variants', id: 'templates' },
   { title: 'enquire@christmasofficeparty.co.uk', desc: 'Gmail account used to send all automated emails', id: 'email' },
   { title: 'Google Sheet', desc: 'MejiMedia_Enquiries_Followup -- Leads tab tracks all enquiries, AB_Analytics for A/B results', id: 'sheet' },
   { title: 'Testing overview', desc: 'Live status, test timeline, and coverage for all 4 automations', id: 'testing' },
-  { title: 'Health check results', desc: 'Latest health check: 2026-03-25, all green, ops at 51%, 65 MySQL rows', id: 'testing' },
+  { title: 'Health check results', desc: 'Latest health check: 2026-03-23, all green, ops at 65%', id: 'testing' },
   { title: 'Test coverage per automation', desc: 'A0: polling+cursor, A1: routing+templates+venue, A2: reply+idempotency, A3: steps+early-exit', id: 'testing' },
 ];
 
@@ -1506,50 +1419,6 @@ document.addEventListener('keydown', function(e) {
   if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); openSearch(); }
   if (e.key === 'Escape') closeSearch();
 });
-
-
 </script>
-
-<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
-  <div style="text-align:center;max-width:360px;padding:24px;">
-    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span></div>
-    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Meji Media Documentation</h2>
-    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Enter your access code to continue.</p>
-    <div style="display:flex;gap:8px;">
-      <input id="auth-input" type="password" placeholder="Access code" autocomplete="off"
-        style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;"
-        onkeydown="if(event.key==='Enter')checkAuth()" />
-      <button onclick="checkAuth()"
-        style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">Enter</button>
-    </div>
-    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Incorrect code. Please try again.</p>
-  </div>
-</div>
-
-<script>
-// Auth gate
-var MEJI_CODE = 'meji2026';
-function checkAuth() {
-  var input = document.getElementById('auth-input').value;
-  if (input === MEJI_CODE) {
-    localStorage.setItem('meji-docs-access', 'granted');
-    var gate = document.getElementById('auth-gate');
-    gate.style.opacity = '0';
-    setTimeout(function() { gate.style.display = 'none'; }, 300);
-  } else {
-    document.getElementById('auth-error').style.display = 'block';
-    document.getElementById('auth-input').value = '';
-    document.getElementById('auth-input').focus();
-  }
-}
-(function() {
-  if (localStorage.getItem('meji-docs-access') === 'granted') {
-    document.getElementById('auth-gate').style.display = 'none';
-  } else {
-    document.getElementById('auth-input').focus();
-  }
-})();
-</script>
-
 </body>
 </html>
