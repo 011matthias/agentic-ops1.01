@@ -483,6 +483,89 @@ li { margin-bottom: 6px; }
     </div>
 </div>
 
+<!-- Channel Flow Diagrams -->
+<h3 style="margin-top:36px;">How each channel flows through the system</h3>
+<p>Every channel follows the same core pipeline, but the intake method and context extraction differ. Here is the journey for each source, from arrival to response.</p>
+
+<div style="display:flex;flex-direction:column;gap:12px;margin:20px 0;">
+    <!-- SAP Store -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px;">
+        <div style="font-size:12px;font-weight:700;color:var(--purple-dark);margin-bottom:8px;">SAP Store Lead</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;">
+            <span style="background:var(--purple-bg);color:var(--purple-dark);padding:4px 10px;border-radius:6px;font-weight:600;">Email arrives</span>
+            <span style="color:var(--text2);">&rarr;</span>
+            <span style="background:var(--blue-bg);color:var(--blue-dark);padding:4px 10px;border-radius:6px;font-weight:600;">A2 polls inbox</span>
+            <span style="color:var(--text2);">&rarr;</span>
+            <span style="background:var(--blue-bg);color:var(--blue-dark);padding:4px 10px;border-radius:6px;font-weight:600;">Extract product + contact</span>
+            <span style="color:var(--text2);">&rarr;</span>
+            <span style="background:var(--orange-bg);color:var(--orange-dark);padding:4px 10px;border-radius:6px;font-weight:600;">Classify (+5 channel)</span>
+            <span style="color:var(--text2);">&rarr;</span>
+            <span style="background:var(--blue-bg);color:var(--blue-dark);padding:4px 10px;border-radius:6px;font-weight:600;">AI draft (product-aware)</span>
+            <span style="color:var(--text2);">&rarr;</span>
+            <span style="background:var(--green-bg);color:var(--green-dark);padding:4px 10px;border-radius:6px;font-weight:600;">HITL review</span>
+            <span style="color:var(--text2);">&rarr;</span>
+            <span style="background:var(--green-bg);color:var(--green-dark);padding:4px 10px;border-radius:6px;font-weight:600;">Send via SMTP</span>
+        </div>
+    </div>
+    <!-- SAP Discovery -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px;">
+        <div style="font-size:12px;font-weight:700;color:var(--blue-dark);margin-bottom:8px;">SAP Discovery Center Lead</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;">
+            <span style="background:var(--blue-bg);color:var(--blue-dark);padding:4px 10px;border-radius:6px;font-weight:600;">Email arrives</span>
+            <span style="color:var(--text2);">&rarr;</span>
+            <span style="background:var(--blue-bg);color:var(--blue-dark);padding:4px 10px;border-radius:6px;font-weight:600;">A2 polls inbox</span>
+            <span style="color:var(--text2);">&rarr;</span>
+            <span style="background:var(--blue-bg);color:var(--blue-dark);padding:4px 10px;border-radius:6px;font-weight:600;">Extract use case + contact</span>
+            <span style="color:var(--text2);">&rarr;</span>
+            <span style="background:var(--orange-bg);color:var(--orange-dark);padding:4px 10px;border-radius:6px;font-weight:600;">Classify (+1 channel)</span>
+            <span style="color:var(--text2);">&rarr;</span>
+            <span style="background:var(--blue-bg);color:var(--blue-dark);padding:4px 10px;border-radius:6px;font-weight:600;">AI draft (UC-aware)</span>
+            <span style="color:var(--text2);">&rarr;</span>
+            <span style="background:var(--green-bg);color:var(--green-dark);padding:4px 10px;border-radius:6px;font-weight:600;">Route by tier</span>
+            <span style="color:var(--text2);">&rarr;</span>
+            <span style="background:var(--green-bg);color:var(--green-dark);padding:4px 10px;border-radius:6px;font-weight:600;">Send via SMTP</span>
+        </div>
+    </div>
+    <!-- Website -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px;">
+        <div style="font-size:12px;font-weight:700;color:var(--green-dark);margin-bottom:8px;">Website Form Lead</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;">
+            <span style="background:var(--green-bg);color:var(--green-dark);padding:4px 10px;border-radius:6px;font-weight:600;">Form submitted</span>
+            <span style="color:var(--text2);">&rarr;</span>
+            <span style="background:var(--green-bg);color:var(--green-dark);padding:4px 10px;border-radius:6px;font-weight:600;">A1 webhook fires</span>
+            <span style="color:var(--text2);">&rarr;</span>
+            <span style="background:var(--green-bg);color:var(--green-dark);padding:4px 10px;border-radius:6px;font-weight:600;">Extract category + landing page</span>
+            <span style="color:var(--text2);">&rarr;</span>
+            <span style="background:var(--orange-bg);color:var(--orange-dark);padding:4px 10px;border-radius:6px;font-weight:600;">Classify</span>
+            <span style="color:var(--text2);">&rarr;</span>
+            <span style="background:var(--blue-bg);color:var(--blue-dark);padding:4px 10px;border-radius:6px;font-weight:600;">AI draft</span>
+            <span style="color:var(--text2);">&rarr;</span>
+            <span style="background:var(--green-bg);color:var(--green-dark);padding:4px 10px;border-radius:6px;font-weight:600;">Route by tier</span>
+            <span style="color:var(--text2);">&rarr;</span>
+            <span style="background:var(--green-bg);color:var(--green-dark);padding:4px 10px;border-radius:6px;font-weight:600;">Send via SMTP</span>
+        </div>
+    </div>
+    <!-- LinkedIn -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px;">
+        <div style="font-size:12px;font-weight:700;color:var(--orange-dark);margin-bottom:8px;">LinkedIn Lead <span style="font-weight:400;font-size:11px;color:var(--text2);">(pending validation)</span></div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;">
+            <span style="background:var(--orange-bg);color:var(--orange-dark);padding:4px 10px;border-radius:6px;font-weight:600;">Message or form</span>
+            <span style="color:var(--text2);">&rarr;</span>
+            <span style="background:var(--orange-bg);color:var(--orange-dark);padding:4px 10px;border-radius:6px;font-weight:600;">A0 API read or manual</span>
+            <span style="color:var(--text2);">&rarr;</span>
+            <span style="background:var(--orange-bg);color:var(--orange-dark);padding:4px 10px;border-radius:6px;font-weight:600;">Extract campaign context</span>
+            <span style="color:var(--text2);">&rarr;</span>
+            <span style="background:var(--orange-bg);color:var(--orange-dark);padding:4px 10px;border-radius:6px;font-weight:600;">Classify</span>
+            <span style="color:var(--text2);">&rarr;</span>
+            <span style="background:var(--blue-bg);color:var(--blue-dark);padding:4px 10px;border-radius:6px;font-weight:600;">AI draft</span>
+            <span style="color:var(--text2);">&rarr;</span>
+            <span style="background:var(--green-bg);color:var(--green-dark);padding:4px 10px;border-radius:6px;font-weight:600;">Route by tier</span>
+            <span style="color:var(--text2);">&rarr;</span>
+            <span style="background:var(--green-bg);color:var(--green-dark);padding:4px 10px;border-radius:6px;font-weight:600;">Send or manual paste</span>
+        </div>
+    </div>
+</div>
+
 <!-- Beyond Lead Nurturing -->
 <h2 id="beyond">Beyond Lead Nurturing</h2>
 <p>The platform is designed to handle more than leads. The same architecture - ingest, process, draft, approve, send, track - applies to other business workflows. These are planned as same-platform extensions, not separate tools.</p>
