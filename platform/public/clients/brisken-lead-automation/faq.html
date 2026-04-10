@@ -298,16 +298,22 @@ summary::-webkit-details-marker { display: none; }
 <details>
     <summary>How does the human review work?</summary>
     <div class="faq-body">
-        <p><strong>High-value leads:</strong> The AI-drafted response is held and sent to the designated reviewer via email or Slack. The reviewer sees the full lead context (source, company, inquiry, enrichment data) alongside the draft. They can approve as-is, edit the draft, or reject it for manual handling.</p>
-        <p><strong>Medium-value leads:</strong> The response is auto-sent, but the reviewer receives a notification with full context. They can review and follow up if needed.</p>
-        <p><strong>All replies:</strong> When a lead responds to the first message, the reply is routed to mandatory human review. No auto-response to second messages, regardless of lead quality. This is a hard rule in the system.</p>
+        <p><strong>First response routing by tier:</strong></p>
+        <ul>
+            <li><strong>High:</strong> AI draft is held for human review before sending. Reviewer sees full context package (lead record, channel context, enrichment data, draft).</li>
+            <li><strong>Medium:</strong> Response auto-sent. Reviewer notified with full context. Can follow up if needed.</li>
+            <li><strong>Low:</strong> Response auto-sent. Logged to CRM. Simpler response with less AI context loaded.</li>
+            <li><strong>Spam:</strong> Dropped entirely. No response, no CRM entry.</li>
+        </ul>
+        <p><strong>All replies (every tier):</strong> When any lead responds to a first message, the reply goes to mandatory human review. No automated second response under any circumstances, regardless of lead tier. The tool accompanies the entire conversation lifecycle, but second responses always go through a human.</p>
     </div>
 </details>
 
 <details>
     <summary>Can I adjust the lead scoring criteria?</summary>
     <div class="faq-body">
-        <p>Yes. The scoring rules are configured directly in the n8n workflow. You can add or remove scoring signals (for example, weighting SAP Store leads higher than Discovery Center leads), adjust the thresholds between quality tiers, and change the routing behavior for each tier. No code changes required for most adjustments.</p>
+        <p>Yes. The scoring weights and tier thresholds live in a configurable table, not in code. You can add or remove scoring signals, change the numeric weight of each signal, and adjust the score ranges that map to SPAM / Low / Medium / High. For example, you could increase the SAP Store weight from +5 to +7, or lower the High threshold from 10 to 8.</p>
+        <p>Fine-tuning works by reviewing leads that were classified incorrectly and adjusting the weights accordingly. Automated tuning (system suggests changes based on outcomes like reply rates and conversions) is planned for a later phase once enough lead history exists.</p>
     </div>
 </details>
 
@@ -353,6 +359,13 @@ summary::-webkit-details-marker { display: none; }
     <summary>Is LinkedIn confirmed as a channel?</summary>
     <div class="faq-body">
         <p>Not yet confirmed for lead ingest, but the scope has expanded: Dirk wants all LinkedIn messages visible in the dashboard, not just lead gen form submissions. The system would assist with response drafting and conversation tracking across LinkedIn. API restrictions for outbound messaging are being investigated.</p>
+    </div>
+</details>
+
+<details>
+    <summary>What if we want to switch away from Zoho CRM?</summary>
+    <div class="faq-body">
+        <p>The system communicates with the CRM through an abstraction layer that defines standard events: Create Lead, Add Comment, Update Lead Status, Attach Email. Zoho is the first connector built for this layer. Switching to a different CRM (HubSpot, Salesforce, Pipedrive, or anything with an API) means writing a new connector that maps these same events to the new CRM's API. The pipeline logic, scoring, AI drafting, and review workflows stay untouched.</p>
     </div>
 </details>
 
@@ -447,5 +460,6 @@ function toggleTheme(){
     sections.forEach(function(s){observer.observe(s.el)});
 })();
 </script>
+<script src="/clients/brisken-lead-automation/review.js"></script>
 </body>
 </html>

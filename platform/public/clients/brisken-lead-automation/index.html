@@ -408,7 +408,7 @@ li { margin-bottom: 6px; }
     </li>
     <li>
         <span class="check-icon"></span>
-        <span><strong>Lead scoring and ranking</strong> - company email, company name, message detail, and source channel determine quality tier</span>
+        <span><strong>4-tier classification</strong> - each lead is scored and classified as SPAM, Low, Medium, or High. Spam is filtered out; all others get a response. Configurable weight table, not hardcoded</span>
     </li>
     <li>
         <span class="check-icon"></span>
@@ -416,7 +416,7 @@ li { margin-bottom: 6px; }
     </li>
     <li>
         <span class="check-icon"></span>
-        <span><strong>Human review gates</strong> - high-value leads held for approval before sending. All replies escalated to human review, no exceptions</span>
+        <span><strong>Human review gates</strong> - high-value leads held for approval before sending. All second responses (replies) go through mandatory human review, regardless of lead tier</span>
     </li>
     <li>
         <span class="check-icon"></span>
@@ -424,7 +424,7 @@ li { margin-bottom: 6px; }
     </li>
     <li>
         <span class="check-icon"></span>
-        <span><strong>CRM sync</strong> - Zoho CRM updated automatically as a record of all events. The dashboard is the working interface, not the CRM</span>
+        <span><strong>CRM abstraction</strong> - standard event layer (Create Lead, Add Comment, Update Status) with Zoho as the first connector. Swap CRM later without reworking logic</span>
     </li>
     <li>
         <span class="check-icon"></span>
@@ -440,43 +440,43 @@ li { margin-bottom: 6px; }
     <div class="zone zone-blue">
         <div class="zone-icon">&#9729;</div>
         <div class="zone-title">SAP Discovery Center</div>
-        <div class="zone-sub">Higher volume</div>
+        <div class="zone-sub">Email forwarding &middot; Higher volume</div>
         <ul class="zone-items">
-            <li>Missions and use cases</li>
-            <li>Delivered via email notification</li>
-            <li>Parsed from inbound email</li>
-            <li>Higher lead volume</li>
+            <li>Context: specific use case / mission</li>
+            <li>Intake: email polling (forwarded notifications)</li>
+            <li>Parsed from inbound email body</li>
+            <li>Higher lead volume, mixed quality</li>
         </ul>
     </div>
     <div class="zone zone-purple">
         <div class="zone-icon">&#128722;</div>
         <div class="zone-title">SAP Store</div>
-        <div class="zone-sub">Higher value</div>
+        <div class="zone-sub">Email forwarding &middot; Higher value</div>
         <ul class="zone-items">
-            <li>Product inquiries</li>
-            <li>Delivered via email notification</li>
-            <li>Rarer but higher intent</li>
-            <li>Strongest scoring signal</li>
+            <li>Context: specific product inquiry</li>
+            <li>Intake: email polling (forwarded notifications)</li>
+            <li>Rarer but highest intent signal</li>
+            <li>Strongest scoring weight (+5)</li>
         </ul>
     </div>
     <div class="zone zone-green">
         <div class="zone-icon">&#127760;</div>
         <div class="zone-title">Website / Landing Pages</div>
-        <div class="zone-sub">Webhook-based</div>
+        <div class="zone-sub">Webhook &middot; Real-time</div>
         <ul class="zone-items">
-            <li>Contact forms</li>
-            <li>Article and landing page forms</li>
-            <li>Webhook or direct DB connect</li>
+            <li>Context: landing page, form category, user selections</li>
+            <li>Intake: webhook from Wix form tool</li>
+            <li>Different categories per entry point</li>
             <li>Real-time capture</li>
         </ul>
     </div>
     <div class="zone zone-orange">
         <div class="zone-icon">&#128101;</div>
         <div class="zone-title">LinkedIn</div>
-        <div class="zone-sub">To be validated</div>
+        <div class="zone-sub">API read or manual &middot; To be validated</div>
         <ul class="zone-items">
-            <li>Campaign responses</li>
-            <li>Direct messages</li>
+            <li>Context: campaign name or generic message</li>
+            <li>Intake: API read or manual capture</li>
             <li>API restrictions under review</li>
             <li>Manual fallback if needed</li>
         </ul>
@@ -690,5 +690,6 @@ document.addEventListener('keydown',function(e){
     }
 });
 </script>
+<script src="/clients/brisken-lead-automation/review.js"></script>
 </body>
 </html>
