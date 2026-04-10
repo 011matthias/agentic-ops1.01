@@ -1,416 +1,457 @@
 /**
- * Review Mode v2 — inline comment system for scope page review.
+ * Review Mode v3 — Word-style inline commenting.
  *
- * Features:
- * - Always-visible comment icons on each section (no toggle required)
- * - Multiple comments per section
- * - Text selection commenting (highlight text → comment on that quote)
- * - Timestamps and edit/delete on saved comments
- * - Cross-page comment summary panel
- * - Export: copy to clipboard + mailto
- * - First-visit onboarding pulse
+ * - Highlight text → comment appears in right sidebar
+ * - Highlighted text stays marked on the page with matching color
+ * - Sidebar shows all comments, ordered by position
+ * - Click comment → scrolls to highlight; click highlight → focuses comment
+ * - Persistent across page loads (localStorage)
+ * - Export: copy all or email
  */
 (function() {
-    var STORAGE_KEY = 'brisken-review-comments';
-    var RECIPIENT = 'nicolas.neumann@unpauseai.com';
-    var pageName = location.pathname.split('/').filter(Boolean).pop() || 'overview';
-    var PAGE_LABELS = { 'brisken-lead-automation': 'Overview', 'solution': 'Solution', 'timeline': 'Timeline', 'faq': 'FAQ' };
-    var pageLabel = PAGE_LABELS[pageName] || pageName;
+    'use strict';
 
-    // --- Storage ---
-    function getAll() {
-        try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
-        catch(e) { return []; }
-    }
-    function saveAll(arr) { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); }
-    function getForSection(sectionId) {
-        return getAll().filter(function(c) { return c.page === pageName && c.section === sectionId; });
-    }
-    function addComment(sectionId, sectionTitle, text, quote) {
-        var all = getAll();
-        all.push({ id: Date.now() + '-' + Math.random().toString(36).substr(2, 5), page: pageName, pageLabel: pageLabel, section: sectionId, sectionTitle: sectionTitle, text: text, quote: quote || null, date: new Date().toISOString() });
-        saveAll(all);
-    }
-    function updateComment(id, newText) {
-        var all = getAll();
-        for (var i = 0; i < all.length; i++) { if (all[i].id === id) { all[i].text = newText; all[i].editedAt = new Date().toISOString(); break; } }
-        saveAll(all);
-    }
-    function deleteComment(id) {
-        saveAll(getAll().filter(function(c) { return c.id !== id; }));
-    }
+    var STORE = 'brisken-rv3';
+    var MAIL = 'nicolas.neumann@unpauseai.com';
+    var page = location.pathname.split('/').filter(Boolean).pop() || 'overview';
+    var PAGES = { 'brisken-lead-automation': 'Overview', solution: 'Solution', timeline: 'Timeline', faq: 'FAQ' };
+    var pageLabel = PAGES[page] || page;
 
-    // --- Helpers ---
-    function esc(str) { var d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
-    function fmtDate(iso) {
+    // Palette for comment markers (rotating)
+    var COLORS = [
+        { bg: 'rgba(124,58,237,.15)', border: '#7c3aed', text: '#5b21b6' },
+        { bg: 'rgba(37,99,235,.15)', border: '#2563eb', text: '#1e40af' },
+        { bg: 'rgba(5,150,105,.15)', border: '#059669', text: '#047857' },
+        { bg: 'rgba(217,119,6,.15)', border: '#d97706', text: '#b45309' },
+        { bg: 'rgba(220,38,38,.12)', border: '#dc2626', text: '#991b1b' },
+    ];
+
+    // ── Storage ──
+    function load() { try { return JSON.parse(localStorage.getItem(STORE) || '[]'); } catch(e) { return []; } }
+    function save(arr) { localStorage.setItem(STORE, JSON.stringify(arr)); }
+    function forPage() { return load().filter(function(c) { return c.page === page; }); }
+    function nextColor() { var all = load(); return COLORS[all.length % COLORS.length]; }
+
+    // ── Helpers ──
+    function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    function fmtTime(iso) {
         var d = new Date(iso);
-        return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+        return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' +
+               d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
     }
-    function totalCount() { return getAll().length; }
+    function uid() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 6); }
 
-    // --- Styles ---
-    var css = document.createElement('style');
-    css.textContent = '\
-/* Review button */\
-.rv-fab{position:fixed;bottom:24px;right:24px;z-index:9000;display:flex;align-items:center;gap:8px;\
-background:var(--purple,#7c3aed);color:#fff;border:none;border-radius:12px;padding:10px 18px;\
-font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 4px 16px rgba(124,58,237,.35);transition:all .2s;}\
-.rv-fab:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(124,58,237,.45);}\
-.rv-fab .rv-count{background:rgba(255,255,255,.25);padding:1px 7px;border-radius:10px;font-size:11px;margin-left:2px;}\
-@keyframes rv-pulse{0%,100%{box-shadow:0 4px 16px rgba(124,58,237,.35)}50%{box-shadow:0 4px 24px rgba(124,58,237,.7)}}\
-.rv-fab.rv-pulse{animation:rv-pulse 2s ease-in-out 3;}\
-/* Section comment icon */\
-.rv-add{display:inline-flex;align-items:center;gap:4px;margin-left:10px;background:var(--purple-light,#ede9fe);\
-color:var(--purple-dark,#5b21b6);border:1px solid color-mix(in srgb,var(--purple,#7c3aed) 20%,var(--border,#e5e7eb));\
-border-radius:6px;padding:3px 9px;font-size:11px;font-weight:600;cursor:pointer;vertical-align:middle;transition:all .15s;opacity:.6;}\
-.rv-add:hover{opacity:1;background:var(--purple,#7c3aed);color:#fff;}\
-[data-theme="dark"] .rv-add{background:var(--purple-bg,#1e1040);color:var(--purple-dark,#c4b5fd);}\
-/* Badge */\
-.rv-badge{display:inline-flex;align-items:center;gap:3px;background:var(--purple,#7c3aed);color:#fff;\
-font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-left:6px;vertical-align:middle;cursor:pointer;}\
-/* Comment panel */\
-.rv-panel{display:none;background:var(--purple-bg,#f5f3ff);border:1px solid color-mix(in srgb,var(--purple,#7c3aed) 15%,var(--border,#e5e7eb));\
-border-radius:10px;padding:16px;margin:12px 0 20px;}\
-.rv-panel.open{display:block;}\
-.rv-panel-quote{font-size:12px;color:var(--purple-dark,#5b21b6);border-left:3px solid var(--purple,#7c3aed);\
-padding:6px 12px;margin:0 0 10px;background:color-mix(in srgb,var(--purple,#7c3aed) 5%,var(--bg,#fff));border-radius:0 6px 6px 0;font-style:italic;}\
-.rv-panel textarea{width:100%;min-height:70px;border:1px solid var(--border,#e5e7eb);border-radius:8px;\
-padding:10px 12px;font-size:13px;font-family:inherit;background:var(--bg,#fff);color:var(--text,#1a1a1a);resize:vertical;}\
-.rv-panel textarea:focus{outline:none;border-color:var(--purple,#7c3aed);box-shadow:0 0 0 3px rgba(124,58,237,.1);}\
-.rv-panel-actions{display:flex;gap:8px;margin-top:10px;justify-content:flex-end;}\
-.rv-panel-actions button{padding:7px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:none;transition:all .15s;}\
-.rv-btn-save{background:var(--purple,#7c3aed);color:#fff;}\
-.rv-btn-save:hover{opacity:.9;}\
-.rv-btn-cancel{background:var(--surface2,#f1f5f9);color:var(--text2,#6b7280);border:1px solid var(--border,#e5e7eb);}\
-.rv-btn-cancel:hover{background:var(--border,#e5e7eb);}\
-/* Saved comments */\
-.rv-comments{margin:8px 0 20px;}\
-.rv-comment{background:var(--purple-bg,#f5f3ff);border-left:3px solid var(--purple,#7c3aed);\
-padding:12px 14px;margin:6px 0;border-radius:0 8px 8px 0;position:relative;}\
-.rv-comment-header{display:flex;align-items:center;gap:8px;margin-bottom:6px;}\
-.rv-comment-date{font-size:10px;color:var(--text2,#6b7280);}\
-.rv-comment-edited{font-size:10px;color:var(--text2,#6b7280);font-style:italic;}\
-.rv-comment-quote{font-size:12px;color:var(--purple-dark,#5b21b6);border-left:2px solid color-mix(in srgb,var(--purple,#7c3aed) 40%,var(--border,#e5e7eb));\
-padding:4px 10px;margin:0 0 8px;font-style:italic;background:color-mix(in srgb,var(--purple,#7c3aed) 3%,var(--bg,#fff));border-radius:0 4px 4px 0;}\
-.rv-comment-text{font-size:13px;color:var(--text,#1a1a1a);white-space:pre-wrap;line-height:1.55;}\
-.rv-comment-actions{display:flex;gap:4px;margin-top:8px;}\
-.rv-comment-actions button{background:transparent;border:none;font-size:11px;font-weight:600;cursor:pointer;padding:3px 8px;border-radius:4px;transition:all .15s;}\
-.rv-comment-actions .rv-act-edit{color:var(--purple-dark,#5b21b6);}\
-.rv-comment-actions .rv-act-edit:hover{background:var(--purple-light,#ede9fe);}\
-.rv-comment-actions .rv-act-del{color:#ef4444;}\
-.rv-comment-actions .rv-act-del:hover{background:#fef2f2;}\
-/* Text selection popup */\
-.rv-sel-popup{position:absolute;z-index:9500;background:var(--purple,#7c3aed);color:#fff;border:none;border-radius:8px;\
-padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(124,58,237,.4);\
-display:none;white-space:nowrap;transition:opacity .15s;}\
-.rv-sel-popup:hover{background:var(--purple-dark,#5b21b6);}\
-.rv-sel-popup::after{content:"";position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);\
+    // Find the nearest section (h2[id]) above a node
+    function nearestSection(node) {
+        var el = node.nodeType === 3 ? node.parentElement : node;
+        while (el && el !== document.body) {
+            var prev = el.previousElementSibling;
+            while (prev) {
+                if (prev.tagName === 'H2' && prev.id) return { id: prev.id, title: prev.textContent.trim() };
+                prev = prev.previousElementSibling;
+            }
+            el = el.parentElement;
+        }
+        // Fallback: closest h2 above by position
+        var all = document.querySelectorAll('h2[id]');
+        for (var i = all.length - 1; i >= 0; i--) {
+            if (all[i].compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING) {
+                return { id: all[i].id, title: all[i].textContent.trim() };
+            }
+        }
+        return { id: 'general', title: 'General' };
+    }
+
+    // ── Inject styles ──
+    var style = document.createElement('style');
+    style.textContent = '\
+/* Sidebar */\
+.rv-sidebar{position:fixed;top:56px;right:0;width:300px;height:calc(100vh - 56px);background:var(--bg,#fff);\
+border-left:1px solid var(--border,#e5e7eb);z-index:800;overflow-y:auto;transform:translateX(100%);\
+transition:transform .25s ease;padding:0;font-size:13px;}\
+.rv-sidebar.open{transform:translateX(0);}\
+.rv-sidebar-header{position:sticky;top:0;background:var(--bg,#fff);border-bottom:1px solid var(--border,#e5e7eb);\
+padding:14px 16px;display:flex;align-items:center;justify-content:space-between;z-index:1;}\
+.rv-sidebar-title{font-size:13px;font-weight:700;color:var(--text-strong,#111827);}\
+.rv-sidebar-count{font-size:11px;color:var(--text2,#6b7280);font-weight:400;margin-left:6px;}\
+.rv-sidebar-actions{display:flex;gap:4px;}\
+.rv-sidebar-actions button{background:var(--surface2,#f1f5f9);border:1px solid var(--border,#e5e7eb);border-radius:6px;\
+padding:4px 8px;font-size:11px;cursor:pointer;color:var(--text2,#6b7280);transition:all .15s;}\
+.rv-sidebar-actions button:hover{background:var(--border,#e5e7eb);color:var(--text,#1a1a1a);}\
+.rv-sidebar-empty{padding:40px 20px;text-align:center;color:var(--text2,#6b7280);font-size:12px;line-height:1.6;}\
+.rv-sidebar-empty b{display:block;font-size:13px;color:var(--text,#1a1a1a);margin-bottom:6px;}\
+/* Comment card */\
+.rv-card{padding:14px 16px;border-bottom:1px solid var(--border,#e5e7eb);cursor:pointer;transition:background .1s;position:relative;}\
+.rv-card:hover{background:var(--surface,#f8fafc);}\
+.rv-card.active{background:var(--purple-bg,#f5f3ff);}\
+.rv-card-marker{position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:0 2px 2px 0;}\
+.rv-card-section{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text2,#6b7280);margin-bottom:4px;padding-left:10px;}\
+.rv-card-quote{font-size:12px;font-style:italic;padding:5px 10px;margin:4px 0 6px 10px;\
+border-left:2px solid var(--border,#e5e7eb);color:var(--text2,#6b7280);max-height:44px;overflow:hidden;\
+text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.4;}\
+.rv-card-text{font-size:13px;color:var(--text,#1a1a1a);padding-left:10px;line-height:1.5;white-space:pre-wrap;}\
+.rv-card-meta{display:flex;align-items:center;gap:8px;margin-top:6px;padding-left:10px;}\
+.rv-card-date{font-size:10px;color:var(--text2,#6b7280);}\
+.rv-card-btns{display:flex;gap:2px;margin-left:auto;opacity:0;transition:opacity .15s;}\
+.rv-card:hover .rv-card-btns{opacity:1;}\
+.rv-card-btns button{background:none;border:none;font-size:10px;font-weight:600;cursor:pointer;padding:2px 6px;border-radius:4px;}\
+.rv-card-btns .rv-edit{color:var(--blue,#2563eb);}\
+.rv-card-btns .rv-edit:hover{background:var(--blue-bg,#eff6ff);}\
+.rv-card-btns .rv-del{color:#ef4444;}\
+.rv-card-btns .rv-del:hover{background:#fef2f2;}\
+/* Edit mode inside card */\
+.rv-card-editing textarea{width:100%;min-height:60px;border:1px solid var(--border,#e5e7eb);border-radius:6px;\
+padding:8px;font-size:12px;font-family:inherit;background:var(--bg,#fff);color:var(--text,#1a1a1a);resize:vertical;margin:4px 0;}\
+.rv-card-editing textarea:focus{outline:none;border-color:var(--purple,#7c3aed);}\
+.rv-card-editing .rv-edit-btns{display:flex;gap:6px;justify-content:flex-end;}\
+.rv-card-editing .rv-edit-btns button{padding:5px 12px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:none;}\
+.rv-card-editing .rv-save-btn{background:var(--purple,#7c3aed);color:#fff;}\
+.rv-card-editing .rv-cancel-btn{background:var(--surface2,#f1f5f9);color:var(--text2,#6b7280);border:1px solid var(--border,#e5e7eb);}\
+/* In-page highlight marks */\
+mark.rv-highlight{border-radius:2px;cursor:pointer;transition:background .15s;padding:0 1px;}\
+mark.rv-highlight:hover{filter:brightness(.92);}\
+mark.rv-highlight.active{outline:2px solid var(--purple,#7c3aed);outline-offset:1px;}\
+/* Selection popup */\
+.rv-popup{position:absolute;z-index:9500;background:var(--purple,#7c3aed);color:#fff;border:none;border-radius:8px;\
+padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(124,58,237,.4);\
+display:none;white-space:nowrap;}\
+.rv-popup:hover{background:var(--purple-dark,#5b21b6);}\
+.rv-popup::after{content:"";position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);\
 border-left:6px solid transparent;border-right:6px solid transparent;border-top:6px solid var(--purple,#7c3aed);}\
-/* Summary panel */\
-.rv-overlay{position:fixed;inset:0;z-index:9800;background:rgba(0,0,0,.4);display:none;transition:opacity .2s;}\
-.rv-overlay.open{display:flex;align-items:center;justify-content:center;}\
-.rv-summary{background:var(--bg,#fff);border-radius:16px;width:90%;max-width:620px;max-height:80vh;overflow-y:auto;\
-box-shadow:0 20px 60px rgba(0,0,0,.2);padding:28px;position:relative;}\
-.rv-summary-title{font-size:18px;font-weight:700;color:var(--text-strong,#111827);margin-bottom:4px;}\
-.rv-summary-sub{font-size:13px;color:var(--text2,#6b7280);margin-bottom:20px;}\
-.rv-summary-page{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;\
-color:var(--purple-dark,#5b21b6);margin:16px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--border,#e5e7eb);}\
-.rv-summary-item{padding:10px 0;border-bottom:1px solid color-mix(in srgb,var(--border,#e5e7eb) 50%,transparent);}\
-.rv-summary-item:last-child{border-bottom:none;}\
-.rv-summary-section{font-size:12px;font-weight:600;color:var(--text-strong,#111827);}\
-.rv-summary-text{font-size:13px;color:var(--text,#1a1a1a);margin-top:4px;white-space:pre-wrap;}\
-.rv-summary-quote{font-size:12px;color:var(--purple-dark,#5b21b6);font-style:italic;margin-top:4px;}\
-.rv-summary-date{font-size:10px;color:var(--text2,#6b7280);margin-top:2px;}\
-.rv-summary-actions{display:flex;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border,#e5e7eb);}\
-.rv-summary-actions button{flex:1;padding:10px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s;}\
-.rv-summary-copy{background:var(--blue,#2563eb);color:#fff;}\
-.rv-summary-copy:hover{opacity:.9;}\
-.rv-summary-email{background:var(--purple,#7c3aed);color:#fff;}\
-.rv-summary-email:hover{opacity:.9;}\
-.rv-summary-close{position:absolute;top:16px;right:16px;background:var(--surface2,#f1f5f9);border:1px solid var(--border,#e5e7eb);\
-border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer;color:var(--text2,#6b7280);}\
-.rv-summary-close:hover{background:var(--border,#e5e7eb);}\
-.rv-toast{position:fixed;bottom:80px;right:24px;z-index:9900;background:#059669;color:#fff;\
-padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(5,150,105,.35);\
+/* Comment input at bottom of sidebar */\
+.rv-input{position:sticky;bottom:0;background:var(--bg,#fff);border-top:1px solid var(--border,#e5e7eb);padding:12px;display:none;}\
+.rv-input.open{display:block;}\
+.rv-input-quote{font-size:11px;font-style:italic;color:var(--purple-dark,#5b21b6);padding:6px 10px;margin-bottom:8px;\
+border-left:3px solid var(--purple,#7c3aed);background:var(--purple-bg,#f5f3ff);border-radius:0 6px 6px 0;\
+max-height:40px;overflow:hidden;}\
+.rv-input textarea{width:100%;min-height:64px;border:1px solid var(--border,#e5e7eb);border-radius:8px;\
+padding:10px;font-size:13px;font-family:inherit;background:var(--surface,#f8fafc);color:var(--text,#1a1a1a);resize:vertical;}\
+.rv-input textarea:focus{outline:none;border-color:var(--purple,#7c3aed);box-shadow:0 0 0 3px rgba(124,58,237,.1);background:var(--bg,#fff);}\
+.rv-input-actions{display:flex;gap:8px;margin-top:8px;justify-content:flex-end;}\
+.rv-input-actions button{padding:7px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:none;}\
+.rv-input .rv-submit{background:var(--purple,#7c3aed);color:#fff;}\
+.rv-input .rv-submit:hover{opacity:.9;}\
+.rv-input .rv-discard{background:var(--surface2,#f1f5f9);color:var(--text2,#6b7280);border:1px solid var(--border,#e5e7eb);}\
+/* FAB */\
+.rv-fab{position:fixed;bottom:24px;right:24px;z-index:900;display:flex;align-items:center;gap:8px;\
+background:var(--purple,#7c3aed);color:#fff;border:none;border-radius:12px;padding:10px 18px;\
+font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 4px 16px rgba(124,58,237,.35);transition:all .25s;}\
+.rv-fab:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(124,58,237,.45);}\
+.rv-fab .rv-cnt{background:rgba(255,255,255,.25);padding:1px 7px;border-radius:10px;font-size:11px;}\
+@keyframes rv-intro{0%,100%{box-shadow:0 4px 16px rgba(124,58,237,.35)}50%{box-shadow:0 4px 28px rgba(124,58,237,.7)}}\
+.rv-fab.intro{animation:rv-intro 1.5s ease-in-out 3;}\
+/* Toast */\
+.rv-toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:9900;background:#059669;color:#fff;\
+padding:8px 20px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(5,150,105,.3);\
 opacity:0;transition:opacity .3s;pointer-events:none;}\
 .rv-toast.show{opacity:1;}\
+/* Layout shift when sidebar open */\
+body.rv-open .main-content{margin-right:300px;transition:margin-right .25s ease;}\
+@media(max-width:1000px){.rv-sidebar{width:100%;max-width:340px;}\
+body.rv-open .main-content{margin-right:0;}}\
 ';
-    document.head.appendChild(css);
+    document.head.appendChild(style);
 
-    // --- Selection popup ---
-    var selPopup = document.createElement('button');
-    selPopup.className = 'rv-sel-popup';
-    selPopup.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:5px;vertical-align:-1px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Comment on this';
-    document.body.appendChild(selPopup);
-    var selectedQuote = '';
-    var selectedSection = null;
+    // ── Build sidebar ──
+    var sidebar = document.createElement('aside');
+    sidebar.className = 'rv-sidebar';
+    sidebar.innerHTML = '\
+<div class="rv-sidebar-header">\
+<div><span class="rv-sidebar-title">Comments</span><span class="rv-sidebar-count" id="rvCount"></span></div>\
+<div class="rv-sidebar-actions">\
+<button id="rvCopy" title="Copy all comments">Copy</button>\
+<button id="rvMail" title="Email comments">Email</button>\
+<button id="rvClose" title="Close panel">&times;</button>\
+</div></div>\
+<div id="rvList"></div>\
+<div class="rv-input" id="rvInput">\
+<div class="rv-input-quote" id="rvInputQuote"></div>\
+<textarea id="rvInputText" placeholder="Add your comment..."></textarea>\
+<div class="rv-input-actions">\
+<button class="rv-discard" id="rvDiscard">Cancel</button>\
+<button class="rv-submit" id="rvSubmit">Comment</button>\
+</div></div>';
+    document.body.appendChild(sidebar);
 
-    // --- Toast ---
-    var toast = document.createElement('div');
-    toast.className = 'rv-toast';
-    document.body.appendChild(toast);
-    function showToast(msg) {
-        toast.textContent = msg;
-        toast.classList.add('show');
-        setTimeout(function() { toast.classList.remove('show'); }, 2000);
-    }
+    var listEl = document.getElementById('rvList');
+    var inputEl = document.getElementById('rvInput');
+    var inputQuoteEl = document.getElementById('rvInputQuote');
+    var inputText = document.getElementById('rvInputText');
+    var countEl = document.getElementById('rvCount');
 
-    // --- Summary overlay ---
-    var overlay = document.createElement('div');
-    overlay.className = 'rv-overlay';
-    overlay.innerHTML = '<div class="rv-summary" id="rvSummary"></div>';
-    document.body.appendChild(overlay);
-    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.classList.remove('open'); });
+    // ── Selection popup ──
+    var popup = document.createElement('button');
+    popup.className = 'rv-popup';
+    popup.innerHTML = '\u270E Comment';
+    document.body.appendChild(popup);
 
-    // --- FAB button ---
+    // ── Toast ──
+    var toastEl = document.createElement('div');
+    toastEl.className = 'rv-toast';
+    document.body.appendChild(toastEl);
+    function toast(msg) { toastEl.textContent = msg; toastEl.classList.add('show'); setTimeout(function() { toastEl.classList.remove('show'); }, 2000); }
+
+    // ── FAB ──
     var fab = document.createElement('button');
     fab.className = 'rv-fab';
-    updateFab();
     document.body.appendChild(fab);
-    fab.onclick = function() { openSummary(); };
+    if (!localStorage.getItem('brisken-rv3-seen')) { fab.classList.add('intro'); localStorage.setItem('brisken-rv3-seen', '1'); }
 
-    // First visit pulse
-    if (!localStorage.getItem('brisken-review-seen')) {
-        fab.classList.add('rv-pulse');
-        localStorage.setItem('brisken-review-seen', '1');
-    }
+    // ── State ──
+    var sidebarOpen = false;
+    var pendingQuote = '';
+    var pendingSection = null;
+    var pendingColor = null;
+    var activeCardId = null;
+
+    // ── Open / close sidebar ──
+    function openSidebar() { sidebar.classList.add('open'); document.body.classList.add('rv-open'); sidebarOpen = true; }
+    function closeSidebar() { sidebar.classList.remove('open'); document.body.classList.remove('rv-open'); sidebarOpen = false; clearActive(); }
+
+    fab.onclick = function() { if (sidebarOpen) closeSidebar(); else { openSidebar(); render(); } };
+    document.getElementById('rvClose').onclick = closeSidebar;
 
     function updateFab() {
-        var n = totalCount();
-        fab.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Feedback' + (n ? ' <span class="rv-count">' + n + '</span>' : '');
+        var n = load().length;
+        fab.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Comments' + (n ? ' <span class="rv-cnt">' + n + '</span>' : '');
     }
+    updateFab();
 
-    // --- Section setup ---
-    var sections = document.querySelectorAll('h2[id]');
-    var sectionData = {};
+    // ── Render comments in sidebar ──
+    function render() {
+        var comments = forPage();
+        countEl.textContent = comments.length ? '(' + comments.length + ')' : '';
+        updateFab();
 
-    sections.forEach(function(h2) {
-        var sid = h2.id;
-        var title = h2.childNodes[0] ? h2.childNodes[0].textContent.trim() : h2.textContent.trim();
-
-        // Add button
-        var btn = document.createElement('button');
-        btn.className = 'rv-add';
-        btn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
-        h2.appendChild(btn);
-
-        // Panel
-        var panel = document.createElement('div');
-        panel.className = 'rv-panel';
-        h2.parentNode.insertBefore(panel, h2.nextSibling);
-
-        // Comments container
-        var commentsDiv = document.createElement('div');
-        commentsDiv.className = 'rv-comments';
-        panel.parentNode.insertBefore(commentsDiv, panel.nextSibling);
-
-        sectionData[sid] = { h2: h2, btn: btn, panel: panel, commentsDiv: commentsDiv, title: title };
-
-        btn.onclick = function(e) { e.preventDefault(); openPanel(sid); };
-    });
-
-    function openPanel(sid, quote) {
-        var d = sectionData[sid];
-        d.panel.innerHTML = (quote ? '<div class="rv-panel-quote">"' + esc(quote) + '"</div>' : '') +
-            '<textarea placeholder="Your comment' + (quote ? ' on this text' : ' on this section') + '..."></textarea>' +
-            '<div class="rv-panel-actions">' +
-            '<button class="rv-btn-cancel">Cancel</button>' +
-            '<button class="rv-btn-save">Save</button>' +
-            '</div>';
-        d.panel.classList.add('open');
-        d.panel.querySelector('textarea').focus();
-        d.panel.querySelector('.rv-btn-cancel').onclick = function() { d.panel.classList.remove('open'); };
-        d.panel.querySelector('.rv-btn-save').onclick = function() {
-            var text = d.panel.querySelector('textarea').value.trim();
-            if (!text) return;
-            addComment(sid, d.title, text, quote || null);
-            d.panel.classList.remove('open');
-            renderComments(sid);
-            updateFab();
-            showToast('Comment saved');
-        };
-    }
-
-    function renderComments(sid) {
-        var d = sectionData[sid];
-        var comments = getForSection(sid);
-        d.commentsDiv.innerHTML = '';
-
-        // Update badge
-        var oldBadge = d.h2.querySelector('.rv-badge');
-        if (oldBadge) oldBadge.remove();
-        if (comments.length) {
-            var badge = document.createElement('span');
-            badge.className = 'rv-badge';
-            badge.textContent = comments.length;
-            badge.onclick = function() { d.commentsDiv.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
-            d.h2.appendChild(badge);
+        if (!comments.length) {
+            listEl.innerHTML = '<div class="rv-sidebar-empty"><b>No comments on this page yet</b>Select any text on the page to leave a comment.<br>Your highlighted text will be marked and linked here.</div>';
+            return;
         }
 
+        listEl.innerHTML = '';
         comments.forEach(function(c) {
-            var el = document.createElement('div');
-            el.className = 'rv-comment';
-            el.innerHTML = '<div class="rv-comment-header"><span class="rv-comment-date">' + fmtDate(c.date) + '</span>' +
-                (c.editedAt ? '<span class="rv-comment-edited">(edited)</span>' : '') + '</div>' +
-                (c.quote ? '<div class="rv-comment-quote">"' + esc(c.quote) + '"</div>' : '') +
-                '<div class="rv-comment-text">' + esc(c.text) + '</div>' +
-                '<div class="rv-comment-actions">' +
-                '<button class="rv-act-edit">Edit</button>' +
-                '<button class="rv-act-del">Delete</button>' +
-                '</div>';
-            d.commentsDiv.appendChild(el);
+            var color = COLORS[c.colorIdx || 0];
+            var card = document.createElement('div');
+            card.className = 'rv-card';
+            card.setAttribute('data-id', c.id);
+            card.innerHTML = '<div class="rv-card-marker" style="background:' + color.border + '"></div>' +
+                '<div class="rv-card-section">' + esc(c.sectionTitle) + '</div>' +
+                (c.quote ? '<div class="rv-card-quote" style="border-color:' + color.border + ';color:' + color.text + '">' + esc(c.quote) + '</div>' : '') +
+                '<div class="rv-card-text">' + esc(c.text) + '</div>' +
+                '<div class="rv-card-meta"><span class="rv-card-date">' + fmtTime(c.date) + (c.editedAt ? ' (edited)' : '') + '</span>' +
+                '<div class="rv-card-btns"><button class="rv-edit">Edit</button><button class="rv-del">Delete</button></div></div>';
+            listEl.appendChild(card);
 
-            el.querySelector('.rv-act-del').onclick = function() {
-                deleteComment(c.id);
-                renderComments(sid);
-                updateFab();
-                showToast('Comment removed');
+            // Click card → scroll to highlight
+            card.onclick = function(e) {
+                if (e.target.closest('.rv-card-btns')) return;
+                setActive(c.id);
+                var mark = document.querySelector('mark.rv-highlight[data-id="' + c.id + '"]');
+                if (mark) mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
             };
-            el.querySelector('.rv-act-edit').onclick = function() {
-                var textEl = el.querySelector('.rv-comment-text');
-                var actionsEl = el.querySelector('.rv-comment-actions');
-                textEl.innerHTML = '<textarea style="width:100%;min-height:60px;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:13px;font-family:inherit;background:var(--bg);color:var(--text);resize:vertical;">' + esc(c.text) + '</textarea>';
-                actionsEl.innerHTML = '<button class="rv-act-edit">Save</button><button class="rv-act-del">Cancel</button>';
-                textEl.querySelector('textarea').focus();
-                actionsEl.querySelector('.rv-act-edit').onclick = function() {
-                    var newText = textEl.querySelector('textarea').value.trim();
-                    if (newText && newText !== c.text) { updateComment(c.id, newText); }
-                    renderComments(sid);
-                    showToast('Comment updated');
+
+            card.querySelector('.rv-del').onclick = function(e) {
+                e.stopPropagation();
+                deleteComment(c.id);
+                removeHighlight(c.id);
+                render();
+                toast('Comment deleted');
+            };
+
+            card.querySelector('.rv-edit').onclick = function(e) {
+                e.stopPropagation();
+                var textDiv = card.querySelector('.rv-card-text');
+                var metaDiv = card.querySelector('.rv-card-meta');
+                card.classList.add('rv-card-editing');
+                textDiv.innerHTML = '<textarea>' + esc(c.text) + '</textarea>';
+                metaDiv.innerHTML = '<div class="rv-edit-btns"><button class="rv-cancel-btn">Cancel</button><button class="rv-save-btn">Save</button></div>';
+                textDiv.querySelector('textarea').focus();
+                metaDiv.querySelector('.rv-save-btn').onclick = function() {
+                    var v = textDiv.querySelector('textarea').value.trim();
+                    if (v) { updateComment(c.id, v); }
+                    render();
+                    toast('Comment updated');
                 };
-                actionsEl.querySelector('.rv-act-del').onclick = function() { renderComments(sid); };
+                metaDiv.querySelector('.rv-cancel-btn').onclick = function() { render(); };
             };
         });
     }
 
-    // Initial render
-    sections.forEach(function(h2) { renderComments(h2.id); });
-
-    // --- Text selection commenting ---
-    document.addEventListener('mouseup', function(e) {
-        var sel = window.getSelection();
-        if (!sel || sel.isCollapsed || !sel.toString().trim()) {
-            selPopup.style.display = 'none';
-            return;
-        }
-        // Find which section this selection belongs to
-        var node = sel.anchorNode;
-        var foundSection = null;
-        while (node && node !== document.body) {
-            if (node.previousElementSibling) {
-                var prev = node.previousElementSibling;
-                while (prev) {
-                    if (prev.tagName === 'H2' && prev.id && sectionData[prev.id]) {
-                        foundSection = prev.id;
-                        break;
-                    }
-                    prev = prev.previousElementSibling;
-                }
-            }
-            if (foundSection) break;
-            node = node.parentNode;
-        }
-        // Fallback: find closest h2 above in document order
-        if (!foundSection) {
-            var allH2 = Array.from(sections);
-            var range = sel.getRangeAt(0);
-            var rect = range.getBoundingClientRect();
-            for (var i = allH2.length - 1; i >= 0; i--) {
-                if (allH2[i].getBoundingClientRect().top < rect.top) {
-                    foundSection = allH2[i].id;
-                    break;
-                }
-            }
-        }
-        if (!foundSection || !sectionData[foundSection]) { selPopup.style.display = 'none'; return; }
-
-        selectedQuote = sel.toString().trim().substring(0, 300);
-        selectedSection = foundSection;
-
-        var r = sel.getRangeAt(0).getBoundingClientRect();
-        selPopup.style.display = 'block';
-        selPopup.style.left = (r.left + r.width / 2 - 70 + window.scrollX) + 'px';
-        selPopup.style.top = (r.top - 40 + window.scrollY) + 'px';
-    });
-
-    selPopup.onclick = function() {
-        selPopup.style.display = 'none';
-        if (selectedSection && selectedQuote) {
-            openPanel(selectedSection, selectedQuote);
-            window.getSelection().removeAllRanges();
-        }
-    };
-
-    document.addEventListener('mousedown', function(e) {
-        if (e.target !== selPopup && !selPopup.contains(e.target)) {
-            selPopup.style.display = 'none';
-        }
-    });
-
-    // --- Summary panel ---
-    function openSummary() {
-        var all = getAll();
-        var sumEl = document.getElementById('rvSummary');
-        var html = '<button class="rv-summary-close" id="rvClose">Close</button>';
-        html += '<div class="rv-summary-title">Your Feedback</div>';
-        html += '<div class="rv-summary-sub">' + all.length + ' comment' + (all.length !== 1 ? 's' : '') + ' across all pages</div>';
-
-        if (!all.length) {
-            html += '<p style="color:var(--text2);font-size:13px;padding:20px 0;">No comments yet. Click the comment icon next to any section header, or highlight text and click "Comment on this" to get started.</p>';
-        } else {
-            // Group by page
-            var byPage = {};
-            all.forEach(function(c) {
-                var p = c.pageLabel || c.page;
-                if (!byPage[p]) byPage[p] = [];
-                byPage[p].push(c);
-            });
-            Object.keys(byPage).forEach(function(p) {
-                html += '<div class="rv-summary-page">' + esc(p) + '</div>';
-                byPage[p].forEach(function(c) {
-                    html += '<div class="rv-summary-item">';
-                    html += '<div class="rv-summary-section">' + esc(c.sectionTitle) + '</div>';
-                    if (c.quote) html += '<div class="rv-summary-quote">"' + esc(c.quote) + '"</div>';
-                    html += '<div class="rv-summary-text">' + esc(c.text) + '</div>';
-                    html += '<div class="rv-summary-date">' + fmtDate(c.date) + (c.editedAt ? ' (edited)' : '') + '</div>';
-                    html += '</div>';
-                });
-            });
-        }
-
-        html += '<div class="rv-summary-actions">';
-        html += '<button class="rv-summary-copy" id="rvCopy"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;vertical-align:-2px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy All</button>';
-        html += '<button class="rv-summary-email" id="rvEmail"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;vertical-align:-2px"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Email to Nico</button>';
-        html += '</div>';
-
-        sumEl.innerHTML = html;
-        overlay.classList.add('open');
-
-        document.getElementById('rvClose').onclick = function() { overlay.classList.remove('open'); };
-        document.getElementById('rvCopy').onclick = function() {
-            var text = buildExportText(all);
-            navigator.clipboard.writeText(text).then(function() { showToast('Copied to clipboard'); });
-        };
-        document.getElementById('rvEmail').onclick = function() {
-            var text = buildExportText(all);
-            window.open('mailto:' + RECIPIENT + '?subject=' + encodeURIComponent('Scope Page Feedback - Brisken') + '&body=' + encodeURIComponent(text), '_blank');
-        };
+    function setActive(id) {
+        clearActive();
+        activeCardId = id;
+        var card = listEl.querySelector('[data-id="' + id + '"]');
+        if (card) card.classList.add('active');
+        document.querySelectorAll('mark.rv-highlight').forEach(function(m) {
+            m.classList.toggle('active', m.getAttribute('data-id') === id);
+        });
     }
 
-    function buildExportText(all) {
-        var text = 'Feedback on Brisken Scope Page\nDate: ' + new Date().toLocaleDateString() + '\n' + '='.repeat(40) + '\n\n';
+    function clearActive() {
+        activeCardId = null;
+        listEl.querySelectorAll('.rv-card.active').forEach(function(c) { c.classList.remove('active'); });
+        document.querySelectorAll('mark.rv-highlight.active').forEach(function(m) { m.classList.remove('active'); });
+    }
+
+    // ── Comment CRUD ──
+    function addCommentData(quote, sectionId, sectionTitle, text) {
+        var all = load();
+        var colorIdx = all.length % COLORS.length;
+        var c = { id: uid(), page: page, pageLabel: pageLabel, section: sectionId, sectionTitle: sectionTitle, quote: quote, text: text, date: new Date().toISOString(), colorIdx: colorIdx };
+        all.push(c);
+        save(all);
+        return c;
+    }
+    function updateComment(id, newText) {
+        var all = load();
+        for (var i = 0; i < all.length; i++) { if (all[i].id === id) { all[i].text = newText; all[i].editedAt = new Date().toISOString(); } }
+        save(all);
+    }
+    function deleteComment(id) { save(load().filter(function(c) { return c.id !== id; })); }
+
+    // ── Highlights ──
+    function applyHighlight(commentObj) {
+        if (!commentObj.quote) return;
+        var color = COLORS[commentObj.colorIdx || 0];
+        // Walk text nodes in the main content to find the quote
+        var content = document.querySelector('.content-inner');
+        if (!content) return;
+        var walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT, null, false);
+        var node;
+        while (node = walker.nextNode()) {
+            var idx = node.textContent.indexOf(commentObj.quote);
+            if (idx === -1) continue;
+            // Don't highlight inside existing marks or buttons
+            if (node.parentElement.closest('mark.rv-highlight, button, .rv-sidebar, .rv-popup, .rv-input, script, style')) continue;
+            var range = document.createRange();
+            range.setStart(node, idx);
+            range.setEnd(node, idx + commentObj.quote.length);
+            var mark = document.createElement('mark');
+            mark.className = 'rv-highlight';
+            mark.setAttribute('data-id', commentObj.id);
+            mark.style.background = color.bg;
+            mark.onclick = function(cid) { return function() { openSidebar(); render(); setActive(cid); var card = listEl.querySelector('[data-id="' + cid + '"]'); if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }; }(commentObj.id);
+            try { range.surroundContents(mark); } catch(e) { /* cross-element selection, skip */ }
+            return; // Only highlight first occurrence
+        }
+    }
+
+    function removeHighlight(id) {
+        var mark = document.querySelector('mark.rv-highlight[data-id="' + id + '"]');
+        if (mark) { var parent = mark.parentNode; parent.replaceChild(document.createTextNode(mark.textContent), mark); parent.normalize(); }
+    }
+
+    function applyAllHighlights() {
+        // Remove existing
+        document.querySelectorAll('mark.rv-highlight').forEach(function(m) {
+            var p = m.parentNode; p.replaceChild(document.createTextNode(m.textContent), m); p.normalize();
+        });
+        forPage().forEach(applyHighlight);
+    }
+
+    // ── Text selection → popup ──
+    document.addEventListener('mouseup', function(e) {
+        if (e.target.closest('.rv-sidebar, .rv-popup, .rv-fab')) return;
+        setTimeout(function() {
+            var sel = window.getSelection();
+            if (!sel || sel.isCollapsed || !sel.toString().trim()) { popup.style.display = 'none'; return; }
+            var text = sel.toString().trim();
+            if (text.length < 3 || text.length > 500) { popup.style.display = 'none'; return; }
+            var range = sel.getRangeAt(0);
+            // Don't show popup inside sidebar
+            if (range.commonAncestorContainer && (range.commonAncestorContainer.nodeType === 1 ? range.commonAncestorContainer : range.commonAncestorContainer.parentElement).closest('.rv-sidebar')) {
+                popup.style.display = 'none'; return;
+            }
+            var rect = range.getBoundingClientRect();
+            popup.style.display = 'block';
+            popup.style.left = (rect.left + rect.width / 2 - 50 + window.scrollX) + 'px';
+            popup.style.top = (rect.top - 38 + window.scrollY) + 'px';
+            var sec = nearestSection(range.startContainer);
+            pendingQuote = text;
+            pendingSection = sec;
+            pendingColor = nextColor();
+        }, 10);
+    });
+
+    document.addEventListener('mousedown', function(e) {
+        if (!e.target.closest('.rv-popup')) popup.style.display = 'none';
+    });
+
+    popup.onclick = function() {
+        popup.style.display = 'none';
+        window.getSelection().removeAllRanges();
+        openSidebar();
+        // Show input area with the quote
+        inputQuoteEl.textContent = '"' + pendingQuote + '"';
+        inputQuoteEl.style.display = 'block';
+        inputEl.classList.add('open');
+        inputText.value = '';
+        inputText.focus();
+        render();
+    };
+
+    // ── Submit new comment ──
+    document.getElementById('rvSubmit').onclick = function() {
+        var text = inputText.value.trim();
+        if (!text) return;
+        var c = addCommentData(pendingQuote, pendingSection.id, pendingSection.title, text);
+        inputEl.classList.remove('open');
+        inputText.value = '';
+        pendingQuote = '';
+        applyHighlight(c);
+        render();
+        toast('Comment saved');
+        // Scroll to the new card
+        setTimeout(function() {
+            var card = listEl.querySelector('[data-id="' + c.id + '"]');
+            if (card) { setActive(c.id); card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+        }, 50);
+    };
+
+    document.getElementById('rvDiscard').onclick = function() {
+        inputEl.classList.remove('open');
+        inputText.value = '';
+        pendingQuote = '';
+    };
+
+    // Submit on Ctrl+Enter
+    inputText.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { document.getElementById('rvSubmit').click(); }
+    });
+
+    // ── Export ──
+    function buildExport() {
+        var all = load();
+        if (!all.length) return '';
+        var out = 'Brisken Scope Page — Feedback\nDate: ' + new Date().toLocaleDateString() + '\n' + '─'.repeat(40) + '\n\n';
         var byPage = {};
         all.forEach(function(c) { var p = c.pageLabel || c.page; if (!byPage[p]) byPage[p] = []; byPage[p].push(c); });
         Object.keys(byPage).forEach(function(p) {
-            text += '## ' + p + '\n\n';
+            out += p.toUpperCase() + '\n\n';
             byPage[p].forEach(function(c) {
-                text += '### ' + c.sectionTitle + '\n';
-                if (c.quote) text += '> "' + c.quote + '"\n';
-                text += c.text + '\n';
-                text += '(' + fmtDate(c.date) + ')\n\n';
+                out += '  ' + c.sectionTitle + '\n';
+                if (c.quote) out += '  > "' + c.quote + '"\n';
+                out += '  ' + c.text + '\n';
+                out += '  (' + fmtTime(c.date) + ')\n\n';
             });
         });
-        return text;
+        return out;
     }
+
+    document.getElementById('rvCopy').onclick = function() {
+        var text = buildExport();
+        if (!text) { toast('No comments to copy'); return; }
+        navigator.clipboard.writeText(text).then(function() { toast('Copied to clipboard'); });
+    };
+
+    document.getElementById('rvMail').onclick = function() {
+        var text = buildExport();
+        if (!text) { toast('No comments to email'); return; }
+        window.open('mailto:' + MAIL + '?subject=' + encodeURIComponent('Scope Feedback — Brisken') + '&body=' + encodeURIComponent(text));
+    };
+
+    // ── Init ──
+    applyAllHighlights();
+    updateFab();
 
 })();
