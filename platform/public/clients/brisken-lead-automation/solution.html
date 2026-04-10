@@ -245,7 +245,8 @@ li { margin-bottom: 6px; }
     .mobile-nav-toggle { display: block; }
     .nav-links { display: none; }
     .ingest-cards { grid-template-columns: 1fr; }
-    .tier-grid { grid-template-columns: 1fr; }
+    .tier-grid { grid-template-columns: 1fr 1fr; }
+    #scoringDemo > div { grid-template-columns: 1fr !important; }
 }
 </style>
 <script>
@@ -302,11 +303,15 @@ li { margin-bottom: 6px; }
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#reply-monitoring" class="step-link"><span class="step-num">4</span> Reply Monitoring</a>
+            <a href="#scoring-demo" class="step-link"><span class="step-num">4</span> Try Scoring</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#data-flow" class="step-link"><span class="step-num">5</span> Data Flow</a>
+            <a href="#reply-monitoring" class="step-link"><span class="step-num">5</span> Reply Monitoring</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#data-flow" class="step-link"><span class="step-num">6</span> Data Flow</a>
         </li>
     </ul>
 </aside>
@@ -539,6 +544,117 @@ li { margin-bottom: 6px; }
     <div class="callout-title">All non-spam leads get a response</div>
     <p>The system does not filter out low-ranked leads. Every lead that is not spam receives a response. The difference is effort: higher-ranked leads get more context loaded into the AI draft, richer personalization, and human review before sending. Lower-ranked leads get a simpler but still relevant response sent automatically.</p>
 </div>
+
+<!-- Interactive Scoring Demo -->
+<h3 id="scoring-demo">Try it: Score a Lead</h3>
+<p>Enter a sample lead below to see how the scoring model classifies it. All weights match the table above. Adjust the inputs and watch the score and tier update in real time.</p>
+
+<div id="scoringDemo" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin:20px 0;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <!-- Left: inputs -->
+        <div>
+            <div style="margin-bottom:14px;">
+                <label style="font-size:12px;font-weight:600;color:var(--text-strong);display:block;margin-bottom:4px;">Lead source channel</label>
+                <select id="ds-channel" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text);">
+                    <option value="sap_store">SAP Store (+5)</option>
+                    <option value="sap_discovery" selected>SAP Discovery Center (+1)</option>
+                    <option value="website">Website Form (+0)</option>
+                    <option value="linkedin">LinkedIn (+0)</option>
+                </select>
+            </div>
+            <div style="margin-bottom:14px;">
+                <label style="font-size:12px;font-weight:600;color:var(--text-strong);display:block;margin-bottom:4px;">Email domain</label>
+                <select id="ds-email" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text);">
+                    <option value="company" selected>Company domain (e.g. @siemens.com) (+3)</option>
+                    <option value="generic">Generic (e.g. @gmail.com) (-2)</option>
+                </select>
+            </div>
+            <div style="margin-bottom:14px;">
+                <label style="font-size:12px;font-weight:600;color:var(--text-strong);display:block;margin-bottom:4px;">Company name provided?</label>
+                <select id="ds-company" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text);">
+                    <option value="yes" selected>Yes (+2)</option>
+                    <option value="no">No (+0)</option>
+                </select>
+            </div>
+            <div style="margin-bottom:14px;">
+                <label style="font-size:12px;font-weight:600;color:var(--text-strong);display:block;margin-bottom:4px;">Message specificity</label>
+                <select id="ds-message" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text);">
+                    <option value="specific" selected>Specific question or product reference (+2)</option>
+                    <option value="vague">Vague or generic inquiry (+0)</option>
+                </select>
+            </div>
+            <div style="margin-bottom:14px;">
+                <label style="font-size:12px;font-weight:600;color:var(--text-strong);display:block;margin-bottom:4px;">Channel context present?</label>
+                <select id="ds-context" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text);">
+                    <option value="yes" selected>Yes (product, use case, campaign, or form category) (+2)</option>
+                    <option value="no">No (+0)</option>
+                </select>
+            </div>
+            <div style="margin-bottom:0;">
+                <label style="font-size:12px;font-weight:600;color:var(--text-strong);display:block;margin-bottom:4px;">Spam indicators?</label>
+                <select id="ds-spam" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text);">
+                    <option value="no" selected>No spam signals (+0)</option>
+                    <option value="yes">Gibberish, known patterns, no real content (-10)</option>
+                </select>
+            </div>
+        </div>
+        <!-- Right: result -->
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);margin-bottom:8px;">Total Score</div>
+            <div id="ds-score" style="font-size:56px;font-weight:800;line-height:1;transition:color .2s;">10</div>
+            <div id="ds-tier" style="display:inline-block;margin-top:12px;padding:6px 20px;border-radius:8px;font-size:14px;font-weight:700;transition:all .2s;">HIGH</div>
+            <div id="ds-action" style="font-size:12px;color:var(--text2);margin-top:12px;max-width:220px;line-height:1.5;"></div>
+            <div id="ds-breakdown" style="margin-top:16px;text-align:left;font-size:11px;color:var(--text2);width:100%;"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function(){
+    var weights = {
+        channel: { sap_store: 5, sap_discovery: 1, website: 0, linkedin: 0 },
+        email: { company: 3, generic: -2 },
+        company: { yes: 2, no: 0 },
+        message: { specific: 2, vague: 0 },
+        context: { yes: 2, no: 0 },
+        spam: { no: 0, yes: -10 }
+    };
+    var tiers = [
+        { min: -Infinity, max: -1, name: 'SPAM', bg: '#fef2f2', color: '#991b1b', border: '#fecaca', action: 'Dropped. No response, no CRM entry.' },
+        { min: 0, max: 4, name: 'LOW', bg: 'var(--surface)', color: 'var(--text2)', border: 'var(--border)', action: 'Auto-response with basic template. Logged to CRM.' },
+        { min: 5, max: 9, name: 'MEDIUM', bg: 'var(--blue-bg)', color: 'var(--blue-dark)', border: 'color-mix(in srgb, var(--blue) 30%, var(--border))', action: 'Richer auto-response. Reviewer notified.' },
+        { min: 10, max: Infinity, name: 'HIGH', bg: 'var(--green-bg)', color: 'var(--green-dark)', border: 'color-mix(in srgb, var(--green) 30%, var(--border))', action: 'Held for human review. Full context package.' }
+    ];
+    var ids = ['ds-channel','ds-email','ds-company','ds-message','ds-context','ds-spam'];
+    var labels = { channel: 'Channel', email: 'Email domain', company: 'Company name', message: 'Message', context: 'Channel context', spam: 'Spam signals' };
+    function calc() {
+        var vals = {};
+        var breakdown = [];
+        var total = 0;
+        ids.forEach(function(id) {
+            var key = id.replace('ds-','');
+            var val = document.getElementById(id).value;
+            vals[key] = val;
+            var w = weights[key][val];
+            total += w;
+            if (w !== 0) breakdown.push('<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>' + labels[key] + '</span><span style="font-weight:700;color:' + (w > 0 ? 'var(--green-dark)' : '#991b1b') + ';">' + (w > 0 ? '+' : '') + w + '</span></div>');
+        });
+        var tier = tiers[1]; // default Low
+        for (var i = 0; i < tiers.length; i++) { if (total >= tiers[i].min && total <= tiers[i].max) { tier = tiers[i]; break; } }
+        document.getElementById('ds-score').textContent = total;
+        document.getElementById('ds-score').style.color = tier.color;
+        var tierEl = document.getElementById('ds-tier');
+        tierEl.textContent = tier.name;
+        tierEl.style.background = tier.bg;
+        tierEl.style.color = tier.color;
+        tierEl.style.border = '2px solid ' + tier.border;
+        document.getElementById('ds-action').textContent = tier.action;
+        document.getElementById('ds-breakdown').innerHTML = '<div style="font-weight:700;margin-bottom:4px;color:var(--text-strong);">Score breakdown</div>' + breakdown.join('') + '<div style="border-top:1px solid var(--border);margin-top:4px;padding-top:4px;display:flex;justify-content:space-between;font-weight:700;color:var(--text-strong);"><span>Total</span><span>' + total + '</span></div>';
+    }
+    ids.forEach(function(id) { document.getElementById(id).addEventListener('change', calc); });
+    calc();
+})();
+</script>
 
 <h3>Stage 3 - Contact Enrichment (optional)</h3>
 <p>For High and Medium leads, A3 can attempt a basic company lookup using the email domain or company name field. This gives the AI more context for drafting a relevant response. This step is optional and can be toggled per tier if the cost or latency is not acceptable.</p>
