@@ -316,7 +316,7 @@ li { margin-bottom: 6px; }
 <div class="content-inner">
 
 <h2 id="arch-overview">Architecture Overview</h2>
-<p>The platform has four layers: channel ingest (leads from SAP, website, LinkedIn), the core processing pipeline (scoring, drafting, routing), email sending via SMTP, and a unified dashboard for approvals and conversation management. Zoho CRM receives event updates as a record of activity but is not the working interface.</p>
+<p>The platform has four layers: channel ingest (leads from SAP, website, LinkedIn), the core processing pipeline (classify, score, draft, route), email sending via SMTP, and a unified dashboard for approvals and conversation management. The CRM layer is abstracted: Zoho CRM is the first connector, but the system defines a standard set of events (Create Lead, Add Comment, Update Status, Attach Email) so swapping CRM later means writing a new connector, not reworking the logic.</p>
 <p>Lead nurturing is the first use case. The architecture is designed so the same layers handle future use cases (invoice routing, compliance emails) by adding new ingest channels and processing rules without rebuilding the core.</p>
 
 <div class="arch-diagram" style="padding:0;overflow:hidden;background:transparent;border:none;">
@@ -344,13 +344,14 @@ li { margin-bottom: 6px; }
     <div style="display:flex;align-items:center;gap:6px;padding:16px;flex-wrap:wrap;background:var(--surface);border-bottom:1px solid var(--border);">
         <span class="arch-node arch-node-blue">Normalize</span>
         <span style="color:var(--text2);">&#8594;</span>
-        <span class="arch-node arch-node-blue">Score</span>
+        <span class="arch-node arch-node-orange">Classify</span>
         <span style="color:var(--text2);">&#8594;</span>
         <span class="arch-node arch-node-blue">Enrich</span>
         <span style="color:var(--text2);">&#8594;</span>
         <span class="arch-node arch-node-blue">AI Draft</span>
         <span style="color:var(--text2);">&#8594;</span>
         <span class="arch-node arch-node-purple">HITL Review</span>
+        <div style="width:100%;margin-top:6px;font-size:11px;color:var(--text2);">Classify = spam filter + scoring in one step. SPAM leads are dropped here. All others continue.</div>
     </div>
 
     <!-- Arrow -->
@@ -392,8 +393,8 @@ li { margin-bottom: 6px; }
                 <span style="color:var(--text2);font-size:12px;">Working interface for all approvals and conversation tracking</span>
             </div>
             <div style="display:flex;align-items:center;gap:8px;">
-                <span class="arch-node arch-node-blue" style="font-size:11px;padding:6px 10px;">Zoho CRM</span>
-                <span style="color:var(--text2);font-size:12px;">Receives event updates as a read-only log</span>
+                <span class="arch-node arch-node-blue" style="font-size:11px;padding:6px 10px;">CRM Layer</span>
+                <span style="color:var(--text2);font-size:12px;">Abstracted events (Create Lead, Update Status, Add Comment). Zoho first, CRM-swappable.</span>
             </div>
         </div>
     </div>
@@ -414,39 +415,39 @@ li { margin-bottom: 6px; }
 
 <!-- Ingest Layer -->
 <h2 id="ingest-layer">Ingest Layer (A0, A1, A2)</h2>
-<p>Three workflows handle lead capture from the active source channels. Each extracts the relevant fields from its source format and outputs a normalized lead record to A3.</p>
+<p>Three workflows handle lead capture from the active source channels. Each channel arrives via a different method and carries different context. The ingest layer extracts that context and normalizes it into a standard lead record for the pipeline.</p>
 
 <div class="ingest-cards">
     <div class="ingest-card ingest-card-blue">
         <div class="ic-id">A2</div>
         <div class="ic-name">SAP Channels</div>
-        <div class="ic-trigger">Trigger: email polling</div>
+        <div class="ic-trigger">Intake: email polling (forwarded notifications)</div>
         <ul>
-            <li>SAP Discovery Center</li>
-            <li>SAP Store inquiries</li>
+            <li>SAP Discovery Center: context = specific use case</li>
+            <li>SAP Store: context = specific product</li>
             <li>Parses email body and headers</li>
-            <li>Detects source sub-channel</li>
+            <li>Detects sub-channel and extracts product/UC reference</li>
         </ul>
     </div>
     <div class="ingest-card ingest-card-green">
         <div class="ic-id">A1</div>
         <div class="ic-name">Website Forms</div>
-        <div class="ic-trigger">Trigger: webhook (form tool)</div>
+        <div class="ic-trigger">Intake: webhook from form tool (Wix)</div>
         <ul>
-            <li>Contact forms</li>
-            <li>Landing page forms</li>
-            <li>Article inquiry forms</li>
+            <li>Context varies by entry point and landing page</li>
+            <li>Form categories depend on user-selected options</li>
+            <li>Extracts: form type, landing page source, category</li>
             <li>Real-time via webhook</li>
         </ul>
     </div>
     <div class="ingest-card ingest-card-orange">
         <div class="ic-id">A0</div>
         <div class="ic-name">LinkedIn</div>
-        <div class="ic-trigger">Trigger: Lead Gen Forms API (pending confirmation)</div>
+        <div class="ic-trigger">Intake: API read or manual capture (pending confirmation)</div>
         <ul>
-            <li>Lead gen form submissions</li>
-            <li>Channel not yet confirmed</li>
-            <li>Same normalized output</li>
+            <li>Context = specific campaign or generic message</li>
+            <li>Campaign-sourced leads carry campaign metadata</li>
+            <li>Direct messages need manual context tagging</li>
             <li>Phase 2 implementation</li>
         </ul>
     </div>
@@ -459,6 +460,12 @@ li { margin-bottom: 6px; }
 <span class="sc">{</span><br>
 &nbsp;&nbsp;<span class="sk">"lead_id"</span>: <span class="sv">"uuid"</span>,&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="sc">// generated on ingest</span><br>
 &nbsp;&nbsp;<span class="sk">"source"</span>: <span class="sv">"sap_discovery | sap_store | website | linkedin"</span>,<br>
+&nbsp;&nbsp;<span class="sk">"channel_context"</span>: <span class="sc">{</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="sc">// metadata specific to the source channel</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="sk">"product"</span>: <span class="sv">"string | null"</span>,&nbsp;&nbsp;&nbsp;<span class="sc">// SAP Store: which product</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="sk">"use_case"</span>: <span class="sv">"string | null"</span>,&nbsp;&nbsp;<span class="sc">// Discovery Center: which UC</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="sk">"campaign"</span>: <span class="sv">"string | null"</span>,&nbsp;&nbsp;<span class="sc">// LinkedIn: campaign name</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="sk">"form_category"</span>: <span class="sv">"string | null"</span>,<span class="sc">// Website: landing page / form type</span><br>
+&nbsp;&nbsp;<span class="sc">}</span>,<br>
 &nbsp;&nbsp;<span class="sk">"received_at"</span>: <span class="sv">"ISO 8601 timestamp"</span>,<br>
 &nbsp;&nbsp;<span class="sk">"contact_name"</span>: <span class="sv">"string"</span>,<br>
 &nbsp;&nbsp;<span class="sk">"contact_email"</span>: <span class="sv">"string"</span>,<br>
@@ -475,36 +482,62 @@ li { margin-bottom: 6px; }
 <h3>Stage 1 - Validation and Deduplication</h3>
 <p>Before any processing, A3 checks that the lead has a valid email address and that the same contact has not already been processed recently. Duplicates are logged and dropped. Invalid records (missing email, clearly spam) are flagged and skipped.</p>
 
-<h3>Stage 2 - Lead Ranking</h3>
-<p>Each lead is scored against a set of signals. The result is a tier: High, Medium, or Low. The tier determines what happens next.</p>
+<h3>Stage 2 - Classification and Scoring</h3>
+<p>Each lead is classified into one of four tiers: <strong>SPAM, Low, Medium, or High</strong>. Classification and spam detection happen in a single step. Each signal carries a numeric weight; the total determines the tier. The weight table is configurable, not hardcoded, so thresholds and signal importance can be adjusted over time without code changes.</p>
 
 <table class="arch-table">
     <thead>
         <tr><th>Signal</th><th>Weight</th><th>Rationale</th></tr>
     </thead>
     <tbody>
-        <tr><td>SAP Store source</td><td>High</td><td>Strongest intent signal - active product inquiry</td></tr>
-        <tr><td>Company email domain (non-Gmail)</td><td>Medium</td><td>Indicates a business contact, not a personal inquiry</td></tr>
-        <tr><td>Company name provided</td><td>Medium</td><td>More detail = more serious inquiry</td></tr>
-        <tr><td>Message length and specificity</td><td>Medium</td><td>A specific question signals genuine interest</td></tr>
-        <tr><td>SAP Discovery Center source</td><td>Low-medium</td><td>Higher volume, mixed quality</td></tr>
-        <tr><td>Gmail or generic email only</td><td>Negative</td><td>Lower confidence without company context</td></tr>
+        <tr><td>SAP Store source</td><td>+5</td><td>Strongest intent signal: active product inquiry with product context</td></tr>
+        <tr><td>Company email domain (non-Gmail)</td><td>+3</td><td>Business contact, not personal</td></tr>
+        <tr><td>Company name provided</td><td>+2</td><td>More detail = more serious inquiry</td></tr>
+        <tr><td>Message length and specificity</td><td>+2</td><td>Specific question signals genuine interest</td></tr>
+        <tr><td>Channel context present (product, UC, campaign)</td><td>+2</td><td>Richer context = better response possible</td></tr>
+        <tr><td>SAP Discovery Center source</td><td>+1</td><td>Higher volume, mixed quality</td></tr>
+        <tr><td>Gmail or generic email only</td><td>-2</td><td>Lower confidence without company context</td></tr>
+        <tr><td>Spam indicators (gibberish, known patterns, no real content)</td><td>-10</td><td>Drops lead below spam threshold</td></tr>
     </tbody>
 </table>
 
-<div class="tier-grid">
-    <div class="tier-card high">
-        <div class="tier-label">High</div>
-        <div class="tier-action">Hold for human review before sending. Reviewer receives draft + full lead context via email or Slack notification.</div>
+<div class="callout orange">
+    <div class="callout-title">Configurable weight table</div>
+    <p>Weights and tier thresholds are stored in the system configuration, not in code. Adjustments are made by editing the config table directly. Fine-tuning works by reviewing misclassified leads and adjusting weights. Automated tuning (system suggests weight changes based on outcomes) is a later-phase feature once enough lead history exists.</p>
+</div>
+
+<div style="margin:20px 0;">
+    <p style="font-size:13px;font-weight:600;color:var(--text-strong);margin-bottom:8px;">Tier thresholds (example ranges, configurable):</p>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:12px;">
+        <span style="background:#fef2f2;color:#991b1b;padding:4px 10px;border-radius:6px;font-weight:600;border:1px solid #fecaca;">SPAM: below 0</span>
+        <span style="background:var(--surface);color:var(--text2);padding:4px 10px;border-radius:6px;font-weight:600;border:1px solid var(--border);">Low: 0 to 4</span>
+        <span style="background:var(--blue-bg);color:var(--blue-dark);padding:4px 10px;border-radius:6px;font-weight:600;border:1px solid color-mix(in srgb, var(--blue) 30%, var(--border));">Medium: 5 to 9</span>
+        <span style="background:var(--green-bg);color:var(--green-dark);padding:4px 10px;border-radius:6px;font-weight:600;border:1px solid color-mix(in srgb, var(--green) 30%, var(--border));">High: 10+</span>
     </div>
-    <div class="tier-card mid">
-        <div class="tier-label">Medium</div>
-        <div class="tier-action">Send automatically. Notify reviewer that a response was sent. Reviewer can follow up if needed.</div>
+</div>
+
+<div class="tier-grid" style="grid-template-columns:1fr 1fr 1fr 1fr;">
+    <div class="tier-card" style="background:#fef2f2;border-color:#fecaca;">
+        <div class="tier-label" style="color:#991b1b;">Spam</div>
+        <div class="tier-action">Dropped. No response, no CRM entry, no AI spend. Logged for audit.</div>
     </div>
     <div class="tier-card low">
         <div class="tier-label">Low</div>
-        <div class="tier-action">Send automatically. Log to destination. No notification unless configured.</div>
+        <div class="tier-action">Response sent automatically. Shorter, template-based. Logged to CRM. Less AI context loaded.</div>
     </div>
+    <div class="tier-card mid">
+        <div class="tier-label">Medium</div>
+        <div class="tier-action">Response sent automatically with richer context. Reviewer notified. Can follow up if needed.</div>
+    </div>
+    <div class="tier-card high">
+        <div class="tier-label">High</div>
+        <div class="tier-action">Held for human review before sending. Full context package: lead record, enrichment, AI draft, channel context.</div>
+    </div>
+</div>
+
+<div class="callout green">
+    <div class="callout-title">All non-spam leads get a response</div>
+    <p>The system does not filter out low-ranked leads. Every lead that is not spam receives a response. The difference is effort: higher-ranked leads get more context loaded into the AI draft, richer personalization, and human review before sending. Lower-ranked leads get a simpler but still relevant response sent automatically.</p>
 </div>
 
 <h3>Stage 3 - Contact Enrichment (optional)</h3>
@@ -519,7 +552,7 @@ li { margin-bottom: 6px; }
 </div>
 
 <h3>Stage 5 - HITL Routing and Send</h3>
-<p>Based on the tier from Stage 2, the draft is either sent directly or routed to a review queue via the unified dashboard. Dirk sees the full lead context, the AI draft, and approve / edit / reject options. Approved responses are sent via SMTP from Dirk's email, preserving the email thread. Follow-ups for unresponsive leads are always replies to the existing thread (never a new email), so the full conversation history stays intact. Each event (sent, approved, rejected) is logged to Zoho CRM automatically.</p>
+<p>Based on the tier from Stage 2, the draft is either sent directly or routed to a review queue via the unified dashboard. Dirk sees the full lead context, the AI draft, and approve / edit / reject options. Approved responses are sent via SMTP from Dirk's email, preserving the email thread. Follow-ups for unresponsive leads are always replies to the existing thread (never a new email), so the full conversation history stays intact. Each event (sent, approved, rejected) is pushed to the CRM via the abstraction layer (Create Lead, Add Comment, Update Status). Currently wired to Zoho; swapping CRM later means writing a new connector, not changing this pipeline.</p>
 
 <!-- Reply Monitoring -->
 <h2 id="reply-monitoring">Reply Monitoring (A4)</h2>
@@ -544,11 +577,11 @@ li { margin-bottom: 6px; }
         <tr><td>1. Arrive</td><td>A0 / A1 / A2</td><td>Lead arrives via email, webhook, or API. Raw payload is captured.</td></tr>
         <tr><td>2. Normalize</td><td>A0 / A1 / A2</td><td>Source-specific parsing extracts fields. Standard lead record is created with a UUID.</td></tr>
         <tr><td>3. Validate</td><td>A3</td><td>Email validity and deduplication check. Duplicates and invalids are dropped with a log entry.</td></tr>
-        <tr><td>4. Score</td><td>A3</td><td>Scoring signals are evaluated. Tier (High/Medium/Low) is assigned.</td></tr>
+        <tr><td>4. Classify</td><td>A3</td><td>Spam filter + scoring in one step. Numeric weights summed, mapped to tier (SPAM/Low/Medium/High). Spam leads dropped here.</td></tr>
         <tr><td>5. Enrich</td><td>A3</td><td>Optional company lookup for High/Medium leads. Appended to lead record.</td></tr>
         <tr><td>6. Draft</td><td>A3</td><td>AI drafts a first response using lead context and channel-specific templates.</td></tr>
-        <tr><td>7. Route</td><td>A3</td><td>High: held for review. Medium/Low: sent automatically with optional notification.</td></tr>
-        <tr><td>8. Log</td><td>A3</td><td>Lead record, tier, draft, and send status written to destination (Sheets/CRM/DB).</td></tr>
+        <tr><td>7. Route</td><td>A3</td><td>High: held for review. Medium/Low: sent automatically with optional notification. All non-spam leads get a response.</td></tr>
+        <tr><td>8. Log</td><td>A3</td><td>Events pushed via CRM abstraction layer: Create Lead, Add Comment, Update Status. Zoho is the first connector.</td></tr>
         <tr><td>9. Monitor</td><td>A4</td><td>Inbox polled for replies. Match found = cancel follow-up sequence.</td></tr>
         <tr><td>10. Escalate</td><td>A4</td><td>Reply escalated to human reviewer with full context package. No auto-response.</td></tr>
     </tbody>
@@ -615,5 +648,6 @@ document.addEventListener('keydown',function(e){
     }
 });
 </script>
+<script src="/clients/brisken-lead-automation/review.js"></script>
 </body>
 </html>
