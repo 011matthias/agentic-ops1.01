@@ -3,10 +3,20 @@ type: client
 platform:
   tier: "unknown"              # confirm with client
   feasibility: "unassessed"    # must complete before /build-automation
-  blockers: []
+  blockers:
+    - "Platform choice undecided (n8n vs Firebase/Firestore vs custom)"
+    - "Upwork contract not yet set up"
   assessed: null
-  notes: "Switched to n8n (2026-03-30). Better fit for AI chains, code nodes, self-hosted data privacy. 4 lead sources planned: LinkedIn, website forms, SAP Discovery Center, SAP Store. Plus future accounting/invoice workstream."
+  notes: >
+    Scope expanded 2026-04-10 call: "universal communicator" platform, not just 5 n8n workflows.
+    Lead nurturing is Phase 1. Invoice/AP, compliance, LinkedIn management planned as same-platform use cases.
+    Dirk suggested Firebase/Firestore. Evaluating n8n vs Firebase vs custom code.
+    Dirk not interested in n8n UI — wants outcomes only. Multi-tenant, auth/RLS required.
+    IP owned by Dirk, potential to productize. Route through Upwork for reference job.
+  platform_decision: "OPEN"    # n8n | firebase | custom — resolve before build
+  upwork_routing: true         # Dirk creating Brisken Upwork account to post job
 
+# Placeholder — update once platform decision is made
 instances:
   - type: n8n
     name: n8n-brisken
@@ -17,3 +27,4 @@ instances:
     workflows: []
     credentials: []
     tags: []
+    status: "provisional — depends on platform decision"

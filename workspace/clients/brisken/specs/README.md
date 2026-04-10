@@ -2,7 +2,7 @@
 
 ## Overview
 
-> **Updated 2026-03-30** -- Dirk confirmed lead automation requirements via email. Specs upgraded from hypothesis to confirmed where applicable. Orchestrator switched from Make.com to n8n.
+> **Updated 2026-04-10** -- Scope expanded significantly per call with Dirk. Lead nurturing remains Phase 1, but project is now a "universal communicator" platform (unified dashboard, invoice/AP routing, compliance emails, multi-tenant). Platform choice (n8n vs Firebase vs custom) is OPEN and must be resolved before build starts. Existing a0-a4 specs are still valid for lead nurturing logic but may need architectural revision depending on platform decision.
 
 | ID | Name | Type | Stage | Trigger | Orchestrator | Status |
 |----|------|------|-------|---------|--------------|--------|
@@ -11,6 +11,16 @@
 | a2 | SAP Channel Ingest | automation | spec | scheduled | n8n | **Confirmed** |
 | a3 | Lead Follow-Up Pipeline | automation | spec | webhook | n8n | **Confirmed** |
 | a4 | Reply Monitoring and Escalation | automation | spec | scheduled | n8n | **Confirmed** |
+
+## New Specs Needed (from 2026-04-10 call)
+
+| ID | Name | Type | Notes |
+|----|------|------|-------|
+| app1 | Unified Dashboard | app | Centralized interface for all channels, approvals, conversation history. Core requirement. |
+| a5 | Invoice/AP Routing | automation | Forward invoices to approvers, track approval, reconcile. Same platform as lead nurturing. |
+| a6 | Compliance Email Routing | automation | Channel compliance emails through tool. Lower priority than a5. |
+
+> **Do not create these specs yet.** Platform decision (n8n vs Firebase vs custom) must be resolved first — it changes the spec shape entirely.
 
 ## Open Bug Fixes
 

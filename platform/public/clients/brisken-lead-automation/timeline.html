@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Delivery Timeline | Brisken Lead Automation | UnpauseAI</title>
+<title>Delivery Timeline | Brisken Automation Platform | UnpauseAI</title>
 <style>
 :root {
     --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
@@ -247,7 +247,7 @@ li { margin-bottom: 6px; }
 <!-- Access Gate -->
 <div class="access-gate" id="accessGate">
     <h2>Project Access</h2>
-    <p>This proposal was prepared for Brisken. Enter the access code to continue.</p>
+    <p>This project scope was prepared for Brisken. Enter the access code to continue.</p>
     <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
     <button onclick="checkAccess()">Continue</button>
     <div class="error" id="accessError"></div>
@@ -261,13 +261,12 @@ li { margin-bottom: 6px; }
         </button>
         <a href="/clients/brisken-lead-automation/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
         <span class="nav-sep">|</span>
-        <span class="nav-client">Brisken Lead Automation</span>
+        <span class="nav-client">Brisken Automation Platform</span>
     </div>
     <div class="nav-links">
         <a href="/clients/brisken-lead-automation/">Overview</a>
         <a href="/clients/brisken-lead-automation/solution">Solution</a>
         <a href="/clients/brisken-lead-automation/timeline" class="active">Timeline</a>
-        <a href="/clients/brisken-lead-automation/investment">Investment</a>
         <a href="/clients/brisken-lead-automation/faq">FAQ</a>
     </div>
     <div class="nav-right">
@@ -297,7 +296,7 @@ li { margin-bottom: 6px; }
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#phase4" class="step-link"><span class="step-num">5</span> Phase 4: Future</a>
+            <a href="#phase4" class="step-link"><span class="step-num">5</span> Phase 4: Extensions</a>
         </li>
     </ul>
 </aside>
@@ -312,7 +311,12 @@ li { margin-bottom: 6px; }
 
 <div class="callout">
     <div class="callout-title">Estimates are working estimates</div>
-    <p>The durations below are based on similar projects. They will be refined after the scoping discussion once we understand the exact email formats, form tools, and destination systems involved.</p>
+    <p>The durations below are based on similar projects. They will be refined once the platform decision is made (n8n, Firebase/Firestore, or custom) and the open investigation items on the Overview page are resolved.</p>
+</div>
+
+<div class="callout orange">
+    <div class="callout-title">Platform decision pending</div>
+    <p>The technology platform for this project is being evaluated: n8n, Firebase/Cloud Firestore, or a custom-coded solution. This decision affects timeline estimates, hosting approach, and dashboard capabilities. See the Open Investigation Items on the Overview page for details.</p>
 </div>
 
 <h2 id="phase1" style="margin-top:40px;">Phases</h2>
@@ -407,18 +411,19 @@ li { margin-bottom: 6px; }
         <div class="phase-marker p4">P4</div>
         <div class="phase-body">
             <div class="phase-header">
-                <span class="phase-title">Phase 4 - Future: Accounting Automation</span>
-                <span class="phase-estimate p4">Not yet scoped</span>
+                <span class="phase-title">Phase 4 - Platform Extension</span>
+                <span class="phase-estimate p4">Ongoing</span>
             </div>
-            <p class="phase-desc">The accounting side of the business - invoice handling, end-of-month workload, payment reconciliation - represents significant automation potential. This phase will be scoped separately once the lead pipeline is stable and running.</p>
+            <p class="phase-desc">Once lead nurturing is running, the same platform extends to handle other business workflows. Each is a new "channel" using the same architecture: ingest, process, approve, send, track.</p>
             <ul class="phase-tasks">
-                <li><span class="task-dot"></span>Invoice processing and routing</li>
-                <li><span class="task-dot"></span>End-of-month workflow automation</li>
-                <li><span class="task-dot"></span>Payment status tracking and notifications</li>
-                <li><span class="task-dot"></span>Scope to be defined based on actual accounting workflows</li>
+                <li><span class="task-dot"></span><strong>Invoice / AP routing</strong> - auto-forward invoices to expense owners for approval, track payment status, reconcile with credit card statements</li>
+                <li><span class="task-dot"></span><strong>Compliance email management</strong> - channel compliance-related emails through the tool, AI-assisted drafting, monitoring and follow-up</li>
+                <li><span class="task-dot"></span><strong>LinkedIn message management</strong> - all LinkedIn messages visible in dashboard, response drafting assistance, conversation tracking</li>
+                <li><span class="task-dot"></span><strong>Multi-tenant enablement</strong> - same platform supporting multiple Dirk entities (Brisken + others), isolated data per tenant</li>
+                <li><span class="task-dot"></span><strong>Additional channels</strong> - any new email-based or messaging-based workflow added without rebuilding the core</li>
             </ul>
             <div class="phase-deliverables" style="background:var(--orange-bg);color:var(--orange-dark);">
-                <strong>Note:</strong> This phase will be scoped separately once the lead pipeline is running. Different systems, different workflows, separate engagement.
+                <strong>Note:</strong> Each extension uses the same platform and dashboard. Scoped individually as the lead pipeline stabilizes. Priority order to be determined based on business impact.
             </div>
         </div>
     </div>
@@ -426,13 +431,13 @@ li { margin-bottom: 6px; }
 </div>
 
 <div class="cta-section">
-    <h2>See the investment breakdown</h2>
-    <p>The Investment page covers what is included in each phase, what is not included, and how pricing will be confirmed after the scoping discussion.</p>
-    <a href="/clients/brisken-lead-automation/investment" class="cta-btn">View Investment &#8594;</a>
+    <h2>Have questions?</h2>
+    <p>The FAQ covers the most common technical, process, and scope questions about the platform.</p>
+    <a href="/clients/brisken-lead-automation/faq" class="cta-btn">View the FAQ &#8594;</a>
 </div>
 
 <footer class="footer">
-    <p>Prepared for <strong>Brisken</strong> by UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
+    <p><strong>Brisken</strong> &times; UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
 </footer>
 
 </div>

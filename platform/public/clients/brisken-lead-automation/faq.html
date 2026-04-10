@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FAQ | Brisken Lead Automation | UnpauseAI</title>
+<title>FAQ | Brisken Automation Platform | UnpauseAI</title>
 <style>
 :root {
     --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
@@ -199,8 +199,8 @@ summary::-webkit-details-marker { display: none; }
 <body>
 
 <div class="access-gate" id="accessGate">
-    <h2>Proposal Access</h2>
-    <p>This proposal was prepared for Brisken. Enter the access code to continue.</p>
+    <h2>Project Access</h2>
+    <p>This project scope was prepared for Brisken. Enter the access code to continue.</p>
     <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
     <button onclick="checkAccess()">Continue</button>
     <div class="error" id="accessError"></div>
@@ -213,13 +213,12 @@ summary::-webkit-details-marker { display: none; }
         </button>
         <a href="/clients/brisken-lead-automation/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
         <span class="nav-sep">|</span>
-        <span class="nav-client">Lead Automation</span>
+        <span class="nav-client">Brisken Automation Platform</span>
     </div>
     <div class="nav-links">
         <a href="/clients/brisken-lead-automation/">Overview</a>
         <a href="/clients/brisken-lead-automation/solution">Solution</a>
         <a href="/clients/brisken-lead-automation/timeline">Timeline</a>
-        <a href="/clients/brisken-lead-automation/investment">Investment</a>
         <a href="/clients/brisken-lead-automation/faq" class="active">FAQ</a>
     </div>
     <div class="nav-right">
@@ -255,26 +254,26 @@ summary::-webkit-details-marker { display: none; }
 <h2 id="technical">Technical</h2>
 
 <details>
-    <summary>Why n8n instead of Make.com or Zapier?</summary>
+    <summary>What platform will this run on?</summary>
     <div class="faq-body">
-        <p>n8n is a better fit for this project for three reasons. First, it has native code nodes that let us write custom scoring logic and parsing rules without workarounds. Second, its AI integration nodes handle multi-step LLM chains (like drafting a response that references specific product context) more cleanly than visual-only tools. Third, n8n can be self-hosted, giving you full control over where your lead data lives.</p>
-        <p>Make.com and Zapier are excellent tools for simpler automation. This project involves AI response composition, lead scoring with custom logic, and human-in-the-loop review gates, which benefit from the flexibility of a code-capable platform.</p>
+        <p>The platform choice is currently being evaluated. Three options are on the table: <strong>n8n</strong> (workflow automation tool with visual interface), <strong>Firebase/Cloud Firestore</strong> (Google's all-in-one platform with database, auth, hosting, and functions), or a <strong>custom-coded solution</strong> (e.g., Next.js + database).</p>
+        <p>Each has different trade-offs around development speed, dashboard capabilities, multi-tenant readiness, and ongoing cost. A recommendation will be provided before the build starts. The choice does not affect what the platform does, only how it is built and hosted.</p>
     </div>
 </details>
 
 <details>
-    <summary>Where does n8n run?</summary>
+    <summary>How does the email sending work?</summary>
     <div class="faq-body">
-        <p>Two options: <strong>n8n Cloud</strong> (hosted by n8n, no infrastructure to manage) or <strong>self-hosted</strong> on your own servers or a cloud provider like AWS, Azure, or Hetzner.</p>
-        <p>Self-hosted gives you full data sovereignty. All lead data, email content, and AI-drafted responses stay on your infrastructure. Cloud is simpler to maintain but data passes through n8n's servers. We will recommend the best option based on your data requirements and IT setup.</p>
+        <p>All outbound emails are sent via SMTP using Dirk's personal corporate email credentials. The automation does not have access to Dirk's inbox. Replies are captured via an Outlook auto-forward rule that routes them to a dedicated monitored mailbox. This means the automation can send as Dirk and detect replies without needing inbox access.</p>
+        <p>Follow-ups always reply to the existing email thread so the full conversation history is preserved. The lead never receives a disconnected email.</p>
     </div>
 </details>
 
 <details>
     <summary>What AI model is used for response drafting?</summary>
     <div class="faq-body">
-        <p>OpenAI GPT-4o-mini for cost-effective drafting in most cases. Can be upgraded to GPT-4o for higher quality on complex responses. The AI operates within strict templates and constraints, not free-form generation. Every draft follows the structure you define: acknowledge the inquiry, reference the specific product interest, provide relevant information, and ask a follow-up question.</p>
-        <p>If you already use a different AI provider (Azure OpenAI, Anthropic, etc.), the system can be adapted. The AI node in n8n is provider-agnostic.</p>
+        <p>The specific model will depend on the platform choice, but the approach is the same: AI operates within strict templates and constraints, not free-form generation. Every draft follows the structure defined in advance: acknowledge the inquiry, reference the specific product interest, provide relevant information, and ask a follow-up question.</p>
+        <p>Multiple AI providers can be used (OpenAI, Anthropic, Azure OpenAI, Google). The system is provider-agnostic.</p>
     </div>
 </details>
 
@@ -283,6 +282,14 @@ summary::-webkit-details-marker { display: none; }
     <div class="faq-body">
         <p>SAP Discovery Center and SAP Store send email notifications when someone expresses interest. The system polls the designated inbox on a schedule (every 10 minutes by default), identifies SAP notification emails by sender and subject pattern, and extracts the lead fields (name, email, company, product interest) from the email body using pattern matching.</p>
         <p>We need sample notification emails from both channels to build the parsing templates. SAP notification formats are consistent, so once the template is built it handles all future emails from that channel reliably.</p>
+    </div>
+</details>
+
+<details>
+    <summary>What about LinkedIn API restrictions?</summary>
+    <div class="faq-body">
+        <p>This is an active investigation item. LinkedIn has bot detection that can flag or temporarily suspend accounts that use API messaging heavily. We are evaluating whether outbound messaging via API is viable at Brisken's volume.</p>
+        <p>If API sending is restricted, the fallback is a manual-send workflow: the system drafts the response and presents it in the dashboard, and Dirk copies it into the LinkedIn chat. At 10 leads per week, this takes about 30 seconds per lead and avoids any API risk.</p>
     </div>
 </details>
 
@@ -321,23 +328,38 @@ summary::-webkit-details-marker { display: none; }
 <h2 id="scope">Scope</h2>
 
 <details>
-    <summary>Can we start with just Phase 1?</summary>
+    <summary>Can we start with just lead nurturing?</summary>
     <div class="faq-body">
-        <p>Yes. Each phase is independently valuable and builds on the previous one. Phase 1 gives you automated lead capture from SAP and website channels, deduplication, and logging to your destination system. That alone eliminates manual inbox monitoring. Phase 2 adds intelligence (ranking, AI response, human review). Phase 3 adds reply monitoring. You approve each phase separately.</p>
+        <p>Yes. Lead nurturing is Phase 1-3 and is independently valuable. Phase 1 gives you automated lead capture from SAP and website channels. Phase 2 adds scoring, AI drafting, and human review gates. Phase 3 adds reply monitoring. The platform extensions (invoice routing, compliance, LinkedIn management) build on the same infrastructure once the lead pipeline is stable.</p>
     </div>
 </details>
 
 <details>
-    <summary>What about the accounting automation?</summary>
+    <summary>How does invoice/AP routing work?</summary>
     <div class="faq-body">
-        <p>The accounting and invoice automation is noted as a separate future workstream (Phase 4). It involves different systems, different workflows, and a different scope. It will be scoped and proposed independently once the lead automation pipeline is running and stable. The two workstreams do not depend on each other.</p>
+        <p>Same architecture as lead nurturing, different use case. Invoices arrive via email, the system auto-forwards them to the relevant expense owner for approval (e.g., Giuliano), tracks the approval status, and notifies Chris for payment. Events are logged to Zoho CRM. This replaces the current manual email forwarding workflow that takes 15 minutes per day.</p>
+        <p>An alternative path is to skip email entirely and create accounts payable entries directly in Zoho, with approval routing built in. Both options will be evaluated.</p>
+    </div>
+</details>
+
+<details>
+    <summary>What does "multi-tenant" mean here?</summary>
+    <div class="faq-body">
+        <p>The platform is designed so that multiple organizations can use the same system with isolated data. For example, Brisken and another Dirk entity could each have their own dashboard, their own leads, their own email settings, but run on the same platform. This does not add significant complexity if built in from the start. Initially, only Brisken will be active.</p>
     </div>
 </details>
 
 <details>
     <summary>Is LinkedIn confirmed as a channel?</summary>
     <div class="faq-body">
-        <p>Not yet. LinkedIn is included in the architecture as a planned channel (A0) but it has not been explicitly confirmed. If LinkedIn is not an active lead source, Phase 2 focuses on lead ranking and AI response drafting without the LinkedIn ingest component. The architecture supports adding it later with no changes to the pipeline.</p>
+        <p>Not yet confirmed for lead ingest, but the scope has expanded: Dirk wants all LinkedIn messages visible in the dashboard, not just lead gen form submissions. The system would assist with response drafting and conversation tracking across LinkedIn. API restrictions for outbound messaging are being investigated.</p>
+    </div>
+</details>
+
+<details>
+    <summary>Who owns the IP?</summary>
+    <div class="faq-body">
+        <p>Dirk / Brisken owns the intellectual property for everything built. UnpauseAI can assist with productization if desired, but all code, configurations, and documentation belong to Brisken.</p>
     </div>
 </details>
 
@@ -346,14 +368,21 @@ summary::-webkit-details-marker { display: none; }
 <details>
     <summary>Where is lead data stored?</summary>
     <div class="faq-body">
-        <p>In your configured destination system: Google Sheets, a CRM (HubSpot, Pipedrive, etc.), or n8n's internal database. No lead data is stored in third-party systems beyond what you choose as the destination. If n8n is self-hosted, all processing happens on your infrastructure. The only external call is to the AI provider for response drafting (the lead's name, company, and inquiry text are sent to generate the draft).</p>
+        <p>Lead data lives in the platform's database (the specifics depend on the platform choice: Firestore, n8n's internal DB, or a dedicated database). Zoho CRM receives event updates as a record of activity. No lead data is stored in third-party systems beyond what you choose. The only external call is to the AI provider for response drafting, where the minimum necessary context (name, company, inquiry) is sent to generate the draft.</p>
+    </div>
+</details>
+
+<details>
+    <summary>Does the automation have access to my inbox?</summary>
+    <div class="faq-body">
+        <p>No. The automation sends via SMTP (outbound only) and does not read Dirk's inbox. Replies are captured via an Outlook auto-forward rule to a separate monitored mailbox. This is a deliberate architectural choice: the automation can send as Dirk and detect replies without needing corporate email access.</p>
     </div>
 </details>
 
 <details>
     <summary>Is this GDPR compliant?</summary>
     <div class="faq-body">
-        <p>The system processes B2B contact data for the purpose of responding to business inquiries, which falls under legitimate business interest. There is no personal data profiling, no behavioral tracking, and no data sharing with third parties beyond the AI provider. If n8n is self-hosted, data stays entirely on your infrastructure. For the AI drafting step, only the minimum necessary context (name, company, inquiry) is sent to the AI provider. We recommend including a data processing note in your SAP and website listings if you do not already have one.</p>
+        <p>The system processes B2B contact data for the purpose of responding to business inquiries, which falls under legitimate business interest. There is no personal data profiling, no behavioral tracking, and no data sharing with third parties beyond the AI provider. For self-hosted options, data stays entirely on your infrastructure. We recommend including a data processing note in your SAP and website listings if you do not already have one.</p>
     </div>
 </details>
 
@@ -366,12 +395,12 @@ summary::-webkit-details-marker { display: none; }
 
 <div class="cta-section">
     <h2>Questions not covered here?</h2>
-    <p>Reach out directly and we can discuss any aspect of the project in more detail.</p>
+    <p>Reach out directly and we can discuss any aspect of the project. Open investigation items are tracked on the Overview page and will be updated as they are resolved.</p>
     <a href="mailto:nicolas.neumann@unpauseai.com" class="cta-btn">Get in touch &#8594;</a>
 </div>
 
 <footer class="footer">
-    <p>Prepared for <strong>Brisken</strong> by UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
+    <p><strong>Brisken</strong> &times; UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
 </footer>
 
 </div>

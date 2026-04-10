@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>System Architecture | Brisken Lead Automation | UnpauseAI</title>
+<title>System Architecture | Brisken Automation Platform | UnpauseAI</title>
 <style>
 :root {
     --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
@@ -257,7 +257,7 @@ li { margin-bottom: 6px; }
 <!-- Access Gate -->
 <div class="access-gate" id="accessGate">
     <h2>Project Access</h2>
-    <p>This proposal was prepared for Brisken. Enter the access code to continue.</p>
+    <p>This project scope was prepared for Brisken. Enter the access code to continue.</p>
     <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
     <button onclick="checkAccess()">Continue</button>
     <div class="error" id="accessError"></div>
@@ -271,13 +271,12 @@ li { margin-bottom: 6px; }
         </button>
         <a href="/clients/brisken-lead-automation/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
         <span class="nav-sep">|</span>
-        <span class="nav-client">Brisken Lead Automation</span>
+        <span class="nav-client">Brisken Automation Platform</span>
     </div>
     <div class="nav-links">
         <a href="/clients/brisken-lead-automation/">Overview</a>
         <a href="/clients/brisken-lead-automation/solution" class="active">Solution</a>
         <a href="/clients/brisken-lead-automation/timeline">Timeline</a>
-        <a href="/clients/brisken-lead-automation/investment">Investment</a>
         <a href="/clients/brisken-lead-automation/faq">FAQ</a>
     </div>
     <div class="nav-right">
@@ -317,7 +316,8 @@ li { margin-bottom: 6px; }
 <div class="content-inner">
 
 <h2 id="arch-overview">Architecture Overview</h2>
-<p>The system is five n8n workflows organized into three layers: channel ingest (A0, A1, A2), the core follow-up pipeline (A3), and reply monitoring (A4). Each ingest workflow outputs a normalized lead record. A3 consumes those records and handles everything from scoring through first response. A4 watches for replies and escalates them.</p>
+<p>The platform has four layers: channel ingest (leads from SAP, website, LinkedIn), the core processing pipeline (scoring, drafting, routing), email sending via SMTP, and a unified dashboard for approvals and conversation management. Zoho CRM receives event updates as a record of activity but is not the working interface.</p>
+<p>Lead nurturing is the first use case. The architecture is designed so the same layers handle future use cases (invoice routing, compliance emails) by adding new ingest channels and processing rules without rebuilding the core.</p>
 
 <div class="arch-diagram">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
@@ -329,16 +329,29 @@ li { margin-bottom: 6px; }
         <span style="color:var(--text2);padding:0 8px;font-size:18px;">&#8594;</span>
         <span class="arch-node arch-node-blue">A3 Pipeline</span>
         <span style="color:var(--text2);padding:0 8px;font-size:18px;">&#8594;</span>
-        <span class="arch-node arch-node-purple">A4 Reply Monitor</span>
+        <span class="arch-node arch-node-green">SMTP Send</span>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
         <span class="arch-node arch-node-blue">A2 SAP</span>
         <span style="color:var(--text2);font-size:13px;">&#8629;</span>
+        <span style="color:var(--text2);padding:0 40px;"></span>
+        <span class="arch-node arch-node-purple">A4 Reply Monitor</span>
+        <span style="color:var(--text2);padding:0 8px;font-size:18px;">&#8594;</span>
+        <span class="arch-node arch-node-orange">Human Review</span>
     </div>
-    <p class="arch-label" style="margin-top:14px;">A0, A1, A2 each normalize their source format into the standard lead schema. A3 receives all leads and handles scoring, drafting, and HITL routing. A4 monitors sent responses for replies and escalates to human review.</p>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+        <span class="arch-node arch-node-purple" style="opacity:.7">Dashboard</span>
+        <span style="color:var(--text2);padding:0 8px;font-size:13px;">&#8596;</span>
+        <span style="color:var(--text2);font-size:12px;">Approvals, conversation history, lead status</span>
+        <span style="color:var(--text2);padding:0 16px;font-size:13px;">|</span>
+        <span class="arch-node arch-node-blue" style="opacity:.7">Zoho CRM</span>
+        <span style="color:var(--text2);padding:0 8px;font-size:13px;">&#8592;</span>
+        <span style="color:var(--text2);font-size:12px;">Event log (read-only repository)</span>
+    </div>
+    <p class="arch-label" style="margin-top:14px;">Ingest layer normalizes each source. Pipeline handles scoring, AI drafting, and HITL routing. Emails sent via SMTP from Dirk's account. Dashboard is the working interface; Zoho CRM is the event record.</p>
 </div>
 
-<p>The design principle is separation of concerns: the ingest layer handles the messiness of each source channel (different email formats, different webhook payloads) so that A3 always works with clean, consistent data. Adding a new channel means adding a new ingest workflow - not changing the pipeline.</p>
+<p>The design principle is separation of concerns: the ingest layer handles the messiness of each source channel (different email formats, different webhook payloads) so that A3 always works with clean, consistent data. Adding a new channel or use case means adding a new ingest workflow, not changing the pipeline.</p>
 
 <!-- Ingest Layer -->
 <h2 id="ingest-layer">Ingest Layer (A0, A1, A2)</h2>
@@ -439,7 +452,7 @@ li { margin-bottom: 6px; }
 <p>For High and Medium leads, A3 can attempt a basic company lookup using the email domain or company name field. This gives the AI more context for drafting a relevant response. This step is optional and can be toggled per tier if the cost or latency is not acceptable.</p>
 
 <h3>Stage 4 - AI Response Drafting</h3>
-<p>GPT-4o-mini drafts a first response using a structured prompt. The prompt constrains the output to: acknowledge the specific inquiry, reference the lead's stated interest, provide relevant context about Brisken's offering, ask one qualifying question, and indicate that a follow-up will come. Docs or links can be attached based on the source channel.</p>
+<p>AI drafts a first response using a structured prompt. The prompt constrains the output to: acknowledge the specific inquiry, reference the lead's stated interest, provide relevant context about Brisken's offering, ask one qualifying question, and indicate that a follow-up will come. Docs or links can be attached based on the source channel. All responses are sent via SMTP from Dirk's personal corporate email, not from a generic address.</p>
 
 <div class="callout green">
     <div class="callout-title">AI constraints</div>
@@ -447,11 +460,11 @@ li { margin-bottom: 6px; }
 </div>
 
 <h3>Stage 5 - HITL Routing and Send</h3>
-<p>Based on the tier from Stage 2, the draft is either sent directly or routed to a review queue. The review interface is an email or Slack message with the full lead context, the AI draft, and approve / edit / reject options. Approved responses send immediately. Rejected responses log the reason for later review.</p>
+<p>Based on the tier from Stage 2, the draft is either sent directly or routed to a review queue via the unified dashboard. Dirk sees the full lead context, the AI draft, and approve / edit / reject options. Approved responses are sent via SMTP from Dirk's email, preserving the email thread. Follow-ups for unresponsive leads are always replies to the existing thread (never a new email), so the full conversation history stays intact. Each event (sent, approved, rejected) is logged to Zoho CRM automatically.</p>
 
 <!-- Reply Monitoring -->
 <h2 id="reply-monitoring">Reply Monitoring (A4)</h2>
-<p>A4 polls the sending inbox at a configurable interval and matches incoming emails to outbound leads using thread ID. When a reply is detected, two things happen immediately: any pending follow-up sequence for that lead is cancelled, and the reply is escalated to human review.</p>
+<p>Since the automation sends via SMTP but does not have access to Dirk's inbox, replies are captured via an Outlook auto-forward rule. Replies land in a dedicated monitored mailbox. A4 polls this mailbox at a configurable interval and matches incoming emails to outbound leads using thread ID and sender. When a reply is detected, two things happen immediately: any pending follow-up sequence for that lead is cancelled, and the reply is escalated to human review via the dashboard.</p>
 
 <div class="callout purple">
     <div class="callout-title">Dirk's requirement - all second responses are human</div>
@@ -484,12 +497,12 @@ li { margin-bottom: 6px; }
 
 <div class="cta-section">
     <h2>See the delivery plan</h2>
-    <p>The Timeline page breaks this into four phases, each independently valuable. Phase 1 can be running within weeks of kickoff.</p>
+    <p>The Timeline page breaks this into phases, starting with lead nurturing and expanding into invoice routing, compliance, and more.</p>
     <a href="/clients/brisken-lead-automation/timeline" class="cta-btn">View the Timeline &#8594;</a>
 </div>
 
 <footer class="footer">
-    <p>Prepared for <strong>Brisken</strong> by UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
+    <p><strong>Brisken</strong> &times; UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
 </footer>
 
 </div>

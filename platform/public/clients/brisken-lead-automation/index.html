@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lead Automation Pipeline for Brisken | UnpauseAI</title>
+<title>Project Scope: Brisken Automation Platform | UnpauseAI</title>
 <style>
 :root {
     --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
@@ -308,7 +308,7 @@ li { margin-bottom: 6px; }
 <!-- Access Gate -->
 <div class="access-gate" id="accessGate">
     <h2>Project Access</h2>
-    <p>This proposal was prepared for Brisken. Enter the access code to continue.</p>
+    <p>This project scope was prepared for Brisken. Enter the access code to continue.</p>
     <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
     <button onclick="checkAccess()">Continue</button>
     <div class="error" id="accessError"></div>
@@ -322,13 +322,12 @@ li { margin-bottom: 6px; }
         </button>
         <a href="/clients/brisken-lead-automation/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
         <span class="nav-sep">|</span>
-        <span class="nav-client">Brisken Lead Automation</span>
+        <span class="nav-client">Brisken Automation Platform</span>
     </div>
     <div class="nav-links">
         <a href="/clients/brisken-lead-automation/" class="active">Overview</a>
         <a href="/clients/brisken-lead-automation/solution">Solution</a>
         <a href="/clients/brisken-lead-automation/timeline">Timeline</a>
-        <a href="/clients/brisken-lead-automation/investment">Investment</a>
         <a href="/clients/brisken-lead-automation/faq">FAQ</a>
     </div>
     <div class="nav-right">
@@ -350,15 +349,23 @@ li { margin-bottom: 6px; }
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#channels" class="step-link"><span class="step-num">3</span> The Channels</a>
+            <a href="#channels" class="step-link"><span class="step-num">3</span> Lead Channels</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#download" class="step-link"><span class="step-num">4</span> Download Template</a>
+            <a href="#beyond" class="step-link"><span class="step-num">4</span> Beyond Leads</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
-            <a href="#next-steps" class="step-link"><span class="step-num">5</span> Next Steps</a>
+            <a href="#download" class="step-link"><span class="step-num">5</span> Download Template</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#open-items" class="step-link"><span class="step-num">6</span> Open Items</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#next-steps" class="step-link"><span class="step-num">7</span> Next Steps</a>
         </li>
     </ul>
 </aside>
@@ -369,63 +376,71 @@ li { margin-bottom: 6px; }
 
 <!-- Hero -->
 <section class="hero" id="overview">
-    <div class="hero-badge">LEAD AUTOMATION</div>
-    <h1>Lead Automation Pipeline for Brisken</h1>
-    <p class="hero-sub">Multi-channel lead capture, AI-powered ranking and response drafting, with human-in-the-loop review gates. Built on n8n.</p>
+    <div class="hero-badge">PROJECT SCOPE</div>
+    <h1>Unified Automation Platform for Brisken</h1>
+    <p class="hero-sub">Centralized lead nurturing, email management, and business process automation. One dashboard for all channels, all approvals, all conversation history.</p>
     <div class="stats-row">
-        <div class="stat-card"><div class="stat-value">4</div><div class="stat-label">Channels</div></div>
-        <div class="stat-card"><div class="stat-value">5</div><div class="stat-label">Workflows</div></div>
-        <div class="stat-card"><div class="stat-value">4</div><div class="stat-label">Phases</div></div>
-        <div class="stat-card"><div class="stat-value">n8n</div><div class="stat-label">Orchestrator</div></div>
+        <div class="stat-card"><div class="stat-value">4</div><div class="stat-label">Lead Channels</div></div>
+        <div class="stat-card"><div class="stat-value">~10/wk</div><div class="stat-label">Lead Volume</div></div>
+        <div class="stat-card"><div class="stat-value">3+</div><div class="stat-label">Use Cases</div></div>
+        <div class="stat-card"><div class="stat-value">1</div><div class="stat-label">Dashboard</div></div>
     </div>
 </section>
 
 <!-- The Challenge -->
 <h2 id="challenge">The Challenge</h2>
-<p>Brisken receives leads from multiple channels: SAP Discovery Center, SAP Store, website forms, and LinkedIn. Each channel delivers leads differently - email notifications, form submissions, lead gen forms - and each has different signal quality and volume characteristics.</p>
-<p>Manual processing means slow response times, inconsistent follow-up, and no lead prioritization. High-value leads from the SAP Store sit in the same inbox as general enquiries. There is no consistent first response, no deduplication, and no way to know which leads are worth prioritizing without reading each one individually.</p>
-<p>The goal is to fix this without removing the human from the loop where it matters. Automated processing handles the repeatable work. Human judgment stays in place for high-value leads and all follow-up responses.</p>
+<p>Brisken receives leads from multiple channels: SAP Discovery Center, SAP Store, website forms, and LinkedIn. Each channel delivers leads differently, and each has different signal quality. With roughly 10 leads per week, the volume is low but each lead matters. The bottleneck is not filtering out noise; it is making sure every lead gets a fast, personalized, high-quality response and consistent follow-up.</p>
+<p>Beyond lead nurturing, the same operational challenge shows up elsewhere: invoice routing requires manual email forwarding every day, compliance emails need tracking, and LinkedIn conversations happen in a separate silo. Multiple tools, multiple inboxes, no central place to manage it all.</p>
+<p>The goal is a unified platform that handles all of this from one place. Automated processing handles the repeatable work. Human judgment stays in the loop for approvals, high-value leads, and all follow-up responses. One dashboard to manage leads, invoices, compliance, and communications across every channel.</p>
 
 <!-- What We're Building -->
 <h2 id="building">What We're Building</h2>
-<p>A unified lead automation pipeline that captures, normalizes, scores, and responds to leads across all channels - with configurable review gates to keep a human in the decision loop.</p>
+<p>A unified automation platform with lead nurturing as the first use case, designed from day one to extend into invoice routing, compliance tracking, and general email management. All managed from a single dashboard.</p>
 
 <ul class="checklist">
     <li>
         <span class="check-icon"></span>
-        <span><strong>Multi-channel capture</strong> - leads from SAP Discovery Center, SAP Store, website, and LinkedIn all flow into a single pipeline</span>
+        <span><strong>Unified dashboard</strong> - one place for all channels, all approvals, all conversation history. No switching between LinkedIn, Outlook, and CRM</span>
     </li>
     <li>
         <span class="check-icon"></span>
-        <span><strong>Normalization</strong> - every lead is converted to a standard schema regardless of source channel</span>
+        <span><strong>Multi-channel lead capture</strong> - SAP Discovery Center, SAP Store, website forms, and LinkedIn all flow into the same pipeline</span>
     </li>
     <li>
         <span class="check-icon"></span>
-        <span><strong>Lead scoring</strong> - signals like company email, company name, message detail, and source channel determine a High / Medium / Low tier</span>
+        <span><strong>Lead scoring and ranking</strong> - company email, company name, message detail, and source channel determine quality tier</span>
     </li>
     <li>
         <span class="check-icon"></span>
-        <span><strong>AI response drafting</strong> - GPT-4o-mini drafts a personalized first response acknowledging the lead's specific interest</span>
+        <span><strong>AI response drafting</strong> - personalized first responses acknowledging the lead's specific interest, sent from Dirk's personal email via SMTP</span>
     </li>
     <li>
         <span class="check-icon"></span>
-        <span><strong>Human review gate</strong> - high-value leads are held for approval before sending; medium and low tiers send automatically with a notification</span>
+        <span><strong>Human review gates</strong> - high-value leads held for approval before sending. All replies escalated to human review, no exceptions</span>
     </li>
     <li>
         <span class="check-icon"></span>
-        <span><strong>Reply monitoring</strong> - when a lead replies, the follow-up sequence stops and the reply is escalated to human review (Dirk's requirement)</span>
+        <span><strong>Automated follow-up sequences</strong> - in-thread follow-ups for unresponsive leads, always individually crafted, with approval gates</span>
+    </li>
+    <li>
+        <span class="check-icon"></span>
+        <span><strong>CRM sync</strong> - Zoho CRM updated automatically as a record of all events. The dashboard is the working interface, not the CRM</span>
+    </li>
+    <li>
+        <span class="check-icon"></span>
+        <span><strong>Extensible architecture</strong> - same platform handles invoice/AP routing, compliance emails, and LinkedIn message management as future use cases</span>
     </li>
 </ul>
 
 <!-- The Channels -->
-<h2 id="channels">The Channels</h2>
-<p>Four ingest sources, each with a dedicated workflow that normalizes output to the same lead schema before passing it downstream.</p>
+<h2 id="channels">Lead Channels</h2>
+<p>Four ingest sources for lead nurturing (the first use case). Each channel feeds into the same unified pipeline and dashboard.</p>
 
 <div class="zones-4">
     <div class="zone zone-blue">
         <div class="zone-icon">&#9729;</div>
         <div class="zone-title">SAP Discovery Center</div>
-        <div class="zone-sub">A2 - Higher volume</div>
+        <div class="zone-sub">Higher volume</div>
         <ul class="zone-items">
             <li>Missions and use cases</li>
             <li>Delivered via email notification</li>
@@ -436,7 +451,7 @@ li { margin-bottom: 6px; }
     <div class="zone zone-purple">
         <div class="zone-icon">&#128722;</div>
         <div class="zone-title">SAP Store</div>
-        <div class="zone-sub">A2 - Higher value</div>
+        <div class="zone-sub">Higher value</div>
         <ul class="zone-items">
             <li>Product inquiries</li>
             <li>Delivered via email notification</li>
@@ -447,30 +462,65 @@ li { margin-bottom: 6px; }
     <div class="zone zone-green">
         <div class="zone-icon">&#127760;</div>
         <div class="zone-title">Website / Landing Pages</div>
-        <div class="zone-sub">A1 - Webhook-based</div>
+        <div class="zone-sub">Webhook-based</div>
         <ul class="zone-items">
             <li>Contact forms</li>
             <li>Article and landing page forms</li>
-            <li>Webhook trigger from form tool</li>
+            <li>Webhook or direct DB connect</li>
             <li>Real-time capture</li>
         </ul>
     </div>
     <div class="zone zone-orange">
         <div class="zone-icon">&#128101;</div>
         <div class="zone-title">LinkedIn</div>
-        <div class="zone-sub">A0 - To be validated</div>
+        <div class="zone-sub">To be validated</div>
         <ul class="zone-items">
-            <li>Lead gen forms</li>
-            <li>Channel not yet confirmed active</li>
-            <li>Will be validated in scoping</li>
-            <li>Phase 2 implementation</li>
+            <li>Campaign responses</li>
+            <li>Direct messages</li>
+            <li>API restrictions under review</li>
+            <li>Manual fallback if needed</li>
         </ul>
     </div>
 </div>
 
-<div class="callout orange">
-    <div class="callout-title">LinkedIn channel status</div>
-    <p>The LinkedIn ingest (A0) is listed as unconfirmed. We will validate whether this is an active lead source during the scoping discussion before committing to the implementation.</p>
+<!-- Beyond Lead Nurturing -->
+<h2 id="beyond">Beyond Lead Nurturing</h2>
+<p>The platform is designed to handle more than leads. The same architecture - ingest, process, draft, approve, send, track - applies to other business workflows. These are planned as same-platform extensions, not separate tools.</p>
+
+<div class="zones">
+    <div class="zone zone-purple">
+        <div class="zone-icon">&#128451;</div>
+        <div class="zone-title">Invoice / AP Routing</div>
+        <div class="zone-sub">Accounts payable</div>
+        <ul class="zone-items">
+            <li>Auto-forward invoices to approvers</li>
+            <li>Approval workflow (Giuliano / Chris)</li>
+            <li>Credit card reconciliation</li>
+            <li>Zoho AP integration</li>
+        </ul>
+    </div>
+    <div class="zone zone-blue">
+        <div class="zone-icon">&#128274;</div>
+        <div class="zone-title">Compliance Emails</div>
+        <div class="zone-sub">Monitoring and routing</div>
+        <ul class="zone-items">
+            <li>Channel compliance emails through the tool</li>
+            <li>AI-assisted drafting</li>
+            <li>Auto-forwarding and tracking</li>
+            <li>Same approval workflow</li>
+        </ul>
+    </div>
+    <div class="zone zone-green">
+        <div class="zone-icon">&#128172;</div>
+        <div class="zone-title">LinkedIn Management</div>
+        <div class="zone-sub">Full message visibility</div>
+        <ul class="zone-items">
+            <li>All LinkedIn messages in dashboard</li>
+            <li>AI-assisted response drafting</li>
+            <li>Conversation tracking</li>
+            <li>Beyond lead ingest</li>
+        </ul>
+    </div>
 </div>
 
 <!-- Download Template -->
@@ -484,20 +534,86 @@ li { margin-bottom: 6px; }
 
 <p>This is a working template, not a mockup. Import it into any n8n instance via Settings > Import Workflow. The scoring logic matches the criteria from the project spec: free email addresses score low, company domains score high, and SAP Store leads get a bonus signal. Adjust the thresholds and free provider list to match your environment.</p>
 
+<!-- Open Investigation Items -->
+<h2 id="open-items">Open Investigation Items</h2>
+<p>These are items from our scoping discussion that need further research before finalizing the architecture. Each one will be evaluated and reported back with a recommendation.</p>
+
+<table style="width:100%;border-collapse:collapse;margin:24px 0;font-size:13px;">
+    <thead>
+        <tr>
+            <th style="background:var(--th-bg);color:#fff;padding:10px 14px;text-align:left;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Item</th>
+            <th style="background:var(--th-bg);color:#fff;padding:10px 14px;text-align:left;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">What We Need to Determine</th>
+            <th style="background:var(--th-bg);color:#fff;padding:10px 14px;text-align:left;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;width:100px;">Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);">Platform choice</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);">Evaluate n8n vs Firebase/Cloud Firestore vs custom code. Trade-offs: development speed, dashboard capabilities, multi-tenant readiness, ongoing cost.</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);"><span style="background:var(--orange-bg);color:var(--orange-dark);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Evaluating</span></td>
+        </tr>
+        <tr>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);background:var(--surface);">SMTP email sending</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);">Confirm SMTP connection to Dirk's corporate email works from the chosen platform. Verify the automation can send as Dirk without requiring inbox access.</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);"><span style="background:var(--orange-bg);color:var(--orange-dark);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Evaluating</span></td>
+        </tr>
+        <tr>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);">LinkedIn API restrictions</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);">Check whether outbound messaging via API risks account flagging or suspension. If restricted, design a manual-send fallback (pre-drafted messages, copy-paste workflow).</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);"><span style="background:var(--orange-bg);color:var(--orange-dark);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Evaluating</span></td>
+        </tr>
+        <tr>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);background:var(--surface);">Reply capture architecture</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);">Current plan: Outlook auto-forward to a monitored mailbox. Investigating whether a more elegant solution exists that avoids the middleman pattern, especially for multi-reply threads.</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);"><span style="background:var(--orange-bg);color:var(--orange-dark);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Evaluating</span></td>
+        </tr>
+        <tr>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);">Hosting approach</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);">Cloud-hosted vs self-hosted for the chosen platform. Factors: data sovereignty, cost at current volume, maintenance burden, scaling path.</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);"><span style="background:var(--orange-bg);color:var(--orange-dark);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Evaluating</span></td>
+        </tr>
+        <tr>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);background:var(--surface);">Multi-thread edge cases</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);">How to handle concurrent replies from the same lead (e.g., "not interested" in one thread, "tell me more" in another). Need a conflict resolution strategy.</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);"><span style="background:var(--blue-bg);color:var(--blue);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Design phase</span></td>
+        </tr>
+        <tr>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);">Email reputation safeguards</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);">Research blacklist risk for the planned follow-up cadence. Define maximum follow-up frequency and opt-out detection to protect Brisken's sender reputation.</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);"><span style="background:var(--blue-bg);color:var(--blue);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Design phase</span></td>
+        </tr>
+        <tr>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);background:var(--surface);">Website form integration</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);">Determine form tool (Wix, Tally, custom) and whether it supports webhook endpoints or direct database connection. Either path works; need to confirm which.</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);"><span style="background:var(--purple-bg);color:var(--purple);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Needs input</span></td>
+        </tr>
+        <tr>
+            <td style="padding:10px 14px;font-weight:600;color:var(--text-strong);">Zoho CRM configuration</td>
+            <td style="padding:10px 14px;">Confirm Zoho can handle automated event writes at the needed granularity (lead created, email sent, reply received, lead closed). Map fields and determine API approach.</td>
+            <td style="padding:10px 14px;"><span style="background:var(--purple-bg);color:var(--purple);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Needs input</span></td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="callout">
+    <div class="callout-title">Living document</div>
+    <p>This scope page will be updated as each investigation item is resolved. Items marked "Needs input" require information from Brisken's side. Items marked "Evaluating" are actively being researched and will be reported back with a recommendation.</p>
+</div>
+
 <!-- Next Steps -->
 <h2 id="next-steps">Next Steps</h2>
-<p>This document covers the high-level picture. The pages below go deeper on each dimension of the project.</p>
+<p>This page covers the high-level picture. The pages below go deeper on each dimension of the project.</p>
 
 <div class="page-links">
     <a href="/clients/brisken-lead-automation/solution" class="page-link-card">
         <span class="plc-label">Architecture</span>
         <span class="plc-title">System Solution</span>
-        <span class="plc-desc">Full workflow breakdown, data flow, and HITL design</span>
+        <span class="plc-desc">Email architecture, dashboard design, lead pipeline, and data flow</span>
     </a>
     <a href="/clients/brisken-lead-automation/timeline" class="page-link-card">
         <span class="plc-label">Delivery</span>
         <span class="plc-title">Phased Timeline</span>
-        <span class="plc-desc">Four phases, each independently valuable</span>
+        <span class="plc-desc">Lead nurturing first, then invoice routing, compliance, and more</span>
     </a>
     <a href="/clients/brisken-lead-automation/faq" class="page-link-card">
         <span class="plc-label">Questions</span>
@@ -508,12 +624,12 @@ li { margin-bottom: 6px; }
 
 <div class="cta-section">
     <h2>See the full system architecture</h2>
-    <p>The Solution page covers each workflow in detail - ingest layer, follow-up pipeline, reply monitoring, and end-to-end data flow.</p>
+    <p>The Solution page covers the email architecture, dashboard concept, lead pipeline, reply monitoring, and end-to-end data flow.</p>
     <a href="/clients/brisken-lead-automation/solution" class="cta-btn">View the Solution &#8594;</a>
 </div>
 
 <footer class="footer">
-    <p>Prepared for <strong>Brisken</strong> by UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
+    <p><strong>Brisken</strong> &times; UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
 </footer>
 
 </div>
