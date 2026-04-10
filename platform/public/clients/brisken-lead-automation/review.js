@@ -13,9 +13,28 @@
 
     var STORE = 'brisken-rv3';
     var MAIL = 'nicolas.neumann@unpauseai.com';
+    var WEBHOOK = 'https://hook.eu1.make.com/ixia13ls7admv5salw3h1p7lmcasmjuh';
     var page = location.pathname.split('/').filter(Boolean).pop() || 'overview';
     var PAGES = { 'brisken-lead-automation': 'Overview', solution: 'Solution', timeline: 'Timeline', faq: 'FAQ' };
     var pageLabel = PAGES[page] || page;
+
+    // Notify webhook when a comment is added or edited
+    function notify(action, comment) {
+        try {
+            fetch(WEBHOOK, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: action,
+                    page: comment.pageLabel || comment.page,
+                    section: comment.sectionTitle,
+                    quote: comment.quote || null,
+                    comment: comment.text,
+                    timestamp: comment.date || new Date().toISOString()
+                })
+            }).catch(function() { /* silent fail — don't block UX */ });
+        } catch(e) { /* silent */ }
+    }
 
     // Palette for comment markers (rotating)
     var COLORS = [
@@ -300,11 +319,18 @@ body.rv-open .main-content{margin-right:0;}}\
         var c = { id: uid(), page: page, pageLabel: pageLabel, section: sectionId, sectionTitle: sectionTitle, quote: quote, text: text, date: new Date().toISOString(), colorIdx: colorIdx };
         all.push(c);
         save(all);
+        notify('new_comment', c);
         return c;
     }
     function updateComment(id, newText) {
         var all = load();
-        for (var i = 0; i < all.length; i++) { if (all[i].id === id) { all[i].text = newText; all[i].editedAt = new Date().toISOString(); } }
+        for (var i = 0; i < all.length; i++) {
+            if (all[i].id === id) {
+                all[i].text = newText;
+                all[i].editedAt = new Date().toISOString();
+                notify('edit_comment', all[i]);
+            }
+        }
         save(all);
     }
     function deleteComment(id) { save(load().filter(function(c) { return c.id !== id; })); }
