@@ -319,36 +319,95 @@ li { margin-bottom: 6px; }
 <p>The platform has four layers: channel ingest (leads from SAP, website, LinkedIn), the core processing pipeline (scoring, drafting, routing), email sending via SMTP, and a unified dashboard for approvals and conversation management. Zoho CRM receives event updates as a record of activity but is not the working interface.</p>
 <p>Lead nurturing is the first use case. The architecture is designed so the same layers handle future use cases (invoice routing, compliance emails) by adding new ingest channels and processing rules without rebuilding the core.</p>
 
-<div class="arch-diagram">
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-        <span class="arch-node arch-node-orange">A0 LinkedIn</span>
-        <span style="color:var(--text2);font-size:13px;">&#8628;</span>
+<div class="arch-diagram" style="padding:0;overflow:hidden;background:transparent;border:none;">
+
+    <!-- Row 1: Section label -->
+    <div style="background:var(--surface2);padding:8px 16px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);border-bottom:1px solid var(--border);">
+        1. Leads come in
     </div>
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-        <span class="arch-node arch-node-green">A1 Website</span>
-        <span style="color:var(--text2);padding:0 8px;font-size:18px;">&#8594;</span>
-        <span class="arch-node arch-node-blue">A3 Pipeline</span>
-        <span style="color:var(--text2);padding:0 8px;font-size:18px;">&#8594;</span>
-        <span class="arch-node arch-node-green">SMTP Send</span>
+    <!-- Row 1: Channels -->
+    <div style="display:flex;gap:10px;padding:16px;flex-wrap:wrap;background:var(--surface);border-bottom:1px solid var(--border);">
+        <span class="arch-node arch-node-blue">SAP Discovery Center</span>
+        <span class="arch-node arch-node-purple">SAP Store</span>
+        <span class="arch-node arch-node-green">Website Forms</span>
+        <span class="arch-node arch-node-orange">LinkedIn</span>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-        <span class="arch-node arch-node-blue">A2 SAP</span>
-        <span style="color:var(--text2);font-size:13px;">&#8629;</span>
-        <span style="color:var(--text2);padding:0 40px;"></span>
-        <span class="arch-node arch-node-purple">A4 Reply Monitor</span>
-        <span style="color:var(--text2);padding:0 8px;font-size:18px;">&#8594;</span>
+
+    <!-- Arrow -->
+    <div style="text-align:center;padding:8px 0;color:var(--text2);font-size:20px;background:var(--bg);">&#8595;</div>
+
+    <!-- Row 2: Section label -->
+    <div style="background:var(--surface2);padding:8px 16px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);border-bottom:1px solid var(--border);border-top:1px solid var(--border);">
+        2. Pipeline processes each lead
+    </div>
+    <!-- Row 2: Pipeline steps -->
+    <div style="display:flex;align-items:center;gap:6px;padding:16px;flex-wrap:wrap;background:var(--surface);border-bottom:1px solid var(--border);">
+        <span class="arch-node arch-node-blue">Normalize</span>
+        <span style="color:var(--text2);">&#8594;</span>
+        <span class="arch-node arch-node-blue">Score</span>
+        <span style="color:var(--text2);">&#8594;</span>
+        <span class="arch-node arch-node-blue">Enrich</span>
+        <span style="color:var(--text2);">&#8594;</span>
+        <span class="arch-node arch-node-blue">AI Draft</span>
+        <span style="color:var(--text2);">&#8594;</span>
+        <span class="arch-node arch-node-purple">HITL Review</span>
+    </div>
+
+    <!-- Arrow -->
+    <div style="text-align:center;padding:8px 0;color:var(--text2);font-size:20px;background:var(--bg);">&#8595;</div>
+
+    <!-- Row 3: Section label -->
+    <div style="background:var(--surface2);padding:8px 16px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);border-bottom:1px solid var(--border);border-top:1px solid var(--border);">
+        3. Approved responses go out
+    </div>
+    <!-- Row 3: Send -->
+    <div style="display:flex;align-items:center;gap:10px;padding:16px;flex-wrap:wrap;background:var(--surface);border-bottom:1px solid var(--border);">
+        <span class="arch-node arch-node-green">Send via SMTP</span>
+        <span style="color:var(--text2);font-size:12px;">from Dirk's email, preserving thread history</span>
+    </div>
+
+    <!-- Arrow (loop back) -->
+    <div style="text-align:center;padding:8px 0;color:var(--text2);font-size:20px;background:var(--bg);">&#8595; lead replies? &#8595;</div>
+
+    <!-- Row 4: Section label -->
+    <div style="background:var(--surface2);padding:8px 16px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);border-bottom:1px solid var(--border);border-top:1px solid var(--border);">
+        4. Replies detected and escalated
+    </div>
+    <!-- Row 4: Reply monitoring -->
+    <div style="display:flex;align-items:center;gap:6px;padding:16px;flex-wrap:wrap;background:var(--surface);border-bottom:1px solid var(--border);">
+        <span class="arch-node arch-node-purple">Outlook Auto-Forward</span>
+        <span style="color:var(--text2);">&#8594;</span>
+        <span class="arch-node arch-node-purple">Reply Monitor</span>
+        <span style="color:var(--text2);">&#8594;</span>
         <span class="arch-node arch-node-orange">Human Review</span>
+        <span style="color:var(--text2);font-size:12px;">(no automated second response, ever)</span>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
-        <span class="arch-node arch-node-purple" style="opacity:.7">Dashboard</span>
-        <span style="color:var(--text2);padding:0 8px;font-size:13px;">&#8596;</span>
-        <span style="color:var(--text2);font-size:12px;">Approvals, conversation history, lead status</span>
-        <span style="color:var(--text2);padding:0 16px;font-size:13px;">|</span>
-        <span class="arch-node arch-node-blue" style="opacity:.7">Zoho CRM</span>
-        <span style="color:var(--text2);padding:0 8px;font-size:13px;">&#8592;</span>
-        <span style="color:var(--text2);font-size:12px;">Event log (read-only repository)</span>
+
+    <!-- Separator -->
+    <div style="padding:12px 16px;background:var(--bg);border-top:2px solid var(--border);border-bottom:1px solid var(--border);">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin-bottom:8px;">Supporting systems</div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span class="arch-node arch-node-green" style="font-size:11px;padding:6px 10px;">Dashboard</span>
+                <span style="color:var(--text2);font-size:12px;">Working interface for all approvals and conversation tracking</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span class="arch-node arch-node-blue" style="font-size:11px;padding:6px 10px;">Zoho CRM</span>
+                <span style="color:var(--text2);font-size:12px;">Receives event updates as a read-only log</span>
+            </div>
+        </div>
     </div>
-    <p class="arch-label" style="margin-top:14px;">Ingest layer normalizes each source. Pipeline handles scoring, AI drafting, and HITL routing. Emails sent via SMTP from Dirk's account. Dashboard is the working interface; Zoho CRM is the event record.</p>
+
+    <!-- Scope section -->
+    <div style="padding:14px 16px;background:var(--orange-bg);border-top:2px solid color-mix(in srgb, var(--orange) 30%, var(--border));">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--orange-dark);margin-bottom:6px;">Same architecture, more use cases</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <span style="background:var(--orange-light);color:var(--orange-dark);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;">Lead Nurturing (Phase 1-3)</span>
+            <span style="background:var(--orange-light);color:var(--orange-dark);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;">Invoice / AP Routing</span>
+            <span style="background:var(--orange-light);color:var(--orange-dark);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;">Compliance Emails</span>
+            <span style="background:var(--orange-light);color:var(--orange-dark);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;">LinkedIn Management</span>
+        </div>
+    </div>
 </div>
 
 <p>The design principle is separation of concerns: the ingest layer handles the messiness of each source channel (different email formats, different webhook payloads) so that A3 always works with clean, consistent data. Adding a new channel or use case means adding a new ingest workflow, not changing the pipeline.</p>
