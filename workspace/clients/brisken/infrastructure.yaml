@@ -1,30 +1,36 @@
 type: client
 
 platform:
-  tier: "unknown"              # confirm with client
+  tier: "unknown"              # operations budget TBD — custom app build, not a workflow-engine op count
   feasibility: "unassessed"    # must complete before /build-automation
   blockers:
-    - "Platform choice undecided (n8n vs Firebase/Firestore vs custom)"
+    - "Platform build scope + sequencing (Phase 1 vs broader app) to confirm on call"
     - "Upwork contract not yet set up"
   assessed: null
-  notes: >
-    Scope expanded 2026-04-10 call: "universal communicator" platform, not just 5 n8n workflows.
-    Lead nurturing is Phase 1. Invoice/AP, compliance, LinkedIn management planned as same-platform use cases.
-    Dirk suggested Firebase/Firestore. Evaluating n8n vs Firebase vs custom code.
-    Dirk not interested in n8n UI — wants outcomes only. Multi-tenant, auth/RLS required.
-    IP owned by Dirk, potential to productize. Route through Upwork for reference job.
-  platform_decision: "OPEN"    # n8n | firebase | custom — resolve before build
+  direction: >
+    2026-04-13 scope-site review (Dirk): direction is a **custom multi-tenant SaaS app**
+    framed as a unified-inbox communication tool (Outlook-like) with channel filtering,
+    Drafts / Outbox / Sent views, and a basic built-in CRM (contacts + companies).
+    Not n8n (explicit). Firebase not ruled out but Dirk's product depth (mini-CRM,
+    unified SMTP capture, markdown normalisation, activity logging) leans toward
+    custom backend. Confirm on platform call.
+  hard_requirements:
+    - "Multi-tenant SaaS from day 1 (no local/laptop deployment)"
+    - "GDPR compliant"
+    - "Activity logging (audit trail for all events)"
+  open_questions:
+    - "Mini-CRM built-in vs federated with external CRM -- data duplication tradeoff (Dirk is deciding)"
+    - "Unified SMTP mail capture (run app as mail client) vs Outlook auto-forward only"
+    - "Markdown normalisation of all inbound/outbound messages (store original + MD + metadata)"
+    - "Conversation-history lookup at ingest vs Stage 1 of A3 (Dirk leans toward A3 Stage 1)"
+  platform_decision: "NARROWED"   # not n8n; custom SaaS app direction; Firebase vs full-custom still open
   upwork_routing: true         # Dirk creating Brisken Upwork account to post job
+  notes: >
+    Scope evolution:
+    2026-04-10 call: "universal communicator" platform, not just 5 n8n workflows.
+    2026-04-13 scope review: firmed up as unified-inbox app with channel filtering,
+    built-in mini-CRM, HITL-first routing, activity logging, and GDPR requirements.
+    The five automations (A0-A4) become behaviours inside this app, not standalone workflows.
 
-# Placeholder — update once platform decision is made
-instances:
-  - type: n8n
-    name: n8n-brisken
-    hosting: TBD               # cloud or self-hosted — confirm with client
-    api_url: TBD               # n8n instance URL
-    api_key_env: "N8N_API_KEY_BRISKEN"
-    mcp_server: n8n-brisken    # MCP server name in .mcp.json
-    workflows: []
-    credentials: []
-    tags: []
-    status: "provisional — depends on platform decision"
+# Placeholder — platform instance(s) will be populated after platform call
+instances: []

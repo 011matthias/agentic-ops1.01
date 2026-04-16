@@ -298,6 +298,14 @@ li { margin-bottom: 6px; }
 @media (max-width: 480px) {
     .zones-4 { grid-template-columns: 1fr; }
 }
+/* Update banner + change chip (added 2026-04-16, post scope-review) */
+.update-banner { background: var(--orange-bg); border: 1px solid color-mix(in srgb, var(--orange) 25%, var(--border)); border-radius: 8px; padding: 10px 16px; margin-bottom: 24px; font-size: 13px; color: var(--orange-dark); display: flex; align-items: center; gap: 8px; }
+.update-banner-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); flex-shrink: 0; }
+.update-banner a { color: var(--orange-dark); font-weight: 700; text-decoration: underline; }
+.update-banner a:hover { text-decoration: none; }
+.change-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--orange-bg); color: var(--orange-dark); border-radius: 10px; padding: 2px 8px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-left: 8px; vertical-align: middle; text-decoration: none !important; border: 1px solid color-mix(in srgb, var(--orange) 30%, var(--border)); transition: background .15s; }
+.change-chip:hover { background: color-mix(in srgb, var(--orange) 15%, var(--orange-bg)); }
+.change-chip-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--orange); }
 </style>
 <script>
 (function(){var t=localStorage.getItem('brisken-lead-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
@@ -329,6 +337,8 @@ li { margin-bottom: 6px; }
         <a href="/clients/brisken-lead-automation/solution">Solution</a>
         <a href="/clients/brisken-lead-automation/timeline">Timeline</a>
         <a href="/clients/brisken-lead-automation/faq">FAQ</a>
+        <a href="/clients/brisken-lead-automation/dashboard">Dashboard</a>
+        <a href="/clients/brisken-lead-automation/changelog">Change Log</a>
     </div>
     <div class="nav-right">
         <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Scoping</span>
@@ -433,8 +443,9 @@ li { margin-bottom: 6px; }
 </ul>
 
 <!-- The Channels -->
-<h2 id="channels">Lead Channels</h2>
+<h2 id="channels">Lead Channels <a href="/clients/brisken-lead-automation/changelog#entry-2026-04-16" class="change-chip"><span class="change-chip-dot"></span>Updated 2026-04-16</a></h2>
 <p>Four ingest sources for lead nurturing (the first use case). Each channel feeds into the same unified pipeline and dashboard.</p>
+<p style="background:var(--surface);border-left:3px solid var(--orange);padding:12px 16px;font-size:14px;color:var(--text);margin:0 0 20px;border-radius:0 6px 6px 0;"><strong>Classification is configurable per channel and learns from your reviews.</strong> Each channel has its own weight set rather than a single shared table. Every HITL decision (approve / edit / reject) is logged as training signal that feeds future weight adjustment. <a href="/clients/brisken-lead-automation/changelog#entry-2026-04-16" style="color:var(--orange-dark);font-weight:600;">See why this changed</a>.</p>
 
 <div class="zones-4">
     <div class="zone zone-blue">
@@ -442,10 +453,10 @@ li { margin-bottom: 6px; }
         <div class="zone-title">SAP Discovery Center</div>
         <div class="zone-sub">Email forwarding &middot; Higher volume</div>
         <ul class="zone-items">
-            <li>Context: specific use case / mission</li>
-            <li>Intake: email polling (forwarded notifications)</li>
-            <li>Parsed from inbound email body</li>
+            <li>Context: specific use case / "mission" the user started</li>
+            <li><strong>Intake method:</strong> Outlook auto-forward rule sends SAP notification emails to a monitored mailbox. System polls every 10 min, parses sender + body to extract lead data.</li>
             <li>Higher lead volume, mixed quality</li>
+            <li>Scoring bonus: +1 (use case context)</li>
         </ul>
     </div>
     <div class="zone zone-purple">
@@ -453,10 +464,10 @@ li { margin-bottom: 6px; }
         <div class="zone-title">SAP Store</div>
         <div class="zone-sub">Email forwarding &middot; Higher value</div>
         <ul class="zone-items">
-            <li>Context: specific product inquiry</li>
-            <li>Intake: email polling (forwarded notifications)</li>
-            <li>Rarer but highest intent signal</li>
-            <li>Strongest scoring weight (+5)</li>
+            <li>Context: specific product inquiry from SAP App Store</li>
+            <li><strong>Intake method:</strong> Same auto-forward + poll pattern as Discovery Center. System identifies SAP Store emails by sender/subject patterns and extracts product context.</li>
+            <li>Rarer but highest commercial intent</li>
+            <li>Scoring bonus: +5 (strongest channel weight)</li>
         </ul>
     </div>
     <div class="zone zone-green">
@@ -464,10 +475,10 @@ li { margin-bottom: 6px; }
         <div class="zone-title">Website / Landing Pages</div>
         <div class="zone-sub">Webhook &middot; Real-time</div>
         <ul class="zone-items">
-            <li>Context: landing page, form category, user selections</li>
-            <li>Intake: webhook from Wix form tool</li>
+            <li>Context: landing page URL, form category, user-selected options</li>
+            <li><strong>Intake method:</strong> Wix form fires HTTP POST (webhook) on submission. Real-time capture, no polling delay. Each form type (article, landing page, contact) sends different fields.</li>
             <li>Different categories per entry point</li>
-            <li>Real-time capture</li>
+            <li>Scoring bonus: +0 (baseline)</li>
         </ul>
     </div>
     <div class="zone zone-orange">
@@ -475,10 +486,10 @@ li { margin-bottom: 6px; }
         <div class="zone-title">LinkedIn</div>
         <div class="zone-sub">API read or manual &middot; To be validated</div>
         <ul class="zone-items">
-            <li>Context: campaign name or generic message</li>
-            <li>Intake: API read or manual capture</li>
-            <li>API restrictions under review</li>
-            <li>Manual fallback if needed</li>
+            <li>Context: campaign name (targeted) or generic message</li>
+            <li><strong>Intake method:</strong> If API access is approved: Lead Gen Forms API polls for new submissions. If restricted: manual copy-paste from LinkedIn into the dashboard (pre-built input form).</li>
+            <li>API restrictions under active review</li>
+            <li>Scoring bonus: +1 (campaign) / +0 (generic)</li>
         </ul>
     </div>
 </div>
@@ -606,19 +617,19 @@ li { margin-bottom: 6px; }
     </div>
 </div>
 
-<!-- Download Template -->
-<h2 id="download">Download: Lead Scoring Template</h2>
+<!-- Scoring Logic Demo (repurposed from n8n download 2026-04-16) -->
+<h2 id="download">Scoring Logic Demo <a href="/clients/brisken-lead-automation/changelog#entry-2026-04-16" class="change-chip"><span class="change-chip-dot"></span>Updated 2026-04-16</a></h2>
 
 <div class="download-box">
-    <h3>n8n Workflow: Lead Scoring and Routing</h3>
-    <p>Import this n8n workflow to see the lead scoring pattern in action. It accepts lead data via webhook, normalizes it to the standard schema, scores based on information quality (company email, message detail, SAP Store source), and routes high-value leads to a review queue. Connect your destination system (Google Sheets, CRM, or email) after the routing step.</p>
-    <a href="/clients/brisken-lead-automation/brisken-lead-scoring-template.json" class="download-btn" download>Download n8n Template (.json)</a>
+    <h3>Try the interactive scoring demo</h3>
+    <p>An earlier version of this page offered a downloadable n8n template here. We've removed it following your "no n8n, please" note. The scoring logic itself still applies; you can test it live on the Solution page with different lead profiles and channel sources, and see the tier assignment update as you change inputs.</p>
+    <a href="/clients/brisken-lead-automation/solution#scoring-demo" class="download-btn">Open the interactive demo &rarr;</a>
 </div>
 
-<p>This is a working template, not a mockup. Import it into any n8n instance via Settings > Import Workflow. The scoring logic matches the criteria from the project spec: free email addresses score low, company domains score high, and SAP Store leads get a bonus signal. Adjust the thresholds and free provider list to match your environment.</p>
+<p>The scoring rules shown in the demo are the same ones that will ship: free email domains score low, company domains and message detail score higher, SAP Store provides the strongest channel bonus, and weights are stored in a config table that can be tuned without code changes.</p>
 
 <!-- Open Investigation Items -->
-<h2 id="open-items">Open Investigation Items</h2>
+<h2 id="open-items">Open Investigation Items <a href="/clients/brisken-lead-automation/changelog#entry-2026-04-16" class="change-chip"><span class="change-chip-dot"></span>Updated 2026-04-16</a></h2>
 <p>These are items from our scoping discussion that need further research before finalizing the architecture. Each one will be evaluated and reported back with a recommendation.</p>
 
 <table style="width:100%;border-collapse:collapse;margin:24px 0;font-size:13px;">
@@ -631,14 +642,34 @@ li { margin-bottom: 6px; }
     </thead>
     <tbody>
         <tr>
-            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);">Platform choice</td>
-            <td style="padding:10px 14px;border-bottom:1px solid var(--border);">Evaluate n8n vs Firebase/Cloud Firestore vs custom code. Trade-offs: development speed, dashboard capabilities, multi-tenant readiness, ongoing cost.</td>
-            <td style="padding:10px 14px;border-bottom:1px solid var(--border);"><span style="background:var(--orange-bg);color:var(--orange-dark);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Evaluating</span></td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);">Lead scoring and classification</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);">4-tier model defined: SPAM / Low / Medium / High. Numeric weights per signal, channel bonuses per source. Configurable via data store. See <a href="/clients/brisken-lead-automation/solution#scoring" style="color:var(--blue);">interactive scoring demo</a>. <em>Design decision pending:</em> channel multipliers (1.3x) vs flat bonuses (+5).</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);"><span style="background:var(--green-bg);color:var(--green-dark);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Defined</span></td>
         </tr>
         <tr>
-            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);background:var(--surface);">SMTP email sending</td>
-            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);">Confirm SMTP connection to Dirk's corporate email works from the chosen platform. Verify the automation can send as Dirk without requiring inbox access.</td>
-            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);"><span style="background:var(--orange-bg);color:var(--orange-dark);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Evaluating</span></td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);background:var(--surface);">CRM abstraction layer</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);">Standard events defined: CREATE_LEAD, UPDATE_STATUS, ADD_NOTE, LOG_EMAIL, SYNC_EXTERNAL_ID. Zoho CRM as async event log (not operational DB). Connector interface designed for CRM portability.</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);"><span style="background:var(--green-bg);color:var(--green-dark);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Defined</span></td>
+        </tr>
+        <tr>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);">HITL review gates</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);"><strong>Phase 1: all tiers through HITL by default.</strong> Auto-send is an opt-in that can be switched on per tier or per score band later, once drafting quality earns trust. All replies (second responses) stay in HITL regardless of tier. Reversed from the earlier tier-based auto-send default after your 2026-04-13 note. <a href="/clients/brisken-lead-automation/changelog#entry-2026-04-16" style="color:var(--blue);">See change</a>.</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);"><span style="background:var(--green-bg);color:var(--green-dark);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Defined</span></td>
+        </tr>
+        <tr>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);background:var(--surface);">Platform choice</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);">n8n ruled out per your 2026-04-13 note ("no n8n, please"). Remaining options: custom multi-tenant SaaS backend vs Firebase/Firestore. The mini-CRM + activity log + HITL dashboard requirements lean toward custom, but Firebase remains on the table for auth and multi-tenant primitives. Decision matrix ready for the call.</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);"><span style="background:var(--orange-bg);color:var(--orange-dark);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Ready to discuss</span></td>
+        </tr>
+        <tr>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);">SMTP email sending</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);">Architecture confirmed: SMTP via Dirk's personal @brisken.com credentials. No inbox access. Thread preservation via In-Reply-To + References headers (RFC 5322). Implementation depends on platform choice.</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);"><span style="background:var(--green-bg);color:var(--green-dark);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Confirmed</span></td>
+        </tr>
+        <tr>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);background:var(--surface);">Reply capture architecture</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);"><strong>Baseline:</strong> Outlook auto-forward to a monitored mailbox; system polls, matches via Message-ID / In-Reply-To headers, stops follow-ups, routes to HITL. <strong>Under consideration (your 2026-04-13 note):</strong> unified SMTP-based mail capture that replaces auto-forward and also handles non-lead channels. Decision tied to the platform call.</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);"><span style="background:var(--orange-bg);color:var(--orange-dark);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Under review</span></td>
         </tr>
         <tr>
             <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);">LinkedIn API restrictions</td>
@@ -646,34 +677,39 @@ li { margin-bottom: 6px; }
             <td style="padding:10px 14px;border-bottom:1px solid var(--border);"><span style="background:var(--orange-bg);color:var(--orange-dark);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Evaluating</span></td>
         </tr>
         <tr>
-            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);background:var(--surface);">Reply capture architecture</td>
-            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);">Current plan: Outlook auto-forward to a monitored mailbox. Investigating whether a more elegant solution exists that avoids the middleman pattern, especially for multi-reply threads.</td>
-            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);"><span style="background:var(--orange-bg);color:var(--orange-dark);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Evaluating</span></td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);background:var(--surface);">Hosting approach</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);">Multi-tenant SaaS, cloud-hosted, from day 1 (your 2026-04-13 note). Self-hosted / local deployment ruled out. Region and data-residency choice slots into the GDPR workstream below.</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);"><span style="background:var(--green-bg);color:var(--green-dark);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Confirmed</span></td>
         </tr>
         <tr>
-            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);">Hosting approach</td>
-            <td style="padding:10px 14px;border-bottom:1px solid var(--border);">Cloud-hosted vs self-hosted for the chosen platform. Factors: data sovereignty, cost at current volume, maintenance burden, scaling path.</td>
-            <td style="padding:10px 14px;border-bottom:1px solid var(--border);"><span style="background:var(--orange-bg);color:var(--orange-dark);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Evaluating</span></td>
-        </tr>
-        <tr>
-            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);background:var(--surface);">Multi-thread edge cases</td>
-            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);">How to handle concurrent replies from the same lead (e.g., "not interested" in one thread, "tell me more" in another). Need a conflict resolution strategy.</td>
-            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);"><span style="background:var(--blue-bg);color:var(--blue);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Design phase</span></td>
-        </tr>
-        <tr>
-            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);">Email reputation safeguards</td>
-            <td style="padding:10px 14px;border-bottom:1px solid var(--border);">Research blacklist risk for the planned follow-up cadence. Define maximum follow-up frequency and opt-out detection to protect Brisken's sender reputation.</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);">Multi-thread edge cases</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);">How to handle concurrent replies from the same lead (e.g., "not interested" in one thread, "tell me more" in another). Need a conflict resolution strategy.</td>
             <td style="padding:10px 14px;border-bottom:1px solid var(--border);"><span style="background:var(--blue-bg);color:var(--blue);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Design phase</span></td>
         </tr>
         <tr>
-            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);background:var(--surface);">Website form integration</td>
-            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);">Determine form tool (Wix, Tally, custom) and whether it supports webhook endpoints or direct database connection. Either path works; need to confirm which.</td>
-            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);"><span style="background:var(--purple-bg);color:var(--purple);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Needs input</span></td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);background:var(--surface);">Email reputation safeguards</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);">Research blacklist risk for the planned follow-up cadence. Define maximum follow-up frequency and opt-out detection to protect Brisken's sender reputation.</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);"><span style="background:var(--blue-bg);color:var(--blue);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Design phase</span></td>
         </tr>
         <tr>
-            <td style="padding:10px 14px;font-weight:600;color:var(--text-strong);">Zoho CRM configuration</td>
-            <td style="padding:10px 14px;">Confirm Zoho can handle automated event writes at the needed granularity (lead created, email sent, reply received, lead closed). Map fields and determine API approach.</td>
-            <td style="padding:10px 14px;"><span style="background:var(--purple-bg);color:var(--purple);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Needs input</span></td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);">Website form integration</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);">Determine form tool (Wix, Tally, custom) and whether it supports webhook endpoints or direct database connection. Either path works; need to confirm which.</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);"><span style="background:var(--purple-bg);color:var(--purple);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Needs input</span></td>
+        </tr>
+        <tr>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);background:var(--surface);">Zoho CRM configuration</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);">CRM abstraction layer designed. Zoho acts as async event log via REST API v8. Standard events (CREATE_LEAD, LOG_EMAIL, etc.) write to Zoho Leads module. Field mapping defined. Need: Zoho API credentials and confirmation of custom field availability.</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface);"><span style="background:var(--orange-bg);color:var(--orange-dark);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Partially defined</span></td>
+        </tr>
+        <tr>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text-strong);">GDPR compliance <span style="background:var(--orange-bg);color:var(--orange-dark);padding:1px 6px;border-radius:8px;font-size:10px;font-weight:700;margin-left:4px;">NEW</span></td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);">Hard requirement, not nice-to-have (your 2026-04-13 note). Scope covers: retention policy for lead data and email threads, right-to-delete flow, EU-region data residency, DPA between Brisken and any subprocessors (AI provider, CRM, hosting). Implementation details depend on platform choice.</td>
+            <td style="padding:10px 14px;border-bottom:1px solid var(--border);"><span style="background:var(--orange-bg);color:var(--orange-dark);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">To scope</span></td>
+        </tr>
+        <tr>
+            <td style="padding:10px 14px;font-weight:600;color:var(--text-strong);background:var(--surface);">Activity logging &middot; audit trail <span style="background:var(--orange-bg);color:var(--orange-dark);padding:1px 6px;border-radius:8px;font-size:10px;font-weight:700;margin-left:4px;">NEW</span></td>
+            <td style="padding:10px 14px;background:var(--surface);">Every event (send, draft, approval, edit, rejection, reply) is captured in an activity log. Two jobs: audit trail for compliance and training signal for the learning classifier. Added as a first-class requirement per your 2026-04-13 note.</td>
+            <td style="padding:10px 14px;background:var(--surface);"><span style="background:var(--green-bg);color:var(--green-dark);padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">Defined</span></td>
         </tr>
     </tbody>
 </table>

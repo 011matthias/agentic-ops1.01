@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Change Log: Brisken Automation Platform | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+
+/* Access Gate */
+.access-gate { position: fixed; inset: 0; z-index: 9999; background: var(--bg); display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; transition: opacity .3s; }
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input { padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px; font-size: 15px; width: 240px; background: var(--surface); color: var(--text); outline: none; transition: border-color .15s; }
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button { padding: 10px 24px; background: var(--blue); color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background .15s; }
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+
+/* Navigation */
+.site-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: var(--nav-bg); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s; }
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a { font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px; color: var(--text2); text-decoration: none; transition: background .15s, color .15s; }
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; background: var(--blue-light); color: var(--blue); }
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 13px; color: var(--text2); transition: background .15s; }
+.nav-theme:hover { background: var(--border); }
+
+/* Sidebar */
+.sidebar { position: fixed; top: 56px; left: 0; width: 220px; height: calc(100vh - 56px); overflow-y: auto; background: var(--nav-bg); border-right: 1px solid var(--border); padding: 20px 0; z-index: 50; transition: transform .25s, background .2s; }
+.sidebar-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px; }
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link { display: flex; align-items: center; gap: 10px; padding: 8px 16px; font-size: 13px; font-weight: 500; color: var(--text2); text-decoration: none; transition: all .15s; border-left: 3px solid transparent; }
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2); flex-shrink: 0; transition: all .15s; }
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line { position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px); background: var(--border); }
+.step-item:last-child .step-line { display: none; }
+
+/* Main Content */
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+
+/* Hero */
+.hero { text-align: center; padding: 48px 0 40px; border-bottom: 1px solid var(--border); margin-bottom: 48px; }
+.hero-badge { display: inline-flex; align-items: center; gap: 6px; background: var(--orange-bg); color: var(--orange-dark); border-radius: 20px; padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 16px; }
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 580px; margin: 0 auto; line-height: 1.6; }
+
+/* Update banner (shared across pages; included here so the changelog looks the same) */
+.update-banner { background: var(--orange-bg); border: 1px solid color-mix(in srgb, var(--orange) 25%, var(--border)); border-radius: 8px; padding: 10px 16px; margin-bottom: 24px; font-size: 13px; color: var(--orange-dark); display: flex; align-items: center; gap: 8px; }
+.update-banner-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); flex-shrink: 0; }
+.update-banner a { color: var(--orange-dark); font-weight: 700; text-decoration: underline; }
+.update-banner a:hover { text-decoration: none; }
+
+/* Change chip (used inline next to edited section headings on other pages) */
+.change-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--orange-bg); color: var(--orange-dark); border-radius: 10px; padding: 2px 8px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-left: 8px; vertical-align: middle; text-decoration: none !important; border: 1px solid color-mix(in srgb, var(--orange) 30%, var(--border)); transition: background .15s; }
+.change-chip:hover { background: color-mix(in srgb, var(--orange) 15%, var(--orange-bg)); }
+.change-chip-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--orange); }
+
+/* Sections */
+h2 { font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue); padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px; }
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+
+/* Change entry (one per revision date) */
+.entry { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px 32px; margin: 24px 0; scroll-margin-top: 80px; }
+.entry-header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
+.entry-date { font-size: 20px; font-weight: 800; color: var(--text-strong); letter-spacing: -.01em; }
+.entry-kind { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 3px 10px; border-radius: 12px; background: var(--orange-bg); color: var(--orange-dark); }
+.entry-summary { font-size: 14px; color: var(--text2); margin-bottom: 24px; line-height: 1.6; }
+
+.change-group { margin: 20px 0 0; padding-top: 20px; border-top: 1px solid var(--border); }
+.change-group:first-of-type { border-top: none; padding-top: 0; }
+.change-group h4 { font-size: 12px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: .06em; margin: 0 0 14px; }
+.change-item { margin-bottom: 18px; padding-left: 14px; border-left: 3px solid var(--orange); }
+.change-item:last-child { margin-bottom: 0; }
+.change-item-what { font-size: 14px; font-weight: 600; color: var(--text-strong); margin-bottom: 4px; }
+.change-item-where { font-size: 12px; color: var(--text2); margin-bottom: 8px; }
+.change-item-where a { color: var(--blue); }
+.change-item-quote { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; font-size: 13px; color: var(--text); font-style: italic; position: relative; margin-top: 6px; }
+.change-item-quote::before { content: '"'; position: absolute; top: -4px; left: 8px; font-size: 32px; line-height: 1; color: var(--orange); font-style: normal; font-family: Georgia, serif; }
+.change-item-quote-body { padding-left: 14px; }
+.change-item-src { font-size: 11px; color: var(--text2); margin-top: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+.callout { border-left: 4px solid var(--blue); background: var(--blue-bg); padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0; }
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); }
+
+@media (max-width: 1100px) { .nav-links a { font-size: 12px; padding: 5px 8px; } .nav-status { display: none; } }
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .hero h1 { font-size: 24px; }
+    .entry { padding: 20px 18px; }
+}
+</style>
+<script>
+(function(){var t=localStorage.getItem('brisken-lead-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<div class="access-gate" id="accessGate">
+    <h2>Project Access</h2>
+    <p>This project scope was prepared for Brisken. Enter the access code to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/brisken-lead-automation/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Brisken Automation Platform</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/brisken-lead-automation/">Overview</a>
+        <a href="/clients/brisken-lead-automation/solution">Solution</a>
+        <a href="/clients/brisken-lead-automation/timeline">Timeline</a>
+        <a href="/clients/brisken-lead-automation/faq">FAQ</a>
+        <a href="/clients/brisken-lead-automation/dashboard">Dashboard</a>
+        <a href="/clients/brisken-lead-automation/changelog" class="active">Change Log</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Scoping</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<aside class="sidebar">
+    <div class="sidebar-label">Revisions</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#about" class="step-link active"><span class="step-num">&#9432;</span> About this log</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#entry-2026-04-16" class="step-link"><span class="step-num">1</span> 2026-04-16 &middot; Post-review update</a>
+        </li>
+    </ul>
+</aside>
+
+<div class="main-content">
+<div class="content-inner">
+
+<section class="hero">
+    <div class="hero-badge">CHANGE LOG</div>
+    <h1>What changed, and why</h1>
+    <p class="hero-sub">A running record of revisions to this scope document. Each entry cites the source of the change so you can trace what we heard and how the spec moved in response.</p>
+</section>
+
+<h2 id="about">About this log</h2>
+<p>This page tracks every substantive revision to the scope document. For each change we list what moved, where (which page / which section), and what prompted it, quoting the source comment or call note verbatim so there is no ambiguity about what was said. Most entries will cite your feedback directly; where a change is internally driven (new research, spec refinement), we mark it as such.</p>
+<p>Entries are ordered newest first. Inline on the other pages, you will see an <span class="change-chip" style="margin: 0;"><span class="change-chip-dot"></span>Updated [date]</span> chip next to headings that were touched in the most recent entry. Click the chip to jump here.</p>
+
+<div class="callout">
+    <div class="callout-title">On your existing scope-site comments</div>
+    <p>Your 23 comments from the 2026-04-13 review are preserved verbatim in the project record (see the entry below for how). Since this update rewords some of the text you originally highlighted, your browser-side review sidebar may show a few highlights that no longer line up with the current text. That is expected -- the canonical record is on our side, nothing is lost.</p>
+</div>
+
+<div class="entry" id="entry-2026-04-16">
+    <div class="entry-header">
+        <div class="entry-date">2026-04-16</div>
+        <span class="entry-kind">Post-review update</span>
+    </div>
+    <p class="entry-summary">Incorporating your 2026-04-13 scope-site review (23 comments in an 86-minute session). Changes cluster into four areas: platform decisions, A3 pipeline mechanics, product-direction inputs, and three site bugs you flagged. Every change below cites the exact comment that drove it.</p>
+
+    <div class="change-group">
+        <h4>Platform decisions &middot; settled</h4>
+
+        <div class="change-item">
+            <div class="change-item-what">Not n8n.</div>
+            <div class="change-item-where">Reflected on <a href="/clients/brisken-lead-automation/#download">Overview &middot; Download</a> and <a href="/clients/brisken-lead-automation/#open-items">Open Items</a>. n8n template offer removed; platform table narrowed to custom SaaS vs Firebase.</div>
+            <div class="change-item-quote"><div class="change-item-quote-body">no n8n, please.</div></div>
+            <div class="change-item-src">Overview / Download &middot; logId 857f93558c77e2099d0dd214e7377000</div>
+        </div>
+
+        <div class="change-item">
+            <div class="change-item-what">Multi-tenant SaaS from day 1 (self-hosted ruled out).</div>
+            <div class="change-item-where">Reflected on <a href="/clients/brisken-lead-automation/#open-items">Overview &middot; Open Items</a>. Hosting row updated from "evaluating" to "multi-tenant SaaS, cloud-hosted, confirmed".</div>
+            <div class="change-item-quote"><div class="change-item-quote-body">when you say self-hosted, you mean running it local on laptop? Then, no - not viable. But you already gave the answer - this must be running as a multi-tenant SaaS solution from day 1.</div></div>
+            <div class="change-item-src">Overview / Open Investigation Items &middot; logId b8906eba6cdc070718800348319d47d2</div>
+        </div>
+
+        <div class="change-item">
+            <div class="change-item-what">GDPR compliance is a hard requirement.</div>
+            <div class="change-item-where">Reflected on <a href="/clients/brisken-lead-automation/faq#privacy">FAQ &middot; Data and Privacy</a> and <a href="/clients/brisken-lead-automation/#open-items">Open Items</a> (added as a first-class row).</div>
+            <div class="change-item-quote"><div class="change-item-quote-body">extremely important - we must be GDPR compliant</div></div>
+            <div class="change-item-src">Overview / Open Investigation Items &middot; logId 9a885d2e55719b2b59820f1c074e5897</div>
+        </div>
+    </div>
+
+    <div class="change-group">
+        <h4>A3 pipeline &middot; mechanics</h4>
+
+        <div class="change-item">
+            <div class="change-item-what">HITL default reversed: all tiers through review in phase 1.</div>
+            <div class="change-item-where">Reflected on <a href="/clients/brisken-lead-automation/solution#follow-up">Solution &middot; Follow-Up Pipeline (A3)</a> and <a href="/clients/brisken-lead-automation/solution#data-flow">Solution &middot; Data Flow</a>. Auto-send is an opt-in toggle per tier, off by default. Phase 2 spec retains the option to turn it on per tier or per score band.</div>
+            <div class="change-item-quote"><div class="change-item-quote-body">initially all mail should go through the HITL. Later, user can switch off HITL by score/group.</div></div>
+            <div class="change-item-src">Solution / Data Flow &middot; logId be7cd26baa5dc9646f3d48cba3ec8060</div>
+        </div>
+
+        <div class="change-item">
+            <div class="change-item-what">Conversation-history lookup moved into Stage 1 of A3.</div>
+            <div class="change-item-where">Reflected on <a href="/clients/brisken-lead-automation/solution#ingest">Solution &middot; Ingest Layer</a> and <a href="/clients/brisken-lead-automation/solution#follow-up">Solution &middot; Follow-Up Pipeline (A3)</a>. Every incoming lead is matched against prior contact / customer / partner records before classification runs.</div>
+            <div class="change-item-quote"><div class="change-item-quote-body">should we not check for any conversation history at this point? Find out whether the lead did communicate with us previousy? is customer? what did we talk about? Maybe we can include this into Stage 1 of A3</div></div>
+            <div class="change-item-src">Solution / Ingest Layer &middot; logId 7b2615dee3fc179841761f750f1cbfb8 (edited)</div>
+        </div>
+
+        <div class="change-item">
+            <div class="change-item-what">Classification is per-channel, configurable, and learning.</div>
+            <div class="change-item-where">Reflected on <a href="/clients/brisken-lead-automation/#channels">Overview &middot; Lead Channels</a> and <a href="/clients/brisken-lead-automation/solution#scoring">Solution &middot; Scoring Demo</a>. Each channel has its own weight set. Every HITL decision (approve / edit / reject) is logged and becomes training signal for future weight adjustment.</div>
+            <div class="change-item-quote"><div class="change-item-quote-body">classification must be adjustable, configurable, learning... - for each channel, different criteria, more than just the channel itself...</div></div>
+            <div class="change-item-src">Overview / Lead Channels &middot; logId ac4e5e0387db3a9d948675705dc13065</div>
+        </div>
+
+        <div class="change-item">
+            <div class="change-item-what">Internal CRM lookup added to contact enrichment.</div>
+            <div class="change-item-where">Reflected on <a href="/clients/brisken-lead-automation/solution#data-flow">Solution &middot; Data Flow</a>. Enrichment now runs internal (built-in contact store) plus external (company website, LinkedIn) in parallel.</div>
+            <div class="change-item-quote"><div class="change-item-quote-body">Optional company lookup and/or CRM lookup</div></div>
+            <div class="change-item-src">Solution / Data Flow &middot; logId a791a12857de9c2399602a5c5a93bcf7</div>
+        </div>
+
+        <div class="change-item">
+            <div class="change-item-what">Activity logging is first-class.</div>
+            <div class="change-item-where">Reflected on <a href="/clients/brisken-lead-automation/solution#architecture">Solution &middot; Architecture</a> and <a href="/clients/brisken-lead-automation/#open-items">Overview &middot; Open Items</a>. Every event (send, draft, approval, rejection, reply) is captured in an audit log; feeds both the audit trail and the learning classifier.</div>
+            <div class="change-item-quote"><div class="change-item-quote-body">logging of all activities?</div></div>
+            <div class="change-item-src">Solution / Architecture Overview &middot; logId 374e5af8367dd32f4131ae4cf909bf61</div>
+        </div>
+
+        <div class="change-item">
+            <div class="change-item-what">A4 reply handling reframed as HITL, not "fully human".</div>
+            <div class="change-item-where">Reflected on <a href="/clients/brisken-lead-automation/solution#reply">Solution &middot; Reply Monitoring (A4)</a>. Corrected the wording that implied the AI steps out of the process; in practice AI drafts the follow-up and you approve it. Same mechanic as first-response HITL.</div>
+            <div class="change-item-quote"><div class="change-item-quote-body">again, this is not what we discussed - maybe, all second responses should always have the HITL....</div></div>
+            <div class="change-item-src">Solution / Reply Monitoring (A4) &middot; logId 9bc2cf0417583d1702f44f3b2d420873</div>
+        </div>
+
+        <div class="change-item">
+            <div class="change-item-what">Auto-responses are "suggested where appropriate", not prohibited.</div>
+            <div class="change-item-where">Reflected on <a href="/clients/brisken-lead-automation/solution#data-flow">Solution &middot; Data Flow</a>. Wording tightened: spam = silent discard with optional suggested response, not a hard "no auto-response".</div>
+            <div class="change-item-quote"><div class="change-item-quote-body">auto responses suggested where appropriate</div></div>
+            <div class="change-item-src">Solution / Data Flow &middot; logId be875cacbeb79aa08c4da7c47ff5ce08</div>
+        </div>
+    </div>
+
+    <div class="change-group">
+        <h4>Product direction &middot; inputs captured, full spec deferred</h4>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">These are the bigger-picture design inputs from your review. They reshape how the full product looks, not just A3. Captured here and in the project record; a dedicated product-spec page is deferred until after the platform call (custom vs Firebase) so we don't write it twice.</p>
+
+        <div class="change-item">
+            <div class="change-item-what">Product framing: unified-inbox app (Outlook-like) with channel filter, Drafts / Outbox / Sent views, column set you specified.</div>
+            <div class="change-item-where">Reflected lightly on <a href="/clients/brisken-lead-automation/solution#architecture">Solution &middot; Architecture</a> and <a href="/clients/brisken-lead-automation/dashboard">Dashboard</a>. Full architecture rewrite deferred to post-platform call.</div>
+            <div class="change-item-quote"><div class="change-item-quote-body">I would think of this a multi channel outlook client. unified inbox, showing the messages and their status and source channel ... Inbox columns: priority + read/reply status (unread, read, draft, sent) + classification + source + date + sender ... Drafts: here we handle the approvals ... OUTBOX: those approved, but not sent yet ... SENT: all messages sent. ... filtering is always possible by channel.</div></div>
+            <div class="change-item-src">Solution / Architecture Overview &middot; logId a7020356e170ceb7fbd8bf7384d6e64f</div>
+        </div>
+
+        <div class="change-item">
+            <div class="change-item-what">Mini-CRM built into the app (open decision: built-in vs federated).</div>
+            <div class="change-item-where">Captured as an open question. Not yet reflected in the spec because you explicitly flagged the tradeoff as still open. Waiting on your direction.</div>
+            <div class="change-item-quote"><div class="change-item-quote-body">would it make sense to create a mini CRM for this, and then connect CRM with CRM? ... I am still wondering how to trade off between "do not replicate data" vs "most efficient architecture for the app"</div></div>
+            <div class="change-item-src">Solution / Architecture Overview &middot; logId 06b9dddc984b492679c08d0a5b69dda9</div>
+        </div>
+
+        <div class="change-item">
+            <div class="change-item-what">Unified SMTP mail capture (not Outlook auto-forward only).</div>
+            <div class="change-item-where">Captured as a design input. Would replace the auto-forward rule with an SMTP-based mail client layer. Deferred: meaningfully affects the ingest architecture and merges with the mini-CRM decision; will slot into the product spec after the platform call.</div>
+            <div class="change-item-quote"><div class="change-item-quote-body">the e-mail forwarding idea will quickly become the bottle neck here ... we could SMTP copy the e-mail as well, basically run an entire mail client function ... We can use this feature for all channels (filters which include messages from LI, WA, Teams, Mail, etc only of relevant to a coms use case of the app)</div></div>
+            <div class="change-item-src">Solution / Architecture Overview &middot; logId d96a3116a6f293b2061a6ff1eec2700d</div>
+        </div>
+
+        <div class="change-item">
+            <div class="change-item-what">Markdown normalisation for all messages (original + MD + metadata).</div>
+            <div class="change-item-where">Captured as a design input for the data model. Deferred to the product spec.</div>
+            <div class="change-item-quote"><div class="change-item-quote-body">it feels like this is where the convert everything to md format comes in ... here we should have the original message stored in its original format, but have the complete message converted md and stored together with original message and the metadata for the message ...</div></div>
+            <div class="change-item-src">Solution / Architecture + Data Flow &middot; logIds b53d458aaa1f072ab52b929c878e5088, 85322f610bb14634584969004bbc6e84</div>
+        </div>
+    </div>
+
+    <div class="change-group">
+        <h4>Site bugs &middot; you flagged, we're fixing</h4>
+
+        <div class="change-item">
+            <div class="change-item-what">FAQ "Get in touch" opened a black screen.</div>
+            <div class="change-item-where">Fixed on <a href="/clients/brisken-lead-automation/faq">FAQ</a>. The CTA is a mailto link; the black screen happens when the browser has no mail client wired up. Added a visible email address with a copy button so the CTA works regardless of OS configuration.</div>
+            <div class="change-item-quote"><div class="change-item-quote-body">opens a black screen only - same question I asked at th ebeginning....</div></div>
+            <div class="change-item-src">FAQ / Data and Privacy &middot; logId 90e621d150c21b00616ea30fffdbf5cc</div>
+        </div>
+
+        <div class="change-item">
+            <div class="change-item-what">Sidebar comment order was chronological, now by text position.</div>
+            <div class="change-item-where">Fix queued in the review sidebar (`review.js`). Sorting will default to the order the highlighted text appears on the page, which matches how doc-review tools usually behave.</div>
+            <div class="change-item-quote"><div class="change-item-quote-body">the order of the comments right now is chronological by timestamp comment was created...ideally, default should be in the order of the text referenced...that is intuitive and how text review tools work in general...</div></div>
+            <div class="change-item-src">Overview / General &middot; logId c72683c6d8beb588a665e4dcb1e7044b</div>
+        </div>
+
+        <div class="change-item">
+            <div class="change-item-what">Comment-to-text navigation was intermittent.</div>
+            <div class="change-item-where">Fix queued in the review sidebar (`review.js`). Investigating the click-to-scroll handler for the edge case where the highlight was outside the visible range.</div>
+            <div class="change-item-quote"><div class="change-item-quote-body">the navigation from the columns to the selected part of the text doe snot always work. When I click on the reference text in the comments, sometime it moves the focus of the docuemnt to the snippet, sometimes it doe snot....</div></div>
+            <div class="change-item-src">Overview / General &middot; logId efdda8d4833b14523b1da49e772a350f</div>
+        </div>
+    </div>
+
+    <div class="change-group">
+        <h4>Acknowledged &middot; no spec change needed</h4>
+
+        <div class="change-item">
+            <div class="change-item-what">Spam threat model confirmed (web-scraper automated pitches).</div>
+            <div class="change-item-where">No spec change. Matches the current SPAM-tier handling; wanted to note it was heard.</div>
+            <div class="change-item-quote"><div class="change-item-quote-body">very typical here - web scrapers found us and are now sending automated e-mails to sell stuff to us.... - spam it!</div></div>
+            <div class="change-item-src">Solution / Follow-Up Pipeline (A3) &middot; logId ea2748b8a05506c09ea31478443aec8a</div>
+        </div>
+
+        <div class="change-item">
+            <div class="change-item-what">"Video feedback would be cool" -- noted, backlog.</div>
+            <div class="change-item-where">Not a blocker; nice-to-have for the review experience. Logged in our tooling backlog, not on the critical path.</div>
+            <div class="change-item-quote"><div class="change-item-quote-body">video feedback would also be cool....</div></div>
+            <div class="change-item-src">FAQ / Data and Privacy &middot; logId 480bdde8089a57aeec6cf27bb1dad749</div>
+        </div>
+
+        <div class="change-item">
+            <div class="change-item-what">Timeline expectation mismatch flagged for the call.</div>
+            <div class="change-item-where">Addressed in <a href="/clients/brisken-lead-automation/timeline">Timeline</a> with an explicit note on the hours-vs-weeks distinction: the five workflows alone are days, the product around them (unified inbox, mini-CRM, HITL dashboard, multi-tenant, GDPR, learning loop) is weeks to first usable and months to full vision. We'll agree on what's in phase 1 on the call.</div>
+            <div class="change-item-quote"><div class="change-item-quote-body">I thought this was a matter of hours? And hten depends on my review?</div></div>
+            <div class="change-item-src">Timeline / Phases &middot; logId abb6e04d06319e711b8edf6a20c238f1</div>
+        </div>
+    </div>
+
+    <div class="change-group">
+        <h4>Source trail</h4>
+        <p style="font-size:13px;color:var(--text2);margin:0;">All 23 comments are preserved verbatim in the project record, pulled from the scope-site webhook payload logs. Each <code style="font-size:12px;background:var(--surface2);padding:1px 5px;border-radius:3px;">logId</code> above is the hook-log identifier and can be traced back to the raw request body (including timestamp and quoted passage).</p>
+    </div>
+</div>
+
+<footer class="footer">
+    <p><strong>Brisken</strong> &times; UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='brisken-2026'){
+        localStorage.setItem('brisken-lead-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Please check the code you were given.';
+    }
+}
+(function(){if(localStorage.getItem('brisken-lead-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('brisken-lead-theme',t);
+}
+
+(function(){
+    var links=document.querySelectorAll('.step-link');
+    var sections=[];
+    links.forEach(function(l){
+        var id=l.getAttribute('href');
+        if(id&&id.startsWith('#')){
+            var el=document.querySelector(id);
+            if(el)sections.push({el:el,link:l});
+        }
+    });
+    if(!sections.length)return;
+    var observer=new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+            if(e.isIntersecting){
+                links.forEach(function(l){l.classList.remove('active')});
+                sections.forEach(function(s){
+                    if(s.el===e.target)s.link.classList.add('active');
+                });
+            }
+        });
+    },{rootMargin:'-80px 0px -60% 0px'});
+    sections.forEach(function(s){observer.observe(s.el)});
+})();
+</script>
+<script src="/clients/brisken-lead-automation/review.js"></script>
+</body>
+</html>
