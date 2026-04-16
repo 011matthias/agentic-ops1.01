@@ -428,13 +428,11 @@ summary::-webkit-details-marker { display: none; }
     <h2>Questions not covered here?</h2>
     <p>Reach out directly and we can discuss any aspect of the project. Open investigation items are tracked on the Overview page and will be updated as they are resolved.</p>
     <div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:12px;">
-        <a href="mailto:nicolas.neumann@unpauseai.com?subject=Brisken%20scope%20question" class="cta-btn">Get in touch &#8594;</a>
-        <div style="font-size:13px;color:var(--text2);display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;">
-            <span>or copy the address:</span>
-            <code id="cta-email" style="background:var(--surface);border:1px solid var(--border);padding:3px 8px;border-radius:6px;font-size:12px;color:var(--text-strong);">nicolas.neumann@unpauseai.com</code>
-            <button onclick="(function(){var t='nicolas.neumann@unpauseai.com';if(navigator.clipboard){navigator.clipboard.writeText(t);}var b=event.target;var o=b.textContent;b.textContent='Copied';setTimeout(function(){b.textContent=o;},1500);})()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 10px;font-size:12px;color:var(--text2);cursor:pointer;">Copy</button>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;">
+            <code id="cta-email" style="background:var(--surface);border:1px solid var(--border);padding:8px 14px;border-radius:8px;font-size:14px;color:var(--text-strong);">nicolas.neumann@unpauseai.com</code>
+            <button onclick="copyContactEmail(event)" class="cta-btn" style="padding:8px 18px;font-size:14px;">Copy address</button>
         </div>
-        <p style="font-size:12px;color:var(--text2);max-width:420px;margin:0;">If the button opens a blank screen, your browser has no default mail client wired up. The address above works anywhere -- copy it and paste it into Outlook, Gmail, or whichever mail tool you use.</p>
+        <a href="mailto:nicolas.neumann@unpauseai.com?subject=Brisken%20scope%20question" style="font-size:13px;color:var(--text2);text-decoration:underline;">or open in your mail client</a>
     </div>
 </div>
 
@@ -461,6 +459,14 @@ function toggleTheme(){
     var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
     h.setAttribute('data-theme',t);
     localStorage.setItem('brisken-lead-theme',t);
+}
+function copyContactEmail(ev){
+    var addr='nicolas.neumann@unpauseai.com';
+    if(navigator.clipboard){navigator.clipboard.writeText(addr);}
+    var b=ev.target;
+    var orig=b.textContent;
+    b.textContent='Copied';
+    setTimeout(function(){b.textContent=orig;},1500);
 }
 (function(){
     var links=document.querySelectorAll('.step-link');

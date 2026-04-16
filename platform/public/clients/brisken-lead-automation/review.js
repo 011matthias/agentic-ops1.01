@@ -248,6 +248,22 @@ body.rv-open .main-content{margin-right:0;}}\
             return;
         }
 
+        // Sort by document position of the comment's highlight mark.
+        // Orphans (quote text not found on page) fall to the bottom, sorted by date.
+        comments.sort(function(a, b) {
+            var ma = document.querySelector('mark.rv-highlight[data-id="' + a.id + '"]');
+            var mb = document.querySelector('mark.rv-highlight[data-id="' + b.id + '"]');
+            if (ma && mb) {
+                var rel = ma.compareDocumentPosition(mb);
+                if (rel & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+                if (rel & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+                return 0;
+            }
+            if (ma && !mb) return -1;
+            if (!ma && mb) return 1;
+            return (a.date || '').localeCompare(b.date || '');
+        });
+
         listEl.innerHTML = '';
         comments.forEach(function(c) {
             var color = COLORS[c.colorIdx || 0];
@@ -267,6 +283,11 @@ body.rv-open .main-content{margin-right:0;}}\
                 if (e.target.closest('.rv-card-btns')) return;
                 setActive(c.id);
                 var mark = document.querySelector('mark.rv-highlight[data-id="' + c.id + '"]');
+                if (!mark) {
+                    // Highlight was skipped at init (quote not in DOM at that moment); retry now.
+                    applyHighlight(c);
+                    mark = document.querySelector('mark.rv-highlight[data-id="' + c.id + '"]');
+                }
                 if (mark) mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
             };
 
