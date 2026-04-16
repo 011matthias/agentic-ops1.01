@@ -191,6 +191,14 @@ summary::-webkit-details-marker { display: none; }
     .mobile-nav-toggle { display: block; }
     .nav-links { display: none; }
 }
+/* Update banner + change chip (added 2026-04-16, post scope-review) */
+.update-banner { background: var(--orange-bg); border: 1px solid color-mix(in srgb, var(--orange) 25%, var(--border)); border-radius: 8px; padding: 10px 16px; margin-bottom: 24px; font-size: 13px; color: var(--orange-dark); display: flex; align-items: center; gap: 8px; }
+.update-banner-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); flex-shrink: 0; }
+.update-banner a { color: var(--orange-dark); font-weight: 700; text-decoration: underline; }
+.update-banner a:hover { text-decoration: none; }
+.change-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--orange-bg); color: var(--orange-dark); border-radius: 10px; padding: 2px 8px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-left: 8px; vertical-align: middle; text-decoration: none !important; border: 1px solid color-mix(in srgb, var(--orange) 30%, var(--border)); transition: background .15s; }
+.change-chip:hover { background: color-mix(in srgb, var(--orange) 15%, var(--orange-bg)); }
+.change-chip-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--orange); }
 </style>
 <script>
 (function(){var t=localStorage.getItem('brisken-lead-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
@@ -220,6 +228,8 @@ summary::-webkit-details-marker { display: none; }
         <a href="/clients/brisken-lead-automation/solution">Solution</a>
         <a href="/clients/brisken-lead-automation/timeline">Timeline</a>
         <a href="/clients/brisken-lead-automation/faq" class="active">FAQ</a>
+        <a href="/clients/brisken-lead-automation/dashboard">Dashboard</a>
+        <a href="/clients/brisken-lead-automation/changelog">Change Log</a>
     </div>
     <div class="nav-right">
         <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Scoping</span>
@@ -376,26 +386,41 @@ summary::-webkit-details-marker { display: none; }
     </div>
 </details>
 
-<h2 id="data-privacy">Data and Privacy</h2>
+<h2 id="data-privacy">Data and Privacy <a href="/clients/brisken-lead-automation/changelog#entry-2026-04-16" class="change-chip"><span class="change-chip-dot"></span>Updated 2026-04-16</a></h2>
 
 <details>
     <summary>Where is lead data stored?</summary>
     <div class="faq-body">
-        <p>Lead data lives in the platform's database (the specifics depend on the platform choice: Firestore, n8n's internal DB, or a dedicated database). Zoho CRM receives event updates as a record of activity. No lead data is stored in third-party systems beyond what you choose. The only external call is to the AI provider for response drafting, where the minimum necessary context (name, company, inquiry) is sent to generate the draft.</p>
+        <p>Lead data lives in the platform's database. The specific store depends on the platform decision still open on the Overview page: a custom multi-tenant SaaS backend with its own database, or Firebase / Firestore. Zoho CRM receives event updates as an async activity log. The only external call with lead content is to the AI provider for response drafting, where the minimum necessary context (name, company, inquiry) is sent to generate the draft.</p>
     </div>
 </details>
 
 <details>
     <summary>Does the automation have access to my inbox?</summary>
     <div class="faq-body">
-        <p>No. The automation sends via SMTP (outbound only) and does not read Dirk's inbox. Replies are captured via an Outlook auto-forward rule to a separate monitored mailbox. This is a deliberate architectural choice: the automation can send as Dirk and detect replies without needing corporate email access.</p>
+        <p>No. The automation sends via SMTP (outbound only) and does not read Dirk's inbox. Replies are captured via an Outlook auto-forward rule to a separate monitored mailbox. This is a deliberate architectural choice: the automation can send as Dirk and detect replies without needing corporate email access. Your 2026-04-13 comment floated a unified SMTP-based mail capture as an alternative; that is being evaluated for phase 2.</p>
     </div>
 </details>
 
 <details>
     <summary>Is this GDPR compliant?</summary>
     <div class="faq-body">
-        <p>The system processes B2B contact data for the purpose of responding to business inquiries, which falls under legitimate business interest. There is no personal data profiling, no behavioral tracking, and no data sharing with third parties beyond the AI provider. For self-hosted options, data stays entirely on your infrastructure. We recommend including a data processing note in your SAP and website listings if you do not already have one.</p>
+        <p>GDPR compliance is a hard requirement per your 2026-04-13 note, not a nice-to-have. The scope covers:</p>
+        <ul>
+            <li><strong>Retention.</strong> Default retention windows per data class (lead records, email threads, AI drafts, activity log). Configurable per tenant.</li>
+            <li><strong>Right to delete.</strong> A documented flow for erasing a contact's data from the system on request, including downstream references in the CRM event log.</li>
+            <li><strong>Residency.</strong> EU-region hosting + storage; region choice slots into the platform decision.</li>
+            <li><strong>Subprocessors.</strong> A short list (AI provider, CRM, hosting); DPAs reviewed and linked in the tenant admin settings.</li>
+            <li><strong>Processing basis.</strong> B2B contact data for responding to inbound inquiries (legitimate interest). No behavioural profiling, no third-party ad tech.</li>
+        </ul>
+        <p>Implementation specifics land once the platform decision is made. We will circulate a short GDPR checklist for your legal review before phase 1 ships.</p>
+    </div>
+</details>
+
+<details>
+    <summary>What gets logged for auditing?</summary>
+    <div class="faq-body">
+        <p>Every event on a lead is captured: receipt timestamp, classification result, enrichment calls, AI draft generation, HITL decision (approve / edit / reject), send timestamp, replies, follow-ups. The activity log serves two purposes: a GDPR-grade audit trail if you ever need to show what the system did with a contact's data, and a training signal for the learning classifier so that your review decisions improve the scorer over time. Added as a first-class requirement per your 2026-04-13 note.</p>
     </div>
 </details>
 
@@ -409,7 +434,15 @@ summary::-webkit-details-marker { display: none; }
 <div class="cta-section">
     <h2>Questions not covered here?</h2>
     <p>Reach out directly and we can discuss any aspect of the project. Open investigation items are tracked on the Overview page and will be updated as they are resolved.</p>
-    <a href="mailto:nicolas.neumann@unpauseai.com" class="cta-btn">Get in touch &#8594;</a>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:12px;">
+        <a href="mailto:nicolas.neumann@unpauseai.com?subject=Brisken%20scope%20question" class="cta-btn">Get in touch &#8594;</a>
+        <div style="font-size:13px;color:var(--text2);display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;">
+            <span>or copy the address:</span>
+            <code id="cta-email" style="background:var(--surface);border:1px solid var(--border);padding:3px 8px;border-radius:6px;font-size:12px;color:var(--text-strong);">nicolas.neumann@unpauseai.com</code>
+            <button onclick="(function(){var t='nicolas.neumann@unpauseai.com';if(navigator.clipboard){navigator.clipboard.writeText(t);}var b=event.target;var o=b.textContent;b.textContent='Copied';setTimeout(function(){b.textContent=o;},1500);})()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 10px;font-size:12px;color:var(--text2);cursor:pointer;">Copy</button>
+        </div>
+        <p style="font-size:12px;color:var(--text2);max-width:420px;margin:0;">If the button opens a blank screen, your browser has no default mail client wired up. The address above works anywhere -- copy it and paste it into Outlook, Gmail, or whichever mail tool you use.</p>
+    </div>
 </div>
 
 <footer class="footer">

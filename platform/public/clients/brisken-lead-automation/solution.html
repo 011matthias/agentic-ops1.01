@@ -248,6 +248,14 @@ li { margin-bottom: 6px; }
     .tier-grid { grid-template-columns: 1fr 1fr; }
     #scoringDemo > div { grid-template-columns: 1fr !important; }
 }
+/* Update banner + change chip (added 2026-04-16, post scope-review) */
+.update-banner { background: var(--orange-bg); border: 1px solid color-mix(in srgb, var(--orange) 25%, var(--border)); border-radius: 8px; padding: 10px 16px; margin-bottom: 24px; font-size: 13px; color: var(--orange-dark); display: flex; align-items: center; gap: 8px; }
+.update-banner-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); flex-shrink: 0; }
+.update-banner a { color: var(--orange-dark); font-weight: 700; text-decoration: underline; }
+.update-banner a:hover { text-decoration: none; }
+.change-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--orange-bg); color: var(--orange-dark); border-radius: 10px; padding: 2px 8px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-left: 8px; vertical-align: middle; text-decoration: none !important; border: 1px solid color-mix(in srgb, var(--orange) 30%, var(--border)); transition: background .15s; }
+.change-chip:hover { background: color-mix(in srgb, var(--orange) 15%, var(--orange-bg)); }
+.change-chip-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--orange); }
 </style>
 <script>
 (function(){var t=localStorage.getItem('brisken-lead-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
@@ -279,6 +287,8 @@ li { margin-bottom: 6px; }
         <a href="/clients/brisken-lead-automation/solution" class="active">Solution</a>
         <a href="/clients/brisken-lead-automation/timeline">Timeline</a>
         <a href="/clients/brisken-lead-automation/faq">FAQ</a>
+        <a href="/clients/brisken-lead-automation/dashboard">Dashboard</a>
+        <a href="/clients/brisken-lead-automation/changelog">Change Log</a>
     </div>
     <div class="nav-right">
         <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Scoping</span>
@@ -320,9 +330,14 @@ li { margin-bottom: 6px; }
 <div class="main-content">
 <div class="content-inner">
 
-<h2 id="arch-overview">Architecture Overview</h2>
+<h2 id="arch-overview">Architecture Overview <a href="/clients/brisken-lead-automation/changelog#entry-2026-04-16" class="change-chip"><span class="change-chip-dot"></span>Updated 2026-04-16</a></h2>
 <p>The platform has four layers: channel ingest (leads from SAP, website, LinkedIn), the core processing pipeline (classify, score, draft, route), email sending via SMTP, and a unified dashboard for approvals and conversation management. The CRM layer is abstracted: Zoho CRM is the first connector, but the system defines a standard set of events (Create Lead, Add Comment, Update Status, Attach Email) so swapping CRM later means writing a new connector, not reworking the logic.</p>
 <p>Lead nurturing is the first use case. The architecture is designed so the same layers handle future use cases (invoice routing, compliance emails) by adding new ingest channels and processing rules without rebuilding the core.</p>
+
+<div class="callout orange" style="margin-bottom:24px;">
+    <div class="callout-title">Product direction (from your 2026-04-13 review)</div>
+    <p>You framed the end product as a multi-channel Outlook client: a unified inbox with channel filtering, Drafts / Outbox / Sent views, and a built-in mini-CRM for contacts and companies. The architecture below still holds as the pipeline, but the interface that wraps it is an app, not just a dashboard. The full product-spec rewrite is deferred until after the platform call (custom vs Firebase). <a href="/clients/brisken-lead-automation/changelog#entry-2026-04-16" style="color:var(--orange-dark);font-weight:700;">Details in the Change Log</a>.</p>
+</div>
 
 <div class="arch-diagram" style="padding:0;overflow:hidden;background:transparent;border:none;">
 
@@ -385,8 +400,8 @@ li { margin-bottom: 6px; }
         <span style="color:var(--text2);">&#8594;</span>
         <span class="arch-node arch-node-purple">Reply Monitor</span>
         <span style="color:var(--text2);">&#8594;</span>
-        <span class="arch-node arch-node-orange">Human Review</span>
-        <span style="color:var(--text2);font-size:12px;">(no automated second response, ever)</span>
+        <span class="arch-node arch-node-orange">HITL Review</span>
+        <span style="color:var(--text2);font-size:12px;">(all replies through HITL regardless of tier)</span>
     </div>
 
     <!-- Separator -->
@@ -419,8 +434,9 @@ li { margin-bottom: 6px; }
 <p>The design principle is separation of concerns: the ingest layer handles the messiness of each source channel (different email formats, different webhook payloads) so that A3 always works with clean, consistent data. Adding a new channel or use case means adding a new ingest workflow, not changing the pipeline.</p>
 
 <!-- Ingest Layer -->
-<h2 id="ingest-layer">Ingest Layer (A0, A1, A2)</h2>
+<h2 id="ingest-layer">Ingest Layer (A0, A1, A2) <a href="/clients/brisken-lead-automation/changelog#entry-2026-04-16" class="change-chip"><span class="change-chip-dot"></span>Updated 2026-04-16</a></h2>
 <p>Three workflows handle lead capture from the active source channels. Each channel arrives via a different method and carries different context. The ingest layer extracts that context and normalizes it into a standard lead record for the pipeline.</p>
+<p style="background:var(--surface);border-left:3px solid var(--orange);padding:12px 16px;font-size:14px;color:var(--text);margin:0 0 20px;border-radius:0 6px 6px 0;"><strong>Conversation-history lookup added to Stage 1 of A3</strong> (your 2026-04-13 edit). Every incoming lead is matched against prior contact, customer, and partner records before classification runs, so the scorer and the AI draft both know whether the sender is new or already known.</p>
 
 <div class="ingest-cards">
     <div class="ingest-card ingest-card-blue">
@@ -481,11 +497,11 @@ li { margin-bottom: 6px; }
 </div>
 
 <!-- Follow-Up Pipeline -->
-<h2 id="pipeline">Follow-Up Pipeline (A3)</h2>
+<h2 id="pipeline">Follow-Up Pipeline (A3) <a href="/clients/brisken-lead-automation/changelog#entry-2026-04-16" class="change-chip"><span class="change-chip-dot"></span>Updated 2026-04-16</a></h2>
 <p>A3 is the core of the system. It receives normalized lead records and takes them from raw input to a sent (or queued-for-review) first response. Five stages run in sequence.</p>
 
-<h3>Stage 1 - Validation and Deduplication</h3>
-<p>Before any processing, A3 checks that the lead has a valid email address and that the same contact has not already been processed recently. Duplicates are logged and dropped. Invalid records (missing email, clearly spam) are flagged and skipped.</p>
+<h3>Stage 1 - Validation, Deduplication, and History Lookup</h3>
+<p>Before any processing, A3 runs three checks. The lead must have a valid email address. The same contact must not have been processed recently (dedupe window is configurable; duplicates are logged and dropped). And the sender is matched against the contact store to see whether they are a prior contact, customer, partner, or unknown. That history signal feeds both the scorer in Stage 2 and the AI draft in Stage 4. Invalid records are flagged and skipped.</p>
 
 <h3>Stage 2 - Classification and Scoring</h3>
 <p>Each lead is classified into one of four tiers: <strong>SPAM, Low, Medium, or High</strong>. Classification and spam detection happen in a single step. Each signal carries a numeric weight; the total determines the tier. The weight table is configurable, not hardcoded, so thresholds and signal importance can be adjusted over time without code changes.</p>
@@ -511,6 +527,11 @@ li { margin-bottom: 6px; }
     <p>Weights and tier thresholds are stored in the system configuration, not in code. Adjustments are made by editing the config table directly. Fine-tuning works by reviewing misclassified leads and adjusting weights. Automated tuning (system suggests weight changes based on outcomes) is a later-phase feature once enough lead history exists.</p>
 </div>
 
+<div class="callout purple">
+    <div class="callout-title">Design decision: channel multipliers vs flat bonuses</div>
+    <p>The weight table above uses <strong>flat bonuses</strong> (SAP Store always adds +5, regardless of base score). An alternative is <strong>channel multipliers</strong> (SAP Store multiplies the base score by 1.3x). Multipliers amplify strong leads from high-value channels more than weak ones. Flat bonuses treat the channel signal as fixed. Both are valid. The interactive demo below uses flat bonuses. We will confirm the preferred approach before implementation.</p>
+</div>
+
 <div style="margin:20px 0;">
     <p style="font-size:13px;font-weight:600;color:var(--text-strong);margin-bottom:8px;">Tier thresholds (example ranges, configurable):</p>
     <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:12px;">
@@ -524,20 +545,25 @@ li { margin-bottom: 6px; }
 <div class="tier-grid" style="grid-template-columns:1fr 1fr 1fr 1fr;">
     <div class="tier-card" style="background:#fef2f2;border-color:#fecaca;">
         <div class="tier-label" style="color:#991b1b;">Spam</div>
-        <div class="tier-action">Dropped. No response, no CRM entry, no AI spend. Logged for audit.</div>
+        <div class="tier-action">Dropped. No response by default. Optional suggested auto-response where appropriate. Logged for audit.</div>
     </div>
     <div class="tier-card low">
         <div class="tier-label">Low</div>
-        <div class="tier-action">Response sent automatically. Shorter, template-based. Logged to CRM. Less AI context loaded.</div>
+        <div class="tier-action">Queued for review with a templated draft. One-click approve in the dashboard. Auto-send is a later opt-in.</div>
     </div>
     <div class="tier-card mid">
         <div class="tier-label">Medium</div>
-        <div class="tier-action">Response sent automatically with richer context. Reviewer notified. Can follow up if needed.</div>
+        <div class="tier-action">Queued for review with a richer personalised draft. Dashboard notification. Auto-send becomes an opt-in once drafting quality earns trust.</div>
     </div>
     <div class="tier-card high">
         <div class="tier-label">High</div>
-        <div class="tier-action">Held for human review before sending. Full context package: lead record, enrichment, AI draft, channel context.</div>
+        <div class="tier-action">Queued for review with full context package: lead record, enrichment, conversation history, AI draft, channel context. Always stays in HITL.</div>
     </div>
+</div>
+
+<div class="callout orange" style="margin-top:16px;">
+    <div class="callout-title">HITL default reversed (2026-04-13)</div>
+    <p>Per your note, phase 1 ships with <strong>all tiers through HITL</strong>. Auto-send is an opt-in you can switch on per tier or per score band later, once you trust the drafting quality. This reverses the earlier tier-based auto-send default; <a href="/clients/brisken-lead-automation/changelog#entry-2026-04-16" style="color:var(--orange-dark);font-weight:700;">Change Log entry</a>.</p>
 </div>
 
 <div class="callout green">
@@ -656,8 +682,13 @@ li { margin-bottom: 6px; }
 })();
 </script>
 
-<h3>Stage 3 - Contact Enrichment (optional)</h3>
-<p>For High and Medium leads, A3 can attempt a basic company lookup using the email domain or company name field. This gives the AI more context for drafting a relevant response. This step is optional and can be toggled per tier if the cost or latency is not acceptable.</p>
+<h3>Stage 3 - Contact Enrichment</h3>
+<p>Two lookup paths run in parallel to give the AI more context before drafting:</p>
+<ul>
+    <li><strong>Internal (built-in contact store):</strong> sender classification (customer / partner / spammer / unknown), last conversation summary and status, company record with notes and any open opportunities or contracts.</li>
+    <li><strong>External:</strong> company website lookup from the email domain, LinkedIn profile search when name plus company are available, and an optional third-party enrichment API (Clearbit or Apollo) for later phases.</li>
+</ul>
+<p>Start with the internal lookup plus domain lookup; expand to LinkedIn and third-party sources later. Per-tier toggling is still available if cost or latency become a concern.</p>
 
 <h3>Stage 4 - AI Response Drafting</h3>
 <p>AI drafts a first response using a structured prompt. The prompt constrains the output to: acknowledge the specific inquiry, reference the lead's stated interest, provide relevant context about Brisken's offering, ask one qualifying question, and indicate that a follow-up will come. Docs or links can be attached based on the source channel. All responses are sent via SMTP from Dirk's personal corporate email, not from a generic address.</p>
@@ -668,21 +699,26 @@ li { margin-bottom: 6px; }
 </div>
 
 <h3>Stage 5 - HITL Routing and Send</h3>
-<p>Based on the tier from Stage 2, the draft is either sent directly or routed to a review queue via the unified dashboard. Dirk sees the full lead context, the AI draft, and approve / edit / reject options. Approved responses are sent via SMTP from Dirk's email, preserving the email thread. Follow-ups for unresponsive leads are always replies to the existing thread (never a new email), so the full conversation history stays intact. Each event (sent, approved, rejected) is pushed to the CRM via the abstraction layer (Create Lead, Add Comment, Update Status). Currently wired to Zoho; swapping CRM later means writing a new connector, not changing this pipeline.</p>
+<p>Based on the tier from Stage 2, the draft is either sent directly or routed to a review queue via the unified dashboard. Dirk sees the full lead context, the AI draft, and approve / edit / reject options. Approved responses are sent via SMTP from Dirk's email, preserving the email thread. Follow-ups for unresponsive leads are always replies to the existing thread (never a new email), so the full conversation history stays intact. Each event (sent, approved, rejected) is pushed to the CRM via the abstraction layer.</p>
 
-<!-- Reply Monitoring -->
-<h2 id="reply-monitoring">Reply Monitoring (A4)</h2>
-<p>Since the automation sends via SMTP but does not have access to Dirk's inbox, replies are captured via an Outlook auto-forward rule. Replies land in a dedicated monitored mailbox. A4 polls this mailbox at a configurable interval and matches incoming emails to outbound leads using thread ID and sender. When a reply is detected, two things happen immediately: any pending follow-up sequence for that lead is cancelled, and the reply is escalated to human review via the dashboard.</p>
-
-<div class="callout purple">
-    <div class="callout-title">Dirk's requirement - all second responses are human</div>
-    <p>There is no automated second response under any circumstances. When a lead replies, the conversation moves to human hands. A4 surfaces the full context - original lead record, first response sent, reply received - so the reviewer has everything needed to continue the conversation.</p>
+<div class="callout orange">
+    <div class="callout-title">HITL applies to the full lifecycle</div>
+    <p>Phase 1: every first response, every follow-up, and every reply goes through the dashboard for approval before anything is sent. Auto-send is a later opt-in you can turn on per tier or per score band once the drafting quality earns trust. The tool accompanies the process from first contact to close, not just the opening message.</p>
 </div>
 
-<p>The escalation notification includes: the lead's original record, the first response that was sent, the reply text, and the recommended next action. The reviewer does not need to search for context.</p>
+<!-- Reply Monitoring -->
+<h2 id="reply-monitoring">Reply Monitoring (A4) <a href="/clients/brisken-lead-automation/changelog#entry-2026-04-16" class="change-chip"><span class="change-chip-dot"></span>Updated 2026-04-16</a></h2>
+<p>Since the automation sends via SMTP but does not have access to Dirk's inbox, replies are captured via an Outlook auto-forward rule. Replies land in a dedicated monitored mailbox. A4 polls this mailbox at a configurable interval and matches incoming emails to outbound leads using thread ID and sender. When a reply is detected, two things happen immediately: any pending follow-up sequence for that lead is cancelled, and the reply is routed to HITL review via the dashboard.</p>
+
+<div class="callout purple">
+    <div class="callout-title">All second responses go through HITL</div>
+    <p>Per your 2026-04-13 note: every reply stays in HITL regardless of the lead's tier. The AI drafts a suggested follow-up using the full thread context; you approve, edit, or reject in the dashboard before anything ships. Same mechanic as the first-response gate, applied end-to-end.</p>
+</div>
+
+<p>The review view includes: the lead's original record, the first response that was sent, the reply text, the AI-suggested follow-up, and the recommended next action. The reviewer does not need to search for context.</p>
 
 <!-- Data Flow -->
-<h2 id="data-flow">Data Flow</h2>
+<h2 id="data-flow">Data Flow <a href="/clients/brisken-lead-automation/changelog#entry-2026-04-16" class="change-chip"><span class="change-chip-dot"></span>Updated 2026-04-16</a></h2>
 <p>End-to-end, a lead moves through the system as follows:</p>
 
 <table class="arch-table">
@@ -690,16 +726,16 @@ li { margin-bottom: 6px; }
         <tr><th>Step</th><th>Workflow</th><th>What happens</th></tr>
     </thead>
     <tbody>
-        <tr><td>1. Arrive</td><td>A0 / A1 / A2</td><td>Lead arrives via email, webhook, or API. Raw payload is captured.</td></tr>
+        <tr><td>1. Arrive</td><td>A0 / A1 / A2</td><td>Lead arrives via email, webhook, or API. Raw payload is captured. Original message stored verbatim.</td></tr>
         <tr><td>2. Normalize</td><td>A0 / A1 / A2</td><td>Source-specific parsing extracts fields. Standard lead record is created with a UUID.</td></tr>
-        <tr><td>3. Validate</td><td>A3</td><td>Email validity and deduplication check. Duplicates and invalids are dropped with a log entry.</td></tr>
-        <tr><td>4. Classify</td><td>A3</td><td>Spam filter + scoring in one step. Numeric weights summed, mapped to tier (SPAM/Low/Medium/High). Spam leads dropped here.</td></tr>
-        <tr><td>5. Enrich</td><td>A3</td><td>Optional company lookup for High/Medium leads. Appended to lead record.</td></tr>
-        <tr><td>6. Draft</td><td>A3</td><td>AI drafts a first response using lead context and channel-specific templates.</td></tr>
-        <tr><td>7. Route</td><td>A3</td><td>High: held for review. Medium/Low: sent automatically with optional notification. All non-spam leads get a response.</td></tr>
-        <tr><td>8. Log</td><td>A3</td><td>Events pushed via CRM abstraction layer: Create Lead, Add Comment, Update Status. Zoho is the first connector.</td></tr>
+        <tr><td>3. Validate + history</td><td>A3</td><td>Email validity, deduplication, and a lookup against the contact store (prior contact, customer, partner). Duplicates and invalids are dropped with a log entry.</td></tr>
+        <tr><td>4. Classify</td><td>A3</td><td>Per-channel classifier with configurable weights. Numeric weights summed, mapped to tier (SPAM / Low / Medium / High). Spam leads dropped here; auto-response suggested where appropriate.</td></tr>
+        <tr><td>5. Enrich</td><td>A3</td><td>Internal (contact store) plus external (company domain, LinkedIn). Results attached to lead record.</td></tr>
+        <tr><td>6. Draft</td><td>A3</td><td>AI drafts a first response using lead context, enrichment, history, and channel-specific templates.</td></tr>
+        <tr><td>7. Route</td><td>A3</td><td><strong>Phase 1: all tiers queued for HITL review</strong> in the dashboard. Auto-send is an opt-in per tier or per score band once drafting quality earns trust. All non-spam leads get a response.</td></tr>
+        <tr><td>8. Log</td><td>A3</td><td>Activity log captures every event (send, draft, approve, edit, reject). CRM abstraction layer pushes Create Lead, Add Comment, Update Status. Zoho is the first connector.</td></tr>
         <tr><td>9. Monitor</td><td>A4</td><td>Inbox polled for replies. Match found = cancel follow-up sequence.</td></tr>
-        <tr><td>10. Escalate</td><td>A4</td><td>Reply escalated to human reviewer with full context package. No auto-response.</td></tr>
+        <tr><td>10. Escalate</td><td>A4</td><td>Reply routed to HITL with full context package; AI-suggested follow-up included. No fully-automated second response.</td></tr>
     </tbody>
 </table>
 

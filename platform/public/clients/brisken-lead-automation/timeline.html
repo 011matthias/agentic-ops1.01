@@ -237,6 +237,14 @@ li { margin-bottom: 6px; }
     .phase-marker { width: 40px; height: 40px; font-size: 11px; }
     .timeline::before { left: 20px; }
 }
+/* Update banner + change chip (added 2026-04-16, post scope-review) */
+.update-banner { background: var(--orange-bg); border: 1px solid color-mix(in srgb, var(--orange) 25%, var(--border)); border-radius: 8px; padding: 10px 16px; margin-bottom: 24px; font-size: 13px; color: var(--orange-dark); display: flex; align-items: center; gap: 8px; }
+.update-banner-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); flex-shrink: 0; }
+.update-banner a { color: var(--orange-dark); font-weight: 700; text-decoration: underline; }
+.update-banner a:hover { text-decoration: none; }
+.change-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--orange-bg); color: var(--orange-dark); border-radius: 10px; padding: 2px 8px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-left: 8px; vertical-align: middle; text-decoration: none !important; border: 1px solid color-mix(in srgb, var(--orange) 30%, var(--border)); transition: background .15s; }
+.change-chip:hover { background: color-mix(in srgb, var(--orange) 15%, var(--orange-bg)); }
+.change-chip-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--orange); }
 </style>
 <script>
 (function(){var t=localStorage.getItem('brisken-lead-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
@@ -268,6 +276,8 @@ li { margin-bottom: 6px; }
         <a href="/clients/brisken-lead-automation/solution">Solution</a>
         <a href="/clients/brisken-lead-automation/timeline" class="active">Timeline</a>
         <a href="/clients/brisken-lead-automation/faq">FAQ</a>
+        <a href="/clients/brisken-lead-automation/dashboard">Dashboard</a>
+        <a href="/clients/brisken-lead-automation/changelog">Change Log</a>
     </div>
     <div class="nav-right">
         <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Scoping</span>
@@ -280,7 +290,7 @@ li { margin-bottom: 6px; }
     <div class="sidebar-label">Timeline</div>
     <ul class="step-list">
         <li class="step-item">
-            <a href="#approach" class="step-link active"><span class="step-num">1</span> Delivery Approach</a>
+            <a href="#sequence" class="step-link active"><span class="step-num">1</span> How we sequence this</a>
             <div class="step-line"></div>
         </li>
         <li class="step-item">
@@ -305,21 +315,28 @@ li { margin-bottom: 6px; }
 <div class="main-content">
 <div class="content-inner">
 
-<h2 id="approach">Delivery Approach</h2>
+<h2 id="sequence">How we sequence this</h2>
 <p>The project is structured as four sequential phases. Each phase is independently valuable - meaning you get a working, useful system at the end of each one, not just at the end of the whole project. If priorities shift after Phase 1 or 2, the work already done has standalone value.</p>
 <p>There is a review checkpoint between each phase. We review what was built, confirm it is working as expected, and agree on scope before starting the next phase. This prevents scope drift and keeps the project aligned with your actual priorities as they evolve.</p>
 
 <div class="callout">
     <div class="callout-title">Estimates are working estimates</div>
-    <p>The durations below are based on similar projects. They will be refined once the platform decision is made (n8n, Firebase/Firestore, or custom) and the open investigation items on the Overview page are resolved.</p>
+    <p>The durations below are based on similar projects. They will be refined once the platform decision is made (custom multi-tenant SaaS vs Firebase) and the open investigation items on the Overview page are resolved.</p>
 </div>
 
 <div class="callout orange">
-    <div class="callout-title">Platform decision pending</div>
-    <p>The technology platform for this project is being evaluated: n8n, Firebase/Cloud Firestore, or a custom-coded solution. This decision affects timeline estimates, hosting approach, and dashboard capabilities. See the Open Investigation Items on the Overview page for details.</p>
+    <div class="callout-title">On "I thought this was a matter of hours"</div>
+    <p>Your 2026-04-13 note: <em>"I thought this was a matter of hours? And then depends on my review?"</em> -- fair question, and it deserves a straight answer.</p>
+    <p style="margin-top:12px;">The five automations on their own (SAP ingest, website ingest, LinkedIn ingest, scoring pipeline, reply monitoring) are a few days of build. What you described in the scope review on top of them -- a unified-inbox app with channel filtering, a built-in mini-CRM for contacts and companies, an HITL dashboard, multi-tenant SaaS, GDPR compliance, an activity log, and a learning classifier -- is a product. First usable version of that product is weeks; the full vision is months.</p>
+    <p style="margin-top:12px;">We will agree on what makes the phase 1 cut on the platform call. The phases below reflect the current working plan; each phase number shifts depending on how tightly we scope phase 1. <a href="/clients/brisken-lead-automation/changelog#entry-2026-04-16" style="color:var(--orange-dark);font-weight:700;">Change Log entry</a>.</p>
 </div>
 
-<h2 id="phase1" style="margin-top:40px;">Phases</h2>
+<div class="callout orange">
+    <div class="callout-title">Platform decision narrowed</div>
+    <p>Following your 2026-04-13 note, n8n is out. Remaining options: custom multi-tenant SaaS backend, or Firebase/Firestore. Mini-CRM, activity log, and HITL dashboard requirements lean toward custom; Firebase stays on the table for auth and multi-tenant primitives. Decision on the call.</p>
+</div>
+
+<h2 id="phase1" style="margin-top:40px;">Phases <a href="/clients/brisken-lead-automation/changelog#entry-2026-04-16" class="change-chip"><span class="change-chip-dot"></span>Updated 2026-04-16</a></h2>
 
 <div class="timeline">
 
@@ -333,10 +350,10 @@ li { margin-bottom: 6px; }
             </div>
             <p class="phase-desc">Get leads flowing. SAP channel and website form ingest, basic normalization, and logging to your destination. No scoring or AI yet - just reliable, automated capture with a consistent data format.</p>
             <ul class="phase-tasks">
-                <li><span class="task-dot"></span>n8n instance setup and environment configuration</li>
+                <li><span class="task-dot"></span>Platform setup on the chosen backend (custom or Firebase) + environment configuration</li>
                 <li><span class="task-dot"></span>A2: SAP Discovery Center and SAP Store email ingest</li>
                 <li><span class="task-dot"></span>A1: Website form ingest via webhook</li>
-                <li><span class="task-dot"></span>Normalized lead schema and destination logging (Sheets, CRM, or n8n DB)</li>
+                <li><span class="task-dot"></span>Normalized lead schema + activity-log store + destination logging (Sheets, CRM, or platform DB)</li>
                 <li><span class="task-dot"></span>Deduplication logic (same contact, same source, within N days)</li>
                 <li><span class="task-dot"></span>Basic error alerting (ingest failures notify by email)</li>
             </ul>
@@ -363,7 +380,7 @@ li { margin-bottom: 6px; }
             <ul class="phase-tasks">
                 <li><span class="task-dot"></span>Lead scoring logic (signals, weights, tier assignment)</li>
                 <li><span class="task-dot"></span>AI response drafting (GPT-4o-mini with channel-specific templates)</li>
-                <li><span class="task-dot"></span>HITL review gate - High tier held for approval, Medium/Low auto-send</li>
+                <li><span class="task-dot"></span>HITL review gate - all tiers queued for approval by default; auto-send opt-in per tier as a phase-2 toggle</li>
                 <li><span class="task-dot"></span>Review notification (email or Slack) with approve/edit/reject flow</li>
                 <li><span class="task-dot"></span>A0: LinkedIn ingest (if confirmed as active channel during Phase 1)</li>
                 <li><span class="task-dot"></span>Scoring threshold tuning based on real lead data from Phase 1</li>

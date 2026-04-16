@@ -25,6 +25,7 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    id: comment.id,
                     action: action,
                     page: comment.pageLabel || comment.page,
                     section: comment.sectionTitle,
