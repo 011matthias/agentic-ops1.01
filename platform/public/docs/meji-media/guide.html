@@ -300,6 +300,7 @@ em {
       <a href="/docs/meji-media/ab-testing" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">A/B Testing</a>
       <a href="/docs/meji-media/lead-scoring" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Scoring</a>
       <a href="/docs/meji-media/system-overview" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Overview</a>
+      <a href="/docs/meji-media/scaling" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Scaling</a>
     </nav>
   </div>
   <div class="header-right">
@@ -606,7 +607,7 @@ new -> following_up -> replied     (hot lead -- team notification + fastest cade
 <tr><td>Website URL</td><td><code>website_url</code></td><td>https://www.christmasofficeparty.co.uk/</td><td>Used in email templates and links</td></tr>
 <tr><td>Portfolio URL</td><td><code>portfolio_url</code></td><td>https://mejimedia.com/portfolio</td><td>Meji Media portfolio (not used in current templates)</td></tr>
 <tr><td>Booking URL</td><td><code>booking_url</code></td><td>https://www.christmasofficeparty.co.uk/</td><td>Used in email templates</td></tr>
-<tr><td>Scoring weights</td><td><code>weight_has_organisation</code>, <code>weight_business_email</code>, <code>weight_has_phone</code>, <code>weight_long_message</code>, <code>weight_budget_keywords</code>, <code>weight_business_hours</code>, <code>weight_form_completeness</code>, <code>topic_weight_corporate</code>, <code>topic_weight_wedding</code>, <code>topic_weight_festival</code>, <code>topic_weight_default</code></td><td>Various</td><td>How much each factor contributes to the lead score. See the <a href="/docs/meji-media/lead-scoring">Lead Scoring Guide</a> for details.</td></tr>
+<tr><td>Scoring weights</td><td><code>weight_has_organisation</code>, <code>weight_business_email</code>, <code>weight_has_phone</code>, <code>weight_long_message</code>, <code>weight_budget_keywords</code>, <code>weight_business_hours</code>, <code>weight_form_completeness</code>, <code>topic_weight_corporate</code>, <code>topic_weight_wedding</code>, <code>topic_weight_festival</code>, <code>topic_weight_default</code></td><td>11 weights, 5&ndash;25 each</td><td>How much each factor contributes to the lead score. See the <a href="/docs/meji-media/lead-scoring">Lead Scoring Guide</a> for details.</td></tr>
 </tbody>
 </table>
 
@@ -832,13 +833,13 @@ new -> following_up -> replied     (hot lead -- team notification + fastest cade
 </tbody>
 </table>
 <ol start="7">
-<li><strong>Done</strong> &ndash; The website form receives a confirmation that everything went through successfully</li>
+<li><strong>Done</strong> &ndash; The website form receives a confirmation that everything went through</li>
 </ol>
 
 <hr />
 
 <h2>What You&rsquo;ll See</h2>
-<p>When A1 runs successfully:</p>
+<p>When A1 finishes a clean run:</p>
 <ul>
 <li><strong>In the Google Sheet:</strong> A new row with all fields filled in. The <code>status</code> column will show <code>new</code> (for all leads, including hot leads). The <code>priority</code> column will show <code>hot</code>, <code>warm</code>, or <code>standard</code>.</li>
 <li><strong>In your Gmail inbox:</strong> The sent email will appear in your Sent folder (since it&rsquo;s sent from your shared inbox). The email will have a personalised opening sentence that references the enquirer&rsquo;s specific topic.</li>
