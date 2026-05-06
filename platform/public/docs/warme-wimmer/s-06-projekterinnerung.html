@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<meta name="googlebot" content="noindex,nofollow">
+<title>W2-06 — Projekterinnerung 1 Tag nach Termin — Wärme Wimmer Hero-Doku</title>
+<style>
+:root{
+  --header-height:72px;--sidebar-width:240px;
+  --bg:#f8fafc;--surface:#ffffff;--surface2:#f1f5f9;--border:#e2e8f0;
+  --text:#0f172a;--text2:#475569;--text3:#94a3b8;
+  --blue:#2563eb;--blue-light:#dbeafe;--blue-dark:#1e40af;
+  --green:#16a34a;--green-light:#dcfce7;
+  --amber:#d97706;--amber-light:#fef3c7;
+  --purple:#7c3aed;--purple-light:#ede9fe;
+  --red:#dc2626;--red-light:#fee2e2;
+  --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.05);
+  --nav-bg:#ffffff;
+}
+[data-theme="dark"]{
+  --bg:#0f172a;--surface:#1e293b;--surface2:#0f172a;--border:#334155;
+  --text:#f1f5f9;--text2:#94a3b8;--text3:#475569;
+  --blue:#3b82f6;--blue-light:#1e3a5f;--blue-dark:#93c5fd;
+  --green:#22c55e;--green-light:#14532d;
+  --amber:#f59e0b;--amber-light:#451a03;
+  --purple:#a78bfa;--purple-light:#2e1065;
+  --red:#f87171;--red-light:#450a0a;
+  --shadow:0 1px 3px rgba(0,0,0,.3);
+  --nav-bg:#1e293b;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.6;min-height:100vh;transition:background .2s,color .2s;padding-top:var(--header-height)}
+.sidebar{position:fixed;top:var(--header-height);left:0;width:var(--sidebar-width);height:calc(100vh - var(--header-height));background:var(--surface);border-right:1px solid var(--border);z-index:50;overflow-y:auto;transition:transform .25s ease}
+.sidebar-group{padding:8px 0;border-bottom:1px solid var(--border)}
+.sidebar-group:last-child{border-bottom:none}
+.sidebar-group-label{padding:8px 20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3)}
+.sidebar-nav{list-style:none}
+.sidebar-nav a{display:flex;align-items:center;gap:8px;padding:8px 20px;font-size:13px;font-weight:500;color:var(--text2);text-decoration:none;border-left:3px solid transparent;transition:background .15s,color .15s,border-color .15s}
+.sidebar-nav a:hover{background:var(--surface2);color:var(--text)}
+.sidebar-nav a.active{background:var(--blue-light);color:var(--blue-dark);border-left-color:var(--blue);font-weight:700}
+.sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:40}
+.sidebar-backdrop.active{display:block}
+.hamburger{display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:18px;color:var(--text2);line-height:1}
+.header{background:var(--nav-bg);border-bottom:1px solid var(--border);padding:16px 24px;padding-left:calc(var(--sidebar-width) + 24px);display:flex;align-items:center;justify-content:space-between;position:fixed;top:0;left:0;right:0;z-index:1000;box-shadow:var(--shadow);transition:background .2s}
+.header-left{display:flex;align-items:center;gap:16px}
+.header-logo{display:flex;align-items:center;gap:6px;font-size:18px;letter-spacing:-0.025em}
+.header-logo .logo-text{font-weight:700;color:var(--text)}
+.header-logo .logo-accent{font-weight:700;color:var(--blue)}
+.header-title h1{font-size:16px;font-weight:700;color:var(--text)}
+.header-title p{font-size:12px;color:var(--text2);margin-top:1px}
+.header-right{display:flex;align-items:center;gap:12px}
+.theme-btn{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;transition:background .15s}
+.theme-btn:hover{background:var(--border)}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600}
+.badge-green{background:var(--green-light);color:var(--green)}
+.badge-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.page-layout{margin-left:var(--sidebar-width)}
+.main{max-width:1100px;margin:0 auto;padding:32px 32px 80px}
+.main h1{font-size:30px;font-weight:800;letter-spacing:-0.02em;margin-bottom:8px;color:var(--text)}
+.main h2{font-size:22px;font-weight:700;margin:32px 0 12px;color:var(--text);padding-bottom:6px;border-bottom:1px solid var(--border)}
+.main h3{font-size:17px;font-weight:700;margin:24px 0 8px;color:var(--text)}
+.main h4{font-size:15px;font-weight:700;margin:18px 0 6px;color:var(--text)}
+.main p{margin:8px 0 12px;color:var(--text2)}
+.main ul,.main ol{margin:8px 0 12px;padding-left:24px;color:var(--text2)}
+.main li{margin:3px 0}
+.main strong{color:var(--text)}
+.main a{color:var(--blue);text-decoration:none}
+.main a:hover{text-decoration:underline}
+.main blockquote{border-left:4px solid var(--blue);background:var(--surface2);padding:12px 16px;margin:12px 0;border-radius:0 8px 8px 0;color:var(--text2);font-style:normal}
+.main blockquote p{margin:0}
+.main blockquote em{font-style:normal;color:var(--text2)}
+.main code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:13px;font-family:'Menlo','Monaco','Consolas',monospace;color:var(--purple)}
+.main pre{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin:12px 0;overflow-x:auto;font-size:13px;line-height:1.5}
+.main pre code{background:none;padding:0;color:var(--text2)}
+.main pre.mermaid{background:var(--surface);border:1px solid var(--border);text-align:center;padding:20px}
+.main table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.main th{background:var(--surface2);padding:10px 14px;text-align:left;font-weight:600;color:var(--text);border-bottom:1px solid var(--border)}
+.main td{padding:10px 14px;color:var(--text2);border-bottom:1px solid var(--border)}
+.main tr:last-child td{border-bottom:none}
+.main hr{border:none;border-top:1px solid var(--border);margin:24px 0}
+.main details{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin:12px 0}
+.main details summary{cursor:pointer;font-weight:600;color:var(--text);padding:4px 0}
+.main details[open] summary{margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.main img{max-width:100%;height:auto;border:1px solid var(--border);border-radius:8px;margin:8px 0;display:block}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin:24px 0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;transition:border-color .15s,box-shadow .15s;display:block;color:inherit;text-decoration:none}
+.card:hover{border-color:var(--blue);box-shadow:var(--shadow);text-decoration:none}
+.card-icon{font-size:24px;margin-bottom:8px;display:block}
+.card h3{font-size:16px;font-weight:700;margin:0 0 4px;color:var(--text)}
+.card p{font-size:13px;color:var(--text2);margin:0}
+.support-cards{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0}
+.support-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;display:block;color:inherit;text-decoration:none;transition:border-color .15s}
+.support-card:hover{border-color:var(--blue);text-decoration:none}
+.support-card h4{margin:8px 0 4px}
+.card-tag{display:inline-block;font-size:11px;font-weight:600;padding:3px 8px;border-radius:12px;background:var(--blue-light);color:var(--blue);margin-top:8px}
+.footer{padding:24px 32px;border-top:1px solid var(--border);text-align:center;font-size:12px;color:var(--text3);margin-top:48px}
+@media (max-width:768px){
+  .sidebar{transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0);box-shadow:var(--shadow)}
+  .header{padding-left:16px}
+  .page-layout{margin-left:0}
+  .hamburger{display:block}
+  .header-title h1{font-size:14px}
+  .main{padding:20px}
+}
+</style>
+</head>
+<body>
+<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
+<nav class="sidebar" id="sidebar">
+<div class="sidebar-group"><div class="sidebar-group-label">🏠 Start</div><ul class="sidebar-nav">
+<li><a href="0-start-hier.html">Start hier — Hero-Automatisierungen Notion-Space</a></li>
+</ul></div>
+<div class="sidebar-group"><div class="sidebar-group-label">🗓 Meetings</div><ul class="sidebar-nav">
+<li><a href="m-meetings.html">Meetings — Hero-Automatisierungen</a></li>
+</ul></div>
+<div class="sidebar-group"><div class="sidebar-group-label">⚙️ Szenarien</div><ul class="sidebar-nav">
+<li><a href="s-00-flowcharts-overview.html">Flowcharts-Übersicht — Alle Hero-Automationen auf einen Blick</a></li>
+<li><a href="s-01-aufgabe-erledigt.html">W2-01 — Aufgabe erledigt (Status-Workflow)</a></li>
+<li><a href="s-02-aufgaben-nach-statuswechsel.html">W2-02 — Aufgaben nach Statusänderung</a></li>
+<li><a href="s-03-dokument-erstellt.html">W2-03 — Dokument erstellt → Statuswechsel</a></li>
+<li><a href="s-04-outlook-hero.html">W2-04: Outlook → HERO (Rewrite-Architektur / SOLL-Zustand)</a></li>
+<li><a href="s-05-projekt-erstellt.html">W2-05 — Projekt erstellt (Logbuch + Osneo-URL)</a></li>
+<li><a href="s-06-projekterinnerung.html" class="active">W2-06 — Projekterinnerung 1 Tag nach Termin</a></li>
+<li><a href="s-07-rechnungen-bezahlt.html">W2-07 — Rechnungen bezahlt → Abgeschlossen</a></li>
+<li><a href="s-08-regiebericht-fehlt.html">W2-08 — Regiebericht fehlt → Statuswechsel</a></li>
+<li><a href="s-09-ueberfaellige-aufgaben.html">W2-09 — Überfällige Aufgaben → Projekt markieren</a></li>
+<li><a href="s-10-zahlung-erhalten.html">W2-10 — Zahlung erhalten → Projektstatus ändern</a></li>
+</ul></div>
+<div class="sidebar-group"><div class="sidebar-group-label">📚 Reference</div><ul class="sidebar-nav">
+<li><a href="r-00-uebersicht.html">Übersicht -- Hero-Automations Lastenheft</a></li>
+<li><a href="r-hero-api-smoketest.html">#14 -- Hero-API Smoketest (Runbook)</a></li>
+<li><a href="r-hero-ids-und-connections.html">Cross-Reference -- Connections, Tokens, Hooks, Codes</a></li>
+<li><a href="r-kosten-und-subscription.html">Kosten & Subscription — Hero-Automations im Make-Konto</a></li>
+<li><a href="r-team-updates.html">Wartungs-Updates — Team-Log</a></li>
+<li><a href="r-w2-04-rewrite-design-ist.html">#4a: Outlook → HERO, IST-Zustand (wie es JETZT funktioniert)</a></li>
+<li><a href="r-w2-04-rewrite-design-mockup.html">W2-04b: Outlook → HERO Rewrite, Make-Szenario-Mockup</a></li>
+</ul></div>
+</nav>
+<header class="header">
+  <div class="header-left">
+    <button class="hamburger" onclick="toggleSidebar()">☰</button>
+    <div class="header-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="28" height="28"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></span></div>
+    <div class="header-title"><h1>Wärme Wimmer</h1><p>Hero-Automatisierungen Dokumentation</p></div>
+  </div>
+  <div class="header-right">
+    <span class="badge badge-green"><span class="badge-dot"></span>9/10 live</span>
+    <button class="theme-btn" onclick="toggleTheme()"><span id="theme-icon">&#9790;</span> Theme</button>
+  </div>
+</header>
+<div class="page-layout">
+  <main class="main">
+    <h1>W2-06 — Projekterinnerung 1 Tag nach Termin</h1>
+    <p><img alt="Make-Szenario-Map" src="screenshots/06-projekterinnerung.png" /></p>
+<p><strong>Risiko:</strong> Low-Mid
+<strong>Strategie:</strong> 1:1 Import
+<strong>Blueprint:</strong> <code>blueprints/Projekterinnerung 1 Tag nach Termin.blueprint.json</code></p>
+<hr />
+<blockquote>
+<p><em>Stand 2026-05-03 · 9/10 Hero-Szenarien live · W2-10 deferred zu n8n · Auto-Buy aktiv</em></p>
+</blockquote>
+<h2 id="flowcharts">Flowcharts</h2>
+<h3 id="sabine-version-was-passiert-geschaftlich">Sabine-Version (was passiert geschäftlich)</h3>
+<p><pre class="mermaid">flowchart TD
+    A[Termin in Hero<br/>angelegt oder geaendert] --> B{Termin-Kategorie<br/>Umsetzung oder<br/>Aushang notwendig?}
+    B -->|nein| Z[Nichts passiert]
+    B -->|ja| C[Projekt-Wiedervorlage<br/>auf Termin-Datum + 1 Tag<br/>setzen 09:00 Uhr]
+    C --> D{Tagesgeschaeft-Projekt<br/>UND Status Zu verplanen?}
+    D -->|ja| E[Projekt zu Terminiert]
+    D -->|nein| F[Wiedervorlage gesetzt<br/>Status bleibt unveraendert]</pre></p>
+<h3 id="audit-version-hero-ids-filter-hardcoded-werte">Audit-Version (Hero-IDs, Filter, Hardcoded-Werte)</h3>
+<p><pre class="mermaid">flowchart TD
+    A[Hero Webhook<br/>WatchAppointments gefeuert] --> B{category.name<br/>== Umsetzung ODER<br/>== Aushang notwendig?}
+    B -->|nein| Z0[Ende]
+    B -->|ja| C{project_match_id<br/>!= 0?}
+    C -->|nein| Z1[Ende]
+    C -->|ja| D[GraphQL update_project_match<br/>maturity_date<br/>= end-date + 1 Tag<br/>+ 07:00:00 UTC]
+    D --> E[GetProject]
+    E --> F{type.id == 25153<br/>UND step_id == 317167?}
+    F -->|ja| G[UpdateProjectStatus<br/>317168 Terminiert]
+    F -->|nein| H[Ende, nur<br/>maturity_date wurde gesetzt]</pre></p>
+<h3 id="annotations">Annotations</h3>
+<pre><code>SZENARIO 6 — PROJEKTERINNERUNG 1 TAG NACH TERMIN
+
+Trigger: app#herosoftwareintern-ba9lus:WatchAppointments
+Webhook-ID: 55916  |  Connection: 63756  |  Auth: 3785
+
+Wiedervorlage-Datum (maturity_date):
+  Berechnet aus end-date + addDays 1 + Zeit &quot;07:00:00+00:00&quot;
+  UTC-Zeit -&gt; Lokal entspricht 09:00 Sommer / 08:00 Winter
+
+Filter (UND-verknuepft auf m2):
+  category.name == &quot;Umsetzung&quot;     ODER
+  category.name == &quot;Aushang notwendig&quot;
+  UND project_match_id != 0
+
+Status-Switch nur fuer Tagesgeschaeft (TG):
+  type.id == 25153 (TG)
+  AND step_id == 317167 (Zu verplanen)
+  -&gt; set 317168 (Terminiert)
+
+NA hat KEIN Status-Switch in diesem Szenario.
+
+WIEDERVORLAGE WIRD BEIM STATUS-WECHSEL GELEERT:
+  Bei jedem UpdateProjectStatus erzeugt Hero eine NEUE
+  current_project_match_status-Row mit leerem maturity_date.
+  Das ist Standard-Hero-Verhalten, kein Bug.
+
+BEKANNTE SCHWAECHEN:
+- Status-Switch nur fuer TG, NA wird ignoriert (Asymmetrie)
+- Hardcoded Uhrzeit 07:00 UTC -&gt; bricht bei Zeitumstellung leicht
+- text:equal auf category.name &quot;Umsetzung&quot; -&gt; bei Umbenennung
+  in &quot;Umsetzungstermin&quot; greift's nicht mehr
+- Termin-Verschiebung loest WatchAppointments mehrfach aus,
+  maturity_date wird mehrfach (gleich) gesetzt — keine echte
+  Schwaeche, aber unnoetiger Traffic
+
+GEPLANTE AENDERUNGEN IN N8N-MIGRATION:
+- Kategorie-IDs statt Namen (254476 = Umsetzung, 254478 = Aushang)
+- Lokal-Zeit statt UTC fuer maturity_date
+- Auch NA-Pendant einbauen (oder bewusst entscheiden ohne)
+- Doppel-Trigger-Schutz (nur eindeutige Termine verarbeiten)
+</code></pre>
+<hr />
+<h2 id="was-tut-es-business-outcome">Was tut es (Business-Outcome)</h2>
+<p>Wenn ein Kalendertermin der Kategorie "Umsetzung" oder "Aushang notwendig" angelegt / verändert wird, setzt dieses Szenario das Projekt-Fälligkeitsdatum (<code>maturity_date</code>) auf <strong>Termin+1 Tag</strong>.</p>
+<p>Das bewirkt, dass das Projekt am Tag nach der Umsetzung automatisch wieder "oben aufschlägt" im HERO-Dashboard (Erinnerungsfunktion). Zusätzlich wird der Projektstatus von <code>317167</code> (Terminiert offen) auf <code>317168</code> (Terminiert mit Termin) gehoben, wenn die Bedingungen stimmen.</p>
+<hr />
+<h2 id="trigger">Trigger</h2>
+<ul>
+<li><strong>Typ:</strong> Event (<code>app#herosoftwareintern-ba9lus:WatchAppointments</code>, neue Variante)</li>
+<li><strong>Hook-ID:</strong> <code>55916</code></li>
+<li><strong>Connection:</strong> <code>63756</code></li>
+</ul>
+<hr />
+<h2 id="branching-logik">Branching-Logik</h2>
+<ul>
+<li><strong>Pre-Filter</strong> am HTTP-Modul 2: (<code>category.name = "Umsetzung"</code> OR <code>"Aushang notwendig"</code>) AND <code>project_match_id ≠ 0</code></li>
+<li><strong>HTTP-GraphQL-Mutation</strong> (Auth 3785): <code>update_project_match</code> mit <code>maturity_date = {termin.end + 1 Tag}T07:00:00+00:00</code></li>
+<li><strong><code>GetProject</code></strong> (conn 63756): lädt Projekt zum Statuscheck</li>
+<li><strong>Router-Route "Tagesgeschäft"</strong> (<code>type.id = 25153</code> AND <code>step_id = 317167</code>) → <code>UpdateProjectStatus</code> auf <code>317168</code></li>
+</ul>
+<hr />
+<h2 id="modul-inventar-node-by-node">Modul-Inventar (Node-by-Node)</h2>
+<p>Jeder Eintrag = ein Modul im Make-Szenario. Einrückung = verschachtelt in Router-Route.</p>
+<ul>
+<li><strong>Modul 1:</strong> HERO Webhook: Termin erstellt/aktualisiert</li>
+<li><strong>Modul 2:</strong> HTTP Request (API-Key Auth) | <strong>Filter</strong> vorhanden (4 Bedingungen)</li>
+<li><strong>Modul 5:</strong> HERO API: Projekt laden (GraphQL)</li>
+<li><strong>Modul 4:</strong> Router (Verzweigung)</li>
+<li><strong>Route 0</strong> (Route 0):<ul>
+<li><strong>Modul 3:</strong> HERO API: Projektstatus setzen | <strong>Filter</strong> vorhanden (2 Bedingungen)</li>
+</ul>
+</li>
+</ul>
+<hr />
+<h2 id="make-implementation-mapping">Make-Implementation-Mapping</h2>
+<table>
+<thead>
+<tr>
+<th>Notion-Knoten</th>
+<th>Make-Modul (Pfad)</th>
+<th>Modul-Typ</th>
+<th>Anmerkung</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A WatchAppointments</td>
+<td><code>m1</code></td>
+<td><code>app#herosoftwareintern-ba9lus:WatchAppointments</code></td>
+<td>HERO-Webhook (Termin erstellt ODER aktualisiert)</td>
+</tr>
+<tr>
+<td category="category">B</td>
+<td>Filter auf <code>m2</code></td>
+<td>Inline-Filter auf nachfolgendem HTTP-Modul</td>
+<td><code>category.name = Umsetzung</code> ODER <code>Aushang notwendig</code> UND <code>project_match_id != 0</code>. <strong>Kein eigenes Decision-Modul.</strong></td>
+</tr>
+<tr>
+<td>C GraphQL: update_project_match maturity_date</td>
+<td><code>m2</code></td>
+<td><code>http:ActionSendDataAPIKeyAuth</code></td>
+<td>Setzt <code>maturity_date = end + 1 Tag @ 07:00 UTC</code> über Mapper-Expression</td>
+</tr>
+<tr>
+<td>D GetProject</td>
+<td><code>m5</code></td>
+<td><code>app#herosoftwareintern-ba9lus:GetProject</code></td>
+<td>Lädt Projekt-Details für Status-Switch-Entscheidung</td>
+</tr>
+<tr>
+<td 317167_="317167?" Tagesgeschäft="Tagesgeschäft" _="+" step="step">E</td>
+<td>Filter auf <code>m4</code> und <code>m4/r0/m3</code></td>
+<td><code>BasicRouter</code> + Inline-Filter</td>
+<td>Status-Switch nur wenn TG (Typ 25153) UND Status <code>Zu verplanen</code> (317167)</td>
+</tr>
+<tr>
+<td>F Status → 317168 (Terminiert)</td>
+<td><code>m4/r0/m3</code></td>
+<td><code>app#herosoftwareintern-ba9lus:UpdateProjectStatus</code></td>
+<td></td>
+</tr>
+<tr>
+<td>G Ende</td>
+<td>implizit</td>
+<td>(kein Modul)</td>
+<td>Projekt schon <code>Terminiert</code> oder NA → Filter blockiert, nur <code>maturity_date</code> wurde gesetzt</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<hr />
+<h2 id="status-ubergange">Status-Übergänge</h2>
+<ul>
+<li>Tagesgeschäft: <code>317167</code> → <code>317168</code> (bei erstmaligem Termin-Anlegen für Projekt, das auf Termin wartet)</li>
+</ul>
+<hr />
+<h2 id="externe-side-effects">Externe Side-Effects</h2>
+<ul>
+<li>1× GraphQL-Mutation (<code>update_project_match</code>, Auth 3785)</li>
+<li>1× GetProject (conn 63756)</li>
+<li>1× UpdateProjectStatus (conn 63756)</li>
+</ul>
+<hr />
+<h2 id="abhangigkeiten">Abhängigkeiten</h2>
+<ul>
+<li>Hook <code>55916</code>, Connection <code>63756</code>, Auth <code>3785</code></li>
+<li><strong>Hardcoded:</strong> category-Namen "Umsetzung"/"Aushang notwendig", type.id 25153, Status-Codes 317167/317168, Zeit <code>07:00:00+00:00</code></li>
+</ul>
+<hr />
+<h2 id="hands-on-verifikation-2026-04-21">Hands-On-Verifikation (2026-04-21)</h2>
+<p><em>Quelle: REST-Blueprint-Extraktion + Test-Bench-Fire. Screenshots inline pro Abschnitt (<code>screenshots/06-*.png</code>).</em></p>
+<p><strong>Hands-On-Status:</strong> BLOCKED. Szenario ist nicht im Client-Org (7209133) importiert. IM016 <code>missingappserror</code> beim letzten Import-Versuch 2026-04-10. Diagnose-Pfad:
+- Schritt 0 (Runbook): UI-Import-Blueprint-Test. Wenn Module rendern, ist App installiert und IM016 war missleading.
+- Wenn Import OK: Die unteren Abschnitte gelten analog (Blueprint = Ist).
+- Wenn Import fehlschlägt: Unblock-Aktion ist die Regeneration des Hero-API-Tokens durch Raphael per Self-Service.</p>
+<h3 id="1-trigger-einstieg">1. Trigger / Einstieg</h3>
+<ul>
+<li><strong>Modul:</strong> <code>app#herosoftwareintern-ba9lus:WatchAppointments</code> (Pfad <code>m1</code>, m1)</li>
+<li><strong>Hook-Ref (Hero-Webhook-ID):</strong> <code>55916</code>. Registriert in Hero-System, nicht im Make-Hook-Endpoint.</li>
+<li><strong>Scheduling:</strong> event-getrieben (kein Schedule-Attribut)</li>
+</ul>
+<p><img alt="Trigger-Modul m1 (app#herosoftwareintern-ba9lus:WatchAppointments)" src="screenshots/06-m1-trigger.png" /></p>
+<h3 id="2-entry-filter">2. Entry-Filter</h3>
+<ul>
+<li><strong>Modul:</strong> <code>http:ActionSendDataAPIKeyAuth</code> (Pfad <code>m2</code>)</li>
+<li><strong>Logik:</strong> ODER zwischen 2 Gruppen. Eine Gruppe reicht zum Passieren.</li>
+<li><strong>Bedingungen (verbatim aus Make):</strong></li>
+<li><strong>Gruppe 1</strong> (intern UND-verknüpft):<ul>
+<li><code>{{1.category.name}}</code> <strong>text:equal</strong> <code>Umsetzung</code></li>
+<li><code>{{1.project_match_id}}</code> <strong>number:notequal</strong> <code>0</code></li>
+</ul>
+</li>
+<li><strong>Gruppe 2</strong> (intern UND-verknüpft):<ul>
+<li><code>{{1.category.name}}</code> <strong>text:equal</strong> <code>Aushang notwendig</code></li>
+<li><code>{{1.project_match_id}}</code> <strong>number:notequal</strong> <code>0</code></li>
+</ul>
+</li>
+<li><strong>Screenshot:</strong> kein separater Entry-Filter vor dem Routing. Der gleiche Filter erscheint als erster Eintrag im Filter-Stichprobe-Abschnitt unten.</li>
+</ul>
+<h3 id="3-filter-operatoren">3. Filter-Operatoren</h3>
+<p><strong>Operator-Verteilung:</strong> <code>number:equal</code>=2, <code>number:notequal</code>=2, <code>text:equal</code>=2</p>
+<p><strong>Nur Exact-Match (<code>text:equal</code>):</strong> Umbenennung eines Titels in Hero bricht die Route stillschweigend.</p>
+<p><strong>Filter-Logik pro Modul</strong> (wichtig: Gruppen-Struktur aus dem Blueprint erhält AND/OR):</p>
+<ul>
+<li>Filter an <code>m2</code> (m2): <strong>ODER</strong> zwischen 2 Gruppen. Eine reicht.</li>
+<li>Gruppe 1 (intern UND):<ul>
+<li><code>{{1.category.name}}</code> <strong>text:equal</strong> <code>Umsetzung</code></li>
+<li><code>{{1.project_match_id}}</code> <strong>number:notequal</strong> <code>0</code></li>
+</ul>
+</li>
+<li>Gruppe 2 (intern UND):<ul>
+<li><code>{{1.category.name}}</code> <strong>text:equal</strong> <code>Aushang notwendig</code></li>
+<li><code>{{1.project_match_id}}</code> <strong>number:notequal</strong> <code>0</code></li>
+</ul>
+</li>
+<li>Filter an <code>m4/r0/m3</code> (m3): <strong>UND</strong>. Alle 2 Bedingungen müssen gleichzeitig gelten.</li>
+<li><code>{{5.type.id}}</code> <strong>number:equal</strong> <code>25153</code></li>
+<li><code>{{5.current_project_match_status.step_id}}</code> <strong>number:equal</strong> <code>317167</code></li>
+</ul>
+<p><strong>Filter-Stichprobe (Screenshots pro Route):</strong></p>
+<p><img alt="Filter an m2 (m2)" src="screenshots/06-m2-filter.png" /></p>
+<p><img alt="Filter an m4/r0/m3 (m3)" src="screenshots/06-m4_r0_m3-filter.png" /></p>
+<h3 id="4-status-ids-updateprojectstatus-module">4. Status-IDs (UpdateProjectStatus-Module)</h3>
+<p><strong>Anzahl <code>UpdateProjectStatus</code>-Module:</strong> 1</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Modul-Pfad</th>
+<th>Modul-ID</th>
+<th>Projekt-Typ</th>
+<th>Status-Code</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>m4/r0/m3</code></td>
+<td>m3</td>
+<td><code>25153</code></td>
+<td><code>317168</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Screenshots pro Modul:</strong> entfallen vorerst. Mapper-Panel ist an die Hero-Connection gekoppelt, die ohne Token leer bleibt — jeder Screenshot wuerde nur <code>Connection * — Value must not be empty</code> zeigen (gleicher Zustand fuer alle 1 Module). Die Status-Codes und Projekt-Typ-IDs in der Tabelle oben stammen aus dem REST-Blueprint (Quelle: <code>context/hero-exports/audit-2026-04-20/06-s5.json</code> → <code>status_id_rows</code>). Re-Verifikation im Make-UI in einem Durchgang, sobald Raphaels Hero-API-Token regeneriert ist.</p>
+<h3 id="5-error-handler-audit">5. Error-Handler-Audit</h3>
+<p><strong>Module mit Error-Handler:</strong> 1 von 5</p>
+<table>
+<thead>
+<tr>
+<th>Modul-Pfad</th>
+<th>Modul-ID</th>
+<th>Modul-Typ</th>
+<th>Handler-Typ</th>
+<th>Handler-Module</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>m5</code></td>
+<td>m5</td>
+<td><code>app#herosoftwareintern-ba9lus:GetProject</code></td>
+<td><code>Ignore</code></td>
+<td>builtin:Ignore</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Screenshot Scenario-Settings (Advanced settings, Error handling):</strong></p>
+<p><img alt="Scenario-Settings: Advanced / Error handling" src="screenshots/06-error-handler-overview.png" /></p>
+<h3 id="6-testlauf-execution-log">6. Testlauf (Execution-Log)</h3>
+<p><strong>Status:</strong> kein Testlauf dokumentiert</p>
+<ul>
+<li><strong>Test-Bench-Szenario:</strong> <code>TEST_s5</code> (ID 5320010)</li>
+<li><strong>Fixture:</strong> <code>context/fixtures/s5-projekterinnerung/aushang-notwendig.json</code></li>
+<li><strong>Getesteter Zweig:</strong> Aushang notwendig / Tagesgeschäft / Zu verplanen → maturity_date + Terminiert</li>
+<li><strong>Erwartetes Verhalten:</strong> Both updates apply (same logic as Umsetzung path)</li>
+<li><strong>Webhook-URL:</strong> <code>https://hook.eu1.make.com/w2diuaw4ab93xkog5pp28j5rsqe9fdgy</code></li>
+<li><strong>Webhook-Fire-Ergebnis:</strong> HTTP <strong>200</strong> um 2026-04-20T22:01:41.414127+00:00, Payload 172 bytes</li>
+<li><strong>Letzte Scenario-Log-Events</strong> (Make REST <code>/logs</code>):</li>
+<li><code>2026-04-17T08:01:19.649Z</code> Typ <code>stop</code> Ops <code>None</code></li>
+<li><code>2026-04-17T08:01:13.096Z</code> Typ <code>start</code> Ops <code>None</code></li>
+<li><code>2026-04-16T21:02:05.003Z</code> Typ <code>modify</code> Ops <code>None</code></li>
+<li><strong>Rohdaten:</strong> <a href="../execution-logs-2026-04-20/06-s5.json"><code>execution-logs-2026-04-20/06-s5.json</code></a></li>
+<li><strong>Hinweis:</strong> End-to-End-Log erst verfuegbar, sobald Raphaels Hero-API-Token regeneriert ist. Bis dahin dokumentiert der Webhook-Fire gegen die TEST-Bench-Variante den strukturellen Durchlauf (Hero-Modul-freie Variante, keine Credentials benoetigt).</li>
+</ul>
+<p><em>Screenshot pending:</em> <code>screenshots/06-execution-log.png</code> (noch nicht captured)</p>
+<hr />
+<h2 id="risiko-bewertung">Risiko-Bewertung</h2>
+<p><strong>Low-Mid.</strong> Ausfall = maturity_date wird nicht gesetzt → Projekt "schwebt" ohne Erinnerung. Kein Datenverlust.</p>
+<hr />
+<h2 id="rote-fahnen-altlasten">Rote Fahnen / Altlasten</h2>
+<ul>
+<li>Nur Tagesgeschäft wird abgedeckt — <strong>kein Nacharbeiten-Pendant</strong> (Asymmetrie zu anderen Szenarien). Absicht oder Lücke?</li>
+<li>Hartkodierte Uhrzeit <code>07:00:00+00:00</code> (UTC, nicht Europe/Berlin)</li>
+</ul>
+<hr />
+<h2 id="offene-fragen-an-raphael">Offene Fragen an Raphael</h2>
+<ol>
+<li>Warum nur Tagesgeschäft (25153), nicht Nacharbeiten (29227)?</li>
+<li><code>07:00:00+00:00</code> = 09:00 Lokalzeit sommers / 08:00 winters — ist das beabsichtigt?</li>
+<li>Werden bei Termin-<strong>Verschiebung</strong> Trigger mehrfach ausgelöst? Doppel-maturity_date-Updates ein Problem?</li>
+</ol>
+<hr />
+<h2 id="phase-1-import-checkliste">Phase-1-Import-Checkliste</h2>
+<ul>
+<li>[ ] Hero-App-Connection (neue Variante) einrichten</li>
+<li>[ ] Auth 3785 bereitstellen</li>
+<li>[ ] Hook <code>55916</code> neu registrieren</li>
+<li>[ ] Blueprint importieren</li>
+<li>[ ] Testlauf: neuen Termin mit Kategorie "Umsetzung" anlegen, prüfen ob maturity_date richtig gesetzt</li>
+</ul>
+  </main>
+  <footer class="footer">Quelle: <code>workspace/clients/warme-wimmer/</code> · Build S-06-projekterinnerung.md · UnpauseAI</footer>
+</div>
+<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
+  <div style="text-align:center;max-width:360px;padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span></div>
+    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Wärme Wimmer Documentation</h2>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Bitte Zugangscode eingeben.</p>
+    <div style="display:flex;gap:8px;">
+      <input id="auth-input" type="password" placeholder="Zugangscode" autocomplete="off" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;" onkeydown="if(event.key==='Enter')checkAuth()" />
+      <button onclick="checkAuth()" style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">OK</button>
+    </div>
+    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Falscher Code, bitte erneut versuchen.</p>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:document.documentElement.getAttribute('data-theme')==='dark'?'dark':'default',securityLevel:'loose'});</script>
+<script>
+var WIMMER_CODE='wimmer2026';
+function checkAuth(){var inp=document.getElementById('auth-input').value;if(inp===WIMMER_CODE){localStorage.setItem('wimmer-docs-access','granted');var g=document.getElementById('auth-gate');g.style.opacity='0';setTimeout(function(){g.style.display='none'},300)}else{document.getElementById('auth-error').style.display='block';document.getElementById('auth-input').value='';document.getElementById('auth-input').focus()}}
+(function(){if(localStorage.getItem('wimmer-docs-access')==='granted'){var g=document.getElementById('auth-gate');if(g)g.style.display='none'}else{var inp=document.getElementById('auth-input');if(inp)inp.focus()}})();
+function toggleTheme(){var h=document.documentElement;var c=h.getAttribute('data-theme');var n=c==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('wimmer-docs-theme',n);var i=document.getElementById('theme-icon');if(i)i.innerHTML=n==='dark'?'&#9788;':'&#9790;'}
+var saved=localStorage.getItem('wimmer-docs-theme');
+if(saved){document.documentElement.setAttribute('data-theme',saved);var i=document.getElementById('theme-icon');if(i&&saved==='dark')i.innerHTML='&#9788;'}
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('sidebarBackdrop').classList.toggle('active')}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('sidebarBackdrop').classList.remove('active')}
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+User-agent: *
+Disallow: /docs/
+Disallow: /clients/
+
+# Client-facing documentation and proposal landing pages are auth-gated;
+# excluded from indexing as belt-and-suspenders alongside the JS auth gate.

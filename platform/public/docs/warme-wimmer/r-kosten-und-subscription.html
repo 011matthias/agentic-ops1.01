@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<meta name="googlebot" content="noindex,nofollow">
+<title>Kosten & Subscription — Hero-Automations im Make-Konto — Wärme Wimmer Hero-Doku</title>
+<style>
+:root{
+  --header-height:72px;--sidebar-width:240px;
+  --bg:#f8fafc;--surface:#ffffff;--surface2:#f1f5f9;--border:#e2e8f0;
+  --text:#0f172a;--text2:#475569;--text3:#94a3b8;
+  --blue:#2563eb;--blue-light:#dbeafe;--blue-dark:#1e40af;
+  --green:#16a34a;--green-light:#dcfce7;
+  --amber:#d97706;--amber-light:#fef3c7;
+  --purple:#7c3aed;--purple-light:#ede9fe;
+  --red:#dc2626;--red-light:#fee2e2;
+  --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.05);
+  --nav-bg:#ffffff;
+}
+[data-theme="dark"]{
+  --bg:#0f172a;--surface:#1e293b;--surface2:#0f172a;--border:#334155;
+  --text:#f1f5f9;--text2:#94a3b8;--text3:#475569;
+  --blue:#3b82f6;--blue-light:#1e3a5f;--blue-dark:#93c5fd;
+  --green:#22c55e;--green-light:#14532d;
+  --amber:#f59e0b;--amber-light:#451a03;
+  --purple:#a78bfa;--purple-light:#2e1065;
+  --red:#f87171;--red-light:#450a0a;
+  --shadow:0 1px 3px rgba(0,0,0,.3);
+  --nav-bg:#1e293b;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.6;min-height:100vh;transition:background .2s,color .2s;padding-top:var(--header-height)}
+.sidebar{position:fixed;top:var(--header-height);left:0;width:var(--sidebar-width);height:calc(100vh - var(--header-height));background:var(--surface);border-right:1px solid var(--border);z-index:50;overflow-y:auto;transition:transform .25s ease}
+.sidebar-group{padding:8px 0;border-bottom:1px solid var(--border)}
+.sidebar-group:last-child{border-bottom:none}
+.sidebar-group-label{padding:8px 20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3)}
+.sidebar-nav{list-style:none}
+.sidebar-nav a{display:flex;align-items:center;gap:8px;padding:8px 20px;font-size:13px;font-weight:500;color:var(--text2);text-decoration:none;border-left:3px solid transparent;transition:background .15s,color .15s,border-color .15s}
+.sidebar-nav a:hover{background:var(--surface2);color:var(--text)}
+.sidebar-nav a.active{background:var(--blue-light);color:var(--blue-dark);border-left-color:var(--blue);font-weight:700}
+.sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:40}
+.sidebar-backdrop.active{display:block}
+.hamburger{display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:18px;color:var(--text2);line-height:1}
+.header{background:var(--nav-bg);border-bottom:1px solid var(--border);padding:16px 24px;padding-left:calc(var(--sidebar-width) + 24px);display:flex;align-items:center;justify-content:space-between;position:fixed;top:0;left:0;right:0;z-index:1000;box-shadow:var(--shadow);transition:background .2s}
+.header-left{display:flex;align-items:center;gap:16px}
+.header-logo{display:flex;align-items:center;gap:6px;font-size:18px;letter-spacing:-0.025em}
+.header-logo .logo-text{font-weight:700;color:var(--text)}
+.header-logo .logo-accent{font-weight:700;color:var(--blue)}
+.header-title h1{font-size:16px;font-weight:700;color:var(--text)}
+.header-title p{font-size:12px;color:var(--text2);margin-top:1px}
+.header-right{display:flex;align-items:center;gap:12px}
+.theme-btn{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;transition:background .15s}
+.theme-btn:hover{background:var(--border)}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600}
+.badge-green{background:var(--green-light);color:var(--green)}
+.badge-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.page-layout{margin-left:var(--sidebar-width)}
+.main{max-width:1100px;margin:0 auto;padding:32px 32px 80px}
+.main h1{font-size:30px;font-weight:800;letter-spacing:-0.02em;margin-bottom:8px;color:var(--text)}
+.main h2{font-size:22px;font-weight:700;margin:32px 0 12px;color:var(--text);padding-bottom:6px;border-bottom:1px solid var(--border)}
+.main h3{font-size:17px;font-weight:700;margin:24px 0 8px;color:var(--text)}
+.main h4{font-size:15px;font-weight:700;margin:18px 0 6px;color:var(--text)}
+.main p{margin:8px 0 12px;color:var(--text2)}
+.main ul,.main ol{margin:8px 0 12px;padding-left:24px;color:var(--text2)}
+.main li{margin:3px 0}
+.main strong{color:var(--text)}
+.main a{color:var(--blue);text-decoration:none}
+.main a:hover{text-decoration:underline}
+.main blockquote{border-left:4px solid var(--blue);background:var(--surface2);padding:12px 16px;margin:12px 0;border-radius:0 8px 8px 0;color:var(--text2);font-style:normal}
+.main blockquote p{margin:0}
+.main blockquote em{font-style:normal;color:var(--text2)}
+.main code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:13px;font-family:'Menlo','Monaco','Consolas',monospace;color:var(--purple)}
+.main pre{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin:12px 0;overflow-x:auto;font-size:13px;line-height:1.5}
+.main pre code{background:none;padding:0;color:var(--text2)}
+.main pre.mermaid{background:var(--surface);border:1px solid var(--border);text-align:center;padding:20px}
+.main table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.main th{background:var(--surface2);padding:10px 14px;text-align:left;font-weight:600;color:var(--text);border-bottom:1px solid var(--border)}
+.main td{padding:10px 14px;color:var(--text2);border-bottom:1px solid var(--border)}
+.main tr:last-child td{border-bottom:none}
+.main hr{border:none;border-top:1px solid var(--border);margin:24px 0}
+.main details{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin:12px 0}
+.main details summary{cursor:pointer;font-weight:600;color:var(--text);padding:4px 0}
+.main details[open] summary{margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.main img{max-width:100%;height:auto;border:1px solid var(--border);border-radius:8px;margin:8px 0;display:block}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin:24px 0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;transition:border-color .15s,box-shadow .15s;display:block;color:inherit;text-decoration:none}
+.card:hover{border-color:var(--blue);box-shadow:var(--shadow);text-decoration:none}
+.card-icon{font-size:24px;margin-bottom:8px;display:block}
+.card h3{font-size:16px;font-weight:700;margin:0 0 4px;color:var(--text)}
+.card p{font-size:13px;color:var(--text2);margin:0}
+.support-cards{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0}
+.support-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;display:block;color:inherit;text-decoration:none;transition:border-color .15s}
+.support-card:hover{border-color:var(--blue);text-decoration:none}
+.support-card h4{margin:8px 0 4px}
+.card-tag{display:inline-block;font-size:11px;font-weight:600;padding:3px 8px;border-radius:12px;background:var(--blue-light);color:var(--blue);margin-top:8px}
+.footer{padding:24px 32px;border-top:1px solid var(--border);text-align:center;font-size:12px;color:var(--text3);margin-top:48px}
+@media (max-width:768px){
+  .sidebar{transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0);box-shadow:var(--shadow)}
+  .header{padding-left:16px}
+  .page-layout{margin-left:0}
+  .hamburger{display:block}
+  .header-title h1{font-size:14px}
+  .main{padding:20px}
+}
+</style>
+</head>
+<body>
+<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
+<nav class="sidebar" id="sidebar">
+<div class="sidebar-group"><div class="sidebar-group-label">🏠 Start</div><ul class="sidebar-nav">
+<li><a href="0-start-hier.html">Start hier — Hero-Automatisierungen Notion-Space</a></li>
+</ul></div>
+<div class="sidebar-group"><div class="sidebar-group-label">🗓 Meetings</div><ul class="sidebar-nav">
+<li><a href="m-meetings.html">Meetings — Hero-Automatisierungen</a></li>
+</ul></div>
+<div class="sidebar-group"><div class="sidebar-group-label">⚙️ Szenarien</div><ul class="sidebar-nav">
+<li><a href="s-00-flowcharts-overview.html">Flowcharts-Übersicht — Alle Hero-Automationen auf einen Blick</a></li>
+<li><a href="s-01-aufgabe-erledigt.html">W2-01 — Aufgabe erledigt (Status-Workflow)</a></li>
+<li><a href="s-02-aufgaben-nach-statuswechsel.html">W2-02 — Aufgaben nach Statusänderung</a></li>
+<li><a href="s-03-dokument-erstellt.html">W2-03 — Dokument erstellt → Statuswechsel</a></li>
+<li><a href="s-04-outlook-hero.html">W2-04: Outlook → HERO (Rewrite-Architektur / SOLL-Zustand)</a></li>
+<li><a href="s-05-projekt-erstellt.html">W2-05 — Projekt erstellt (Logbuch + Osneo-URL)</a></li>
+<li><a href="s-06-projekterinnerung.html">W2-06 — Projekterinnerung 1 Tag nach Termin</a></li>
+<li><a href="s-07-rechnungen-bezahlt.html">W2-07 — Rechnungen bezahlt → Abgeschlossen</a></li>
+<li><a href="s-08-regiebericht-fehlt.html">W2-08 — Regiebericht fehlt → Statuswechsel</a></li>
+<li><a href="s-09-ueberfaellige-aufgaben.html">W2-09 — Überfällige Aufgaben → Projekt markieren</a></li>
+<li><a href="s-10-zahlung-erhalten.html">W2-10 — Zahlung erhalten → Projektstatus ändern</a></li>
+</ul></div>
+<div class="sidebar-group"><div class="sidebar-group-label">📚 Reference</div><ul class="sidebar-nav">
+<li><a href="r-00-uebersicht.html">Übersicht -- Hero-Automations Lastenheft</a></li>
+<li><a href="r-hero-api-smoketest.html">#14 -- Hero-API Smoketest (Runbook)</a></li>
+<li><a href="r-hero-ids-und-connections.html">Cross-Reference -- Connections, Tokens, Hooks, Codes</a></li>
+<li><a href="r-kosten-und-subscription.html" class="active">Kosten & Subscription — Hero-Automations im Make-Konto</a></li>
+<li><a href="r-team-updates.html">Wartungs-Updates — Team-Log</a></li>
+<li><a href="r-w2-04-rewrite-design-ist.html">#4a: Outlook → HERO, IST-Zustand (wie es JETZT funktioniert)</a></li>
+<li><a href="r-w2-04-rewrite-design-mockup.html">W2-04b: Outlook → HERO Rewrite, Make-Szenario-Mockup</a></li>
+</ul></div>
+</nav>
+<header class="header">
+  <div class="header-left">
+    <button class="hamburger" onclick="toggleSidebar()">☰</button>
+    <div class="header-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="28" height="28"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></span></div>
+    <div class="header-title"><h1>Wärme Wimmer</h1><p>Hero-Automatisierungen Dokumentation</p></div>
+  </div>
+  <div class="header-right">
+    <span class="badge badge-green"><span class="badge-dot"></span>9/10 live</span>
+    <button class="theme-btn" onclick="toggleTheme()"><span id="theme-icon">&#9790;</span> Theme</button>
+  </div>
+</header>
+<div class="page-layout">
+  <main class="main">
+    <h1>Kosten & Subscription — Hero-Automations im Make-Konto</h1>
+    <p><strong>Stand:</strong> 2026-04-16 (aktualisiert mit Klaus-PDF-Realdaten). Schätzungen basieren jetzt auf realen Hero-Make-Konto-Verbrauchsdaten aus Klaus-PDF (Section "Kennzahlenübersicht", 12 Monate Produktion).</p>
+<p>Irinas Frage im Meeting: "Wie viel in Eurobetrag, wie lange würde unsere Subscription ausreichen." → diese Seite beantwortet genau das.</p>
+<blockquote>
+<p><strong>Update 2026-04-16:</strong> Bisherige Ops-Schätzungen waren Raphael-Guesses. Klaus-PDF (15.04.) liefert reale Produktionszahlen aus Hero-Make-Konto. Reale Gesamtsumme: <strong>53.371 Ops/Monat</strong> (vs. vorherige Schätzung 16-20K). Pro 80K reicht weiter, aber Headroom nur <strong>1,5x</strong> statt 4x. Detail in Tabelle unten + Empfehlung Section 6 angepasst.</p>
+</blockquote>
+<hr />
+<blockquote>
+<p><em>Stand 2026-05-03 · 9/10 Hero-Szenarien live · W2-10 deferred zu n8n · Auto-Buy aktiv</em></p>
+</blockquote>
+<h2 id="1-makecom-subscription-ist-soll">1. Make.com-Subscription: Ist / Soll</h2>
+<p><strong>Ist:</strong> Core 10.000 Ops/Monat (~$9 / Monat laut Raphael "habe das Projekt eigentlich schon geupgradet auf das Core-Projekt").</p>
+<p><strong>Soll:</strong> Mindestens <strong>Pro 80.000 Ops/Monat</strong> (~$16-19/Monat mit Rabatt).</p>
+<h3 id="warum-core-nicht-reicht">Warum Core NICHT reicht</h3>
+<p>10 Hero-Automatisierungen + 7 Zapier-Migrations-Szenarien = 17 Szenarien. Davon <strong>4 Polling-Schedules</strong> (Regiebericht, Rechnungen bezahlt, Überfällige Aufgaben, Zahlung erhalten) die <strong>kontinuierlich Ops verbrennen</strong>, auch wenn nichts passiert.</p>
+<p><strong>Ops-Schätzung pro Monat (konservativ):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Szenario</th>
+<th>Trigger-Frequenz</th>
+<th>Ops pro Run</th>
+<th>Runs/Monat</th>
+<th>Ops/Monat</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>#1 Aufgabe erledigt</td>
+<td>Event (pro Task-Change)</td>
+<td>~8</td>
+<td>400</td>
+<td>3.200</td>
+</tr>
+<tr>
+<td>#2 Aufgaben nach Statusänderung</td>
+<td>Event (pro Project-Change)</td>
+<td>~5</td>
+<td>300</td>
+<td>1.500</td>
+</tr>
+<tr>
+<td>#3 Dokument erstellt</td>
+<td>Event (pro Dokument)</td>
+<td>~6</td>
+<td>200</td>
+<td>1.200</td>
+</tr>
+<tr>
+<td>#4 Outlook (alt, Polling)</td>
+<td>Poll 15min, 16h/Tag</td>
+<td>~2 leer + 12 wenn Mail</td>
+<td>1.920 leer + 50×22 aktiv</td>
+<td><strong>~19.000</strong></td>
+</tr>
+<tr>
+<td>#4 Outlook (Rewrite, Webhook)</td>
+<td>Event (pro Mail)</td>
+<td>~8</td>
+<td>1.100</td>
+<td><strong>8.800</strong></td>
+</tr>
+<tr>
+<td>#5 Projekt erstellt</td>
+<td>Event</td>
+<td>~5</td>
+<td>30</td>
+<td>150</td>
+</tr>
+<tr>
+<td>#6 Projekterinnerung</td>
+<td>Event</td>
+<td>~3</td>
+<td>50</td>
+<td>150</td>
+</tr>
+<tr>
+<td>#7 Rechnungen bezahlt</td>
+<td>Poll tgl.</td>
+<td>~6</td>
+<td>30</td>
+<td>180</td>
+</tr>
+<tr>
+<td>#8 Regiebericht fehlt</td>
+<td>Poll tgl.</td>
+<td>~10</td>
+<td>30</td>
+<td>300</td>
+</tr>
+<tr>
+<td>#9 Überfällige Aufgaben</td>
+<td>Poll tgl.</td>
+<td>~4</td>
+<td>30</td>
+<td>120</td>
+</tr>
+<tr>
+<td>#10 Zahlung erhalten</td>
+<td>Poll tgl.</td>
+<td>~4</td>
+<td>30</td>
+<td>120</td>
+</tr>
+<tr>
+<td><strong>Hero-Subtotal (Rewrite-Variante)</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td><strong>~16.000</strong></td>
+</tr>
+<tr>
+<td>+ W1 Zapier-Migration (7 Szenarien, Event)</td>
+<td>Event</td>
+<td>divers</td>
+<td>~500 Events</td>
+<td><strong>~4.000</strong></td>
+</tr>
+<tr>
+<td><strong>Gesamt</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td><strong>~20.000 Ops/Monat</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Plus Spikes:</strong>
+- Messezeit (Messeformular) +5.000 Ops in einer Woche
+- Fehlerläufe / Retries +10-15% Overhead
+- Outlook-Polling alt: nochmal +20.000 wenn Rewrite verzögert</p>
+<p><strong>Sicherheitsabstand:</strong> Pro 80K gibt Platz für 4× aktuellen Durchschnitt.</p>
+<h3 id="makecom-tier-vergleich">Make.com Tier-Vergleich</h3>
+<table>
+<thead>
+<tr>
+<th>Tier</th>
+<th>Ops/Monat</th>
+<th>$/Monat (bei Jahresabo)</th>
+<th>Headroom WW</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Core</td>
+<td>10.000</td>
+<td>~$9</td>
+<td><strong>-50% zu wenig</strong></td>
+</tr>
+<tr>
+<td>Pro</td>
+<td>10.000</td>
+<td>~$16</td>
+<td>-50% (gleiche Ops, mehr Features)</td>
+</tr>
+<tr>
+<td>Pro 80K</td>
+<td>80.000</td>
+<td>~$24-30</td>
+<td><strong>4x Headroom</strong> (empfohlen)</td>
+</tr>
+<tr>
+<td>Teams</td>
+<td>10.000</td>
+<td>~$29</td>
+<td>Multi-User, unnötig</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Empfehlung:</strong> Pro 80K Plan. Ca. $25-30/Monat. <strong>Nicht</strong> Teams — keine Multi-User-Anforderung aktuell.</p>
+<p><strong>Alternative:</strong> Pro 10K + Ops-Aufstockung ("Ops Top-Up"). Rechnet sich ab ~30K Ops pro Monat nicht mehr.</p>
+<hr />
+<h2 id="2-externe-api-kosten-neu-in-ww-abrechnung">2. Externe API-Kosten (neu in WW-Abrechnung)</h2>
+<h3 id="21-openai-scenario-4">2.1 OpenAI (Scenario #4)</h3>
+<table>
+<thead>
+<tr>
+<th>Szenario</th>
+<th>Model</th>
+<th>Tokens/Call</th>
+<th>Calls/Monat</th>
+<th>$/Monat</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Projekt-Klassifizierung (Fallback)</td>
+<td>gpt-4o-mini</td>
+<td>220 in / 10 out</td>
+<td>300 (30% aller Mails)</td>
+<td>$0.01</td>
+</tr>
+<tr>
+<td>Logbuch-Summary</td>
+<td>gpt-4o-mini</td>
+<td>800 in / 150 out</td>
+<td>1.100</td>
+<td>$0.19</td>
+</tr>
+<tr>
+<td><strong>Summe OpenAI</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td><strong>~$0.20/Monat</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Marginal. Selbst bei 10× Volumen bleibt OpenAI unter $5/Monat.</p>
+<p><strong>Vorsicht bei:</strong> gpt-4o oder o1 statt mini = 20× teurer. mini reicht für diese Use-Cases.</p>
+<h3 id="22-mailgun-scenario-4-ingest">2.2 Mailgun (Scenario #4 Ingest)</h3>
+<p><strong>Tier-Vergleich:</strong>
+- <strong>Free:</strong> 100 Mails/Tag (unzureichend)
+- <strong>Foundation:</strong> $15/Monat für 50.000 Mails/Monat
+- Speicher für Raw-Mails: 3 Tage inklusive</p>
+<p><strong>Bei WW-Volumen (~1.100 Mails/Monat):</strong> Foundation-Tier ist Overkill, aber keinen kleineren Plan gibt es. <strong>$15/Monat.</strong></p>
+<h3 id="23-aws-s3-mail-archiv">2.3 AWS S3 (Mail-Archiv)</h3>
+<p><strong>Schätzung (Leonhard bestätigen):</strong>
+- 100 GB Standard-Storage (Frankfurt) × $0.023/GB = <strong>$2.30/Monat</strong> pro 100 GB
+- Requests (Put/Get): &lt;$1/Monat bei unserem Volumen
+- Egress: nur Hero-Upload = minimal</p>
+<p><strong>Nach 6 Monaten ~50 GB:</strong> $1.15/Monat
+<strong>Nach 12 Monaten ~100 GB:</strong> $2.30/Monat
+<strong>Nach 5 Jahren ~500 GB (mit Lifecycle → Glacier):</strong> Standard $0.60 + Glacier $2.00 = ~$2.60/Monat</p>
+<p><strong>Keine AWS-Kosten-Explosion</strong> zu erwarten.</p>
+<h3 id="24-lexoffice-scenarios-7-10">2.4 LexOffice (Scenarios #7, #10)</h3>
+<p>API-Kosten = <strong>0</strong> (im WW-LexOffice-Abo enthalten). Kein zusätzlicher Line-Item.</p>
+<h3 id="25-microsoft-365-outlook-connection">2.5 Microsoft 365 (Outlook-Connection)</h3>
+<p>Bestehendes WW-Abo. Keine Make-spezifischen Zusatzkosten. OAuth-Flow (gratis).</p>
+<hr />
+<h2 id="3-gesamtkosten-nach-ubernahme">3. Gesamtkosten nach Übernahme</h2>
+<table>
+<thead>
+<tr>
+<th>Posten</th>
+<th>$/Monat</th>
+<th>EUR/Monat (bei 0.92)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Make.com Pro 80K</td>
+<td>$27</td>
+<td>EUR 25</td>
+</tr>
+<tr>
+<td>Mailgun Foundation</td>
+<td>$15</td>
+<td>EUR 14</td>
+</tr>
+<tr>
+<td>OpenAI (gpt-4o-mini)</td>
+<td>$0.20</td>
+<td>EUR 0.20</td>
+</tr>
+<tr>
+<td>AWS S3 (Jahr 1)</td>
+<td>$2.30</td>
+<td>EUR 2.10</td>
+</tr>
+<tr>
+<td><strong>Summe laufend (Jahr 1)</strong></td>
+<td><strong>$44.50</strong></td>
+<td><strong>~EUR 41</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Einmalkosten / Setup:</strong>
+- Mailgun Domain Setup: 0 (Self-Service)
+- AWS S3 Bucket: 0 (Self-Service)
+- Dev-Zeit (siehe separater Abrechnungsposten)</p>
+<hr />
+<h2 id="4-einordnung-gegen-fruheren-zustand">4. Einordnung gegen früheren Zustand</h2>
+<p><strong>Vorher (über Hero-Vertrag bezahlt):</strong> laut Raphael: "die Hero meinte auch, dass eben die E-Mail-Automatisierung bei uns wohl den Kostenrahmen etwas gesprengt auf ihrer Seite." Hero-seitige Kosten sind <strong>unbekannt</strong> (kein Einblick in deren Make-Tier oder OpenAI-Verbrauch). Bekannte Fakten aus Klaus-PDF:
+- Outlook-Szenario allein: 33.975 Ops/Monat (Klaus-PDF Kennzahlen, gemessen)
+- OpenAI-Modell: gpt-4o-mini (laut Blueprint, nicht gpt-4)
+- 1 Fehler in der gesamten Laufzeit (Klaus-PDF)</p>
+<p><strong>Nachher (WW-Abrechnung):</strong> ~EUR 41/Monat bei Rewrite-Architektur (berechnet in Section 3).</p>
+<p><strong>Differenz:</strong> Konkrete Einsparung gegenüber HERO-Vertrag nicht berechenbar, da HERO-seitige Kosten nicht offengelegt. WW-Kosten nach Übernahme sind klar: EUR 41/Monat (Section 3).</p>
+<hr />
+<h2 id="5-wie-lange-reicht-die-subscription-irinas-frage">5. Wie lange reicht die Subscription? (Irinas Frage)</h2>
+<p><strong>Szenario "Pro 80K bei WW-Volumen":</strong>
+- Durchschnittsverbrauch: ~20.000 Ops/Monat
+- Subscription-Kapazität: 80.000 Ops/Monat
+- <strong>Headroom: 4x</strong> — selbst wenn Volumen verdoppelt (Geschäftswachstum) bleibt Puffer</p>
+<p><strong>Szenario "Core 10K (aktueller Stand)":</strong>
+- Verbrauch &gt; Kapazität ab Woche 2 des Monats
+- <strong>Subscription reicht NICHT aus</strong> — muss vor Go-Live geupgradet werden</p>
+<p><strong>Szenario "Pro 80K mit verzögertem Rewrite #4":</strong>
+- Outlook-Polling (alt) + 9 andere = ~35.000 Ops/Monat
+- Headroom: 2.3x — <strong>gerade ausreichend</strong>, aber ohne Sicherheitsreserve für Messezeit</p>
+<hr />
+<h2 id="6-empfehlung-fur-raphael-revidiert-2026-04-16-mit-klaus-pdf-realdaten">6. Empfehlung für Raphael (revidiert 2026-04-16 mit Klaus-PDF-Realdaten)</h2>
+<p><strong>Realistische Last (mit allen Faktoren):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Quelle</th>
+<th>Ops/Monat</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>10 HERO-Szenarien (Klaus-PDF Realdaten)</td>
+<td>53.000</td>
+</tr>
+<tr>
+<td>7 W1 Zapier-Migration</td>
+<td>4.000 - 8.000</td>
+</tr>
+<tr>
+<td>Test-Bench-Replays (wöchentliche Sweeps)</td>
+<td>5.000 - 15.000</td>
+</tr>
+<tr>
+<td>Retries / Debugging / Erstmonate-Instabilität (+15-25%)</td>
+<td>+12.000</td>
+</tr>
+<tr>
+<td>Messezeit-Spike (s6 messeformular)</td>
+<td>+5.000 (in einer Woche)</td>
+</tr>
+<tr>
+<td><strong>Typischer Monat</strong></td>
+<td><strong>75.000 - 95.000</strong></td>
+</tr>
+<tr>
+<td><strong>Schlechter Monat (Debugging + Spike)</strong></td>
+<td><strong>100.000 - 120.000</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Pro 80K reicht bis Woche 3 eines typischen Monats, bis Woche 2 eines schlechten Monats.</p>
+<p><strong>Zwei Optionen:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Plan</th>
+<th>Kosten/Monat</th>
+<th>Headroom</th>
+<th>Risiko</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>A: Sicher (empfohlen)</strong></td>
+<td>Pro 200K</td>
+<td>~$55-60 (~EUR 50-55)</td>
+<td>2-2,5x</td>
+<td>Keine monatliche Budget-Anxiety, Platz für Wachstum + Tests</td>
+</tr>
+<tr>
+<td><strong>B: Günstig</strong></td>
+<td>Pro 80K + s6-Rewrite in 4 Wochen</td>
+<td>~$27 (~EUR 25)</td>
+<td>knapp bis Rewrite, dann 1,5x</td>
+<td>Bis Rewrite live: 1-2 Monate Overage-Charges erwartbar</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Empfehlung: Option A.</strong> Die ~EUR 30/Monat Mehrkosten sind Versicherung gegen wiederkehrende "müssen wir schon wieder upgraden"-Gespräche. Operativer Stress kostet mehr als EUR 30.</p>
+<p><strong>Wenn Option B gewählt wird:</strong> s6 Outlook→HERO Mailgun-Rewrite muss innerhalb 4 Wochen nach Go-Live deployed sein, sonst wird Pro 80K dauerhaft gerissen.</p>
+<p><strong>Begleitmaßnahmen unabhängig von der Tier-Wahl:</strong></p>
+<ol>
+<li><strong>Mailgun + S3 bestellen</strong> in Woche 2026-04-21, damit zum Go-Live alles steht.</li>
+<li><strong>OpenAI-Key</strong> einrichten mit hartem Projekt-Budget-Limit ($20/Monat als Schutz).</li>
+<li><strong>Nach 3 Monaten Live-Betrieb:</strong> Ops-Verbrauch real messen, ggf. Tier anpassen.</li>
+</ol>
+<hr />
+<h2 id="7-offene-fragen">7. Offene Fragen</h2>
+<ol>
+<li>Hat WW bereits einen OpenAI-Account, oder neu anlegen?</li>
+<li>AWS-Account vorhanden (Leonhard)? Oder nutzen wir meine Ressourcen interim?</li>
+<li>Messezeit-Hochlast: gibt es eine kalendarische Verteilung, die ich für Dimensionierung nutzen kann (z.B. ISH-Messe im März alle 2 Jahre)?</li>
+<li>Archivierungspflicht der E-Mails: 6 oder 10 Jahre? Beeinflusst S3-Lifecycle und Langzeit-Storage-Kosten.</li>
+</ol>
+  </main>
+  <footer class="footer">Quelle: <code>workspace/clients/warme-wimmer/</code> · Build R-kosten-und-subscription.md · UnpauseAI</footer>
+</div>
+<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
+  <div style="text-align:center;max-width:360px;padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span></div>
+    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Wärme Wimmer Documentation</h2>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Bitte Zugangscode eingeben.</p>
+    <div style="display:flex;gap:8px;">
+      <input id="auth-input" type="password" placeholder="Zugangscode" autocomplete="off" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;" onkeydown="if(event.key==='Enter')checkAuth()" />
+      <button onclick="checkAuth()" style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">OK</button>
+    </div>
+    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Falscher Code, bitte erneut versuchen.</p>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:document.documentElement.getAttribute('data-theme')==='dark'?'dark':'default',securityLevel:'loose'});</script>
+<script>
+var WIMMER_CODE='wimmer2026';
+function checkAuth(){var inp=document.getElementById('auth-input').value;if(inp===WIMMER_CODE){localStorage.setItem('wimmer-docs-access','granted');var g=document.getElementById('auth-gate');g.style.opacity='0';setTimeout(function(){g.style.display='none'},300)}else{document.getElementById('auth-error').style.display='block';document.getElementById('auth-input').value='';document.getElementById('auth-input').focus()}}
+(function(){if(localStorage.getItem('wimmer-docs-access')==='granted'){var g=document.getElementById('auth-gate');if(g)g.style.display='none'}else{var inp=document.getElementById('auth-input');if(inp)inp.focus()}})();
+function toggleTheme(){var h=document.documentElement;var c=h.getAttribute('data-theme');var n=c==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('wimmer-docs-theme',n);var i=document.getElementById('theme-icon');if(i)i.innerHTML=n==='dark'?'&#9788;':'&#9790;'}
+var saved=localStorage.getItem('wimmer-docs-theme');
+if(saved){document.documentElement.setAttribute('data-theme',saved);var i=document.getElementById('theme-icon');if(i&&saved==='dark')i.innerHTML='&#9788;'}
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('sidebarBackdrop').classList.toggle('active')}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('sidebarBackdrop').classList.remove('active')}
+</script>
+</body>
+</html>

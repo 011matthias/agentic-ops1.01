@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<meta name="googlebot" content="noindex,nofollow">
+<title>#14 -- Hero-API Smoketest (Runbook) — Wärme Wimmer Hero-Doku</title>
+<style>
+:root{
+  --header-height:72px;--sidebar-width:240px;
+  --bg:#f8fafc;--surface:#ffffff;--surface2:#f1f5f9;--border:#e2e8f0;
+  --text:#0f172a;--text2:#475569;--text3:#94a3b8;
+  --blue:#2563eb;--blue-light:#dbeafe;--blue-dark:#1e40af;
+  --green:#16a34a;--green-light:#dcfce7;
+  --amber:#d97706;--amber-light:#fef3c7;
+  --purple:#7c3aed;--purple-light:#ede9fe;
+  --red:#dc2626;--red-light:#fee2e2;
+  --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.05);
+  --nav-bg:#ffffff;
+}
+[data-theme="dark"]{
+  --bg:#0f172a;--surface:#1e293b;--surface2:#0f172a;--border:#334155;
+  --text:#f1f5f9;--text2:#94a3b8;--text3:#475569;
+  --blue:#3b82f6;--blue-light:#1e3a5f;--blue-dark:#93c5fd;
+  --green:#22c55e;--green-light:#14532d;
+  --amber:#f59e0b;--amber-light:#451a03;
+  --purple:#a78bfa;--purple-light:#2e1065;
+  --red:#f87171;--red-light:#450a0a;
+  --shadow:0 1px 3px rgba(0,0,0,.3);
+  --nav-bg:#1e293b;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.6;min-height:100vh;transition:background .2s,color .2s;padding-top:var(--header-height)}
+.sidebar{position:fixed;top:var(--header-height);left:0;width:var(--sidebar-width);height:calc(100vh - var(--header-height));background:var(--surface);border-right:1px solid var(--border);z-index:50;overflow-y:auto;transition:transform .25s ease}
+.sidebar-group{padding:8px 0;border-bottom:1px solid var(--border)}
+.sidebar-group:last-child{border-bottom:none}
+.sidebar-group-label{padding:8px 20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3)}
+.sidebar-nav{list-style:none}
+.sidebar-nav a{display:flex;align-items:center;gap:8px;padding:8px 20px;font-size:13px;font-weight:500;color:var(--text2);text-decoration:none;border-left:3px solid transparent;transition:background .15s,color .15s,border-color .15s}
+.sidebar-nav a:hover{background:var(--surface2);color:var(--text)}
+.sidebar-nav a.active{background:var(--blue-light);color:var(--blue-dark);border-left-color:var(--blue);font-weight:700}
+.sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:40}
+.sidebar-backdrop.active{display:block}
+.hamburger{display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:18px;color:var(--text2);line-height:1}
+.header{background:var(--nav-bg);border-bottom:1px solid var(--border);padding:16px 24px;padding-left:calc(var(--sidebar-width) + 24px);display:flex;align-items:center;justify-content:space-between;position:fixed;top:0;left:0;right:0;z-index:1000;box-shadow:var(--shadow);transition:background .2s}
+.header-left{display:flex;align-items:center;gap:16px}
+.header-logo{display:flex;align-items:center;gap:6px;font-size:18px;letter-spacing:-0.025em}
+.header-logo .logo-text{font-weight:700;color:var(--text)}
+.header-logo .logo-accent{font-weight:700;color:var(--blue)}
+.header-title h1{font-size:16px;font-weight:700;color:var(--text)}
+.header-title p{font-size:12px;color:var(--text2);margin-top:1px}
+.header-right{display:flex;align-items:center;gap:12px}
+.theme-btn{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;transition:background .15s}
+.theme-btn:hover{background:var(--border)}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600}
+.badge-green{background:var(--green-light);color:var(--green)}
+.badge-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.page-layout{margin-left:var(--sidebar-width)}
+.main{max-width:1100px;margin:0 auto;padding:32px 32px 80px}
+.main h1{font-size:30px;font-weight:800;letter-spacing:-0.02em;margin-bottom:8px;color:var(--text)}
+.main h2{font-size:22px;font-weight:700;margin:32px 0 12px;color:var(--text);padding-bottom:6px;border-bottom:1px solid var(--border)}
+.main h3{font-size:17px;font-weight:700;margin:24px 0 8px;color:var(--text)}
+.main h4{font-size:15px;font-weight:700;margin:18px 0 6px;color:var(--text)}
+.main p{margin:8px 0 12px;color:var(--text2)}
+.main ul,.main ol{margin:8px 0 12px;padding-left:24px;color:var(--text2)}
+.main li{margin:3px 0}
+.main strong{color:var(--text)}
+.main a{color:var(--blue);text-decoration:none}
+.main a:hover{text-decoration:underline}
+.main blockquote{border-left:4px solid var(--blue);background:var(--surface2);padding:12px 16px;margin:12px 0;border-radius:0 8px 8px 0;color:var(--text2);font-style:normal}
+.main blockquote p{margin:0}
+.main blockquote em{font-style:normal;color:var(--text2)}
+.main code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:13px;font-family:'Menlo','Monaco','Consolas',monospace;color:var(--purple)}
+.main pre{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin:12px 0;overflow-x:auto;font-size:13px;line-height:1.5}
+.main pre code{background:none;padding:0;color:var(--text2)}
+.main pre.mermaid{background:var(--surface);border:1px solid var(--border);text-align:center;padding:20px}
+.main table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.main th{background:var(--surface2);padding:10px 14px;text-align:left;font-weight:600;color:var(--text);border-bottom:1px solid var(--border)}
+.main td{padding:10px 14px;color:var(--text2);border-bottom:1px solid var(--border)}
+.main tr:last-child td{border-bottom:none}
+.main hr{border:none;border-top:1px solid var(--border);margin:24px 0}
+.main details{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin:12px 0}
+.main details summary{cursor:pointer;font-weight:600;color:var(--text);padding:4px 0}
+.main details[open] summary{margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.main img{max-width:100%;height:auto;border:1px solid var(--border);border-radius:8px;margin:8px 0;display:block}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin:24px 0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;transition:border-color .15s,box-shadow .15s;display:block;color:inherit;text-decoration:none}
+.card:hover{border-color:var(--blue);box-shadow:var(--shadow);text-decoration:none}
+.card-icon{font-size:24px;margin-bottom:8px;display:block}
+.card h3{font-size:16px;font-weight:700;margin:0 0 4px;color:var(--text)}
+.card p{font-size:13px;color:var(--text2);margin:0}
+.support-cards{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0}
+.support-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;display:block;color:inherit;text-decoration:none;transition:border-color .15s}
+.support-card:hover{border-color:var(--blue);text-decoration:none}
+.support-card h4{margin:8px 0 4px}
+.card-tag{display:inline-block;font-size:11px;font-weight:600;padding:3px 8px;border-radius:12px;background:var(--blue-light);color:var(--blue);margin-top:8px}
+.footer{padding:24px 32px;border-top:1px solid var(--border);text-align:center;font-size:12px;color:var(--text3);margin-top:48px}
+@media (max-width:768px){
+  .sidebar{transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0);box-shadow:var(--shadow)}
+  .header{padding-left:16px}
+  .page-layout{margin-left:0}
+  .hamburger{display:block}
+  .header-title h1{font-size:14px}
+  .main{padding:20px}
+}
+</style>
+</head>
+<body>
+<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
+<nav class="sidebar" id="sidebar">
+<div class="sidebar-group"><div class="sidebar-group-label">🏠 Start</div><ul class="sidebar-nav">
+<li><a href="0-start-hier.html">Start hier — Hero-Automatisierungen Notion-Space</a></li>
+</ul></div>
+<div class="sidebar-group"><div class="sidebar-group-label">🗓 Meetings</div><ul class="sidebar-nav">
+<li><a href="m-meetings.html">Meetings — Hero-Automatisierungen</a></li>
+</ul></div>
+<div class="sidebar-group"><div class="sidebar-group-label">⚙️ Szenarien</div><ul class="sidebar-nav">
+<li><a href="s-00-flowcharts-overview.html">Flowcharts-Übersicht — Alle Hero-Automationen auf einen Blick</a></li>
+<li><a href="s-01-aufgabe-erledigt.html">W2-01 — Aufgabe erledigt (Status-Workflow)</a></li>
+<li><a href="s-02-aufgaben-nach-statuswechsel.html">W2-02 — Aufgaben nach Statusänderung</a></li>
+<li><a href="s-03-dokument-erstellt.html">W2-03 — Dokument erstellt → Statuswechsel</a></li>
+<li><a href="s-04-outlook-hero.html">W2-04: Outlook → HERO (Rewrite-Architektur / SOLL-Zustand)</a></li>
+<li><a href="s-05-projekt-erstellt.html">W2-05 — Projekt erstellt (Logbuch + Osneo-URL)</a></li>
+<li><a href="s-06-projekterinnerung.html">W2-06 — Projekterinnerung 1 Tag nach Termin</a></li>
+<li><a href="s-07-rechnungen-bezahlt.html">W2-07 — Rechnungen bezahlt → Abgeschlossen</a></li>
+<li><a href="s-08-regiebericht-fehlt.html">W2-08 — Regiebericht fehlt → Statuswechsel</a></li>
+<li><a href="s-09-ueberfaellige-aufgaben.html">W2-09 — Überfällige Aufgaben → Projekt markieren</a></li>
+<li><a href="s-10-zahlung-erhalten.html">W2-10 — Zahlung erhalten → Projektstatus ändern</a></li>
+</ul></div>
+<div class="sidebar-group"><div class="sidebar-group-label">📚 Reference</div><ul class="sidebar-nav">
+<li><a href="r-00-uebersicht.html">Übersicht -- Hero-Automations Lastenheft</a></li>
+<li><a href="r-hero-api-smoketest.html" class="active">#14 -- Hero-API Smoketest (Runbook)</a></li>
+<li><a href="r-hero-ids-und-connections.html">Cross-Reference -- Connections, Tokens, Hooks, Codes</a></li>
+<li><a href="r-kosten-und-subscription.html">Kosten & Subscription — Hero-Automations im Make-Konto</a></li>
+<li><a href="r-team-updates.html">Wartungs-Updates — Team-Log</a></li>
+<li><a href="r-w2-04-rewrite-design-ist.html">#4a: Outlook → HERO, IST-Zustand (wie es JETZT funktioniert)</a></li>
+<li><a href="r-w2-04-rewrite-design-mockup.html">W2-04b: Outlook → HERO Rewrite, Make-Szenario-Mockup</a></li>
+</ul></div>
+</nav>
+<header class="header">
+  <div class="header-left">
+    <button class="hamburger" onclick="toggleSidebar()">☰</button>
+    <div class="header-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="28" height="28"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></span></div>
+    <div class="header-title"><h1>Wärme Wimmer</h1><p>Hero-Automatisierungen Dokumentation</p></div>
+  </div>
+  <div class="header-right">
+    <span class="badge badge-green"><span class="badge-dot"></span>9/10 live</span>
+    <button class="theme-btn" onclick="toggleTheme()"><span id="theme-icon">&#9790;</span> Theme</button>
+  </div>
+</header>
+<div class="page-layout">
+  <main class="main">
+    <h1>#14 -- Hero-API Smoketest (Runbook)</h1>
+    <p><strong>Zweck:</strong> Schneller Nachweis, dass die neu generierten Hero-API-Tokens (<code>3672</code> Sabine, <code>3785</code> Sammelbearbeiter) gegen den Live-Endpoint funktionieren, <strong>bevor</strong> der Friday-Walkthrough mit Raphael startet. Entdeckt Auth-Fehler in &lt; 30 Sekunden statt mitten im Meeting.</p>
+<p><strong>Status heute (2026-04-15):</strong> Blocker -- Tokens noch nicht neu generiert. Sobald Raphael das Self-Service-Feld in der Hero-UI (<code>Schnittstellen &gt; API</code>) durchgeklickt hat, laeuft dieses Runbook in einem Befehl durch.</p>
+<hr />
+<blockquote>
+<p><em>Stand 2026-05-03 · 9/10 Hero-Szenarien live · W2-10 deferred zu n8n · Auto-Buy aktiv</em></p>
+</blockquote>
+<h2 id="endpoint-verifiziert">Endpoint (verifiziert)</h2>
+<pre><code>https://login.hero-software.de/api/external/v9/graphql
+</code></pre>
+<p>Alle 10 Hero-Blueprints senden HTTP-POSTs an diesen Endpoint. Der Token geht im <code>Authorization: Bearer &lt;token&gt;</code> Header -- in Make verwaltet als <code>auth</code>-Parameter auf <code>http:ActionSendDataAPIKeyAuth</code>-Modulen.</p>
+<hr />
+<h2 id="zwei-tokens-zwei-scopes">Zwei Tokens, zwei Scopes</h2>
+<table>
+<thead>
+<tr>
+<th>Auth-ID</th>
+<th>Label in Make</th>
+<th>Szenarien</th>
+<th>Typ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>3672</code></td>
+<td>Sabine Wimmer (personalisiert)</td>
+<td>#3, #5, #7, #8, #9, #10</td>
+<td>User-Token</td>
+</tr>
+<tr>
+<td><code>3785</code></td>
+<td>Sammelbearbeiter HERO</td>
+<td>#1, #2, #4, #6</td>
+<td>Service-artig</td>
+</tr>
+</tbody>
+</table>
+<p><em>Evidence: siehe <code>12-cross-reference.md</code> + <code>audit-2026-04-15.json</code> (Parameter <code>auth</code> pro http-Modul).</em></p>
+<hr />
+<h2 id="runbook-drei-befehle">Runbook (drei Befehle)</h2>
+<h3 id="schritt-1-token-regenerieren-raphael">Schritt 1: Token regenerieren (Raphael)</h3>
+<p>In Hero UI: <strong>Schnittstellen &gt; API</strong>.</p>
+<ul>
+<li>Token <code>3672</code> erneuern, neuen Wert in 1Password-Safe ablegen (Slot <code>hero-sabine-3672</code>)</li>
+<li>Token <code>3785</code> erneuern, Slot <code>hero-sammel-3785</code></li>
+<li>Alte Tokens sind laut Hero nicht mehr sichtbar -- die Neu-Generierung ist die einzige Option</li>
+</ul>
+<h3 id="schritt-2-tokens-in-shell-env-laden-nico">Schritt 2: Tokens in shell-env laden (Nico)</h3>
+<pre><code class="language-bash">export HERO_TOKEN_SABINE=&quot;$(op read op://agentic-ops/hero-sabine-3672/token)&quot;
+export HERO_TOKEN_SAMMEL=&quot;$(op read op://agentic-ops/hero-sammel-3785/token)&quot;
+</code></pre>
+<p>(1Password-CLI <code>op</code>. Alternativ beide Werte per WhatsApp-Voice und manuell in <code>.env.warme-wimmer</code> legen -- aber NICHT in Git!)</p>
+<h3 id="schritt-3-smoketest-ausfuhren-nico">Schritt 3: Smoketest ausführen (Nico)</h3>
+<pre><code class="language-bash">uv run hero-api-smoketest.py --out api-smoketest-$(date +%F).md
+</code></pre>
+<p>Erwarteter Exit-Code <code>0</code> = beide Tokens valide, Entity-Fetch erfolgreich. Exit <code>1</code> = Auth-Fail; Exit <code>2</code> = Endpoint OK, aber GraphQL-Errors (z.B. Scope-Restriktion).</p>
+<p>Der Report <code>api-smoketest-YYYY-MM-DD.md</code> wird von Nico lokal abgelegt und dient als Beleg für die Walkthrough-Praesentation am 2026-04-17.</p>
+<hr />
+<h2 id="was-der-smoketest-pruft">Was der Smoketest prüft</h2>
+<ol>
+<li><strong>Endpoint reachable:</strong> TCP + TLS zum Hero-Server</li>
+<li><strong>Auth valid:</strong> <code>Authorization: Bearer</code> wird akzeptiert (kein HTTP 401/403)</li>
+<li><strong>Viewer-Query:</strong> GraphQL-Schema antwortet mit dem User-Context des Tokens (<code>viewer.id</code>, <code>viewer.name</code>)</li>
+<li><strong>Entity-Fetch:</strong> <code>project_matches(limit: 1)</code> liefert mindestens 1 Eintrag -- beweist Read-Scope auf Projekt-Daten</li>
+</ol>
+<p>Die Entity-Fetch-Query ist mit Absicht schlank gehalten: reine Leseoperation, keine Mutation, kein Risiko Produktiv-Daten zu verändern.</p>
+<hr />
+<h2 id="bei-fehler">Bei Fehler</h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Diagnose</th>
+<th>Nächster Schritt</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HTTP 401/403</td>
+<td>Token falsch, abgelaufen oder falsch kopiert</td>
+<td>Token erneut via Hero UI generieren, sicherstellen dass kein Leerzeichen im Token</td>
+</tr>
+<tr>
+<td><code>errors: ["Cannot query field ... on type ..."]</code></td>
+<td>GraphQL-Schema-Änderung auf Hero-Seite seit Export 2026-04-09</td>
+<td>Vor Walkthrough mit Raphael klaeren, ob Schema-Version v9 noch aktuell ist</td>
+</tr>
+<tr>
+<td>Timeout / connection refused</td>
+<td>Hero-Server nicht erreichbar</td>
+<td>Hero-Support-Status prüfen, Meeting ggf. verschieben</td>
+</tr>
+<tr>
+<td>Entity-Fetch <code>project_matches: []</code></td>
+<td>Scope korrekt, aber Token hat keine Projekt-Leseberechtigung</td>
+<td>Kritischer Blocker für #1, #4, #7-10 -- Raphael bitten Scope auszuweiten</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="zeitbudget">Zeitbudget</h2>
+<p>Smoketest wurde so gebaut dass er komplett in unter 30 Sekunden durchlaeuft (2 HTTP-Roundtrips pro Token, 4 insgesamt). Passt vor jeden Walkthrough, jeden Build-Session.</p>
+<hr />
+<h2 id="verankerung-im-build-pfad">Verankerung im Build-Pfad</h2>
+<p>Nach erfolgreichem Smoketest sind folgende WW-Make-Account-Arbeiten unblockiert (aus <code>infrastructure.yaml &gt; make.pending_connections</code>):</p>
+<ul>
+<li>20 Connection-Slots können verdrahtet werden (inkl. Hero-API-Tokens als Connection-Credentials)</li>
+<li>3 Data-Store-Rebinds</li>
+<li>5 Webhook-URL-Pastes</li>
+</ul>
+<p>Ohne Smoketest-Pass bleibt der Build blockiert -- wir importieren keine Szenarien mit Platzhalter-Tokens in ein Pro-Abo.</p>
+  </main>
+  <footer class="footer">Quelle: <code>workspace/clients/warme-wimmer/</code> · Build R-hero-api-smoketest.md · UnpauseAI</footer>
+</div>
+<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
+  <div style="text-align:center;max-width:360px;padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span></div>
+    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Wärme Wimmer Documentation</h2>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Bitte Zugangscode eingeben.</p>
+    <div style="display:flex;gap:8px;">
+      <input id="auth-input" type="password" placeholder="Zugangscode" autocomplete="off" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;" onkeydown="if(event.key==='Enter')checkAuth()" />
+      <button onclick="checkAuth()" style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">OK</button>
+    </div>
+    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Falscher Code, bitte erneut versuchen.</p>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:document.documentElement.getAttribute('data-theme')==='dark'?'dark':'default',securityLevel:'loose'});</script>
+<script>
+var WIMMER_CODE='wimmer2026';
+function checkAuth(){var inp=document.getElementById('auth-input').value;if(inp===WIMMER_CODE){localStorage.setItem('wimmer-docs-access','granted');var g=document.getElementById('auth-gate');g.style.opacity='0';setTimeout(function(){g.style.display='none'},300)}else{document.getElementById('auth-error').style.display='block';document.getElementById('auth-input').value='';document.getElementById('auth-input').focus()}}
+(function(){if(localStorage.getItem('wimmer-docs-access')==='granted'){var g=document.getElementById('auth-gate');if(g)g.style.display='none'}else{var inp=document.getElementById('auth-input');if(inp)inp.focus()}})();
+function toggleTheme(){var h=document.documentElement;var c=h.getAttribute('data-theme');var n=c==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('wimmer-docs-theme',n);var i=document.getElementById('theme-icon');if(i)i.innerHTML=n==='dark'?'&#9788;':'&#9790;'}
+var saved=localStorage.getItem('wimmer-docs-theme');
+if(saved){document.documentElement.setAttribute('data-theme',saved);var i=document.getElementById('theme-icon');if(i&&saved==='dark')i.innerHTML='&#9788;'}
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('sidebarBackdrop').classList.toggle('active')}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('sidebarBackdrop').classList.remove('active')}
+</script>
+</body>
+</html>

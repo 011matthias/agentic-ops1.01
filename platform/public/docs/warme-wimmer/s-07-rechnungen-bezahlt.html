@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<meta name="googlebot" content="noindex,nofollow">
+<title>W2-07 — Rechnungen bezahlt → Abgeschlossen — Wärme Wimmer Hero-Doku</title>
+<style>
+:root{
+  --header-height:72px;--sidebar-width:240px;
+  --bg:#f8fafc;--surface:#ffffff;--surface2:#f1f5f9;--border:#e2e8f0;
+  --text:#0f172a;--text2:#475569;--text3:#94a3b8;
+  --blue:#2563eb;--blue-light:#dbeafe;--blue-dark:#1e40af;
+  --green:#16a34a;--green-light:#dcfce7;
+  --amber:#d97706;--amber-light:#fef3c7;
+  --purple:#7c3aed;--purple-light:#ede9fe;
+  --red:#dc2626;--red-light:#fee2e2;
+  --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.05);
+  --nav-bg:#ffffff;
+}
+[data-theme="dark"]{
+  --bg:#0f172a;--surface:#1e293b;--surface2:#0f172a;--border:#334155;
+  --text:#f1f5f9;--text2:#94a3b8;--text3:#475569;
+  --blue:#3b82f6;--blue-light:#1e3a5f;--blue-dark:#93c5fd;
+  --green:#22c55e;--green-light:#14532d;
+  --amber:#f59e0b;--amber-light:#451a03;
+  --purple:#a78bfa;--purple-light:#2e1065;
+  --red:#f87171;--red-light:#450a0a;
+  --shadow:0 1px 3px rgba(0,0,0,.3);
+  --nav-bg:#1e293b;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.6;min-height:100vh;transition:background .2s,color .2s;padding-top:var(--header-height)}
+.sidebar{position:fixed;top:var(--header-height);left:0;width:var(--sidebar-width);height:calc(100vh - var(--header-height));background:var(--surface);border-right:1px solid var(--border);z-index:50;overflow-y:auto;transition:transform .25s ease}
+.sidebar-group{padding:8px 0;border-bottom:1px solid var(--border)}
+.sidebar-group:last-child{border-bottom:none}
+.sidebar-group-label{padding:8px 20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3)}
+.sidebar-nav{list-style:none}
+.sidebar-nav a{display:flex;align-items:center;gap:8px;padding:8px 20px;font-size:13px;font-weight:500;color:var(--text2);text-decoration:none;border-left:3px solid transparent;transition:background .15s,color .15s,border-color .15s}
+.sidebar-nav a:hover{background:var(--surface2);color:var(--text)}
+.sidebar-nav a.active{background:var(--blue-light);color:var(--blue-dark);border-left-color:var(--blue);font-weight:700}
+.sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:40}
+.sidebar-backdrop.active{display:block}
+.hamburger{display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:18px;color:var(--text2);line-height:1}
+.header{background:var(--nav-bg);border-bottom:1px solid var(--border);padding:16px 24px;padding-left:calc(var(--sidebar-width) + 24px);display:flex;align-items:center;justify-content:space-between;position:fixed;top:0;left:0;right:0;z-index:1000;box-shadow:var(--shadow);transition:background .2s}
+.header-left{display:flex;align-items:center;gap:16px}
+.header-logo{display:flex;align-items:center;gap:6px;font-size:18px;letter-spacing:-0.025em}
+.header-logo .logo-text{font-weight:700;color:var(--text)}
+.header-logo .logo-accent{font-weight:700;color:var(--blue)}
+.header-title h1{font-size:16px;font-weight:700;color:var(--text)}
+.header-title p{font-size:12px;color:var(--text2);margin-top:1px}
+.header-right{display:flex;align-items:center;gap:12px}
+.theme-btn{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;transition:background .15s}
+.theme-btn:hover{background:var(--border)}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600}
+.badge-green{background:var(--green-light);color:var(--green)}
+.badge-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.page-layout{margin-left:var(--sidebar-width)}
+.main{max-width:1100px;margin:0 auto;padding:32px 32px 80px}
+.main h1{font-size:30px;font-weight:800;letter-spacing:-0.02em;margin-bottom:8px;color:var(--text)}
+.main h2{font-size:22px;font-weight:700;margin:32px 0 12px;color:var(--text);padding-bottom:6px;border-bottom:1px solid var(--border)}
+.main h3{font-size:17px;font-weight:700;margin:24px 0 8px;color:var(--text)}
+.main h4{font-size:15px;font-weight:700;margin:18px 0 6px;color:var(--text)}
+.main p{margin:8px 0 12px;color:var(--text2)}
+.main ul,.main ol{margin:8px 0 12px;padding-left:24px;color:var(--text2)}
+.main li{margin:3px 0}
+.main strong{color:var(--text)}
+.main a{color:var(--blue);text-decoration:none}
+.main a:hover{text-decoration:underline}
+.main blockquote{border-left:4px solid var(--blue);background:var(--surface2);padding:12px 16px;margin:12px 0;border-radius:0 8px 8px 0;color:var(--text2);font-style:normal}
+.main blockquote p{margin:0}
+.main blockquote em{font-style:normal;color:var(--text2)}
+.main code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:13px;font-family:'Menlo','Monaco','Consolas',monospace;color:var(--purple)}
+.main pre{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin:12px 0;overflow-x:auto;font-size:13px;line-height:1.5}
+.main pre code{background:none;padding:0;color:var(--text2)}
+.main pre.mermaid{background:var(--surface);border:1px solid var(--border);text-align:center;padding:20px}
+.main table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.main th{background:var(--surface2);padding:10px 14px;text-align:left;font-weight:600;color:var(--text);border-bottom:1px solid var(--border)}
+.main td{padding:10px 14px;color:var(--text2);border-bottom:1px solid var(--border)}
+.main tr:last-child td{border-bottom:none}
+.main hr{border:none;border-top:1px solid var(--border);margin:24px 0}
+.main details{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin:12px 0}
+.main details summary{cursor:pointer;font-weight:600;color:var(--text);padding:4px 0}
+.main details[open] summary{margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.main img{max-width:100%;height:auto;border:1px solid var(--border);border-radius:8px;margin:8px 0;display:block}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin:24px 0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;transition:border-color .15s,box-shadow .15s;display:block;color:inherit;text-decoration:none}
+.card:hover{border-color:var(--blue);box-shadow:var(--shadow);text-decoration:none}
+.card-icon{font-size:24px;margin-bottom:8px;display:block}
+.card h3{font-size:16px;font-weight:700;margin:0 0 4px;color:var(--text)}
+.card p{font-size:13px;color:var(--text2);margin:0}
+.support-cards{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0}
+.support-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;display:block;color:inherit;text-decoration:none;transition:border-color .15s}
+.support-card:hover{border-color:var(--blue);text-decoration:none}
+.support-card h4{margin:8px 0 4px}
+.card-tag{display:inline-block;font-size:11px;font-weight:600;padding:3px 8px;border-radius:12px;background:var(--blue-light);color:var(--blue);margin-top:8px}
+.footer{padding:24px 32px;border-top:1px solid var(--border);text-align:center;font-size:12px;color:var(--text3);margin-top:48px}
+@media (max-width:768px){
+  .sidebar{transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0);box-shadow:var(--shadow)}
+  .header{padding-left:16px}
+  .page-layout{margin-left:0}
+  .hamburger{display:block}
+  .header-title h1{font-size:14px}
+  .main{padding:20px}
+}
+</style>
+</head>
+<body>
+<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
+<nav class="sidebar" id="sidebar">
+<div class="sidebar-group"><div class="sidebar-group-label">🏠 Start</div><ul class="sidebar-nav">
+<li><a href="0-start-hier.html">Start hier — Hero-Automatisierungen Notion-Space</a></li>
+</ul></div>
+<div class="sidebar-group"><div class="sidebar-group-label">🗓 Meetings</div><ul class="sidebar-nav">
+<li><a href="m-meetings.html">Meetings — Hero-Automatisierungen</a></li>
+</ul></div>
+<div class="sidebar-group"><div class="sidebar-group-label">⚙️ Szenarien</div><ul class="sidebar-nav">
+<li><a href="s-00-flowcharts-overview.html">Flowcharts-Übersicht — Alle Hero-Automationen auf einen Blick</a></li>
+<li><a href="s-01-aufgabe-erledigt.html">W2-01 — Aufgabe erledigt (Status-Workflow)</a></li>
+<li><a href="s-02-aufgaben-nach-statuswechsel.html">W2-02 — Aufgaben nach Statusänderung</a></li>
+<li><a href="s-03-dokument-erstellt.html">W2-03 — Dokument erstellt → Statuswechsel</a></li>
+<li><a href="s-04-outlook-hero.html">W2-04: Outlook → HERO (Rewrite-Architektur / SOLL-Zustand)</a></li>
+<li><a href="s-05-projekt-erstellt.html">W2-05 — Projekt erstellt (Logbuch + Osneo-URL)</a></li>
+<li><a href="s-06-projekterinnerung.html">W2-06 — Projekterinnerung 1 Tag nach Termin</a></li>
+<li><a href="s-07-rechnungen-bezahlt.html" class="active">W2-07 — Rechnungen bezahlt → Abgeschlossen</a></li>
+<li><a href="s-08-regiebericht-fehlt.html">W2-08 — Regiebericht fehlt → Statuswechsel</a></li>
+<li><a href="s-09-ueberfaellige-aufgaben.html">W2-09 — Überfällige Aufgaben → Projekt markieren</a></li>
+<li><a href="s-10-zahlung-erhalten.html">W2-10 — Zahlung erhalten → Projektstatus ändern</a></li>
+</ul></div>
+<div class="sidebar-group"><div class="sidebar-group-label">📚 Reference</div><ul class="sidebar-nav">
+<li><a href="r-00-uebersicht.html">Übersicht -- Hero-Automations Lastenheft</a></li>
+<li><a href="r-hero-api-smoketest.html">#14 -- Hero-API Smoketest (Runbook)</a></li>
+<li><a href="r-hero-ids-und-connections.html">Cross-Reference -- Connections, Tokens, Hooks, Codes</a></li>
+<li><a href="r-kosten-und-subscription.html">Kosten & Subscription — Hero-Automations im Make-Konto</a></li>
+<li><a href="r-team-updates.html">Wartungs-Updates — Team-Log</a></li>
+<li><a href="r-w2-04-rewrite-design-ist.html">#4a: Outlook → HERO, IST-Zustand (wie es JETZT funktioniert)</a></li>
+<li><a href="r-w2-04-rewrite-design-mockup.html">W2-04b: Outlook → HERO Rewrite, Make-Szenario-Mockup</a></li>
+</ul></div>
+</nav>
+<header class="header">
+  <div class="header-left">
+    <button class="hamburger" onclick="toggleSidebar()">☰</button>
+    <div class="header-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="28" height="28"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></span></div>
+    <div class="header-title"><h1>Wärme Wimmer</h1><p>Hero-Automatisierungen Dokumentation</p></div>
+  </div>
+  <div class="header-right">
+    <span class="badge badge-green"><span class="badge-dot"></span>9/10 live</span>
+    <button class="theme-btn" onclick="toggleTheme()"><span id="theme-icon">&#9790;</span> Theme</button>
+  </div>
+</header>
+<div class="page-layout">
+  <main class="main">
+    <h1>W2-07 — Rechnungen bezahlt → Abgeschlossen</h1>
+    <p><img alt="Make-Szenario-Map" src="screenshots/07-rechnungen-bezahlt.png" /></p>
+<p><strong>Risiko:</strong> Mid
+<strong>Strategie:</strong> 1:1 Import + Business-Logik-Cleanup
+<strong>Blueprint:</strong> <code>blueprints/Rechnungen bezahlt -- Abgeschlossen.blueprint.json</code></p>
+<hr />
+<blockquote>
+<p><em>Stand 2026-05-03 · 9/10 Hero-Szenarien live · W2-10 deferred zu n8n · Auto-Buy aktiv</em></p>
+</blockquote>
+<h2 id="flowcharts">Flowcharts</h2>
+<h3 id="sabine-version-was-passiert-geschaftlich">Sabine-Version (was passiert geschäftlich)</h3>
+<p><pre class="mermaid">flowchart TD
+    A[Taegliche Pruefung 05:00] --> B[Alle Projekte im Status<br/>Rechnung gestellt laden<br/>TG und NA getrennt]
+    B --> C[Pro Projekt pruefen]
+    C --> D{Hat das Projekt<br/>Rechnungs-Dokumente?}
+    D -->|nein| Z[Ueberspringen]
+    D -->|ja| E{Sind ALLE Rechnungen<br/>NICHT mehr offen?}
+    E -->|nein, mind. eine offen| Z2[Ueberspringen]
+    E -->|ja, alle bezahlt<br/>oder teilbezahlt| F{Tagesgeschaeft<br/>oder Nacharbeiten?}
+    F -->|TG| G1[Projekt zu<br/>Abgeschlossen TG]
+    F -->|NA| G2[Projekt zu<br/>Abgeschlossen NA]</pre></p>
+<h3 id="audit-version-hero-ids-filter-hardcoded-werte">Audit-Version (Hero-IDs, Filter, Hardcoded-Werte)</h3>
+<p><pre class="mermaid">flowchart TD
+    A[Schedule taeglich 05:00<br/>30 Laeufe/Monat<br/>128 Ops/Monat] --> B[GraphQL CombinedQuery<br/>step_ids 317169 TG<br/>+ step_ids 368546 NA<br/>mit customer_documents<br/>doc_type 952733/737664/<br/>688377/688386<br/>+ booking.status]
+    B --> C[Router 2 Routen<br/>kein Router-Filter]
+    C --> D1[Feeder Tagesgeschaeft<br/>iteriert data.Tagesgeschaeft]
+    C --> D2[Feeder Nacharbeiten<br/>iteriert data.Nacharbeiten]
+    D1 --> E1{customer_documents<br/>length != 0<br/>UND map booking.status<br/>== open length == 0?}
+    D2 --> E2{customer_documents<br/>length != 0<br/>UND map booking.status<br/>== open length == 0?}
+    E1 -->|ja| F1[hero-software<br/>updateProjectStatus<br/>conn 61785<br/>type 25153<br/>code 317171]
+    E2 -->|ja| F2[hero-software<br/>updateProjectStatus<br/>conn 61785<br/>type 29227<br/>code 368548]
+    E1 -->|nein| Z1[Skip]
+    E2 -->|nein| Z2[Skip]</pre></p>
+<h3 id="annotations">Annotations</h3>
+<pre><code>SZENARIO 7 — RECHNUNGEN BEZAHLT ZU ABGESCHLOSSEN
+
+Schedule: taeglich 05:00 (Klaus-PDF Realdaten)
+Trigger ist HTTP-Modul mit Schedule-Attribut (combined Trigger+Fetch)
+
+Auth: 3672 (Sabine)  |  Connection: 61785 (alte Hero-App, Variante 2)
+
+Quell-Status:
+  317169 = TG Rechnung gestellt
+  368546 = NA Rechnung gestellt
+
+Ziel-Status:
+  317171 = TG Abgeschlossen
+  368548 = NA Abgeschlossen
+
+Document-Type-IDs (Rechnungs-Typen):
+  952733  737664  688377  688386
+  HINWEIS: welcher genau &quot;Schlussrechnung&quot;, &quot;Teilrechnung&quot; etc.
+  ist - mit Raphael verifizieren.
+
+LexOffice-Sync:
+  booking.status kommt aus LexOffice via Hero-Sync (Mechanik
+  unklar - Polling? Webhook? Manuell?). Wenn LexOffice nicht
+  syncen sollte, bleiben Projekte ewig im &quot;Rechnung gestellt&quot;.
+
+Filter-Bedingung verbatim:
+  customer_documents != 0
+  UND map(customer_documents; &quot;booking.status&quot;; &quot;open&quot;) == 0
+  (= keine Buchung mehr &quot;open&quot;)
+
+BEKANNTE SCHWAECHEN:
+- Connection 61785 != 63384 (zwei alte Hero-Connections, Grund unklar)
+- Auth 3672 (personalisiert Sabine)
+- Kein last:-Limit -&gt; bei vielen Projekten potenzielles
+  Performance-Problem
+- LexOffice-Sync-Mechanik nicht dokumentiert (Black Box)
+- Kein Error-Handler -&gt; Hero 5xx = stilles Sterben
+
+GEPLANTE AENDERUNGEN IN N8N-MIGRATION:
+- Auf Sammelbearbeiter-Token (3785) statt Sabine
+- Eine Connection statt zwei
+- Pagination einbauen (last/first Cursor)
+- Error-Handler mit Alert an monitoring@
+- LexOffice-Sync separates Untersuchungs-Item
+</code></pre>
+<hr />
+<h2 id="was-tut-es-business-outcome">Was tut es (Business-Outcome)</h2>
+<p>Schedule-Szenario (Polling). Sucht alle Projekte, die in den Status <code>317169</code> (Tagesgeschäft) oder <code>368546</code> (Nacharbeiten) stehen — also auf Rechnungs-Zahlung warten.</p>
+<p>Für jedes Projekt: wenn <strong>alle</strong> Rechnungsdokumente (document_type_ids 952733, 737664, 688377, 688386) keine offene Buchung (<code>status != "open"</code>) mehr haben, wird das Projekt auf <code>317171</code> (Tagesgeschäft) bzw. <code>368548</code> (Nacharbeiten) = "Abgeschlossen" gesetzt.</p>
+<p><strong>LexOffice-Relevanz:</strong> laut Raphael interessant — Buchungsstatus kommt aus LexOffice. Deep-Dive erforderlich, wie die Schnittstelle aussieht.</p>
+<hr />
+<h2 id="trigger">Trigger</h2>
+<ul>
+<li><strong>Typ:</strong> Schedule (Polling) — <strong>Intervall im Blueprint nicht definiert</strong> (<code>scheduling: null</code>), wird bei Import im UI oder per MCP gesetzt</li>
+<li><strong>Klaus-PDF-Realdaten:</strong> Täglich 05:00 Uhr, 30 Ausführungen/Monat, <strong>128 Ops/Monat</strong> (extrem günstig). Zero Errors in HERO-Produktion.</li>
+</ul>
+<hr />
+<h2 id="branching-logik">Branching-Logik</h2>
+<p>GraphQL-Query (Auth 3672) liefert zwei benannte Query-Blöcke:
+- <code>Tagesgeschäft</code> (step 317169) mit customer_documents + booking.status
+- <code>Nacharbeiten</code> (step 368546) mit customer_documents + booking.status</p>
+<p>Router mit 2 Routen (kein Router-Filter — jede Route hat eigenen Feeder + Filter):</p>
+<table>
+<thead>
+<tr>
+<th>Route</th>
+<th>Filter</th>
+<th>Aktion</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>R0 Tagesgeschäft</td>
+<td>customer_documents ≠ 0 AND alle booking.status ≠ "open"</td>
+<td>Status → <code>317171</code></td>
+</tr>
+<tr>
+<td>R1 Nacharbeiten</td>
+<td>customer_documents ≠ 0 AND alle booking.status ≠ "open"</td>
+<td>Status → <code>368548</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="modul-inventar-node-by-node">Modul-Inventar (Node-by-Node)</h2>
+<p>Jeder Eintrag = ein Modul im Make-Szenario. Einrückung = verschachtelt in Router-Route.</p>
+<ul>
+<li><strong>Modul 1:</strong> HTTP Request (API-Key Auth)</li>
+<li><strong>Modul 6:</strong> Router (Verzweigung)</li>
+<li><strong>Route 0</strong> (Route 0):<ul>
+<li><strong>Modul 2:</strong> Iterator (Schleife)</li>
+<li><strong>Modul 3:</strong> HERO API: Projektstatus setzen (alte App) | <strong>Filter</strong> vorhanden (2 Bedingungen)</li>
+</ul>
+</li>
+<li><strong>Route 1</strong> (Route 1):<ul>
+<li><strong>Modul 4:</strong> Iterator (Schleife)</li>
+<li><strong>Modul 5:</strong> HERO API: Projektstatus setzen (alte App) | <strong>Filter</strong> vorhanden (2 Bedingungen)</li>
+</ul>
+</li>
+</ul>
+<hr />
+<h2 id="make-implementation-mapping">Make-Implementation-Mapping</h2>
+<table>
+<thead>
+<tr>
+<th>Notion-Knoten</th>
+<th>Make-Modul (Pfad)</th>
+<th>Modul-Typ</th>
+<th>Anmerkung</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A Schedule Trigger</td>
+<td><code>m1</code> (Schedule-Attribut)</td>
+<td><code>http:ActionSendDataAPIKeyAuth</code></td>
+<td><strong>Combined Trigger + Fetch.</strong> Schedule ist ein Attribut des HTTP-Moduls, kein separates Modul</td>
+</tr>
+<tr>
+<td>B GraphQL: project_matches in 317169 + 368546</td>
+<td><code>m1</code> (gleiches Modul)</td>
+<td><code>http:ActionSendDataAPIKeyAuth</code></td>
+<td>Returnt 2 Listen: <code>data.Tagesgeschaeft</code>, <code>data.Nacharbeiten</code></td>
+</tr>
+<tr>
+<td>C1 Feeder: Tagesgeschäft</td>
+<td><code>m6/r0/m2</code></td>
+<td><code>builtin:BasicFeeder</code></td>
+<td>Iteriert über <code>data.Tagesgeschaeft</code>-Liste</td>
+</tr>
+<tr>
+<td>D1 {Alle Rechnungen bezahlt?} (TG)</td>
+<td>Filter auf <code>m6/r0/m3</code></td>
+<td>Inline-Filter</td>
+<td>Bedingung: <code>customer_documents</code> non-empty UND alle <code>booking.status != open</code>. <strong>Kein eigenes Decision-Modul.</strong></td>
+</tr>
+<tr>
+<td>E1 Status → 317171</td>
+<td><code>m6/r0/m3</code></td>
+<td><code>hero-software:updateProjectStatus</code></td>
+<td></td>
+</tr>
+<tr>
+<td>C2 Feeder: Nacharbeiten</td>
+<td><code>m6/r1/m4</code></td>
+<td><code>builtin:BasicFeeder</code></td>
+<td></td>
+</tr>
+<tr>
+<td>D2 {Alle Rechnungen bezahlt?} (NA)</td>
+<td>Filter auf <code>m6/r1/m5</code></td>
+<td>Inline-Filter</td>
+<td>Gleiche Logik wie D1</td>
+</tr>
+<tr>
+<td>E2 Status → 368548</td>
+<td><code>m6/r1/m5</code></td>
+<td><code>hero-software:updateProjectStatus</code></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<hr />
+<h2 id="status-ubergange">Status-Übergänge</h2>
+<ul>
+<li><strong>Tagesgeschäft:</strong> <code>317169</code> (Rechnung gestellt) → <code>317171</code> (Abgeschlossen)</li>
+<li><strong>Nacharbeiten:</strong> <code>368546</code> → <code>368548</code></li>
+</ul>
+<hr />
+<h2 id="externe-side-effects">Externe Side-Effects</h2>
+<ul>
+<li>1× GraphQL-Query (Auth 3672)</li>
+<li>N× <code>updateProjectStatus</code> (conn <strong>61785</strong> — andere Hero-Connection als andere Szenarien)</li>
+</ul>
+<hr />
+<h2 id="abhangigkeiten">Abhängigkeiten</h2>
+<ul>
+<li>Auth <code>3672</code> (Sabine), Connection <code>61785</code> (<strong>nicht 63384!</strong>)</li>
+<li><strong>Hardcoded:</strong></li>
+<li>document_type_ids [952733, 737664, 688377, 688386] (Rechnungsdokument-Typen)</li>
+<li>Step-IDs 317169/368546</li>
+<li>Ziel-Codes 317171/368548</li>
+<li>type.ids 25153/29227</li>
+</ul>
+<hr />
+<h2 id="hands-on-verifikation-2026-04-21">Hands-On-Verifikation (2026-04-21)</h2>
+<p><em>Quelle: REST-Blueprint-Extraktion + Test-Bench-Fire. Screenshots inline pro Abschnitt (<code>screenshots/07-*.png</code>).</em></p>
+<h3 id="1-trigger-einstieg">1. Trigger / Einstieg</h3>
+<ul>
+<li><strong>Modul:</strong> <code>http:ActionSendDataAPIKeyAuth</code> (Pfad <code>m1</code>, m1)</li>
+<li><strong>Scheduling:</strong> event-getrieben (kein Schedule-Attribut)</li>
+</ul>
+<p><img alt="Trigger-Modul m1 (http:ActionSendDataAPIKeyAuth)" src="screenshots/07-m1-trigger.png" /></p>
+<h3 id="2-entry-filter">2. Entry-Filter</h3>
+<ul>
+<li><strong>Modul:</strong> <code>hero-software:updateProjectStatus</code> (Pfad <code>m6/r0/m3</code>)</li>
+<li><strong>Logik:</strong> UND. Alle 2 Bedingungen müssen gleichzeitig gelten.</li>
+<li><strong>Bedingungen (verbatim aus Make):</strong></li>
+<li><code>{{2.customer_documents}}</code> <strong>array:notequal</strong> <code>0</code></li>
+<li><code>{{map(2.customer_documents; "customer_document_booking.status"; "customer_document_booking.status"; "open")}}</code> <strong>array:equal</strong> <code>0</code></li>
+<li><strong>Screenshot:</strong> kein separater Entry-Filter vor dem Routing. Der gleiche Filter erscheint als erster Eintrag im Filter-Stichprobe-Abschnitt unten.</li>
+</ul>
+<h3 id="3-filter-operatoren">3. Filter-Operatoren</h3>
+<p><strong>Operator-Verteilung:</strong> <code>array:equal</code>=2, <code>array:notequal</code>=2</p>
+<p><strong>Filter-Logik pro Modul</strong> (wichtig: Gruppen-Struktur aus dem Blueprint erhält AND/OR):</p>
+<ul>
+<li>Filter an <code>m6/r0/m3</code> (m3): <strong>UND</strong>. Alle 2 Bedingungen müssen gleichzeitig gelten.</li>
+<li><code>{{2.customer_documents}}</code> <strong>array:notequal</strong> <code>0</code></li>
+<li><code>{{map(2.customer_documents; "customer_document_booking.status"; "customer_docume</code> <strong>array:equal</strong> <code>0</code></li>
+<li>Filter an <code>m6/r1/m5</code> (m5): <strong>UND</strong>. Alle 2 Bedingungen müssen gleichzeitig gelten.</li>
+<li><code>{{4.customer_documents}}</code> <strong>array:notequal</strong> <code>0</code></li>
+<li><code>{{map(4.customer_documents; "customer_document_booking.status"; "customer_docume</code> <strong>array:equal</strong> <code>0</code></li>
+</ul>
+<p><strong>Filter-Stichprobe (Screenshots pro Route):</strong></p>
+<p><img alt="Filter an m6/r0/m3 (m3)" src="screenshots/07-m6_r0_m3-filter.png" /></p>
+<p><img alt="Filter an m6/r1/m5 (m5)" src="screenshots/07-m6_r1_m5-filter.png" /></p>
+<h3 id="4-status-ids-updateprojectstatus-module">4. Status-IDs (UpdateProjectStatus-Module)</h3>
+<blockquote>
+<p><strong>⚠ Hero-Verbindung fehlt noch</strong> (Token-Regeneration bei Raphael pending).</p>
+<p>Solange kein gueltiges Hero-API-Token in der Connection haengt, zeigt Make im Modul-Panel nur das Connection-Pflichtfeld (<code>Value must not be empty</code>). Das Mapper-Panel mit <code>project_type_id</code> + <code>project_status_code</code> wird erst sichtbar, sobald eine gueltige Hero-Connection gewaehlt ist.</p>
+<p>Bis dahin gelten die Status-Codes in der Tabelle unten als <strong>REST-verifiziert aus dem Blueprint</strong>, nicht aus dem UI-Mapper. Die Screenshots zeigen den Modul-gewaehlt-Zustand mit dem leeren Connection-Feld als Positions-Beleg.</p>
+</blockquote>
+<p><strong>Anzahl <code>UpdateProjectStatus</code>-Module:</strong> 2</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Modul-Pfad</th>
+<th>Modul-ID</th>
+<th>Projekt-Typ</th>
+<th>Status-Code</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>m6/r0/m3</code></td>
+<td>m3</td>
+<td><code>25153</code></td>
+<td><code>317171</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>m6/r1/m5</code></td>
+<td>m5</td>
+<td><code>29227</code></td>
+<td><code>368548</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Screenshots pro Modul:</strong> entfallen vorerst. Mapper-Panel ist an die Hero-Connection gekoppelt, die ohne Token leer bleibt — jeder Screenshot wuerde nur <code>Connection * — Value must not be empty</code> zeigen (gleicher Zustand fuer alle 2 Module). Die Status-Codes und Projekt-Typ-IDs in der Tabelle oben stammen aus dem REST-Blueprint (Quelle: <code>context/hero-exports/audit-2026-04-20/07-s7.json</code> → <code>status_id_rows</code>). Re-Verifikation im Make-UI in einem Durchgang, sobald Raphaels Hero-API-Token regeneriert ist.</p>
+<h3 id="5-error-handler-audit">5. Error-Handler-Audit</h3>
+<p><strong>Module mit Error-Handler:</strong> 0 von 6</p>
+<p><strong>Keine Error-Handler auf Modul-Ebene.</strong> Bei Modul-Ausfall stoppt die Execution stillschweigend, kein Alert, kein Retry. Rote Fahne für Raphael: mindestens <code>break</code>-Handler plus Alert an <code>monitoring@wärme-wimmer.de</code> nachrüsten.</p>
+<p><strong>Screenshot Scenario-Settings (Advanced settings, Error handling):</strong></p>
+<p><img alt="Scenario-Settings: Advanced / Error handling" src="screenshots/07-error-handler-overview.png" /></p>
+<h3 id="6-testlauf-execution-log">6. Testlauf (Execution-Log)</h3>
+<p><strong>Status:</strong> ⚠ Teilweise Branch-Execution (3 von 6 Modulen gefeuert)</p>
+<ul>
+<li><strong>Test-Bench-Szenario:</strong> <code>TEST_s7</code> (ID 5318553)</li>
+<li><strong>Fixture:</strong> <code>context/fixtures/s7-rechnungen-bezahlt/state-na-all-paid.json</code></li>
+<li><strong>Getesteter Zweig:</strong> Nacharbeit / all invoices paid → Abgeschlossen NA</li>
+<li><strong>Erwartetes Verhalten:</strong> Status set to 368548</li>
+<li><strong>Webhook-URL:</strong> <code>https://hook.eu1.make.com/vfffngpp721n8xdntdnpskcqfc8hhi4e</code></li>
+<li><strong>Webhook-Fire-Ergebnis:</strong> HTTP <strong>200</strong> um 2026-04-20T22:01:50.296185+00:00, Payload 2 bytes</li>
+<li><strong>Execution:</strong> 3 Operations, 1223ms, status <code>SUCCESS</code></li>
+<li><strong>Letzte Scenario-Log-Events</strong> (Make REST <code>/logs</code>):</li>
+<li><code>2026-04-21T02:12:06.863Z</code> Typ <code>manual</code> Ops <code>3</code></li>
+<li><code>2026-04-21T01:39:40.776Z</code> Typ <code>modify</code> Ops <code>None</code></li>
+<li><code>2026-04-21T01:31:52.574Z</code> Typ <code>modify</code> Ops <code>None</code></li>
+<li><strong>Rohdaten:</strong> <a href="../execution-logs-2026-04-20/07-s7.json"><code>execution-logs-2026-04-20/07-s7.json</code></a></li>
+</ul>
+<p><strong>Erweiterung zur Full-Branch-Execution (Phase 2, nach Hero-Token):</strong></p>
+<p>Der Test-Bench ersetzt Hero-Module durch Mock-Module, die aktuell leere Bundles zurueckgeben. Damit Filter wie <code>{{3.type.id}}</code> oder <code>{{map(2.customer_documents; ...)}}</code> greifen, braucht es Mock-Responses, die Hero-JSON-Shapes emulieren (synthetische <code>type.id</code>, <code>current_project_match_status.name</code>, <code>customer_documents</code>-Array etc.). Als Referenz funktioniert W2-09 bereits end-to-end (<a href="09-ueberfaellige-aufgaben.html">09-ueberfaellige-aufgaben</a>, 3 Operations).
+- <strong>Screenshot Execution-Log (Make UI):</strong> Nico führt <code>Run Once</code> auf Test-Bench aus und screenshotted das Log-Panel.</p>
+<p><img alt="Execution-Log Test-Bench Run" src="screenshots/07-execution-log.png" /></p>
+<hr />
+<h2 id="risiko-bewertung">Risiko-Bewertung</h2>
+<p><strong>Mid.</strong> Ausfall = bezahlte Projekte rutschen nicht automatisch auf "Abgeschlossen" → Pipeline verstopft, weil Status nicht aktuell. Keine Datenverluste. Polling-Lauf wiederholt sich, also self-healing bei kurzen Ausfällen.</p>
+<hr />
+<h2 id="rote-fahnen-altlasten">Rote Fahnen / Altlasten</h2>
+<ul>
+<li><strong>Connection 61785</strong> statt 63384 — zweite alte-Hero-App-Connection. Warum zwei unterschiedliche?</li>
+<li><code>customer_documents ≠ 0</code> als <code>array:notequal</code> mit Wert "0" ist idiomatisch schräg (Make-Konvention "Array ist nicht leer")</li>
+<li>Auth 3672 (personalisiert)</li>
+<li>Kein <code>last:</code>-Limit in der Query → bei hohem Volumen potentiell Performance-Problem</li>
+<li><strong>Business-Logik-Cleanup aus Meeting 2026-04-15:</strong> Raphael flagte die Aufgabe "Rechnung kann gestellt werden" als redundant zur Rechnungsstellungs-Statusspalte. <strong>Gehört entfernt</strong> (siehe auch #1, #2)</li>
+</ul>
+<hr />
+<h2 id="offene-fragen-an-raphael">Offene Fragen an Raphael</h2>
+<ol>
+<li>Welche document_type_ids sind das konkret (952733, 737664, 688377, 688386 — Schlussrechnung, Teilrechnung, Anzahlung, ...)?</li>
+<li>Schedule-Intervall: wie oft heute (1h, 15min, täglich)?</li>
+<li>Warum zwei alte Hero-Connections (61785 vs. 63384)?</li>
+<li>Was, wenn ein Projekt <strong>keine</strong> Rechnungen hat (erstes Array-Element, aber leer)? Filter sagt <code>≠ 0</code> → blockiert, korrekt?</li>
+<li><strong>LexOffice-Deep-Dive:</strong> Wie genau wird <code>booking.status</code> aus LexOffice in Hero reingespiegelt? Polling? Webhook? Manuell?</li>
+<li>Task "Rechnung kann gestellt werden" entfernen — an welcher Stelle (Hero-Konfiguration)?</li>
+</ol>
+<hr />
+<h2 id="phase-1-import-checkliste">Phase-1-Import-Checkliste</h2>
+<ul>
+<li>[ ] Hero-App-Connection 61785 (alte Variante) bereitstellen</li>
+<li>[ ] Auth 3672 neu generieren</li>
+<li>[ ] Blueprint importieren</li>
+<li>[ ] <strong>Schedule-Intervall</strong> konfigurieren (Empfehlung: 1h oder täglich 6 Uhr)</li>
+<li>[ ] LexOffice-Verhalten verifizieren (Test-Rechnung markieren als bezahlt, prüfen ob Hero reagiert)</li>
+<li>[ ] Testlauf mit Test-Projekt in 317169</li>
+</ul>
+  </main>
+  <footer class="footer">Quelle: <code>workspace/clients/warme-wimmer/</code> · Build S-07-rechnungen-bezahlt.md · UnpauseAI</footer>
+</div>
+<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
+  <div style="text-align:center;max-width:360px;padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span></div>
+    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Wärme Wimmer Documentation</h2>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Bitte Zugangscode eingeben.</p>
+    <div style="display:flex;gap:8px;">
+      <input id="auth-input" type="password" placeholder="Zugangscode" autocomplete="off" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;" onkeydown="if(event.key==='Enter')checkAuth()" />
+      <button onclick="checkAuth()" style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">OK</button>
+    </div>
+    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Falscher Code, bitte erneut versuchen.</p>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:document.documentElement.getAttribute('data-theme')==='dark'?'dark':'default',securityLevel:'loose'});</script>
+<script>
+var WIMMER_CODE='wimmer2026';
+function checkAuth(){var inp=document.getElementById('auth-input').value;if(inp===WIMMER_CODE){localStorage.setItem('wimmer-docs-access','granted');var g=document.getElementById('auth-gate');g.style.opacity='0';setTimeout(function(){g.style.display='none'},300)}else{document.getElementById('auth-error').style.display='block';document.getElementById('auth-input').value='';document.getElementById('auth-input').focus()}}
+(function(){if(localStorage.getItem('wimmer-docs-access')==='granted'){var g=document.getElementById('auth-gate');if(g)g.style.display='none'}else{var inp=document.getElementById('auth-input');if(inp)inp.focus()}})();
+function toggleTheme(){var h=document.documentElement;var c=h.getAttribute('data-theme');var n=c==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('wimmer-docs-theme',n);var i=document.getElementById('theme-icon');if(i)i.innerHTML=n==='dark'?'&#9788;':'&#9790;'}
+var saved=localStorage.getItem('wimmer-docs-theme');
+if(saved){document.documentElement.setAttribute('data-theme',saved);var i=document.getElementById('theme-icon');if(i&&saved==='dark')i.innerHTML='&#9788;'}
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('sidebarBackdrop').classList.toggle('active')}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('sidebarBackdrop').classList.remove('active')}
+</script>
+</body>
+</html>

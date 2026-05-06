@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<meta name="googlebot" content="noindex,nofollow">
+<title>#4a: Outlook → HERO, IST-Zustand (wie es JETZT funktioniert) — Wärme Wimmer Hero-Doku</title>
+<style>
+:root{
+  --header-height:72px;--sidebar-width:240px;
+  --bg:#f8fafc;--surface:#ffffff;--surface2:#f1f5f9;--border:#e2e8f0;
+  --text:#0f172a;--text2:#475569;--text3:#94a3b8;
+  --blue:#2563eb;--blue-light:#dbeafe;--blue-dark:#1e40af;
+  --green:#16a34a;--green-light:#dcfce7;
+  --amber:#d97706;--amber-light:#fef3c7;
+  --purple:#7c3aed;--purple-light:#ede9fe;
+  --red:#dc2626;--red-light:#fee2e2;
+  --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.05);
+  --nav-bg:#ffffff;
+}
+[data-theme="dark"]{
+  --bg:#0f172a;--surface:#1e293b;--surface2:#0f172a;--border:#334155;
+  --text:#f1f5f9;--text2:#94a3b8;--text3:#475569;
+  --blue:#3b82f6;--blue-light:#1e3a5f;--blue-dark:#93c5fd;
+  --green:#22c55e;--green-light:#14532d;
+  --amber:#f59e0b;--amber-light:#451a03;
+  --purple:#a78bfa;--purple-light:#2e1065;
+  --red:#f87171;--red-light:#450a0a;
+  --shadow:0 1px 3px rgba(0,0,0,.3);
+  --nav-bg:#1e293b;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.6;min-height:100vh;transition:background .2s,color .2s;padding-top:var(--header-height)}
+.sidebar{position:fixed;top:var(--header-height);left:0;width:var(--sidebar-width);height:calc(100vh - var(--header-height));background:var(--surface);border-right:1px solid var(--border);z-index:50;overflow-y:auto;transition:transform .25s ease}
+.sidebar-group{padding:8px 0;border-bottom:1px solid var(--border)}
+.sidebar-group:last-child{border-bottom:none}
+.sidebar-group-label{padding:8px 20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3)}
+.sidebar-nav{list-style:none}
+.sidebar-nav a{display:flex;align-items:center;gap:8px;padding:8px 20px;font-size:13px;font-weight:500;color:var(--text2);text-decoration:none;border-left:3px solid transparent;transition:background .15s,color .15s,border-color .15s}
+.sidebar-nav a:hover{background:var(--surface2);color:var(--text)}
+.sidebar-nav a.active{background:var(--blue-light);color:var(--blue-dark);border-left-color:var(--blue);font-weight:700}
+.sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:40}
+.sidebar-backdrop.active{display:block}
+.hamburger{display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:18px;color:var(--text2);line-height:1}
+.header{background:var(--nav-bg);border-bottom:1px solid var(--border);padding:16px 24px;padding-left:calc(var(--sidebar-width) + 24px);display:flex;align-items:center;justify-content:space-between;position:fixed;top:0;left:0;right:0;z-index:1000;box-shadow:var(--shadow);transition:background .2s}
+.header-left{display:flex;align-items:center;gap:16px}
+.header-logo{display:flex;align-items:center;gap:6px;font-size:18px;letter-spacing:-0.025em}
+.header-logo .logo-text{font-weight:700;color:var(--text)}
+.header-logo .logo-accent{font-weight:700;color:var(--blue)}
+.header-title h1{font-size:16px;font-weight:700;color:var(--text)}
+.header-title p{font-size:12px;color:var(--text2);margin-top:1px}
+.header-right{display:flex;align-items:center;gap:12px}
+.theme-btn{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;transition:background .15s}
+.theme-btn:hover{background:var(--border)}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600}
+.badge-green{background:var(--green-light);color:var(--green)}
+.badge-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.page-layout{margin-left:var(--sidebar-width)}
+.main{max-width:1100px;margin:0 auto;padding:32px 32px 80px}
+.main h1{font-size:30px;font-weight:800;letter-spacing:-0.02em;margin-bottom:8px;color:var(--text)}
+.main h2{font-size:22px;font-weight:700;margin:32px 0 12px;color:var(--text);padding-bottom:6px;border-bottom:1px solid var(--border)}
+.main h3{font-size:17px;font-weight:700;margin:24px 0 8px;color:var(--text)}
+.main h4{font-size:15px;font-weight:700;margin:18px 0 6px;color:var(--text)}
+.main p{margin:8px 0 12px;color:var(--text2)}
+.main ul,.main ol{margin:8px 0 12px;padding-left:24px;color:var(--text2)}
+.main li{margin:3px 0}
+.main strong{color:var(--text)}
+.main a{color:var(--blue);text-decoration:none}
+.main a:hover{text-decoration:underline}
+.main blockquote{border-left:4px solid var(--blue);background:var(--surface2);padding:12px 16px;margin:12px 0;border-radius:0 8px 8px 0;color:var(--text2);font-style:normal}
+.main blockquote p{margin:0}
+.main blockquote em{font-style:normal;color:var(--text2)}
+.main code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:13px;font-family:'Menlo','Monaco','Consolas',monospace;color:var(--purple)}
+.main pre{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin:12px 0;overflow-x:auto;font-size:13px;line-height:1.5}
+.main pre code{background:none;padding:0;color:var(--text2)}
+.main pre.mermaid{background:var(--surface);border:1px solid var(--border);text-align:center;padding:20px}
+.main table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.main th{background:var(--surface2);padding:10px 14px;text-align:left;font-weight:600;color:var(--text);border-bottom:1px solid var(--border)}
+.main td{padding:10px 14px;color:var(--text2);border-bottom:1px solid var(--border)}
+.main tr:last-child td{border-bottom:none}
+.main hr{border:none;border-top:1px solid var(--border);margin:24px 0}
+.main details{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin:12px 0}
+.main details summary{cursor:pointer;font-weight:600;color:var(--text);padding:4px 0}
+.main details[open] summary{margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.main img{max-width:100%;height:auto;border:1px solid var(--border);border-radius:8px;margin:8px 0;display:block}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin:24px 0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;transition:border-color .15s,box-shadow .15s;display:block;color:inherit;text-decoration:none}
+.card:hover{border-color:var(--blue);box-shadow:var(--shadow);text-decoration:none}
+.card-icon{font-size:24px;margin-bottom:8px;display:block}
+.card h3{font-size:16px;font-weight:700;margin:0 0 4px;color:var(--text)}
+.card p{font-size:13px;color:var(--text2);margin:0}
+.support-cards{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0}
+.support-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;display:block;color:inherit;text-decoration:none;transition:border-color .15s}
+.support-card:hover{border-color:var(--blue);text-decoration:none}
+.support-card h4{margin:8px 0 4px}
+.card-tag{display:inline-block;font-size:11px;font-weight:600;padding:3px 8px;border-radius:12px;background:var(--blue-light);color:var(--blue);margin-top:8px}
+.footer{padding:24px 32px;border-top:1px solid var(--border);text-align:center;font-size:12px;color:var(--text3);margin-top:48px}
+@media (max-width:768px){
+  .sidebar{transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0);box-shadow:var(--shadow)}
+  .header{padding-left:16px}
+  .page-layout{margin-left:0}
+  .hamburger{display:block}
+  .header-title h1{font-size:14px}
+  .main{padding:20px}
+}
+</style>
+</head>
+<body>
+<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
+<nav class="sidebar" id="sidebar">
+<div class="sidebar-group"><div class="sidebar-group-label">🏠 Start</div><ul class="sidebar-nav">
+<li><a href="0-start-hier.html">Start hier — Hero-Automatisierungen Notion-Space</a></li>
+</ul></div>
+<div class="sidebar-group"><div class="sidebar-group-label">🗓 Meetings</div><ul class="sidebar-nav">
+<li><a href="m-meetings.html">Meetings — Hero-Automatisierungen</a></li>
+</ul></div>
+<div class="sidebar-group"><div class="sidebar-group-label">⚙️ Szenarien</div><ul class="sidebar-nav">
+<li><a href="s-00-flowcharts-overview.html">Flowcharts-Übersicht — Alle Hero-Automationen auf einen Blick</a></li>
+<li><a href="s-01-aufgabe-erledigt.html">W2-01 — Aufgabe erledigt (Status-Workflow)</a></li>
+<li><a href="s-02-aufgaben-nach-statuswechsel.html">W2-02 — Aufgaben nach Statusänderung</a></li>
+<li><a href="s-03-dokument-erstellt.html">W2-03 — Dokument erstellt → Statuswechsel</a></li>
+<li><a href="s-04-outlook-hero.html">W2-04: Outlook → HERO (Rewrite-Architektur / SOLL-Zustand)</a></li>
+<li><a href="s-05-projekt-erstellt.html">W2-05 — Projekt erstellt (Logbuch + Osneo-URL)</a></li>
+<li><a href="s-06-projekterinnerung.html">W2-06 — Projekterinnerung 1 Tag nach Termin</a></li>
+<li><a href="s-07-rechnungen-bezahlt.html">W2-07 — Rechnungen bezahlt → Abgeschlossen</a></li>
+<li><a href="s-08-regiebericht-fehlt.html">W2-08 — Regiebericht fehlt → Statuswechsel</a></li>
+<li><a href="s-09-ueberfaellige-aufgaben.html">W2-09 — Überfällige Aufgaben → Projekt markieren</a></li>
+<li><a href="s-10-zahlung-erhalten.html">W2-10 — Zahlung erhalten → Projektstatus ändern</a></li>
+</ul></div>
+<div class="sidebar-group"><div class="sidebar-group-label">📚 Reference</div><ul class="sidebar-nav">
+<li><a href="r-00-uebersicht.html">Übersicht -- Hero-Automations Lastenheft</a></li>
+<li><a href="r-hero-api-smoketest.html">#14 -- Hero-API Smoketest (Runbook)</a></li>
+<li><a href="r-hero-ids-und-connections.html">Cross-Reference -- Connections, Tokens, Hooks, Codes</a></li>
+<li><a href="r-kosten-und-subscription.html">Kosten & Subscription — Hero-Automations im Make-Konto</a></li>
+<li><a href="r-team-updates.html">Wartungs-Updates — Team-Log</a></li>
+<li><a href="r-w2-04-rewrite-design-ist.html" class="active">#4a: Outlook → HERO, IST-Zustand (wie es JETZT funktioniert)</a></li>
+<li><a href="r-w2-04-rewrite-design-mockup.html">W2-04b: Outlook → HERO Rewrite, Make-Szenario-Mockup</a></li>
+</ul></div>
+</nav>
+<header class="header">
+  <div class="header-left">
+    <button class="hamburger" onclick="toggleSidebar()">☰</button>
+    <div class="header-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="28" height="28"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></span></div>
+    <div class="header-title"><h1>Wärme Wimmer</h1><p>Hero-Automatisierungen Dokumentation</p></div>
+  </div>
+  <div class="header-right">
+    <span class="badge badge-green"><span class="badge-dot"></span>9/10 live</span>
+    <button class="theme-btn" onclick="toggleTheme()"><span id="theme-icon">&#9790;</span> Theme</button>
+  </div>
+</header>
+<div class="page-layout">
+  <main class="main">
+    <h1>#4a: Outlook → HERO, IST-Zustand (wie es JETZT funktioniert)</h1>
+    <p><img alt="Make-Szenario IST-Zustand (24 Module)" src="screenshots/04-outlook-hero-rewrite.png" /></p>
+<p><strong>Was ist das:</strong> Das aktuelle E-Mail-Szenario, gebaut von Michael Klaus (HERO Software). 24 Module, pollt Outlook alle 15 Minuten, ist 6x ausgefallen. <strong>Wird komplett ersetzt</strong> durch den Rewrite (siehe <a href="r-w2-04-rewrite-design-mockup.html">R-w2-04-rewrite-design-mockup.md</a>).</p>
+<p><strong>Navigation:</strong>
+- <strong>Diese Seite (04a):</strong> wie es jetzt ist (IST), Screenshot, Modul-Inventar, Routing-Logik
+- <strong><a href="r-w2-04-rewrite-design-mockup.html">R-w2-04-rewrite-design (SOLL)</a>:</strong> wie wir es neu bauen (SOLL)
+- <strong><a href="r-w2-04-rewrite-design-mockup.html">Mockup</a>:</strong> Mockup des neuen Szenarios, Modul für Modul erklärt</p>
+<hr />
+<blockquote>
+<p><em>Stand 2026-05-03 · 9/10 Hero-Szenarien live · W2-10 deferred zu n8n · Auto-Buy aktiv</em></p>
+</blockquote>
+<h2 id="wie-es-funktioniert-einfach-erklart">Wie es funktioniert (einfach erklärt)</h2>
+<p>Alle 15 Minuten (Mo-Fr, 05:00-22:30) passiert Folgendes:</p>
+<pre><code>Make fragt Outlook: &quot;Neue Mails im Postfach hero.automation@?&quot;
+    │
+    │  Für JEDE gefundene Mail (bis 200 pro Lauf):
+    │
+    ├── Schritt 1: Betreff + Vorschau nach Projektnummer durchsuchen
+    │              (z.B. &quot;HUK-100040&quot; per Regex-Muster)
+    │
+    ├── Projektnummer gefunden?
+    │       │
+    │       ├── JA → Projekt in HERO nachschlagen
+    │       │       │
+    │       │       │  Dann passieren 3 Dinge GLEICHZEITIG (parallel):
+    │       │       │
+    │       │       ├── 1) ANHÄNGE verarbeiten (wenn vorhanden)
+    │       │       │      Bilder (PNG/JPG) → HERO Bildergalerie
+    │       │       │      Dokumente (PDF etc) → HERO Ordner &quot;Allgemein&quot;
+    │       │       │
+    │       │       ├── 2) HAUPTPFAD:
+    │       │       │      OpenAI fasst Mail zusammen (GPT-4o-mini)
+    │       │       │      TinyURL kürzt den Outlook-Weblink
+    │       │       │      Logbuch-Eintrag in HERO schreiben
+    │       │       │      │
+    │       │       │      └── Ist Projekt in &quot;Reklamation&quot;-Status?
+    │       │       │              JA → Forward an reklamation@
+    │       │       │              NEIN → Task &quot;Neue Mail lesen&quot; anlegen
+    │       │       │
+    │       │       └── 3) AUFRÄUMEN: Mail aus Postfach löschen
+    │       │
+    │       └── NEIN (keine Projektnummer gefunden)
+    │               → Mail weiterleiten an info@waerme-wimmer.de
+    │               → 5 Sekunden warten
+    │               → Mail aus Postfach löschen
+    │
+    └── (nächste Mail)
+</code></pre>
+<hr />
+<h2 id="was-tut-es-ist-zustand-technisch">Was tut es (Ist-Zustand, technisch)</h2>
+<p>Das zentrale E-Mail-Ingestion-Szenario. Pollt alle 200 Nachrichten aus einem definierten Outlook-Folder des M365-Accounts (Connection 61784 = Hero-Automation-Postfach). Für jede Mail:</p>
+<ol>
+<li>Extrahiert Projektnummer aus Subject + Body-Preview per REGEX</li>
+<li>Schlägt Projekt in HERO nach</li>
+<li><strong>Wenn Projekt gefunden:</strong></li>
+<li>Lädt Attachments hoch (PDF → Dokument, Bilder → Image-Kategorie "Bilder vom Kunden")</li>
+<li>Erzeugt Logbuch-Eintrag mit OpenAI-zusammengefasstem Mail-Body und TinyURL-Kurzlink zum Outlook-Webmail</li>
+<li>Legt ggf. Task "Neue Mail lesen" an</li>
+<li>Leitet an <code>reklamation@waerme-wimmer.de</code> weiter wenn Projekt in Reklamationsstatus</li>
+<li>Löscht Mail</li>
+<li><strong>Wenn keine Projektnummer oder kein Treffer</strong> → Mail nach <code>info@waerme-wimmer.de</code> weiterleiten + löschen</li>
+</ol>
+<hr />
+<h2 id="trigger-ist">Trigger (Ist)</h2>
+<ul>
+<li><strong>Typ:</strong> Event (Polling) -- <code>microsoft-email:watchMessages</code>, 200 Nachrichten/Lauf</li>
+<li><strong>Outlook-Folder-ID:</strong> <code>AAMkADNjN2RhODU1LWY5ZTctNGY4Ni05YTdjLThiOTVhNjZiYmMzMAAuAAAAAAA1yqiQerSkSrXEslY7-RemAQAAUROkpOoTTJCfHJMHL4ZRAAAAAAEMAAA=</code></li>
+<li><strong>Connection:</strong> <code>61784</code> (azure/Outlook, Hero-Automation-Postfach)</li>
+<li><strong>Abgerufene Felder:</strong> <code>body</code>, <code>bodyPreview</code>, <code>from</code>, <code>hasAttachments</code>, <code>subject</code>, <code>webLink</code></li>
+</ul>
+<hr />
+<h2 id="regex-projektnummer-matching-modul-3">REGEX-Projektnummer-Matching (Modul 3)</h2>
+<ul>
+<li><strong>Pattern:</strong> <code>\b[A-Z]{3}-\d{3,6}\b</code> (drei Großbuchstaben, Bindestrich, 3–6 Ziffern)</li>
+<li><strong>Input:</strong> <code>{{1.subject}} {{1.bodyPreview}}</code> (subject + preview concat)</li>
+<li><strong>Flags:</strong> <code>global: True</code>, <code>sensitive: False</code>, <code>continueWhenNoRes: True</code></li>
+<li>Downstream nutzt nur <code>last(split(__IMTMATCH__; "-"))</code> -- nimmt die Zahlen nach dem Bindestrich als <code>relative_id</code> für <code>project_matches(relative_id: ...)</code></li>
+</ul>
+<hr />
+<h2 id="branching-logik-ist-detailliert">Branching-Logik (Ist, detailliert)</h2>
+<p><strong>Top-Router:</strong></p>
+<ul>
+<li><strong>Route A -- "Projektnummer gefunden"</strong> (Filter: <code>__IMTMATCH__</code> exists AND <code>i = 1</code> -- genau 1 Regex-Match):</li>
+<li>GraphQL-Call (Auth 3785) <code>project_matches(relative_id: ...)</code> -- lädt Projekt-Details + Status + Partner</li>
+<li>Sub-Router mit 3 Unter-Routen:<ul>
+<li><strong>A1 -- "Has Attachments":</strong> <code>listAttachments</code> → <code>downloadAnAttachment</code> → Sub-Router:</li>
+<li>Nicht-Bild → <code>hero-software:UploadDocument</code> (conn 63384, document_type_id <code>688384</code>, document_folder_id <code>654644</code>)</li>
+<li>Bild → <code>hero-software:UploadImage</code> (conn 63384, category "Bilder vom Kunden")</li>
+<li><strong>A2 -- Haupt-Pfad:</strong></li>
+<li><strong>OpenAI CreateCompletion</strong> (conn 62622, <code>gpt-4o-mini</code>, top_p=1, max_tokens=2048, temp=1)<ul>
+<li>Prompt: <code>"Entferne die Signatur und fasse die Mail zusammen. Entferne alles an HTML und fuege ausschließlich &lt;br&gt; für Zeilenumbruche hinzu. Email: {{1.body.content}}"</code></li>
+</ul>
+</li>
+<li><strong>TinyURL-Call</strong> (Auth 3732) -- kürzt Outlook-Webmail-Link</li>
+<li><strong>Logbuch-Eintrag</strong> (<code>hero-software:createLogbookEntry</code>, conn 63384): <code>target=project_match</code>, Text = <code>&lt;a href="TinyURL"&gt;E-Mail&lt;/a&gt; von {{from.name}} ({{from.address}}) vom {{createdDateTime}}: &lt;br&gt;&lt;br&gt;{{"Anhänge vorhanden" wenn hasAttachments}}&lt;br&gt;&lt;br&gt;{{OpenAI summary}}</code>, <code>role_visibility=[branch_manager, worker, accounting, sales]</code></li>
+<li>Sub-Router:<ul>
+<li><strong>"Keine Reklamation"</strong> (step.name ≠ "Reklamation"): GraphQL <code>tasks(project_match_id, is_done: false)</code> → wenn kein Task mit Titel "Neue Mail lesen" existiert, <code>update_task</code> anlegen für <code>target_user_id: partner.user_id</code> mit due_date +1 Tag</li>
+<li><strong>"Reklamation"</strong> (step.name contains "Reklamation"): <code>microsoft-email:forwardMessage</code> → <code>reklamation@waerme-wimmer.de</code></li>
+<li><strong>unconditional:</strong> <code>microsoft-email:deleteAMessage</code></li>
+</ul>
+</li>
+<li><strong>A3 -- "Keine Projekt → Weiterleitung"</strong> (project_matches = 0 OR REGEX ≠ project_nr): forward an <code>info@</code> → Sleep 5s → delete</li>
+</ul>
+</li>
+<li><strong>Route B -- "Keine Projektnummer gefunden"</strong> (<code>__IMTMATCH__</code> notexist): forward an <code>info@</code> → Sleep 5s → delete</li>
+</ul>
+<hr />
+<h2 id="delete-logik-ist">Delete-Logik (Ist)</h2>
+<ul>
+<li>Jede Terminal-Route endet mit <code>microsoft-email:deleteAMessage</code> (Modul 34, 35, 36)</li>
+<li>Sleep 5s (util:FunctionSleep) vor Delete bei Forward-Zweigen, Zweck: Forward-Zustellung abwarten bevor Original gelöscht wird</li>
+<li><strong>Delete vor Verarbeitungsbestätigung</strong> -- wenn Hero-Upload fehlschlägt, aber Forward erfolgreich war, ist Mail weg</li>
+</ul>
+<hr />
+<h2 id="error-fallback-email-an-micha-aufgeklart-2026-04-15">Error-Fallback-Email an Micha (aufgeklärt 2026-04-15)</h2>
+<ul>
+<li><strong>README:</strong> Modul 43 <code>google-email:sendAnEmail</code> über Connection "Micha" mit Empfänger <code>michael.klaus@hero-software.de</code> sendet "WW OpenAI Ausfall"-Alerts</li>
+<li><strong>Im JSON verifiziert 2026-04-15 (Blueprint-Reverify):</strong> Modul 43 existiert in <code>Outlook -- HERO.blueprint.json</code> Zeile 1776 im <code>onerror</code>-Handler des Szenarios -- NICHT im Standard-<code>flow</code> gelistet. Erklärung (c) bestätigt.</li>
+<li><strong>Gesamter Modul-Count (JSON, rekursiv flow + onerror + routes):</strong> 29 Module. Die frühere Zählung "24" bezog sich nur auf den Standard-<code>flow</code>. Die Notion-Page 00 "~30" war näher an der Wahrheit.</li>
+</ul>
+<p><strong>Konsequenz für #4 Rewrite:</strong>
+- Fallback-Logik existiert im Ist-Zustand und muss im Rewrite ersetzt werden durch <code>monitoring@waerme-wimmer.de</code>-Alert (Page 04 Z.159). Micha's privates Gmail fliegt raus.
+- Kein Raphael-Meeting-Blocker mehr -- ursprüngliche Diskrepanz war Export-Perspektive (flow vs onerror).</p>
+<hr />
+<h2 id="modul-inventar-node-by-node">Modul-Inventar (Node-by-Node)</h2>
+<p>Jeder Eintrag = ein Modul im Make-Szenario. Einrückung = verschachtelt in Router-Route.</p>
+<ul>
+<li><strong>Modul 1:</strong> Outlook: Neue E-Mails abrufen (Polling)</li>
+<li><strong>Modul 3:</strong> Regex: Pattern-Match</li>
+<li><strong>Modul 9:</strong> Router (Verzweigung)</li>
+<li><strong>Route 0</strong> (Route 0):<ul>
+<li><strong>Modul 4:</strong> HTTP Request (API-Key Auth) | <strong>Filter</strong> vorhanden (2 Bedingungen)</li>
+<li><strong>Modul 18:</strong> Router (Verzweigung)</li>
+<li><strong>Route 0</strong> (Route 0):<ul>
+<li><strong>Modul 14:</strong> Outlook: Anhänge auflisten | <strong>Filter</strong> vorhanden (3 Bedingungen)</li>
+<li><strong>Modul 16:</strong> Outlook: Anhang herunterladen | <strong>Filter</strong> vorhanden (1 Bedingungen)</li>
+<li><strong>Modul 22:</strong> Router (Verzweigung)</li>
+<li><strong>Route 0</strong> (Route 0):<ul>
+<li><strong>Modul 19:</strong> HERO API: Dokument hochladen | <strong>Filter</strong> vorhanden (3 Bedingungen)</li>
+</ul>
+</li>
+<li><strong>Route 1</strong> (Route 1):<ul>
+<li><strong>Modul 23:</strong> HERO API: Bild hochladen | <strong>Filter</strong> vorhanden (3 Bedingungen)</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><strong>Route 1</strong> (Route 1):<ul>
+<li><strong>Modul 21:</strong> OpenAI: GPT-4o-mini Zusammenfassung | <strong>Filter</strong> vorhanden (2 Bedingungen)</li>
+<li><strong>Modul 26:</strong> HTTP Request (API-Key Auth)</li>
+<li><strong>Modul 8:</strong> HERO API: Logbuch-Eintrag erstellen | <strong>Filter</strong> vorhanden (1 Bedingungen)</li>
+<li><strong>Modul 24:</strong> Router (Verzweigung)</li>
+<li><strong>Route 0</strong> (Route 0):<ul>
+<li><strong>Modul 31:</strong> HTTP Request (API-Key Auth) | <strong>Filter</strong> vorhanden (1 Bedingungen)</li>
+<li><strong>Modul 12:</strong> HTTP Request (API-Key Auth) | <strong>Filter</strong> vorhanden (1 Bedingungen)</li>
+</ul>
+</li>
+<li><strong>Route 1</strong> (Route 1):<ul>
+<li><strong>Modul 25:</strong> Outlook: E-Mail weiterleiten | <strong>Filter</strong> vorhanden (1 Bedingungen)</li>
+</ul>
+</li>
+<li><strong>Route 2</strong> (Route 2):<ul>
+<li><strong>Modul 36:</strong> Outlook: E-Mail löschen</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><strong>Route 2</strong> (Route 2):<ul>
+<li><strong>Modul 29:</strong> Outlook: E-Mail weiterleiten | <strong>Filter</strong> vorhanden (2 Bedingungen)</li>
+<li><strong>Modul 39:</strong> Warten (Sleep)</li>
+<li><strong>Modul 35:</strong> Outlook: E-Mail löschen</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><strong>Route 1</strong> (Route 1):<ul>
+<li><strong>Modul 13:</strong> Outlook: E-Mail weiterleiten | <strong>Filter</strong> vorhanden (1 Bedingungen)</li>
+<li><strong>Modul 38:</strong> Warten (Sleep)</li>
+<li><strong>Modul 34:</strong> Outlook: E-Mail löschen</li>
+</ul>
+</li>
+</ul>
+<hr />
+<h2 id="make-implementation-mapping">Make-Implementation-Mapping</h2>
+<table>
+<thead>
+<tr>
+<th>Funktion (Ist-Analyse-Schritt)</th>
+<th>Make-Modul (Pfad)</th>
+<th>Modul-Typ</th>
+<th>Anmerkung</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Polling-Trigger Outlook-Inbox</td>
+<td><code>m1</code></td>
+<td><code>microsoft-email:watchMessages</code></td>
+<td>200 Mails/Lauf, alle 15 Min Mo-Fr 05:00-22:30</td>
+</tr>
+<tr>
+<td>Regex-Match Projektnummer</td>
+<td><code>m3</code></td>
+<td><code>regexp:Parser</code></td>
+<td>Pattern <code>\b[A-Z]{3}-\d{3,6}\b</code>, Input = subject + bodyPreview</td>
+</tr>
+<tr>
+<td>Top-Router (Match vs No-Match)</td>
+<td><code>m9</code></td>
+<td><code>builtin:BasicRouter</code> (2 Routen)</td>
+<td>r0 = Projektnummer gefunden, r1 = nicht gefunden</td>
+</tr>
+<tr>
+<td>HERO Project lookup (Route A)</td>
+<td><code>m9/r0/m4</code></td>
+<td><code>http:ActionSendDataAPIKeyAuth</code></td>
+<td>GraphQL <code>project_matches(relative_id: ...)</code>. Filter: <code>__IMTMATCH__</code> exists</td>
+</tr>
+<tr>
+<td>Sub-Router Route A</td>
+<td><code>m9/r0/m18</code></td>
+<td><code>builtin:BasicRouter</code> (3 parallele Sub-Routen)</td>
+<td>A1 Attachments, A2 Hauptpfad, A3 Cleanup</td>
+</tr>
+<tr>
+<td>listAttachments (A1)</td>
+<td><code>m9/r0/m18/r0/m14</code></td>
+<td><code>microsoft-email:listAttachments</code></td>
+<td>Filter: <code>hasAttachments=true</code></td>
+</tr>
+<tr>
+<td>downloadAnAttachment (A1)</td>
+<td><code>m9/r0/m18/r0/m16</code></td>
+<td><code>microsoft-email:downloadAnAttachment</code></td>
+<td></td>
+</tr>
+<tr>
+<td>Sub-Router Bild-vs-Doc (A1)</td>
+<td><code>m9/r0/m18/r0/m22</code></td>
+<td><code>builtin:BasicRouter</code> (2 Routen)</td>
+<td></td>
+</tr>
+<tr>
+<td>UploadDocument (Allgemein 688384)</td>
+<td><code>m9/r0/m18/r0/m22/r0/m19</code></td>
+<td><code>hero-software:UploadDocument</code></td>
+<td>Nicht-Bild-Anhänge</td>
+</tr>
+<tr>
+<td>UploadImage (Bilder vom Kunden)</td>
+<td><code>m9/r0/m18/r0/m22/r1/m23</code></td>
+<td><code>hero-software:UploadImage</code></td>
+<td>PNG/JPG/JPEG</td>
+</tr>
+<tr>
+<td>OpenAI CreateCompletion (A2)</td>
+<td><code>m9/r0/m18/r1/m21</code></td>
+<td><code>openai-gpt-3:CreateCompletion</code></td>
+<td>gpt-4o-mini, fasst Mail zusammen, entfernt Signaturen</td>
+</tr>
+<tr>
+<td>TinyURL-Call (A2)</td>
+<td><code>m9/r0/m18/r1/m26</code></td>
+<td><code>http:ActionSendDataAPIKeyAuth</code></td>
+<td>Kürzt Outlook-Webmail-Link</td>
+</tr>
+<tr>
+<td>createLogbookEntry (A2)</td>
+<td><code>m9/r0/m18/r1/m8</code></td>
+<td><code>hero-software:createLogbookEntry</code></td>
+<td>Logbuch-Eintrag mit OpenAI-Summary + TinyURL + Absender</td>
+</tr>
+<tr>
+<td>Sub-Sub-Router (A2 Tail)</td>
+<td><code>m9/r0/m18/r1/m24</code></td>
+<td><code>builtin:BasicRouter</code> (3 Routen)</td>
+<td>Reklamation-vs-Normal-vs-OpenAI-Fallback</td>
+</tr>
+<tr>
+<td>GraphQL <code>tasks</code> (Check Neue-Mail-lesen)</td>
+<td><code>m9/r0/m18/r1/m24/r0/m31</code></td>
+<td><code>http:ActionSendDataAPIKeyAuth</code></td>
+<td>Route Normal: prüft ob Task offen ist</td>
+</tr>
+<tr>
+<td>GraphQL <code>update_task</code> (Anlegen Neue-Mail-lesen)</td>
+<td><code>m9/r0/m18/r1/m24/r0/m12</code></td>
+<td><code>http:ActionSendDataAPIKeyAuth</code></td>
+<td>Filter: kein offener Task vorhanden</td>
+</tr>
+<tr>
+<td>forwardMessage → reklamation@</td>
+<td><code>m9/r0/m18/r1/m24/r1/m25</code></td>
+<td><code>microsoft-email:forwardMessage</code></td>
+<td>Filter: status enthält <code>Reklamation</code></td>
+</tr>
+<tr>
+<td>deleteAMessage (Cleanup A2)</td>
+<td><code>m9/r0/m18/r1/m24/r2/m36</code></td>
+<td><code>microsoft-email:deleteAMessage</code></td>
+<td>OpenAI-Fallback-Pfad</td>
+</tr>
+<tr>
+<td>forwardMessage → reklamation@ (A3 Cleanup)</td>
+<td><code>m9/r0/m18/r2/m29</code></td>
+<td><code>microsoft-email:forwardMessage</code></td>
+<td></td>
+</tr>
+<tr>
+<td>Sleep + Delete (A3 Cleanup)</td>
+<td><code>m9/r0/m18/r2/m39</code>, <code>m9/r0/m18/r2/m35</code></td>
+<td><code>util:FunctionSleep</code>, <code>microsoft-email:deleteAMessage</code></td>
+<td></td>
+</tr>
+<tr>
+<td>forwardMessage → info@ (Route B)</td>
+<td><code>m9/r1/m13</code></td>
+<td><code>microsoft-email:forwardMessage</code></td>
+<td>Filter: <code>__IMTMATCH__</code> nicht vorhanden — fallback bei keiner Projektnummer</td>
+</tr>
+<tr>
+<td>Sleep + Delete (Route B)</td>
+<td><code>m9/r1/m38</code>, <code>m9/r1/m34</code></td>
+<td><code>util:FunctionSleep</code>, <code>microsoft-email:deleteAMessage</code></td>
+<td>5s Wait → dann Delete (Zustellungssicherheit)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="status-ubergange">Status-Übergänge</h2>
+<p><strong>Keine.</strong> Dieses Szenario schreibt keine Status-Codes. Es liest Status (<code>step.name = "Reklamation"</code>) als Verzweigung.</p>
+<hr />
+<h2 id="externe-side-effects-ist">Externe Side-Effects (Ist)</h2>
+<table>
+<thead>
+<tr>
+<th>System</th>
+<th>Aktion</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Outlook</td>
+<td>forward an <code>reklamation@</code>, forward an <code>info@</code>, delete message (3× verschiedene Zweige)</td>
+</tr>
+<tr>
+<td>Hero GraphQL (Auth 3785)</td>
+<td>project_matches lookup + tasks query + update_task mutation</td>
+</tr>
+<tr>
+<td>Hero native (conn 63384)</td>
+<td>UploadDocument + UploadImage + createLogbookEntry</td>
+</tr>
+<tr>
+<td>OpenAI (conn 62622)</td>
+<td><code>gpt-4o-mini</code> Completion pro Inbound-Mail</td>
+</tr>
+<tr>
+<td>TinyURL (Auth 3732)</td>
+<td>POST create pro Mail</td>
+</tr>
+<tr>
+<td>Gmail (laut README, nicht im JSON)</td>
+<td>Fallback-Alert an Micha</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="abhangigkeiten">Abhängigkeiten</h2>
+<ul>
+<li><strong>Connections:</strong> 61784 (Outlook), 62622 (OpenAI), 63384 (Hero alt)</li>
+<li><strong>Auths:</strong> 3785 (Sammelbearbeiter), 3732 (TinyURL)</li>
+<li><strong>Hardcoded Werte:</strong></li>
+<li>document_type_id <code>688384</code>, document_folder_id <code>654644</code></li>
+<li>Weiterleitungs-Adressen <code>reklamation@</code> + <code>info@waerme-wimmer.de</code></li>
+<li>Image-Kategorie <code>"Bilder vom Kunden"</code></li>
+<li>Outlook-Folder-ID (Base64-Blob)</li>
+</ul>
+<hr />
+<h2 id="hands-on-verifikation-2026-04-21">Hands-On-Verifikation (2026-04-21)</h2>
+<p><em>Quelle: REST-Blueprint-Extraktion + Test-Bench-Fire. Screenshots inline pro Abschnitt (<code>screenshots/04-*.png</code>).</em></p>
+<h3 id="1-trigger-einstieg">1. Trigger / Einstieg</h3>
+<ul>
+<li><strong>Modul:</strong> <code>microsoft-email:watchMessages</code> (Pfad <code>m1</code>, m1)</li>
+<li><strong>Connection-Ref:</strong> <code>61784</code></li>
+<li><strong>Scheduling:</strong> event-getrieben (kein Schedule-Attribut)</li>
+</ul>
+<p><img alt="Trigger-Modul m1 (microsoft-email:watchMessages)" src="screenshots/04-m1-trigger.png" /></p>
+<h3 id="2-entry-filter">2. Entry-Filter</h3>
+<ul>
+<li><strong>Modul:</strong> <code>http:ActionSendDataAPIKeyAuth</code> (Pfad <code>m9/r0/m4</code>)</li>
+<li><strong>Logik:</strong> UND. Alle 2 Bedingungen müssen gleichzeitig gelten.</li>
+<li><strong>Bedingungen (verbatim aus Make):</strong></li>
+<li><code>{{3.</code><strong>IMTMATCH</strong><code>}}</code> <strong>exist</strong> ``</li>
+<li><code>{{3.i}}</code> <strong>number:equal</strong> <code>1</code></li>
+<li><strong>Screenshot:</strong> kein separater Entry-Filter vor dem Routing. Der gleiche Filter erscheint als erster Eintrag im Filter-Stichprobe-Abschnitt unten.</li>
+</ul>
+<h3 id="3-filter-operatoren">3. Filter-Operatoren</h3>
+<p><strong>Operator-Verteilung:</strong> <code>array:equal</code>=2, <code>array:greater</code>=2, <code>boolean:equal</code>=1, <code>exist</code>=2, <code>notexist</code>=1, <code>number:equal</code>=1, <code>text:contain:ci</code>=4, <code>text:equal:ci</code>=2, <code>text:notcontain:ci</code>=5, <code>text:notequal:ci</code>=1</p>
+<p><strong>Mix <code>text:equal</code> und <code>text:contain:ci</code>:</strong> bewusst gewählt? <code>text:equal</code> bricht bei Hero-Titel-Umbenennung; <code>text:contain:ci</code> ist toleranter.</p>
+<p><strong>Filter-Logik pro Modul</strong> (wichtig: Gruppen-Struktur aus dem Blueprint erhält AND/OR):</p>
+<ul>
+<li>Filter an <code>m9/r0/m4</code> (m4): <strong>UND</strong>. Alle 2 Bedingungen müssen gleichzeitig gelten.</li>
+<li><code>{{3.</code><strong>IMTMATCH</strong><code>}}</code> <strong>exist</strong> ``</li>
+<li><code>{{3.i}}</code> <strong>number:equal</strong> <code>1</code></li>
+<li>Filter an <code>m9/r0/m18/r0/m14</code> (m14): <strong>UND</strong>. Alle 3 Bedingungen müssen gleichzeitig gelten.</li>
+<li><code>{{1.hasAttachments}}</code> <strong>boolean:equal</strong> <code>{{true}}</code></li>
+<li><code>{{4.data.data.project_matches}}</code> <strong>array:greater</strong> <code>0</code></li>
+<li><code>{{3.</code><strong>IMTMATCH</strong><code>}}</code> <strong>text:equal:ci</strong> <code>{{4.data.data.project_matches[].project_nr}}</code></li>
+<li>Filter an <code>m9/r0/m18/r0/m16</code> (m16): Einzelbedingung.</li>
+<li><code>{{14.contentType}}</code> <strong>text:notcontain:ci</strong> <code>json</code></li>
+<li>Filter an <code>m9/r0/m18/r0/m22/r0/m19</code> (m19): <strong>UND</strong>. Alle 3 Bedingungen müssen gleichzeitig gelten.</li>
+<li><code>{{16.filename}}</code> <strong>text:notcontain:ci</strong> <code>.png</code></li>
+<li><code>{{16.filename}}</code> <strong>text:notcontain:ci</strong> <code>.jpg</code></li>
+<li><code>{{16.filename}}</code> <strong>text:notcontain:ci</strong> <code>.jpeg</code></li>
+<li>Filter an <code>m9/r0/m18/r0/m22/r1/m23</code> (m23): <strong>ODER</strong> zwischen 3 Gruppen. Eine reicht.</li>
+<li>Gruppe 1 (intern UND):<ul>
+<li><code>{{16.filename}}</code> <strong>text:contain:ci</strong> <code>.png</code></li>
+</ul>
+</li>
+<li>Gruppe 2 (intern UND):<ul>
+<li><code>{{16.filename}}</code> <strong>text:contain:ci</strong> <code>.jpg</code></li>
+</ul>
+</li>
+<li>Gruppe 3 (intern UND):<ul>
+<li><code>{{16.filename}}</code> <strong>text:contain:ci</strong> <code>.jpeg</code></li>
+</ul>
+</li>
+<li>Filter an <code>m9/r0/m18/r1/m21</code> (m21): <strong>UND</strong>. Alle 2 Bedingungen müssen gleichzeitig gelten.</li>
+<li><code>{{4.data.data.project_matches}}</code> <strong>array:greater</strong> <code>0</code></li>
+<li><code>{{3.</code><strong>IMTMATCH</strong><code>}}</code> <strong>text:equal:ci</strong> <code>{{4.data.data.project_matches[].project_nr}}</code></li>
+<li>Filter an <code>m9/r0/m18/r1/m8</code> (m8): Einzelbedingung.</li>
+<li><code>{{26.data.data.tiny_url}}</code> <strong>exist</strong> ``</li>
+<li>Filter an <code>m9/r0/m18/r1/m24/r0/m31</code> (m31): Einzelbedingung.</li>
+<li><code>{{4.data.data.project_matches[].current_project_match_status.step.name}}</code> <strong>text:notcontain:ci</strong> <code>Reklamation</code></li>
+<li>Filter an <code>m9/r0/m18/r1/m24/r0/m12</code> (m12): Einzelbedingung.</li>
+<li><code>{{map(31.data.data.tasks; "title"; "title"; "Neue Mail lesen")}}</code> <strong>array:equal</strong> <code>0</code></li>
+<li>Filter an <code>m9/r0/m18/r1/m24/r1/m25</code> (m25): Einzelbedingung.</li>
+<li><code>{{4.data.data.project_matches[].current_project_match_status.step.name}}</code> <strong>text:contain:ci</strong> <code>Reklamation</code></li>
+<li>Filter an <code>m9/r0/m18/r2/m29</code> (m29): <strong>ODER</strong> zwischen 2 Gruppen. Eine reicht.</li>
+<li>Gruppe 1 (intern UND):<ul>
+<li><code>{{4.data.data.project_matches}}</code> <strong>array:equal</strong> <code>0</code></li>
+</ul>
+</li>
+<li>Gruppe 2 (intern UND):<ul>
+<li><code>{{3.</code><strong>IMTMATCH</strong><code>}}</code> <strong>text:notequal:ci</strong> <code>{{4.data.data.project_matches[].project_nr}}</code></li>
+</ul>
+</li>
+<li>Filter an <code>m9/r1/m13</code> (m13): Einzelbedingung.</li>
+<li><code>{{3.</code><strong>IMTMATCH</strong><code>}}</code> <strong>notexist</strong> ``</li>
+</ul>
+<p><strong>Filter-Stichprobe (Screenshots pro Route):</strong></p>
+<p><img alt="Filter an m9/r0/m4 (m4)" src="screenshots/04-m9_r0_m4-filter.png" /></p>
+<p><img alt="Filter an m9/r0/m18/r0/m14 (m14)" src="screenshots/04-m9_r0_m18_r0_m14-filter.png" /></p>
+<p><img alt="Filter an m9/r0/m18/r0/m16 (m16)" src="screenshots/04-m9_r0_m18_r0_m16-filter.png" /></p>
+<p><img alt="Filter an m9/r0/m18/r0/m22/r0/m19 (m19)" src="screenshots/04-m9_r0_m18_r0_m22_r0_m19-filter.png" /></p>
+<p><img alt="Filter an m9/r0/m18/r0/m22/r1/m23 (m23)" src="screenshots/04-m9_r0_m18_r0_m22_r1_m23-filter.png" /></p>
+<p><img alt="Filter an m9/r0/m18/r1/m21 (m21)" src="screenshots/04-m9_r0_m18_r1_m21-filter.png" /></p>
+<p><em>Screenshot pending:</em> <code>screenshots/04-m9_r0_m18_r1_m8-filter.png</code> (noch nicht captured)</p>
+<p><img alt="Filter an m9/r0/m18/r1/m24/r0/m31 (m31)" src="screenshots/04-m9_r0_m18_r1_m24_r0_m31-filter.png" /></p>
+<h3 id="4-status-ids-updateprojectstatus-module">4. Status-IDs (UpdateProjectStatus-Module)</h3>
+<p>Szenario hat keine <code>UpdateProjectStatus</code>-Module (schreibt keine Projektstatus direkt via Hero-App-Modul).</p>
+<h3 id="5-error-handler-audit">5. Error-Handler-Audit</h3>
+<p><strong>Module mit Error-Handler:</strong> 4 von 24</p>
+<table>
+<thead>
+<tr>
+<th>Modul-Pfad</th>
+<th>Modul-ID</th>
+<th>Modul-Typ</th>
+<th>Handler-Typ</th>
+<th>Handler-Module</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>m9/r0/m18/r0/m16</code></td>
+<td>m16</td>
+<td><code>microsoft-email:downloadAnAttachment</code></td>
+<td><code>Ignore</code></td>
+<td>builtin:Ignore</td>
+</tr>
+<tr>
+<td><code>m9/r0/m18/r0/m22/r0/m19</code></td>
+<td>m19</td>
+<td><code>hero-software:UploadDocument</code></td>
+<td><code>Ignore</code></td>
+<td>builtin:Ignore</td>
+</tr>
+<tr>
+<td><code>m9/r0/m18/r0/m22/r1/m23</code></td>
+<td>m23</td>
+<td><code>hero-software:UploadImage</code></td>
+<td><code>Ignore</code></td>
+<td>builtin:Ignore</td>
+</tr>
+<tr>
+<td><code>m9/r0/m18/r1/m21</code></td>
+<td>m21</td>
+<td><code>openai-gpt-3:CreateCompletion</code></td>
+<td><code>sendAnEmail</code></td>
+<td>google-email:sendAnEmail, builtin:Resume</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Screenshot Scenario-Settings (Advanced settings, Error handling):</strong></p>
+<p><img alt="Scenario-Settings: Advanced / Error handling" src="screenshots/04-error-handler-overview.png" /></p>
+<h3 id="6-testlauf-execution-log">6. Testlauf (Execution-Log)</h3>
+<p><strong>Status:</strong> kein Testlauf dokumentiert</p>
+<ul>
+<li><strong>Test-Bench-Szenario:</strong> <code>TEST_s6</code> (ID 5318552)</li>
+<li><strong>Fixture:</strong> <code>context/fixtures/s6-outlook-hero/edge-projectnumber-not-in-hero.json</code></li>
+<li><strong>Getesteter Zweig:</strong> Route A regex matches, but no project_match found → behaves as Route B</li>
+<li><strong>Erwartetes Verhalten:</strong> Forward to info@ + delete (no logbuch since no project)</li>
+<li><strong>Webhook-URL:</strong> <code>https://hook.eu1.make.com/92xl05cm39xriejp5rdrddfqumqf0xmj</code></li>
+<li><strong>Webhook-Fire-Ergebnis:</strong> HTTP <strong>200</strong> um 2026-04-20T22:01:45.851519+00:00, Payload 477 bytes</li>
+<li><strong>Letzte Scenario-Log-Events</strong> (Make REST <code>/logs</code>):</li>
+<li><code>2026-04-17T08:01:28.153Z</code> Typ <code>stop</code> Ops <code>None</code></li>
+<li><code>2026-04-17T08:01:22.348Z</code> Typ <code>start</code> Ops <code>None</code></li>
+<li><code>2026-04-16T18:34:12.781Z</code> Typ <code>modify</code> Ops <code>None</code></li>
+<li><strong>Rohdaten:</strong> <a href="../execution-logs-2026-04-20/04-s6.json"><code>execution-logs-2026-04-20/04-s6.json</code></a></li>
+<li><strong>Screenshot Execution-Log (Make UI):</strong> Nico führt <code>Run Once</code> auf Test-Bench aus und screenshotted das Log-Panel.</li>
+</ul>
+<p><em>Screenshot pending:</em> <code>screenshots/04-execution-log.png</code> (noch nicht captured)</p>
+<hr />
+<h2 id="rote-fahnen-altlasten">Rote Fahnen / Altlasten</h2>
+<ol>
+<li><strong>Micha's Gmail als Error-Fallback</strong> (siehe Diskrepanz oben)</li>
+<li><strong>TinyURL</strong> per Hero-Meeting 2026-04-09 entfallbar (Subdomain-Bug gefixt) -- im Rewrite raus</li>
+<li><strong>OpenAI-Kosten</strong> pro Mail in WW-Abrechnung (war bisher über Hero)</li>
+<li><strong>Delete vor Verarbeitungsbestätigung</strong> -- Data-Loss-Risiko bei Upload-Failure</li>
+<li><strong>Komplexer Pfad ohne Error-Handler</strong> an Upload-Modulen</li>
+<li><strong>REGEX ist restriktiv</strong> (<code>[A-Z]{3}-\d{3,6}</code>): Kleinbuchstaben-Projektnummern, 2-stellige Nummern oder Nummern ohne Bindestrich werden verworfen</li>
+<li><strong>Filter <code>3.i = 1</code></strong> akzeptiert NUR genau 1 Match: Mail mit 2 Projektnummern im Subject landet bei <code>info@</code></li>
+<li><strong>Postfach-Overflow</strong> (historisch 6× Ausfall)</li>
+<li><strong>Polling statt Event</strong> -- Zeitfenster-Lücken</li>
+<li><strong>Calendar-Invite-Loop</strong> (tausende Iterationen, Ursache unbekannt)</li>
+</ol>
+<hr />
+<h2 id="offene-fragen-an-raphael">Offene Fragen an Raphael</h2>
+<ol>
+<li>Wo ist Modul 43 (google-email Fallback)? Scenario-Error-Handler-Branch? JSON unvollständig? Oder README-Fehler?</li>
+<li>Welche Outlook-Folder-ID (Base64) entspricht welchem Unterordner (<code>info@</code>? <code>hero.automation@</code>? Unterordner <code>Zum Verarbeiten</code>?)</li>
+<li>OpenAI-Volumen historisch: wie viele Mails/Tag laufen durch? Brauchen wir Kostencap?</li>
+<li>Können wir TinyURL rausnehmen und direkt <code>1.webLink</code> verwenden (nach Subdomain-Fix)?</li>
+<li>Warum Connection 63384 (alte Hero-App) für Upload, aber Auth 3785 (Sammelbearbeiter) für GraphQL? Mischung absichtlich?</li>
+<li>Soll im Rewrite Outlook→S3/Mailgun umgestellt werden (Hero-Meeting-Hinweis)? → <strong>bestätigt im Meeting 2026-04-15</strong></li>
+</ol>
+<hr />
+<h2 id="rewrite-referenz">Rewrite-Referenz</h2>
+<p>Ziel-Architektur + Implementierungsplan siehe <strong><code>04-outlook-hero-rewrite.md</code></strong>.</p>
+  </main>
+  <footer class="footer">Quelle: <code>workspace/clients/warme-wimmer/</code> · Build R-w2-04-rewrite-design-ist.md · UnpauseAI</footer>
+</div>
+<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
+  <div style="text-align:center;max-width:360px;padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span></div>
+    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Wärme Wimmer Documentation</h2>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Bitte Zugangscode eingeben.</p>
+    <div style="display:flex;gap:8px;">
+      <input id="auth-input" type="password" placeholder="Zugangscode" autocomplete="off" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;" onkeydown="if(event.key==='Enter')checkAuth()" />
+      <button onclick="checkAuth()" style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">OK</button>
+    </div>
+    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Falscher Code, bitte erneut versuchen.</p>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:document.documentElement.getAttribute('data-theme')==='dark'?'dark':'default',securityLevel:'loose'});</script>
+<script>
+var WIMMER_CODE='wimmer2026';
+function checkAuth(){var inp=document.getElementById('auth-input').value;if(inp===WIMMER_CODE){localStorage.setItem('wimmer-docs-access','granted');var g=document.getElementById('auth-gate');g.style.opacity='0';setTimeout(function(){g.style.display='none'},300)}else{document.getElementById('auth-error').style.display='block';document.getElementById('auth-input').value='';document.getElementById('auth-input').focus()}}
+(function(){if(localStorage.getItem('wimmer-docs-access')==='granted'){var g=document.getElementById('auth-gate');if(g)g.style.display='none'}else{var inp=document.getElementById('auth-input');if(inp)inp.focus()}})();
+function toggleTheme(){var h=document.documentElement;var c=h.getAttribute('data-theme');var n=c==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('wimmer-docs-theme',n);var i=document.getElementById('theme-icon');if(i)i.innerHTML=n==='dark'?'&#9788;':'&#9790;'}
+var saved=localStorage.getItem('wimmer-docs-theme');
+if(saved){document.documentElement.setAttribute('data-theme',saved);var i=document.getElementById('theme-icon');if(i&&saved==='dark')i.innerHTML='&#9788;'}
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('sidebarBackdrop').classList.toggle('active')}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('sidebarBackdrop').classList.remove('active')}
+</script>
+</body>
+</html>

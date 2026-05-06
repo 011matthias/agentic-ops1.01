@@ -7,5 +7,17 @@
       "destination": "/clients/menovia/",
       "permanent": true
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "wimmer.unpauseai.com" }],
+      "destination": "/docs/warme-wimmer/index.html"
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "wimmer.unpauseai.com" }],
+      "destination": "/docs/warme-wimmer/:path*"
+    }
   ]
 }
