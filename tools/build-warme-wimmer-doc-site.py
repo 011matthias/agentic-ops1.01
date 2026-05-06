@@ -434,6 +434,10 @@ def main() -> int:
         out_path = OUT_DIR / f"{slug}.html"
         out_path.write_text(render_page(fname, content, pages), encoding="utf-8")
         written += 1
+    # Case-insensitive URLs are handled by platform/src/middleware.ts which
+    # 308-redirects any uppercase chars in /docs/warme-wimmer/* paths to
+    # the lowercase canonical (Linux fs is case-sensitive; Windows is not,
+    # so file duplication doesn't survive a git commit on Windows).
 
     index_path = OUT_DIR / "index.html"
     index_path.write_text(render_index(pages), encoding="utf-8")
