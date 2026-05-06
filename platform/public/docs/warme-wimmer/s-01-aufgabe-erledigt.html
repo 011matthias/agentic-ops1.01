@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex,nofollow">
 <meta name="googlebot" content="noindex,nofollow">
-<title>W2-01 — Aufgabe erledigt (Status-Workflow) — Wärme Wimmer Hero-Doku</title>
+<title>W2-01: Aufgabe erledigt — Wärme Wimmer Hero-Doku</title>
 <style>
 :root{
   --header-height:72px;--sidebar-width:240px;
@@ -88,6 +88,30 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .main details summary{cursor:pointer;font-weight:600;color:var(--text);padding:4px 0}
 .main details[open] summary{margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)}
 .main img{max-width:100%;height:auto;border:1px solid var(--border);border-radius:8px;margin:8px 0;display:block}
+.status-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin:0 0 24px;display:grid;grid-template-columns:1fr;gap:6px}
+.status-row{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:6px 0;border-bottom:1px solid var(--border)}
+.status-row:last-child{border-bottom:none}
+.status-label{color:var(--text2);font-weight:500}
+.status-row span:last-child{color:var(--text);text-align:right}
+.badge-amber{background:var(--amber-light);color:var(--amber)}
+.badge-red{background:var(--red-light);color:var(--red)}
+.badge-grey{background:var(--grey-light);color:var(--grey)}
+.dashboard-table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.dashboard-table th{background:var(--surface2);padding:10px 14px;text-align:left;font-weight:600;color:var(--text);border-bottom:1px solid var(--border);font-size:12px;text-transform:uppercase;letter-spacing:0.05em}
+.dashboard-table td{padding:10px 14px;color:var(--text2);border-bottom:1px solid var(--border)}
+.dashboard-table tr:last-child td{border-bottom:none}
+.dashboard-table tr:hover td{background:var(--surface2)}
+.dashboard-table a{color:var(--blue);text-decoration:none}
+.dashboard-table a:hover{text-decoration:underline}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin:24px 0}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 20px}
+.kpi-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3);margin-bottom:6px}
+.kpi-value{font-size:24px;font-weight:700;color:var(--text);letter-spacing:-0.02em}
+.kpi-sub{font-size:12px;color:var(--text2);margin-top:4px}
+.kpi-progress{height:6px;background:var(--surface2);border-radius:3px;margin-top:10px;overflow:hidden}
+.kpi-progress-bar{height:100%;background:var(--blue);transition:width .3s}
+.kpi-progress-bar.warn{background:var(--amber)}
+.kpi-progress-bar.danger{background:var(--red)}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin:24px 0}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;transition:border-color .15s,box-shadow .15s;display:block;color:inherit;text-decoration:none}
 .card:hover{border-color:var(--blue);box-shadow:var(--shadow);text-decoration:none}
@@ -114,34 +138,30 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 <body>
 <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
 <nav class="sidebar" id="sidebar">
-<div class="sidebar-group"><a href="/docs/warme-wimmer/" class="sidebar-home">Übersicht</a></div>
-<div class="sidebar-group"><div class="sidebar-group-label">Start</div><ul class="sidebar-nav">
-<li><a href="/docs/warme-wimmer/0-start-hier.html">Start hier — Hero-Automatisierungen Notion-Space</a></li>
-</ul></div>
-<div class="sidebar-group"><div class="sidebar-group-label">Meetings</div><ul class="sidebar-nav">
-<li><a href="/docs/warme-wimmer/m-meetings.html">Meetings — Hero-Automatisierungen</a></li>
-</ul></div>
-<div class="sidebar-group"><div class="sidebar-group-label">Szenarien</div><ul class="sidebar-nav">
-<li><a href="/docs/warme-wimmer/s-00-flowcharts-overview.html">Flowcharts-Übersicht — Alle Hero-Automationen auf einen Blick</a></li>
-<li><a href="/docs/warme-wimmer/s-01-aufgabe-erledigt.html" class="active">W2-01 — Aufgabe erledigt (Status-Workflow)</a></li>
-<li><a href="/docs/warme-wimmer/s-02-aufgaben-nach-statuswechsel.html">W2-02 — Aufgaben nach Statusänderung</a></li>
-<li><a href="/docs/warme-wimmer/s-03-dokument-erstellt.html">W2-03 — Dokument erstellt → Statuswechsel</a></li>
-<li><a href="/docs/warme-wimmer/s-04-outlook-hero.html">W2-04: Outlook → HERO (Rewrite-Architektur / SOLL-Zustand)</a></li>
-<li><a href="/docs/warme-wimmer/s-05-projekt-erstellt.html">W2-05 — Projekt erstellt (Logbuch + Osneo-URL)</a></li>
-<li><a href="/docs/warme-wimmer/s-06-projekterinnerung.html">W2-06 — Projekterinnerung 1 Tag nach Termin</a></li>
-<li><a href="/docs/warme-wimmer/s-07-rechnungen-bezahlt.html">W2-07 — Rechnungen bezahlt → Abgeschlossen</a></li>
-<li><a href="/docs/warme-wimmer/s-08-regiebericht-fehlt.html">W2-08 — Regiebericht fehlt → Statuswechsel</a></li>
-<li><a href="/docs/warme-wimmer/s-09-ueberfaellige-aufgaben.html">W2-09 — Überfällige Aufgaben → Projekt markieren</a></li>
-<li><a href="/docs/warme-wimmer/s-10-zahlung-erhalten.html">W2-10 — Zahlung erhalten → Projektstatus ändern</a></li>
+<div class="sidebar-group"><a href="/docs/warme-wimmer/" class="sidebar-home">Dashboard</a></div>
+<div class="sidebar-group"><div class="sidebar-group-label">Automatisierungen</div><ul class="sidebar-nav">
+<li><a href="/docs/warme-wimmer/s-00-flowcharts-overview.html">Flowcharts-Übersicht</a></li>
+<li><a href="/docs/warme-wimmer/s-01-aufgabe-erledigt.html" class="active">W2-01: Aufgabe erledigt</a></li>
+<li><a href="/docs/warme-wimmer/s-02-aufgaben-nach-statuswechsel.html">W2-02: Aufgaben nach Statuswechsel</a></li>
+<li><a href="/docs/warme-wimmer/s-03-dokument-erstellt.html">W2-03: Dokument erstellt</a></li>
+<li><a href="/docs/warme-wimmer/s-04-outlook-hero.html">W2-04: Outlook nach Hero</a></li>
+<li><a href="/docs/warme-wimmer/s-05-projekt-erstellt.html">W2-05: Projekt erstellt</a></li>
+<li><a href="/docs/warme-wimmer/s-06-projekterinnerung.html">W2-06: Projekterinnerung</a></li>
+<li><a href="/docs/warme-wimmer/s-07-rechnungen-bezahlt.html">W2-07: Rechnungen bezahlt</a></li>
+<li><a href="/docs/warme-wimmer/s-08-regiebericht-fehlt.html">W2-08: Regiebericht fehlt</a></li>
+<li><a href="/docs/warme-wimmer/s-09-ueberfaellige-aufgaben.html">W2-09: Überfällige Aufgaben</a></li>
+<li><a href="/docs/warme-wimmer/s-10-zahlung-erhalten.html">W2-10: Zahlung erhalten</a></li>
 </ul></div>
 <div class="sidebar-group"><div class="sidebar-group-label">Referenz</div><ul class="sidebar-nav">
-<li><a href="/docs/warme-wimmer/r-00-uebersicht.html">Übersicht -- Hero-Automations Lastenheft</a></li>
-<li><a href="/docs/warme-wimmer/r-hero-api-smoketest.html">#14 -- Hero-API Smoketest (Runbook)</a></li>
-<li><a href="/docs/warme-wimmer/r-hero-ids-und-connections.html">Cross-Reference -- Connections, Tokens, Hooks, Codes</a></li>
-<li><a href="/docs/warme-wimmer/r-kosten-und-subscription.html">Kosten & Subscription — Hero-Automations im Make-Konto</a></li>
-<li><a href="/docs/warme-wimmer/r-team-updates.html">Wartungs-Updates — Team-Log</a></li>
-<li><a href="/docs/warme-wimmer/r-w2-04-rewrite-design-ist.html">#4a: Outlook → HERO, IST-Zustand (wie es JETZT funktioniert)</a></li>
-<li><a href="/docs/warme-wimmer/r-w2-04-rewrite-design-mockup.html">W2-04b: Outlook → HERO Rewrite, Make-Szenario-Mockup</a></li>
+<li><a href="/docs/warme-wimmer/r-00-uebersicht.html">Lastenheft (Hintergrund)</a></li>
+<li><a href="/docs/warme-wimmer/r-hero-ids-und-connections.html">Hero-IDs und Connections</a></li>
+<li><a href="/docs/warme-wimmer/r-kosten-und-subscription.html">Kosten und Subscription</a></li>
+<li><a href="/docs/warme-wimmer/r-w2-04-rewrite-design-ist.html">W2-04: Rewrite-Design (IST-Analyse)</a></li>
+<li><a href="/docs/warme-wimmer/r-w2-04-rewrite-design-mockup.html">W2-04: Rewrite-Design (Mockup)</a></li>
+</ul></div>
+<div class="sidebar-group"><div class="sidebar-group-label">Aktivität</div><ul class="sidebar-nav">
+<li><a href="/docs/warme-wimmer/m-meetings.html">Meetings</a></li>
+<li><a href="/docs/warme-wimmer/r-team-updates.html">Wartungs-Updates</a></li>
 </ul></div>
 </nav>
 <header class="header">
@@ -157,7 +177,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 </header>
 <div class="page-layout">
   <main class="main">
-    <h1>W2-01 — Aufgabe erledigt (Status-Workflow)</h1>
+    <h1>W2-01: Aufgabe erledigt</h1>
+    <div class="status-card">
+  <div class="status-row"><span class="status-label">Status</span><span class="badge badge-green">läuft</span></div>
+  <div class="status-row"><span class="status-label">Letzter Lauf</span><span>2026-05-06 13:06 UTC</span></div>
+  <div class="status-row"><span class="status-label">Nächster Lauf</span><span>—</span></div>
+  <div class="status-row"><span class="status-label">Ausführungsplan</span><span>event-getrieben (Webhook)</span></div>
+  <div class="status-row"><span class="status-label">Letzte Läufe</span><span>50 von letzten 50 OK</span></div>
+</div>
     <p><img alt="Make-Szenario-Map" src="screenshots/01-aufgabe-erledigt.png" /></p>
 <p><strong>Risiko:</strong> Mid
 <strong>Strategie:</strong> 1:1 Import
