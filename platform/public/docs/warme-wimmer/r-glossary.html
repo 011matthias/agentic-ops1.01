@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex,nofollow">
 <meta name="googlebot" content="noindex,nofollow">
-<title>Wärme Wimmer — Wärme Wimmer Hero-Doku</title>
+<title>Glossar — Wärme Wimmer Hero-Doku</title>
 <style>
 :root{
   --header-height:72px;--sidebar-width:240px;
@@ -191,7 +191,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 <div id="cdn-banner" class="cdn-banner">Mermaid-CDN nicht erreichbar — Diagramme werden ggf. nicht gerendert. Quelltext bleibt sichtbar.</div>
 <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
 <nav class="sidebar" id="sidebar">
-<div class="sidebar-group"><a href="/docs/warme-wimmer/" class="sidebar-home active">Dashboard</a></div>
+<div class="sidebar-group"><a href="/docs/warme-wimmer/" class="sidebar-home">Dashboard</a></div>
 <div class="sidebar-group"><div class="sidebar-group-label">Orientierung</div><ul class="sidebar-nav">
 <li><a href="/docs/warme-wimmer/0-start-hier.html">Start hier</a></li>
 </ul></div>
@@ -216,7 +216,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 <li><a href="/docs/warme-wimmer/r-w2-04-rewrite-design-mockup.html">W2-04: Rewrite-Design (Mockup)</a></li>
 <li><a href="/docs/warme-wimmer/r-runbook.html">Incident-Runbook</a></li>
 <li><a href="/docs/warme-wimmer/r-faq.html">FAQ</a></li>
-<li><a href="/docs/warme-wimmer/r-glossary.html">Glossar</a></li>
+<li><a href="/docs/warme-wimmer/r-glossary.html" class="active">Glossar</a></li>
 <li><a href="/docs/warme-wimmer/r-contacts.html">Kontakte und Eskalation</a></li>
 </ul></div>
 <div class="sidebar-group"><div class="sidebar-group-label">Aktivität</div><ul class="sidebar-nav">
@@ -238,64 +238,43 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 </header>
 <div class="page-layout">
   <main class="main">
-<h1>Hero-Automatisierungen — Wärme Wimmer</h1>
-<p style="color:var(--text2);font-size:14px;margin-bottom:24px;">Stand 2026-05-06 · Tag 8 nach Go-Live · 9 von 10 Szenarien aktiv</p>
-<div class="kpi-grid">
-<div class="kpi">
-  <div class="kpi-label">Make-Operations (Cycle)</div>
-  <div class="kpi-value">13,570 / 20,000</div>
-  <div class="kpi-sub">67.8% verbraucht · 10,000 Auto-Buy · Reset 2026-05-14</div>
-  <div class="kpi-progress"><div class="kpi-progress-bar warn" style="width:67.8%"></div></div>
-</div>
-<div class="kpi">
-  <div class="kpi-label">Aktive Szenarien</div>
-  <div class="kpi-value">9 / 10</div>
-  <div class="kpi-sub">Auto-Buy aktiv</div>
-</div>
-<div class="kpi">
-  <div class="kpi-label">Outlook-Speicher</div>
-  <div class="kpi-value">44.0%</div>
-  <div class="kpi-sub">21.92 von 49.5 GB · Stand 2026-05-06</div>
-  <div class="kpi-progress"><div class="kpi-progress-bar " style="width:44.0%"></div></div>
-  <div class="kpi-sub" style="font-size:11px;color:var(--text3);">+0.53 GB seit 2026-05-03 · ~45 Tage bis 60% bei 177 MB/Tag</div>
-</div>
-</div>
-<p style="color:var(--text3);font-size:11px;margin-top:-12px;margin-bottom:24px;">Live-Daten via Make REST API · Build-Snapshot 2026-05-06 14:24 UTC</p><h2>Status der Automatisierungen</h2><table class="dashboard-table">
-<thead><tr><th>Szenario</th><th>Status</th><th>Letzter Lauf</th><th>Plan</th><th>Letzte 50</th></tr></thead>
-<tbody>
-<tr><td><a href="/docs/warme-wimmer/s-01-aufgabe-erledigt.html">W2-01: Aufgabe erledigt</a></td><td><span class="badge badge-green">läuft</span></td><td>2026-05-06 14:23</td><td>event-getrieben (Webhook)</td><td>50 OK · <a href="https://eu1.make.com/1421610/scenarios/5423770/edit#history" target="_blank" rel="noopener">Make-History ↗</a></td></tr>
-<tr><td><a href="/docs/warme-wimmer/s-02-aufgaben-nach-statuswechsel.html">W2-02: Aufgaben nach Statuswechsel</a></td><td><span class="badge badge-green">läuft</span></td><td>2026-05-06 14:23</td><td>event-getrieben (Webhook)</td><td>50 OK · <a href="https://eu1.make.com/1421610/scenarios/5316656/edit#history" target="_blank" rel="noopener">Make-History ↗</a></td></tr>
-<tr><td><a href="/docs/warme-wimmer/s-03-dokument-erstellt.html">W2-03: Dokument erstellt</a></td><td><span class="badge badge-green">läuft</span></td><td>2026-05-06 14:23</td><td>event-getrieben (Webhook)</td><td>50 OK · <a href="https://eu1.make.com/1421610/scenarios/5423798/edit#history" target="_blank" rel="noopener">Make-History ↗</a></td></tr>
-<tr><td><a href="/docs/warme-wimmer/s-04-outlook-hero.html">W2-04: Outlook nach Hero</a></td><td><span class="badge badge-green">läuft</span></td><td>2026-05-06 14:15</td><td>alle 15 min, Mo–Fr 05:00–22:30</td><td>50 OK · <a href="https://eu1.make.com/1421610/scenarios/5316629/edit#history" target="_blank" rel="noopener">Make-History ↗</a></td></tr>
-<tr><td><a href="/docs/warme-wimmer/s-05-projekt-erstellt.html">W2-05: Projekt erstellt</a></td><td><span class="badge badge-green">läuft</span></td><td>2026-05-06 13:32</td><td>event-getrieben (Webhook)</td><td>50 OK · <a href="https://eu1.make.com/1421610/scenarios/5316659/edit#history" target="_blank" rel="noopener">Make-History ↗</a></td></tr>
-<tr><td><a href="/docs/warme-wimmer/s-06-projekterinnerung.html">W2-06: Projekterinnerung</a></td><td><span class="badge badge-green">läuft</span></td><td>2026-05-06 13:59</td><td>event-getrieben (Webhook)</td><td>50 OK · <a href="https://eu1.make.com/1421610/scenarios/5423810/edit#history" target="_blank" rel="noopener">Make-History ↗</a></td></tr>
-<tr><td><a href="/docs/warme-wimmer/s-07-rechnungen-bezahlt.html">W2-07: Rechnungen bezahlt</a></td><td><span class="badge badge-green">läuft</span></td><td>2026-05-06 03:00</td><td>daily</td><td>20 OK · <a href="https://eu1.make.com/1421610/scenarios/5316633/edit#history" target="_blank" rel="noopener">Make-History ↗</a></td></tr>
-<tr><td><a href="/docs/warme-wimmer/s-08-regiebericht-fehlt.html">W2-08: Regiebericht fehlt</a></td><td><span class="badge badge-red">Fehler</span></td><td>2026-05-06 10:00</td><td>alle 7 h, Mo–Fr 05:00–19:00</td><td><details><summary>27 OK · 2 Fehler</summary><ul class="error-list"><li>2026-04-24 13:38 UTC — Warnung (status 2)</li><li>2026-04-24 12:45 UTC — Fehler — incomplete (status 3)</li></ul><p style="margin:6px 0 0;font-size:12px;"><a href="https://eu1.make.com/1421610/scenarios/5423817/edit#history" target="_blank" rel="noopener">Make-History ↗</a></p></details></td></tr>
-<tr><td><a href="/docs/warme-wimmer/s-09-ueberfaellige-aufgaben.html">W2-09: Überfällige Aufgaben</a></td><td><span class="badge badge-red">Fehler</span></td><td>2026-05-06 04:00</td><td>daily</td><td><details><summary>18 OK · 1 Fehler</summary><ul class="error-list"><li>2026-04-24 13:44 UTC — Warnung (status 2)</li></ul><p style="margin:6px 0 0;font-size:12px;"><a href="https://eu1.make.com/1421610/scenarios/5316635/edit#history" target="_blank" rel="noopener">Make-History ↗</a></p></details></td></tr>
-<tr><td><a href="/docs/warme-wimmer/s-10-zahlung-erhalten.html">W2-10: Zahlung erhalten</a></td><td><span class="badge badge-grey">deaktiviert</span></td><td>2026-04-25 11:45</td><td>deaktiviert</td><td>5 OK · <a href="https://eu1.make.com/1421610/scenarios/5316617/edit#history" target="_blank" rel="noopener">Make-History ↗</a></td></tr>
-</tbody></table>
-<p style="font-size:11px;color:var(--text3);margin:6px 0 24px;">Status-Codes: 1 = OK · 2/5 = Warnung · 3 = incomplete · 4 = failed. Klick auf eine Szenario-Zeile öffnet die Detail-Seite mit Owner, Runbook und Make-UI-Links.</p><h2>Weitere Bereiche</h2><div class="cards">
-<a class="card" href="/docs/warme-wimmer/S-00-flowcharts-overview.html"><h3>Flowcharts-Übersicht</h3><p>Alle 10 Hero-Automationen auf einer Seite, mit Sabine-Sicht und Audit-Sicht.</p></a>
-<a class="card" href="/docs/warme-wimmer/M-meetings.html"><h3>Meetings</h3><p>Chronik aller Meetings mit Decision-Log und Notizen pro Termin.</p></a>
-<a class="card" href="/docs/warme-wimmer/R-runbook.html"><h3>Incident-Runbook</h3><p>Wenn ein Szenario kippt — Diagnose-Pfad und Erst-Fix-Schritte.</p></a>
-<a class="card" href="/docs/warme-wimmer/R-team-updates.html"><h3>Wartungs-Updates</h3><p>An das Team kommunizierte Status-Updates inkl. Screenshots.</p></a>
-<a class="card" href="/docs/warme-wimmer/R-00-uebersicht.html"><h3>Lastenheft (Hintergrund)</h3><p>Spezifikations-Dokument aus der Bauphase, post-Go-Live aktualisiert.</p></a>
-<a class="card" href="/docs/warme-wimmer/R-hero-ids-und-connections.html"><h3>Hero-IDs und Connections</h3><p>Referenz-Tabelle aller Tokens, Connection-IDs und Hooks.</p></a>
-<a class="card" href="/docs/warme-wimmer/R-kosten-und-subscription.html"><h3>Kosten und Subscription</h3><p>Make-Tier, OpenAI, weitere Komponenten.</p></a>
-<a class="card" href="/docs/warme-wimmer/R-faq.html"><h3>FAQ</h3><p>Häufig gestellte Fragen aus den Meetings (Sammelbearbeiter, Wimmer-Assistent, hardcoded IDs …).</p></a>
-<a class="card" href="/docs/warme-wimmer/R-glossary.html"><h3>Glossar</h3><p>Begriffe aus der Doku in einem Satz erklärt.</p></a>
-<a class="card" href="/docs/warme-wimmer/R-contacts.html"><h3>Kontakte und Eskalation</h3><p>Wer macht was — Rollen, Zuständigkeiten, Kontaktwege.</p></a>
-</div>
-<h2>Support</h2>
-<div class="support-cards">
-  <a class="support-card" href="mailto:nicolas@unpauseai.com?subject=W%C3%A4rme%20Wimmer%20-%20%C3%84nderungs-Anfrage">
-    <h4>Änderung anfragen</h4><p>Was soll angepasst oder erweitert werden?</p><span class="card-tag">E-Mail</span>
-  </a>
-  <a class="support-card" href="mailto:nicolas@unpauseai.com?subject=W%C3%A4rme%20Wimmer%20-%20Problem-Meldung">
-    <h4>Problem melden</h4><p>Eine Automatisierung verhält sich nicht wie erwartet?</p><span class="card-tag">E-Mail</span>
-  </a>
-</div>
+<h1>Glossar</h1>
 
+<blockquote>
+<p><strong>Was ist das?</strong> Begriffe aus der Hero-Doku, in einem Satz erklärt — für alle, die nicht in jedem Meeting dabei waren.
+<strong>Wann brauchst du das?</strong> Wenn du auf einen Begriff stößt und wissen willst, was er konkret meint.</p>
+</blockquote>
+<h2 id="a">A</h2>
+<p><strong>Audit-Sicht</strong> — Die technische Diagramm-Variante eines Szenarios mit Hero-IDs, Filter-Bedingungen und Modul-Nummern. Gegenstück zur Sabine-Sicht. Steht auf jeder S-XX-Seite und auf der Flowcharts-Übersicht.</p>
+<p><strong>Auto-Buy / Auto-Purchasing</strong> — Make-Feature, das automatisch zusätzliche Operations-Blöcke kauft, wenn das Cycle-Limit erreicht ist. Bei uns aktiviert mit Core 10K, damit ein Spike das Tagesgeschäft nicht blockiert.</p>
+<h2 id="c">C</h2>
+<p><strong>Custom-App (Hero)</strong> — Hero hat eine private Make-App, die Hero-only veröffentlicht ist (<code>hero-software</code> ohne <code>:public</code>). Sie wird <strong>nicht</strong> an uns freigegeben. Die einzige Stelle, an der wir sie noch berühren, ist W2-01 (Custom-Webhook-Trigger). Alle anderen Szenarien laufen auf der öffentlichen Hero-App.</p>
+<h2 id="e">E</h2>
+<p><strong>Evidence-Verifikation</strong> — Maschinell durchgeführter Abgleich zwischen Lastenheft-Aussagen und den 10 Blueprint-JSONs. Belegt, dass jede Zahl, jede Connection-ID, jeder Filter im Lastenheft auch wirklich im laufenden Make-Szenario steht. Pre-Go-Live einmal abgeschlossen.</p>
+<h2 id="g">G</h2>
+<p><strong>GoBD</strong> — "Grundsätze zur ordnungsmäßigen Führung und Aufbewahrung von Büchern". Deutsche Steuerregel, die 10 Jahre Aufbewahrung von Geschäfts-E-Mails verlangt — Kontext für die Outlook-Speicher-Frage (50 GB-Limit reicht nicht für 10 Jahre, daher 500 GB-Upgrade).</p>
+<h2 id="h">H</h2>
+<p><strong>Hero / Hero-Software</strong> — Das CRM, das Wärme Wimmer einsetzt. Die 10 Make-Szenarien lesen aus Hero, schreiben nach Hero, oder reagieren auf Hero-Webhooks.</p>
+<p><strong>Hero-Webhook-Event-Selection</strong> — Bei der Webhook-Registrierung in Hero wählt man das Event ("Projekt erstellt" vs "Projektstatus geändert" usw.). Diese Auswahl wird beim JSON-Export von Hero <strong>nicht</strong> mit übertragen — bekannte Drift-Quelle (siehe W2-05-Fix).</p>
+<h2 id="l">L</h2>
+<p><strong>Lastenheft</strong> — Spezifikations-Dokument aus der Bauphase. Beschreibt was die Automatisierung tun soll, welche Hero-IDs benutzt werden, welche Risiken bekannt sind. Post-Go-Live aktualisiert; siehe <code>R-00-uebersicht</code>.</p>
+<h2 id="m">M</h2>
+<p><strong>Mailgun-Rewrite (W2-04 Phase 2)</strong> — Geplante Neufassung des Outlook-nach-Hero-Szenarios mit Mailgun-Webhook + S3-Archival statt 15-Minuten-Outlook-Polling. Löst das 50-GB-Outlook-Limit-Problem strukturell. Implementierung <strong>nach</strong> Go-Live.</p>
+<h2 id="n">N</h2>
+<p><strong>n8n-Migration</strong> — Nach Go-Live geplante Verschiebung der 10 Szenarien von Make.com auf n8n (selbst-gehostet auf Hetzner-VM von Leonard). Motivation: Pro-80K-Tier-Kostenfrage, mehr Kontrolle, zukünftige OS-Neo-Anbindung.</p>
+<h2 id="o">O</h2>
+<p><strong>OS-Neo</strong> — Wärme-Wimmer-eigenes CRM, das Hero langfristig komplett ersetzen soll. Strategischer Hinweis von Leonard (M-04-30); aktuell noch Zukunftsmusik.</p>
+<p><strong>Outlook-Speicher</strong> — Postfach <code>hero.automation@waerme-wimmer.de</code>. Limit aktuell 50 GB, mit GoBD-Pflicht zu klein. Upgrade auf 500 GB ist offene Aktion (Raphael).</p>
+<h2 id="r">R</h2>
+<p><strong>Runbook</strong> — Anleitung für den Notfall: was tun, wenn ein Szenario kippt, eine Quote überlaufen ist, ein Webhook nicht reagiert. Siehe <code>R-runbook</code>.</p>
+<h2 id="s">S</h2>
+<p><strong>Sabine-Sicht</strong> — Die geschäftliche Diagramm-Variante eines Szenarios — was passiert für den Menschen, ohne IDs und Filter. Gegenstück zur Audit-Sicht.</p>
+<p><strong>Sammelbearbeiter</strong> — Hero-User-ID <code>270612</code>. <strong>Nicht</strong> Sabine. Ein Shared-Inbox-User, der bewusst statisch ins Make-Szenario hartcodiert ist (Sabines Spec-Vorgabe). Sabines echte User-ID ist <code>255797</code>.</p>
+<h2 id="t">T</h2>
+<p><strong>TinyURL-Workaround</strong> — Frühere Notlösung, weil eine Hero-Subdomain einen Bug hatte. Nicht mehr nötig — Subdomain-Bug behoben (M-04-09).</p>
+<h2 id="w">W</h2>
+<p><strong>W1 / W2</strong> — Workstreams. <strong>W1</strong> = Zapier-zu-Make-Migration (5 Zapier-Szenarien, wird nach n8n migriert). <strong>W2</strong> = die 10 Hero-Automatisierungen, die diese Doku abdeckt.</p>
+<p><strong>Wimmer-Assistent</strong> — Dedizierter Hero-System-User (ID <code>316312</code>) für API-Zugriff. Token in <code>.env</code> (<code>MAKE_API_TOKEN_WARME_WIMMER</code>). Trennt API-Zugriff von Sabines Personal-Account.</p>
   </main>
 <footer class="footer">
   <div class="footer-line">Wärme Wimmer · Hero-Automatisierungen · Aufgesetzt von <a href="https://unpauseai.com">UnpauseAI</a></div>

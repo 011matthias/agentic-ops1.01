@@ -27,7 +27,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import markdown as md_lib
@@ -44,6 +44,22 @@ STATUS_YAML = REPO / "workspace/clients/warme-wimmer/context/maintenance/status.
 MAKE_BASE = "https://eu1.make.com/api/v2"
 MAKE_ORG_ID = 7209133
 MAKE_TEAM_ID = 1421610
+MAKE_UI_BASE = f"https://eu1.make.com/{MAKE_TEAM_ID}/scenarios"
+GO_LIVE_DATE = date(2026, 4, 28)
+
+# Per-scenario owner / escalation hint for status card.
+SCENARIO_OWNER = {
+    1:  "Nico (Make-Build) -> Raphael bei Wirtschaftsfragen",
+    2:  "Nico -> Raphael",
+    3:  "Nico -> Raphael",
+    4:  "Nico -> Raphael; Phase-2-Mailgun-Rewrite eskaliert",
+    5:  "Nico -> Raphael; Hero-Webhook-Fragen an Hero-Support",
+    6:  "Nico -> Raphael",
+    7:  "Nico -> Raphael",
+    8:  "Nico -> Raphael",
+    9:  "Nico -> Raphael",
+    10: "Deferred zu n8n-Migration -> Leonhard",
+}
 
 # (scenario number, display W2 label, Make scenario ID, German short name)
 W2_SCENARIOS = [
@@ -208,6 +224,13 @@ def fetch_make_status() -> dict:
         warn_count = sum(1 for l in runs if l.get("status") == 5)
         err_count = sum(1 for l in runs if l.get("status") in (2, 3, 4))
 
+        # Recent errors / warnings: last 5, newest first.
+        non_ok = [l for l in runs if l.get("status") and l.get("status") != 1]
+        recent_errors = [
+            {"timestamp": l.get("timestamp"), "status": l.get("status"), "type": l.get("type")}
+            for l in non_ok[:5]
+        ]
+
         is_active = bool(scn.get("isActive"))
         is_paused = bool(scn.get("isPaused"))
         if not is_active:
@@ -234,6 +257,7 @@ def fetch_make_status() -> dict:
             "ok_count": ok_count,
             "warn_count": warn_count,
             "err_count": err_count,
+            "recent_errors": recent_errors,
             "next_exec": scn.get("nextExec"),
             "health": health,
         }
@@ -323,6 +347,7 @@ def page_title(filename: str, content: str) -> str:
 # Page metadata: drives sidebar title + group + drop-list.
 # Filename keys are the original-case names from notion-restructure-v18.build_pages().
 PAGE_META = {
+    "0-Start-Hier.md":                {"title": "Start hier",                "group": "orientierung", "order": 1},
     "S-00-flowcharts-overview.md":    {"title": "Flowcharts-Übersicht",     "group": "automatisierungen", "order": 0},
     "S-01-aufgabe-erledigt.md":            {"title": "W2-01: Aufgabe erledigt",            "group": "automatisierungen", "order": 1},
     "S-02-aufgaben-nach-statuswechsel.md": {"title": "W2-02: Aufgaben nach Statuswechsel", "group": "automatisierungen", "order": 2},
@@ -341,12 +366,16 @@ PAGE_META = {
     "R-kosten-und-subscription.md":   {"title": "Kosten und Subscription",   "group": "referenz", "order": 3},
     "R-w2-04-rewrite-design-ist.md":  {"title": "W2-04: Rewrite-Design (IST-Analyse)",   "group": "referenz", "order": 4},
     "R-w2-04-rewrite-design-mockup.md": {"title": "W2-04: Rewrite-Design (Mockup)",      "group": "referenz", "order": 5},
+    "R-runbook.md":                   {"title": "Incident-Runbook",          "group": "referenz", "order": 6},
+    "R-faq.md":                       {"title": "FAQ",                       "group": "referenz", "order": 7},
+    "R-glossary.md":                  {"title": "Glossar",                   "group": "referenz", "order": 8},
+    "R-contacts.md":                  {"title": "Kontakte und Eskalation",   "group": "referenz", "order": 9},
     # Pages dropped from build (drop=True keeps them in source but excludes from output):
-    "0-Start-Hier.md":                {"drop": True},
     "R-hero-api-smoketest.md":        {"drop": True},
 }
 
 GROUPS = [
+    ("orientierung",      "Orientierung"),
     ("automatisierungen", "Automatisierungen"),
     ("referenz",          "Referenz"),
     ("aktivitaet",        "Aktivität"),
@@ -384,6 +413,7 @@ CSS = """
   --amber:#d97706;--amber-light:#fef3c7;
   --purple:#7c3aed;--purple-light:#ede9fe;
   --red:#dc2626;--red-light:#fee2e2;
+  --grey:#64748b;--grey-light:#f1f5f9;
   --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.05);
   --nav-bg:#ffffff;
 }
@@ -395,6 +425,7 @@ CSS = """
   --amber:#f59e0b;--amber-light:#451a03;
   --purple:#a78bfa;--purple-light:#2e1065;
   --red:#f87171;--red-light:#450a0a;
+  --grey:#94a3b8;--grey-light:#334155;
   --shadow:0 1px 3px rgba(0,0,0,.3);
   --nav-bg:#1e293b;
 }
@@ -492,6 +523,40 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .support-card h4{margin:8px 0 4px}
 .card-tag{display:inline-block;font-size:11px;font-weight:600;padding:3px 8px;border-radius:12px;background:var(--blue-light);color:var(--blue);margin-top:8px}
 .footer{padding:24px 32px;border-top:1px solid var(--border);text-align:center;font-size:12px;color:var(--text3);margin-top:48px}
+.footer .footer-line{margin:4px 0}
+.scenario-meta{display:grid;grid-template-columns:1fr;gap:6px;margin:0 0 12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-size:13px}
+.scenario-meta-row{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--border);padding:6px 0}
+.scenario-meta-row:last-child{border-bottom:none}
+.scenario-meta-label{color:var(--text2);font-weight:500}
+.scenario-meta-row a{color:var(--blue);text-decoration:none}
+.scenario-meta-row a:hover{text-decoration:underline}
+.error-list{margin:6px 0 0;padding-left:18px;font-size:12px;color:var(--text2)}
+.error-list li{margin:2px 0}
+.unavailable-note{background:var(--surface2);border:1px dashed var(--border);border-radius:8px;padding:10px 14px;margin:0 0 16px;font-size:13px;color:var(--text2)}
+.callout{background:var(--blue-light);border-left:4px solid var(--blue);border-radius:0 8px 8px 0;padding:14px 18px;margin:8px 0 20px;color:var(--text)}
+.callout strong{color:var(--text)}
+.callout-q{margin:6px 0;font-size:14px}
+.persona-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin:24px 0}
+.persona-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;display:block;color:inherit;text-decoration:none;transition:border-color .15s,box-shadow .15s}
+.persona-card:hover{border-color:var(--blue);box-shadow:var(--shadow);text-decoration:none}
+.persona-card h3{margin:0 0 8px}
+.persona-card p{margin:0 0 8px;color:var(--text2);font-size:13px}
+.persona-card .persona-target{font-size:12px;color:var(--blue);font-weight:600}
+.search-trigger{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:8px;transition:background .15s,border-color .15s}
+.search-trigger:hover{background:var(--border)}
+.search-trigger kbd{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:11px;font-family:'Menlo','Monaco','Consolas',monospace;color:var(--text2)}
+#search-modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;display:none;align-items:flex-start;justify-content:center;padding-top:96px}
+#search-modal.open{display:flex}
+.search-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;width:min(640px,calc(100% - 40px));max-height:60vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.25);overflow:hidden}
+.search-input{padding:14px 18px;border:none;border-bottom:1px solid var(--border);font-size:15px;background:var(--surface);color:var(--text);outline:none}
+.search-results{overflow-y:auto;padding:8px 0}
+.search-result{display:block;padding:10px 18px;color:var(--text);text-decoration:none;border-left:3px solid transparent}
+.search-result:hover,.search-result.active{background:var(--surface2);border-left-color:var(--blue);text-decoration:none}
+.search-result-title{font-size:14px;font-weight:600}
+.search-result-page{font-size:12px;color:var(--text3);margin-top:2px}
+.search-empty{padding:18px;color:var(--text3);font-size:13px}
+.cdn-banner{display:none;background:var(--amber-light);color:var(--amber);padding:8px 18px;font-size:12px;text-align:center;border-bottom:1px solid var(--border)}
+.cdn-banner.show{display:block}
 @media (max-width:768px){
   .sidebar{transform:translateX(-100%)}
   .sidebar.open{transform:translateX(0);box-shadow:var(--shadow)}
@@ -500,6 +565,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
   .hamburger{display:block}
   .header-title h1{font-size:14px}
   .main{padding:20px}
+  .search-trigger span{display:none}
+  .search-trigger kbd{display:none}
+}
+@media (max-width:480px){
+  .kpi-grid{grid-template-columns:1fr}
+  .persona-cards{grid-template-columns:1fr}
+  .support-cards{grid-template-columns:1fr}
+}
+@media print{
+  .header,.sidebar,.sidebar-backdrop,.hamburger,.theme-btn,.search-trigger,#auth-gate,#search-modal{display:none !important}
+  .page-layout{margin-left:0}
+  body{background:white;color:black;padding-top:0}
+  .main{max-width:100%;padding:0}
+  .badge-dot{animation:none;opacity:1}
+  details{break-inside:avoid}
+  pre.mermaid{break-inside:avoid;page-break-inside:avoid}
 }
 """
 
@@ -512,6 +593,12 @@ var saved=localStorage.getItem('{LS_PREFIX}-theme');
 if(saved){{document.documentElement.setAttribute('data-theme',saved);var i=document.getElementById('theme-icon');if(i&&saved==='dark')i.innerHTML='&#9788;'}}
 function toggleSidebar(){{document.getElementById('sidebar').classList.toggle('open');document.getElementById('sidebarBackdrop').classList.toggle('active')}}
 function closeSidebar(){{document.getElementById('sidebar').classList.remove('open');document.getElementById('sidebarBackdrop').classList.remove('active')}}
+function openSearch(){{var m=document.getElementById('search-modal');if(!m)return;m.classList.add('open');var i=document.getElementById('search-input');if(i){{i.value='';i.focus();renderSearch('')}}}}
+function closeSearch(){{var m=document.getElementById('search-modal');if(m)m.classList.remove('open')}}
+function renderSearch(q){{var idx=window.WIMMER_SEARCH_INDEX||[];var box=document.getElementById('search-results');if(!box)return;q=(q||'').trim().toLowerCase();var matches=q?idx.filter(function(it){{return it.t.toLowerCase().indexOf(q)!==-1||it.p.toLowerCase().indexOf(q)!==-1}}).slice(0,30):idx.slice(0,30);if(!matches.length){{box.innerHTML='<div class="search-empty">Keine Treffer.</div>';return}}box.innerHTML=matches.map(function(it,i){{return '<a class="search-result'+(i===0?' active':'')+'" href="'+it.u+'"><div class="search-result-title">'+it.t+'</div><div class="search-result-page">'+it.p+'</div></a>'}}).join('')}}
+document.addEventListener('keydown',function(e){{var k=e.key||'';if((e.ctrlKey||e.metaKey)&&k.toLowerCase()==='k'){{e.preventDefault();openSearch()}}else if(k==='Escape'){{closeSearch()}}}});
+document.addEventListener('click',function(e){{var m=document.getElementById('search-modal');if(m&&e.target===m)closeSearch()}});
+window.addEventListener('load',function(){{var s=document.getElementById('search-input');if(s)s.addEventListener('input',function(e){{renderSearch(e.target.value)}});var t=window.setTimeout(function(){{if(typeof mermaid==='undefined'){{var b=document.getElementById('cdn-banner');if(b)b.classList.add('show')}}}},2500)}});
 """
 
 
@@ -561,7 +648,7 @@ def _health_class(health: str) -> str:
     }.get(health, "badge-grey")
 
 
-def render_scenario_status_card(scn_data: dict) -> str:
+def render_scenario_status_card(scn_data: dict, scenario_num: int | None = None) -> str:
     """Status card injected at the top of each S-XX-*.md page."""
     if not scn_data:
         return ""
@@ -573,62 +660,91 @@ def render_scenario_status_card(scn_data: dict) -> str:
     total_runs = scn_data.get("ok_count", 0) + scn_data.get("err_count", 0) + scn_data.get("warn_count", 0)
     success_text = f'{scn_data.get("ok_count", 0)} von letzten {total_runs} OK' if total_runs else "keine Läufe in Make-Log"
 
+    scenario_id = scn_data.get("id")
+    make_ui_link = (
+        f'<a href="{MAKE_UI_BASE}/{scenario_id}/edit" target="_blank" rel="noopener">Make-UI öffnen ↗</a>'
+        f' &middot; <a href="{MAKE_UI_BASE}/{scenario_id}/edit#history" target="_blank" rel="noopener">History ↗</a>'
+        if scenario_id else "—"
+    )
+    owner = SCENARIO_OWNER.get(scenario_num or -1, "—") if scenario_num else "—"
+    runbook_anchor = f"w2-{scenario_num:02d}" if scenario_num else ""
+    runbook_link = (
+        f'<a href="{BASE_PATH}r-runbook.html#{runbook_anchor}">Runbook für {label or "dieses Szenario"} ↗</a>'
+        if runbook_anchor else "—"
+    )
+
+    # Recent error / warning detail. Only render the block if there are entries.
+    recent_errors = scn_data.get("recent_errors") or []
+    error_block = ""
+    if recent_errors:
+        items = []
+        for ev in recent_errors[:3]:
+            ts = _humanize_dt(ev.get("timestamp"))
+            sname = _make_status_name(ev.get("status"))
+            items.append(f"<li>{ts} — {sname}</li>")
+        history_link = (
+            f'<a href="{MAKE_UI_BASE}/{scenario_id}/edit#history" target="_blank" rel="noopener">'
+            f"Vollständige Make-History ↗</a>"
+            if scenario_id else ""
+        )
+        error_block = (
+            f'<div class="status-row"><span class="status-label">Letzte Fehler/Warnungen</span>'
+            f'<span><ul class="error-list">{"".join(items)}</ul>{history_link}</span></div>'
+        )
+
     return f"""<div class="status-card">
   <div class="status-row"><span class="status-label">Status</span><span class="badge {_health_class(health)}">{health}</span></div>
   <div class="status-row"><span class="status-label">Letzter Lauf</span><span>{last_run}</span></div>
   <div class="status-row"><span class="status-label">Nächster Lauf</span><span>{next_exec}</span></div>
   <div class="status-row"><span class="status-label">Ausführungsplan</span><span>{schedule}</span></div>
   <div class="status-row"><span class="status-label">Letzte Läufe</span><span>{success_text}</span></div>
+  {error_block}
+  <div class="status-row"><span class="status-label">Make-UI</span><span>{make_ui_link}</span></div>
+  <div class="status-row"><span class="status-label">Owner / Eskalation</span><span>{owner}</span></div>
+  <div class="status-row"><span class="status-label">Runbook</span><span>{runbook_link}</span></div>
 </div>"""
 
 
-def render_page(filename: str, content: str, all_pages: dict[str, str], make_status: dict | None = None) -> str:
-    title = display_title(filename, content)
-    body_md = re.sub(r"^# .+\n+", "", content, count=1)
-    body_html = md_to_html_body(body_md)
-    sidebar = render_sidebar(all_pages, page_slug(filename))
-    status_card = ""
-    scenario_num = _scenario_num_for_file(filename)
-    if scenario_num and make_status and not make_status.get("unavailable"):
-        scn = (make_status.get("scenarios") or {}).get(scenario_num)
-        if scn:
-            status_card = render_scenario_status_card(scn)
+def _make_status_name(code: int | None) -> str:
+    """Map Make REST scenario-log status code to human label."""
+    return {
+        1: "OK (status 1)",
+        2: "Warnung (status 2)",
+        3: "Fehler — incomplete (status 3)",
+        4: "Fehler — failed (status 4)",
+        5: "Warnung — partial (status 5)",
+    }.get(code or 0, f"unbekannt (status {code})")
 
-    return f"""<!DOCTYPE html>
-<html lang="de" data-theme="light">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="robots" content="noindex,nofollow">
-<meta name="googlebot" content="noindex,nofollow">
-<title>{title} — Wärme Wimmer Hero-Doku</title>
-<style>{CSS}</style>
-</head>
-<body>
-<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
-{sidebar}
-<header class="header">
-  <div class="header-left">
-    <button class="hamburger" onclick="toggleSidebar()">☰</button>
-    <div class="header-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="28" height="28"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></span></div>
-    <div class="header-title"><h1>Wärme Wimmer</h1><p>Hero-Automatisierungen Dokumentation</p></div>
-  </div>
-  <div class="header-right">
-    <span class="badge badge-green"><span class="badge-dot"></span>9 von 10 aktiv</span>
-    <button class="theme-btn" onclick="toggleTheme()"><span id="theme-icon">&#9790;</span> Theme</button>
-  </div>
-</header>
-<div class="page-layout">
-  <main class="main">
-    <h1>{title}</h1>
-    {status_card}
-    {body_html}
-  </main>
-  <footer class="footer">Wärme Wimmer · Hero-Automatisierungen · Aufgesetzt von <a href="https://unpauseai.com">UnpauseAI</a></footer>
-</div>
-<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
+
+# ============ Shell / chrome ============
+
+
+SVG_LOGO_28 = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="28" height="28">'
+    '<rect width="32" height="32" rx="7" fill="#2563eb"/>'
+    '<rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/>'
+    '<polygon points="18,8 23,16 18,24" fill="white"/></svg>'
+)
+SVG_LOGO_40 = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40">'
+    '<rect width="32" height="32" rx="7" fill="#2563eb"/>'
+    '<rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/>'
+    '<polygon points="18,8 23,16 18,24" fill="white"/></svg>'
+)
+
+
+def _scenarios_active_count(make_status: dict | None) -> tuple[int, int]:
+    if not make_status or make_status.get("unavailable"):
+        return (0, 10)
+    scns = make_status.get("scenarios") or {}
+    n_active = sum(1 for s in scns.values() if s.get("is_active"))
+    return (n_active, len(scns) or 10)
+
+
+def render_auth_gate() -> str:
+    return f"""<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
   <div style="text-align:center;max-width:360px;padding:24px;">
-    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span></div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;">{SVG_LOGO_40}<span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span></div>
     <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Wärme Wimmer Documentation</h2>
     <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Bitte Zugangscode eingeben.</p>
     <div style="display:flex;gap:8px;">
@@ -637,13 +753,122 @@ def render_page(filename: str, content: str, all_pages: dict[str, str], make_sta
     </div>
     <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Falscher Code, bitte erneut versuchen.</p>
   </div>
+</div>"""
+
+
+def render_search_modal() -> str:
+    return """<div id="search-modal">
+  <div class="search-box" onclick="event.stopPropagation()">
+    <input id="search-input" class="search-input" type="text" placeholder="Seiten und Abschnitte durchsuchen…" autocomplete="off" />
+    <div id="search-results" class="search-results"></div>
+  </div>
+</div>"""
+
+
+def render_header(make_status: dict | None) -> str:
+    n_active, n_total = _scenarios_active_count(make_status)
+    badge_cls = "badge-green" if (make_status and not make_status.get("unavailable") and n_active == n_total) else "badge-amber"
+    if make_status and make_status.get("unavailable"):
+        badge_cls = "badge-grey"
+        active_text = "Live-Status: nicht verfügbar"
+    else:
+        active_text = f"{n_active} von {n_total} aktiv"
+    return f"""<header class="header">
+  <div class="header-left">
+    <button class="hamburger" onclick="toggleSidebar()">☰</button>
+    <div class="header-logo">{SVG_LOGO_28}<span><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></span></div>
+    <div class="header-title"><h1>Wärme Wimmer</h1><p>Hero-Automatisierungen Dokumentation</p></div>
+  </div>
+  <div class="header-right">
+    <button class="search-trigger" onclick="openSearch()" title="Suche (Ctrl/Cmd+K)"><span>Suchen</span><kbd>Ctrl+K</kbd></button>
+    <span class="badge {badge_cls}"><span class="badge-dot"></span>{active_text}</span>
+    <button class="theme-btn" onclick="toggleTheme()"><span id="theme-icon">&#9790;</span> Theme</button>
+  </div>
+</header>"""
+
+
+def render_footer(make_status: dict | None) -> str:
+    fetched = "—"
+    if make_status and not make_status.get("unavailable"):
+        fetched = _humanize_dt(make_status.get("fetched_at"))
+    build_now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    return f"""<footer class="footer">
+  <div class="footer-line">Wärme Wimmer · Hero-Automatisierungen · Aufgesetzt von <a href="https://unpauseai.com">UnpauseAI</a></div>
+  <div class="footer-line">Letzter Build: {build_now} · Live-Daten: {fetched}</div>
+  <div class="footer-line">Quelle: <code>workspace/clients/warme-wimmer/</code></div>
+</footer>"""
+
+
+def render_shell(
+    body_html: str,
+    page_title: str,
+    sidebar_slug: str,
+    all_pages: dict[str, str],
+    make_status: dict | None,
+    *,
+    search_index_json: str = "[]",
+) -> str:
+    sidebar = render_sidebar(all_pages, sidebar_slug)
+    return f"""<!DOCTYPE html>
+<html lang="de" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<meta name="googlebot" content="noindex,nofollow">
+<title>{page_title} — Wärme Wimmer Hero-Doku</title>
+<style>{CSS}</style>
+</head>
+<body>
+<div id="cdn-banner" class="cdn-banner">Mermaid-CDN nicht erreichbar — Diagramme werden ggf. nicht gerendert. Quelltext bleibt sichtbar.</div>
+<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
+{sidebar}
+{render_header(make_status)}
+<div class="page-layout">
+  <main class="main">
+{body_html}
+  </main>
+{render_footer(make_status)}
 </div>
+{render_auth_gate()}
+{render_search_modal()}
+<script>window.WIMMER_SEARCH_INDEX={search_index_json};</script>
 <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-<script>mermaid.initialize({{startOnLoad:true,theme:document.documentElement.getAttribute('data-theme')==='dark'?'dark':'default',securityLevel:'loose'}});</script>
+<script>if(typeof mermaid!=='undefined'){{mermaid.initialize({{startOnLoad:true,theme:document.documentElement.getAttribute('data-theme')==='dark'?'dark':'default',securityLevel:'loose'}});}}</script>
 <script>{AUTH_THEME_JS}</script>
 </body>
 </html>
 """
+
+
+def render_page(
+    filename: str,
+    content: str,
+    all_pages: dict[str, str],
+    make_status: dict | None = None,
+    *,
+    search_index_json: str = "[]",
+) -> str:
+    title = display_title(filename, content)
+    body_md = re.sub(r"^# .+\n+", "", content, count=1)
+    body_html = md_to_html_body(body_md)
+
+    status_card = ""
+    scenario_num = _scenario_num_for_file(filename)
+    if scenario_num:
+        if make_status and not make_status.get("unavailable"):
+            scn = (make_status.get("scenarios") or {}).get(scenario_num)
+            if scn:
+                status_card = render_scenario_status_card(scn, scenario_num)
+        else:
+            status_card = (
+                '<div class="unavailable-note">Live-Status nicht verfügbar '
+                "(Make-Token fehlt oder Make REST nicht erreichbar). "
+                "Schedule und Owner-Info sind weiter unten dokumentiert.</div>"
+            )
+
+    inner = f"<h1>{title}</h1>\n{status_card}\n{body_html}"
+    return render_shell(inner, title, page_slug(filename), all_pages, make_status, search_index_json=search_index_json)
 
 
 def render_dashboard_kpis(make_status: dict, storage: dict) -> str:
@@ -663,18 +888,42 @@ def render_dashboard_kpis(make_status: dict, storage: dict) -> str:
 
     storage_block = ""
     storage_data = storage.get("storage", {}) if storage else {}
+    storage_history = storage.get("storage_history", []) if storage else []
     if storage_data:
         s_pct = storage_data.get("percent", 0)
         s_class = "danger" if s_pct > 85 else ("warn" if s_pct > 60 else "")
         s_used = storage_data.get("used_gb", 0)
         s_total = storage_data.get("total_gb", 0)
         s_date = storage_data.get("date", "—")
+        growth_mb_day = storage_data.get("growth_per_day_mb")
+        thresholds = storage_data.get("thresholds") or {}
+
+        # Trend: Δ vs second-to-last entry, days-until-yellow at current growth.
+        trend_bits = []
+        if len(storage_history) >= 2:
+            prev = storage_history[-2]
+            cur = storage_history[-1]
+            delta_gb = round(cur.get("used_gb", 0) - prev.get("used_gb", 0), 2)
+            sign = "+" if delta_gb >= 0 else ""
+            trend_bits.append(f"{sign}{delta_gb} GB seit {prev.get('date')}")
+        if growth_mb_day and s_total and thresholds.get("yellow_pct"):
+            yellow_gb = float(s_total) * float(thresholds["yellow_pct"]) / 100.0
+            headroom_gb = max(0.0, yellow_gb - float(s_used))
+            if growth_mb_day > 0:
+                days_to_yellow = int(headroom_gb * 1024 / growth_mb_day)
+                trend_bits.append(f"~{days_to_yellow} Tage bis {thresholds['yellow_pct']}% bei {growth_mb_day} MB/Tag")
+        trend_html = (
+            f'<div class="kpi-sub" style="font-size:11px;color:var(--text3);">{" · ".join(trend_bits)}</div>'
+            if trend_bits else ""
+        )
+
         storage_block = f"""
 <div class="kpi">
   <div class="kpi-label">Outlook-Speicher</div>
   <div class="kpi-value">{s_pct}%</div>
   <div class="kpi-sub">{s_used} von {s_total} GB · Stand {s_date}</div>
   <div class="kpi-progress"><div class="kpi-progress-bar {s_class}" style="width:{s_pct}%"></div></div>
+  {trend_html}
 </div>"""
 
     scenarios = make_status.get("scenarios", {})
@@ -699,7 +948,10 @@ def render_dashboard_kpis(make_status: dict, storage: dict) -> str:
 
 def render_dashboard_table(make_status: dict, all_pages: dict[str, str]) -> str:
     if make_status.get("unavailable"):
-        return ""
+        return (
+            '<div class="unavailable-note">Live-Status nicht verfügbar — Make-Token fehlt oder Make REST nicht erreichbar. '
+            "Tabelle wird beim nächsten Build aktualisiert.</div>"
+        )
     rows = []
     rows.append('<table class="dashboard-table">')
     rows.append("<thead><tr><th>Szenario</th><th>Status</th><th>Letzter Lauf</th><th>Plan</th><th>Letzte 50</th></tr></thead>")
@@ -720,31 +972,73 @@ def render_dashboard_table(make_status: dict, all_pages: dict[str, str]) -> str:
         last_run_short = _humanize_dt(scn.get("last_run"))
         if last_run_short != "—":
             last_run_short = last_run_short[:16]  # Trim "UTC" etc
-        success = f'{scn.get("ok_count", 0)} OK'
-        if scn.get("err_count"):
-            success += f' · {scn["err_count"]} Fehler'
-        if scn.get("warn_count"):
-            success += f' · {scn["warn_count"]} Warnung'
+        ok_count = scn.get("ok_count", 0)
+        err_count = scn.get("err_count", 0)
+        warn_count = scn.get("warn_count", 0)
+
+        # Build the "Letzte 50" cell — collapsible details when there are errors/warnings.
+        recent = scn.get("recent_errors") or []
+        scenario_id = scn.get("id")
+        history_link = (
+            f'<a href="{MAKE_UI_BASE}/{scenario_id}/edit#history" target="_blank" rel="noopener">Make-History ↗</a>'
+            if scenario_id else ""
+        )
+        if recent:
+            error_items = "".join(
+                f"<li>{_humanize_dt(ev.get('timestamp'))} — {_make_status_name(ev.get('status'))}</li>"
+                for ev in recent[:3]
+            )
+            success_html = (
+                f'<details><summary>{ok_count} OK · '
+                f'{(str(err_count) + " Fehler") if err_count else ""}'
+                f'{(" · " + str(warn_count) + " Warnung") if warn_count else ""}</summary>'
+                f'<ul class="error-list">{error_items}</ul>'
+                f'<p style="margin:6px 0 0;font-size:12px;">{history_link}</p>'
+                f"</details>"
+            )
+        else:
+            base = f'{ok_count} OK'
+            if err_count:
+                base += f' · {err_count} Fehler'
+            if warn_count:
+                base += f' · {warn_count} Warnung'
+            success_html = base + (f' · {history_link}' if history_link else '')
+
         rows.append(
             f'<tr><td>{link}</td>'
             f'<td><span class="badge {_health_class(scn["health"])}">{scn["health"]}</span></td>'
             f'<td>{last_run_short}</td>'
             f'<td>{scn["schedule"]}</td>'
-            f'<td>{success}</td></tr>'
+            f'<td>{success_html}</td></tr>'
         )
     rows.append("</tbody></table>")
+    rows.append(
+        '<p style="font-size:11px;color:var(--text3);margin:6px 0 24px;">'
+        "Status-Codes: 1 = OK · 2/5 = Warnung · 3 = incomplete · 4 = failed. "
+        "Klick auf eine Szenario-Zeile öffnet die Detail-Seite mit Owner, Runbook und Make-UI-Links.</p>"
+    )
     return "\n".join(rows)
 
 
-def render_index(all_pages: dict[str, str], make_status: dict, storage: dict) -> str:
+def render_index(
+    all_pages: dict[str, str],
+    make_status: dict,
+    storage: dict,
+    *,
+    search_index_json: str = "[]",
+) -> str:
     cards_html = [
         '<div class="cards">',
         _card("S-00-flowcharts-overview", "Flowcharts-Übersicht", "Alle 10 Hero-Automationen auf einer Seite, mit Sabine-Sicht und Audit-Sicht."),
         _card("M-meetings", "Meetings", "Chronik aller Meetings mit Decision-Log und Notizen pro Termin."),
+        _card("R-runbook", "Incident-Runbook", "Wenn ein Szenario kippt — Diagnose-Pfad und Erst-Fix-Schritte."),
         _card("R-team-updates", "Wartungs-Updates", "An das Team kommunizierte Status-Updates inkl. Screenshots."),
         _card("R-00-uebersicht", "Lastenheft (Hintergrund)", "Spezifikations-Dokument aus der Bauphase, post-Go-Live aktualisiert."),
         _card("R-hero-ids-und-connections", "Hero-IDs und Connections", "Referenz-Tabelle aller Tokens, Connection-IDs und Hooks."),
         _card("R-kosten-und-subscription", "Kosten und Subscription", "Make-Tier, OpenAI, weitere Komponenten."),
+        _card("R-faq", "FAQ", "Häufig gestellte Fragen aus den Meetings (Sammelbearbeiter, Wimmer-Assistent, hardcoded IDs …)."),
+        _card("R-glossary", "Glossar", "Begriffe aus der Doku in einem Satz erklärt."),
+        _card("R-contacts", "Kontakte und Eskalation", "Wer macht was — Rollen, Zuständigkeiten, Kontaktwege."),
         "</div>",
     ]
 
@@ -760,9 +1054,19 @@ def render_index(all_pages: dict[str, str], make_status: dict, storage: dict) ->
 </div>
 """
 
-    sidebar = render_sidebar(all_pages, "index")
+    today = date.today()
+    days_post = (today - GO_LIVE_DATE).days
+    n_active, n_total = _scenarios_active_count(make_status)
+    if make_status and make_status.get("unavailable"):
+        active_phrase = "Live-Status nicht verfügbar"
+    else:
+        active_phrase = f"{n_active} von {n_total} Szenarien aktiv"
+
     body = (
-        render_dashboard_kpis(make_status, storage)
+        f"<h1>Hero-Automatisierungen — Wärme Wimmer</h1>\n"
+        f'<p style="color:var(--text2);font-size:14px;margin-bottom:24px;">'
+        f"Stand {today.isoformat()} · Tag {days_post} nach Go-Live · {active_phrase}</p>\n"
+        + render_dashboard_kpis(make_status, storage)
         + "<h2>Status der Automatisierungen</h2>"
         + render_dashboard_table(make_status, all_pages)
         + "<h2>Weitere Bereiche</h2>"
@@ -770,60 +1074,62 @@ def render_index(all_pages: dict[str, str], make_status: dict, storage: dict) ->
         + support
     )
 
-    return f"""<!DOCTYPE html>
-<html lang="de" data-theme="light">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="robots" content="noindex,nofollow">
-<meta name="googlebot" content="noindex,nofollow">
-<title>Wärme Wimmer — Hero-Automatisierungen</title>
-<style>{CSS}</style>
-</head>
-<body>
-<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
-{sidebar}
-<header class="header">
-  <div class="header-left">
-    <button class="hamburger" onclick="toggleSidebar()">☰</button>
-    <div class="header-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="28" height="28"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></span></div>
-    <div class="header-title"><h1>Wärme Wimmer</h1><p>Hero-Automatisierungen Dokumentation</p></div>
-  </div>
-  <div class="header-right">
-    <span class="badge badge-green"><span class="badge-dot"></span>9 von 10 aktiv</span>
-    <button class="theme-btn" onclick="toggleTheme()"><span id="theme-icon">&#9790;</span> Theme</button>
-  </div>
-</header>
-<div class="page-layout">
-  <main class="main">
-    <h1>Hero-Automatisierungen — Wärme Wimmer</h1>
-    <p style="color:var(--text2);font-size:14px;margin-bottom:24px;">Stand 2026-05-06 · Tag 8 nach Go-Live · 9 von 10 Szenarien aktiv</p>
-    {body}
-  </main>
-  <footer class="footer">Quelle: <code>workspace/clients/warme-wimmer/</code> · UnpauseAI</footer>
-</div>
-<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
-  <div style="text-align:center;max-width:360px;padding:24px;">
-    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span></div>
-    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Wärme Wimmer Documentation</h2>
-    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Bitte Zugangscode eingeben.</p>
-    <div style="display:flex;gap:8px;">
-      <input id="auth-input" type="password" placeholder="Zugangscode" autocomplete="off" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;" onkeydown="if(event.key==='Enter')checkAuth()" />
-      <button onclick="checkAuth()" style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">OK</button>
-    </div>
-    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Falscher Code, bitte erneut versuchen.</p>
-  </div>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-<script>mermaid.initialize({{startOnLoad:true,theme:document.documentElement.getAttribute('data-theme')==='dark'?'dark':'default',securityLevel:'loose'}});</script>
-<script>{AUTH_THEME_JS}</script>
-</body>
-</html>
-"""
+    return render_shell(body, "Wärme Wimmer", "index", all_pages, make_status, search_index_json=search_index_json)
 
 
 def _card(slug: str, title: str, desc: str) -> str:
     return f'<a class="card" href="{BASE_PATH}{slug}.html"><h3>{title}</h3><p>{desc}</p></a>'
+
+
+# ============ Search index + anchor validation ============
+
+
+_HEADING_RE = re.compile(r'<h([1-3])(?:\s+id="([^"]+)")?[^>]*>(.*?)</h\1>', re.IGNORECASE | re.DOTALL)
+_TAG_RE = re.compile(r"<[^>]+>")
+_HREF_FRAG_RE = re.compile(r'href="#([^"]+)"')
+_ID_RE = re.compile(r'id="([^"]+)"')
+
+
+def _strip_html(s: str) -> str:
+    return _TAG_RE.sub("", s).strip()
+
+
+def build_search_index(rendered: dict[str, str], all_pages: dict[str, str]) -> list[dict]:
+    """Index every h1/h2/h3 across all rendered HTML pages.
+
+    Each entry: {t: title, p: page-title, u: url-with-fragment}.
+    Used by the Cmd+K search overlay.
+    """
+    index: list[dict] = []
+    for slug, html in rendered.items():
+        if slug == "index":
+            page_title_str = "Dashboard"
+        else:
+            # Find the original markdown filename for this slug.
+            original = next((f for f in all_pages if page_slug(f) == slug), None)
+            page_title_str = display_title(original, all_pages.get(original, "")) if original else slug
+        for m in _HEADING_RE.finditer(html):
+            level = m.group(1)
+            anchor = m.group(2) or ""
+            text = _strip_html(m.group(3))
+            if not text or text.startswith("Wärme Wimmer Documentation"):
+                continue
+            url = f"{BASE_PATH}{slug}.html" + (f"#{anchor}" if anchor else "")
+            index.append({"t": text, "p": page_title_str, "u": url, "lvl": int(level)})
+    return index
+
+
+def validate_anchors(rendered: dict[str, str]) -> list[str]:
+    """Scan all rendered HTML for `<a href="#X">` and verify each `X` exists as `id="X"`
+    within the same page. Returns a list of warning strings.
+    """
+    warnings = []
+    for slug, html in rendered.items():
+        ids = set(_ID_RE.findall(html))
+        for frag in _HREF_FRAG_RE.findall(html):
+            if frag and frag not in ids:
+                warnings.append(f"{slug}.html: <a href='#{frag}'> has no matching id")
+    return warnings
 
 
 def main() -> int:
@@ -863,23 +1169,60 @@ def main() -> int:
     if removed:
         print(f"Removed {removed} stale .html file(s)")
 
-    written = 0
+    # Two-pass build:
+    #   Pass 1: render every page with empty search index, so we can scan headings.
+    #   Pass 2: re-render with the populated index injected.
+    rendered_pass1: dict[str, str] = {}
     skipped = 0
     for fname, content in pages.items():
         if is_dropped(fname):
             skipped += 1
             continue
         slug = page_slug(fname)
+        rendered_pass1[slug] = render_page(fname, content, pages, make_status, search_index_json="[]")
+    rendered_pass1["index"] = render_index(pages, make_status, storage, search_index_json="[]")
+
+    search_index = build_search_index(rendered_pass1, pages)
+    search_index_json = json.dumps(search_index, ensure_ascii=False)
+    print(f"Built search index with {len(search_index)} entries")
+
+    written = 0
+    rendered_final: dict[str, str] = {}
+    for fname, content in pages.items():
+        if is_dropped(fname):
+            continue
+        slug = page_slug(fname)
         out_path = OUT_DIR / f"{slug}.html"
-        out_path.write_text(render_page(fname, content, pages, make_status), encoding="utf-8")
+        html = render_page(fname, content, pages, make_status, search_index_json=search_index_json)
+        out_path.write_text(html, encoding="utf-8")
+        rendered_final[slug] = html
         written += 1
     # Case-insensitive URLs handled by platform/src/proxy.ts which
     # 308-redirects any uppercase chars in /docs/warme-wimmer/* paths.
 
     index_path = OUT_DIR / "index.html"
-    index_path.write_text(render_index(pages, make_status, storage), encoding="utf-8")
+    index_html = render_index(pages, make_status, storage, search_index_json=search_index_json)
+    index_path.write_text(index_html, encoding="utf-8")
+    rendered_final["index"] = index_html
     written += 1
     print(f"Skipped {skipped} dropped pages (per PAGE_META drop=True)")
+
+    # Anchor validation — write a build report.
+    anchor_warnings = validate_anchors(rendered_final)
+    report_path = OUT_DIR / ".build-report.txt"
+    if anchor_warnings:
+        report_path.write_text(
+            f"Build {datetime.now(timezone.utc).isoformat(timespec='seconds')}\n\n"
+            f"Anchor warnings ({len(anchor_warnings)}):\n  - "
+            + "\n  - ".join(anchor_warnings),
+            encoding="utf-8",
+        )
+        print(f"WARN: {len(anchor_warnings)} broken anchor links — see {report_path}")
+    else:
+        report_path.write_text(
+            f"Build {datetime.now(timezone.utc).isoformat(timespec='seconds')}\n\nNo broken anchors.\n",
+            encoding="utf-8",
+        )
 
     print(f"Wrote {written} HTML files to {OUT_DIR}")
     print()

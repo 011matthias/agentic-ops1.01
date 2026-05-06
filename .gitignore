@@ -78,3 +78,6 @@ docs/sessions/*-context.yaml
 platform/.next/
 platform/node_modules/
 platform/.env.local
+
+# Per-build artifacts (anchor validation report) — regenerated each build
+platform/public/docs/*/.build-report.txt

@@ -35,6 +35,7 @@ CREDITS_DIR = WW / "context/credits"
 COMMS_LOG = WW / "context/comms-log.md"
 PLAN_FILE = Path.home() / ".claude" / "plans" / "waerme-wimmer-all-right-i-m-glimmering-turing.md"
 MEETING_NOTES_DIR = WW / "context/meeting-notes"
+DOC_SITE_DIR = WW / "context/doc-site"
 OUT_DIR = WW / "context/hero-exports"
 TODAY = date.today().strftime("%Y-%m-%d")
 
@@ -92,6 +93,23 @@ LINK_REWRITES = [
 
 
 # ============ Meetings (consolidated) ============
+
+# Fireflies recording URLs per meeting anchor. Populate as URLs become available.
+# Source: `context/comms-log.md` and `context/meeting-notes/*.md` `transcript_source` fields.
+# Two known so far; the other 8 transcripts exist in Fireflies but the URLs aren't in the repo yet.
+# Pattern: https://app.fireflies.ai/view/{title-slug}-{hash} (paste full URL here when known).
+FIREFLIES_BY_ANCHOR = {
+    "m-04-08": None,
+    "m-04-09": None,
+    "m-04-15": None,
+    "m-04-17": None,
+    "m-04-21": "https://app.fireflies.ai/view/Automation-Hero-c2c0ade1-3b22",
+    "m-04-22": None,
+    "m-04-24": "https://app.fireflies.ai/view/20260423_Client_Wärme-Wimmer_Hero-Touchbase-57efba1c-880c",
+    "m-04-25": None,
+    "m-04-27": None,
+    "m-04-30": None,
+}
 
 MEETINGS = [
     {"date": "2026-04-08", "anchor": "m-04-08",
@@ -285,13 +303,27 @@ def render_meetings_page() -> str:
 
 
 def render_meeting_section(m: dict) -> str:
-    """One meeting as an H2 section with decisions + collapsible notes."""
+    """One meeting as an H2 section with decisions + collapsible notes.
+
+    Notes:
+    - The H2 gets an explicit `{#anchor}` attr-list so chronology + decision-log links resolve.
+    - The notes-dropdown uses `<details markdown="1">` so Python-markdown processes the
+      inner markdown (headings, lists, tables) instead of dumping it as one paragraph.
+    - The Fireflies URL (if known) is rendered after Outcome; placeholder if unknown so the
+      gap is visible to Nico.
+    """
     lines = []
-    lines.append(f"## {m['date']} — {m['title']}")
+    lines.append(f"## {m['date']} — {m['title']} {{#{m['anchor']}}}")
     lines.append("")
     lines.append(f"**Kanal · Dauer:** {m['channel']} · {m['duration']}  ")
     lines.append(f"**Teilnehmer:** {m['attendees']}  ")
-    lines.append(f"**Outcome:** {m['outcome']}")
+    lines.append(f"**Outcome:** {m['outcome']}  ")
+
+    fireflies = FIREFLIES_BY_ANCHOR.get(m["anchor"])
+    if fireflies:
+        lines.append(f"**Fireflies-Aufnahme:** [Notiz öffnen ↗]({fireflies})")
+    else:
+        lines.append("**Fireflies-Aufnahme:** _Link folgt — Nico backfillt aus Fireflies_")
     lines.append("")
     lines.append("### Was hier entschieden wurde")
     lines.append("")
@@ -299,15 +331,18 @@ def render_meeting_section(m: dict) -> str:
         lines.append(f"- {d}")
     lines.append("")
 
-    # Collapsible detail-notes from source file (when available)
+    # Collapsible detail-notes from source file (when available).
+    # Strip both the YAML frontmatter and the H1 before injection so the dropdown
+    # opens onto useful content, not the file's metadata.
     notes = ""
     src = m.get("notes_source")
     if src and src.is_file():
         notes = src.read_text(encoding="utf-8")
-        notes = re.sub(r"^# .+?\n+", "", notes, count=1)  # strip its H1
+        notes = re.sub(r"^---\n.*?\n---\n+", "", notes, count=1, flags=re.DOTALL)  # frontmatter
+        notes = re.sub(r"^# .+?\n+", "", notes, count=1)  # H1
         notes = notes.strip()
     if notes:
-        lines.append("<details>")
+        lines.append('<details markdown="1">')
         lines.append("<summary>Notizen aus Meeting-File (zum Aufklappen)</summary>")
         lines.append("")
         lines.append(notes)
@@ -409,44 +444,57 @@ def fix_r_w2_04_navigation(text: str) -> str:
 
 
 def render_start_here_page() -> str:
-    """Landing page that orients a reader on first import."""
+    """Persona-based landing page that orients a fresh reader.
+
+    Three persona cards (Sabine / Raphael / Auditor) → each links to the right starting page.
+    Embedded HTML (passing through Python-markdown) so we get the same `.persona-cards` styling
+    as the rest of the site.
+    """
     return (
-        "# Start hier — Hero-Automatisierungen Notion-Space\n"
+        "# Start hier — Hero-Automatisierungen Doku\n"
         "\n"
-        "> *Stand 2026-05-03 · 9/10 Hero-Szenarien live seit 2026-04-28*\n"
+        "> **Was ist hier?** 10 Make.com-Automatisierungen, die seit 2026-04-28 die Hero-Workflows von Wärme Wimmer abdecken — vorher von Hero gehostet, jetzt bei uns. Diese Seiten erklären jede Automatisierung, was im Hintergrund läuft, wer welche Frage beantwortet, und was zu tun ist wenn etwas kippt.\n"
         "\n"
-        "Diese Seiten dokumentieren die 10 Make.com-Automatisierungen, die seit 2026-04-28 die Hero-Workflows von Waerme Wimmer "
-        "abdecken. Aufgebaut in drei Gruppen, alphabetisch sortiert in der Sidebar:\n"
+        "## Wo gehst du hin?\n"
         "\n"
-        "## Drei Gruppen\n"
+        "<div class=\"persona-cards\">\n"
+        "  <a class=\"persona-card\" href=\"s-00-flowcharts-overview.html\">\n"
+        "    <h3>Sabine / Operativ</h3>\n"
+        "    <p>Du siehst eine Aufgabe, willst wissen ob die richtige Automatisierung angesprungen ist und wo sie steht.</p>\n"
+        "    <span class=\"persona-target\">→ Flowcharts-Übersicht (alle 10 Szenarien auf einer Seite)</span>\n"
+        "  </a>\n"
+        "  <a class=\"persona-card\" href=\"index.html\">\n"
+        "    <h3>Raphael / Technisch</h3>\n"
+        "    <p>Du willst wissen ob die Operations-Quote unter Limit ist, ob alle Szenarien aktiv laufen, und wo die letzten Fehler aufgetreten sind.</p>\n"
+        "    <span class=\"persona-target\">→ Dashboard mit Live-Make-Daten</span>\n"
+        "  </a>\n"
+        "  <a class=\"persona-card\" href=\"r-00-uebersicht.html\">\n"
+        "    <h3>Auditor / Später-Eingestiegener</h3>\n"
+        "    <p>Du willst die Geschichte verstehen — warum so gebaut, welche Entscheidungen, was war Phase 1 vs Phase 2.</p>\n"
+        "    <span class=\"persona-target\">→ Lastenheft (Hintergrund)</span>\n"
+        "  </a>\n"
+        "  <a class=\"persona-card\" href=\"r-runbook.html\">\n"
+        "    <h3>03:00 Uhr-Eskalation</h3>\n"
+        "    <p>Etwas ist kaputt. Du brauchst einen Diagnose-Pfad und einen Erst-Fix.</p>\n"
+        "    <span class=\"persona-target\">→ Incident-Runbook</span>\n"
+        "  </a>\n"
+        "</div>\n"
         "\n"
-        "**M-meetings** — Eine Seite, alle 10 Meetings (Onboarding bis Post-Go-Live). Pro Meeting: Outcome, Entscheidungen, Notizen-Toggle. "
-        "Decision-Log am Anfang fuer schnellen Sprung.\n"
+        "## Drei Gruppen, eine Logik\n"
         "\n"
-        "**S-* (Scenarios)** — Pro Automatisierung eine Seite. **S-00-flowcharts-overview** ist die Single-Page-Uebersicht "
-        "mit allen 20 Diagrammen (Sabine-Sicht + Audit-Sicht pro Szenario). **S-01 bis S-10** sind die Detail-Seiten mit "
-        "Hero-IDs, Filter-Bedingungen, bekannten Schwaechen, n8n-Migrations-Plan.\n"
+        "**Automatisierungen (S-* )** — Pro W2-Automatisierung eine Seite mit Status-Card, Was-tut-es, Trigger, Branching, Modul-Inventar, Risiko-Bewertung, Quick-Fix. **S-00-flowcharts-overview** ist die Sammelseite mit allen Flow-Diagrammen.\n"
         "\n"
-        "**R-* (Reference)** — Querschnitts-Themen. **R-00-uebersicht** = ehemaliges Lastenheft (post-Go-Live aktualisiert). "
-        "**R-hero-ids-und-connections** = alle Hero-IDs/Tokens/Connections in einer Tabelle. **R-kosten-und-subscription** = "
-        "Make-Tier + OpenAI-Verbrauch. **R-w2-04-rewrite-design-***  = Phase-2-Design fuer den Mailgun-Rewrite (post-Go-Live geplant).\n"
+        "**Referenz (R-* )** — Querschnitts-Themen, die mehr als ein Szenario betreffen: Hero-IDs, Connections, Kosten, Lastenheft (Hintergrund), Phase-2-Mockups, Runbook, FAQ, Glossar, Kontakte.\n"
         "\n"
-        "## Empfohlene Reihenfolge je Leser\n"
+        "**Aktivität (M-, R-team-updates)** — Was passiert ist: Meetings (chronologisch + thematisch), Wartungs-Updates an Raphael/Irina/Sabine.\n"
         "\n"
-        "**Sabine / Operatives:** Start bei **S-00-flowcharts-overview** -> sieht alle Flows auf einer Seite. Bei Detail-Bedarf "
-        "auf die jeweilige S-NN-* Seite.\n"
+        "## Wie nutze ich die Suche?\n"
         "\n"
-        "**Raphael / Technisch:** **M-meetings** Decision-Log oben fuer Status-Snapshot, dann **R-hero-ids-und-connections** "
-        "fuer die laufenden Bindings, dann **S-* Detail-Seiten** fuer Modul-Inventar je Szenario.\n"
+        "**Ctrl+K** (oder Cmd+K) öffnet eine Suche über alle Seiten und Abschnitte. Tippe `Sammelbearbeiter`, `W2-04`, `Mailgun`, oder einen anderen Begriff — Enter springt zur Stelle.\n"
         "\n"
-        "**Auditor / Spaeter-Eingestiegener:** **R-00-uebersicht** fuer Geschichte und Lastenheft-Hintergrund, dann **M-meetings** "
-        "fuer chronologischen Decision-Trail.\n"
+        "## Pflege\n"
         "\n"
-        "## Hinweis zur Pflege\n"
-        "\n"
-        "Quelle der Wahrheit fuer alle Seiten: das Workspace-Repo `workspace/clients/warme-wimmer/`. "
-        "Bei Aenderungen wird der Notion-Space neu importiert (zip-basiert). Ad-hoc-Edits direkt in Notion gehen beim "
-        "naechsten Re-Import verloren -- daher Aenderungen ins Repo zurueckspielen.\n"
+        "Quelle der Wahrheit: das Repo `workspace/clients/warme-wimmer/`. Diese HTML-Seiten werden daraus gebaut. Ad-hoc-Edits direkt im Notion-Space gehen beim nächsten Re-Import verloren — Änderungen also ins Repo.\n"
     )
 
 
@@ -471,6 +519,203 @@ def filter_comms_section_for_meeting(section: str, meeting_keywords: list[str]) 
             out.append(heading)
             out.append(body.rstrip())
     return "\n".join(p for p in out if p).strip()
+
+
+# ============ Page intros (Was / Wann callouts) + Quick-Fix blocks ============
+
+
+# 1-2 line "Was / Wer / Wann"-callouts injected after the H1 of each R-* / M-* page.
+# Helps a fresh reader orient in 3 seconds without a glossary lookup.
+PAGE_INTROS = {
+    "M-meetings.md": (
+        "**Was ist das?** Chronik aller 10 Meetings vom Onboarding bis Post-Go-Live, plus thematischer Decision-Log oben. "
+        "**Wann brauchst du das?** Wenn du wissen willst, *warum* eine Entscheidung getroffen wurde — der Decision-Log verlinkt direkt ins Meeting."
+    ),
+    "R-team-updates.md": (
+        "**Was ist das?** Append-only-Chronik der Status-Updates an Raphael / Irina / Sabine — was wurde wann kommuniziert, mit Screenshots. "
+        "**Wann brauchst du das?** Bei der Frage 'haben wir das schon angekündigt?' oder für den Audit-Trail."
+    ),
+    "R-hero-ids-und-connections.md": (
+        "**Was ist das?** Referenz-Tabelle aller Hero-IDs, Tokens, Connection-IDs, Webhook-IDs in einem Dokument. "
+        "**Wann brauchst du das?** Bei Connection-Brüchen, Token-Rotation, oder wenn du eine ID in Make-Modul wiederfinden musst."
+    ),
+    "R-kosten-und-subscription.md": (
+        "**Was ist das?** Make-Tier, OpenAI-Verbrauch, Mailgun-Kosten — alle Komponenten mit Stand-pro-Monat. "
+        "**Wann brauchst du das?** Bei Operations-Spike, Tier-Upgrade-Frage, oder Kosten-Rechtfertigung."
+    ),
+    "R-w2-04-rewrite-design-ist.md": (
+        "**Was ist das?** IST-Analyse des aktuellen Outlook-nach-Hero-Szenarios (W2-04) — alle 24 Module, alle bekannten Schwächen. "
+        "**Wann brauchst du das?** Vor dem Phase-2-Rewrite, oder wenn das aktuelle Szenario kippt und du verstehen willst, was unten drunter läuft."
+    ),
+    "R-w2-04-rewrite-design-mockup.md": (
+        "**Was ist das?** SOLL-Architektur des Phase-2-Rewrites (Mailgun + S3 + 13 Module statt 24). Noch nicht gebaut. "
+        "**Wann brauchst du das?** Wenn die Phase-2-Frage aufkommt, oder wenn das aktuelle Szenario zu fragil wird."
+    ),
+    "R-runbook.md": "",  # Runbook hat eigenen Vorspann.
+    "R-faq.md": "",       # FAQ hat eigenen Vorspann.
+    "R-glossary.md": "",  # Glossary hat eigenen Vorspann.
+    "R-contacts.md": "",  # Contacts hat eigenen Vorspann.
+}
+
+
+def inject_page_intro(filename: str, text: str) -> str:
+    """Inject a `> **Was ist das?** …` blockquote callout right after the H1.
+
+    No-op if the page key isn't in PAGE_INTROS or its value is empty (already has its own intro).
+    """
+    intro = PAGE_INTROS.get(filename)
+    if not intro:
+        return text
+    # Find H1 line and inject after it (preserving any blockquotes that follow)
+    return re.sub(
+        r"^(# [^\n]+\n)",
+        lambda m: m.group(1) + "\n> " + intro + "\n",
+        text,
+        count=1,
+        flags=re.MULTILINE,
+    )
+
+
+# Per-scenario Quick-Fix block — injected right under the status card on each S-XX page.
+# Keep it short and scannable. Each entry is markdown.
+QUICK_FIX_BY_SCENARIO = {
+    "S-01-aufgabe-erledigt.md": (
+        "## Wenn das Szenario kippt {#quick-fix}\n"
+        "\n"
+        "1. Im Make-UI das Szenario manuell **deaktivieren + reaktivieren** — triggert Webhook-Re-Sync.\n"
+        "2. Eine Test-Aufgabe in Hero erledigen → Webhook-Modul → Payload sichtbar?\n"
+        "3. Wenn keine Payload kommt: Hero-Custom-App-Webhook defekt → [Runbook · W2-01](r-runbook.md#w2-01).\n"
+    ),
+    "S-02-aufgaben-nach-statuswechsel.md": (
+        "## Wenn das Szenario kippt {#quick-fix}\n"
+        "\n"
+        "1. Make-UI History öffnen → letzten Failed-Run prüfen.\n"
+        "2. **Status-ID-Drift** ist die häufigste Ursache (Hero hat Status umbenannt). Cross-Reference: [R-hero-ids-und-connections](r-hero-ids-und-connections.md).\n"
+        "3. Eskalation: [Runbook · scenario-error](r-runbook.md#scenario-error).\n"
+    ),
+    "S-03-dokument-erstellt.md": (
+        "## Wenn das Szenario kippt {#quick-fix}\n"
+        "\n"
+        "1. **Filter prüfen**: W2-03 nutzt Document-**Name** für Rechnungs-Filter (Schwachstelle, falls Name geändert wird).\n"
+        "2. Make-UI History → letzten Failed-Run.\n"
+        "3. Eskalation: [Runbook](r-runbook.md#scenario-error).\n"
+    ),
+    "S-04-outlook-hero.md": (
+        "## Wenn das Szenario kippt {#quick-fix}\n"
+        "\n"
+        "1. **Outlook-Speicher** prüfen (Dashboard-KPI). Wenn 75%+: Gelöschte Elemente leeren oder Upgrade.\n"
+        "2. **OpenAI-Modell** prüfen — soll `gpt-5-mini` sein, nicht `gpt-4o-mini`. Verifiziert bei [m-04-24](m-meetings.md#m-04-24).\n"
+        "3. Stale Chain ohne Fehlermeldung? Klassisches Outlook-Voll-Symptom — Phase-2-Mailgun-Rewrite löst das strukturell ([R-w2-04-rewrite-design-mockup](r-w2-04-rewrite-design-mockup.md)).\n"
+        "4. Eskalation: [Runbook](r-runbook.md#scenario-error).\n"
+    ),
+    "S-05-projekt-erstellt.md": (
+        "## Wenn das Szenario kippt {#quick-fix}\n"
+        "\n"
+        "1. **Hero-Webhook-Event-Selection** in Hero-UI prüfen — muss \"Projekt erstellt\" sein, nicht \"alle\". Bekannte Drift-Quelle.\n"
+        "2. Webhook in Hero-UI neu registrieren falls nötig — kein Make-Side-Filter.\n"
+        "3. Hintergrund: [m-04-24 W2-05-Bug](m-meetings.md#m-04-24).\n"
+    ),
+    "S-06-projekterinnerung.md": (
+        "## Wenn das Szenario kippt {#quick-fix}\n"
+        "\n"
+        "1. Schedule prüfen: läuft täglich, daher max 1× Fehler pro Tag.\n"
+        "2. Make-UI History → Wenn `Hero API 4xx`: Token rotieren prüfen.\n"
+        "3. Eskalation: [Runbook](r-runbook.md#scenario-error).\n"
+    ),
+    "S-07-rechnungen-bezahlt.md": (
+        "## Wenn das Szenario kippt {#quick-fix}\n"
+        "\n"
+        "1. Schedule: täglich 05:00 — verifiziert in [m-04-24](m-meetings.md#m-04-24).\n"
+        "2. Make-UI History → letzten Failed-Run.\n"
+        "3. Eskalation: [Runbook](r-runbook.md#scenario-error).\n"
+    ),
+    "S-08-regiebericht-fehlt.md": (
+        "## Wenn das Szenario kippt {#quick-fix}\n"
+        "\n"
+        "1. Schedule: alle 7h Mo-Fr 05:00-19:00 (= 2 Runs/Tag).\n"
+        "2. Make-UI History → letzten Failed-Run, Fehler-Snippet prüfen.\n"
+        "3. Eskalation: [Runbook](r-runbook.md#scenario-error).\n"
+    ),
+    "S-09-ueberfaellige-aufgaben.md": (
+        "## Wenn das Szenario kippt {#quick-fix}\n"
+        "\n"
+        "1. Schedule: täglich 06:00.\n"
+        "2. Make-UI History → letzten Failed-Run.\n"
+        "3. Eskalation: [Runbook](r-runbook.md#scenario-error).\n"
+    ),
+    "S-10-zahlung-erhalten.md": (
+        "## Wenn das Szenario kippt {#quick-fix}\n"
+        "\n"
+        "**Status: deaktiviert** — gewollt. W2-10 ist deferred zur n8n-Migration wegen 50-Result-Hero-Pagination-Limit. "
+        "Siehe [Runbook · W2-10](r-runbook.md#w2-10) und [m-04-25](m-meetings.md#m-04-25).\n"
+    ),
+}
+
+
+def inject_quick_fix(filename: str, text: str) -> str:
+    """Inject the Quick-Fix block right after the one-line banner (or H1 if no banner).
+
+    Searches for the canonical 1-line banner from compress_banner(). Falls back to inserting
+    after the H1 if the banner isn't there.
+    """
+    quick = QUICK_FIX_BY_SCENARIO.get(filename)
+    if not quick:
+        return text
+    # Try to insert after the 1-line banner.
+    banner_match = re.search(
+        r"(^> \*Stand 2026-05-03[^\n]+\n+)",
+        text,
+        flags=re.MULTILINE,
+    )
+    if banner_match:
+        idx = banner_match.end()
+        return text[:idx] + quick + "\n" + text[idx:]
+    # Fall back: after the H1.
+    return re.sub(
+        r"^(# [^\n]+\n+)",
+        lambda m: m.group(1) + quick + "\n",
+        text,
+        count=1,
+        flags=re.MULTILINE,
+    )
+
+
+def restructure_r00_audit_to_bottom(text: str) -> str:
+    """Move the dense `Evidence-Verifikation 2026-04-15` block to the page footer.
+
+    The block opens with that exact phrase and runs until the next `> Stand` blockquote
+    or a `## ` H2. We pull it out, wrap in `<details markdown="1">`, and append at the end.
+    """
+    audit_re = re.compile(
+        r"(>?\s*\*\*Evidence-Verifikation 2026-04-15:.*?)(?=\n+(?:>?\s*Stand 2026-05-03|## |---))",
+        re.DOTALL,
+    )
+    m = audit_re.search(text)
+    if not m:
+        return text
+    audit_block = m.group(1).strip()
+    # Strip leading ">" so the markdown inside <details> is plain prose.
+    audit_block = re.sub(r"^>\s?", "", audit_block, flags=re.MULTILINE).strip()
+    text_without = text[: m.start()] + text[m.end():]
+    appended = (
+        text_without.rstrip()
+        + "\n\n---\n\n"
+        + '<details markdown="1">\n'
+        + "<summary>Audit-Trail: Evidence-Verifikation 2026-04-15</summary>\n\n"
+        + audit_block
+        + "\n\n</details>\n"
+    )
+    return appended
+
+
+def fix_r00_intro_callout(text: str) -> str:
+    """Inject the 'Was ist das? / Wer / Wann' blockquote right after R-00's H1."""
+    intro = (
+        "> **Was ist das?** Das ursprüngliche Lastenheft aus der Bauphase, post-Go-Live aktualisiert.  \n"
+        "> **Wer liest das?** Ein Auditor oder ein Später-Eingestiegener, der den Hintergrund verstehen will — nicht das Tagesgeschäft.  \n"
+        "> **Wann brauchst du das?** Wenn du wissen willst, *warum* eine Automatisierung so gebaut wurde. Für tägliche Arbeit reicht die jeweilige S-XX-Seite oder [M-meetings](M-meetings.md).\n"
+    )
+    return re.sub(r"^(# [^\n]+\n)", lambda m: m.group(1) + "\n" + intro + "\n", text, count=1, flags=re.MULTILINE)
 
 
 def build_pages() -> dict[str, str]:
@@ -513,17 +758,37 @@ def build_pages() -> dict[str, str]:
         text = compress_banner(text)
         if new_name.startswith("S-"):
             text = strip_old_flow_diagramm(text)
+            text = inject_quick_fix(new_name, text)
         if new_name.startswith("R-"):
             text = rewrite_links(text)
         if new_name == "R-00-uebersicht.md":
             text = fix_r00_special(text)
+            text = fix_r00_intro_callout(text)
+            text = restructure_r00_audit_to_bottom(text)
         if new_name.startswith("R-w2-04-"):
             text = fix_r_w2_04_navigation(text)
+        # Inject Was/Wann callout (after H1) for all known pages with intros.
+        text = inject_page_intro(new_name, text)
         pages[new_name] = text
 
     for src, target in EXTRA_PAGES.items():
         if src.is_file():
-            pages[target] = src.read_text(encoding="utf-8")
+            text = src.read_text(encoding="utf-8")
+            text = inject_page_intro(target, text)
+            pages[target] = text
+
+    # Doc-site-only pages (glossary, runbook, contacts, FAQ). Map plain filename -> R-* slug.
+    docsite_map = {
+        "glossary.md": "R-glossary.md",
+        "runbook.md": "R-runbook.md",
+        "contacts.md": "R-contacts.md",
+        "faq.md": "R-faq.md",
+    }
+    if DOC_SITE_DIR.is_dir():
+        for src_name, target_name in docsite_map.items():
+            src_path = DOC_SITE_DIR / src_name
+            if src_path.is_file():
+                pages[target_name] = src_path.read_text(encoding="utf-8")
 
     return pages
 
