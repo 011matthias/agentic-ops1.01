@@ -15,13 +15,19 @@
 import { NextRequest, NextResponse } from "next/server"
 import { cookieMatches, WIMMER_COOKIE, WIMMER_PATH_PREFIX } from "./lib/wimmer-auth"
 
+const WIMMER_PATH_ROOT = "/docs/warme-wimmer" // Vercel cleanUrls strips trailing slash
+
+function isDocSitePath(path: string): boolean {
+  return path === WIMMER_PATH_ROOT || path.startsWith(WIMMER_PATH_PREFIX)
+}
+
 export async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname
 
   // Case-insensitive URLs for the doc site. M-meetings.html / S-04-... are the
   // canonical filenames in the source repo (uppercase), but we serve them
   // lowercase. This 308's any uppercase request to the canonical lowercase URL.
-  if (path.startsWith(WIMMER_PATH_PREFIX)) {
+  if (isDocSitePath(path)) {
     const lower = path.toLowerCase()
     if (lower !== path) {
       const url = req.nextUrl.clone()
@@ -35,9 +41,9 @@ export async function proxy(req: NextRequest) {
     return NextResponse.next()
   }
 
-  // Gate /docs/warme-wimmer/* on the wimmer-auth cookie.
-  if (path.startsWith(WIMMER_PATH_PREFIX)) {
-    const secret = process.env.WIMMER_AUTH_SECRET
+  // Gate /docs/warme-wimmer (no trailing slash) AND /docs/warme-wimmer/* on cookie.
+  if (isDocSitePath(path)) {
+    const secret = process.env.WIMMER_AUTH_SECRET?.trim()
     if (!secret) {
       // Misconfiguration: fail closed but visibly. Surface 500 to ourselves
       // rather than letting unauthenticated traffic through silently.
@@ -62,5 +68,12 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/docs/warme-wimmer/:path*", "/wimmer-login", "/api/wimmer-unlock"],
+  // Both the bare path (Vercel cleanUrls strips trailing slash on the root)
+  // and any sub-path must run through the gate.
+  matcher: [
+    "/docs/warme-wimmer",
+    "/docs/warme-wimmer/:path*",
+    "/wimmer-login",
+    "/api/wimmer-unlock",
+  ],
 }

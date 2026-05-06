@@ -15,8 +15,10 @@ export async function POST(req: Request) {
   const submitted = String(form.get("code") ?? "")
   const from = safeFromUrl(String(form.get("from") ?? ""))
 
-  const accessCode = process.env.WIMMER_ACCESS_CODE
-  const secret = process.env.WIMMER_AUTH_SECRET
+  // Defensive: trim env vars in case the deploy step accidentally stored a
+  // trailing newline (`echo "x" | vercel env add` does this — burned us once).
+  const accessCode = process.env.WIMMER_ACCESS_CODE?.trim()
+  const secret = process.env.WIMMER_AUTH_SECRET?.trim()
   if (!accessCode || !secret) {
     return new NextResponse(
       "WIMMER_ACCESS_CODE / WIMMER_AUTH_SECRET not configured.",
