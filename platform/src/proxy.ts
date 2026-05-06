@@ -1,3 +1,9 @@
+// DEAD CODE — this file is not wired as middleware. The active middleware
+// lives at platform/src/middleware.ts (server-side gate for the doc site +
+// case-insensitive URL redirect). The /admin and /portal access checks here
+// are dormant and not currently enforced. Promoting them would require
+// re-exporting from middleware.ts and is tracked as a separate follow-up.
+
 import { auth } from "@/lib/auth"
 import { NextResponse } from "next/server"
 

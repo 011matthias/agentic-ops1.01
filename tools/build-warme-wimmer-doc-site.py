@@ -37,7 +37,8 @@ REPO = Path.cwd()
 SRC_TOOL = REPO / "tools/notion-restructure-v18.py"
 OUT_DIR = REPO / "platform/public/docs/warme-wimmer"
 BASE_PATH = "/docs/warme-wimmer/"
-ACCESS_CODE = "wimmer2026"
+# Auth is enforced server-side by `platform/src/middleware.ts`. The previous
+# inline JS gate was removed (was shipping the passcode in plaintext).
 LS_PREFIX = "wimmer-docs"
 STATUS_YAML = REPO / "workspace/clients/warme-wimmer/context/maintenance/status.yaml"
 
@@ -574,7 +575,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
   .support-cards{grid-template-columns:1fr}
 }
 @media print{
-  .header,.sidebar,.sidebar-backdrop,.hamburger,.theme-btn,.search-trigger,#auth-gate,#search-modal{display:none !important}
+  .header,.sidebar,.sidebar-backdrop,.hamburger,.theme-btn,.search-trigger,#search-modal{display:none !important}
   .page-layout{margin-left:0}
   body{background:white;color:black;padding-top:0}
   .main{max-width:100%;padding:0}
@@ -584,10 +585,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 }
 """
 
+# Auth is enforced server-side by `platform/src/middleware.ts`.
+# The JS in this block is purely for theme toggle, sidebar, search modal,
+# and the mermaid CDN-fail watcher. No passcode in plaintext.
 AUTH_THEME_JS = f"""
-var WIMMER_CODE='{ACCESS_CODE}';
-function checkAuth(){{var inp=document.getElementById('auth-input').value;if(inp===WIMMER_CODE){{localStorage.setItem('{LS_PREFIX}-access','granted');var g=document.getElementById('auth-gate');g.style.opacity='0';setTimeout(function(){{g.style.display='none'}},300)}}else{{document.getElementById('auth-error').style.display='block';document.getElementById('auth-input').value='';document.getElementById('auth-input').focus()}}}}
-(function(){{if(localStorage.getItem('{LS_PREFIX}-access')==='granted'){{var g=document.getElementById('auth-gate');if(g)g.style.display='none'}}else{{var inp=document.getElementById('auth-input');if(inp)inp.focus()}}}})();
 function toggleTheme(){{var h=document.documentElement;var c=h.getAttribute('data-theme');var n=c==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('{LS_PREFIX}-theme',n);var i=document.getElementById('theme-icon');if(i)i.innerHTML=n==='dark'?'&#9788;':'&#9790;'}}
 var saved=localStorage.getItem('{LS_PREFIX}-theme');
 if(saved){{document.documentElement.setAttribute('data-theme',saved);var i=document.getElementById('theme-icon');if(i&&saved==='dark')i.innerHTML='&#9788;'}}
@@ -741,21 +742,6 @@ def _scenarios_active_count(make_status: dict | None) -> tuple[int, int]:
     return (n_active, len(scns) or 10)
 
 
-def render_auth_gate() -> str:
-    return f"""<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
-  <div style="text-align:center;max-width:360px;padding:24px;">
-    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;">{SVG_LOGO_40}<span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span></div>
-    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Wärme Wimmer Documentation</h2>
-    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Bitte Zugangscode eingeben.</p>
-    <div style="display:flex;gap:8px;">
-      <input id="auth-input" type="password" placeholder="Zugangscode" autocomplete="off" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;" onkeydown="if(event.key==='Enter')checkAuth()" />
-      <button onclick="checkAuth()" style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">OK</button>
-    </div>
-    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Falscher Code, bitte erneut versuchen.</p>
-  </div>
-</div>"""
-
-
 def render_search_modal() -> str:
     return """<div id="search-modal">
   <div class="search-box" onclick="event.stopPropagation()">
@@ -830,7 +816,6 @@ def render_shell(
   </main>
 {render_footer(make_status)}
 </div>
-{render_auth_gate()}
 {render_search_modal()}
 <script>window.WIMMER_SEARCH_INDEX={search_index_json};</script>
 <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
@@ -1230,7 +1215,7 @@ def main() -> int:
     print(f"  cd platform && npm run dev")
     print(f"  open http://localhost:3000/docs/warme-wimmer/")
     print()
-    print(f"Access code: {ACCESS_CODE}")
+    print("Access code: server-side via WIMMER_ACCESS_CODE env var (Vercel)")
     print("Subdomain `wimmer.unpauseai.com` requires:")
     print("  1. Vercel UI: add domain alias `wimmer.unpauseai.com` to the platform project")
     print("  2. DNS: add CNAME `wimmer` -> `cname.vercel-dns.com`")
