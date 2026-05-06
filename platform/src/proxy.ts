@@ -6,6 +6,18 @@ export const proxy = auth((req) => {
   const path = nextUrl.pathname
   const isApiRoute = path.startsWith("/api/")
 
+  // Wärme Wimmer doc site: case-insensitive URLs.
+  // Lowercase the path so URLs typed with the M-/S-/R- prefix uppercase
+  // (matching our internal naming) resolve to the lowercase canonical files.
+  if (path.startsWith("/docs/warme-wimmer/")) {
+    const lower = path.toLowerCase()
+    if (lower !== path) {
+      const url = nextUrl.clone()
+      url.pathname = lower
+      return NextResponse.redirect(url, 308)
+    }
+  }
+
   // Admin routes: require admin role
   if (path.startsWith("/admin") || path.startsWith("/api/admin")) {
     if (!session?.user) {
@@ -35,5 +47,6 @@ export const config = {
     "/portal/:path*",
     "/api/admin/:path*",
     "/api/portal/:path*",
+    "/docs/warme-wimmer/:path*",
   ],
 }
