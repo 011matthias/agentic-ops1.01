@@ -851,6 +851,18 @@ def main() -> int:
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
+    # Clean stale .html files from previous builds (drops, renames).
+    # Compute the set of slugs we'll write this build, plus index.
+    expected_slugs = {page_slug(fname) for fname in pages if not is_dropped(fname)}
+    expected_slugs.add("index")
+    removed = 0
+    for old in OUT_DIR.glob("*.html"):
+        if old.stem not in expected_slugs:
+            old.unlink()
+            removed += 1
+    if removed:
+        print(f"Removed {removed} stale .html file(s)")
+
     written = 0
     skipped = 0
     for fname, content in pages.items():
