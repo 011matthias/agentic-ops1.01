@@ -120,7 +120,7 @@ export default function OneProposalPage() {
             OneProposal · by UnpauseAI
           </span>
           <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
-            Upwork proposals that don&apos;t sound like ChatGPT.
+            Upwork proposals that don’t sound like ChatGPT.
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-lg leading-relaxed text-muted">
             Paste a job posting. Get a tailored cover letter and a personalized
@@ -176,7 +176,7 @@ export default function OneProposalPage() {
             </h2>
             <p className="mx-auto mt-3 max-w-xl text-muted">
               ChatGPT writes the same proposal as 800 other applicants. We
-              built the engine that doesn&apos;t.
+              built the engine that doesn’t.
             </p>
           </div>
           <div className="grid gap-6 md:grid-cols-3">
@@ -370,7 +370,7 @@ export default function OneProposalPage() {
             </h2>
             <p className="mx-auto mt-4 max-w-md text-muted">
               No subscription. No trial. Pay $5, get a proposal, send it. If
-              it&apos;s not usable, the credit comes back.
+              it’s not usable, the credit comes back.
             </p>
             <div className="mt-8">
               <Link
