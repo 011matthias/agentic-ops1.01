@@ -36,6 +36,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .sidebar-group{padding:8px 0;border-bottom:1px solid var(--border)}
 .sidebar-group:last-child{border-bottom:none}
 .sidebar-group-label{padding:8px 20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3)}
+.sidebar-home{display:block;padding:10px 20px;font-size:13px;font-weight:600;color:var(--text);text-decoration:none;border-left:3px solid transparent;transition:background .15s}
+.sidebar-home:hover{background:var(--surface2)}
+.sidebar-home.active{background:var(--blue-light);color:var(--blue-dark);border-left-color:var(--blue)}
 .sidebar-nav{list-style:none}
 .sidebar-nav a{display:flex;align-items:center;gap:8px;padding:8px 20px;font-size:13px;font-weight:500;color:var(--text2);text-decoration:none;border-left:3px solid transparent;transition:background .15s,color .15s,border-color .15s}
 .sidebar-nav a:hover{background:var(--surface2);color:var(--text)}
@@ -111,33 +114,34 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 <body>
 <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
 <nav class="sidebar" id="sidebar">
-<div class="sidebar-group"><div class="sidebar-group-label">🏠 Start</div><ul class="sidebar-nav">
-<li><a href="0-start-hier.html">Start hier — Hero-Automatisierungen Notion-Space</a></li>
+<div class="sidebar-group"><a href="/docs/warme-wimmer/" class="sidebar-home">Übersicht</a></div>
+<div class="sidebar-group"><div class="sidebar-group-label">Start</div><ul class="sidebar-nav">
+<li><a href="/docs/warme-wimmer/0-start-hier.html">Start hier — Hero-Automatisierungen Notion-Space</a></li>
 </ul></div>
-<div class="sidebar-group"><div class="sidebar-group-label">🗓 Meetings</div><ul class="sidebar-nav">
-<li><a href="m-meetings.html">Meetings — Hero-Automatisierungen</a></li>
+<div class="sidebar-group"><div class="sidebar-group-label">Meetings</div><ul class="sidebar-nav">
+<li><a href="/docs/warme-wimmer/m-meetings.html">Meetings — Hero-Automatisierungen</a></li>
 </ul></div>
-<div class="sidebar-group"><div class="sidebar-group-label">⚙️ Szenarien</div><ul class="sidebar-nav">
-<li><a href="s-00-flowcharts-overview.html">Flowcharts-Übersicht — Alle Hero-Automationen auf einen Blick</a></li>
-<li><a href="s-01-aufgabe-erledigt.html">W2-01 — Aufgabe erledigt (Status-Workflow)</a></li>
-<li><a href="s-02-aufgaben-nach-statuswechsel.html">W2-02 — Aufgaben nach Statusänderung</a></li>
-<li><a href="s-03-dokument-erstellt.html">W2-03 — Dokument erstellt → Statuswechsel</a></li>
-<li><a href="s-04-outlook-hero.html">W2-04: Outlook → HERO (Rewrite-Architektur / SOLL-Zustand)</a></li>
-<li><a href="s-05-projekt-erstellt.html">W2-05 — Projekt erstellt (Logbuch + Osneo-URL)</a></li>
-<li><a href="s-06-projekterinnerung.html">W2-06 — Projekterinnerung 1 Tag nach Termin</a></li>
-<li><a href="s-07-rechnungen-bezahlt.html">W2-07 — Rechnungen bezahlt → Abgeschlossen</a></li>
-<li><a href="s-08-regiebericht-fehlt.html">W2-08 — Regiebericht fehlt → Statuswechsel</a></li>
-<li><a href="s-09-ueberfaellige-aufgaben.html">W2-09 — Überfällige Aufgaben → Projekt markieren</a></li>
-<li><a href="s-10-zahlung-erhalten.html">W2-10 — Zahlung erhalten → Projektstatus ändern</a></li>
+<div class="sidebar-group"><div class="sidebar-group-label">Szenarien</div><ul class="sidebar-nav">
+<li><a href="/docs/warme-wimmer/s-00-flowcharts-overview.html">Flowcharts-Übersicht — Alle Hero-Automationen auf einen Blick</a></li>
+<li><a href="/docs/warme-wimmer/s-01-aufgabe-erledigt.html">W2-01 — Aufgabe erledigt (Status-Workflow)</a></li>
+<li><a href="/docs/warme-wimmer/s-02-aufgaben-nach-statuswechsel.html">W2-02 — Aufgaben nach Statusänderung</a></li>
+<li><a href="/docs/warme-wimmer/s-03-dokument-erstellt.html">W2-03 — Dokument erstellt → Statuswechsel</a></li>
+<li><a href="/docs/warme-wimmer/s-04-outlook-hero.html">W2-04: Outlook → HERO (Rewrite-Architektur / SOLL-Zustand)</a></li>
+<li><a href="/docs/warme-wimmer/s-05-projekt-erstellt.html">W2-05 — Projekt erstellt (Logbuch + Osneo-URL)</a></li>
+<li><a href="/docs/warme-wimmer/s-06-projekterinnerung.html">W2-06 — Projekterinnerung 1 Tag nach Termin</a></li>
+<li><a href="/docs/warme-wimmer/s-07-rechnungen-bezahlt.html">W2-07 — Rechnungen bezahlt → Abgeschlossen</a></li>
+<li><a href="/docs/warme-wimmer/s-08-regiebericht-fehlt.html">W2-08 — Regiebericht fehlt → Statuswechsel</a></li>
+<li><a href="/docs/warme-wimmer/s-09-ueberfaellige-aufgaben.html">W2-09 — Überfällige Aufgaben → Projekt markieren</a></li>
+<li><a href="/docs/warme-wimmer/s-10-zahlung-erhalten.html">W2-10 — Zahlung erhalten → Projektstatus ändern</a></li>
 </ul></div>
-<div class="sidebar-group"><div class="sidebar-group-label">📚 Reference</div><ul class="sidebar-nav">
-<li><a href="r-00-uebersicht.html" class="active">Übersicht -- Hero-Automations Lastenheft</a></li>
-<li><a href="r-hero-api-smoketest.html">#14 -- Hero-API Smoketest (Runbook)</a></li>
-<li><a href="r-hero-ids-und-connections.html">Cross-Reference -- Connections, Tokens, Hooks, Codes</a></li>
-<li><a href="r-kosten-und-subscription.html">Kosten & Subscription — Hero-Automations im Make-Konto</a></li>
-<li><a href="r-team-updates.html">Wartungs-Updates — Team-Log</a></li>
-<li><a href="r-w2-04-rewrite-design-ist.html">#4a: Outlook → HERO, IST-Zustand (wie es JETZT funktioniert)</a></li>
-<li><a href="r-w2-04-rewrite-design-mockup.html">W2-04b: Outlook → HERO Rewrite, Make-Szenario-Mockup</a></li>
+<div class="sidebar-group"><div class="sidebar-group-label">Referenz</div><ul class="sidebar-nav">
+<li><a href="/docs/warme-wimmer/r-00-uebersicht.html" class="active">Übersicht -- Hero-Automations Lastenheft</a></li>
+<li><a href="/docs/warme-wimmer/r-hero-api-smoketest.html">#14 -- Hero-API Smoketest (Runbook)</a></li>
+<li><a href="/docs/warme-wimmer/r-hero-ids-und-connections.html">Cross-Reference -- Connections, Tokens, Hooks, Codes</a></li>
+<li><a href="/docs/warme-wimmer/r-kosten-und-subscription.html">Kosten & Subscription — Hero-Automations im Make-Konto</a></li>
+<li><a href="/docs/warme-wimmer/r-team-updates.html">Wartungs-Updates — Team-Log</a></li>
+<li><a href="/docs/warme-wimmer/r-w2-04-rewrite-design-ist.html">#4a: Outlook → HERO, IST-Zustand (wie es JETZT funktioniert)</a></li>
+<li><a href="/docs/warme-wimmer/r-w2-04-rewrite-design-mockup.html">W2-04b: Outlook → HERO Rewrite, Make-Szenario-Mockup</a></li>
 </ul></div>
 </nav>
 <header class="header">
@@ -147,7 +151,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
     <div class="header-title"><h1>Wärme Wimmer</h1><p>Hero-Automatisierungen Dokumentation</p></div>
   </div>
   <div class="header-right">
-    <span class="badge badge-green"><span class="badge-dot"></span>9/10 live</span>
+    <span class="badge badge-green"><span class="badge-dot"></span>9 von 10 aktiv</span>
     <button class="theme-btn" onclick="toggleTheme()"><span id="theme-icon">&#9790;</span> Theme</button>
   </div>
 </header>
@@ -190,70 +194,70 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 </thead>
 <tbody>
 <tr>
-<td><a href="s-01-aufgabe-erledigt.html">1</a></td>
+<td><a href="/docs/warme-wimmer/s-01-aufgabe-erledigt.html">1</a></td>
 <td>Aufgabe erledigt -- Status-Workflow</td>
 <td>Event (Hero WatchTasks)</td>
 <td>Low-Mid</td>
 <td>1:1 Import</td>
 </tr>
 <tr>
-<td><a href="s-02-aufgaben-nach-statuswechsel.html">2</a></td>
+<td><a href="/docs/warme-wimmer/s-02-aufgaben-nach-statuswechsel.html">2</a></td>
 <td>Aufgaben nach Statusänderung</td>
 <td>Event (WatchProjects)</td>
 <td>Mid</td>
 <td>1:1 Import, user_id prüfen</td>
 </tr>
 <tr>
-<td><a href="s-03-dokument-erstellt.html">3</a></td>
+<td><a href="/docs/warme-wimmer/s-03-dokument-erstellt.html">3</a></td>
 <td>Dokument erstellt → Statuswechsel</td>
 <td>Event (WatchDocuments)</td>
 <td>Mid</td>
 <td>1:1 Import</td>
 </tr>
 <tr>
-<td><a href="s-04-outlook-hero.html">4</a></td>
+<td><a href="/docs/warme-wimmer/s-04-outlook-hero.html">4</a></td>
 <td><strong>Outlook → HERO</strong></td>
 <td>Polling (Rewrite!)</td>
 <td><strong>HIGH</strong></td>
 <td><strong>REWRITE</strong> -- Mailgun+S3+OpenAI</td>
 </tr>
 <tr>
-<td><a href="s-05-projekt-erstellt.html">5</a></td>
+<td><a href="/docs/warme-wimmer/s-05-projekt-erstellt.html">5</a></td>
 <td>Projekt erstellt -- Logbuch + Osneo-URL</td>
 <td>Event (WatchProjects)</td>
 <td>Low</td>
 <td>1:1 Import</td>
 </tr>
 <tr>
-<td><a href="s-06-projekterinnerung.html">6</a></td>
+<td><a href="/docs/warme-wimmer/s-06-projekterinnerung.html">6</a></td>
 <td>Projekterinnerung +1 Tag</td>
 <td>Event (WatchAppointments)</td>
 <td>Low</td>
 <td>1:1 Import</td>
 </tr>
 <tr>
-<td><a href="s-07-rechnungen-bezahlt.html">7</a></td>
+<td><a href="/docs/warme-wimmer/s-07-rechnungen-bezahlt.html">7</a></td>
 <td>Rechnungen bezahlt → Abgeschlossen</td>
 <td>Polling (tgl.)</td>
 <td>Mid</td>
 <td>1:1 Import + Aufgabe entfernen</td>
 </tr>
 <tr>
-<td><a href="s-08-regiebericht-fehlt.html">8</a></td>
+<td><a href="/docs/warme-wimmer/s-08-regiebericht-fehlt.html">8</a></td>
 <td>Regiebericht fehlt → Statuswechsel</td>
 <td>Polling (tgl.)</td>
 <td>Mid</td>
 <td>1:1 Import</td>
 </tr>
 <tr>
-<td><a href="s-09-ueberfaellige-aufgaben.html">9</a></td>
+<td><a href="/docs/warme-wimmer/s-09-ueberfaellige-aufgaben.html">9</a></td>
 <td>Überfällige Aufgaben → Projekt markiert</td>
 <td>Polling (tgl.)</td>
 <td>Low</td>
 <td>1:1 Import</td>
 </tr>
 <tr>
-<td><a href="s-10-zahlung-erhalten.html">10</a></td>
+<td><a href="/docs/warme-wimmer/s-10-zahlung-erhalten.html">10</a></td>
 <td>Zahlung erhalten → Projektstatus</td>
 <td>Polling (tgl.)</td>
 <td>Mid</td>
@@ -261,28 +265,28 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 </tr>
 <tr>
 <td>11</td>
-<td><a href="r-kosten-und-subscription.html">Kosten &amp; Subscription</a></td>
+<td><a href="/docs/warme-wimmer/r-kosten-und-subscription.html">Kosten &amp; Subscription</a></td>
 <td></td>
 <td></td>
 <td>Budget-Page</td>
 </tr>
 <tr>
 <td>12</td>
-<td><a href="r-hero-ids-und-connections.html">Cross-Reference</a></td>
+<td><a href="/docs/warme-wimmer/r-hero-ids-und-connections.html">Cross-Reference</a></td>
 <td></td>
 <td></td>
 <td>Connections, Tokens, Hooks, Codes</td>
 </tr>
 <tr>
 <td>-</td>
-<td>~~Pre-Meeting-Fragen~~ obsolet, in <a href="m-meetings.html">M-meetings</a> aufgegangen</td>
+<td>~~Pre-Meeting-Fragen~~ obsolet, in <a href="/docs/warme-wimmer/m-meetings.html">M-meetings</a> aufgegangen</td>
 <td></td>
 <td></td>
 <td></td>
 </tr>
 <tr>
 <td>14</td>
-<td><a href="r-hero-api-smoketest.html">Hero-API Smoketest</a></td>
+<td><a href="/docs/warme-wimmer/r-hero-api-smoketest.html">Hero-API Smoketest</a></td>
 <td></td>
 <td></td>
 <td>Runbook: Blocker Tokens noch nicht regeneriert</td>
@@ -293,7 +297,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 <h2 id="test-bench-neu-2026-04-16">Test-Bench (neu 2026-04-16)</h2>
 <p>Test-Infrastruktur für alle 10 Szenarien jetzt live im WW-Make-Konto, Folder <code>Test-Bench</code> (id 329064). Pro Szenario eine <code>TEST_*</code>-Variante mit Outbound-Modulen gestrippt + Logger-Ersatz. Plus 6 <code>TEST_PROBE_*</code>-Szenarien für API-Connection-Checks (HERO, LexOffice, Outlook x2, Google Maps, Placetel), nutzbar sobald Credentials da sind.</p>
 <p>49 reconstructive Test-Fixtures (<code>context/fixtures/</code>), eine kanonische Klaus-PDF-Konversion (<code>process-doc-michael-klaus-2026-04-15.md</code>) und ein Drift-Audit (<code>blueprint-pdf-drift.md</code>) als Layer-1-Evidence-Basis. Operator-Doku: <code>test-bench-README.md</code>, Per-Szenario-Karten: <code>test-cards.md</code>, Funktionsweise: <code>how-testing-works.md</code>.</p>
-<p><strong>Klaus-PDF-Drift (RESOLVED 2026-04-24):</strong> Alle 3 Findings am 2026-04-24 mit Michael geklaert. s2 +7 Tage = intentional, s1 Entry-Filter mit 5 Aufgaben-Titeln korrigiert, s6 Regex-Strict bestaetigt. Siehe <a href="m-meetings.html#m-04-24">M-meetings · 2026-04-24</a>.</p>
+<p><strong>Klaus-PDF-Drift (RESOLVED 2026-04-24):</strong> Alle 3 Findings am 2026-04-24 mit Michael geklaert. s2 +7 Tage = intentional, s1 Entry-Filter mit 5 Aufgaben-Titeln korrigiert, s6 Regex-Strict bestaetigt. Siehe <a href="/docs/warme-wimmer/m-meetings.html#m-04-24">M-meetings · 2026-04-24</a>.</p>
 <hr />
 <h2 id="zentrale-erkenntnisse">Zentrale Erkenntnisse</h2>
 <h3 id="was-ubernommen-werden-kann">Was übernommen werden kann</h3>
@@ -374,7 +378,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 <li><strong>Michael Klaus (Hero):</strong> bisheriger Builder, Support in Übergangsphase (über Hero-Support-Mail, nicht privat)</li>
 </ul>
   </main>
-  <footer class="footer">Quelle: <code>workspace/clients/warme-wimmer/</code> · Build R-00-uebersicht.md · UnpauseAI</footer>
+  <footer class="footer">Wärme Wimmer · Hero-Automatisierungen · Aufgesetzt von <a href="https://unpauseai.com">UnpauseAI</a></footer>
 </div>
 <div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
   <div style="text-align:center;max-width:360px;padding:24px;">

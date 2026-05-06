@@ -25,6 +25,7 @@ import markdown as md_lib
 REPO = Path.cwd()
 SRC_TOOL = REPO / "tools/notion-restructure-v18.py"
 OUT_DIR = REPO / "platform/public/docs/warme-wimmer"
+BASE_PATH = "/docs/warme-wimmer/"
 ACCESS_CODE = "wimmer2026"
 LS_PREFIX = "wimmer-docs"
 
@@ -36,8 +37,32 @@ def _import_v18():
     return mod
 
 
+EMOJI_STRIP = {
+    "✅": "OK",
+    "❌": "—",
+    "🟢": "low",
+    "🟡": "mid",
+    "🟠": "high",
+    "🔴": "kritisch",
+    "🚀": "",
+    "📌": "",
+    "💡": "",
+    "📝": "",
+    "🔧": "",
+    "⚠️": "Achtung:",
+    "⚠": "Achtung:",
+}
+
+
+def strip_emojis(text: str) -> str:
+    for emoji, replacement in EMOJI_STRIP.items():
+        text = text.replace(emoji, replacement)
+    return text
+
+
 def md_to_html_body(md_text: str) -> str:
     """Convert markdown to HTML, preserving mermaid blocks for client-side rendering."""
+    md_text = strip_emojis(md_text)
     placeholders: dict[str, str] = {}
 
     def stash_mermaid(match: re.Match) -> str:
@@ -65,7 +90,7 @@ def _rewrite_link_to_html(m: re.Match) -> str:
     base = m.group(1)
     fragment = m.group(2) or ""
     slug = page_slug(base + ".md")
-    return f'<a href="{slug}.html{fragment}">'
+    return f'<a href="{BASE_PATH}{slug}.html{fragment}">'
 
 
 def page_slug(filename: str) -> str:
@@ -80,18 +105,18 @@ def page_title(filename: str, content: str) -> str:
 
 
 GROUP_LABEL = {
-    "0-": ("Start", "🏠"),
-    "M-": ("Meetings", "🗓"),
-    "S-": ("Szenarien", "⚙️"),
-    "R-": ("Reference", "📚"),
+    "0-": "Start",
+    "M-": "Meetings",
+    "S-": "Szenarien",
+    "R-": "Referenz",
 }
 
 
-def group_for(filename: str) -> tuple[str, str]:
+def group_for(filename: str) -> str:
     for prefix, label in GROUP_LABEL.items():
         if filename.startswith(prefix):
             return label
-    return ("Other", "📄")
+    return "Sonstiges"
 
 
 CSS = """
@@ -124,6 +149,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .sidebar-group{padding:8px 0;border-bottom:1px solid var(--border)}
 .sidebar-group:last-child{border-bottom:none}
 .sidebar-group-label{padding:8px 20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3)}
+.sidebar-home{display:block;padding:10px 20px;font-size:13px;font-weight:600;color:var(--text);text-decoration:none;border-left:3px solid transparent;transition:background .15s}
+.sidebar-home:hover{background:var(--surface2)}
+.sidebar-home.active{background:var(--blue-light);color:var(--blue-dark);border-left-color:var(--blue)}
 .sidebar-nav{list-style:none}
 .sidebar-nav a{display:flex;align-items:center;gap:8px;padding:8px 20px;font-size:13px;font-weight:500;color:var(--text2);text-decoration:none;border-left:3px solid transparent;transition:background .15s,color .15s,border-color .15s}
 .sidebar-nav a:hover{background:var(--surface2);color:var(--text)}
@@ -217,16 +245,16 @@ def render_sidebar(pages: dict[str, str], current_slug: str) -> str:
                 break
 
     out = ['<nav class="sidebar" id="sidebar">']
-    for prefix, label_emoji in GROUP_LABEL.items():
+    out.append(f'<div class="sidebar-group"><a href="{BASE_PATH}" class="sidebar-home{(" active" if current_slug == "index" else "")}">Übersicht</a></div>')
+    for prefix, label in GROUP_LABEL.items():
         items = grouped.get(prefix, [])
         if not items:
             continue
-        label, emoji = label_emoji
-        out.append(f'<div class="sidebar-group"><div class="sidebar-group-label">{emoji} {label}</div><ul class="sidebar-nav">')
+        out.append(f'<div class="sidebar-group"><div class="sidebar-group-label">{label}</div><ul class="sidebar-nav">')
         for fname, title in items:
             slug = page_slug(fname)
             cls = ' class="active"' if slug == current_slug else ""
-            out.append(f'<li><a href="{slug}.html"{cls}>{title}</a></li>')
+            out.append(f'<li><a href="{BASE_PATH}{slug}.html"{cls}>{title}</a></li>')
         out.append("</ul></div>")
     out.append("</nav>")
     return "\n".join(out)
@@ -258,7 +286,7 @@ def render_page(filename: str, content: str, all_pages: dict[str, str]) -> str:
     <div class="header-title"><h1>Wärme Wimmer</h1><p>Hero-Automatisierungen Dokumentation</p></div>
   </div>
   <div class="header-right">
-    <span class="badge badge-green"><span class="badge-dot"></span>9/10 live</span>
+    <span class="badge badge-green"><span class="badge-dot"></span>9 von 10 aktiv</span>
     <button class="theme-btn" onclick="toggleTheme()"><span id="theme-icon">&#9790;</span> Theme</button>
   </div>
 </header>
@@ -267,7 +295,7 @@ def render_page(filename: str, content: str, all_pages: dict[str, str]) -> str:
     <h1>{title}</h1>
     {body_html}
   </main>
-  <footer class="footer">Quelle: <code>workspace/clients/warme-wimmer/</code> · Build {filename} · UnpauseAI</footer>
+  <footer class="footer">Wärme Wimmer · Hero-Automatisierungen · Aufgesetzt von <a href="https://unpauseai.com">UnpauseAI</a></footer>
 </div>
 <div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
   <div style="text-align:center;max-width:360px;padding:24px;">
@@ -292,12 +320,12 @@ def render_page(filename: str, content: str, all_pages: dict[str, str]) -> str:
 def render_index(all_pages: dict[str, str]) -> str:
     cards_html = []
     cards_html.append('<div class="cards">')
-    cards_html.append(_card("S-00-flowcharts-overview", "Alle Flowcharts auf einen Blick", "Sabine + Audit-Sicht pro Szenario, 20 Diagramme.", "🗺"))
-    cards_html.append(_card("M-meetings", "Meetings + Decision-Log", "10 Meetings konsolidiert, Entscheidungs-Chronik mit Sprung-Links.", "🗓"))
-    cards_html.append(_card("R-team-updates", "Wartungs-Updates", "Was wurde wann an Irina/Raphael kommuniziert. Append-only Log.", "📬"))
-    cards_html.append(_card("R-00-uebersicht", "Lastenheft (post-Go-Live)", "Ehemaliges Lastenheft, post-Go-Live aktualisiert.", "📘"))
-    cards_html.append(_card("R-hero-ids-und-connections", "Hero-IDs + Connections", "Tabelle aller Tokens, Connection-IDs, Hooks.", "🔑"))
-    cards_html.append(_card("R-kosten-und-subscription", "Kosten + Subscription", "Make-Tier, OpenAI, Mailgun, S3.", "💶"))
+    cards_html.append(_card("S-00-flowcharts-overview", "Flowcharts-Übersicht", "Alle 10 Hero-Automationen auf einer Seite. Sabine-Sicht und Audit-Sicht pro Szenario."))
+    cards_html.append(_card("M-meetings", "Meetings & Decision-Log", "Chronik aller Meetings vom Onboarding bis Post-Go-Live, mit Entscheidungs-Index."))
+    cards_html.append(_card("R-team-updates", "Wartungs-Updates", "Speicher- und Credit-Stand, plus Updates die an das Team gingen."))
+    cards_html.append(_card("R-00-uebersicht", "Lastenheft", "Vollständige Dokumentation, post-Go-Live aktualisiert."))
+    cards_html.append(_card("R-hero-ids-und-connections", "Hero-IDs und Connections", "Referenz-Tabelle aller Tokens, Connection-IDs und Hooks."))
+    cards_html.append(_card("R-kosten-und-subscription", "Kosten und Subscription", "Make-Tier, OpenAI, Mailgun, S3 — Verbrauch und Tarife."))
     cards_html.append("</div>")
 
     scenarios = []
@@ -306,26 +334,28 @@ def render_index(all_pages: dict[str, str]) -> str:
     s_pages = sorted([k for k in all_pages.keys() if k.startswith("S-") and not k.startswith("S-00")])
     for fname in s_pages:
         title = page_title(fname, all_pages[fname])
-        scenarios.append(_card(fname.removesuffix(".md"), title, "", "⚙"))
+        scenarios.append(_card(fname.removesuffix(".md"), title, ""))
     scenarios.append("</div>")
 
     support = """
 <h2>Support</h2>
 <div class="support-cards">
   <a class="support-card" href="mailto:nicolas@unpauseai.com?subject=W%C3%A4rme%20Wimmer%20-%20%C3%84nderungs-Anfrage">
-    <span class="card-icon">✉</span><h4>Aenderung anfragen</h4><p>Was soll angepasst werden?</p><span class="card-tag">Email</span>
+    <h4>Änderung anfragen</h4><p>Was soll angepasst oder erweitert werden?</p><span class="card-tag">E-Mail</span>
   </a>
   <a class="support-card" href="mailto:nicolas@unpauseai.com?subject=W%C3%A4rme%20Wimmer%20-%20Problem-Meldung">
-    <span class="card-icon">⚠</span><h4>Problem melden</h4><p>Etwas funktioniert nicht?</p><span class="card-tag">Email</span>
+    <h4>Problem melden</h4><p>Eine Automatisierung verhält sich nicht wie erwartet?</p><span class="card-tag">E-Mail</span>
   </a>
 </div>
 """
 
     sidebar = render_sidebar(all_pages, "index")
     body = (
-        "<p>Live-Dokumentation der 10 Hero-Make-Automatisierungen, seit 2026-04-28 produktiv. "
-        "Diese Seiten werden direkt aus dem Repo deployed (Vercel auto-deploy) -- jede Aenderung "
-        "wird sofort sichtbar.</p>"
+        "<p>Vollständige Dokumentation der zehn Hero-Make-Automatisierungen, die seit dem 28. April 2026 "
+        "die Hero-Workflows von Wärme Wimmer abdecken. Neun Szenarien sind aktiv im Produktivbetrieb; "
+        "W2-10 ist auf die n8n-Migration verschoben.</p>"
+        "<p style=\"color:var(--text2);font-size:14px;margin-top:8px;\">Diese Seite ersetzt die bisherige Notion-Dokumentation. "
+        "Inhalte werden direkt aus der Quelltext-Steuerung gepflegt; Änderungen sind nach kurzer Zeit live.</p>"
         "<h2>Schnell-Einstieg</h2>"
         + "\n".join(cards_html)
         + "\n".join(scenarios)
@@ -352,14 +382,14 @@ def render_index(all_pages: dict[str, str]) -> str:
     <div class="header-title"><h1>Wärme Wimmer</h1><p>Hero-Automatisierungen Dokumentation</p></div>
   </div>
   <div class="header-right">
-    <span class="badge badge-green"><span class="badge-dot"></span>9/10 live</span>
+    <span class="badge badge-green"><span class="badge-dot"></span>9 von 10 aktiv</span>
     <button class="theme-btn" onclick="toggleTheme()"><span id="theme-icon">&#9790;</span> Theme</button>
   </div>
 </header>
 <div class="page-layout">
   <main class="main">
     <h1>Hero-Automatisierungen — Wärme Wimmer</h1>
-    <p style="color:var(--text2);font-size:14px;margin-bottom:24px;"><em>Stand 2026-05-06 · Post Go-Live, Tag 8 · 9/10 Szenarien live</em></p>
+    <p style="color:var(--text2);font-size:14px;margin-bottom:24px;">Stand 2026-05-06 · Tag 8 nach Go-Live · 9 von 10 Szenarien aktiv</p>
     {body}
   </main>
   <footer class="footer">Quelle: <code>workspace/clients/warme-wimmer/</code> · UnpauseAI</footer>
@@ -384,8 +414,8 @@ def render_index(all_pages: dict[str, str]) -> str:
 """
 
 
-def _card(slug: str, title: str, desc: str, icon: str) -> str:
-    return f'<a class="card" href="{slug}.html"><span class="card-icon">{icon}</span><h3>{title}</h3><p>{desc}</p></a>'
+def _card(slug: str, title: str, desc: str) -> str:
+    return f'<a class="card" href="{BASE_PATH}{slug}.html"><h3>{title}</h3><p>{desc}</p></a>'
 
 
 def main() -> int:

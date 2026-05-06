@@ -36,6 +36,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .sidebar-group{padding:8px 0;border-bottom:1px solid var(--border)}
 .sidebar-group:last-child{border-bottom:none}
 .sidebar-group-label{padding:8px 20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3)}
+.sidebar-home{display:block;padding:10px 20px;font-size:13px;font-weight:600;color:var(--text);text-decoration:none;border-left:3px solid transparent;transition:background .15s}
+.sidebar-home:hover{background:var(--surface2)}
+.sidebar-home.active{background:var(--blue-light);color:var(--blue-dark);border-left-color:var(--blue)}
 .sidebar-nav{list-style:none}
 .sidebar-nav a{display:flex;align-items:center;gap:8px;padding:8px 20px;font-size:13px;font-weight:500;color:var(--text2);text-decoration:none;border-left:3px solid transparent;transition:background .15s,color .15s,border-color .15s}
 .sidebar-nav a:hover{background:var(--surface2);color:var(--text)}
@@ -111,33 +114,34 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 <body>
 <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
 <nav class="sidebar" id="sidebar">
-<div class="sidebar-group"><div class="sidebar-group-label">🏠 Start</div><ul class="sidebar-nav">
-<li><a href="0-start-hier.html">Start hier — Hero-Automatisierungen Notion-Space</a></li>
+<div class="sidebar-group"><a href="/docs/warme-wimmer/" class="sidebar-home">Übersicht</a></div>
+<div class="sidebar-group"><div class="sidebar-group-label">Start</div><ul class="sidebar-nav">
+<li><a href="/docs/warme-wimmer/0-start-hier.html">Start hier — Hero-Automatisierungen Notion-Space</a></li>
 </ul></div>
-<div class="sidebar-group"><div class="sidebar-group-label">🗓 Meetings</div><ul class="sidebar-nav">
-<li><a href="m-meetings.html">Meetings — Hero-Automatisierungen</a></li>
+<div class="sidebar-group"><div class="sidebar-group-label">Meetings</div><ul class="sidebar-nav">
+<li><a href="/docs/warme-wimmer/m-meetings.html">Meetings — Hero-Automatisierungen</a></li>
 </ul></div>
-<div class="sidebar-group"><div class="sidebar-group-label">⚙️ Szenarien</div><ul class="sidebar-nav">
-<li><a href="s-00-flowcharts-overview.html" class="active">Flowcharts-Übersicht — Alle Hero-Automationen auf einen Blick</a></li>
-<li><a href="s-01-aufgabe-erledigt.html">W2-01 — Aufgabe erledigt (Status-Workflow)</a></li>
-<li><a href="s-02-aufgaben-nach-statuswechsel.html">W2-02 — Aufgaben nach Statusänderung</a></li>
-<li><a href="s-03-dokument-erstellt.html">W2-03 — Dokument erstellt → Statuswechsel</a></li>
-<li><a href="s-04-outlook-hero.html">W2-04: Outlook → HERO (Rewrite-Architektur / SOLL-Zustand)</a></li>
-<li><a href="s-05-projekt-erstellt.html">W2-05 — Projekt erstellt (Logbuch + Osneo-URL)</a></li>
-<li><a href="s-06-projekterinnerung.html">W2-06 — Projekterinnerung 1 Tag nach Termin</a></li>
-<li><a href="s-07-rechnungen-bezahlt.html">W2-07 — Rechnungen bezahlt → Abgeschlossen</a></li>
-<li><a href="s-08-regiebericht-fehlt.html">W2-08 — Regiebericht fehlt → Statuswechsel</a></li>
-<li><a href="s-09-ueberfaellige-aufgaben.html">W2-09 — Überfällige Aufgaben → Projekt markieren</a></li>
-<li><a href="s-10-zahlung-erhalten.html">W2-10 — Zahlung erhalten → Projektstatus ändern</a></li>
+<div class="sidebar-group"><div class="sidebar-group-label">Szenarien</div><ul class="sidebar-nav">
+<li><a href="/docs/warme-wimmer/s-00-flowcharts-overview.html" class="active">Flowcharts-Übersicht — Alle Hero-Automationen auf einen Blick</a></li>
+<li><a href="/docs/warme-wimmer/s-01-aufgabe-erledigt.html">W2-01 — Aufgabe erledigt (Status-Workflow)</a></li>
+<li><a href="/docs/warme-wimmer/s-02-aufgaben-nach-statuswechsel.html">W2-02 — Aufgaben nach Statusänderung</a></li>
+<li><a href="/docs/warme-wimmer/s-03-dokument-erstellt.html">W2-03 — Dokument erstellt → Statuswechsel</a></li>
+<li><a href="/docs/warme-wimmer/s-04-outlook-hero.html">W2-04: Outlook → HERO (Rewrite-Architektur / SOLL-Zustand)</a></li>
+<li><a href="/docs/warme-wimmer/s-05-projekt-erstellt.html">W2-05 — Projekt erstellt (Logbuch + Osneo-URL)</a></li>
+<li><a href="/docs/warme-wimmer/s-06-projekterinnerung.html">W2-06 — Projekterinnerung 1 Tag nach Termin</a></li>
+<li><a href="/docs/warme-wimmer/s-07-rechnungen-bezahlt.html">W2-07 — Rechnungen bezahlt → Abgeschlossen</a></li>
+<li><a href="/docs/warme-wimmer/s-08-regiebericht-fehlt.html">W2-08 — Regiebericht fehlt → Statuswechsel</a></li>
+<li><a href="/docs/warme-wimmer/s-09-ueberfaellige-aufgaben.html">W2-09 — Überfällige Aufgaben → Projekt markieren</a></li>
+<li><a href="/docs/warme-wimmer/s-10-zahlung-erhalten.html">W2-10 — Zahlung erhalten → Projektstatus ändern</a></li>
 </ul></div>
-<div class="sidebar-group"><div class="sidebar-group-label">📚 Reference</div><ul class="sidebar-nav">
-<li><a href="r-00-uebersicht.html">Übersicht -- Hero-Automations Lastenheft</a></li>
-<li><a href="r-hero-api-smoketest.html">#14 -- Hero-API Smoketest (Runbook)</a></li>
-<li><a href="r-hero-ids-und-connections.html">Cross-Reference -- Connections, Tokens, Hooks, Codes</a></li>
-<li><a href="r-kosten-und-subscription.html">Kosten & Subscription — Hero-Automations im Make-Konto</a></li>
-<li><a href="r-team-updates.html">Wartungs-Updates — Team-Log</a></li>
-<li><a href="r-w2-04-rewrite-design-ist.html">#4a: Outlook → HERO, IST-Zustand (wie es JETZT funktioniert)</a></li>
-<li><a href="r-w2-04-rewrite-design-mockup.html">W2-04b: Outlook → HERO Rewrite, Make-Szenario-Mockup</a></li>
+<div class="sidebar-group"><div class="sidebar-group-label">Referenz</div><ul class="sidebar-nav">
+<li><a href="/docs/warme-wimmer/r-00-uebersicht.html">Übersicht -- Hero-Automations Lastenheft</a></li>
+<li><a href="/docs/warme-wimmer/r-hero-api-smoketest.html">#14 -- Hero-API Smoketest (Runbook)</a></li>
+<li><a href="/docs/warme-wimmer/r-hero-ids-und-connections.html">Cross-Reference -- Connections, Tokens, Hooks, Codes</a></li>
+<li><a href="/docs/warme-wimmer/r-kosten-und-subscription.html">Kosten & Subscription — Hero-Automations im Make-Konto</a></li>
+<li><a href="/docs/warme-wimmer/r-team-updates.html">Wartungs-Updates — Team-Log</a></li>
+<li><a href="/docs/warme-wimmer/r-w2-04-rewrite-design-ist.html">#4a: Outlook → HERO, IST-Zustand (wie es JETZT funktioniert)</a></li>
+<li><a href="/docs/warme-wimmer/r-w2-04-rewrite-design-mockup.html">W2-04b: Outlook → HERO Rewrite, Make-Szenario-Mockup</a></li>
 </ul></div>
 </nav>
 <header class="header">
@@ -147,7 +151,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
     <div class="header-title"><h1>Wärme Wimmer</h1><p>Hero-Automatisierungen Dokumentation</p></div>
   </div>
   <div class="header-right">
-    <span class="badge badge-green"><span class="badge-dot"></span>9/10 live</span>
+    <span class="badge badge-green"><span class="badge-dot"></span>9 von 10 aktiv</span>
     <button class="theme-btn" onclick="toggleTheme()"><span id="theme-icon">&#9790;</span> Theme</button>
   </div>
 </header>
@@ -189,7 +193,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 <h2 id="w2-01-aufgabe-erledigt">W2-01 — Aufgabe erledigt</h2>
 <p><strong>Trigger:</strong> Hero Webhook (Tasks)  ·  <strong>Schedule:</strong> event-driven  ·  <strong>Status:</strong> live</p>
 <p><strong>Was es tut (Business-Sicht):</strong> Wenn jemand in Hero eine Aufgabe als erledigt abhakt, springt das zugehörige Projekt automatisch in den nächsten Status. Übersetzt Task-Titel ('Angebot angenommen', 'Material angekommen', etc.) in Status-Code-Sprünge, damit niemand den Projekt-Status manuell pflegen muss.</p>
-<p><a href="01-aufgabe-erledigt.html">→ Detail-Seite mit Annotations, Hero-IDs, Schwächen, n8n-Plan</a></p>
+<p><a href="/docs/warme-wimmer/01-aufgabe-erledigt.html">→ Detail-Seite mit Annotations, Hero-IDs, Schwächen, n8n-Plan</a></p>
 <h3 id="sabine-sicht-was-passiert-geschaftlich">Sabine-Sicht (was passiert geschäftlich)</h3>
 <p><pre class="mermaid">flowchart TD
     A[Aufgabe in Hero erledigt] --> B{Welche Aufgabe<br/>war es?}
@@ -226,7 +230,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 <h2 id="w2-02-aufgaben-nach-statuswechsel">W2-02 — Aufgaben nach Statuswechsel</h2>
 <p><strong>Trigger:</strong> Hero Webhook (Projects)  ·  <strong>Schedule:</strong> event-driven  ·  <strong>Status:</strong> live</p>
 <p><strong>Was es tut (Business-Sicht):</strong> Sobald ein Projekt-Status sich ändert (z.B. auf 'Materialbestellung'), erstellt das Szenario die passenden Folge-Aufgaben für den Sammelbearbeiter (z.B. 'Material bestellen', 'Material angekommen'). So entstehen Aufgaben automatisch beim Status-Übergang statt manuell.</p>
-<p><a href="02-aufgaben-nach-statusaenderung.html">→ Detail-Seite mit Annotations, Hero-IDs, Schwächen, n8n-Plan</a></p>
+<p><a href="/docs/warme-wimmer/02-aufgaben-nach-statusaenderung.html">→ Detail-Seite mit Annotations, Hero-IDs, Schwächen, n8n-Plan</a></p>
 <h3 id="sabine-sicht-was-passiert-geschaftlich_1">Sabine-Sicht (was passiert geschäftlich)</h3>
 <p><pre class="mermaid">flowchart TD
     A[Projekt-Status<br/>aendert sich] --> B{Neuer Status?}
@@ -257,7 +261,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 <h2 id="w2-03-dokument-erstellt-statuswechsel">W2-03 — Dokument erstellt → Statuswechsel</h2>
 <p><strong>Trigger:</strong> Hero Webhook (Documents)  ·  <strong>Schedule:</strong> event-driven  ·  <strong>Status:</strong> live</p>
 <p><strong>Was es tut (Business-Sicht):</strong> Wenn ein Dokument in Hero erstellt wird (z.B. Rechnung, Reparaturauftrag, Regiebericht), schaltet das Szenario das Projekt in den passenden Folgestatus weiter. Gleicher Mechanismus wie W2-01, aber Trigger ist Dokument-Erstellung statt Aufgaben-Abhakung.</p>
-<p><a href="03-dokument-erstellt-statuswechsel.html">→ Detail-Seite mit Annotations, Hero-IDs, Schwächen, n8n-Plan</a></p>
+<p><a href="/docs/warme-wimmer/03-dokument-erstellt-statuswechsel.html">→ Detail-Seite mit Annotations, Hero-IDs, Schwächen, n8n-Plan</a></p>
 <h3 id="sabine-sicht-was-passiert-geschaftlich_2">Sabine-Sicht (was passiert geschäftlich)</h3>
 <p><pre class="mermaid">flowchart TD
     A[Dokument in<br/>Projekt erstellt] --> B{Hat das Dokument<br/>einen Projekt-Bezug?}
@@ -291,7 +295,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 <h2 id="w2-04-outlook-hero">W2-04 — Outlook → Hero</h2>
 <p><strong>Trigger:</strong> Outlook Polling (Mo-Fr 05:00-22:30, alle 15 min)  ·  <strong>Schedule:</strong> Mo-Fr 05:00-22:30 alle 15 min  ·  <strong>Status:</strong> live (Mailgun-Rewrite Phase 2 geplant)</p>
 <p><strong>Was es tut (Business-Sicht):</strong> Eingehende E-Mails an info@ werden gepollt, mit OpenAI zusammengefasst, dem passenden Hero-Projekt zugeordnet (Regex-Match auf Projektnummer im Betreff/Body) und als Notiz + Anhang im Projekt abgelegt. Wenn keine Projektnummer gefunden wird, geht die Mail in eine Eingangs-Queue.</p>
-<p><a href="04-outlook-hero-rewrite.html">→ Detail-Seite mit Annotations, Hero-IDs, Schwächen, n8n-Plan</a></p>
+<p><a href="/docs/warme-wimmer/04-outlook-hero-rewrite.html">→ Detail-Seite mit Annotations, Hero-IDs, Schwächen, n8n-Plan</a></p>
 <h3 id="sabine-sicht-was-passiert-geschaftlich_3">Sabine-Sicht (was passiert geschäftlich)</h3>
 <p><pre class="mermaid">flowchart TD
     A[Mail trifft im Outlook<br/>info@waerme-wimmer.de ein] --> B{Projektnummer im<br/>Betreff oder Text?}
@@ -336,7 +340,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 <h2 id="w2-05-projekt-erstellt">W2-05 — Projekt erstellt</h2>
 <p><strong>Trigger:</strong> Hero Webhook (Project Created)  ·  <strong>Schedule:</strong> event-driven  ·  <strong>Status:</strong> live (Osneo-URL-Bug bekannt)</p>
 <p><strong>Was es tut (Business-Sicht):</strong> Wenn ein neues Projekt in Hero angelegt wird, schreibt das Szenario einen Logbuch-Eintrag mit Osneo-Link auf die Projekt-Dokumente. Dient als Audit-Trail und schneller Sprung zwischen Hero und dem Osneo-Dokumentensystem.</p>
-<p><a href="05-projekt-erstellt.html">→ Detail-Seite mit Annotations, Hero-IDs, Schwächen, n8n-Plan</a></p>
+<p><a href="/docs/warme-wimmer/05-projekt-erstellt.html">→ Detail-Seite mit Annotations, Hero-IDs, Schwächen, n8n-Plan</a></p>
 <h3 id="sabine-sicht-was-passiert-geschaftlich_4">Sabine-Sicht (was passiert geschäftlich)</h3>
 <p><pre class="mermaid">flowchart TD
     A[Neues Projekt<br/>in Hero angelegt] --> B[Kontakt-Daten und<br/>Adresse aus Hero abrufen]
@@ -364,7 +368,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 <h2 id="w2-06-projekterinnerung-1-tag-nach-termin">W2-06 — Projekterinnerung 1 Tag nach Termin</h2>
 <p><strong>Trigger:</strong> Hero Webhook (Appointments)  ·  <strong>Schedule:</strong> event-driven, Folge-Logik via Sleep+Filter  ·  <strong>Status:</strong> live</p>
 <p><strong>Was es tut (Business-Sicht):</strong> Nach einem Termin (z.B. Heizungsaustausch beim Kunden) wird ein Tag später automatisch eine Erinnerungs-Aufgabe für den Sammelbearbeiter erstellt: 'Projekt nachhalten, Zufriedenheit erfragen'. Verhindert dass Termine in der Folge vergessen werden.</p>
-<p><a href="06-projekterinnerung.html">→ Detail-Seite mit Annotations, Hero-IDs, Schwächen, n8n-Plan</a></p>
+<p><a href="/docs/warme-wimmer/06-projekterinnerung.html">→ Detail-Seite mit Annotations, Hero-IDs, Schwächen, n8n-Plan</a></p>
 <h3 id="sabine-sicht-was-passiert-geschaftlich_5">Sabine-Sicht (was passiert geschäftlich)</h3>
 <p><pre class="mermaid">flowchart TD
     A[Termin in Hero<br/>angelegt oder geaendert] --> B{Termin-Kategorie<br/>Umsetzung oder<br/>Aushang notwendig?}
@@ -388,7 +392,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 <h2 id="w2-07-rechnungen-bezahlt-abgeschlossen">W2-07 — Rechnungen bezahlt → Abgeschlossen</h2>
 <p><strong>Trigger:</strong> LexOffice Polling (täglich 05:00 CEST)  ·  <strong>Schedule:</strong> täglich 05:00 CEST  ·  <strong>Status:</strong> live</p>
 <p><strong>Was es tut (Business-Sicht):</strong> Pollt LexOffice täglich morgens auf bezahlte Rechnungen. Für jede bezahlte Rechnung wird das zugehörige Hero-Projekt auf Status 'Abgeschlossen' gesetzt. Schließt den Lifecycle Rechnung→Zahlung→Abschluss automatisch.</p>
-<p><a href="07-rechnungen-bezahlt.html">→ Detail-Seite mit Annotations, Hero-IDs, Schwächen, n8n-Plan</a></p>
+<p><a href="/docs/warme-wimmer/07-rechnungen-bezahlt.html">→ Detail-Seite mit Annotations, Hero-IDs, Schwächen, n8n-Plan</a></p>
 <h3 id="sabine-sicht-was-passiert-geschaftlich_6">Sabine-Sicht (was passiert geschäftlich)</h3>
 <p><pre class="mermaid">flowchart TD
     A[Taegliche Pruefung 05:00] --> B[Alle Projekte im Status<br/>Rechnung gestellt laden<br/>TG und NA getrennt]
@@ -416,7 +420,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 <h2 id="w2-08-regiebericht-fehlt-statuswechsel">W2-08 — Regiebericht fehlt → Statuswechsel</h2>
 <p><strong>Trigger:</strong> Hero Polling (Mo-Fr alle 7h, 05:00-19:00)  ·  <strong>Schedule:</strong> Mo-Fr alle 7h, 05:00-19:00 CEST  ·  <strong>Status:</strong> live</p>
 <p><strong>Was es tut (Business-Sicht):</strong> Pollt Hero auf Projekte, bei denen nach abgeschlossenem Termin der Regiebericht (Service-dokumentation) fehlt. Setzt diese Projekte automatisch auf einen Wartestatus, damit das Team weiß: hier muss noch Doku nachgeliefert werden, bevor abgerechnet werden kann.</p>
-<p><a href="08-regiebericht-fehlt.html">→ Detail-Seite mit Annotations, Hero-IDs, Schwächen, n8n-Plan</a></p>
+<p><a href="/docs/warme-wimmer/08-regiebericht-fehlt.html">→ Detail-Seite mit Annotations, Hero-IDs, Schwächen, n8n-Plan</a></p>
 <h3 id="sabine-sicht-was-passiert-geschaftlich_7">Sabine-Sicht (was passiert geschäftlich)</h3>
 <p><pre class="mermaid">flowchart TD
     A[Lauf alle 7 Stunden<br/>Mo-Fr 05:00-19:00] --> B[Alle Projekte im Status<br/>Termin bestaetigt laden<br/>TG und NA]
@@ -442,7 +446,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 <h2 id="w2-09-uberfallige-aufgaben-projekt-markieren">W2-09 — Überfällige Aufgaben → Projekt markieren</h2>
 <p><strong>Trigger:</strong> Hero Polling (täglich 06:00 CEST)  ·  <strong>Schedule:</strong> täglich 06:00 CEST  ·  <strong>Status:</strong> live</p>
 <p><strong>Was es tut (Business-Sicht):</strong> Sucht jeden Morgen nach Aufgaben, deren Fälligkeitsdatum überschritten ist, und markiert die zugehörigen Projekte entsprechend, damit sie im Dashboard auffallen. Verhindert dass vergessene Aufgaben unter dem Radar bleiben.</p>
-<p><a href="09-ueberfaellige-aufgaben.html">→ Detail-Seite mit Annotations, Hero-IDs, Schwächen, n8n-Plan</a></p>
+<p><a href="/docs/warme-wimmer/09-ueberfaellige-aufgaben.html">→ Detail-Seite mit Annotations, Hero-IDs, Schwächen, n8n-Plan</a></p>
 <h3 id="sabine-sicht-was-passiert-geschaftlich_8">Sabine-Sicht (was passiert geschäftlich)</h3>
 <p><pre class="mermaid">flowchart TD
     A[Taeglich 06:00] --> B[Alle heute faelligen<br/>UNERLEDIGTEN<br/>Aufgaben laden]
@@ -461,7 +465,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 <h2 id="w2-10-zahlung-erhalten-projektstatus-andern">W2-10 — Zahlung erhalten → Projektstatus ändern</h2>
 <p><strong>Trigger:</strong> LexOffice/Hero Polling  ·  <strong>Schedule:</strong> (geplant: täglich 06:00 CEST)  ·  <strong>Status:</strong> DEFERRED zu n8n-Migration</p>
 <p><strong>Was es tut (Business-Sicht):</strong> DEFERRED: Hat in der Hero-Welt nie sauber funktioniert (50-Result-Pagination-Limit der Hero-API bei ~1.000+ offenen Projekten). Wird im n8n-Rebuild mit Pagination + Cursor-Logik neu gebaut. Kein Make-Fix mehr geplant.</p>
-<p><a href="10-zahlung-erhalten.html">→ Detail-Seite mit Annotations, Hero-IDs, Schwächen, n8n-Plan</a></p>
+<p><a href="/docs/warme-wimmer/10-zahlung-erhalten.html">→ Detail-Seite mit Annotations, Hero-IDs, Schwächen, n8n-Plan</a></p>
 <h3 id="sabine-sicht-was-passiert-geschaftlich_9">Sabine-Sicht (was passiert geschäftlich)</h3>
 <p><pre class="mermaid">flowchart TD
     A[Taeglich 06:00] --> B[Alle Projekte im Status<br/>Bezahlt-Zwischenstatus laden<br/>HEUTE: erste 50 von 1082]
@@ -484,7 +488,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
     R[BROKEN: 1082 Projekte<br/>aber nur 50 abgefragt<br/>orderBy nicht supported<br/>Pagination nicht implementiert] -.-> B</pre></p>
 <hr />
   </main>
-  <footer class="footer">Quelle: <code>workspace/clients/warme-wimmer/</code> · Build S-00-flowcharts-overview.md · UnpauseAI</footer>
+  <footer class="footer">Wärme Wimmer · Hero-Automatisierungen · Aufgesetzt von <a href="https://unpauseai.com">UnpauseAI</a></footer>
 </div>
 <div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
   <div style="text-align:center;max-width:360px;padding:24px;">

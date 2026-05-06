@@ -36,6 +36,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .sidebar-group{padding:8px 0;border-bottom:1px solid var(--border)}
 .sidebar-group:last-child{border-bottom:none}
 .sidebar-group-label{padding:8px 20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3)}
+.sidebar-home{display:block;padding:10px 20px;font-size:13px;font-weight:600;color:var(--text);text-decoration:none;border-left:3px solid transparent;transition:background .15s}
+.sidebar-home:hover{background:var(--surface2)}
+.sidebar-home.active{background:var(--blue-light);color:var(--blue-dark);border-left-color:var(--blue)}
 .sidebar-nav{list-style:none}
 .sidebar-nav a{display:flex;align-items:center;gap:8px;padding:8px 20px;font-size:13px;font-weight:500;color:var(--text2);text-decoration:none;border-left:3px solid transparent;transition:background .15s,color .15s,border-color .15s}
 .sidebar-nav a:hover{background:var(--surface2);color:var(--text)}
@@ -111,33 +114,34 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 <body>
 <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
 <nav class="sidebar" id="sidebar">
-<div class="sidebar-group"><div class="sidebar-group-label">🏠 Start</div><ul class="sidebar-nav">
-<li><a href="0-start-hier.html">Start hier — Hero-Automatisierungen Notion-Space</a></li>
+<div class="sidebar-group"><a href="/docs/warme-wimmer/" class="sidebar-home active">Übersicht</a></div>
+<div class="sidebar-group"><div class="sidebar-group-label">Start</div><ul class="sidebar-nav">
+<li><a href="/docs/warme-wimmer/0-start-hier.html">Start hier — Hero-Automatisierungen Notion-Space</a></li>
 </ul></div>
-<div class="sidebar-group"><div class="sidebar-group-label">🗓 Meetings</div><ul class="sidebar-nav">
-<li><a href="m-meetings.html">Meetings — Hero-Automatisierungen</a></li>
+<div class="sidebar-group"><div class="sidebar-group-label">Meetings</div><ul class="sidebar-nav">
+<li><a href="/docs/warme-wimmer/m-meetings.html">Meetings — Hero-Automatisierungen</a></li>
 </ul></div>
-<div class="sidebar-group"><div class="sidebar-group-label">⚙️ Szenarien</div><ul class="sidebar-nav">
-<li><a href="s-00-flowcharts-overview.html">Flowcharts-Übersicht — Alle Hero-Automationen auf einen Blick</a></li>
-<li><a href="s-01-aufgabe-erledigt.html">W2-01 — Aufgabe erledigt (Status-Workflow)</a></li>
-<li><a href="s-02-aufgaben-nach-statuswechsel.html">W2-02 — Aufgaben nach Statusänderung</a></li>
-<li><a href="s-03-dokument-erstellt.html">W2-03 — Dokument erstellt → Statuswechsel</a></li>
-<li><a href="s-04-outlook-hero.html">W2-04: Outlook → HERO (Rewrite-Architektur / SOLL-Zustand)</a></li>
-<li><a href="s-05-projekt-erstellt.html">W2-05 — Projekt erstellt (Logbuch + Osneo-URL)</a></li>
-<li><a href="s-06-projekterinnerung.html">W2-06 — Projekterinnerung 1 Tag nach Termin</a></li>
-<li><a href="s-07-rechnungen-bezahlt.html">W2-07 — Rechnungen bezahlt → Abgeschlossen</a></li>
-<li><a href="s-08-regiebericht-fehlt.html">W2-08 — Regiebericht fehlt → Statuswechsel</a></li>
-<li><a href="s-09-ueberfaellige-aufgaben.html">W2-09 — Überfällige Aufgaben → Projekt markieren</a></li>
-<li><a href="s-10-zahlung-erhalten.html">W2-10 — Zahlung erhalten → Projektstatus ändern</a></li>
+<div class="sidebar-group"><div class="sidebar-group-label">Szenarien</div><ul class="sidebar-nav">
+<li><a href="/docs/warme-wimmer/s-00-flowcharts-overview.html">Flowcharts-Übersicht — Alle Hero-Automationen auf einen Blick</a></li>
+<li><a href="/docs/warme-wimmer/s-01-aufgabe-erledigt.html">W2-01 — Aufgabe erledigt (Status-Workflow)</a></li>
+<li><a href="/docs/warme-wimmer/s-02-aufgaben-nach-statuswechsel.html">W2-02 — Aufgaben nach Statusänderung</a></li>
+<li><a href="/docs/warme-wimmer/s-03-dokument-erstellt.html">W2-03 — Dokument erstellt → Statuswechsel</a></li>
+<li><a href="/docs/warme-wimmer/s-04-outlook-hero.html">W2-04: Outlook → HERO (Rewrite-Architektur / SOLL-Zustand)</a></li>
+<li><a href="/docs/warme-wimmer/s-05-projekt-erstellt.html">W2-05 — Projekt erstellt (Logbuch + Osneo-URL)</a></li>
+<li><a href="/docs/warme-wimmer/s-06-projekterinnerung.html">W2-06 — Projekterinnerung 1 Tag nach Termin</a></li>
+<li><a href="/docs/warme-wimmer/s-07-rechnungen-bezahlt.html">W2-07 — Rechnungen bezahlt → Abgeschlossen</a></li>
+<li><a href="/docs/warme-wimmer/s-08-regiebericht-fehlt.html">W2-08 — Regiebericht fehlt → Statuswechsel</a></li>
+<li><a href="/docs/warme-wimmer/s-09-ueberfaellige-aufgaben.html">W2-09 — Überfällige Aufgaben → Projekt markieren</a></li>
+<li><a href="/docs/warme-wimmer/s-10-zahlung-erhalten.html">W2-10 — Zahlung erhalten → Projektstatus ändern</a></li>
 </ul></div>
-<div class="sidebar-group"><div class="sidebar-group-label">📚 Reference</div><ul class="sidebar-nav">
-<li><a href="r-00-uebersicht.html">Übersicht -- Hero-Automations Lastenheft</a></li>
-<li><a href="r-hero-api-smoketest.html">#14 -- Hero-API Smoketest (Runbook)</a></li>
-<li><a href="r-hero-ids-und-connections.html">Cross-Reference -- Connections, Tokens, Hooks, Codes</a></li>
-<li><a href="r-kosten-und-subscription.html">Kosten & Subscription — Hero-Automations im Make-Konto</a></li>
-<li><a href="r-team-updates.html">Wartungs-Updates — Team-Log</a></li>
-<li><a href="r-w2-04-rewrite-design-ist.html">#4a: Outlook → HERO, IST-Zustand (wie es JETZT funktioniert)</a></li>
-<li><a href="r-w2-04-rewrite-design-mockup.html">W2-04b: Outlook → HERO Rewrite, Make-Szenario-Mockup</a></li>
+<div class="sidebar-group"><div class="sidebar-group-label">Referenz</div><ul class="sidebar-nav">
+<li><a href="/docs/warme-wimmer/r-00-uebersicht.html">Übersicht -- Hero-Automations Lastenheft</a></li>
+<li><a href="/docs/warme-wimmer/r-hero-api-smoketest.html">#14 -- Hero-API Smoketest (Runbook)</a></li>
+<li><a href="/docs/warme-wimmer/r-hero-ids-und-connections.html">Cross-Reference -- Connections, Tokens, Hooks, Codes</a></li>
+<li><a href="/docs/warme-wimmer/r-kosten-und-subscription.html">Kosten & Subscription — Hero-Automations im Make-Konto</a></li>
+<li><a href="/docs/warme-wimmer/r-team-updates.html">Wartungs-Updates — Team-Log</a></li>
+<li><a href="/docs/warme-wimmer/r-w2-04-rewrite-design-ist.html">#4a: Outlook → HERO, IST-Zustand (wie es JETZT funktioniert)</a></li>
+<li><a href="/docs/warme-wimmer/r-w2-04-rewrite-design-mockup.html">W2-04b: Outlook → HERO Rewrite, Make-Szenario-Mockup</a></li>
 </ul></div>
 </nav>
 <header class="header">
@@ -147,41 +151,41 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
     <div class="header-title"><h1>Wärme Wimmer</h1><p>Hero-Automatisierungen Dokumentation</p></div>
   </div>
   <div class="header-right">
-    <span class="badge badge-green"><span class="badge-dot"></span>9/10 live</span>
+    <span class="badge badge-green"><span class="badge-dot"></span>9 von 10 aktiv</span>
     <button class="theme-btn" onclick="toggleTheme()"><span id="theme-icon">&#9790;</span> Theme</button>
   </div>
 </header>
 <div class="page-layout">
   <main class="main">
     <h1>Hero-Automatisierungen — Wärme Wimmer</h1>
-    <p style="color:var(--text2);font-size:14px;margin-bottom:24px;"><em>Stand 2026-05-06 · Post Go-Live, Tag 8 · 9/10 Szenarien live</em></p>
-    <p>Live-Dokumentation der 10 Hero-Make-Automatisierungen, seit 2026-04-28 produktiv. Diese Seiten werden direkt aus dem Repo deployed (Vercel auto-deploy) -- jede Aenderung wird sofort sichtbar.</p><h2>Schnell-Einstieg</h2><div class="cards">
-<a class="card" href="S-00-flowcharts-overview.html"><span class="card-icon">🗺</span><h3>Alle Flowcharts auf einen Blick</h3><p>Sabine + Audit-Sicht pro Szenario, 20 Diagramme.</p></a>
-<a class="card" href="M-meetings.html"><span class="card-icon">🗓</span><h3>Meetings + Decision-Log</h3><p>10 Meetings konsolidiert, Entscheidungs-Chronik mit Sprung-Links.</p></a>
-<a class="card" href="R-team-updates.html"><span class="card-icon">📬</span><h3>Wartungs-Updates</h3><p>Was wurde wann an Irina/Raphael kommuniziert. Append-only Log.</p></a>
-<a class="card" href="R-00-uebersicht.html"><span class="card-icon">📘</span><h3>Lastenheft (post-Go-Live)</h3><p>Ehemaliges Lastenheft, post-Go-Live aktualisiert.</p></a>
-<a class="card" href="R-hero-ids-und-connections.html"><span class="card-icon">🔑</span><h3>Hero-IDs + Connections</h3><p>Tabelle aller Tokens, Connection-IDs, Hooks.</p></a>
-<a class="card" href="R-kosten-und-subscription.html"><span class="card-icon">💶</span><h3>Kosten + Subscription</h3><p>Make-Tier, OpenAI, Mailgun, S3.</p></a>
+    <p style="color:var(--text2);font-size:14px;margin-bottom:24px;">Stand 2026-05-06 · Tag 8 nach Go-Live · 9 von 10 Szenarien aktiv</p>
+    <p>Vollständige Dokumentation der zehn Hero-Make-Automatisierungen, die seit dem 28. April 2026 die Hero-Workflows von Wärme Wimmer abdecken. Neun Szenarien sind aktiv im Produktivbetrieb; W2-10 ist auf die n8n-Migration verschoben.</p><p style="color:var(--text2);font-size:14px;margin-top:8px;">Diese Seite ersetzt die bisherige Notion-Dokumentation. Inhalte werden direkt aus der Quelltext-Steuerung gepflegt; Änderungen sind nach kurzer Zeit live.</p><h2>Schnell-Einstieg</h2><div class="cards">
+<a class="card" href="/docs/warme-wimmer/S-00-flowcharts-overview.html"><h3>Flowcharts-Übersicht</h3><p>Alle 10 Hero-Automationen auf einer Seite. Sabine-Sicht und Audit-Sicht pro Szenario.</p></a>
+<a class="card" href="/docs/warme-wimmer/M-meetings.html"><h3>Meetings & Decision-Log</h3><p>Chronik aller Meetings vom Onboarding bis Post-Go-Live, mit Entscheidungs-Index.</p></a>
+<a class="card" href="/docs/warme-wimmer/R-team-updates.html"><h3>Wartungs-Updates</h3><p>Speicher- und Credit-Stand, plus Updates die an das Team gingen.</p></a>
+<a class="card" href="/docs/warme-wimmer/R-00-uebersicht.html"><h3>Lastenheft</h3><p>Vollständige Dokumentation, post-Go-Live aktualisiert.</p></a>
+<a class="card" href="/docs/warme-wimmer/R-hero-ids-und-connections.html"><h3>Hero-IDs und Connections</h3><p>Referenz-Tabelle aller Tokens, Connection-IDs und Hooks.</p></a>
+<a class="card" href="/docs/warme-wimmer/R-kosten-und-subscription.html"><h3>Kosten und Subscription</h3><p>Make-Tier, OpenAI, Mailgun, S3 — Verbrauch und Tarife.</p></a>
 </div><h2>Szenarien (W2-01 bis W2-10)</h2>
 <div class="cards">
-<a class="card" href="S-01-aufgabe-erledigt.html"><span class="card-icon">⚙</span><h3>W2-01 — Aufgabe erledigt (Status-Workflow)</h3><p></p></a>
-<a class="card" href="S-02-aufgaben-nach-statuswechsel.html"><span class="card-icon">⚙</span><h3>W2-02 — Aufgaben nach Statusänderung</h3><p></p></a>
-<a class="card" href="S-03-dokument-erstellt.html"><span class="card-icon">⚙</span><h3>W2-03 — Dokument erstellt → Statuswechsel</h3><p></p></a>
-<a class="card" href="S-04-outlook-hero.html"><span class="card-icon">⚙</span><h3>W2-04: Outlook → HERO (Rewrite-Architektur / SOLL-Zustand)</h3><p></p></a>
-<a class="card" href="S-05-projekt-erstellt.html"><span class="card-icon">⚙</span><h3>W2-05 — Projekt erstellt (Logbuch + Osneo-URL)</h3><p></p></a>
-<a class="card" href="S-06-projekterinnerung.html"><span class="card-icon">⚙</span><h3>W2-06 — Projekterinnerung 1 Tag nach Termin</h3><p></p></a>
-<a class="card" href="S-07-rechnungen-bezahlt.html"><span class="card-icon">⚙</span><h3>W2-07 — Rechnungen bezahlt → Abgeschlossen</h3><p></p></a>
-<a class="card" href="S-08-regiebericht-fehlt.html"><span class="card-icon">⚙</span><h3>W2-08 — Regiebericht fehlt → Statuswechsel</h3><p></p></a>
-<a class="card" href="S-09-ueberfaellige-aufgaben.html"><span class="card-icon">⚙</span><h3>W2-09 — Überfällige Aufgaben → Projekt markieren</h3><p></p></a>
-<a class="card" href="S-10-zahlung-erhalten.html"><span class="card-icon">⚙</span><h3>W2-10 — Zahlung erhalten → Projektstatus ändern</h3><p></p></a>
+<a class="card" href="/docs/warme-wimmer/S-01-aufgabe-erledigt.html"><h3>W2-01 — Aufgabe erledigt (Status-Workflow)</h3><p></p></a>
+<a class="card" href="/docs/warme-wimmer/S-02-aufgaben-nach-statuswechsel.html"><h3>W2-02 — Aufgaben nach Statusänderung</h3><p></p></a>
+<a class="card" href="/docs/warme-wimmer/S-03-dokument-erstellt.html"><h3>W2-03 — Dokument erstellt → Statuswechsel</h3><p></p></a>
+<a class="card" href="/docs/warme-wimmer/S-04-outlook-hero.html"><h3>W2-04: Outlook → HERO (Rewrite-Architektur / SOLL-Zustand)</h3><p></p></a>
+<a class="card" href="/docs/warme-wimmer/S-05-projekt-erstellt.html"><h3>W2-05 — Projekt erstellt (Logbuch + Osneo-URL)</h3><p></p></a>
+<a class="card" href="/docs/warme-wimmer/S-06-projekterinnerung.html"><h3>W2-06 — Projekterinnerung 1 Tag nach Termin</h3><p></p></a>
+<a class="card" href="/docs/warme-wimmer/S-07-rechnungen-bezahlt.html"><h3>W2-07 — Rechnungen bezahlt → Abgeschlossen</h3><p></p></a>
+<a class="card" href="/docs/warme-wimmer/S-08-regiebericht-fehlt.html"><h3>W2-08 — Regiebericht fehlt → Statuswechsel</h3><p></p></a>
+<a class="card" href="/docs/warme-wimmer/S-09-ueberfaellige-aufgaben.html"><h3>W2-09 — Überfällige Aufgaben → Projekt markieren</h3><p></p></a>
+<a class="card" href="/docs/warme-wimmer/S-10-zahlung-erhalten.html"><h3>W2-10 — Zahlung erhalten → Projektstatus ändern</h3><p></p></a>
 </div>
 <h2>Support</h2>
 <div class="support-cards">
   <a class="support-card" href="mailto:nicolas@unpauseai.com?subject=W%C3%A4rme%20Wimmer%20-%20%C3%84nderungs-Anfrage">
-    <span class="card-icon">✉</span><h4>Aenderung anfragen</h4><p>Was soll angepasst werden?</p><span class="card-tag">Email</span>
+    <h4>Änderung anfragen</h4><p>Was soll angepasst oder erweitert werden?</p><span class="card-tag">E-Mail</span>
   </a>
   <a class="support-card" href="mailto:nicolas@unpauseai.com?subject=W%C3%A4rme%20Wimmer%20-%20Problem-Meldung">
-    <span class="card-icon">⚠</span><h4>Problem melden</h4><p>Etwas funktioniert nicht?</p><span class="card-tag">Email</span>
+    <h4>Problem melden</h4><p>Eine Automatisierung verhält sich nicht wie erwartet?</p><span class="card-tag">E-Mail</span>
   </a>
 </div>
 
