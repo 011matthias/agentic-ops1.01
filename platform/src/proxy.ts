@@ -1,58 +1,66 @@
-// DEAD CODE — this file is not wired as middleware. The active middleware
-// lives at platform/src/middleware.ts (server-side gate for the doc site +
-// case-insensitive URL redirect). The /admin and /portal access checks here
-// are dormant and not currently enforced. Promoting them would require
-// re-exporting from middleware.ts and is tracked as a separate follow-up.
+// Next.js 16 renamed `middleware.ts` to `proxy.ts`. This file is what runs
+// on every request matching the `config.matcher` below.
+//
+// Server-side gate for the Wärme Wimmer doc site. Replaces the previous
+// in-page JS overlay (which shipped the passcode in plaintext) with an
+// HMAC-cookie check enforced before the static HTML is served.
+//
+// NOTE: previously this file used NextAuth's `auth()` wrapper to gate
+// /admin and /portal as well. That logic was never wired to a live
+// `middleware.ts`, so it was dead code. Promoting NextAuth-based gating
+// for /admin and /portal is a separate concern and is intentionally
+// out of scope here — see `platform/src/lib/auth.ts` for the auth client
+// when that work is picked up.
 
-import { auth } from "@/lib/auth"
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
+import { cookieMatches, WIMMER_COOKIE, WIMMER_PATH_PREFIX } from "./lib/wimmer-auth"
 
-export const proxy = auth((req) => {
-  const { auth: session, nextUrl } = req
-  const path = nextUrl.pathname
-  const isApiRoute = path.startsWith("/api/")
+export async function proxy(req: NextRequest) {
+  const path = req.nextUrl.pathname
 
-  // Wärme Wimmer doc site: case-insensitive URLs.
-  // Lowercase the path so URLs typed with the M-/S-/R- prefix uppercase
-  // (matching our internal naming) resolve to the lowercase canonical files.
-  if (path.startsWith("/docs/warme-wimmer/")) {
+  // Case-insensitive URLs for the doc site. M-meetings.html / S-04-... are the
+  // canonical filenames in the source repo (uppercase), but we serve them
+  // lowercase. This 308's any uppercase request to the canonical lowercase URL.
+  if (path.startsWith(WIMMER_PATH_PREFIX)) {
     const lower = path.toLowerCase()
     if (lower !== path) {
-      const url = nextUrl.clone()
+      const url = req.nextUrl.clone()
       url.pathname = lower
       return NextResponse.redirect(url, 308)
     }
   }
 
-  // Admin routes: require admin role
-  if (path.startsWith("/admin") || path.startsWith("/api/admin")) {
-    if (!session?.user) {
-      if (isApiRoute) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-      return NextResponse.redirect(new URL("/login", nextUrl))
-    }
-    if (session.user.role !== "admin") {
-      if (isApiRoute) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-      return NextResponse.redirect(new URL("/portal", nextUrl))
-    }
+  // Allow the login page and the unlock API through unconditionally.
+  if (path === "/wimmer-login" || path === "/api/wimmer-unlock") {
+    return NextResponse.next()
   }
 
-  // Portal routes: require authenticated user (client or admin)
-  if (path.startsWith("/portal") || path.startsWith("/api/portal")) {
-    if (!session?.user) {
-      if (isApiRoute) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-      return NextResponse.redirect(new URL("/login", nextUrl))
+  // Gate /docs/warme-wimmer/* on the wimmer-auth cookie.
+  if (path.startsWith(WIMMER_PATH_PREFIX)) {
+    const secret = process.env.WIMMER_AUTH_SECRET
+    if (!secret) {
+      // Misconfiguration: fail closed but visibly. Surface 500 to ourselves
+      // rather than letting unauthenticated traffic through silently.
+      return new NextResponse(
+        "WIMMER_AUTH_SECRET is not set on this deployment.",
+        { status: 500 },
+      )
     }
+    const cookie = req.cookies.get(WIMMER_COOKIE)?.value
+    if (await cookieMatches(cookie, secret)) {
+      return NextResponse.next()
+    }
+    // Rewrite (not redirect) so the URL bar keeps the original path —
+    // /api/wimmer-unlock can read the `from` field and bounce back on success.
+    const url = req.nextUrl.clone()
+    url.pathname = "/wimmer-login"
+    url.searchParams.set("from", path + req.nextUrl.search)
+    return NextResponse.rewrite(url)
   }
 
   return NextResponse.next()
-})
+}
 
 export const config = {
-  matcher: [
-    "/admin/:path*",
-    "/portal/:path*",
-    "/api/admin/:path*",
-    "/api/portal/:path*",
-    "/docs/warme-wimmer/:path*",
-  ],
+  matcher: ["/docs/warme-wimmer/:path*", "/wimmer-login", "/api/wimmer-unlock"],
 }
