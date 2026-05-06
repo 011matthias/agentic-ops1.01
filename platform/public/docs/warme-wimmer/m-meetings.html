@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<meta name="googlebot" content="noindex,nofollow">
+<title>Meetings — Hero-Automatisierungen — Wärme Wimmer Hero-Doku</title>
+<style>
+:root{
+  --header-height:72px;--sidebar-width:240px;
+  --bg:#f8fafc;--surface:#ffffff;--surface2:#f1f5f9;--border:#e2e8f0;
+  --text:#0f172a;--text2:#475569;--text3:#94a3b8;
+  --blue:#2563eb;--blue-light:#dbeafe;--blue-dark:#1e40af;
+  --green:#16a34a;--green-light:#dcfce7;
+  --amber:#d97706;--amber-light:#fef3c7;
+  --purple:#7c3aed;--purple-light:#ede9fe;
+  --red:#dc2626;--red-light:#fee2e2;
+  --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.05);
+  --nav-bg:#ffffff;
+}
+[data-theme="dark"]{
+  --bg:#0f172a;--surface:#1e293b;--surface2:#0f172a;--border:#334155;
+  --text:#f1f5f9;--text2:#94a3b8;--text3:#475569;
+  --blue:#3b82f6;--blue-light:#1e3a5f;--blue-dark:#93c5fd;
+  --green:#22c55e;--green-light:#14532d;
+  --amber:#f59e0b;--amber-light:#451a03;
+  --purple:#a78bfa;--purple-light:#2e1065;
+  --red:#f87171;--red-light:#450a0a;
+  --shadow:0 1px 3px rgba(0,0,0,.3);
+  --nav-bg:#1e293b;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.6;min-height:100vh;transition:background .2s,color .2s;padding-top:var(--header-height)}
+.sidebar{position:fixed;top:var(--header-height);left:0;width:var(--sidebar-width);height:calc(100vh - var(--header-height));background:var(--surface);border-right:1px solid var(--border);z-index:50;overflow-y:auto;transition:transform .25s ease}
+.sidebar-group{padding:8px 0;border-bottom:1px solid var(--border)}
+.sidebar-group:last-child{border-bottom:none}
+.sidebar-group-label{padding:8px 20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3)}
+.sidebar-nav{list-style:none}
+.sidebar-nav a{display:flex;align-items:center;gap:8px;padding:8px 20px;font-size:13px;font-weight:500;color:var(--text2);text-decoration:none;border-left:3px solid transparent;transition:background .15s,color .15s,border-color .15s}
+.sidebar-nav a:hover{background:var(--surface2);color:var(--text)}
+.sidebar-nav a.active{background:var(--blue-light);color:var(--blue-dark);border-left-color:var(--blue);font-weight:700}
+.sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:40}
+.sidebar-backdrop.active{display:block}
+.hamburger{display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:18px;color:var(--text2);line-height:1}
+.header{background:var(--nav-bg);border-bottom:1px solid var(--border);padding:16px 24px;padding-left:calc(var(--sidebar-width) + 24px);display:flex;align-items:center;justify-content:space-between;position:fixed;top:0;left:0;right:0;z-index:1000;box-shadow:var(--shadow);transition:background .2s}
+.header-left{display:flex;align-items:center;gap:16px}
+.header-logo{display:flex;align-items:center;gap:6px;font-size:18px;letter-spacing:-0.025em}
+.header-logo .logo-text{font-weight:700;color:var(--text)}
+.header-logo .logo-accent{font-weight:700;color:var(--blue)}
+.header-title h1{font-size:16px;font-weight:700;color:var(--text)}
+.header-title p{font-size:12px;color:var(--text2);margin-top:1px}
+.header-right{display:flex;align-items:center;gap:12px}
+.theme-btn{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;transition:background .15s}
+.theme-btn:hover{background:var(--border)}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600}
+.badge-green{background:var(--green-light);color:var(--green)}
+.badge-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.page-layout{margin-left:var(--sidebar-width)}
+.main{max-width:1100px;margin:0 auto;padding:32px 32px 80px}
+.main h1{font-size:30px;font-weight:800;letter-spacing:-0.02em;margin-bottom:8px;color:var(--text)}
+.main h2{font-size:22px;font-weight:700;margin:32px 0 12px;color:var(--text);padding-bottom:6px;border-bottom:1px solid var(--border)}
+.main h3{font-size:17px;font-weight:700;margin:24px 0 8px;color:var(--text)}
+.main h4{font-size:15px;font-weight:700;margin:18px 0 6px;color:var(--text)}
+.main p{margin:8px 0 12px;color:var(--text2)}
+.main ul,.main ol{margin:8px 0 12px;padding-left:24px;color:var(--text2)}
+.main li{margin:3px 0}
+.main strong{color:var(--text)}
+.main a{color:var(--blue);text-decoration:none}
+.main a:hover{text-decoration:underline}
+.main blockquote{border-left:4px solid var(--blue);background:var(--surface2);padding:12px 16px;margin:12px 0;border-radius:0 8px 8px 0;color:var(--text2);font-style:normal}
+.main blockquote p{margin:0}
+.main blockquote em{font-style:normal;color:var(--text2)}
+.main code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:13px;font-family:'Menlo','Monaco','Consolas',monospace;color:var(--purple)}
+.main pre{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin:12px 0;overflow-x:auto;font-size:13px;line-height:1.5}
+.main pre code{background:none;padding:0;color:var(--text2)}
+.main pre.mermaid{background:var(--surface);border:1px solid var(--border);text-align:center;padding:20px}
+.main table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.main th{background:var(--surface2);padding:10px 14px;text-align:left;font-weight:600;color:var(--text);border-bottom:1px solid var(--border)}
+.main td{padding:10px 14px;color:var(--text2);border-bottom:1px solid var(--border)}
+.main tr:last-child td{border-bottom:none}
+.main hr{border:none;border-top:1px solid var(--border);margin:24px 0}
+.main details{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin:12px 0}
+.main details summary{cursor:pointer;font-weight:600;color:var(--text);padding:4px 0}
+.main details[open] summary{margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.main img{max-width:100%;height:auto;border:1px solid var(--border);border-radius:8px;margin:8px 0;display:block}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin:24px 0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;transition:border-color .15s,box-shadow .15s;display:block;color:inherit;text-decoration:none}
+.card:hover{border-color:var(--blue);box-shadow:var(--shadow);text-decoration:none}
+.card-icon{font-size:24px;margin-bottom:8px;display:block}
+.card h3{font-size:16px;font-weight:700;margin:0 0 4px;color:var(--text)}
+.card p{font-size:13px;color:var(--text2);margin:0}
+.support-cards{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0}
+.support-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;display:block;color:inherit;text-decoration:none;transition:border-color .15s}
+.support-card:hover{border-color:var(--blue);text-decoration:none}
+.support-card h4{margin:8px 0 4px}
+.card-tag{display:inline-block;font-size:11px;font-weight:600;padding:3px 8px;border-radius:12px;background:var(--blue-light);color:var(--blue);margin-top:8px}
+.footer{padding:24px 32px;border-top:1px solid var(--border);text-align:center;font-size:12px;color:var(--text3);margin-top:48px}
+@media (max-width:768px){
+  .sidebar{transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0);box-shadow:var(--shadow)}
+  .header{padding-left:16px}
+  .page-layout{margin-left:0}
+  .hamburger{display:block}
+  .header-title h1{font-size:14px}
+  .main{padding:20px}
+}
+</style>
+</head>
+<body>
+<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
+<nav class="sidebar" id="sidebar">
+<div class="sidebar-group"><div class="sidebar-group-label">🏠 Start</div><ul class="sidebar-nav">
+<li><a href="0-start-hier.html">Start hier — Hero-Automatisierungen Notion-Space</a></li>
+</ul></div>
+<div class="sidebar-group"><div class="sidebar-group-label">🗓 Meetings</div><ul class="sidebar-nav">
+<li><a href="m-meetings.html" class="active">Meetings — Hero-Automatisierungen</a></li>
+</ul></div>
+<div class="sidebar-group"><div class="sidebar-group-label">⚙️ Szenarien</div><ul class="sidebar-nav">
+<li><a href="s-00-flowcharts-overview.html">Flowcharts-Übersicht — Alle Hero-Automationen auf einen Blick</a></li>
+<li><a href="s-01-aufgabe-erledigt.html">W2-01 — Aufgabe erledigt (Status-Workflow)</a></li>
+<li><a href="s-02-aufgaben-nach-statuswechsel.html">W2-02 — Aufgaben nach Statusänderung</a></li>
+<li><a href="s-03-dokument-erstellt.html">W2-03 — Dokument erstellt → Statuswechsel</a></li>
+<li><a href="s-04-outlook-hero.html">W2-04: Outlook → HERO (Rewrite-Architektur / SOLL-Zustand)</a></li>
+<li><a href="s-05-projekt-erstellt.html">W2-05 — Projekt erstellt (Logbuch + Osneo-URL)</a></li>
+<li><a href="s-06-projekterinnerung.html">W2-06 — Projekterinnerung 1 Tag nach Termin</a></li>
+<li><a href="s-07-rechnungen-bezahlt.html">W2-07 — Rechnungen bezahlt → Abgeschlossen</a></li>
+<li><a href="s-08-regiebericht-fehlt.html">W2-08 — Regiebericht fehlt → Statuswechsel</a></li>
+<li><a href="s-09-ueberfaellige-aufgaben.html">W2-09 — Überfällige Aufgaben → Projekt markieren</a></li>
+<li><a href="s-10-zahlung-erhalten.html">W2-10 — Zahlung erhalten → Projektstatus ändern</a></li>
+</ul></div>
+<div class="sidebar-group"><div class="sidebar-group-label">📚 Reference</div><ul class="sidebar-nav">
+<li><a href="r-00-uebersicht.html">Übersicht -- Hero-Automations Lastenheft</a></li>
+<li><a href="r-hero-api-smoketest.html">#14 -- Hero-API Smoketest (Runbook)</a></li>
+<li><a href="r-hero-ids-und-connections.html">Cross-Reference -- Connections, Tokens, Hooks, Codes</a></li>
+<li><a href="r-kosten-und-subscription.html">Kosten & Subscription — Hero-Automations im Make-Konto</a></li>
+<li><a href="r-team-updates.html">Wartungs-Updates — Team-Log</a></li>
+<li><a href="r-w2-04-rewrite-design-ist.html">#4a: Outlook → HERO, IST-Zustand (wie es JETZT funktioniert)</a></li>
+<li><a href="r-w2-04-rewrite-design-mockup.html">W2-04b: Outlook → HERO Rewrite, Make-Szenario-Mockup</a></li>
+</ul></div>
+</nav>
+<header class="header">
+  <div class="header-left">
+    <button class="hamburger" onclick="toggleSidebar()">☰</button>
+    <div class="header-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="28" height="28"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></span></div>
+    <div class="header-title"><h1>Wärme Wimmer</h1><p>Hero-Automatisierungen Dokumentation</p></div>
+  </div>
+  <div class="header-right">
+    <span class="badge badge-green"><span class="badge-dot"></span>9/10 live</span>
+    <button class="theme-btn" onclick="toggleTheme()"><span id="theme-icon">&#9790;</span> Theme</button>
+  </div>
+</header>
+<div class="page-layout">
+  <main class="main">
+    <h1>Meetings — Hero-Automatisierungen</h1>
+    <blockquote>
+<p><em>Stand 2026-05-03 · 10 Meetings konsolidiert · jede Section enthaelt Outcome + Entscheidungen + Notizen-Toggle</em></p>
+</blockquote>
+<p>Diese Seite ersetzt die fruehere <code>Pre-Meeting-Fragen</code>-Liste: was offen war, ist hier in der jeweiligen Meeting-Section unter "Was hier entschieden wurde" festgehalten.</p>
+<h2 id="chronologie">Chronologie</h2>
+<table>
+<thead>
+<tr>
+<th>Datum</th>
+<th>Meeting</th>
+<th>Outcome</th>
+<th>Springen</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-04-08</td>
+<td>Onboarding-Meeting</td>
+<td>Scope + Zugaenge geklaert</td>
+<td><a href="#m-04-08">#m-04-08</a></td>
+</tr>
+<tr>
+<td>2026-04-09</td>
+<td>Hero-Handover-Meeting (Raphael + Michael)</td>
+<td>Timeline locked: Hero schaltet 24.04 ab, Go-Liv...</td>
+<td><a href="#m-04-09">#m-04-09</a></td>
+</tr>
+<tr>
+<td>2026-04-15</td>
+<td>Aufplanungs-Meeting (Workstream 2 Kickoff)</td>
+<td>W2-Architektur + Make-Tier festgelegt</td>
+<td><a href="#m-04-15">#m-04-15</a></td>
+</tr>
+<tr>
+<td>2026-04-17</td>
+<td>Live-Walkthrough mit Raphael</td>
+<td>Walkthrough produktiv; Lastenheft-Anforderungen...</td>
+<td><a href="#m-04-17">#m-04-17</a></td>
+</tr>
+<tr>
+<td>2026-04-21</td>
+<td>Hero-Token-Meeting + Wimmer-Assistent-Setup</td>
+<td>Hero-API-Auth final geklaert; Sammelbearbeiter-...</td>
+<td><a href="#m-04-21">#m-04-21</a></td>
+</tr>
+<tr>
+<td>2026-04-22</td>
+<td>Mittwochs-Prep (Pre-Migration)</td>
+<td>Letzte Blocker vor Freitag geraeumt</td>
+<td><a href="#m-04-22">#m-04-22</a></td>
+</tr>
+<tr>
+<td>2026-04-24</td>
+<td>Hero-Handover-Meeting mit Michael (final)</td>
+<td>Wichtigstes Meeting: Mythen geklaert, Schedule-...</td>
+<td><a href="#m-04-24">#m-04-24</a></td>
+</tr>
+<tr>
+<td>2026-04-25</td>
+<td>Joint-Test mit Raphael (Pre-Go-Live)</td>
+<td>9/10 Szenarien als Go-Live-ready verifiziert</td>
+<td><a href="#m-04-25">#m-04-25</a></td>
+</tr>
+<tr>
+<td>2026-04-27</td>
+<td>Irina-Call (Post-Go-Live Alignment)</td>
+<td>Action-Items fuer Doku + n8n-Migration abgestimmt</td>
+<td><a href="#m-04-27">#m-04-27</a></td>
+</tr>
+<tr>
+<td>2026-04-30</td>
+<td>Leonard-Call (n8n-Strategie)</td>
+<td>n8n-Test-Instanz live; Lizenz + OS-Neo-Strategi...</td>
+<td><a href="#m-04-30">#m-04-30</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="decision-log-thematisch">Decision-Log (thematisch)</h2>
+<ul>
+<li><strong>Make-Tier:</strong> Core 10K + Auto-Buy aktiv (statt Pro 80K) (<a href="#m-04-15">Meeting</a>)</li>
+<li><strong>Hero-API-Auth:</strong> Dedizierter System-User <code>Wimmer Assistent</code> (ID 316312); Token in .env (<a href="#m-04-21">Meeting</a>)</li>
+<li><strong>Sammelbearbeiter:</strong> User-ID 270612 ist NICHT Sabine; Shared-Inbox-User. Intentional static. (<a href="#m-04-21">Meeting</a>)</li>
+<li><strong>OpenAI:</strong> gpt-4o-mini -&gt; gpt-5-mini (Kosten-gleich, schneller) (<a href="#m-04-24">Meeting</a>)</li>
+<li><strong>W2-04 Rewrite:</strong> Mailgun + S3 Architektur; Implementierung Phase 2 (post-Go-Live) (<a href="#m-04-15">Meeting</a>)</li>
+<li><strong>Hero Custom-App:</strong> Wird NICHT freigegeben. Nur W2-01 Custom-Webhook, sonst public App. (<a href="#m-04-24">Meeting</a>)</li>
+<li><strong>W2-05 Bug:</strong> Hero-Webhook-Event-Selection wird beim JSON-Export nicht uebertragen. Fix Hero-UI-seitig. (<a href="#m-04-24">Meeting</a>)</li>
+<li><strong>Schedule-Intervalle:</strong> W2-04 Mo-Fr 05-22:30 / W2-08 Mo-Fr 7h / W2-09+W2-10 daily 06:00 / W2-07 daily 05:00 (<a href="#m-04-24">Meeting</a>)</li>
+<li><strong>W2-10:</strong> Deferred zur n8n-Migration (Hero-API 50-Result-Pagination-Limit) (<a href="#m-04-25">Meeting</a>)</li>
+<li><strong>Outlook-Speicher:</strong> 50 -&gt; 500 GB Upgrade post-Go-Live; Geloeschte-Elemente Quick-Win 31% Speicher-Rueckgewinn (<a href="#m-04-24">Meeting</a>)</li>
+<li><strong>n8n-Migration:</strong> Auf Leonards Hetzner-Self-Hosted; Lizenz-Frage offen (Cloud Starter $20/mo Alternative) (<a href="#m-04-30">Meeting</a>)</li>
+<li><strong>OS-Neo-Strategie:</strong> WW-eigenes OS-Neo soll Hero langfristig abloesen (Leonards Hinweis) (<a href="#m-04-30">Meeting</a>)</li>
+</ul>
+<hr />
+<h2 id="2026-04-08-onboarding-meeting">2026-04-08 — Onboarding-Meeting</h2>
+<p><strong>Kanal · Dauer:</strong> Teams · 37 Min<br />
+<strong>Teilnehmer:</strong> Irina Dragunow, Raphael Woltz, Nicolas Neumann<br />
+<strong>Outcome:</strong> Scope + Zugaenge geklaert</p>
+<h3 id="was-hier-entschieden-wurde">Was hier entschieden wurde</h3>
+<ul>
+<li>Migration ist Zapier -&gt; Make (nicht Make -&gt; Make).</li>
+<li>Zweiter Workstream: Hero-E-Mail-Automatisierung uebernehmen.</li>
+<li>5 aktive Zapier-Szenarien identifiziert (Alarme, WP-Check, Rechnungsstellung, Qualifizierung, Messeformular).</li>
+<li>Make-/Zapier-Zugang erteilt; Jotform-Zugang ausstehend.</li>
+<li>Kommunikation: Upwork wird durch E-Mail + WhatsApp-Gruppe abgeloest.</li>
+<li>Kapazitaet 20 Std/Woche, flexibel.</li>
+</ul>
+<details>
+<summary>Notizen aus Meeting-File (zum Aufklappen)</summary>
+
+- **Datum:** 2026-04-08, ca. 37 Min
+- **Plattform:** Microsoft Teams
+- **Teilnehmer:** Irina Dragunow (PM), Raphael Woltz (kaufm. Leitung), Nicolas Neumann
+
+## Zusammenfassung
+
+Raphael gab einen Ueberblick ueber die bestehende Automatisierungslandschaft. Die bisherigen Automatisierungen liegen auf **Zapier** (von Raphael selbst gebaut), nicht auf Make.com wie angenommen. Grund fuer den Wechsel zu Make: Hero Software (CRM) hat nur eine native Make-Anbindung, keine Zapier-Integration.
+
+Zusaetzlich gibt es eine **E-Mail-Automatisierung auf Make.com**, die vom internen Hero-Entwicklerteam gebaut wurde. Diese ist 6x ausgefallen (u.a. OpenAI-Guthaben abgelaufen, Outlook-Polling-Volumen gesprengt). Warme Wimmer uebernimmt diese jetzt selbst.
+
+## Zapier-Szenario-Inventar (Walkthrough ~23:56)
+
+### Aktiv (zu migrieren)
+
+1. **Speichert neue Alarme** -- Notdienstsystem, Webhook rein, in Zapier-Tabelle speichern
+2. **WP Check (Waermepumpencheck), neuer Lead** -- Jotform auf Website, ausgehender Webhook + 2 SMTP-E-Mails
+3. **Automatische Rechnungsstellung** -- Jotform-basiert, komplexer, noch aktiv
+4. **Qualifizierungsformular, neuer Lead** -- Jotform, nur ausgehender Webhook
+5. **Messeformular, neuer Lead** -- Jotform, Webhook + verzweigte E-Mails mit verschiedenen Anhaengen (PV, Waermepumpe, Klima-Kombinationen). Raphael: "Das kann man sicherlich besser loesen." Nur eine Variable unterschiedlich pro Pfad, dynamisch generierbar.
+
+### Deaktiviert / nicht mehr existent
+
+- Neue WhatsApp Nachricht -- deaktiviert
+- SSD Automatisierung -- nicht mehr existent
+- Antworten auf WhatsApp -- nicht mehr existent
+
+## Entscheidungen
+
+1. **Erster Auftrag:** Zapier-Szenarien auf Make umziehen. Vorbereitung kann sofort starten.
+2. **Finaler Umzug:** In einem gemeinsamen Call mit Raphael (Durchtesten).
+3. **Hero-E-Mail-Automatisierung:** Briefing naechste Woche, nachdem Hero-Meeting (2026-04-09) stattgefunden hat.
+4. **Kommunikation:** Weg von Upwork, hin zu E-Mail + WhatsApp-Gruppe (Sabine, Raphael, Irina, Nicolas).
+5. **Make bestaetigt** als Zielplattform. Raphael offen fuer andere Tools bei hoher Komplexitaet ("Python Script auf Windows Server" erwaehnt).
+6. **Kapazitaet:** 20 Std/Woche bestaetigt, flexibel nach oben.
+
+## Zugaenge
+
+| System | Status |
+|--------|--------|
+| Make.com | Einladung erhalten, Account erstellt, Waermewimmer-Ordner sichtbar |
+| Zapier | Zugang erhalten, Waermewimmer-Ordner sichtbar |
+| Teams | Funktioniert (Onboarding-Meeting) |
+| Jotform | Ausstehend -- Raphael muss einrichten |
+
+## Offene Punkte
+
+- Jotform-Zugang (Raphael)
+- Hero-Meeting Ergebnisse abwarten (2026-04-09)
+- Hero-E-Mail-Briefing naechste Woche
+- WhatsApp-Nummer an Irina schicken
+- Ausgehender Webhook: "Hack" von Raphael, koennte bei Cross-Site-Schutz brechen
+
+## Personen-Details
+
+- **Raphael Woltz:** Kaufmaennische Leitung. Technisch versiert, hat die Zapier-Automations selbst gebaut. Macht Entscheidungen zu Plattform und Architektur. Offen fuer Vorschlaege.
+- **Irina Dragunow:** PM fuer Softwareentwicklung. Kein Background in Make/Automatisierung. BWL-Studium, Airbus/BMW Prozessoptimierung, Marketing, Freelancing, seit 6 Monaten bei WW. Machine-Learning-Kurs gemacht um technische Themen zu verstehen.
+- **Sabine ("die Biene"):** Wird in WhatsApp-Gruppe aufgenommen. Rolle TBD.
+- **Leonhard:** IT/Sysadmin (von Irina erwaehnt: "dem Leonhard Bescheid geben").
+
+## Zukuenftige Arbeit (erwaehnt)
+
+- **LexOffice Controlling:** "Monster-Projekt" -- Kostenstellen-Auswertung, evtl. Make + Notion. Raphael kennt LexOffice gut.
+- **Laufende Automatisierungsaenderungen:** "Die aendern sich im laufenden Geschaeft permanent."
+
+</details>
+
+<hr />
+<h2 id="2026-04-09-hero-handover-meeting-raphael-michael">2026-04-09 — Hero-Handover-Meeting (Raphael + Michael)</h2>
+<p><strong>Kanal · Dauer:</strong> Teams (ohne Nico) · ?<br />
+<strong>Teilnehmer:</strong> Raphael Woltz, Michael Klaus (Hero) — Nico nicht dabei<br />
+<strong>Outcome:</strong> Timeline locked: Hero schaltet 24.04 ab, Go-Live 28.04</p>
+<h3 id="was-hier-entschieden-wurde_1">Was hier entschieden wurde</h3>
+<ul>
+<li>Hero-API-Token: Raphael generiert per Self-Service.</li>
+<li>Uebergabe-Zeitplan: Hero schaltet Do 2026-04-24 Feierabend ab; Wochenende Joint-Test; Mo 2026-04-28 Go-Live.</li>
+<li>Support nach Uebergabe: kein offizieller Hero-Support; nur Hero-Support-Email.</li>
+<li>TinyURL-Workaround entfaellt (Subdomain-Bug behoben).</li>
+<li>E-Mail-Szenario muss komplett neu aufgebaut werden (Mailgun-Rewrite, Phase 2).</li>
+<li>Hero-JSONs werden per E-Mail an Nico uebermittelt.</li>
+</ul>
+<hr />
+<h2 id="2026-04-15-aufplanungs-meeting-workstream-2-kickoff">2026-04-15 — Aufplanungs-Meeting (Workstream 2 Kickoff)</h2>
+<p><strong>Kanal · Dauer:</strong> Teams · 47 Min<br />
+<strong>Teilnehmer:</strong> Raphael Woltz, Irina Dragunow, Nicolas Neumann<br />
+<strong>Outcome:</strong> W2-Architektur + Make-Tier festgelegt</p>
+<h3 id="was-hier-entschieden-wurde_2">Was hier entschieden wurde</h3>
+<ul>
+<li>Make-Abo: Core 10K aktiviert (Pro 80K abgelehnt; Auto-Buy als Puffer).</li>
+<li>W2-04-Rewrite: Mailgun + S3 Architektur bestaetigt; Implementation NACH Go-Live (Phase 2).</li>
+<li>Test-Strategie: Tests gegen Produktion mit Test-Konvention (Fibi Muster, Test--Prefix, archivieren).</li>
+<li>Hero-App-Variante 'internal' ist installiert in Team 1421610 (Annahme korrigiert).</li>
+</ul>
+<hr />
+<h2 id="2026-04-17-live-walkthrough-mit-raphael">2026-04-17 — Live-Walkthrough mit Raphael</h2>
+<p><strong>Kanal · Dauer:</strong> Teams · 90 Min<br />
+<strong>Teilnehmer:</strong> Raphael Woltz, Nicolas Neumann<br />
+<strong>Outcome:</strong> Walkthrough produktiv; Lastenheft-Anforderungen verschaerft</p>
+<h3 id="was-hier-entschieden-wurde_3">Was hier entschieden wurde</h3>
+<ul>
+<li>Walkthrough-Script erfolgreich gelaufen (Rechnungsstellung-Demo).</li>
+<li>Best-Practices-Cross-Reference als Diskussionsbasis akzeptiert.</li>
+<li>5 Go-Live-MUSS-Fixes priorisiert (Break-Handler, Dedup-Store, Failure-Alert, Webhook-Secret, Make-Tier).</li>
+<li>Irina-Forderung: Lastenhefte muessen mit Make-Screenshots unterfuettert werden, kein Fliesstext.</li>
+</ul>
+<hr />
+<h2 id="2026-04-21-hero-token-meeting-wimmer-assistent-setup">2026-04-21 — Hero-Token-Meeting + Wimmer-Assistent-Setup</h2>
+<p><strong>Kanal · Dauer:</strong> Teams · ?<br />
+<strong>Teilnehmer:</strong> Raphael Woltz, Nicolas Neumann<br />
+<strong>Outcome:</strong> Hero-API-Auth final geklaert; Sammelbearbeiter-Frage gelaeutert</p>
+<h3 id="was-hier-entschieden-wurde_4">Was hier entschieden wurde</h3>
+<ul>
+<li>Hero-API-Token via dediziertem System-User 'Wimmer Assistent' (ID 316312); Token in .env.</li>
+<li>Sammelbearbeiter (User-ID 270612) ist NICHT Sabine; Shared-Inbox-User. Sabines echter User: 255797.</li>
+<li>Hero-UI-Login fuer Nicolas: Produktivzugang erteilt, Passwort geaendert.</li>
+<li>Test-Instanz wird verworfen (ID-Mismatch); Tests laufen gegen Produktion mit Konvention.</li>
+<li>Separate Sabine-Token nicht noetig; Wimmer-Assistent-Token reicht.</li>
+<li>W2-04-Rewrite (Mailgun) bleibt Phase 2; IST-Zustand wird Freitag uebernommen.</li>
+</ul>
+<hr />
+<h2 id="2026-04-22-mittwochs-prep-pre-migration">2026-04-22 — Mittwochs-Prep (Pre-Migration)</h2>
+<p><strong>Kanal · Dauer:</strong> Teams · ?<br />
+<strong>Teilnehmer:</strong> Raphael Woltz, Nicolas Neumann<br />
+<strong>Outcome:</strong> Letzte Blocker vor Freitag geraeumt</p>
+<h3 id="was-hier-entschieden-wurde_5">Was hier entschieden wurde</h3>
+<ul>
+<li>OpenAI-Key: bestehender Hero-Vertrag-Key bleibt aktiv im Uebergang; eigener WW-Key spaeter (Phase 2).</li>
+<li>Postfach hero.automation@waerme-wimmer.de existiert; OAuth-Consent-Plan fuer Freitag.</li>
+<li>Wimmer-Assistent-Token-Smoke-Tests: Tasks-Mutation + Document-Upload bestanden.</li>
+</ul>
+<hr />
+<h2 id="2026-04-24-hero-handover-meeting-mit-michael-final">2026-04-24 — Hero-Handover-Meeting mit Michael (final)</h2>
+<p><strong>Kanal · Dauer:</strong> Teams · 94 Min<br />
+<strong>Teilnehmer:</strong> Nicolas Neumann, Irina Dragunow, Michael Klaus (Hero)<br />
+<strong>Outcome:</strong> Wichtigstes Meeting: Mythen geklaert, Schedule-Intervalle uebergeben</p>
+<h3 id="was-hier-entschieden-wurde_6">Was hier entschieden wurde</h3>
+<ul>
+<li>OpenAI-Modell-Swap: gpt-4o-mini -&gt; gpt-5-mini (Kosten-gleich, besser, schneller).</li>
+<li>W2-04 Cleanup: 3x Delete-E-Mail-Routen deaktivieren; Gmail-Fallback (Modul 43) entfernen; OpenAI-Modell-Swap; TinyURL-Modul 26 entfernen.</li>
+<li>Hero Custom-App wird NICHT freigegeben (final). Nur W2-01 Custom-Webhook, sonst public App.</li>
+<li>Schedule-Intervalle (verbal): W2-04 Mo-Fr 05:00-22:30 alle 15 min; W2-08 Mo-Fr 7h 05:00-19:00; W2-09 daily 06:00; W2-10 daily 06:00; W2-07 daily 05:00.</li>
+<li>6x W2-04-Ausfaelle: Root-Cause = Outlook-Postfach voll (50 GB vs GoBD 10y). Silent hang. Mitigation: 50 -&gt; 500 GB Upgrade.</li>
+<li>Calendar-Invite-Loop: Regex zu lax -&gt; Michael hat verschaerft, Loop nicht mehr aktiv.</li>
+<li>W2-05 'fehlender Filter': Misdiagnose. Echte Ursache = Hero-Webhook-Event-Selection wird beim JSON-Export nicht uebertragen. Fix Hero-UI-seitig.</li>
+<li>Sammelbearbeiter (270612) und hardcoded Status-IDs: intentional static per Sabines Spec. Keine Dynamisierung.</li>
+<li>Hero-Document-Type-IDs (1094611, 688384, 952733, etc.) per Hero-UI verifiziert.</li>
+<li>n8n-Migration ermutigt: 'fuer die Situation, in der ihr euch befindet, ist es eigentlich sogar das Beste'.</li>
+</ul>
+<details>
+<summary>Notizen aus Meeting-File (zum Aufklappen)</summary>
+
+---
+client: warme-wimmer
+date: 2026-04-24
+duration: ~90 min (07:39-09:13 CEST)
+meeting_type: Hero-Handover
+attendees: [Nicolas Neumann, Irina Dragunow, Michael Klaus (Hero)]
+transcript_source: Fireflies "20260423_Client_Wärme-Wimmer_Hero-Touchbase-57efba1c-880c"
+purpose: Final Michael-handover before Hero shuts off the 10 Make-scenarios at Feierabend
+---
+
+# Hero-Handover Meeting — Michael Klaus
+
+## Follow-up Call
+
+- **Heute 15:30 CEST** kurzer Call mit Michael für finalen Shutdown.
+- Michael erreichbar per E-Mail 13:00-16:00, hat 16:00-17:00 anderen Termin.
+- Notfall-Fallback: **Mo 2026-04-27 11:00** mit Michael falls heute nicht klappt.
+- Irina nicht im 15:30-Call. WhatsApp-Status-Updates vor/nach Shutdown an sie.
+
+## Decisions bestätigt
+
+1. **OpenAI-Modell-Upgrade GO** — `gpt-4o-mini` → `gpt-5-mini` (oder äquivalent). Kosten-gleich, besser + bisschen schneller. Raphaels Empfehlung = Michaels Empfehlung.
+2. **W2-04 Delete-E-Mail-Routen SOFORT deaktivieren.** Michael hat bei sich die letzten Tage alle 3 Delete-Routen deaktiviert (GoBD-Konflikt). Funktionieren nicht mehr. Wir übernehmen den deaktivierten Zustand.
+3. **Gmail-Node in W2-04 kann komplett raus** — war nur für Michaels eigene Fehler-Mails. Nicht ersetzt durch Outlook, sondern entfernt.
+4. **Hero Custom-App bleibt Hero-intern** — nur W2-01 Aufgaben-Trigger braucht Custom-Webhook. Alle anderen laufen auf public schwarzer App.
+5. **Hardcoded IDs bewusst** — Status-/Pipeline-/Doc-Type-IDs hart-codiert weil Namen sich ändern können, IDs nicht. Rechnung-Filter in W2-03 nutzt Typ-NAME (Schwachstelle falls umbenannt).
+6. **Intervalle nach Import prüfen** — Make-JSON-Export überträgt Scheduling nicht sauber. Michael gab Werte durch (siehe unten).
+
+## Confirmed intervals (Michael's live-values, Make-JSON-Drift)
+
+| Szenario | Intervall | Advanced Scheduling |
+|---|---|---|
+| W2-04 Outlook → Hero | 15 min | 05:00-22:30, Mo-Fr (Nicolas aktuell auf Test-Mode) |
+| W2-07 Rechnungen bezahlt | täglich | 05:00 (per PDF — Michael hat's nicht live gezeigt, verifizieren) |
+| W2-08 Regiebericht fehlt | alle **420 min (7h)** | 05:00-19:00, Mo-Fr |
+| W2-09 Überfällige Aufgaben | täglich | 06:00, ohne Advanced Settings |
+| W2-10 Zahlung erhalten | täglich | **06:00** (Nicolas hatte **10:00** importiert — DRIFT, fixen) |
+
+## Mythen geklärt (rote Fahnen vom Handover)
+
+### Die 6x W2-04 Ausfälle
+**Root cause:** Outlook-Postfach voll (50GB-Limit vs. GoBD-Pflicht 10 Jahre Retention). Weitergeleitete Mails landen im "Gesendet"-Ordner → wenn voll, kann Outlook keine Weiterleitung mehr rausschicken → Chain stoppt, **ohne Fehler**. Kein Mail-Verlust (nur Zeitverzug fürs Team).
+
+**Mitigation Phase 1:** Outlook-Speicher auf 500GB upgraden → kauft "ein paar Jahre".
+**Mitigation Phase 2:** Mailgun-Rewrite mit S3-Archival — langfristige Lösung, entkoppelt vom Outlook-Limit.
+
+### Calendar-Invite-Loop
+**Root cause:** Regex am Szenario-Anfang war zu lax — projektnummer-ähnliche Zahlen in Kalender-Einladungen matchten, Szenario loopte. Michael hat den Regex später verschärft. **Nicht mehr aktiv.** Falls es wieder aufträte, würde Michael's Hero-Team-Ops-Limit-Alert es sofort fangen — passiert nicht mehr seit dem Fix.
+
+### W2-05 "Filter fehlt"
+**Nicolas-Misdiagnose, Michael-Klärung:** Der scheinbar fehlende Filter ist kein Make-Filter, sondern die **Event-Auswahl bei Hero-Webhook-Registrierung**. Beim `hero-software:WatchProjects`-Trigger wählt man in der Webhook-Konfiguration "Projekt erstellt" vs. "Projektstatus-Änderung" etc. JSON-Export überträgt diese Event-Selection nicht. **Fix: Webhook in Hero neu registrieren mit korrektem Event**, kein Make-Filter hinzufügen.
+
+### Polling vs. Subscription (die "Half-L"-Frage)
+Michael: "Nativ unterstützt das Outlook einfach nicht, nicht in Make." Also keine Graph-Subscription-Module in Make. Empfehlung: Outlook-Weiterleitung → Mailgun. Bestätigt was Raphael 2026-04-15 schon beschlossen hat.
+
+### Sammelbearbeiter 270612 / hardcoded User-IDs
+**Intentional static design.** Sabine's Spec: wenn X dann genau diese ID. Keine Dynamisierung geplant.
+
+## Action Items — Nicolas, vor 15:30
+
+**Blockers für Shutdown:**
+
+1. **Scheduling-Drift fixen** in allen Szenarien → Werte aus Tabelle oben eintragen. W2-10 ist der klare Fix (10:00 → 06:00).
+2. **W2-04 Delete-Routen deaktivieren** — 3 Stellen (vor Sleep, rechtsklick Route → deactivate). Weiterleiten-Route NICHT deaktivieren.
+3. **W2-04 Gmail-Node entfernen.**
+4. **W2-05 Webhook** in Hero → Firmeneinstellungen → Schnittstelle neu registrieren mit Event "Projekt erstellt" (nur — nicht Projektstatus-Änderung).
+5. **W2-01 Webhook-Payload** — Aufgabe in Hero manuell erledigen (Test-Kunde) → Payload landet in Make-Webhook-Queue → Trigger-Modul → Variablen-Pfade neu mappen in allen Downstream-Filtern. Temporär `1=2`-Pseudo-Filter vorne einfügen um produktive Ausführung zu verhindern während du mappst.
+6. **Connection-Durchklick** an allen 10 Szenarien — jedes Hero-Modul aufklappen, Connection "HERO Wimmer Assistent Production" zuweisen.
+7. **Test-Run pro Szenario** im Produktivsystem mit Test-Konvention (Fibi-Muster / "Test-"-Prefix, Projekt nach Test archivieren). Pro Raphaels 2026-04-22-Teams-Video.
+8. **OpenAI-Modell swap** `gpt-4o-mini` → `gpt-5-mini` in W2-04 Modul 21.
+
+**Comms:**
+
+- **Status-Ping an Irina** ca. 1h vor 15:30 (ihre Bitte) via WhatsApp.
+- **15:30 Call mit Michael** — Shutdown durchsprechen.
+- **Nach Shutdown:** Einmal komplett durchtesten, bevor du "live" meldest. Druck raus nehmen für den Samstag-Termin mit Raphael — dort nur Ergebnisse zeigen, kein Live-Debugging.
+- **Irina nach Shutdown:** kurzer Status via WhatsApp.
+- **Feierabend-Update:** Sprachnachricht an Irina mit Details was behoben wurde.
+
+## Open items post-Go-Live (nicht heute)
+
+- **Outlook-Speicher-Upgrade** 50 → 500GB (Raphael-Decision) bis Mailgun-Rewrite.
+- **Mailgun-Rewrite W2-04** (post-Go-Live).
+- **n8n-Migration** aller 10 Szenarien (Michael ermutigt, Hero hat kein n8n-App → alles per GraphQL). Leonhards Hetzner-Cluster, ~1.5 Wochen.
+- **Rechnung-Filter W2-03** auf Doc-Type-ID statt Name umbauen (Michael flaggte als Schwachstelle).
+- **Make-Abo-Upgrade** — Auto-Credit-Purchasing aktuell an; Nicolas daily monitoren, wöchentlicher Report an Raphael+Irina.
+
+## Key Quotes (für Retro / Kontext)
+
+- Michael zu Outlook-Szenario-Design: "Das war halt auch der Part, wo ich eigentlich gesagt habe, das will ich nicht für euch umsetzen, aber dann hieß es doch, doch und meine Chefs haben auch gesagt, wir machen das."
+- Michael zum Handover-Präzedenz: "Die Übergabe ist auch mein erstes Mal, weil das ist definitiv kein Standard. Wir wollen ja eigentlich unsere Kunden selber verwalten."
+- Michael zu n8n-Migration: "Für die Situation, in der ihr euch befindet, ist es eigentlich sogar das Beste, was man machen könnte."
+- Michael zu Kompetenz-Level: "Das ist nicht vergleichbar mit der Situation, wie wir sie jetzt haben. Ihr habt den Nikolas, der hat Ahnung."
+- Irina (nach Meeting): "Problem Solving Live ... das sieht nicht professionell aus." Für Samstag mit Raphael: nur Ergebnisse zeigen, keine Live-Iteration.
+
+## Handover-Support post-Shutdown
+
+- Michael offiziell **nicht mehr der Ansprechpartner** ab heute. Fallback = generisches Hero-Support.
+- Montag 11:00 als Backup-Slot falls Shutdown heute scheitert (Platzhalter, nicht geplant zu nutzen).
+
+## Transkript-Referenz
+
+Fireflies-Aufnahme "20260423_Client_Wärme-Wimmer_Hero-Touchbase-57efba1c-880c". Video via Teams-Chat mit Irina (noch nicht heruntergeladen — Berechtigungs-Flow unklar, Notaker-Bot war eh dabei).
+
+</details>
+
+<hr />
+<h2 id="2026-04-25-joint-test-mit-raphael-pre-go-live">2026-04-25 — Joint-Test mit Raphael (Pre-Go-Live)</h2>
+<p><strong>Kanal · Dauer:</strong> Teams · 120 Min<br />
+<strong>Teilnehmer:</strong> Raphael Woltz, Nicolas Neumann (Irina nicht dabei)<br />
+<strong>Outcome:</strong> 9/10 Szenarien als Go-Live-ready verifiziert</p>
+<h3 id="was-hier-entschieden-wurde_7">Was hier entschieden wurde</h3>
+<ul>
+<li>9/10 Szenarien als funktional verifiziert (W2-01 bis W2-09).</li>
+<li>W2-10 deferred zur n8n-Migration: 50-Result-Hero-Pagination-Limit, hat seit Hero-Zeiten nie funktioniert.</li>
+<li>Live-Fix W2-03: Filter-Rule <code>_trigger = document:created</code> entfernt (unsatisfiable in public Hero-App).</li>
+<li>Live-Fix W2-04: Hero-Automation-Filter raus (redundant zu Outlook-Server-Regel).</li>
+<li>Mehrfach-Bug-Befund: leere Test-Router in W2-01, Material-bestellt-Filter-Mismatch (Imperativ vs. Partizip).</li>
+</ul>
+<hr />
+<h2 id="2026-04-27-irina-call-post-go-live-alignment">2026-04-27 — Irina-Call (Post-Go-Live Alignment)</h2>
+<p><strong>Kanal · Dauer:</strong> Teams · 40 Min<br />
+<strong>Teilnehmer:</strong> Irina Dragunow, Nicolas Neumann<br />
+<strong>Outcome:</strong> Action-Items fuer Doku + n8n-Migration abgestimmt</p>
+<h3 id="was-hier-entschieden-wurde_8">Was hier entschieden wurde</h3>
+<ul>
+<li>Brasilien-Move-Decision: Nico bleibt unter Vorbehalt ($25/hr, n8n-Lernkurve bezahlt).</li>
+<li>n8n-Migrations-Timeline: nach Leonard-Setup, Self-Hosted vs Cloud Starter offen.</li>
+<li>Storage-Snapshot Outlook hero.automation@: 42% / 21,12 GB; 15,47 GB Altlast in Geloeschte Elemente.</li>
+<li>Flowchart-Deadline: Dienstag 2026-05-05.</li>
+</ul>
+<hr />
+<h2 id="2026-04-30-leonard-call-n8n-strategie">2026-04-30 — Leonard-Call (n8n-Strategie)</h2>
+<p><strong>Kanal · Dauer:</strong> Teams · 120 Min<br />
+<strong>Teilnehmer:</strong> Leonard, Nicolas Neumann<br />
+<strong>Outcome:</strong> n8n-Test-Instanz live; Lizenz + OS-Neo-Strategie offen</p>
+<h3 id="was-hier-entschieden-wurde_9">Was hier entschieden wurde</h3>
+<ul>
+<li>n8n-Test-Instanz auf Hetzner-VM aufgesetzt.</li>
+<li>Self-Hosted Community erlaubt nur 1 User; gemeinsamer Login oder Cloud Starter ($20/Monat) als Alternativen.</li>
+<li>Server-Redundanz: kein automatisches Failover; manuelle VM-Migration (~20 Min Downtime) reicht.</li>
+<li>Strategischer Hinweis: WW-eigenes OS-Neo-CRM soll Hero langfristig komplett abloesen.</li>
+<li>W2-05 Osneo-URL-Bug entdeckt (Hero-Projekt-ID statt Dokument-ID, plus fehlendes /download).</li>
+<li>W1-Zapier-Migration wird in n8n neu gebaut (LexOffice/GMaps/Placetel/Jotform).</li>
+</ul>
+<hr />
+  </main>
+  <footer class="footer">Quelle: <code>workspace/clients/warme-wimmer/</code> · Build M-meetings.md · UnpauseAI</footer>
+</div>
+<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
+  <div style="text-align:center;max-width:360px;padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span></div>
+    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Wärme Wimmer Documentation</h2>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Bitte Zugangscode eingeben.</p>
+    <div style="display:flex;gap:8px;">
+      <input id="auth-input" type="password" placeholder="Zugangscode" autocomplete="off" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;" onkeydown="if(event.key==='Enter')checkAuth()" />
+      <button onclick="checkAuth()" style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">OK</button>
+    </div>
+    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Falscher Code, bitte erneut versuchen.</p>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:document.documentElement.getAttribute('data-theme')==='dark'?'dark':'default',securityLevel:'loose'});</script>
+<script>
+var WIMMER_CODE='wimmer2026';
+function checkAuth(){var inp=document.getElementById('auth-input').value;if(inp===WIMMER_CODE){localStorage.setItem('wimmer-docs-access','granted');var g=document.getElementById('auth-gate');g.style.opacity='0';setTimeout(function(){g.style.display='none'},300)}else{document.getElementById('auth-error').style.display='block';document.getElementById('auth-input').value='';document.getElementById('auth-input').focus()}}
+(function(){if(localStorage.getItem('wimmer-docs-access')==='granted'){var g=document.getElementById('auth-gate');if(g)g.style.display='none'}else{var inp=document.getElementById('auth-input');if(inp)inp.focus()}})();
+function toggleTheme(){var h=document.documentElement;var c=h.getAttribute('data-theme');var n=c==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('wimmer-docs-theme',n);var i=document.getElementById('theme-icon');if(i)i.innerHTML=n==='dark'?'&#9788;':'&#9790;'}
+var saved=localStorage.getItem('wimmer-docs-theme');
+if(saved){document.documentElement.setAttribute('data-theme',saved);var i=document.getElementById('theme-icon');if(i&&saved==='dark')i.innerHTML='&#9788;'}
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('sidebarBackdrop').classList.toggle('active')}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('sidebarBackdrop').classList.remove('active')}
+</script>
+</body>
+</html>

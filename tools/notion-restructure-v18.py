@@ -1,0 +1,645 @@
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
+"""v18 restructure with audit fixes:
+
+1. Consolidate 10 separate meeting pages into ONE page (M-meetings.md).
+   Each meeting = H2 section with summary up top + collapsible <details> for raw notes.
+2. Fix whitespace bloat: no blank lines inside markdown tables (Notion parser was
+   silently dropping table rendering — confirmed via user screenshot of M-00).
+3. Fix R-00 intra-zip links: old `01-aufgabe-erledigt.md` -> new `S-01-aufgabe-erledigt.md`.
+4. Remove R-00 link to excluded `13-pre-meeting-fragen.md`.
+5. Fix R-w2-04-* navigation pointers (Seite 04 / 04b -> R-w2-04-*).
+6. Compress 4-line banner on detail pages to a 1-line status note.
+7. Strip duplicate `## Flow-Diagramm` block from S-01..S-10 (Sabine + Audit blocks
+   from earlier sweep already cover this; the original was kept for safety).
+8. Mark R-00 Klaus-PDF-Drift section as resolved (links to consolidated meeting page).
+"""
+from __future__ import annotations
+
+import io
+import re
+import sys
+import zipfile
+from datetime import date
+from pathlib import Path
+
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+
+WW = Path("workspace/clients/warme-wimmer")
+NDIR = WW / "context/hero-exports/notion-pages"
+SHOTS_DIR = WW / "context/hero-exports/screenshots"
+STORAGE_DIR = WW / "context/storage"
+CREDITS_DIR = WW / "context/credits"
+COMMS_LOG = WW / "context/comms-log.md"
+PLAN_FILE = Path.home() / ".claude" / "plans" / "waerme-wimmer-all-right-i-m-glimmering-turing.md"
+MEETING_NOTES_DIR = WW / "context/meeting-notes"
+OUT_DIR = WW / "context/hero-exports"
+TODAY = date.today().strftime("%Y-%m-%d")
+
+# Extra pages outside notion-pages/ source dir (logs).
+EXTRA_PAGES = {
+    WW / "context/maintenance/team-updates.md": "R-team-updates.md",
+}
+
+# Existing notion-pages files: rename via map, exclude unwanted ones
+RENAME_MAP = {
+    "00-uebersicht.md": "R-00-uebersicht.md",
+    "11-kosten-und-subscription.md": "R-kosten-und-subscription.md",
+    "12-cross-reference.md": "R-hero-ids-und-connections.md",
+    "14-hero-api-smoketest.md": "R-hero-api-smoketest.md",
+    "04a-outlook-hero-ist-analyse.md": "R-w2-04-rewrite-design-ist.md",
+    "04b-outlook-hero-rewrite-mockup.md": "R-w2-04-rewrite-design-mockup.md",
+    "01-aufgabe-erledigt.md": "S-01-aufgabe-erledigt.md",
+    "02-aufgaben-nach-statusaenderung.md": "S-02-aufgaben-nach-statuswechsel.md",
+    "03-dokument-erstellt-statuswechsel.md": "S-03-dokument-erstellt.md",
+    "04-outlook-hero-rewrite.md": "S-04-outlook-hero.md",
+    "05-projekt-erstellt.md": "S-05-projekt-erstellt.md",
+    "06-projekterinnerung.md": "S-06-projekterinnerung.md",
+    "07-rechnungen-bezahlt.md": "S-07-rechnungen-bezahlt.md",
+    "08-regiebericht-fehlt.md": "S-08-regiebericht-fehlt.md",
+    "09-ueberfaellige-aufgaben.md": "S-09-ueberfaellige-aufgaben.md",
+    "10-zahlung-erhalten.md": "S-10-zahlung-erhalten.md",
+}
+EXCLUDE = {"13-pre-meeting-fragen.md", "15-flowcharts-overview.md", "16-prozessdoku-klaus.md"}
+
+# Old banner block (4 lines) to be replaced with a 1-liner on detail pages
+OLD_BANNER_RE = re.compile(
+    r"<!-- POST-GO-LIVE-BANNER -->\s*\n\n> ## Post-Go-Live Status .*?<!-- /POST-GO-LIVE-BANNER -->\n*",
+    re.DOTALL,
+)
+ONE_LINE_BANNER = "> *Stand 2026-05-03 · 9/10 Hero-Szenarien live · W2-10 deferred zu n8n · Auto-Buy aktiv*\n\n"
+
+# Old sequential `01-...md` -> new `S-01-...md` link rewrites for R-00
+LINK_REWRITES = [
+    (r"\(\./?01-aufgabe-erledigt\.md\)", "(S-01-aufgabe-erledigt.md)"),
+    (r"\(\./?02-aufgaben-nach-status[äa]nderung\.md\)", "(S-02-aufgaben-nach-statuswechsel.md)"),
+    (r"\(\./?03-dokument-erstellt-statuswechsel\.md\)", "(S-03-dokument-erstellt.md)"),
+    (r"\(\./?04-outlook-hero-rewrite\.md\)", "(S-04-outlook-hero.md)"),
+    (r"\(\./?04a-outlook-hero-ist-analyse\.md\)", "(R-w2-04-rewrite-design-ist.md)"),
+    (r"\(\./?04b-outlook-hero-rewrite-mockup\.md\)", "(R-w2-04-rewrite-design-mockup.md)"),
+    (r"\(\./?05-projekt-erstellt\.md\)", "(S-05-projekt-erstellt.md)"),
+    (r"\(\./?06-projekterinnerung\.md\)", "(S-06-projekterinnerung.md)"),
+    (r"\(\./?07-rechnungen-bezahlt\.md\)", "(S-07-rechnungen-bezahlt.md)"),
+    (r"\(\./?08-regiebericht-fehlt\.md\)", "(S-08-regiebericht-fehlt.md)"),
+    (r"\(\./?09-(?:ueberfaellige|überfällige)-aufgaben\.md\)", "(S-09-ueberfaellige-aufgaben.md)"),
+    (r"\(\./?10-zahlung-erhalten\.md\)", "(S-10-zahlung-erhalten.md)"),
+    (r"\(\./?11-kosten-und-subscription\.md\)", "(R-kosten-und-subscription.md)"),
+    (r"\(\./?12-cross-reference\.md\)", "(R-hero-ids-und-connections.md)"),
+    (r"\(\./?14-hero-api-smoketest\.md\)", "(R-hero-api-smoketest.md)"),
+]
+
+
+# ============ Meetings (consolidated) ============
+
+MEETINGS = [
+    {"date": "2026-04-08", "anchor": "m-04-08",
+     "title": "Onboarding-Meeting", "channel": "Teams", "duration": "37 Min",
+     "attendees": "Irina Dragunow, Raphael Woltz, Nicolas Neumann",
+     "outcome": "Scope + Zugaenge geklaert",
+     "decisions": [
+        "Migration ist Zapier -> Make (nicht Make -> Make).",
+        "Zweiter Workstream: Hero-E-Mail-Automatisierung uebernehmen.",
+        "5 aktive Zapier-Szenarien identifiziert (Alarme, WP-Check, Rechnungsstellung, Qualifizierung, Messeformular).",
+        "Make-/Zapier-Zugang erteilt; Jotform-Zugang ausstehend.",
+        "Kommunikation: Upwork wird durch E-Mail + WhatsApp-Gruppe abgeloest.",
+        "Kapazitaet 20 Std/Woche, flexibel.",
+     ],
+     "notes_source": MEETING_NOTES_DIR / "2026-04-08-onboarding.md",
+    },
+    {"date": "2026-04-09", "anchor": "m-04-09",
+     "title": "Hero-Handover-Meeting (Raphael + Michael)", "channel": "Teams (ohne Nico)", "duration": "?",
+     "attendees": "Raphael Woltz, Michael Klaus (Hero) — Nico nicht dabei",
+     "outcome": "Timeline locked: Hero schaltet 24.04 ab, Go-Live 28.04",
+     "decisions": [
+        "Hero-API-Token: Raphael generiert per Self-Service.",
+        "Uebergabe-Zeitplan: Hero schaltet Do 2026-04-24 Feierabend ab; Wochenende Joint-Test; Mo 2026-04-28 Go-Live.",
+        "Support nach Uebergabe: kein offizieller Hero-Support; nur Hero-Support-Email.",
+        "TinyURL-Workaround entfaellt (Subdomain-Bug behoben).",
+        "E-Mail-Szenario muss komplett neu aufgebaut werden (Mailgun-Rewrite, Phase 2).",
+        "Hero-JSONs werden per E-Mail an Nico uebermittelt.",
+     ],
+     "notes_source": None,
+     "comms_keywords": ["hero handover", "handover-meeting", "hero/michael", "michael", "hero-jsons"],
+    },
+    {"date": "2026-04-15", "anchor": "m-04-15",
+     "title": "Aufplanungs-Meeting (Workstream 2 Kickoff)", "channel": "Teams", "duration": "47 Min",
+     "attendees": "Raphael Woltz, Irina Dragunow, Nicolas Neumann",
+     "outcome": "W2-Architektur + Make-Tier festgelegt",
+     "decisions": [
+        "Make-Abo: Core 10K aktiviert (Pro 80K abgelehnt; Auto-Buy als Puffer).",
+        "W2-04-Rewrite: Mailgun + S3 Architektur bestaetigt; Implementation NACH Go-Live (Phase 2).",
+        "Test-Strategie: Tests gegen Produktion mit Test-Konvention (Fibi Muster, Test--Prefix, archivieren).",
+        "Hero-App-Variante 'internal' ist installiert in Team 1421610 (Annahme korrigiert).",
+     ],
+     "notes_source": None,
+    },
+    {"date": "2026-04-17", "anchor": "m-04-17",
+     "title": "Live-Walkthrough mit Raphael", "channel": "Teams", "duration": "90 Min",
+     "attendees": "Raphael Woltz, Nicolas Neumann",
+     "outcome": "Walkthrough produktiv; Lastenheft-Anforderungen verschaerft",
+     "decisions": [
+        "Walkthrough-Script erfolgreich gelaufen (Rechnungsstellung-Demo).",
+        "Best-Practices-Cross-Reference als Diskussionsbasis akzeptiert.",
+        "5 Go-Live-MUSS-Fixes priorisiert (Break-Handler, Dedup-Store, Failure-Alert, Webhook-Secret, Make-Tier).",
+        "Irina-Forderung: Lastenhefte muessen mit Make-Screenshots unterfuettert werden, kein Fliesstext.",
+     ],
+     "notes_source": None,
+    },
+    {"date": "2026-04-21", "anchor": "m-04-21",
+     "title": "Hero-Token-Meeting + Wimmer-Assistent-Setup", "channel": "Teams", "duration": "?",
+     "attendees": "Raphael Woltz, Nicolas Neumann",
+     "outcome": "Hero-API-Auth final geklaert; Sammelbearbeiter-Frage gelaeutert",
+     "decisions": [
+        "Hero-API-Token via dediziertem System-User 'Wimmer Assistent' (ID 316312); Token in .env.",
+        "Sammelbearbeiter (User-ID 270612) ist NICHT Sabine; Shared-Inbox-User. Sabines echter User: 255797.",
+        "Hero-UI-Login fuer Nicolas: Produktivzugang erteilt, Passwort geaendert.",
+        "Test-Instanz wird verworfen (ID-Mismatch); Tests laufen gegen Produktion mit Konvention.",
+        "Separate Sabine-Token nicht noetig; Wimmer-Assistent-Token reicht.",
+        "W2-04-Rewrite (Mailgun) bleibt Phase 2; IST-Zustand wird Freitag uebernommen.",
+     ],
+     "notes_source": None,
+    },
+    {"date": "2026-04-22", "anchor": "m-04-22",
+     "title": "Mittwochs-Prep (Pre-Migration)", "channel": "Teams", "duration": "?",
+     "attendees": "Raphael Woltz, Nicolas Neumann",
+     "outcome": "Letzte Blocker vor Freitag geraeumt",
+     "decisions": [
+        "OpenAI-Key: bestehender Hero-Vertrag-Key bleibt aktiv im Uebergang; eigener WW-Key spaeter (Phase 2).",
+        "Postfach hero.automation@waerme-wimmer.de existiert; OAuth-Consent-Plan fuer Freitag.",
+        "Wimmer-Assistent-Token-Smoke-Tests: Tasks-Mutation + Document-Upload bestanden.",
+     ],
+     "notes_source": None,
+    },
+    {"date": "2026-04-24", "anchor": "m-04-24",
+     "title": "Hero-Handover-Meeting mit Michael (final)", "channel": "Teams", "duration": "94 Min",
+     "attendees": "Nicolas Neumann, Irina Dragunow, Michael Klaus (Hero)",
+     "outcome": "Wichtigstes Meeting: Mythen geklaert, Schedule-Intervalle uebergeben",
+     "decisions": [
+        "OpenAI-Modell-Swap: gpt-4o-mini -> gpt-5-mini (Kosten-gleich, besser, schneller).",
+        "W2-04 Cleanup: 3x Delete-E-Mail-Routen deaktivieren; Gmail-Fallback (Modul 43) entfernen; OpenAI-Modell-Swap; TinyURL-Modul 26 entfernen.",
+        "Hero Custom-App wird NICHT freigegeben (final). Nur W2-01 Custom-Webhook, sonst public App.",
+        "Schedule-Intervalle (verbal): W2-04 Mo-Fr 05:00-22:30 alle 15 min; W2-08 Mo-Fr 7h 05:00-19:00; W2-09 daily 06:00; W2-10 daily 06:00; W2-07 daily 05:00.",
+        "6x W2-04-Ausfaelle: Root-Cause = Outlook-Postfach voll (50 GB vs GoBD 10y). Silent hang. Mitigation: 50 -> 500 GB Upgrade.",
+        "Calendar-Invite-Loop: Regex zu lax -> Michael hat verschaerft, Loop nicht mehr aktiv.",
+        "W2-05 'fehlender Filter': Misdiagnose. Echte Ursache = Hero-Webhook-Event-Selection wird beim JSON-Export nicht uebertragen. Fix Hero-UI-seitig.",
+        "Sammelbearbeiter (270612) und hardcoded Status-IDs: intentional static per Sabines Spec. Keine Dynamisierung.",
+        "Hero-Document-Type-IDs (1094611, 688384, 952733, etc.) per Hero-UI verifiziert.",
+        "n8n-Migration ermutigt: 'fuer die Situation, in der ihr euch befindet, ist es eigentlich sogar das Beste'.",
+     ],
+     "notes_source": MEETING_NOTES_DIR / "2026-04-24-michael-handover.md",
+    },
+    {"date": "2026-04-25", "anchor": "m-04-25",
+     "title": "Joint-Test mit Raphael (Pre-Go-Live)", "channel": "Teams", "duration": "120 Min",
+     "attendees": "Raphael Woltz, Nicolas Neumann (Irina nicht dabei)",
+     "outcome": "9/10 Szenarien als Go-Live-ready verifiziert",
+     "decisions": [
+        "9/10 Szenarien als funktional verifiziert (W2-01 bis W2-09).",
+        "W2-10 deferred zur n8n-Migration: 50-Result-Hero-Pagination-Limit, hat seit Hero-Zeiten nie funktioniert.",
+        "Live-Fix W2-03: Filter-Rule `_trigger = document:created` entfernt (unsatisfiable in public Hero-App).",
+        "Live-Fix W2-04: Hero-Automation-Filter raus (redundant zu Outlook-Server-Regel).",
+        "Mehrfach-Bug-Befund: leere Test-Router in W2-01, Material-bestellt-Filter-Mismatch (Imperativ vs. Partizip).",
+     ],
+     "notes_source": None,
+    },
+    {"date": "2026-04-27", "anchor": "m-04-27",
+     "title": "Irina-Call (Post-Go-Live Alignment)", "channel": "Teams", "duration": "40 Min",
+     "attendees": "Irina Dragunow, Nicolas Neumann",
+     "outcome": "Action-Items fuer Doku + n8n-Migration abgestimmt",
+     "decisions": [
+        "Brasilien-Move-Decision: Nico bleibt unter Vorbehalt ($25/hr, n8n-Lernkurve bezahlt).",
+        "n8n-Migrations-Timeline: nach Leonard-Setup, Self-Hosted vs Cloud Starter offen.",
+        "Storage-Snapshot Outlook hero.automation@: 42% / 21,12 GB; 15,47 GB Altlast in Geloeschte Elemente.",
+        "Flowchart-Deadline: Dienstag 2026-05-05.",
+     ],
+     "notes_source": None,
+    },
+    {"date": "2026-04-30", "anchor": "m-04-30",
+     "title": "Leonard-Call (n8n-Strategie)", "channel": "Teams", "duration": "120 Min",
+     "attendees": "Leonard, Nicolas Neumann",
+     "outcome": "n8n-Test-Instanz live; Lizenz + OS-Neo-Strategie offen",
+     "decisions": [
+        "n8n-Test-Instanz auf Hetzner-VM aufgesetzt.",
+        "Self-Hosted Community erlaubt nur 1 User; gemeinsamer Login oder Cloud Starter ($20/Monat) als Alternativen.",
+        "Server-Redundanz: kein automatisches Failover; manuelle VM-Migration (~20 Min Downtime) reicht.",
+        "Strategischer Hinweis: WW-eigenes OS-Neo-CRM soll Hero langfristig komplett abloesen.",
+        "W2-05 Osneo-URL-Bug entdeckt (Hero-Projekt-ID statt Dokument-ID, plus fehlendes /download).",
+        "W1-Zapier-Migration wird in n8n neu gebaut (LexOffice/GMaps/Placetel/Jotform).",
+     ],
+     "notes_source": None,
+    },
+]
+
+
+def render_meetings_page() -> str:
+    """Single consolidated Meetings page. Mind the no-blank-line-in-tables invariant."""
+    parts = []
+    parts.append("# Meetings — Hero-Automatisierungen\n")
+    parts.append("> *Stand 2026-05-03 · 10 Meetings konsolidiert · jede Section enthaelt Outcome + Entscheidungen + Notizen-Toggle*\n")
+    parts.append("Diese Seite ersetzt die fruehere `Pre-Meeting-Fragen`-Liste: was offen war, ist hier in der jeweiligen Meeting-Section unter \"Was hier entschieden wurde\" festgehalten.\n")
+
+    # --- Chronologie table (NO blank lines inside the table block!) ---
+    table_lines = ["## Chronologie"]
+    table_lines.append("")  # one blank line BEFORE table -- ok
+    table_lines.append("| Datum | Meeting | Outcome | Springen |")
+    table_lines.append("|---|---|---|---|")
+    for m in MEETINGS:
+        title_short = m["title"]
+        if len(title_short) > 50:
+            title_short = title_short[:47] + "..."
+        outcome = m["outcome"]
+        if len(outcome) > 50:
+            outcome = outcome[:47] + "..."
+        table_lines.append(f"| {m['date']} | {title_short} | {outcome} | [#{m['anchor']}](#{m['anchor']}) |")
+    parts.append("\n".join(table_lines))
+    parts.append("")  # blank line AFTER table -- ok
+
+    # --- Decision-Log ---
+    parts.append("## Decision-Log (thematisch)\n")
+    decisions_log = [
+        ("Make-Tier", "Core 10K + Auto-Buy aktiv (statt Pro 80K)", "m-04-15"),
+        ("Hero-API-Auth", "Dedizierter System-User `Wimmer Assistent` (ID 316312); Token in .env", "m-04-21"),
+        ("Sammelbearbeiter", "User-ID 270612 ist NICHT Sabine; Shared-Inbox-User. Intentional static.", "m-04-21"),
+        ("OpenAI", "gpt-4o-mini -> gpt-5-mini (Kosten-gleich, schneller)", "m-04-24"),
+        ("W2-04 Rewrite", "Mailgun + S3 Architektur; Implementierung Phase 2 (post-Go-Live)", "m-04-15"),
+        ("Hero Custom-App", "Wird NICHT freigegeben. Nur W2-01 Custom-Webhook, sonst public App.", "m-04-24"),
+        ("W2-05 Bug", "Hero-Webhook-Event-Selection wird beim JSON-Export nicht uebertragen. Fix Hero-UI-seitig.", "m-04-24"),
+        ("Schedule-Intervalle", "W2-04 Mo-Fr 05-22:30 / W2-08 Mo-Fr 7h / W2-09+W2-10 daily 06:00 / W2-07 daily 05:00", "m-04-24"),
+        ("W2-10", "Deferred zur n8n-Migration (Hero-API 50-Result-Pagination-Limit)", "m-04-25"),
+        ("Outlook-Speicher", "50 -> 500 GB Upgrade post-Go-Live; Geloeschte-Elemente Quick-Win 31% Speicher-Rueckgewinn", "m-04-24"),
+        ("n8n-Migration", "Auf Leonards Hetzner-Self-Hosted; Lizenz-Frage offen (Cloud Starter $20/mo Alternative)", "m-04-30"),
+        ("OS-Neo-Strategie", "WW-eigenes OS-Neo soll Hero langfristig abloesen (Leonards Hinweis)", "m-04-30"),
+    ]
+    for topic, decision, anchor in decisions_log:
+        parts.append(f"- **{topic}:** {decision} ([Meeting](#{anchor}))")
+    parts.append("")
+
+    # --- Per-meeting sections ---
+    parts.append("---\n")
+    for m in MEETINGS:
+        section = render_meeting_section(m)
+        parts.append(section)
+
+    return "\n".join(parts) + "\n"
+
+
+def render_meeting_section(m: dict) -> str:
+    """One meeting as an H2 section with decisions + collapsible notes."""
+    lines = []
+    lines.append(f"## {m['date']} — {m['title']}")
+    lines.append("")
+    lines.append(f"**Kanal · Dauer:** {m['channel']} · {m['duration']}  ")
+    lines.append(f"**Teilnehmer:** {m['attendees']}  ")
+    lines.append(f"**Outcome:** {m['outcome']}")
+    lines.append("")
+    lines.append("### Was hier entschieden wurde")
+    lines.append("")
+    for d in m["decisions"]:
+        lines.append(f"- {d}")
+    lines.append("")
+
+    # Collapsible detail-notes from source file (when available)
+    notes = ""
+    src = m.get("notes_source")
+    if src and src.is_file():
+        notes = src.read_text(encoding="utf-8")
+        notes = re.sub(r"^# .+?\n+", "", notes, count=1)  # strip its H1
+        notes = notes.strip()
+    if notes:
+        lines.append("<details>")
+        lines.append("<summary>Notizen aus Meeting-File (zum Aufklappen)</summary>")
+        lines.append("")
+        lines.append(notes)
+        lines.append("")
+        lines.append("</details>")
+        lines.append("")
+
+    lines.append("---")
+    return "\n".join(lines)
+
+
+# ============ S-* / R-* edits ============
+
+def compress_banner(text: str) -> str:
+    return OLD_BANNER_RE.sub(ONE_LINE_BANNER, text, count=1)
+
+
+def rewrite_links(text: str) -> str:
+    for pattern, repl in LINK_REWRITES:
+        text = re.sub(pattern, repl, text)
+    return text
+
+
+def strip_old_flow_diagramm(text: str) -> str:
+    """Remove the original `## Flow-Diagramm` block from S-* pages.
+
+    The earlier sweep injected `## Flowcharts / ### Sabine-Version / ### Audit-Version`
+    which supersedes the old `## Flow-Diagramm` single-mermaid block. Drop the original
+    to avoid 3-mermaid-blocks-of-the-same-flow-on-one-page redundancy.
+    """
+    pattern = re.compile(r"## Flow-Diagramm\n+```mermaid\n.*?```\n+", re.DOTALL)
+    return pattern.sub("", text, count=1)
+
+
+def fix_r00_header(text: str) -> str:
+    """Replace the pre-Go-Live framing at the top of R-00 with post-Go-Live compact state.
+
+    Original (pre-Go-Live):
+      **Stand:** 2026-04-15 EOD
+      **Autor:** Nicolas Neumann (UnpauseAI)
+      **Ziel-Go-Live:** Mo 2026-04-28 (intern) -- Hero schaltet Do 2026-04-24 Feierabend ab
+
+    Post-Go-Live: collapse into 2-line factual state.
+    """
+    new_header = (
+        "**Stand:** 2026-05-03 (post-Go-Live, Tag 6)  ·  **Status:** 9/10 Hero-Szenarien live, W2-10 deferred zur n8n-Migration  \n"
+        "**Historie:** initial 2026-04-15 verfasst (Pre-Go-Live Lastenheft); Go-Live erfolgte planmaessig 2026-04-28."
+    )
+    return re.sub(
+        r"\*\*Stand:\*\* 2026-04-15 EOD[^\n]*\n"
+        r"\*\*Autor:\*\* Nicolas Neumann \(UnpauseAI\)\n"
+        r"\*\*Ziel-Go-Live:\*\* Mo 2026-04-28[^\n]*",
+        new_header,
+        text,
+        count=1,
+    )
+
+
+def fix_r00_special(text: str) -> str:
+    """R-00 specific: drop link to excluded `13-pre-meeting-fragen.md`,
+    mark stale Klaus-PDF-Drift section as resolved, fix pre-Go-Live header.
+    """
+    text = fix_r00_header(text)
+    # Replace the row pointing to 13-pre-meeting-fragen with a resolved-link to consolidated meetings
+    text = re.sub(
+        r"\| 13 \| \[Pre-Meeting-Fragen\]\([^)]+\) \|[^|]*\|[^|]*\| 63 Fragen für Fr-Meeting \|",
+        "| - | ~~Pre-Meeting-Fragen~~ obsolet, in [M-meetings](M-meetings.md) aufgegangen | | | |",
+        text,
+    )
+    # Remove the Klaus-PDF-Drift HIGH/MEDIUM/LOW block (it was pre-Go-Live, all 3 resolved at M-04-24)
+    drift_re = re.compile(
+        r"\*\*Klaus-PDF-Drift \(3 Findings, vor Klaus-Klärung Mo\):\*\*\n.*?(?=\n\n|\n---|\n## )",
+        re.DOTALL,
+    )
+    text = drift_re.sub(
+        "**Klaus-PDF-Drift (RESOLVED 2026-04-24):** Alle 3 Findings am 2026-04-24 mit Michael geklaert. "
+        "s2 +7 Tage = intentional, s1 Entry-Filter mit 5 Aufgaben-Titeln korrigiert, s6 Regex-Strict bestaetigt. "
+        "Siehe [M-meetings · 2026-04-24](M-meetings.md#m-04-24).",
+        text,
+    )
+    return text
+
+
+def fix_r_w2_04_navigation(text: str) -> str:
+    """Replace `Seite 04` / `Seite 04b` references with new R-* names."""
+    text = re.sub(
+        r"\*\*Seite 04:\*\*", "**[R-w2-04-rewrite-design (SOLL)](R-w2-04-rewrite-design-mockup.md):**",
+        text,
+    )
+    text = re.sub(
+        r"\*\*Seite 04b:\*\*", "**[Mockup](R-w2-04-rewrite-design-mockup.md):**",
+        text,
+    )
+    text = re.sub(
+        r"durch den Rewrite auf \[Seite 04\]\([^)]+\)", "durch den Rewrite (siehe [R-w2-04-rewrite-design-mockup.md](R-w2-04-rewrite-design-mockup.md))",
+        text,
+    )
+    return text
+
+
+def render_start_here_page() -> str:
+    """Landing page that orients a reader on first import."""
+    return (
+        "# Start hier — Hero-Automatisierungen Notion-Space\n"
+        "\n"
+        "> *Stand 2026-05-03 · 9/10 Hero-Szenarien live seit 2026-04-28*\n"
+        "\n"
+        "Diese Seiten dokumentieren die 10 Make.com-Automatisierungen, die seit 2026-04-28 die Hero-Workflows von Waerme Wimmer "
+        "abdecken. Aufgebaut in drei Gruppen, alphabetisch sortiert in der Sidebar:\n"
+        "\n"
+        "## Drei Gruppen\n"
+        "\n"
+        "**M-meetings** — Eine Seite, alle 10 Meetings (Onboarding bis Post-Go-Live). Pro Meeting: Outcome, Entscheidungen, Notizen-Toggle. "
+        "Decision-Log am Anfang fuer schnellen Sprung.\n"
+        "\n"
+        "**S-* (Scenarios)** — Pro Automatisierung eine Seite. **S-00-flowcharts-overview** ist die Single-Page-Uebersicht "
+        "mit allen 20 Diagrammen (Sabine-Sicht + Audit-Sicht pro Szenario). **S-01 bis S-10** sind die Detail-Seiten mit "
+        "Hero-IDs, Filter-Bedingungen, bekannten Schwaechen, n8n-Migrations-Plan.\n"
+        "\n"
+        "**R-* (Reference)** — Querschnitts-Themen. **R-00-uebersicht** = ehemaliges Lastenheft (post-Go-Live aktualisiert). "
+        "**R-hero-ids-und-connections** = alle Hero-IDs/Tokens/Connections in einer Tabelle. **R-kosten-und-subscription** = "
+        "Make-Tier + OpenAI-Verbrauch. **R-w2-04-rewrite-design-***  = Phase-2-Design fuer den Mailgun-Rewrite (post-Go-Live geplant).\n"
+        "\n"
+        "## Empfohlene Reihenfolge je Leser\n"
+        "\n"
+        "**Sabine / Operatives:** Start bei **S-00-flowcharts-overview** -> sieht alle Flows auf einer Seite. Bei Detail-Bedarf "
+        "auf die jeweilige S-NN-* Seite.\n"
+        "\n"
+        "**Raphael / Technisch:** **M-meetings** Decision-Log oben fuer Status-Snapshot, dann **R-hero-ids-und-connections** "
+        "fuer die laufenden Bindings, dann **S-* Detail-Seiten** fuer Modul-Inventar je Szenario.\n"
+        "\n"
+        "**Auditor / Spaeter-Eingestiegener:** **R-00-uebersicht** fuer Geschichte und Lastenheft-Hintergrund, dann **M-meetings** "
+        "fuer chronologischen Decision-Trail.\n"
+        "\n"
+        "## Hinweis zur Pflege\n"
+        "\n"
+        "Quelle der Wahrheit fuer alle Seiten: das Workspace-Repo `workspace/clients/warme-wimmer/`. "
+        "Bei Aenderungen wird der Notion-Space neu importiert (zip-basiert). Ad-hoc-Edits direkt in Notion gehen beim "
+        "naechsten Re-Import verloren -- daher Aenderungen ins Repo zurueckspielen.\n"
+    )
+
+
+def filter_comms_section_for_meeting(section: str, meeting_keywords: list[str]) -> str:
+    """Best-effort filter: keep only sub-sections of a comms-log entry that mention meeting keywords.
+
+    Comms-log entries are organized by date with sub-headings (### sub-headings).
+    Many sub-headings are unrelated chat that happened on the same day. This function
+    keeps sub-sections whose heading or first paragraph contains any of the meeting keywords.
+    """
+    # Split into sub-sections at level-3 (### ...) headings
+    chunks = re.split(r"(?m)^(### .+)$", section)
+    if len(chunks) < 3:
+        return section.strip()
+    # chunks now alternates: [pre-heading-text, heading, body, heading, body, ...]
+    out = [chunks[0].strip()]
+    for i in range(1, len(chunks) - 1, 2):
+        heading = chunks[i]
+        body = chunks[i + 1]
+        keep = any(kw.lower() in heading.lower() or kw.lower() in body.lower()[:300] for kw in meeting_keywords)
+        if keep:
+            out.append(heading)
+            out.append(body.rstrip())
+    return "\n".join(p for p in out if p).strip()
+
+
+def build_pages() -> dict[str, str]:
+    """Build the dict of {filename: markdown_content} that constitutes the Notion bundle.
+
+    Reusable by both the zip-builder (this module's main) and the doc-site builder
+    (`tools/build-doc-site.py`).
+    """
+    pages: dict[str, str] = {}
+    pages["0-Start-Hier.md"] = render_start_here_page()
+    pages["M-meetings.md"] = render_meetings_page()
+
+    s00_src = NDIR / "15-flowcharts-overview.md"
+    if s00_src.is_file():
+        s00 = s00_src.read_text(encoding="utf-8")
+        s00 = re.sub(
+            r"Quelle der Sabine-Prozess-Spalte: \*\*Michael Klaus' Prozess-Dokumentation\*\*[^\n]+\n+",
+            "", s00,
+        )
+        s00 = re.sub(
+            r"Wo der Klaus-Zweck-Satz von der Sabine-Mermaid-Sicht abweicht, gilt \*\*Klaus als Wahrheit\*\*[^\n]+\n+",
+            "", s00,
+        )
+        s00 = re.sub(r"lt\. Klaus", "lt. Hero-Doku", s00)
+        s00 = re.sub(
+            r"\*\*Prozess-Doku \(Klaus, kanonisch\):\*\* \[16 Prozessdoku Klaus, Section \d+\]\([^)]+\) -- siehe dort fuer Hero-IDs, Filter-Bedingungen, alle Routen mit Status-Codes\.\n+",
+            "", s00,
+        )
+        s00 = re.sub(r"\| Prozess \(lt\. Hero-Doku\) \|", "| Prozess |", s00)
+        s00 = re.sub(r"\| Prozess \(lt\. Klaus\) \|", "| Prozess |", s00)
+        pages["S-00-flowcharts-overview.md"] = s00
+
+    for src_md in sorted(NDIR.glob("*.md")):
+        if src_md.name in EXCLUDE:
+            continue
+        new_name = RENAME_MAP.get(src_md.name)
+        if new_name is None:
+            continue
+        text = src_md.read_text(encoding="utf-8")
+        text = compress_banner(text)
+        if new_name.startswith("S-"):
+            text = strip_old_flow_diagramm(text)
+        if new_name.startswith("R-"):
+            text = rewrite_links(text)
+        if new_name == "R-00-uebersicht.md":
+            text = fix_r00_special(text)
+        if new_name.startswith("R-w2-04-"):
+            text = fix_r_w2_04_navigation(text)
+        pages[new_name] = text
+
+    for src, target in EXTRA_PAGES.items():
+        if src.is_file():
+            pages[target] = src.read_text(encoding="utf-8")
+
+    return pages
+
+
+def main() -> int:
+    pages: dict[str, str] = {}
+
+    # 0. Landing page (sorts above M-/R-/S- alphabetically because '0' < letters in ASCII)
+    pages["0-Start-Hier.md"] = render_start_here_page()
+
+    # 1. Single consolidated meetings page
+    pages["M-meetings.md"] = render_meetings_page()
+
+    # 2. S-00 flowcharts overview -- reuse from prior generator if exists, else regenerate
+    s00_src = NDIR / "15-flowcharts-overview.md"
+    if s00_src.is_file():
+        s00 = s00_src.read_text(encoding="utf-8")
+        # Strip Klaus references the prior script left in (Process column / Klaus link section)
+        s00 = re.sub(
+            r"Quelle der Sabine-Prozess-Spalte: \*\*Michael Klaus' Prozess-Dokumentation\*\*[^\n]+\n+",
+            "", s00,
+        )
+        s00 = re.sub(
+            r"Wo der Klaus-Zweck-Satz von der Sabine-Mermaid-Sicht abweicht, gilt \*\*Klaus als Wahrheit\*\*[^\n]+\n+",
+            "", s00,
+        )
+        s00 = re.sub(r"lt\. Klaus", "lt. Hero-Doku", s00)
+        s00 = re.sub(
+            r"\*\*Prozess-Doku \(Klaus, kanonisch\):\*\* \[16 Prozessdoku Klaus, Section \d+\]\([^)]+\) -- siehe dort fuer Hero-IDs, Filter-Bedingungen, alle Routen mit Status-Codes\.\n+",
+            "", s00,
+        )
+        s00 = re.sub(
+            r"\| Prozess \(lt\. Hero-Doku\) \|", "| Prozess |", s00,
+        )
+        # Remove "Prozess (lt. Klaus)" header if not yet caught
+        s00 = re.sub(r"\| Prozess \(lt\. Klaus\) \|", "| Prozess |", s00)
+        pages["S-00-flowcharts-overview.md"] = s00
+    else:
+        print("WARN: 15-flowcharts-overview.md missing — S-00 not produced", file=sys.stderr)
+
+    # 3. Existing notion-pages files: rename + apply targeted edits
+    for src_md in sorted(NDIR.glob("*.md")):
+        if src_md.name in EXCLUDE:
+            continue
+        new_name = RENAME_MAP.get(src_md.name)
+        if new_name is None:
+            print(f"  WARN: no rename rule for {src_md.name} (skipped)")
+            continue
+        text = src_md.read_text(encoding="utf-8")
+        # Compress 4-line banner -> 1-liner
+        text = compress_banner(text)
+        # S-* pages: also strip duplicate Flow-Diagramm block
+        if new_name.startswith("S-"):
+            text = strip_old_flow_diagramm(text)
+        # R-* pages: rewrite intra-zip links
+        if new_name.startswith("R-"):
+            text = rewrite_links(text)
+        # R-00 specific cleanup
+        if new_name == "R-00-uebersicht.md":
+            text = fix_r00_special(text)
+        # R-w2-04-* navigation pointers
+        if new_name.startswith("R-w2-04-"):
+            text = fix_r_w2_04_navigation(text)
+        pages[new_name] = text
+
+    # 4. Extra pages (storage log, credits log) from outside notion-pages/
+    for src, target in EXTRA_PAGES.items():
+        if src.is_file():
+            pages[target] = src.read_text(encoding="utf-8")
+            print(f"  Included extra: {src} -> {target}")
+        else:
+            print(f"  WARN: extra page missing: {src} (not added)")
+
+    # 5. Build zip
+    out_name = f"hero-lastenheft-notion-{TODAY}-v18-clean.zip"
+    out_path = OUT_DIR / out_name
+
+    with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for name in sorted(pages.keys()):
+            zf.writestr(name, pages[name])
+        if SHOTS_DIR.is_dir():
+            for png in sorted(SHOTS_DIR.glob("*.png")):
+                zf.write(png, arcname=f"screenshots/{png.name}")
+            per_module = SHOTS_DIR / "per-module"
+            if per_module.is_dir():
+                for png in sorted(per_module.glob("*.png")):
+                    zf.write(png, arcname=f"screenshots/{png.name}")
+
+    md_count = len(pages)
+    png_count = sum(1 for _ in SHOTS_DIR.rglob("*.png")) if SHOTS_DIR.is_dir() else 0
+    size_mb = out_path.stat().st_size / (1024 * 1024)
+
+    print(f"Wrote: {out_path}  ({size_mb:.2f} MB)")
+    print(f"  Pages: {md_count}  ·  Screenshots: {png_count}")
+    print()
+    m = sum(1 for k in pages if k.startswith("M-"))
+    s = sum(1 for k in pages if k.startswith("S-"))
+    r = sum(1 for k in pages if k.startswith("R-"))
+    print(f"  Meetings (M-*):  {m}  (consolidated single page)")
+    print(f"  Scenarios (S-*): {s}  (1 overview + {s-1} per-scenario)")
+    print(f"  Reference (R-*): {r}")
+    print()
+    print(f"Excluded from zip: {sorted(EXCLUDE)}")
+    print()
+    print("v18 fixes applied:")
+    print("  - Consolidated 10 separate meeting pages into M-meetings.md")
+    print("  - Table rendering fix (no blank lines inside tables)")
+    print("  - R-00 intra-zip links rewritten to S-/R- naming")
+    print("  - Broken link to excluded 13-pre-meeting-fragen.md replaced with strikethrough")
+    print("  - Klaus-PDF-Drift section marked resolved (link to M-04-24 section)")
+    print("  - Banner compressed from 4 lines to 1 line on detail pages")
+    print("  - S-* pages: duplicate `## Flow-Diagramm` block stripped (Sabine + Audit blocks remain)")
+    print("  - R-w2-04-* navigation pointers fixed (`Seite 04` -> R-w2-04-*)")
+    print("  - S-00 cross-reference column header simplified ('Prozess' instead of 'Prozess (lt. Klaus)')")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

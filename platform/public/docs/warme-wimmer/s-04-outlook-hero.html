@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<meta name="googlebot" content="noindex,nofollow">
+<title>W2-04: Outlook → HERO (Rewrite-Architektur / SOLL-Zustand) — Wärme Wimmer Hero-Doku</title>
+<style>
+:root{
+  --header-height:72px;--sidebar-width:240px;
+  --bg:#f8fafc;--surface:#ffffff;--surface2:#f1f5f9;--border:#e2e8f0;
+  --text:#0f172a;--text2:#475569;--text3:#94a3b8;
+  --blue:#2563eb;--blue-light:#dbeafe;--blue-dark:#1e40af;
+  --green:#16a34a;--green-light:#dcfce7;
+  --amber:#d97706;--amber-light:#fef3c7;
+  --purple:#7c3aed;--purple-light:#ede9fe;
+  --red:#dc2626;--red-light:#fee2e2;
+  --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.05);
+  --nav-bg:#ffffff;
+}
+[data-theme="dark"]{
+  --bg:#0f172a;--surface:#1e293b;--surface2:#0f172a;--border:#334155;
+  --text:#f1f5f9;--text2:#94a3b8;--text3:#475569;
+  --blue:#3b82f6;--blue-light:#1e3a5f;--blue-dark:#93c5fd;
+  --green:#22c55e;--green-light:#14532d;
+  --amber:#f59e0b;--amber-light:#451a03;
+  --purple:#a78bfa;--purple-light:#2e1065;
+  --red:#f87171;--red-light:#450a0a;
+  --shadow:0 1px 3px rgba(0,0,0,.3);
+  --nav-bg:#1e293b;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.6;min-height:100vh;transition:background .2s,color .2s;padding-top:var(--header-height)}
+.sidebar{position:fixed;top:var(--header-height);left:0;width:var(--sidebar-width);height:calc(100vh - var(--header-height));background:var(--surface);border-right:1px solid var(--border);z-index:50;overflow-y:auto;transition:transform .25s ease}
+.sidebar-group{padding:8px 0;border-bottom:1px solid var(--border)}
+.sidebar-group:last-child{border-bottom:none}
+.sidebar-group-label{padding:8px 20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text3)}
+.sidebar-nav{list-style:none}
+.sidebar-nav a{display:flex;align-items:center;gap:8px;padding:8px 20px;font-size:13px;font-weight:500;color:var(--text2);text-decoration:none;border-left:3px solid transparent;transition:background .15s,color .15s,border-color .15s}
+.sidebar-nav a:hover{background:var(--surface2);color:var(--text)}
+.sidebar-nav a.active{background:var(--blue-light);color:var(--blue-dark);border-left-color:var(--blue);font-weight:700}
+.sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:40}
+.sidebar-backdrop.active{display:block}
+.hamburger{display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:18px;color:var(--text2);line-height:1}
+.header{background:var(--nav-bg);border-bottom:1px solid var(--border);padding:16px 24px;padding-left:calc(var(--sidebar-width) + 24px);display:flex;align-items:center;justify-content:space-between;position:fixed;top:0;left:0;right:0;z-index:1000;box-shadow:var(--shadow);transition:background .2s}
+.header-left{display:flex;align-items:center;gap:16px}
+.header-logo{display:flex;align-items:center;gap:6px;font-size:18px;letter-spacing:-0.025em}
+.header-logo .logo-text{font-weight:700;color:var(--text)}
+.header-logo .logo-accent{font-weight:700;color:var(--blue)}
+.header-title h1{font-size:16px;font-weight:700;color:var(--text)}
+.header-title p{font-size:12px;color:var(--text2);margin-top:1px}
+.header-right{display:flex;align-items:center;gap:12px}
+.theme-btn{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;transition:background .15s}
+.theme-btn:hover{background:var(--border)}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600}
+.badge-green{background:var(--green-light);color:var(--green)}
+.badge-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.page-layout{margin-left:var(--sidebar-width)}
+.main{max-width:1100px;margin:0 auto;padding:32px 32px 80px}
+.main h1{font-size:30px;font-weight:800;letter-spacing:-0.02em;margin-bottom:8px;color:var(--text)}
+.main h2{font-size:22px;font-weight:700;margin:32px 0 12px;color:var(--text);padding-bottom:6px;border-bottom:1px solid var(--border)}
+.main h3{font-size:17px;font-weight:700;margin:24px 0 8px;color:var(--text)}
+.main h4{font-size:15px;font-weight:700;margin:18px 0 6px;color:var(--text)}
+.main p{margin:8px 0 12px;color:var(--text2)}
+.main ul,.main ol{margin:8px 0 12px;padding-left:24px;color:var(--text2)}
+.main li{margin:3px 0}
+.main strong{color:var(--text)}
+.main a{color:var(--blue);text-decoration:none}
+.main a:hover{text-decoration:underline}
+.main blockquote{border-left:4px solid var(--blue);background:var(--surface2);padding:12px 16px;margin:12px 0;border-radius:0 8px 8px 0;color:var(--text2);font-style:normal}
+.main blockquote p{margin:0}
+.main blockquote em{font-style:normal;color:var(--text2)}
+.main code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:13px;font-family:'Menlo','Monaco','Consolas',monospace;color:var(--purple)}
+.main pre{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin:12px 0;overflow-x:auto;font-size:13px;line-height:1.5}
+.main pre code{background:none;padding:0;color:var(--text2)}
+.main pre.mermaid{background:var(--surface);border:1px solid var(--border);text-align:center;padding:20px}
+.main table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.main th{background:var(--surface2);padding:10px 14px;text-align:left;font-weight:600;color:var(--text);border-bottom:1px solid var(--border)}
+.main td{padding:10px 14px;color:var(--text2);border-bottom:1px solid var(--border)}
+.main tr:last-child td{border-bottom:none}
+.main hr{border:none;border-top:1px solid var(--border);margin:24px 0}
+.main details{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin:12px 0}
+.main details summary{cursor:pointer;font-weight:600;color:var(--text);padding:4px 0}
+.main details[open] summary{margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.main img{max-width:100%;height:auto;border:1px solid var(--border);border-radius:8px;margin:8px 0;display:block}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin:24px 0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;transition:border-color .15s,box-shadow .15s;display:block;color:inherit;text-decoration:none}
+.card:hover{border-color:var(--blue);box-shadow:var(--shadow);text-decoration:none}
+.card-icon{font-size:24px;margin-bottom:8px;display:block}
+.card h3{font-size:16px;font-weight:700;margin:0 0 4px;color:var(--text)}
+.card p{font-size:13px;color:var(--text2);margin:0}
+.support-cards{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0}
+.support-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;display:block;color:inherit;text-decoration:none;transition:border-color .15s}
+.support-card:hover{border-color:var(--blue);text-decoration:none}
+.support-card h4{margin:8px 0 4px}
+.card-tag{display:inline-block;font-size:11px;font-weight:600;padding:3px 8px;border-radius:12px;background:var(--blue-light);color:var(--blue);margin-top:8px}
+.footer{padding:24px 32px;border-top:1px solid var(--border);text-align:center;font-size:12px;color:var(--text3);margin-top:48px}
+@media (max-width:768px){
+  .sidebar{transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0);box-shadow:var(--shadow)}
+  .header{padding-left:16px}
+  .page-layout{margin-left:0}
+  .hamburger{display:block}
+  .header-title h1{font-size:14px}
+  .main{padding:20px}
+}
+</style>
+</head>
+<body>
+<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
+<nav class="sidebar" id="sidebar">
+<div class="sidebar-group"><div class="sidebar-group-label">🏠 Start</div><ul class="sidebar-nav">
+<li><a href="0-start-hier.html">Start hier — Hero-Automatisierungen Notion-Space</a></li>
+</ul></div>
+<div class="sidebar-group"><div class="sidebar-group-label">🗓 Meetings</div><ul class="sidebar-nav">
+<li><a href="m-meetings.html">Meetings — Hero-Automatisierungen</a></li>
+</ul></div>
+<div class="sidebar-group"><div class="sidebar-group-label">⚙️ Szenarien</div><ul class="sidebar-nav">
+<li><a href="s-00-flowcharts-overview.html">Flowcharts-Übersicht — Alle Hero-Automationen auf einen Blick</a></li>
+<li><a href="s-01-aufgabe-erledigt.html">W2-01 — Aufgabe erledigt (Status-Workflow)</a></li>
+<li><a href="s-02-aufgaben-nach-statuswechsel.html">W2-02 — Aufgaben nach Statusänderung</a></li>
+<li><a href="s-03-dokument-erstellt.html">W2-03 — Dokument erstellt → Statuswechsel</a></li>
+<li><a href="s-04-outlook-hero.html" class="active">W2-04: Outlook → HERO (Rewrite-Architektur / SOLL-Zustand)</a></li>
+<li><a href="s-05-projekt-erstellt.html">W2-05 — Projekt erstellt (Logbuch + Osneo-URL)</a></li>
+<li><a href="s-06-projekterinnerung.html">W2-06 — Projekterinnerung 1 Tag nach Termin</a></li>
+<li><a href="s-07-rechnungen-bezahlt.html">W2-07 — Rechnungen bezahlt → Abgeschlossen</a></li>
+<li><a href="s-08-regiebericht-fehlt.html">W2-08 — Regiebericht fehlt → Statuswechsel</a></li>
+<li><a href="s-09-ueberfaellige-aufgaben.html">W2-09 — Überfällige Aufgaben → Projekt markieren</a></li>
+<li><a href="s-10-zahlung-erhalten.html">W2-10 — Zahlung erhalten → Projektstatus ändern</a></li>
+</ul></div>
+<div class="sidebar-group"><div class="sidebar-group-label">📚 Reference</div><ul class="sidebar-nav">
+<li><a href="r-00-uebersicht.html">Übersicht -- Hero-Automations Lastenheft</a></li>
+<li><a href="r-hero-api-smoketest.html">#14 -- Hero-API Smoketest (Runbook)</a></li>
+<li><a href="r-hero-ids-und-connections.html">Cross-Reference -- Connections, Tokens, Hooks, Codes</a></li>
+<li><a href="r-kosten-und-subscription.html">Kosten & Subscription — Hero-Automations im Make-Konto</a></li>
+<li><a href="r-team-updates.html">Wartungs-Updates — Team-Log</a></li>
+<li><a href="r-w2-04-rewrite-design-ist.html">#4a: Outlook → HERO, IST-Zustand (wie es JETZT funktioniert)</a></li>
+<li><a href="r-w2-04-rewrite-design-mockup.html">W2-04b: Outlook → HERO Rewrite, Make-Szenario-Mockup</a></li>
+</ul></div>
+</nav>
+<header class="header">
+  <div class="header-left">
+    <button class="hamburger" onclick="toggleSidebar()">☰</button>
+    <div class="header-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="28" height="28"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></span></div>
+    <div class="header-title"><h1>Wärme Wimmer</h1><p>Hero-Automatisierungen Dokumentation</p></div>
+  </div>
+  <div class="header-right">
+    <span class="badge badge-green"><span class="badge-dot"></span>9/10 live</span>
+    <button class="theme-btn" onclick="toggleTheme()"><span id="theme-icon">&#9790;</span> Theme</button>
+  </div>
+</header>
+<div class="page-layout">
+  <main class="main">
+    <h1>W2-04: Outlook → HERO (Rewrite-Architektur / SOLL-Zustand)</h1>
+    <p><strong>Status:</strong> Rewrite. Der Ist-Zustand (24 Module, Polling) wird komplett ersetzt.
+<strong>Risiko bei Ausfall:</strong> HOCH: ohne diese Automatisierung landen Kundenmails nicht als Logbucheinträge im Hero-Projekt.
+<strong>Kritischer Pfad:</strong> Ja, muss am 2026-04-28 Go-Live funktionieren.</p>
+<p><strong>Navigation:</strong>
+- <strong>IST-Zustand</strong> (wie es jetzt aussieht, Screenshot, Modul-Inventar, Hands-On-Verifikation 2026-04-21): → <a href="./04a-outlook-hero-ist-analyse.html">Seite 04a</a>
+- <strong>SOLL-Zustand</strong> (was wir bauen, Modul-Plan): diese Seite + <a href="./04b-outlook-hero-rewrite-mockup.html">Seite 04b Mockup</a>
+- <strong>Demo-Szenario in Make:</strong> <code>REWRITE_s4_outlook_hero (Soll-Architektur Demo)</code> im Test-Bench Folder</p>
+<p><strong>Hands-On-Verifikation 2026-04-21 (gemaess Irina-Anforderung):</strong> Die sechs Pruefpunkte (Trigger, Entry-Filter, Filter-Operatoren, Status-IDs, Error-Handler, Testlauf) sind fuer den IST-Zustand auf <strong><a href="./04a-outlook-hero-ist-analyse.html">Seite 04a</a></strong> dokumentiert. Die SOLL-Architektur auf dieser Seite + Seite 04b ist ein geplanter Bauplan; sie hat keinen produktiven Ist-Zustand zum Hands-On-Pruefen. Nach Go-Live (2026-04-28) folgt eine analoge Verifikation.</p>
+<hr />
+<blockquote>
+<p><em>Stand 2026-05-03 · 9/10 Hero-Szenarien live · W2-10 deferred zu n8n · Auto-Buy aktiv</em></p>
+</blockquote>
+<h2 id="flowcharts">Flowcharts</h2>
+<h3 id="sabine-version-was-passiert-geschaftlich">Sabine-Version (was passiert geschäftlich)</h3>
+<p><pre class="mermaid">flowchart TD
+    A[Mail trifft im Outlook<br/>info@waerme-wimmer.de ein] --> B{Projektnummer im<br/>Betreff oder Text?}
+    B -->|nein| C1[Mail an info@<br/>weiterleiten zur Sichtung]
+    B -->|ja| D[Projekt in Hero suchen]
+    D --> E{Projekt gefunden?}
+    E -->|nein| C2[Mail an info@<br/>weiterleiten zur Sichtung]
+    E -->|ja| F{Anhaenge vorhanden?}
+    F -->|ja, Bild| G1[Bild in Hero hochladen<br/>Bilder vom Kunden]
+    F -->|ja, Dokument| G2[Dokument in Hero hochladen<br/>Allgemein]
+    F -->|nein| H
+    G1 --> H
+    G2 --> H
+    H[OpenAI fasst<br/>Mail zusammen] --> I[Logbucheintrag<br/>im Projekt anlegen]
+    I --> J{Projekt im Status<br/>Reklamation?}
+    J -->|ja| K1[Mail zusaetzlich an<br/>reklamation@ weiterleiten]
+    J -->|nein| K2[Aufgabe Neue Mail lesen<br/>anlegen wenn nicht offen]</pre></p>
+<h3 id="audit-version-hero-ids-filter-hardcoded-werte">Audit-Version (Hero-IDs, Filter, Hardcoded-Werte)</h3>
+<p><pre class="mermaid">flowchart TD
+    A[Outlook Polling alle 15 min<br/>Mo-Fr 05:00-22:30<br/>200 Mails/Lauf] --> B[Regex auf Betreff +<br/>Body-Preview<br/>Pattern bracket A-Z 3-Bindestrich-3-6 Ziffern]
+    B --> C{Match exists<br/>UND i == 1?}
+    C -->|nein| D1[Forward an info@<br/>Sleep 5s + Delete<br/>HEUTE: Delete deaktiviert]
+    C -->|ja| E[Hero GraphQL<br/>project_matches relative_id]
+    E --> F{project_matches<br/>length groesser 0<br/>UND match == project_nr?}
+    F -->|nein| D1
+    F -->|ja| G[Sub-Router<br/>3 parallele Routen]
+    G --> H1{hasAttachments<br/>UND project found<br/>UND match == project_nr?}
+    G --> H2[OpenAI<br/>gpt-4o-mini Summary<br/>HEUTE: gpt-5-mini]
+    G --> H3[Forward + Sleep + Delete<br/>HEUTE deaktiviert]
+    H1 -->|ja| I[Anhang herunterladen]
+    I --> J{Filename Endung}
+    J -->|.png .jpg .jpeg| J1[Hero UploadImage<br/>Kategorie Bilder vom Kunden]
+    J -->|sonst| J2[Hero UploadDocument<br/>Ordner Allgemein]
+    H2 --> K[TinyURL<br/>HEUTE: deaktiviert]
+    K --> L[Hero createLogbookEntry<br/>Connection 63384]
+    L --> M{step.name<br/>contains Reklamation?}
+    M -->|ja| N1[Outlook forwardMessage<br/>reklamation@waerme-wimmer.de]
+    M -->|nein| N2{Aufgabe Neue Mail<br/>lesen schon offen?}
+    N2 -->|nein| N3[update_task<br/>Neue Mail lesen<br/>target_user_id partner.user_id]
+    L -.->|Fehler| O[Alert-Mail an<br/>monitoring@<br/>HEUTE: Gmail-Fallback raus]</pre></p>
+<h3 id="annotations">Annotations</h3>
+<pre><code>SZENARIO 4 — OUTLOOK ZU HERO
+
+Trigger: microsoft-email:watchMessages (Polling)
+Connection: 61784 (Outlook hero.automation@waerme-wimmer.de)
+Folder: hero.automation@-Postfach (Base64-ID)
+Frequenz: alle 15 min, Mo-Fr 05:00-22:30, 200 Mails/Lauf
+
+Hero-Calls:
+  GraphQL project_matches (Auth 3785 Sammelbearbeiter)
+  hero-software:UploadImage (conn 63384)
+  hero-software:UploadDocument (conn 63384, document_type_id 688384,
+                                              document_folder_id 654644)
+  hero-software:createLogbookEntry (conn 63384)
+  hero-software:CreateTask (offen welche User-ID)
+
+OpenAI: Connection 62622, Modell heute gpt-5-mini (vorher gpt-4o-mini)
+
+Regex: \b[A-Z]{3}-\d{3,6}\b auf subject + bodyPreview
+
+LIVE-AENDERUNGEN per 2026-04-24/25:
+- Delete-Routen (3 Stueck) deaktiviert (GoBD-Konflikt)
+- Gmail-Fallback an Michael komplett entfernt
+- OpenAI-Modell gpt-4o-mini -&gt; gpt-5-mini
+- Outlook-Server-Regel: Loop-Schutz &quot;info@ -&gt; hero.automation@,
+  ausser Absender ist hero.automation@ selbst&quot;
+
+BEKANNTE SCHWAECHEN:
+- Polling-Architektur: Outlook-Postfach-Volumen kann 50 GB sprengen
+  (heute bei 42% / 21.12 GB). Bei Vollauf: Forwarding stoppt OHNE
+  Fehlermeldung. Historisch 6x ausgefallen.
+- &quot;Geloeschte Elemente&quot; Ordner: 15.47 GB / 23k Mails Altlast
+- Polling-Luecke 22:30-05:00: Naechtliche Mails liegen Stunden
+- Filter &quot;i == 1&quot;: Mail mit zwei Projekt-Nr im Betreff landet bei info@
+- Regex restriktiv: keine Kleinbuchstaben, keine 2-stelligen Nummern,
+  keine Nummern ohne Bindestrich
+- OpenAI-Prompt liefert Text + Zusammenfassung doppelt (siehe Sa-Test)
+
+GEPLANTE AENDERUNGEN IN N8N-MIGRATION:
+- KOMPLETTER REWRITE auf Mailgun-Webhook (Push statt Polling)
+- S3-Archivierung der Mails (10 Jahre GoBD-konform)
+- OpenAI-Prompt umformulieren (nur Zusammenfassung, kein Volltext-Echo)
+- KI-Fallback fuer Mails ohne erkennbare Projekt-Nr (&quot;Eingang
+  unsortiert&quot; statt info@-Bounce)
+- Alert-Mail an monitoring@waerme-wimmer.de
+- TinyURL komplett entfallen (Hero-Subdomain-Bug behoben)
+- OpenAI-Key auf WW-eigenen Account
+</code></pre>
+<hr />
+<h2 id="1-business-outcome-was-muss-es-tun">1. Business-Outcome (was muss es tun)</h2>
+<p>Alle eingehenden E-Mails an <code>info@waerme-wimmer.de</code> werden automatisch:</p>
+<ol>
+<li>Einem Hero-Projekt zugeordnet (via Projektnummer im Betreff oder Body, mit Fallback auf KI-Klassifizierung)</li>
+<li>Als Logbucheintrag ins Projekt geschrieben (Absender, Betreff, Datum, OpenAI-Kurzzusammenfassung)</li>
+<li>Anhänge werden extrahiert und je nach Typ als Dokument oder Bild ins Projekt hochgeladen</li>
+<li>Bei Reklamations-Keywords wird automatisch eine Aufgabe im Projekt erzeugt und an <code>reklamation@...</code> forwarded</li>
+<li>Die E-Mail wird nach erfolgreicher Verarbeitung aus dem Info-Postfach entfernt (auf S3 archiviert)</li>
+</ol>
+<p>Bei Fehlern (OpenAI-Ausfall, kein Projekt gefunden, Parsing-Error) wird eine Alert-Mail an eine <strong>WW-interne Monitoring-Adresse</strong> geschickt (nicht mehr an Micha's Gmail) und die E-Mail bleibt im Postfach zur manuellen Sichtung.</p>
+<hr />
+<h2 id="2-warum-rewrite-die-4-probleme-des-ist-zustands">2. Warum Rewrite (die 4 Probleme des Ist-Zustands)</h2>
+<table>
+<thead>
+<tr>
+<th>Problem</th>
+<th>Ursache</th>
+<th>Konsequenz</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Postfach lief regelmäßig voll</td>
+<td>Outlook-Polling alle X Min, bei Fehlern blieb Backlog liegen</td>
+<td>6x Ausfall historisch</td>
+</tr>
+<tr>
+<td>Zeitfenster-Lücke 05:00 bis ~? Uhr</td>
+<td>Scheduler deaktiviert nachts</td>
+<td>Späte Mails bleiben bis morgens unverarbeitet; 2FA blockiert Spätarbeit</td>
+</tr>
+<tr>
+<td>Calendar-Invite-Loop</td>
+<td>Unklarer Bug im Outlook-Watch</td>
+<td>Tausende von Iterationen, Ops-Verbrauch explodiert</td>
+</tr>
+<tr>
+<td>Micha's private Gmail als Error-Fallback</td>
+<td><code>google-email:sendAnEmail</code> → <code>michael.klaus@hero-software.de</code></td>
+<td>Nach Übernahme untragbar (Privacy + Ownership)</td>
+</tr>
+<tr>
+<td>OpenAI-Kosten außerhalb WW-Abrechnung</td>
+<td>Token lief über Hero-Vertrag</td>
+<td>Nach Übernahme kein WW-Key, kein Budget-Monitoring</td>
+</tr>
+<tr>
+<td>Regex als Single-Point-of-Failure</td>
+<td>Project-Nr muss exakt matchen</td>
+<td>False-Negatives werden still ignoriert</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="3-ziel-architektur-soll-zustand">3. Ziel-Architektur (Soll-Zustand)</h2>
+<p><pre class="mermaid">flowchart TD
+    A[Kunde sendet Mail an info@waerme-wimmer.de] --> B[MX bleibt Microsoft 365]
+    B --> C[Outlook-Forwarding-Regel: Kopie an<br/>ingest@mg.waerme-wimmer.de]
+    C --> D[Mailgun Route: match_recipient + store + notify]
+    D --> E[Mailgun speichert Raw-Mail + Attachments auf S3<br/>Bucket: ww-mail-archive]
+    D --> F[Mailgun-Webhook POST an Make]
+    F --> G[Make Scenario: WW-Hero-Mail-Ingest]
+    G --> H{Projekt-Nr im<br/>Betreff/Body?}
+    H -->|Ja| I[Hero: GetProject by ID]
+    H -->|Nein| J[OpenAI Klassifizierung<br/>Projekt-Kandidaten]
+    J --> K{Confidence > 0.8?}
+    K -->|Ja| I
+    K -->|Nein| L[Projekt 'Eingang unsortiert']
+    I --> M[OpenAI Summary<br/>gpt-4o-mini, 150 tokens]
+    L --> M
+    M --> N[Hero: CreateLogbookEntry]
+    N --> O{Attachments<br/>vorhanden?}
+    O -->|Ja| P[S3 Presigned URL →<br/>Hero UploadDocument/UploadImage]
+    O -->|Nein| Q
+    P --> Q{Reklamations-<br/>Keyword?}
+    Q -->|Ja| R[Hero: CreateTask<br/>+ Forward an reklamation@]
+    Q -->|Nein| S[Ende]
+    R --> S
+    G -.->|Fehler| T[Alert-Mail an<br/>monitoring@waerme-wimmer.de]
+    T -.-> U[Mail bleibt auf S3;<br/>Status: failed]</pre></p>
+<hr />
+<h2 id="4-komponenten-im-detail">4. Komponenten im Detail</h2>
+<h3 id="41-mail-ingest-outlook-forwarding-mailgun">4.1 Mail-Ingest: Outlook-Forwarding → Mailgun</h3>
+<p><strong>Entscheidung Meeting 2026-04-15:</strong> MX-Record bleibt bei Microsoft 365; Mailgun wird über <strong>Outlook-Weiterleitungsregel</strong> befüllt. Raphael: "Ich würde einfach eine Weiterleitung machen. Ich würde quasi eine andere Domain der Mailgun zur Verfügung stellen."</p>
+<p><strong>Setup:</strong>
+- Neue Subdomain: <code>mg.waerme-wimmer.de</code> (DNS MX bei Mailgun, DKIM/SPF bei Mailgun)
+- Mailgun-Route: <code>match_recipient("ingest@mg.waerme-wimmer.de")</code> → store + forward-to-webhook
+- Outlook-Server-Regel: "Eingehende Mail an info@ → Kopie an ingest@mg.waerme-wimmer.de <strong>behalten</strong> im info-Postfach bis Make bestätigt"</p>
+<p><strong>Vorteile:</strong>
+- Kein MX-Switch, andere W1-Automatisierungen unberührt
+- Event-getrieben, kein Polling — kein Postfach-Overflow, kein Zeitfenster-Problem
+- Mailgun hält Raw-Mails 3 Tage vor (Resend-Möglichkeit)
+- Kostenrahmen planbar (siehe Kostenkalkulation)</p>
+<p><strong>Risiken / offene Punkte:</strong>
+- Outlook-Server-Regel muss im M365-Admin-Center gesetzt werden (Raphael / Leonhard)
+- Kopie-Weiterleitung: Info-Postfach darf sich nicht mehr füllen → Archiv-Regel nach Make-Bestätigung nötig (Housekeeping-Szenario)
+- Fallback wenn Mailgun down ist: Mails sammeln sich im info-Postfach, werden nicht doppelt verarbeitet</p>
+<h3 id="42-mail-storage-s3">4.2 Mail-Storage: S3</h3>
+<p><strong>Entscheidung Meeting 2026-04-15:</strong> Raw-Mails + Attachments liegen auf S3, nicht mehr in Outlook. Raphael: "E-Mails sollen auf S3 gespeichert und von dort angezeigt werden."</p>
+<p><strong>Setup (mit Leonhard):</strong>
+- Bucket: <code>ww-mail-archive</code> (Region: eu-central-1 Frankfurt, DSGVO)
+- Lifecycle-Policy: Standard-Tier 180 Tage, dann Glacier
+- IAM-User für Mailgun: nur <code>s3:PutObject</code> auf <code>raw/*</code>
+- IAM-User für Make: <code>s3:GetObject</code> + <code>s3:HeadObject</code> für Presigned-URL-Generation</p>
+<p><strong>Keying-Schema:</strong></p>
+<pre><code>raw/{YYYY}/{MM}/{DD}/{message-id}.eml
+attachments/{YYYY}/{MM}/{DD}/{message-id}/{sha256}-{original-filename}
+</code></pre>
+<p><strong>Leonhards Fragen (aus Meeting) beantwortet:</strong>
+- Was wird gespeichert: <code>.eml</code>-Raw + alle Attachments (PDFs, Bilder, Office-Docs)
+- Datenrelevanz: DSGVO-relevant (Kundenmails). Zugriff auf Mitarbeiter beschränken, Löschfrist klären (gesetzliche Aufbewahrungspflicht = 6 oder 10 Jahre).
+- Größe pro Jahr: <strong>~100 GB</strong> (Schätzung WW, 2026-04-15). Budget-Basis für Backups.</p>
+<h3 id="43-projekt-matching-regex-ki-fallback">4.3 Projekt-Matching: Regex + KI-Fallback</h3>
+<p><strong>Ist-Zustand:</strong> Regex matcht Projekt-Nr in Subject/Body, bei Nicht-Match wird Mail als Fehler gehandelt.</p>
+<p><strong>Soll-Zustand (aus Meeting):</strong> Raphael: "Projektzuweisung auch KI-basiert noch mal verbessern, kann ich mir vorstellen. Können wir einfach mal drüber nachdenken."</p>
+<p><strong>2-stufiger Ansatz:</strong>
+1. <strong>Regex first</strong> (Kosten = 0). Pattern: <code>\b[A-Z]{3}-\d{3,6}\b</code> (bestätigt per Klaus-PDF + Blueprint). Trifft nur, wenn Projektnummer im Betreff/Body steht. Trefferquote unbekannt (keine Messdaten aus HERO-Betrieb vorhanden, muss nach Go-Live gemessen werden).
+2. <strong>OpenAI-Fallback</strong> wenn Regex leer ist. Prompt: "Extract the most likely Hero project number from this email. Return only the number or NONE. Context: recent open projects for this customer: [LIST]." gpt-4o-mini, ~200 tokens in + 10 out.</p>
+<p>Bei Confidence-Score &lt; 0.8 oder Antwort "NONE": landet in Fallback-Projekt "Eingang unsortiert" (muss Sabine/Michaela manuell triagieren). <strong>Kein stilles Dropping mehr.</strong></p>
+<h3 id="44-openai-nutzung">4.4 OpenAI-Nutzung</h3>
+<p><strong>Zwei Calls pro Mail (im Worst-Case):</strong>
+1. Projekt-Klassifizierung (nur wenn Regex leer): ~210 tokens
+2. Logbuch-Summary (immer): Prompt 800 tokens + Completion 150 tokens</p>
+<p><strong>Model:</strong> <code>gpt-4o-mini</code> (Input $0.15/M, Output $0.60/M)</p>
+<p><strong>Kosten pro Mail (Best/Avg/Worst):</strong>
+- Best (Regex trifft, Mail kurz): 1 Call a 800/150 = $0.00021
+- Avg: $0.00035
+- Worst (Regex leer + Mail lang): 2 Calls, $0.00085</p>
+<p>Bei 50 Mails/Tag × 22 Werktage = 1100 Mails/Monat × $0.00035 = <strong>~$0.40/Monat</strong>. Marginal. Siehe Kosten-Page für Gesamt-Budget.</p>
+<p><strong>WW-eigener Key erforderlich</strong> (offen: Raphael klärt ob WW OpenAI-Account hat).</p>
+<h3 id="45-hero-schreibpfad">4.5 Hero-Schreibpfad</h3>
+<p><strong>Logbuch-Eintrag:</strong>
+- Endpoint: Hero native Modul <code>app#herosoftwareintern-ba9lus:CreateProjectLogEntry</code> (bevorzugt) oder GraphQL-Mutation via <code>http:ActionSendDataAPIKeyAuth</code>
+- Felder: <code>project_id</code>, <code>type: email</code>, <code>sender</code>, <code>subject</code>, <code>summary</code>, <code>original_date</code>, <code>s3_url</code> (Link zur .eml-Datei)</p>
+<p><strong>Attachment-Upload:</strong>
+- Bilder (jpg/png/heic): <code>UploadImage</code>-Modul
+- Dokumente (pdf/docx/xlsx): <code>UploadDocument</code>-Modul
+- Hero-API-Token: <code>Sammelbearbeiter HERO</code> (neu generiert durch Raphael via Self-Service)
+- TinyURL-Umweg <strong>entfällt</strong> (Hero-Subdomain-Bug behoben laut Meeting 2026-04-09)</p>
+<p><strong>Reklamations-Task:</strong>
+- Keyword-Liste: <code>["reklamation", "beschwerde", "problem mit", "kaputt", "defekt", "nicht zufrieden"]</code> (erweiterbar; Raphael bestätigen)
+- Aktion: <code>CreateTask(project_id, title="Reklamation prüfen", assigned_user_id=&lt;TBD&gt;)</code> + Forward der Original-Mail an <code>reklamation@waerme-wimmer.de</code>
+- <strong>Offen:</strong> Wer ist <code>assigned_user_id</code>? Früher wurde hardcoded <code>user_id 270612</code> (Sabine) verwendet — Raphael bestätigen.</p>
+<h3 id="46-fehlerbehandlung-monitoring">4.6 Fehlerbehandlung &amp; Monitoring</h3>
+<p><strong>Alert-Ziel (neu):</strong> <code>monitoring@waerme-wimmer.de</code> (WW-eigenes Postfach, von Raphael anzulegen). Ersetzt <code>michael.klaus@hero-software.de</code>.</p>
+<p><strong>Drei Fehlerklassen:</strong>
+1. <strong>Retriable</strong> (OpenAI-Timeout, Hero-5xx, Netzwerk): Make Error-Handler mit Exponential-Backoff, max 3 Versuche.
+2. <strong>Permanent</strong> (Projekt nicht findbar, Attachment corrupted): Mail landet in "Eingang unsortiert", Alert informativ.
+3. <strong>Fatal</strong> (Mailgun-Webhook-Signatur invalid, OpenAI-Kontingent leer): Alert + Scenario pausiert sich selbst, Rollback auf Outlook-Polling als Kurzfrist-Workaround.</p>
+<p><strong>Dashboard-Minimum:</strong>
+- Mails empfangen / verarbeitet / gefailed pro Tag (Make-Operation-Log)
+- OpenAI-Token-Verbrauch täglich (Usage-API)
+- S3-Bucket-Größe wöchentlich</p>
+<h3 id="47-dsgvo-anforderungen">4.7 DSGVO-Anforderungen</h3>
+<ul>
+<li>S3-Bucket Frankfurt (EU)</li>
+<li>OpenAI-Datenverarbeitungs-Addendum unterzeichnen (Raphael / GF)</li>
+<li>Löschfristen-Policy: Raw-Mail 10 Jahre (GoBD), dann automatisch gelöscht</li>
+<li>Zugriffslog auf Bucket aktivieren (CloudTrail)</li>
+<li>Auftragsverarbeitungs-Verträge: Mailgun (Sinch Email API) + OpenAI + AWS</li>
+</ul>
+<hr />
+<h2 id="5-make-module-plan-soll-zustand-konkreter-bauplan">5. Make-Module-Plan (Soll-Zustand): konkreter Bauplan</h2>
+<p>Ist-Zustand: 24 Module, verschachtelt, schwer nachvollziehbar. Soll: <strong>~14 Module</strong>, klarere Struktur.</p>
+<h3 id="modul-fur-modul-so-wurde-es-gebaut">Modul-für-Modul (so würde es gebaut)</h3>
+<ul>
+<li><strong>M1:</strong> <code>gateway:CustomWebHook</code> — Mailgun-Webhook empfängt POST mit Mail-Daten + Attachments</li>
+<li><strong>M2:</strong> <code>regexp:Parser</code> — Extrahiert Projektnummer aus <code>subject + body</code> via <code>\b[A-Z]{3}-\d{3,6}\b</code></li>
+<li><strong>M3:</strong> <code>builtin:BasicRouter</code> — 2 Routen: Regex-Match (R0) vs kein Match (R1)</li>
+<li><strong>Route 0 — Projektnummer gefunden:</strong><ul>
+<li><strong>M4:</strong> <code>app#herosoftwareintern-ba9lus:GetProject</code> — Projekt per <code>relative_id</code> aus HERO laden</li>
+<li><strong>M5:</strong> <code>openai-gpt-3:CreateCompletion</code> — gpt-4o-mini, Signatur entfernen + Zusammenfassung (150 Tokens)</li>
+<li><strong>M6:</strong> <code>app#herosoftwareintern-ba9lus:createLogbookEntry</code> — Logbuch schreiben (Absender, Datum, Summary, S3-Link)</li>
+<li><strong>M7:</strong> <code>builtin:BasicRouter</code> — 3 Sub-Routen nach Kontext</li>
+<li><strong>R0 — Attachments vorhanden:</strong> <code>hasAttachments = true</code><ul>
+<li><strong>M8:</strong> <code>http:ActionSendData</code> — S3 Presigned URL generieren</li>
+<li><strong>M9:</strong> <code>builtin:BasicRouter</code> — Bild vs Dokument</li>
+<li><strong>R0:</strong> <code>app#...:UploadImage</code> (PNG/JPG/HEIC → Kategorie "Bilder vom Kunden")</li>
+<li><strong>R1:</strong> <code>app#...:UploadDocument</code> (PDF/DOCX → Ordner "Allgemein", Typ 688384)</li>
+</ul>
+</li>
+<li><strong>R1 — Reklamation:</strong> Status enthält "Reklamation"-Keyword<ul>
+<li><strong>M10:</strong> <code>app#...:CreateTask</code> — "Reklamation prüfen" für <code>target_user_id: TBD</code></li>
+<li><strong>M11:</strong> <code>microsoft-email:forwardMessage</code> → <code>reklamation@waerme-wimmer.de</code></li>
+</ul>
+</li>
+<li><strong>R2 — Normal (kein Attachment, kein Reklamation):</strong> Ende</li>
+</ul>
+</li>
+<li><strong>Route 1 — Keine Projektnummer (KI-Fallback):</strong><ul>
+<li><strong>M12:</strong> <code>openai-gpt-3:CreateCompletion</code> — Klassifizierung: "Welches HERO-Projekt passt?"</li>
+<li><strong>M13:</strong> <code>builtin:BasicRouter</code> — Confidence &gt; 0.8 vs niedrig</li>
+<li><strong>R0 — hohe Confidence:</strong> → weiter mit M4-M11 (gleicher Pfad wie Route 0)</li>
+<li><strong>R1 — niedrige Confidence:</strong> Projekt = "Eingang unsortiert" → weiter mit M5-M6 (nur Logbuch, kein Attachment)</li>
+</ul>
+</li>
+<li><strong>Error-Handler (auf M5):</strong> <code>builtin:BasicRouter (Break)</code> — bei OpenAI-Ausfall: Rohtext als Summary verwenden</li>
+<li><strong>M14:</strong> <code>microsoft-email:sendAnEmail</code> → <code>monitoring@waerme-wimmer.de</code> (Alert bei Fehler)</li>
+</ul>
+<p><strong>Gesamtanzahl: ~14-16 Module</strong> (vs. 24 im IST)</p>
+<h3 id="was-entfallt-vs-ist">Was entfällt vs. IST</h3>
+<table>
+<thead>
+<tr>
+<th>IST-Modul</th>
+<th>Was es tat</th>
+<th>Entfällt warum</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>microsoft-email:watchMessages</code></td>
+<td>Outlook-Polling alle 15 Min</td>
+<td>Ersetzt durch Mailgun-Webhook (M1)</td>
+</tr>
+<tr>
+<td><code>http:ActionSendDataAPIKeyAuth</code> (TinyURL)</td>
+<td>Outlook-Weblink kürzen</td>
+<td>TinyURL-Bug behoben; Link nicht mehr nötig; S3-URL stattdessen</td>
+</tr>
+<tr>
+<td><code>microsoft-email:deleteAMessage</code> (3x)</td>
+<td>Mail aus Postfach löschen</td>
+<td>Entfällt: Mail liegt auf S3, nicht mehr in Outlook</td>
+</tr>
+<tr>
+<td><code>util:FunctionSleep</code> (2x)</td>
+<td>5s Wartezeit für Zustellungssicherheit</td>
+<td>Entfällt: Webhook-basiert, kein Timing-Problem</td>
+</tr>
+<tr>
+<td><code>microsoft-email:forwardMessage</code> (Route B)</td>
+<td>Unbekannte Mail → info@</td>
+<td>Ersetzt durch Fallback-Projekt "Eingang unsortiert" in HERO</td>
+</tr>
+</tbody>
+</table>
+<h3 id="was-neu-dazukommt">Was NEU dazukommt</h3>
+<table>
+<thead>
+<tr>
+<th>Neues Modul</th>
+<th>Warum</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>S3 Presigned URL (M8)</td>
+<td>Attachments von S3 an HERO übergeben statt Outlook-Inline</td>
+</tr>
+<tr>
+<td>OpenAI Klassifizierung (M12)</td>
+<td>KI-Fallback für Mails ohne Projektnummer im Betreff</td>
+</tr>
+<tr>
+<td>Alert-Mail an monitoring@ (M14)</td>
+<td>Ersetzt michael.klaus@hero-software.de als Error-Ziel</td>
+</tr>
+</tbody>
+</table>
+<h3 id="vergleich-ist-vs-soll-auf-einen-blick">Vergleich IST vs SOLL auf einen Blick</h3>
+<pre><code>IST (24 Module):
+  Outlook-Poll → Regex → Router → [4 Sub-Router mit je 2-3 Modulen] → Delete/Forward/Sleep
+
+SOLL (14 Module):
+  Mailgun-Webhook → Regex → Router → GetProject → OpenAI → Logbuch → [Attachment/Reklamation/Normal]
+</code></pre>
+<hr />
+<h2 id="5b-geplante-modul-anzahl-12-16">5b. Geplante Modul-Anzahl: ~12-16</h2>
+<p>Das Ist-Szenario hatte ~30 Module. Ziel-Rewrite durch:
+- Entfallende TinyURL-Logik (-2 Module)
+- Konsolidierte Router-Struktur (-4 Module)
+- Mailgun-Webhook statt Outlook-Polling (-3 Module)
+- Saubere Error-Pfade (Make native Error-Handler statt Inline-Logik)</p>
+<p>Ops-Verbrauch pro Mail: <strong>6-10 Ops</strong> (vs. 12-18 heute) — siehe Kosten-Page.</p>
+<hr />
+<h2 id="6-offene-fragen-an-raphael-fur-fr-meeting-2026-04-17">6. Offene Fragen an Raphael (für Fr-Meeting 2026-04-17)</h2>
+<ol>
+<li><strong>M365-Admin-Zugriff:</strong> Wer legt die Outlook-Weiterleitungsregel an (Raphael / Leonhard)?</li>
+<li><strong>Mailgun-Account:</strong> WW-eigen oder nutzen wir meinen, bis Setup klar ist? (Kostenrahmen $15/mo bei 50k Mails)</li>
+<li><strong>S3-Bucket:</strong> Leonhards Timeline für Provisioning? Blocker für Go-Live 2026-04-28.</li>
+<li><strong>OpenAI-Key:</strong> WW-eigener Account? Bei Neu-Einrichtung: Projekt-Budget-Limit setzen.</li>
+<li><strong><code>monitoring@</code>-Postfach:</strong> bestehend oder neu anlegen?</li>
+<li><strong>Reklamations-Keywords + Ziel-Postfach:</strong> bestätigen die Liste und <code>reklamation@waerme-wimmer.de</code> existiert.</li>
+<li><strong>Hardcoded <code>user_id 270612</code>:</strong> Sabines ID oder dynamisch per Projektzuweisung?</li>
+<li><strong>Fallback-Projekt "Eingang unsortiert":</strong> neu anlegen in Hero oder existierendes nutzen?</li>
+<li><strong>Calendar-Invite-Loop:</strong> Kannst du ein Beispiel aus dem Execution-Log teilen, damit ich den Root-Cause nachvollziehen kann, bevor ich den Rewrite mache?</li>
+<li><strong>Zeitrahmen für S3-Migration:</strong> Phase-1 (Go-Live 28.04) mit S3, oder Phase-2 nach Go-Live? Falls Phase-2: Interim-Storage in Make-Data-Store oder Mailgun-Retention (3 Tage) reicht?</li>
+</ol>
+<hr />
+<h2 id="7-implementierungs-reihenfolge">7. Implementierungs-Reihenfolge</h2>
+<p><strong>Week of 2026-04-20:</strong>
+1. Mi 23.04: Mailgun-Domain <code>mg.waerme-wimmer.de</code> + Route + Test-Mail (dry-run)
+2. Mi 23.04: S3-Bucket via Leonhard (oder Phase-2 Entscheidung)
+3. Do 24.04 AM: Make-Scenario v1 — happy path (Regex-Match + Logbook-Eintrag), Outlook-Forwarding-Regel aktivieren
+4. Do 24.04 PM: Attachment-Pfad + Reklamations-Task
+5. Do 24.04 Feierabend: Hero schaltet ab, wir übernehmen
+6. Sa 25.04 / So 26.04: OpenAI-Fallback + Error-Handler + Monitoring; End-to-End-Tests mit Echt-Mails
+7. Mo 28.04: Go-Live; Outlook-Polling-Scenario archivieren</p>
+<p><strong>Phase-2 Polish (nach Go-Live):</strong>
+- S3-Presigned-URLs in Hero-Logbuch-Einträgen klickbar machen
+- Dashboard (Metabase / Notion-Embedded)
+- Erweiterte Reklamations-Keywords via Config-Table</p>
+  </main>
+  <footer class="footer">Quelle: <code>workspace/clients/warme-wimmer/</code> · Build S-04-outlook-hero.md · UnpauseAI</footer>
+</div>
+<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
+  <div style="text-align:center;max-width:360px;padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span></div>
+    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Wärme Wimmer Documentation</h2>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Bitte Zugangscode eingeben.</p>
+    <div style="display:flex;gap:8px;">
+      <input id="auth-input" type="password" placeholder="Zugangscode" autocomplete="off" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;" onkeydown="if(event.key==='Enter')checkAuth()" />
+      <button onclick="checkAuth()" style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">OK</button>
+    </div>
+    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Falscher Code, bitte erneut versuchen.</p>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:document.documentElement.getAttribute('data-theme')==='dark'?'dark':'default',securityLevel:'loose'});</script>
+<script>
+var WIMMER_CODE='wimmer2026';
+function checkAuth(){var inp=document.getElementById('auth-input').value;if(inp===WIMMER_CODE){localStorage.setItem('wimmer-docs-access','granted');var g=document.getElementById('auth-gate');g.style.opacity='0';setTimeout(function(){g.style.display='none'},300)}else{document.getElementById('auth-error').style.display='block';document.getElementById('auth-input').value='';document.getElementById('auth-input').focus()}}
+(function(){if(localStorage.getItem('wimmer-docs-access')==='granted'){var g=document.getElementById('auth-gate');if(g)g.style.display='none'}else{var inp=document.getElementById('auth-input');if(inp)inp.focus()}})();
+function toggleTheme(){var h=document.documentElement;var c=h.getAttribute('data-theme');var n=c==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('wimmer-docs-theme',n);var i=document.getElementById('theme-icon');if(i)i.innerHTML=n==='dark'?'&#9788;':'&#9790;'}
+var saved=localStorage.getItem('wimmer-docs-theme');
+if(saved){document.documentElement.setAttribute('data-theme',saved);var i=document.getElementById('theme-icon');if(i&&saved==='dark')i.innerHTML='&#9788;'}
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('sidebarBackdrop').classList.toggle('active')}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('sidebarBackdrop').classList.remove('active')}
+</script>
+</body>
+</html>
