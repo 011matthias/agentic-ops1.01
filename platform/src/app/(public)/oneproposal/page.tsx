@@ -8,7 +8,7 @@ export const metadata: Metadata = {
     "Paste an Upwork job posting. Get a tailored cover letter and a personalized proposal page in 30 seconds. $5 per proposal, refunded on failure.",
 };
 
-const APP_URL = "https://proposal-scribe-bot.lovable.app";
+const APP_URL = "https://app.unpauseai.com";
 // SAMPLE_PROPOSAL_URL intentionally not displayed inline -- the privacy rule
 // (no prospect/client names on unpauseai.com) means we cannot expose a
 // generated proposal's slug here, since the slug contains the prospect name.
