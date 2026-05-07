@@ -170,7 +170,7 @@ def fetch_make_status() -> dict:
     build can still produce a site.
     """
     if not MAKE_TOKEN:
-        print("WARN: MAKE_API_TOKEN_WARME_WIMMER not set — building without live data", file=sys.stderr)
+        print("WARN: MAKE_API_TOKEN_WARME_WIMMER not set; building without live data", file=sys.stderr)
         return {"unavailable": True, "reason": "no_token"}
     headers = {"Authorization": f"Token {MAKE_TOKEN}"}
     try:
@@ -384,7 +384,7 @@ GROUPS = [
 
 
 def display_title(filename: str, content: str) -> str:
-    """Return the display title for a page — uses PAGE_META override if set,
+    """Return the display title for a page; uses PAGE_META override if set,
     falls back to the H1 of the markdown."""
     meta = PAGE_META.get(filename, {})
     if meta.get("title"):
@@ -682,7 +682,7 @@ def render_scenario_status_card(scn_data: dict, scenario_num: int | None = None)
         for ev in recent_errors[:3]:
             ts = _humanize_dt(ev.get("timestamp"))
             sname = _make_status_name(ev.get("status"))
-            items.append(f"<li>{ts} — {sname}</li>")
+            items.append(f"<li>{ts}; {sname}</li>")
         history_link = (
             f'<a href="{MAKE_UI_BASE}/{scenario_id}/edit#history" target="_blank" rel="noopener">'
             f"Vollständige Make-History ↗</a>"
@@ -711,9 +711,9 @@ def _make_status_name(code: int | None) -> str:
     return {
         1: "OK (status 1)",
         2: "Warnung (status 2)",
-        3: "Fehler — incomplete (status 3)",
-        4: "Fehler — failed (status 4)",
-        5: "Warnung — partial (status 5)",
+        3: "Fehler; incomplete (status 3)",
+        4: "Fehler; failed (status 4)",
+        5: "Warnung; partial (status 5)",
     }.get(code or 0, f"unbekannt (status {code})")
 
 
@@ -802,11 +802,11 @@ def render_shell(
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex,nofollow">
 <meta name="googlebot" content="noindex,nofollow">
-<title>{page_title} — Wärme Wimmer Hero-Doku</title>
+<title>{page_title}; Wärme Wimmer Hero-Doku</title>
 <style>{CSS}</style>
 </head>
 <body>
-<div id="cdn-banner" class="cdn-banner">Mermaid-CDN nicht erreichbar — Diagramme werden ggf. nicht gerendert. Quelltext bleibt sichtbar.</div>
+<div id="cdn-banner" class="cdn-banner">Mermaid-CDN nicht erreichbar; Diagramme werden ggf. nicht gerendert. Quelltext bleibt sichtbar.</div>
 <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
 {sidebar}
 {render_header(make_status)}
@@ -934,7 +934,7 @@ def render_dashboard_kpis(make_status: dict, storage: dict) -> str:
 def render_dashboard_table(make_status: dict, all_pages: dict[str, str]) -> str:
     if make_status.get("unavailable"):
         return (
-            '<div class="unavailable-note">Live-Status nicht verfügbar — Make-Token fehlt oder Make REST nicht erreichbar. '
+            '<div class="unavailable-note">Live-Status nicht verfügbar; Make-Token fehlt oder Make REST nicht erreichbar. '
             "Tabelle wird beim nächsten Build aktualisiert.</div>"
         )
     rows = []
@@ -961,7 +961,7 @@ def render_dashboard_table(make_status: dict, all_pages: dict[str, str]) -> str:
         err_count = scn.get("err_count", 0)
         warn_count = scn.get("warn_count", 0)
 
-        # Build the "Letzte 50" cell — collapsible details when there are errors/warnings.
+        # Build the "Letzte 50" cell; collapsible details when there are errors/warnings.
         recent = scn.get("recent_errors") or []
         scenario_id = scn.get("id")
         history_link = (
@@ -970,7 +970,7 @@ def render_dashboard_table(make_status: dict, all_pages: dict[str, str]) -> str:
         )
         if recent:
             error_items = "".join(
-                f"<li>{_humanize_dt(ev.get('timestamp'))} — {_make_status_name(ev.get('status'))}</li>"
+                f"<li>{_humanize_dt(ev.get('timestamp'))}; {_make_status_name(ev.get('status'))}</li>"
                 for ev in recent[:3]
             )
             success_html = (
@@ -1016,14 +1016,14 @@ def render_index(
         '<div class="cards">',
         _card("S-00-flowcharts-overview", "Flowcharts-Übersicht", "Alle 10 Hero-Automationen auf einer Seite, mit Sabine-Sicht und Audit-Sicht."),
         _card("M-meetings", "Meetings", "Chronik aller Meetings mit Decision-Log und Notizen pro Termin."),
-        _card("R-runbook", "Incident-Runbook", "Wenn ein Szenario kippt — Diagnose-Pfad und Erst-Fix-Schritte."),
+        _card("R-runbook", "Incident-Runbook", "Wenn ein Szenario kippt; Diagnose-Pfad und Erst-Fix-Schritte."),
         _card("R-team-updates", "Wartungs-Updates", "An das Team kommunizierte Status-Updates inkl. Screenshots."),
         _card("R-00-uebersicht", "Lastenheft (Hintergrund)", "Spezifikations-Dokument aus der Bauphase, post-Go-Live aktualisiert."),
         _card("R-hero-ids-und-connections", "Hero-IDs und Connections", "Referenz-Tabelle aller Tokens, Connection-IDs und Hooks."),
         _card("R-kosten-und-subscription", "Kosten und Subscription", "Make-Tier, OpenAI, weitere Komponenten."),
         _card("R-faq", "FAQ", "Häufig gestellte Fragen aus den Meetings (Sammelbearbeiter, Wimmer-Assistent, hardcoded IDs …)."),
         _card("R-glossary", "Glossar", "Begriffe aus der Doku in einem Satz erklärt."),
-        _card("R-contacts", "Kontakte und Eskalation", "Wer macht was — Rollen, Zuständigkeiten, Kontaktwege."),
+        _card("R-contacts", "Kontakte und Eskalation", "Wer macht was; Rollen, Zuständigkeiten, Kontaktwege."),
         "</div>",
     ]
 
@@ -1048,7 +1048,7 @@ def render_index(
         active_phrase = f"{n_active} von {n_total} Szenarien aktiv"
 
     body = (
-        f"<h1>Hero-Automatisierungen — Wärme Wimmer</h1>\n"
+        f"<h1>Hero-Automatisierungen; Wärme Wimmer</h1>\n"
         f'<p style="color:var(--text2);font-size:14px;margin-bottom:24px;">'
         f"Stand {today.isoformat()} · Tag {days_post} nach Go-Live · {active_phrase}</p>\n"
         + render_dashboard_kpis(make_status, storage)
@@ -1192,7 +1192,7 @@ def main() -> int:
     written += 1
     print(f"Skipped {skipped} dropped pages (per PAGE_META drop=True)")
 
-    # Anchor validation — write a build report.
+    # Anchor validation; write a build report.
     anchor_warnings = validate_anchors(rendered_final)
     report_path = OUT_DIR / ".build-report.txt"
     if anchor_warnings:
@@ -1202,7 +1202,7 @@ def main() -> int:
             + "\n  - ".join(anchor_warnings),
             encoding="utf-8",
         )
-        print(f"WARN: {len(anchor_warnings)} broken anchor links — see {report_path}")
+        print(f"WARN: {len(anchor_warnings)} broken anchor links; see {report_path}")
     else:
         report_path.write_text(
             f"Build {datetime.now(timezone.utc).isoformat(timespec='seconds')}\n\nNo broken anchors.\n",

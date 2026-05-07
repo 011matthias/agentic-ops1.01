@@ -7,7 +7,7 @@
 1. Consolidate 10 separate meeting pages into ONE page (M-meetings.md).
    Each meeting = H2 section with summary up top + collapsible <details> for raw notes.
 2. Fix whitespace bloat: no blank lines inside markdown tables (Notion parser was
-   silently dropping table rendering — confirmed via user screenshot of M-00).
+   silently dropping table rendering; confirmed via user screenshot of M-00).
 3. Fix R-00 intra-zip links: old `01-aufgabe-erledigt.md` -> new `S-01-aufgabe-erledigt.md`.
 4. Remove R-00 link to excluded `13-pre-meeting-fragen.md`.
 5. Fix R-w2-04-* navigation pointers (Seite 04 / 04b -> R-w2-04-*).
@@ -128,7 +128,7 @@ MEETINGS = [
     },
     {"date": "2026-04-09", "anchor": "m-04-09",
      "title": "Hero-Handover-Meeting (Raphael + Michael)", "channel": "Teams (ohne Nico)", "duration": "?",
-     "attendees": "Raphael Woltz, Michael Klaus (Hero) — Nico nicht dabei",
+     "attendees": "Raphael Woltz, Michael Klaus (Hero); Nico nicht dabei",
      "outcome": "Timeline locked: Hero schaltet 24.04 ab, Go-Live 28.04",
      "decisions": [
         "Hero-API-Token: Raphael generiert per Self-Service.",
@@ -253,13 +253,13 @@ MEETINGS = [
 def render_meetings_page() -> str:
     """Single consolidated Meetings page. Mind the no-blank-line-in-tables invariant."""
     parts = []
-    parts.append("# Meetings — Hero-Automatisierungen\n")
+    parts.append("# Meetings; Hero-Automatisierungen\n")
     parts.append("> *Stand 2026-05-03 · 10 Meetings konsolidiert · jede Section enthaelt Outcome + Entscheidungen + Notizen-Toggle*\n")
     parts.append("Diese Seite ersetzt die fruehere `Pre-Meeting-Fragen`-Liste: was offen war, ist hier in der jeweiligen Meeting-Section unter \"Was hier entschieden wurde\" festgehalten.\n")
 
     # --- Chronologie table (NO blank lines inside the table block!) ---
     table_lines = ["## Chronologie"]
-    table_lines.append("")  # one blank line BEFORE table -- ok
+    table_lines.append("")  # one blank line BEFORE table; ok
     table_lines.append("| Datum | Meeting | Outcome | Springen |")
     table_lines.append("|---|---|---|---|")
     for m in MEETINGS:
@@ -271,7 +271,7 @@ def render_meetings_page() -> str:
             outcome = outcome[:47] + "..."
         table_lines.append(f"| {m['date']} | {title_short} | {outcome} | [#{m['anchor']}](#{m['anchor']}) |")
     parts.append("\n".join(table_lines))
-    parts.append("")  # blank line AFTER table -- ok
+    parts.append("")  # blank line AFTER table; ok
 
     # --- Decision-Log ---
     parts.append("## Decision-Log (thematisch)\n")
@@ -313,7 +313,7 @@ def render_meeting_section(m: dict) -> str:
       gap is visible to Nico.
     """
     lines = []
-    lines.append(f"## {m['date']} — {m['title']} {{#{m['anchor']}}}")
+    lines.append(f"## {m['date']}; {m['title']} {{#{m['anchor']}}}")
     lines.append("")
     lines.append(f"**Kanal · Dauer:** {m['channel']} · {m['duration']}  ")
     lines.append(f"**Teilnehmer:** {m['attendees']}  ")
@@ -323,7 +323,7 @@ def render_meeting_section(m: dict) -> str:
     if fireflies:
         lines.append(f"**Fireflies-Aufnahme:** [Notiz öffnen ↗]({fireflies})")
     else:
-        lines.append("**Fireflies-Aufnahme:** _Link folgt — Nico backfillt aus Fireflies_")
+        lines.append("**Fireflies-Aufnahme:** _Link folgt; Nico backfillt aus Fireflies_")
     lines.append("")
     lines.append("### Was hier entschieden wurde")
     lines.append("")
@@ -383,7 +383,7 @@ def fix_r00_header(text: str) -> str:
     Original (pre-Go-Live):
       **Stand:** 2026-04-15 EOD
       **Autor:** Nicolas Neumann (UnpauseAI)
-      **Ziel-Go-Live:** Mo 2026-04-28 (intern) -- Hero schaltet Do 2026-04-24 Feierabend ab
+      **Ziel-Go-Live:** Mo 2026-04-28 (intern); Hero schaltet Do 2026-04-24 Feierabend ab
 
     Post-Go-Live: collapse into 2-line factual state.
     """
@@ -451,9 +451,9 @@ def render_start_here_page() -> str:
     as the rest of the site.
     """
     return (
-        "# Start hier — Hero-Automatisierungen Doku\n"
+        "# Start hier; Hero-Automatisierungen Doku\n"
         "\n"
-        "> **Was ist hier?** 10 Make.com-Automatisierungen, die seit 2026-04-28 die Hero-Workflows von Wärme Wimmer abdecken — vorher von Hero gehostet, jetzt bei uns. Diese Seiten erklären jede Automatisierung, was im Hintergrund läuft, wer welche Frage beantwortet, und was zu tun ist wenn etwas kippt.\n"
+        "> **Was ist hier?** 10 Make.com-Automatisierungen, die seit 2026-04-28 die Hero-Workflows von Wärme Wimmer abdecken; vorher von Hero gehostet, jetzt bei uns. Diese Seiten erklären jede Automatisierung, was im Hintergrund läuft, wer welche Frage beantwortet, und was zu tun ist wenn etwas kippt.\n"
         "\n"
         "## Wo gehst du hin?\n"
         "\n"
@@ -470,7 +470,7 @@ def render_start_here_page() -> str:
         "  </a>\n"
         "  <a class=\"persona-card\" href=\"r-00-uebersicht.html\">\n"
         "    <h3>Auditor / Später-Eingestiegener</h3>\n"
-        "    <p>Du willst die Geschichte verstehen — warum so gebaut, welche Entscheidungen, was war Phase 1 vs Phase 2.</p>\n"
+        "    <p>Du willst die Geschichte verstehen; warum so gebaut, welche Entscheidungen, was war Phase 1 vs Phase 2.</p>\n"
         "    <span class=\"persona-target\">→ Lastenheft (Hintergrund)</span>\n"
         "  </a>\n"
         "  <a class=\"persona-card\" href=\"r-runbook.html\">\n"
@@ -482,19 +482,19 @@ def render_start_here_page() -> str:
         "\n"
         "## Drei Gruppen, eine Logik\n"
         "\n"
-        "**Automatisierungen (S-* )** — Pro W2-Automatisierung eine Seite mit Status-Card, Was-tut-es, Trigger, Branching, Modul-Inventar, Risiko-Bewertung, Quick-Fix. **S-00-flowcharts-overview** ist die Sammelseite mit allen Flow-Diagrammen.\n"
+        "**Automatisierungen (S-* )**; Pro W2-Automatisierung eine Seite mit Status-Card, Was-tut-es, Trigger, Branching, Modul-Inventar, Risiko-Bewertung, Quick-Fix. **S-00-flowcharts-overview** ist die Sammelseite mit allen Flow-Diagrammen.\n"
         "\n"
-        "**Referenz (R-* )** — Querschnitts-Themen, die mehr als ein Szenario betreffen: Hero-IDs, Connections, Kosten, Lastenheft (Hintergrund), Phase-2-Mockups, Runbook, FAQ, Glossar, Kontakte.\n"
+        "**Referenz (R-* )**; Querschnitts-Themen, die mehr als ein Szenario betreffen: Hero-IDs, Connections, Kosten, Lastenheft (Hintergrund), Phase-2-Mockups, Runbook, FAQ, Glossar, Kontakte.\n"
         "\n"
-        "**Aktivität (M-, R-team-updates)** — Was passiert ist: Meetings (chronologisch + thematisch), Wartungs-Updates an Raphael/Irina/Sabine.\n"
+        "**Aktivität (M-, R-team-updates)**; Was passiert ist: Meetings (chronologisch + thematisch), Wartungs-Updates an Raphael/Irina/Sabine.\n"
         "\n"
         "## Wie nutze ich die Suche?\n"
         "\n"
-        "**Ctrl+K** (oder Cmd+K) öffnet eine Suche über alle Seiten und Abschnitte. Tippe `Sammelbearbeiter`, `W2-04`, `Mailgun`, oder einen anderen Begriff — Enter springt zur Stelle.\n"
+        "**Ctrl+K** (oder Cmd+K) öffnet eine Suche über alle Seiten und Abschnitte. Tippe `Sammelbearbeiter`, `W2-04`, `Mailgun`, oder einen anderen Begriff; Enter springt zur Stelle.\n"
         "\n"
         "## Pflege\n"
         "\n"
-        "Quelle der Wahrheit: das Repo `workspace/clients/warme-wimmer/`. Diese HTML-Seiten werden daraus gebaut. Ad-hoc-Edits direkt im Notion-Space gehen beim nächsten Re-Import verloren — Änderungen also ins Repo.\n"
+        "Quelle der Wahrheit: das Repo `workspace/clients/warme-wimmer/`. Diese HTML-Seiten werden daraus gebaut. Ad-hoc-Edits direkt im Notion-Space gehen beim nächsten Re-Import verloren; Änderungen also ins Repo.\n"
     )
 
 
@@ -529,10 +529,10 @@ def filter_comms_section_for_meeting(section: str, meeting_keywords: list[str]) 
 PAGE_INTROS = {
     "M-meetings.md": (
         "**Was ist das?** Chronik aller 10 Meetings vom Onboarding bis Post-Go-Live, plus thematischer Decision-Log oben. "
-        "**Wann brauchst du das?** Wenn du wissen willst, *warum* eine Entscheidung getroffen wurde — der Decision-Log verlinkt direkt ins Meeting."
+        "**Wann brauchst du das?** Wenn du wissen willst, *warum* eine Entscheidung getroffen wurde; der Decision-Log verlinkt direkt ins Meeting."
     ),
     "R-team-updates.md": (
-        "**Was ist das?** Append-only-Chronik der Status-Updates an Raphael / Irina / Sabine — was wurde wann kommuniziert, mit Screenshots. "
+        "**Was ist das?** Append-only-Chronik der Status-Updates an Raphael / Irina / Sabine; was wurde wann kommuniziert, mit Screenshots. "
         "**Wann brauchst du das?** Bei der Frage 'haben wir das schon angekündigt?' oder für den Audit-Trail."
     ),
     "R-hero-ids-und-connections.md": (
@@ -540,11 +540,11 @@ PAGE_INTROS = {
         "**Wann brauchst du das?** Bei Connection-Brüchen, Token-Rotation, oder wenn du eine ID in Make-Modul wiederfinden musst."
     ),
     "R-kosten-und-subscription.md": (
-        "**Was ist das?** Make-Tier, OpenAI-Verbrauch, Mailgun-Kosten — alle Komponenten mit Stand-pro-Monat. "
+        "**Was ist das?** Make-Tier, OpenAI-Verbrauch, Mailgun-Kosten; alle Komponenten mit Stand-pro-Monat. "
         "**Wann brauchst du das?** Bei Operations-Spike, Tier-Upgrade-Frage, oder Kosten-Rechtfertigung."
     ),
     "R-w2-04-rewrite-design-ist.md": (
-        "**Was ist das?** IST-Analyse des aktuellen Outlook-nach-Hero-Szenarios (W2-04) — alle 24 Module, alle bekannten Schwächen. "
+        "**Was ist das?** IST-Analyse des aktuellen Outlook-nach-Hero-Szenarios (W2-04); alle 24 Module, alle bekannten Schwächen. "
         "**Wann brauchst du das?** Vor dem Phase-2-Rewrite, oder wenn das aktuelle Szenario kippt und du verstehen willst, was unten drunter läuft."
     ),
     "R-w2-04-rewrite-design-mockup.md": (
@@ -576,13 +576,13 @@ def inject_page_intro(filename: str, text: str) -> str:
     )
 
 
-# Per-scenario Quick-Fix block — injected right under the status card on each S-XX page.
+# Per-scenario Quick-Fix block; injected right under the status card on each S-XX page.
 # Keep it short and scannable. Each entry is markdown.
 QUICK_FIX_BY_SCENARIO = {
     "S-01-aufgabe-erledigt.md": (
         "## Wenn das Szenario kippt {#quick-fix}\n"
         "\n"
-        "1. Im Make-UI das Szenario manuell **deaktivieren + reaktivieren** — triggert Webhook-Re-Sync.\n"
+        "1. Im Make-UI das Szenario manuell **deaktivieren + reaktivieren**; triggert Webhook-Re-Sync.\n"
         "2. Eine Test-Aufgabe in Hero erledigen → Webhook-Modul → Payload sichtbar?\n"
         "3. Wenn keine Payload kommt: Hero-Custom-App-Webhook defekt → [Runbook · W2-01](r-runbook.md#w2-01).\n"
     ),
@@ -604,15 +604,15 @@ QUICK_FIX_BY_SCENARIO = {
         "## Wenn das Szenario kippt {#quick-fix}\n"
         "\n"
         "1. **Outlook-Speicher** prüfen (Dashboard-KPI). Wenn 75%+: Gelöschte Elemente leeren oder Upgrade.\n"
-        "2. **OpenAI-Modell** prüfen — soll `gpt-5-mini` sein, nicht `gpt-4o-mini`. Verifiziert bei [m-04-24](m-meetings.md#m-04-24).\n"
-        "3. Stale Chain ohne Fehlermeldung? Klassisches Outlook-Voll-Symptom — Phase-2-Mailgun-Rewrite löst das strukturell ([R-w2-04-rewrite-design-mockup](r-w2-04-rewrite-design-mockup.md)).\n"
+        "2. **OpenAI-Modell** prüfen; soll `gpt-5-mini` sein, nicht `gpt-4o-mini`. Verifiziert bei [m-04-24](m-meetings.md#m-04-24).\n"
+        "3. Stale Chain ohne Fehlermeldung? Klassisches Outlook-Voll-Symptom; Phase-2-Mailgun-Rewrite löst das strukturell ([R-w2-04-rewrite-design-mockup](r-w2-04-rewrite-design-mockup.md)).\n"
         "4. Eskalation: [Runbook](r-runbook.md#scenario-error).\n"
     ),
     "S-05-projekt-erstellt.md": (
         "## Wenn das Szenario kippt {#quick-fix}\n"
         "\n"
-        "1. **Hero-Webhook-Event-Selection** in Hero-UI prüfen — muss \"Projekt erstellt\" sein, nicht \"alle\". Bekannte Drift-Quelle.\n"
-        "2. Webhook in Hero-UI neu registrieren falls nötig — kein Make-Side-Filter.\n"
+        "1. **Hero-Webhook-Event-Selection** in Hero-UI prüfen; muss \"Projekt erstellt\" sein, nicht \"alle\". Bekannte Drift-Quelle.\n"
+        "2. Webhook in Hero-UI neu registrieren falls nötig; kein Make-Side-Filter.\n"
         "3. Hintergrund: [m-04-24 W2-05-Bug](m-meetings.md#m-04-24).\n"
     ),
     "S-06-projekterinnerung.md": (
@@ -625,7 +625,7 @@ QUICK_FIX_BY_SCENARIO = {
     "S-07-rechnungen-bezahlt.md": (
         "## Wenn das Szenario kippt {#quick-fix}\n"
         "\n"
-        "1. Schedule: täglich 05:00 — verifiziert in [m-04-24](m-meetings.md#m-04-24).\n"
+        "1. Schedule: täglich 05:00; verifiziert in [m-04-24](m-meetings.md#m-04-24).\n"
         "2. Make-UI History → letzten Failed-Run.\n"
         "3. Eskalation: [Runbook](r-runbook.md#scenario-error).\n"
     ),
@@ -646,7 +646,7 @@ QUICK_FIX_BY_SCENARIO = {
     "S-10-zahlung-erhalten.md": (
         "## Wenn das Szenario kippt {#quick-fix}\n"
         "\n"
-        "**Status: deaktiviert** — gewollt. W2-10 ist deferred zur n8n-Migration wegen 50-Result-Hero-Pagination-Limit. "
+        "**Status: deaktiviert**; gewollt. W2-10 ist deferred zur n8n-Migration wegen 50-Result-Hero-Pagination-Limit. "
         "Siehe [Runbook · W2-10](r-runbook.md#w2-10) und [m-04-25](m-meetings.md#m-04-25).\n"
     ),
 }
@@ -712,7 +712,7 @@ def fix_r00_intro_callout(text: str) -> str:
     """Inject the 'Was ist das? / Wer / Wann' blockquote right after R-00's H1."""
     intro = (
         "> **Was ist das?** Das ursprüngliche Lastenheft aus der Bauphase, post-Go-Live aktualisiert.  \n"
-        "> **Wer liest das?** Ein Auditor oder ein Später-Eingestiegener, der den Hintergrund verstehen will — nicht das Tagesgeschäft.  \n"
+        "> **Wer liest das?** Ein Auditor oder ein Später-Eingestiegener, der den Hintergrund verstehen will; nicht das Tagesgeschäft.  \n"
         "> **Wann brauchst du das?** Wenn du wissen willst, *warum* eine Automatisierung so gebaut wurde. Für tägliche Arbeit reicht die jeweilige S-XX-Seite oder [M-meetings](M-meetings.md).\n"
     )
     return re.sub(r"^(# [^\n]+\n)", lambda m: m.group(1) + "\n" + intro + "\n", text, count=1, flags=re.MULTILINE)
@@ -741,7 +741,7 @@ def build_pages() -> dict[str, str]:
         )
         s00 = re.sub(r"lt\. Klaus", "lt. Hero-Doku", s00)
         s00 = re.sub(
-            r"\*\*Prozess-Doku \(Klaus, kanonisch\):\*\* \[16 Prozessdoku Klaus, Section \d+\]\([^)]+\) -- siehe dort fuer Hero-IDs, Filter-Bedingungen, alle Routen mit Status-Codes\.\n+",
+            r"\*\*Prozess-Doku \(Klaus, kanonisch\):\*\* \[16 Prozessdoku Klaus, Section \d+\]\([^)]+\); siehe dort fuer Hero-IDs, Filter-Bedingungen, alle Routen mit Status-Codes\.\n+",
             "", s00,
         )
         s00 = re.sub(r"\| Prozess \(lt\. Hero-Doku\) \|", "| Prozess |", s00)
@@ -802,7 +802,7 @@ def main() -> int:
     # 1. Single consolidated meetings page
     pages["M-meetings.md"] = render_meetings_page()
 
-    # 2. S-00 flowcharts overview -- reuse from prior generator if exists, else regenerate
+    # 2. S-00 flowcharts overview; reuse from prior generator if exists, else regenerate
     s00_src = NDIR / "15-flowcharts-overview.md"
     if s00_src.is_file():
         s00 = s00_src.read_text(encoding="utf-8")
@@ -817,7 +817,7 @@ def main() -> int:
         )
         s00 = re.sub(r"lt\. Klaus", "lt. Hero-Doku", s00)
         s00 = re.sub(
-            r"\*\*Prozess-Doku \(Klaus, kanonisch\):\*\* \[16 Prozessdoku Klaus, Section \d+\]\([^)]+\) -- siehe dort fuer Hero-IDs, Filter-Bedingungen, alle Routen mit Status-Codes\.\n+",
+            r"\*\*Prozess-Doku \(Klaus, kanonisch\):\*\* \[16 Prozessdoku Klaus, Section \d+\]\([^)]+\); siehe dort fuer Hero-IDs, Filter-Bedingungen, alle Routen mit Status-Codes\.\n+",
             "", s00,
         )
         s00 = re.sub(
@@ -827,7 +827,7 @@ def main() -> int:
         s00 = re.sub(r"\| Prozess \(lt\. Klaus\) \|", "| Prozess |", s00)
         pages["S-00-flowcharts-overview.md"] = s00
     else:
-        print("WARN: 15-flowcharts-overview.md missing — S-00 not produced", file=sys.stderr)
+        print("WARN: 15-flowcharts-overview.md missing; S-00 not produced", file=sys.stderr)
 
     # 3. Existing notion-pages files: rename + apply targeted edits
     for src_md in sorted(NDIR.glob("*.md")):
