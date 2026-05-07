@@ -46,7 +46,7 @@ Beyond the Gurmej thread, here's what's true:
 
 - The four Christmas/automation scenarios (A0, A1, A2, A3) are running clean. A3 has been healthy since the 2026-04-27 fix landed.
 - Jess sent a single chase on 2026-05-05 11:40 BST asking about the Gmail send-limits research. The deliverability + scaling report that answers her question went live on 2026-04-27 (PR #102, force-deployed via `tools/vercel-force-deploy.sh`) at `unpauseai.com/docs/meji-media/scaling` (access code `meji2026`), but I never sent her the link. I'm sending it today as part of the introduction.
-- The Instantly logins are in hand: `gurmej@mejimedia.com / Renewal1840@`. All 10-11 warmed Instantly domains are Meji-owned. Try them when you have access. If they don't work, ask Gurmej to verify or reset.
+- The Instantly logins are in hand: `gurmej@mejimedia.com / <ASK-NICOLAS-OFFLINE>`. All 10-11 warmed Instantly domains are Meji-owned. Try them when you have access. If they don't work, ask Gurmej to verify or reset.
 - One small loose end on the live system: the `developer_bcc` field in Pipeline Config (DS 153173) still points at a deactivated mailbox. A1 sends customer emails fine but emits status-2 warnings on every send. Cleanup is a B1.5-gated change you can take whenever you're ready.
 
 That's the snapshot. The rest of this guide gives you what you need to act on it.
@@ -107,7 +107,7 @@ Group thread with Gurmej, Jess, and (when relevant) Anuj. This is where all Chri
 
 **Thread 2: "General outreach project"**, 1:1 Gurmej for the Instantly scope
 
-Started by Gurmej as a separate project for the Instantly outbound work. This is where the Instantly logins were sent (2026-04-27 15:09 BST: `gurmej@mejimedia.com / Renewal1840@`) and where Gurmej has chased three times waiting for a response. Jess is NOT on this thread. The work that happens here is strategic outbound, not Christmas-side ops.
+Started by Gurmej as a separate project for the Instantly outbound work. This is where the Instantly logins were sent (2026-04-27 15:09 BST: `gurmej@mejimedia.com / <ASK-NICOLAS-OFFLINE>`) and where Gurmej has chased three times waiting for a response. Jess is NOT on this thread. The work that happens here is strategic outbound, not Christmas-side ops.
 
 The reason this matters: when you reply to Gurmej about Instantly, reply in **Thread 2** (General outreach project), not Thread 1. They are different commercial conversations and conflating them in either direction would be confusing. The introduction message I'm sending today goes in Thread 1 because it covers the Christmas-side handover and the access asks; you'll then reply to Gurmej in Thread 2 to close the silence there.
 
@@ -321,7 +321,7 @@ A3 should have ~24 executions per 24h on the hourly schedule, all status 1, ops 
 
 ### Days 5-10: take over the relationship
 
-**9. Try the Instantly credentials.** `gurmej@mejimedia.com / Renewal1840@`. If they work, start the audit (next section). If they don't, single-line ask to Gurmej: "Tried the ones you shared and they're not getting me through. Could you double-check or reset and resend? No rush, but it's the gating piece for the scope-out."
+**9. Try the Instantly credentials.** `gurmej@mejimedia.com / <ASK-NICOLAS-OFFLINE>`. If they work, start the audit (next section). If they don't, single-line ask to Gurmej: "Tried the ones you shared and they're not getting me through. Could you double-check or reset and resend? No rush, but it's the gating piece for the scope-out."
 
 **10. First operational message under your name.** Likely triggered by Jess flagging something or Gurmej asking a question. Whatever the first one is, reply same-day. Match the Meji style. The validator gate is your safety net.
 
@@ -385,7 +385,7 @@ What you need; what's automatic; what needs an explicit ask.
 
 **MySQL database direct access.** Optional. A0 reads from `xmas_2020.enquiries` via the `make` user (read-only) inside the Make.com Sheets connection. You inherit it via org membership without needing a personal copy. If you ever need to query the DB outside of Make, Anuj has phpMyAdmin at `christmasofficeparty.co.uk/phpmyadmin/` (host whitelisting required; Anuj has 3 EU2 IPs already whitelisted: `34.254.1.9`, `52.31.156.93`, `52.50.32.186`).
 
-**Instantly dashboard.** Login `gurmej@mejimedia.com / Renewal1840@`. Try once you have time. If the credentials don't work, reset/verify ask to Gurmej (single line, see §9 step 9).
+**Instantly dashboard.** Login `gurmej@mejimedia.com / <ASK-NICOLAS-OFFLINE>`. Try once you have time. If the credentials don't work, reset/verify ask to Gurmej (single line, see §9 step 9).
 
 **Documentation portal.** `unpauseai.com/docs/meji-media/` with access code `meji2026`. Source files at `platform/public/docs/meji-media/` in this repo. You inherit access via repo access; no separate auth.
 
