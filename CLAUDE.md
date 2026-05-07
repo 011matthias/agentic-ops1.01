@@ -17,7 +17,7 @@ platform/                            # Website — proposals + automation module
 ├── src/modules/                     # Module registry and type definitions
 docs/                                # Session logs, checkpoints, friction register
 ├── sessions/                        # Daily logs + YAML context for /resume fast-path
-tools/                               # Utility scripts (make-api.py, etc.)
+tools/                               # Utility scripts (see tools/INDEX.md for manifest)
 scripts/                             # One-off automation scripts
 .claude/skills/                      # On-demand domain knowledge (via packs)
 .claude/agents/                      # Multi-step orchestrators
