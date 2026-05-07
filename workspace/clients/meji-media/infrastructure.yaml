@@ -91,13 +91,13 @@ instances:
         trigger: scheduled (1800s)
         ship: true
         status: active
-        note: "2026-03-30: Reconciled from live. 1003 executions, 11 errors."
+        note: "2026-04-10: Running. 5,000 credits topped up by Gurmej. First run at 08:29 UTC caught backlog (14 ops). Picking up new enquiries normally."
       - id: 8804011
         name: "A1 - Enquiry Follow-Up Sequence"
         trigger: webhook
         ship: true
         status: active
-        note: "2026-03-31: Verified venue_key mapping from events table. All 19 IDs mapped via contains(): B=130,141-148 W=131,133-137 L=132,138-140. Fixed name/leader swap + guest grammar. Jess Leicester test (id 14294, event_id 138) processed successfully. Previously: 2026-03-30 replace chains update."
+        note: "2026-04-23: Reactivated after 2026-04-21 halt. Drained 24 queued webhooks (14 from halt window + 10 fresh AM enquiries A0 forwarded while in pre-meeting sitrep). All runs status 2 (WARNING) not status 1 -- caused by onerror:Resume firing on email-send modules because `developer_bcc` in DS 153173 points at deactivated `client.meji-media@unpauseai.com`. Customer emails unaffected. Cleanup pending. Leicester mapping includes 149/150 (forward-fix live since 2026-04-20: L=132,138-140,149,150). Previously 2026-03-31: verified venue_key mapping from events table; all 19 IDs mapped via contains(): B=130,141-148 W=131,133-137 L=132,138-140; fixed name/leader swap + guest grammar; Jess Leicester test (id 14294, event_id 138) processed successfully."
       - id: 8804012
         name: "A2 - Reply Detection & Stop"
         trigger: scheduled (600s)
@@ -109,7 +109,13 @@ instances:
         trigger: scheduled (3600s)
         ship: true
         status: active
-        note: "2026-03-30: Updated replace chains for ##theme_name##, ##venue_features_text##, ##venue_tiers_text##. Active, interval 3600s (was 900s in YAML)."
+        note: "2026-04-27: REAL fix deployed (text:less -> date:less on column M filter condition). Empirically verified pre-deploy via diagnostic UTIL scenario 9133798 (now deleted). Post-deploy verification: 151 ops on first responsive run, 10 rows drained, status 1 green (~15 ops/row matches blueprint module count). Drains backlog at limit:10 per scheduled cycle; will clear over a few hours. EARLIER 2026-04-27 Fix A FAILED: tried renaming filter column refs `K`/`M` to header names `stopped`/`next_step_due` (INVALID_ARGUMENT - Make filterRows requires column LETTERS, not names). Rolled back within 2 minutes. Then ran isolated single-condition tests on diagnostic UTIL: K=FALSE alone returned rows, M!='' alone returned rows, M<now with `text:less` returned ZERO (the bug), M<now with `date:less` returned rows (the fix). 2026-04-10 'Fix VERIFIED' was a verify-config-not-behavior miss: ops dropped from 51 to 1 was interpreted as healthy idle but actually meant filter rejected every row. 2+ weeks of step 2/3/4 emails never landed (2026-04-08 to 2026-04-27). Jess flagged 2026-04-24 18:10 BST. Backfill: Clean (Jess pre-curated already-contacted leads with stopped=TRUE / row deletion). Reactivated 2026-04-23 from 2026-04-21 halt. Previously 2026-04-10: Fix CLAIMED VERIFIED based on ops drop (false signal). 2026-03-06 created."
+      - id: 8974201
+        name: "UTIL - MySQL Parameterized Query"
+        trigger: tool (callable via scenarios_run with mode/param1/param2)
+        ship: false
+        status: active
+        note: "2026-03-31: Created in system-dev. Modes: by_id, by_range, recent, events, count. Uses MySQL connection 13875518. Replaces hardcoded LIMIT-3 tools for flexible DB queries."
 
     data_stores:
       - id: 153173
@@ -117,6 +123,7 @@ instances:
         records: 1
         fields: 35
         ship: true
+        note: "2026-04-23: `developer_bcc` field still points at deactivated `client.meji-media@unpauseai.com`. BCC silent-bounces on every A1 send, triggering onerror:Resume and producing status-2 warnings (not errors) on A1 executions since ~2026-04-21. Customer-facing sends unaffected. Cleanup: clear the field OR repoint to `neumanic2@gmail.com`. Requires B1.5 gate."
       - id: 153175
         name: "Email Templates"
         records: 10  # 5 template pairs x 2 A/B variants
@@ -141,18 +148,33 @@ instances:
         ship: true
 
     connections:
+      - id: 12352178
+        type: google
+        account: "gurmej@mejimedia.com"
+        note: "Production Google Sheets + Drive connection. Gurmej-owned (his personal Google account linked in Make). Used by live A1/A2/A3 for all sheet reads/writes. Swap made during 2026-03-17 go-live cutover, not documented here until 2026-04-21."
+      - id: 13923632
+        type: gmail
+        account: "enquire@christmasofficeparty.co.uk"
+        note: "Production Gmail connection. Used by live A1/A2/A3 for customer-facing sends."
       - id: 13838215
         type: google-sheets
         account: "client.meji-media@unpauseai.com"
-        note: "Test account -- swap to client's Google account for production"
+        note: "LEGACY. Account deactivated ~2026-04-21 (confirmed by Nicolas). Only referenced by S1 Production Cutover (8883091) + UTIL - Cell Writer (8842533) + UTIL - EU2 Sheet Reader (8843278). Not used by live A1/A2/A3."
       - id: 13838220
         type: gmail
         account: "client.meji-media@unpauseai.com"
-        note: "Test account -- swap to client's shared inbox (enquire@christmasofficeparty.co.uk)"
+        note: "LEGACY. Account deactivated. Not used by any live scenario."
+      - id: 13875518
+        type: mysql
+        account: "make@christmasofficeparty.co.uk:3306/xmas_2020"
+        note: "Production MySQL read-only. Used by A0 + UTIL MySQL scenarios."
 
     spreadsheet:
-      id: "1nZcLJzjJ0Ff1j4yZQfxB09REsL2MZe4kt1xuVwaiS-M"
+      id: "1Bmm-cbnvpdmJH7w3Y-PiZz7c3Z7JC4L6-6aMZw541BM"
       name: "MejiMedia_Enquiries_Followup"
       worksheet: "Leads"
-      columns: 17 (A-Q)
-      note: "Created by deployment agent. In client.meji-media@unpauseai.com Drive."
+      columns: "A-U (21)"
+      owner: "gurmej@mejimedia.com Drive (via connection 12352178)"
+      note: "Production sheet. Written by A1 (addRow), read+updated by A2 + A3. CORRECTED 2026-04-21 from stale ID '1nZcLJzj...uiprZI' that pointed at a deactivated-unpauseai.com legacy copy. Correct ID verified against A1/A2/A3 blueprints at scenarios_get + historical checkpoints (2026-03-17 Go-Live, 2026-03-20 Wrap-Up, 2026-03-30 Email Template Verification where the mismatch was first flagged but not propagated)."
+      legacy_id: "1nZcLJzjJ0Ff1j4yZQfxB09REsL2MZe4kt1xuVwaiS-M"
+      legacy_note: "Stale S1-deployment artifact in deactivated client.meji-media@unpauseai.com Drive. Referenced by S1 Production Cutover + UTIL scenarios. Not used by live A1/A2/A3."
