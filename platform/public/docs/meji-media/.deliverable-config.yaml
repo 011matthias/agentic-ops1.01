@@ -1,0 +1,22 @@
+# Deliverable gate config for the Meji Media client-facing doc site
+# Files: index.html, guide.html, ab-testing.html, lead-scoring.html,
+# system-overview.html, scaling.html, volume-forecast.html
+#
+# This config covers the established doc-site UX convention. Adding
+# copy-clipboard and Ctrl+K search to one new page would diverge from
+# the other six pages already shipped without those features. Either
+# all seven get retrofitted or none do; today none do.
+deliverable:
+  allow_categories:
+    - copy-clipboard
+    - keyboard-search
+  # reason: "Doc-site convention is established across 6 prior pages
+  # (index, guide, ab-testing, lead-scoring, system-overview, scaling)
+  # without copy-to-clipboard or Ctrl+K search. The pages contain
+  # narrative prose with inline <code> for table/scenario IDs; there
+  # are no shell commands or large code blocks where copy-on-hover
+  # carries real UX value, and native browser Ctrl+F handles in-page
+  # search adequately for single-page narratives. New volume-forecast.html
+  # follows the same convention. If we add these features, do it as a
+  # site-wide retrofit, not per-file divergence. Tracked as a follow-up
+  # in the friction register if it comes up again."
