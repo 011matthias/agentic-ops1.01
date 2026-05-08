@@ -219,14 +219,14 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
 
 <nav class="sidebar" id="sidebar">
   <ul class="sidebar-nav">
-    <li><a href="#section-summary" data-section="section-summary"><span class="nav-icon">&#128221;</span> Summary</a></li>
-    <li><a href="#section-headline" data-section="section-headline"><span class="nav-icon">&#127919;</span> Headline Finding</a></li>
-    <li><a href="#section-2025" data-section="section-2025"><span class="nav-icon">&#128202;</span> 2025 Monthly Curve</a></li>
-    <li><a href="#section-cross-year" data-section="section-cross-year"><span class="nav-icon">&#128197;</span> Same Pattern Every Year</a></li>
-    <li><a href="#section-yearly" data-section="section-yearly"><span class="nav-icon">&#128200;</span> A Decade In Totals</a></li>
-    <li><a href="#section-implications" data-section="section-implications"><span class="nav-icon">&#9881;</span> What It Means</a></li>
-    <li><a href="#section-method" data-section="section-method"><span class="nav-icon">&#128270;</span> How We Got It</a></li>
-    <li><a href="#section-caveats" data-section="section-caveats"><span class="nav-icon">&#9888;</span> Caveats</a></li>
+    <li><a href="#section-summary" data-section="section-summary">Summary</a></li>
+    <li><a href="#section-headline" data-section="section-headline">Headline Finding</a></li>
+    <li><a href="#section-2025" data-section="section-2025">2025 Monthly Curve</a></li>
+    <li><a href="#section-cross-year" data-section="section-cross-year">Same Pattern Every Year</a></li>
+    <li><a href="#section-yearly" data-section="section-yearly">A Decade In Totals</a></li>
+    <li><a href="#section-implications" data-section="section-implications">What It Means</a></li>
+    <li><a href="#section-method" data-section="section-method">How We Got It</a></li>
+    <li><a href="#section-caveats" data-section="section-caveats">Caveats</a></li>
   </ul>
 </nav>
 
@@ -273,7 +273,7 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
   <div class="section" id="section-summary">
     <div class="section-title">Summary in Three Sentences</div>
     <p>The peak month for new enquiries is <strong>September every year</strong>, by a wide margin. The intake curve from January to December is the same shape year after year: a slow first half, a steady ramp from June, a sharp September spike, then a fast tail through November and December.</p>
-    <p>Both stated growth views from the 22 April calls turn out to be <em>partly</em> right but neither is the full picture: annual totals are roughly stable year-over-year (Gurmej's "not wildly different" is closer than +10%), and Jess's instinct about a ramp was directionally correct but mistimed by about two months &mdash; the ramp is real, but it lands in <strong>August through October</strong>, not June and July.</p>
+    <p>Both stated growth views from the 22 April calls turn out to be <em>partly</em> right but neither is the full picture: annual totals are roughly stable year-over-year (Gurmej's "not wildly different" is closer than +10%), and Jess's instinct about a ramp was directionally correct but mistimed by about two months, the ramp is real, but it lands in <strong>August through October</strong>, not June and July.</p>
     <p>For the scaling decision, this means the deliverability cliffs in the <a href="/docs/meji-media/scaling">Scaling document</a> need to be evaluated against a September peak that historically hits <strong>20 to 25 enquiries per day sustained for several weeks</strong>, not a flat year-round average.</p>
   </div>
 
@@ -382,7 +382,7 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
         <p>The 5,000-per-day bulk-sender threshold is far off. No realistic September scenario for the Christmas-side flow brings it close. (The Instantly outbound side is a separate story.)</p>
       </div>
     </div>
-    <p style="margin-top:14px;">The practical translation: <strong>Path A (monitor and stay) is genuinely at risk for the upcoming September</strong>. Path B (multi-mailbox rotation) was framed as "buys 12+ months of headroom" and that framing holds &mdash; if you spread the September load across 2 to 3 mailboxes, each one stays comfortably under the cliff. Path C remains the right answer if the Instantly outbound work moves forward and you want shared infrastructure.</p>
+    <p style="margin-top:14px;">The practical translation: <strong>Path A (monitor and stay) is genuinely at risk for the upcoming September</strong>. Path B (multi-mailbox rotation) was framed as "buys 12+ months of headroom" and that framing holds, if you spread the September load across 2 to 3 mailboxes, each one stays comfortably under the cliff. Path C remains the right answer if the Instantly outbound work moves forward and you want shared infrastructure.</p>
   </div>
 
   <div class="section" id="section-method">
@@ -391,7 +391,7 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
     <ol>
       <li>The MySQL connection used by the existing automations (<code>enquire@christmasofficeparty.co.uk</code> mailbox flow) is read-only. We built a small read-only diagnostic scenario in Make.com (UTIL scenario 8974201) for ad-hoc queries against the same connection, no separate credentials required.</li>
       <li>The historical enquiry data is split across four tables: <code>enquiries</code> (the live current-season table, 181 rows), <code>all_enquiries</code> (a 2015 to 2020 archive, 3,005 rows), <code>full_data_enquiries</code> (a wider 2023 to 2026 view, 7,833 rows), and <code>enquiries_backup_23-04-2025</code> (a snapshot from April 2025, 3,859 rows).</li>
-      <li>None of these alone covers the full timeline. We reconciled them by date range, schema discovery, and de-duplication. The 2020 to 2022 period is the only stretch we could not recover &mdash; it sits in none of the four tables.</li>
+      <li>None of these alone covers the full timeline. We reconciled them by date range, schema discovery, and de-duplication. The 2020 to 2022 period is the only stretch we could not recover, it sits in none of the four tables.</li>
       <li>All aggregation done in SQL against the live tables. No data was extracted, exported, or persisted outside the database. The numbers in this document are the database&apos;s; we surfaced the pattern.</li>
     </ol>
   </div>
@@ -403,7 +403,7 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
       <li><strong>The <code>full_data_enquiries</code> table is slightly stale for 2026.</strong> It shows only 49 rows for 2026 but the live <code>enquiries</code> table has 181 through 7 May. Daily counts for late April and early May 2026 are based on the live table only and may be undercounted by a small amount in any historical aggregate.</li>
       <li><strong>The 2017 yearly total (227) is suspicious.</strong> Other years in the same archive are in the 600-plus range. Most likely a partial-year data issue rather than a real volume drop.</li>
       <li><strong>Single-day peak (42) is from 2025-09-03 specifically.</strong> Daily peaks were extracted across the full archive; a higher single day could exist in the 2020 to 2022 gap. We treat 42 as a lower bound on the historical peak.</li>
-      <li><strong>"Enquiry" is defined here as a row in the database</strong> &mdash; whatever flowed in via the website form, the phone capture, the partner referral feed, etc. We have not separated by source. If you want a per-source breakdown, that&apos;s a follow-up query.</li>
+      <li><strong>"Enquiry" is defined here as a row in the database</strong>, whatever flowed in via the website form, the phone capture, the partner referral feed, etc. We have not separated by source. If you want a per-source breakdown, that&apos;s a follow-up query.</li>
     </ul>
     <p>If any of these caveats matter for the path decision, say so and we&apos;ll dig further before locking in a recommendation.</p>
   </div>

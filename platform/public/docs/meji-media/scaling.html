@@ -198,14 +198,14 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
 
 <nav class="sidebar" id="sidebar">
   <ul class="sidebar-nav">
-    <li><a href="#section-summary" data-section="section-summary"><span class="nav-icon">&#128221;</span> Summary</a></li>
-    <li><a href="#section-current" data-section="section-current"><span class="nav-icon">&#9881;</span> Where Things Stand</a></li>
-    <li><a href="#section-cliffs" data-section="section-cliffs"><span class="nav-icon">&#9888;</span> The Cliffs</a></li>
-    <li><a href="#section-volume" data-section="section-volume"><span class="nav-icon">&#128202;</span> Volume Mapping</a></li>
-    <li><a href="#section-paths" data-section="section-paths"><span class="nav-icon">&#128279;</span> Three Paths</a></li>
-    <li><a href="#section-questions" data-section="section-questions"><span class="nav-icon">&#10067;</span> What We Need</a></li>
-    <li><a href="#section-meantime" data-section="section-meantime"><span class="nav-icon">&#128736;</span> In the Meantime</a></li>
-    <li><a href="#section-sources" data-section="section-sources"><span class="nav-icon">&#128279;</span> Sources</a></li>
+    <li><a href="#section-summary" data-section="section-summary">Summary</a></li>
+    <li><a href="#section-current" data-section="section-current">Where Things Stand</a></li>
+    <li><a href="#section-cliffs" data-section="section-cliffs">The Cliffs</a></li>
+    <li><a href="#section-volume" data-section="section-volume">Volume Mapping</a></li>
+    <li><a href="#section-paths" data-section="section-paths">Three Paths</a></li>
+    <li><a href="#section-questions" data-section="section-questions">What We Need</a></li>
+    <li><a href="#section-meantime" data-section="section-meantime">In the Meantime</a></li>
+    <li><a href="#section-sources" data-section="section-sources">Sources</a></li>
   </ul>
 </nav>
 
@@ -274,21 +274,21 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
     <p>Three different limits sit between today's setup and a "system can't keep up" outcome. They hit at very different volumes, and the <em>first</em> one to hit isn't the one most people think of.</p>
 
     <div class="cliff-card cliff-soft">
-      <h4>Cliff 1 &mdash; Gmail spam-filter heuristics on volume spikes <span class="cliff-tag tag-amber">Soft, hits first</span></h4>
+      <h4>Cliff 1, Gmail spam-filter heuristics on volume spikes <span class="cliff-tag tag-amber">Soft, hits first</span></h4>
       <p>This isn't a published limit. It's a reputation system. Gmail watches the rate-of-change of any sender, not just absolute volume. A mailbox going from 30 emails per day to 150 emails per day in a single week behaves <em>to Gmail's spam filter</em> like a domain that just got compromised, even when the recipients are real and the content is good. The penalty isn't a bounce; it's deliverability quietly dropping into spam folders.</p>
       <p><strong>Critically: you do not see this happen.</strong> Sends complete normally, the mailbox doesn't hit any error. Two to three weeks later you notice the conversion rate has tanked because your initial acknowledgement is landing in spam.</p>
       <p><strong>Realistic trigger range:</strong> anywhere from a 3x to 10x volume jump within 1 to 2 weeks against a baseline like Meji's current 30 per day. So somewhere between 90 per day and 300 per day, depending on how cleanly the ramp-up is executed.</p>
     </div>
 
     <div class="cliff-card cliff-hard">
-      <h4>Cliff 2 &mdash; Google Workspace daily send limit <span class="cliff-tag tag-red">Hard, well-defined</span></h4>
+      <h4>Cliff 2, Google Workspace daily send limit <span class="cliff-tag tag-red">Hard, well-defined</span></h4>
       <p>Google Workspace caps a single user mailbox at <strong>2,000 messages per rolling 24-hour window</strong>.</p>
       <p>For Meji's pattern (4 to 6 emails per inquiry), that means roughly <strong>330 to 500 inquiries per day</strong> would saturate the mailbox. On hit, sends stop for 24 hours, then resume.</p>
       <p>This cliff is well-documented and recoverable, but it's also a hard wall: there's no warning, the day you cross it you have leads not getting acknowledged.</p>
     </div>
 
     <div class="cliff-card cliff-far">
-      <h4>Cliff 3 &mdash; Bulk-sender threshold and Google's 2024 enforcement <span class="cliff-tag tag-purple">Regulatory, far away</span></h4>
+      <h4>Cliff 3, Bulk-sender threshold and Google's 2024 enforcement <span class="cliff-tag tag-purple">Regulatory, far away</span></h4>
       <p>If <code>enquire@christmasofficeparty.co.uk</code> ever sends <strong>5,000+ messages per day to Gmail recipients</strong>, it gets permanently classified as a "bulk sender" under Google's 2024 rules. That brings mandatory SPF + DKIM + DMARC alignment, one-click unsubscribe, a hard 0.30% spam-complaint cap, and active enforcement (rejections, not just spam-folder placement) since November 2025.</p>
       <p>This designation is <em>permanent</em> once triggered. You don't drop out of bulk-sender status by sending less afterwards.</p>
       <p>For Meji's inquiry-driven flow this cliff is far off; you'd need around 830 inquiries per day to cross it. Not a current concern, but worth knowing exists. <strong>More relevant to the Instantly outbound side</strong> where send volumes are deliberately high.</p>
@@ -410,9 +410,9 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
   <div class="section" id="section-sources">
     <div class="section-title">Sources</div>
     <ul>
-      <li><a href="https://support.google.com/a/answer/166852" target="_blank" rel="noopener">Gmail sending limits in Google Workspace</a> &mdash; the 2,000-per-day rolling cap, recipient limits</li>
-      <li><a href="https://support.google.com/a/answer/81126" target="_blank" rel="noopener">Email sender guidelines &mdash; Google Workspace Admin Help</a> &mdash; bulk-sender requirements, 5,000-per-day threshold, SPF/DKIM/DMARC</li>
-      <li><a href="https://redsift.com/resources/blog/gmails-enforcement-ramps-up-what-bulk-senders-need-to-know" target="_blank" rel="noopener">Gmail's enforcement ramps up</a> &mdash; November 2025 enforcement update</li>
+      <li><a href="https://support.google.com/a/answer/166852" target="_blank" rel="noopener">Gmail sending limits in Google Workspace</a>, the 2,000-per-day rolling cap, recipient limits</li>
+      <li><a href="https://support.google.com/a/answer/81126" target="_blank" rel="noopener">Email sender guidelines, Google Workspace Admin Help</a>, bulk-sender requirements, 5,000-per-day threshold, SPF/DKIM/DMARC</li>
+      <li><a href="https://redsift.com/resources/blog/gmails-enforcement-ramps-up-what-bulk-senders-need-to-know" target="_blank" rel="noopener">Gmail's enforcement ramps up</a>, November 2025 enforcement update</li>
     </ul>
   </div>
 
