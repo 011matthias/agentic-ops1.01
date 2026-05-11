@@ -39,7 +39,10 @@ REQUIRED_PAGES = ["index.html", "solution.html", "timeline.html",
 OPTIONAL_PAGES = ["workflow.html", "gdpr.html", "print.html",
                   "proposal-pdf.html", "onboarding-pdf.html", "brief.html"]
 
-OPENING_FORMULA = "Hi there, Nico here."
+OPENING_FORMULAS = [
+    "Hi there, Nico here.",
+    "Hi there, Matthias here.",
+]
 
 COVER_LETTER_BOUNDS = {
     "template_1_2": (8, 15),    # Track 1: 8-12 lines + some flexibility
@@ -393,12 +396,12 @@ def check_video_script(report: ValidationReport, client_dir: Path, site_headings
         suffix = f" ({script_path.name})" if len(script_files) > 1 else ""
         content = script_path.read_text(encoding="utf-8")
 
-        # Opening formula
-        if OPENING_FORMULA in content:
+        # Opening formula (accept any registered proposer)
+        if any(formula in content for formula in OPENING_FORMULAS):
             report.add(f"Opening formula{suffix}", "PASS")
         else:
             report.add(f"Opening formula{suffix}", "FAIL",
-                       f'Expected exact: "{OPENING_FORMULA}"')
+                       f'Expected one of: {OPENING_FORMULAS}')
 
         # 3-beat structure
         beats_found = []
