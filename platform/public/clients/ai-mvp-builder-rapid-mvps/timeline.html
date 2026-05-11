@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Timeline | UnpauseAI</title>
+<style>
+:root { --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827; --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff; --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6; --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857; --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309; --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9; --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08); }
+[data-theme="dark"] { --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9; --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554; --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd; --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7; --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d; --border: #334155; --surface: #1e293b; --surface2: #1e293b; --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3); }
+* { box-sizing: border-box; margin: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px; transition: background .2s, color .2s; }
+.access-gate { position: fixed; inset: 0; z-index: 9999; background: var(--bg); display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; transition: opacity .3s; }
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input { padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px; font-size: 15px; width: 240px; background: var(--surface); color: var(--text); outline: none; }
+.access-gate button { padding: 10px 24px; background: var(--blue); color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+.site-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: var(--nav-bg); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); }
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a { font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px; color: var(--text2); text-decoration: none; }
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-theme { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 13px; color: var(--text2); }
+.main-content { padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+.hero { text-align: center; padding: 40px 0 32px; border-bottom: 1px solid var(--border); margin-bottom: 40px; }
+.hero-badge { display: inline-flex; gap: 6px; background: var(--blue-bg); color: var(--blue); border-radius: 20px; padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 16px; }
+.hero h1 { font-size: 30px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 15px; color: var(--text2); max-width: 620px; margin: 0 auto; line-height: 1.6; }
+h2 { font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue); padding-bottom: 8px; margin-top: 48px; margin-bottom: 20px; }
+h3 { font-size: 17px; color: var(--text-strong); margin-top: 24px; margin-bottom: 10px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+.phase-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 22px 24px; margin: 18px 0; border-left: 4px solid var(--blue); }
+.phase-card.green { border-left-color: var(--green); }
+.phase-card.purple { border-left-color: var(--purple); }
+.phase-card.orange { border-left-color: var(--orange); }
+.phase-tag { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 3px 10px; border-radius: 12px; margin-bottom: 8px; }
+.phase-card .phase-tag { background: var(--blue-bg); color: var(--blue-dark); }
+.phase-card.green .phase-tag { background: var(--green-bg); color: var(--green-dark); }
+.phase-card.purple .phase-tag { background: var(--purple-bg); color: var(--purple-dark); }
+.phase-card.orange .phase-tag { background: var(--orange-bg); color: var(--orange-dark); }
+.phase-card h3 { margin-top: 0; }
+.phase-card .phase-time { font-size: 12px; color: var(--text2); margin-bottom: 12px; }
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); }
+.footer a { color: var(--text2); }
+@media (max-width: 768px) { .nav-links { display: none; } .hero h1 { font-size: 24px; } }
+</style>
+<script>
+(function(){var t=localStorage.getItem('ai-mvp-builder-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<div class="access-gate" id="accessGate">
+    <h2>Project Access</h2>
+    <p>Enter the access code to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<nav class="site-nav">
+    <div class="nav-left">
+        <a href="/clients/ai-mvp-builder-rapid-mvps/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">AI-Native MVP Builder</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/ai-mvp-builder-rapid-mvps/">Overview</a>
+        <a href="/clients/ai-mvp-builder-rapid-mvps/solution">Solution</a>
+        <a href="/clients/ai-mvp-builder-rapid-mvps/timeline" class="active">Timeline</a>
+        <a href="/clients/ai-mvp-builder-rapid-mvps/investment">Investment</a>
+        <a href="/clients/ai-mvp-builder-rapid-mvps/faq">FAQ</a>
+        <a href="/clients/ai-mvp-builder-rapid-mvps/onboarding">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<div class="main-content">
+<div class="content-inner">
+
+<section class="hero">
+    <div class="hero-badge">TIMELINE</div>
+    <h1>What ships, when</h1>
+    <p class="hero-sub">Paid test first, MVP next, iteration after. Each phase has a concrete output you can review before the next phase starts.</p>
+</section>
+
+<h2>Phase shape</h2>
+<p>Four phases. The first is a fixed-price test so we both validate fit on real data. Phases two and three are the actual MVP build. Phase four is iteration. Nothing is sequential just for the sake of it; every phase ends with a working artifact you can look at.</p>
+
+<div class="phase-card green">
+    <span class="phase-tag">Phase 0, Paid Test</span>
+    <div class="phase-time">10 hours fixed at $400</div>
+    <h3>Working tool on a slice of your data</h3>
+    <p>Pick 200 to 500 products and 2 to 3 supplier CSVs. I deliver: normalized data, working dedupe with confidence scores, CLI search returning top-K matches with confidence, a short written report on what the matching quality looks like on your actual data, and the code.</p>
+    <p><strong>Output:</strong> runnable code, written report, matching quality assessment. You decide whether to continue.</p>
+</div>
+
+<div class="phase-card">
+    <span class="phase-tag">Phase 1, Week 1 MVP</span>
+    <div class="phase-time">~25 to 35 hours</div>
+    <h3>Full 2,000 product pipeline, CLI search</h3>
+    <p>Apply the paid-test pipeline to your full catalog. All suppliers, all products. Set up the data refresh process (manual or scheduled). Embeddings and vector store sized for the real volume. CLI search that two team members can use immediately.</p>
+    <p><strong>Output:</strong> working pipeline on all 2,000 products, repeatable refresh process, CLI in their hands.</p>
+</div>
+
+<div class="phase-card purple">
+    <span class="phase-tag">Phase 2, Week 2 UI</span>
+    <div class="phase-time">~20 to 30 hours</div>
+    <h3>Team interface (Next.js or Streamlit)</h3>
+    <p>Whichever framework matches your stack. Search box, results grid with confidence scores, side-by-side compare view, "this match is wrong" feedback button that writes to a corrections table. Authentication if your network requires it.</p>
+    <p><strong>Output:</strong> deployed UI two team members can use without the terminal.</p>
+</div>
+
+<div class="phase-card orange">
+    <span class="phase-tag">Phase 3+, Iteration</span>
+    <div class="phase-time">Hourly, as needed</div>
+    <h3>Tune ranking, add filters, close the feedback loop</h3>
+    <p>Watch what the team actually searches for. Adjust embedding inputs, ranking weights, and filters based on real usage. Use the corrections table to improve match quality systematically. Add features the team asks for after seeing the v1.</p>
+    <p><strong>Output:</strong> better matching every week, in proportion to how much the team uses it.</p>
+</div>
+
+<h2>What the timeline does not pretend to be</h2>
+<ul>
+    <li>Not a Gantt chart with daily milestones. Software estimates that precise are usually lying.</li>
+    <li>Not a fixed delivery date for the full MVP. Phase 0 (paid test) is fixed. Phase 1 and Phase 2 are scoped in hours, not deadlines, so we can adjust if your data reveals something I didn't account for.</li>
+    <li>Not a "we'll figure it out as we go." Each phase has a defined output and a stopping point.</li>
+</ul>
+
+<h2>Calibration after Phase 0</h2>
+<p>Once the paid test ships, we'll have real numbers: how messy the data actually is, what the matching quality looks like, where the failure modes are. Phase 1 and Phase 2 estimates get tightened at that point. If the data is cleaner than I assumed, the estimates go down. If it is messier, we discuss scope before continuing.</p>
+
+<div class="footer">
+    Prepared by Matthias, UnpauseAI &middot; <a href="mailto:admin@unpauseai.com">admin@unpauseai.com</a> &middot; 2026
+</div>
+
+</div>
+</div>
+
+<script>
+function toggleTheme() {
+    var html = document.documentElement;
+    var current = html.getAttribute('data-theme');
+    var next = current === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+    localStorage.setItem('ai-mvp-builder-theme', next);
+}
+function checkAccess() {
+    var input = document.getElementById('accessCode').value.trim().toLowerCase();
+    var expected = 'ai-mvp-builder-2026';
+    if (input === expected) {
+        localStorage.setItem('ai-mvp-builder-access', 'granted');
+        document.getElementById('accessGate').classList.add('hidden');
+        setTimeout(function(){ document.getElementById('accessGate').style.display = 'none'; }, 300);
+    } else {
+        document.getElementById('accessError').textContent = 'Invalid code, check your invitation.';
+    }
+}
+if (localStorage.getItem('ai-mvp-builder-access') === 'granted') {
+    document.getElementById('accessGate').style.display = 'none';
+}
+</script>
+
+<script>
+(function() {
+    var s = document.createElement('style');
+    s.textContent = '.copy-btn{position:absolute;top:6px;right:6px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-size:11px;padding:3px 8px;border-radius:4px;cursor:pointer;opacity:0;transition:opacity .15s;font-family:inherit}pre:hover .copy-btn{opacity:1}.copy-btn:hover{background:var(--blue-light);color:var(--blue-dark)}.copy-btn.copied{background:var(--green-bg);color:var(--green-dark);border-color:var(--green);opacity:1}.kbd-hint{font-size:11px;color:var(--text2);border:1px solid var(--border);border-radius:4px;padding:2px 6px;background:var(--surface2);cursor:pointer;font-family:ui-monospace,monospace;margin-right:6px}.kbd-hint:hover{background:var(--border);color:var(--text)}.search-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;display:none;align-items:flex-start;justify-content:center;padding-top:100px}.search-overlay.active{display:flex}.search-overlay-inner{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px;width:480px;max-width:90%;box-shadow:0 12px 40px rgba(0,0,0,.3)}.search-overlay input{width:100%;padding:12px 16px;font-size:15px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);outline:none}.search-overlay input:focus{border-color:var(--blue)}.search-overlay-hint{font-size:12px;color:var(--text2);margin-top:10px;text-align:center}h2.search-match,h3.search-match{background:var(--orange-bg);transition:background .2s}';
+    document.head.appendChild(s);
+    var ov = document.createElement('div');
+    ov.className = 'search-overlay';
+    ov.id = 'searchOverlay';
+    ov.innerHTML = '<div class="search-overlay-inner"><input id="searchInput" type="text" placeholder="Search section headings..." autocomplete="off"><div class="search-overlay-hint">Press Esc to close. Highlights matching headings on this page.</div></div>';
+    document.body.appendChild(ov);
+    var nr = document.querySelector('.nav-right');
+    if (nr) {
+        var hk = document.createElement('span');
+        hk.className = 'kbd-hint';
+        hk.textContent = 'Ctrl+K';
+        hk.title = 'Search this page (Ctrl/Cmd+K)';
+        hk.addEventListener('click', function() { ov.classList.add('active'); document.getElementById('searchInput').focus(); });
+        nr.insertBefore(hk, nr.firstChild);
+    }
+    document.querySelectorAll('pre').forEach(function(p) {
+        p.style.position = 'relative';
+        var b = document.createElement('button');
+        b.className = 'copy-btn';
+        b.type = 'button';
+        b.textContent = 'Copy';
+        b.setAttribute('aria-label', 'Copy code to clipboard');
+        b.addEventListener('click', function() {
+            navigator.clipboard.writeText(p.textContent).then(function() {
+                b.textContent = 'Copied';
+                b.classList.add('copied');
+                setTimeout(function() { b.textContent = 'Copy'; b.classList.remove('copied'); }, 1500);
+            });
+        });
+        p.appendChild(b);
+    });
+    document.addEventListener('keydown', function(e) {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+            e.preventDefault();
+            ov.classList.add('active');
+            document.getElementById('searchInput').focus();
+        }
+        if (e.key === 'Escape' && ov.classList.contains('active')) {
+            ov.classList.remove('active');
+            var si = document.getElementById('searchInput');
+            if (si) si.value = '';
+            document.querySelectorAll('h2.search-match, h3.search-match').forEach(function(h) { h.classList.remove('search-match'); });
+        }
+    });
+    ov.addEventListener('click', function(e) { if (e.target === ov) ov.classList.remove('active'); });
+    document.getElementById('searchInput').addEventListener('input', function() {
+        var q = this.value.toLowerCase().trim();
+        var first = null;
+        document.querySelectorAll('h2, h3').forEach(function(h) {
+            h.classList.remove('search-match');
+            if (q && h.textContent.toLowerCase().includes(q)) {
+                h.classList.add('search-match');
+                if (!first) first = h;
+            }
+        });
+        if (first) first.scrollIntoView({behavior: 'smooth', block: 'center'});
+    });
+})();
+</script>
+
+</body>
+</html>
