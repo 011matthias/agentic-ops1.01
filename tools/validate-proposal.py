@@ -616,9 +616,11 @@ def check_video_script_abbreviations(report: ValidationReport, client_dir: Path,
                 f"Video script: abbreviation glosses{suffix}",
                 "FAIL",
                 f"Abbreviations without inline gloss in SAY: lines: {', '.join(violations)}. "
-                f"Add a 3-8 word explanation after first mention "
-                f"(e.g., 'SKU, the product code each supplier uses'), or rephrase to plain language. "
-                f"Exempt: {', '.join(sorted(COMMON_ABBREVIATIONS))}. "
+                f"Keep the abbreviation in (it signals expertise) and add a 3-8 word inline gloss "
+                f"the first time it appears, e.g., 'SKU, the product code each supplier uses' or "
+                f"'a CLI, a command-line tool you run in the terminal'. "
+                f"Do not strip the term to plain language; that removes signal. "
+                f"Exempt (no gloss needed): {', '.join(sorted(COMMON_ABBREVIATIONS))}. "
                 f"See rule_deliverables.md 'Video script humanness' and feedback_video_script_human_language.md.",
             )
         else:
