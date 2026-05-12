@@ -74,6 +74,41 @@ TBD_PATTERNS = [
     r'\{loom.*?pending\}',
 ]
 
+# Abbreviation enforcement for video script SAY: lines.
+# Per feedback_video_script_human_language.md: spoken lines must use plain language.
+# Abbreviations need an inline gloss (3-8 words) the first time they appear,
+# unless they're in COMMON_ABBREVIATIONS.
+COMMON_ABBREVIATIONS = {
+    # Truly ubiquitous tech
+    'AI', 'API', 'UI', 'URL', 'HTML', 'CSS', 'JS', 'JSON', 'XML',
+    'SQL', 'OS', 'CSV', 'HTTP', 'HTTPS', 'PDF', 'TCP', 'IP', 'DNS',
+    # Business common
+    'CRM', 'CEO', 'CTO', 'CFO', 'COO', 'CMO', 'VP',
+    'B2B', 'B2C', 'KPI', 'ROI',
+    'IT', 'HR', 'PR', 'QA', 'UX',
+    # Geo
+    'EU', 'US', 'UK', 'USA', 'EMEA', 'APAC',
+    # Misc
+    'AM', 'PM', 'OK', 'TBD', 'FAQ',
+}
+# Patterns that indicate an abbreviation is being explained inline.
+# Checked in the ~120 chars right after the first occurrence.
+EXPLANATION_PATTERNS = [
+    r',\s+which\s+(?:is\s+)?',
+    r',\s+the\s+',
+    r',\s+a\s+',
+    r',\s+two\s+',
+    r',\s+three\s+',
+    r',\s+meaning\s+',
+    r',\s+essentially\s+',
+    r',\s+just\s+',
+    r',\s+that\s+is\s+',
+    r'\s+\([^)]{6,}\)',     # parenthetical with 6+ chars (gloss-sized)
+    r'\s+stands\s+for\s+',
+    r'\s+aka\s+',
+    r'\s+also\s+known\s+as\s+',
+]
+
 # Public platform directories to scan for client name leaks
 PUBLIC_PLATFORM_DIRS = [
     "platform/src/app",
@@ -518,6 +553,76 @@ def check_video_script(report: ValidationReport, client_dir: Path, site_headings
                        f"Found {content.count(chr(0x2014))} em dash(es)")
         else:
             report.add(f"No em dashes in script{suffix}", "PASS")
+
+
+def check_video_script_abbreviations(report: ValidationReport, client_dir: Path, working_dir: Path | None = None):
+    """Flag abbreviations in SAY: lines that don't have an inline gloss.
+
+    Spoken content needs to land in the ear on first pass. Per
+    feedback_video_script_human_language.md, any abbreviation not in
+    COMMON_ABBREVIATIONS must be followed by a short explanation
+    (matched against EXPLANATION_PATTERNS) within ~120 chars of first mention.
+
+    Only SAY: lines are scanned (>> stage directions and LOOM NOTES are exempt).
+    """
+    script_files = list((working_dir or client_dir).glob("*video-script*.md"))
+    if not script_files:
+        script_files = list(client_dir.glob("*video-script*.md"))
+    if not script_files:
+        return
+
+    for script_path in script_files:
+        suffix = f" ({script_path.name})" if len(script_files) > 1 else ""
+        content = script_path.read_text(encoding="utf-8")
+
+        # Cut LOOM NOTES section out (teleprompter cues are silent, abbreviations OK)
+        loom_split = re.split(r'(?im)^##\s*LOOM\s+NOTES', content)
+        spoken_section = loom_split[0]
+
+        # Collect only SAY: line text
+        say_lines = [
+            re.sub(r'^\s*SAY:\s*', '', line)
+            for line in spoken_section.split("\n")
+            if line.strip().startswith("SAY:")
+        ]
+        if not say_lines:
+            report.add(f"Video script: abbreviation glosses{suffix}", "SKIP",
+                       "No SAY: lines found")
+            continue
+        say_text = "\n".join(say_lines)
+
+        # Find ALL-CAPS abbreviations (2-6 chars, word boundary).
+        # \b[A-Z][A-Z0-9]{1,5}\b — must start with letter, can include digits (e.g. B2B).
+        candidates_raw = re.findall(r'\b[A-Z][A-Z0-9]{1,5}\b', say_text)
+        candidates = set(candidates_raw) - COMMON_ABBREVIATIONS
+
+        if not candidates:
+            report.add(f"Video script: abbreviation glosses{suffix}", "PASS")
+            continue
+
+        violations = []
+        for abbr in sorted(candidates):
+            first_match = re.search(rf'\b{re.escape(abbr)}\b', say_text)
+            if not first_match:
+                continue
+            # Window: 120 chars after first occurrence
+            context = say_text[first_match.end():first_match.end() + 120]
+            has_gloss = any(re.search(pat, context, re.I) for pat in EXPLANATION_PATTERNS)
+            if not has_gloss:
+                violations.append(abbr)
+
+        if violations:
+            report.add(
+                f"Video script: abbreviation glosses{suffix}",
+                "WARN",
+                f"Abbreviations without inline gloss in SAY: lines: {', '.join(violations)}. "
+                f"Add a 3-8 word explanation after first mention "
+                f"(e.g., 'SKU, the product code each supplier uses'), or rephrase to plain language. "
+                f"Exempt: {', '.join(sorted(COMMON_ABBREVIATIONS))}. "
+                f"See feedback_video_script_human_language.md.",
+            )
+        else:
+            report.add(f"Video script: abbreviation glosses{suffix}", "PASS")
 
 
 def check_html_site(report: ValidationReport, client_dir: Path, fm: dict) -> dict[str, list[str]]:
@@ -1027,6 +1132,11 @@ def validate_proposal(slug: str, verbose: bool = False) -> ValidationReport:
 
     # Video script (needs site headings for cross-check)
     check_video_script(report, client_dir, site_headings, working_dir)
+
+    # Video script: abbreviation glosses (SAY: lines must use plain language
+    # or include a 3-8 word inline explanation). See
+    # feedback_video_script_human_language.md.
+    check_video_script_abbreviations(report, client_dir, working_dir)
 
     # TBD in text files
     check_tbd_in_text_files(report, client_dir, working_dir)
