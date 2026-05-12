@@ -614,12 +614,12 @@ def check_video_script_abbreviations(report: ValidationReport, client_dir: Path,
         if violations:
             report.add(
                 f"Video script: abbreviation glosses{suffix}",
-                "WARN",
+                "FAIL",
                 f"Abbreviations without inline gloss in SAY: lines: {', '.join(violations)}. "
                 f"Add a 3-8 word explanation after first mention "
                 f"(e.g., 'SKU, the product code each supplier uses'), or rephrase to plain language. "
                 f"Exempt: {', '.join(sorted(COMMON_ABBREVIATIONS))}. "
-                f"See feedback_video_script_human_language.md.",
+                f"See rule_deliverables.md 'Video script humanness' and feedback_video_script_human_language.md.",
             )
         else:
             report.add(f"Video script: abbreviation glosses{suffix}", "PASS")
