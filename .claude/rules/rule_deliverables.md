@@ -21,25 +21,27 @@
 
 ## Video script humanness (proposal Loom walkthroughs)
 
-Video scripts must read like a human speaking, not like written technical notes. The spoken-aloud parts (lines prefixed `SAY:`) are heard, not read — jargon and abbreviations land badly in the ear. Authenticity is the core differentiator on Upwork; unexplained jargon makes the proposer sound like a written-by-AI list rather than a person who understands the problem. Proposals win or lose on the first 30 seconds of the Loom.
+Video scripts must read like a human speaking, not like written technical notes. The spoken-aloud parts (lines prefixed `SAY:`) are heard, not read. The point isn't to strip terminology — specific terms and abbreviations show competence and compress meaning. The point is that the **listener can follow** without already knowing the jargon. Authenticity is the core differentiator on Upwork; unexplained jargon makes the proposer sound like a written-by-AI list, but jargon-free dumbed-down language makes the proposer sound like a beginner. The middle path is: use the term, gloss it inline.
 
 **Rules for `SAY:` lines:**
 
-1. **Plain human language by default.** "Embeddings turn each product into a vector" not "OpenAI text-embedding-3-small embeds the catalog."
-2. **Any abbreviation needs a 3-8 word inline gloss the first time it appears**, unless it's as universal as: AI, API, UI, URL, HTML, CSS, JS, JSON, XML, SQL, OS, CSV, HTTP, HTTPS, PDF, TCP, IP, DNS, CRM, CEO, CTO, CFO, COO, CMO, VP, B2B, B2C, KPI, ROI, IT, HR, PR, QA, UX, EU, US, UK, USA, EMEA, APAC, FAQ, AM, PM, TBD, OK.
-3. **Examples of correct glossing:**
+1. **Use specific terminology and abbreviations confidently.** Don't strip them out — they signal expertise and shorthand complex ideas. The goal is comprehension by the listener, not removal of jargon.
+2. **Any abbreviation or domain-specific term needs a 3-8 word inline gloss the first time it appears**, unless it's as universal as: AI, API, UI, URL, HTML, CSS, JS, JSON, XML, SQL, OS, CSV, HTTP, HTTPS, PDF, TCP, IP, DNS, CRM, CEO, CTO, CFO, COO, CMO, VP, B2B, B2C, KPI, ROI, IT, HR, PR, QA, UX, EU, US, UK, USA, EMEA, APAC, FAQ, AM, PM, TBD, OK.
+3. **The gloss embeds naturally right after the term** — listener hears the abbreviation AND its meaning in one sentence:
    - "the SKU, the product code each supplier uses to identify an item"
    - "FAISS or sqlite-vec, two libraries for fast similarity search"
-   - "a vector database like Pinecone"
-   - "a small focused language model call" (not "LLM call")
-   - "a command-line search tool" (not "CLI search")
-   - "with their JavaScript library" (not "JS SDK")
+   - "a vector DB, a managed database for similarity search, like Pinecone"
+   - "their JS SDK, the JavaScript library"
+   - "a CLI, a command-line search tool you run in the terminal"
+   - "Small focused LLM calls, language model calls for the judgment parts"
    - "the first working MVP, the minimum viable product"
+   - "top-K cosine similarity search, which means we rank the K closest matches by how similar their vectors are"
+4. **Don't translate terminology into plain language** ("language model call" instead of "LLM call"). That loses the signal. Use the term, gloss it.
 
-**Exempt sections (abbreviations OK):**
+**Exempt sections (abbreviations OK without gloss):**
 - `>>` lines — stage directions, not spoken
 - `## LOOM NOTES VERSION` block — silent teleprompter cues
-- Tool/library proper nouns (Algolia, Pinecone, FAISS, Streamlit) are not abbreviations; they're names. Still benefit from one-line explanations on first mention.
+- Tool/library proper nouns (Algolia, Pinecone, FAISS, Streamlit) are names, not abbreviations. Still benefit from one-line context on first mention.
 
 **Enforcement.** `tools/validate-proposal.py` `check_video_script_abbreviations()` scans `SAY:` lines, slices out LOOM NOTES, and **FAILs** on any non-exempt abbreviation without a gloss within 120 chars of first occurrence. This is a B2 gate extension — fix before sending the proposal. Backed by `feedback_video_script_human_language.md`.
 
