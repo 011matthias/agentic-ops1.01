@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meji Media &ndash; Volume Forecast (11 Years of Enquiry Data)</title>
+<style>
+:root {
+  --header-height: 72px;
+  --sidebar-width: 200px;
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface2: #f1f5f9;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --text2: #475569;
+  --text3: #94a3b8;
+  --blue: #2563eb;
+  --blue-light: #dbeafe;
+  --blue-dark: #1e40af;
+  --green: #16a34a;
+  --green-light: #dcfce7;
+  --amber: #d97706;
+  --amber-light: #fef3c7;
+  --red: #dc2626;
+  --red-light: #fee2e2;
+  --purple: #7c3aed;
+  --purple-light: #ede9fe;
+  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05);
+  --shadow-md: 0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.05);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,.1), 0 4px 6px rgba(0,0,0,.05);
+  --nav-bg: #ffffff;
+}
+[data-theme="dark"] {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface2: #0f172a;
+  --border: #334155;
+  --text: #f1f5f9;
+  --text2: #94a3b8;
+  --text3: #475569;
+  --blue: #3b82f6;
+  --blue-light: #1e3a5f;
+  --blue-dark: #93c5fd;
+  --green: #22c55e;
+  --green-light: #14532d;
+  --amber: #f59e0b;
+  --amber-light: #451a03;
+  --red: #ef4444;
+  --red-light: #450a0a;
+  --purple: #a78bfa;
+  --purple-light: #2e1065;
+  --shadow: 0 1px 3px rgba(0,0,0,.3);
+  --shadow-md: 0 4px 6px rgba(0,0,0,.4);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,.5);
+  --nav-bg: #1e293b;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.6;
+  min-height: 100vh;
+  transition: background .2s, color .2s;
+  padding-top: var(--header-height);
+}
+
+.sidebar {
+  position: fixed; top: var(--header-height); left: 0;
+  width: var(--sidebar-width); height: calc(100vh - var(--header-height));
+  background: var(--surface); border-right: 1px solid var(--border);
+  z-index: 50; overflow-y: auto; transition: transform .25s ease;
+}
+.sidebar-nav { list-style: none; padding: 12px 0; }
+.sidebar-nav li { margin: 0; }
+.sidebar-nav a {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 20px; font-size: 13px; font-weight: 500;
+  color: var(--text2); text-decoration: none;
+  border-left: 3px solid transparent;
+  transition: all .15s;
+}
+.sidebar-nav a:hover { background: var(--surface2); color: var(--text); }
+.sidebar-nav a.active { background: var(--blue-light); color: var(--blue); border-left-color: var(--blue); font-weight: 600; }
+.nav-icon { font-size: 14px; opacity: .8; }
+.sidebar-backdrop { display: none; }
+
+.header {
+  position: fixed; top: 0; left: 0; right: 0; height: var(--header-height);
+  background: var(--nav-bg); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; z-index: 100; box-shadow: var(--shadow);
+}
+.header-left { display: flex; align-items: center; gap: 16px; }
+.header-logo { display: flex; align-items: center; gap: 6px; font-size: 18px; letter-spacing: -0.025em; }
+.header-logo svg { display: block; }
+.logo-text { font-weight: 700; color: var(--text); }
+.logo-accent { font-weight: 700; color: var(--blue); }
+.header-title h1 { font-size: 17px; font-weight: 700; color: var(--text); line-height: 1.2; }
+.header-title p { font-size: 12px; color: var(--text2); margin-top: 1px; }
+.header-right { display: flex; align-items: center; gap: 12px; }
+.badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 999px; }
+.badge-purple { background: var(--purple-light); color: var(--purple); }
+.badge-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.theme-btn {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  padding: 6px 12px; border-radius: 8px; font-size: 13px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.theme-btn:hover { background: var(--border); }
+.hamburger { display: none; background: none; border: none; color: var(--text); font-size: 22px; cursor: pointer; padding: 0 6px; }
+
+.page-layout { margin-left: var(--sidebar-width); }
+.main { max-width: 920px; margin: 0 auto; padding: 32px 32px 80px; }
+
+.hero {
+  background: linear-gradient(135deg, var(--purple-light), var(--blue-light));
+  border-radius: 14px; padding: 28px 32px; margin-bottom: 28px;
+  border: 1px solid var(--border);
+}
+.hero h2 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: var(--text); margin-bottom: 10px; }
+.hero p { color: var(--text2); font-size: 15px; max-width: 760px; }
+.hero-meta { display: flex; gap: 24px; margin-top: 18px; font-size: 13px; color: var(--text2); flex-wrap: wrap; }
+.hero-meta strong { color: var(--text); font-weight: 600; }
+
+.section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin-bottom: 18px; box-shadow: var(--shadow); scroll-margin-top: calc(var(--header-height) + 16px); }
+.section-title { font-size: 18px; font-weight: 700; letter-spacing: -0.015em; color: var(--text); margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.section h3 { font-size: 16px; font-weight: 600; color: var(--text); margin: 18px 0 8px; }
+.section h4 { font-size: 14px; font-weight: 600; color: var(--text); margin: 14px 0 6px; }
+.section p { color: var(--text2); margin-bottom: 12px; }
+.section p strong { color: var(--text); font-weight: 600; }
+.section ul, .section ol { color: var(--text2); padding-left: 22px; margin-bottom: 12px; }
+.section li { margin-bottom: 6px; }
+.section a { color: var(--blue); text-decoration: none; }
+.section a:hover { text-decoration: underline; }
+
+code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--text); }
+
+.callout { border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; margin: 14px 0; background: var(--surface2); }
+.callout-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text2); margin-bottom: 8px; }
+
+.headline-stat {
+  background: linear-gradient(135deg, var(--purple-light), var(--blue-light));
+  border-radius: 10px; padding: 18px 22px; margin: 14px 0;
+  text-align: center;
+}
+.headline-stat .big { font-size: 28px; font-weight: 800; color: var(--text); letter-spacing: -0.02em; line-height: 1.2; }
+.headline-stat .big span { color: var(--purple); }
+.headline-stat .sub { color: var(--text2); font-size: 14px; margin-top: 6px; }
+
+.month-chart { display: grid; grid-template-columns: repeat(12, 1fr); gap: 6px; margin: 16px 0 8px; }
+.month-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.month-bar-track { width: 100%; height: 140px; display: flex; align-items: flex-end; }
+.month-bar { width: 100%; border-radius: 4px 4px 0 0; transition: height .25s ease; min-height: 1px; }
+.month-bar.purple { background: var(--purple); }
+.month-bar.blue { background: var(--blue); }
+.month-bar.green { background: var(--green); }
+.month-value { font-size: 11px; font-weight: 700; color: var(--text); }
+.month-label { font-size: 11px; color: var(--text2); }
+.chart-caption { font-size: 12px; color: var(--text3); text-align: center; margin-top: 6px; }
+
+.year-row { display: flex; align-items: center; gap: 14px; margin: 8px 0; }
+.year-label { width: 80px; text-align: right; font-size: 13px; font-weight: 600; color: var(--text2); flex-shrink: 0; }
+.year-bar-track { flex: 1; height: 22px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+.year-bar { height: 100%; background: var(--blue); border-radius: 4px; transition: width .25s ease; }
+.year-bar.gap { background: repeating-linear-gradient(45deg, var(--surface2), var(--surface2) 6px, var(--border) 6px, var(--border) 12px); }
+.year-value { width: 140px; font-size: 13px; font-weight: 600; color: var(--text); flex-shrink: 0; }
+.year-value .note { color: var(--text3); font-weight: 400; font-size: 12px; margin-left: 4px; }
+
+.peak-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-top: 14px; }
+.peak-card { background: var(--surface2); border-radius: 8px; padding: 12px 14px; }
+.peak-card-year { font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+.peak-card-month { font-size: 15px; font-weight: 700; color: var(--text); }
+.peak-card-value { font-size: 13px; color: var(--text2); margin-top: 2px; }
+
+.implication-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 14px; }
+.implication-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+.implication-card .tag { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 8px; border-radius: 4px; margin-bottom: 8px; }
+.implication-card .tag.blue { background: var(--blue-light); color: var(--blue); }
+.implication-card .tag.purple { background: var(--purple-light); color: var(--purple); }
+.implication-card .tag.green { background: var(--green-light); color: var(--green); }
+.implication-card p { font-size: 13px; line-height: 1.55; }
+
+.footer { padding: 30px 32px 30px; text-align: center; font-size: 13px; color: var(--text3); border-top: 1px solid var(--border); }
+.footer a { color: var(--text2); text-decoration: none; }
+.footer a:hover { color: var(--blue); }
+
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-backdrop { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 49; opacity: 0; pointer-events: none; transition: opacity .2s; top: var(--header-height); }
+  .sidebar-backdrop.active { opacity: 1; pointer-events: auto; }
+  .page-layout { margin-left: 0; }
+  .footer { margin-left: 0 !important; }
+  .header-title h1 { font-size: 15px; }
+  .header-title p { display: none; }
+  .header-logo .logo-text, .header-logo .logo-accent { display: none; }
+  .hamburger { display: block; }
+  .hero { padding: 22px 20px; }
+  .hero h2 { font-size: 20px; }
+  .hero-meta { flex-wrap: wrap; gap: 12px; }
+  .main { padding: 24px 16px 60px; }
+  .header-left nav { display: none; }
+  .month-chart { grid-template-columns: repeat(6, 1fr); }
+  .month-bar-track { height: 100px; }
+  .year-label { width: 60px; }
+  .year-value { width: 100px; }
+  .headline-stat .big { font-size: 22px; }
+}
+</style>
+</head>
+<body>
+
+<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
+
+<nav class="sidebar" id="sidebar">
+  <ul class="sidebar-nav">
+    <li><a href="#section-summary" data-section="section-summary">Summary</a></li>
+    <li><a href="#section-headline" data-section="section-headline">Headline Finding</a></li>
+    <li><a href="#section-2025" data-section="section-2025">2025 Monthly Curve</a></li>
+    <li><a href="#section-cross-year" data-section="section-cross-year">Same Pattern Every Year</a></li>
+    <li><a href="#section-yearly" data-section="section-yearly">A Decade In Totals</a></li>
+    <li><a href="#section-implications" data-section="section-implications">What It Means</a></li>
+    <li><a href="#section-method" data-section="section-method">How We Got It</a></li>
+    <li><a href="#section-caveats" data-section="section-caveats">Caveats</a></li>
+  </ul>
+</nav>
+
+<header class="header">
+  <div class="header-left">
+    <button class="hamburger" id="hamburgerBtn" onclick="toggleSidebar()">&#9776;</button>
+    <div class="header-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></div>
+    <div class="header-title">
+      <h1>Meji Media</h1>
+      <p>Volume Forecast (11 Years of Data)</p>
+    </div>
+    <span style="color:var(--border);font-size:20px;margin:0 4px;">|</span>
+    <nav style="display:flex;gap:4px;">
+      <a href="/docs/meji-media/" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Hub</a>
+      <a href="/docs/meji-media/guide" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Guide</a>
+      <a href="/docs/meji-media/ab-testing" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">A/B Testing</a>
+      <a href="/docs/meji-media/lead-scoring" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Scoring</a>
+      <a href="/docs/meji-media/system-overview" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Overview</a>
+      <a href="/docs/meji-media/scaling" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Scaling</a>
+      <a href="/docs/meji-media/volume-forecast" style="font-size:13px;font-weight:700;padding:6px 12px;border-radius:6px;background:var(--purple-light);color:var(--purple);text-decoration:none;">Volume</a>
+    </nav>
+  </div>
+  <div class="header-right">
+    <span class="badge badge-purple"><span class="badge-dot"></span> Data-Driven Forecast</span>
+    <button class="theme-btn" onclick="toggleTheme()">
+      <span id="theme-icon">&#9790;</span> Theme
+    </button>
+  </div>
+</header>
+
+<div class="page-layout">
+<div class="main">
+
+  <div class="hero">
+    <h2>Volume Forecast: What 11 Years of Enquiry Data Tells Us</h2>
+    <p>The <a href="/docs/meji-media/scaling" style="color:var(--blue);">Scaling document</a> ended on an open question: Gurmej's "annual +10%" or Jess's "skyrockets June/July"? This document answers it. We pulled every enquiry on file across the full historical archive (four MySQL tables, 2015 to 2025) and the pattern is clearer than either intuition guessed.</p>
+    <div class="hero-meta">
+      <div><strong>Prepared for:</strong> Gurmej Pawar, Jess Harrar</div>
+      <div><strong>Date:</strong> 8 May 2026</div>
+      <div><strong>Source:</strong> Live MySQL archive (read-only)</div>
+    </div>
+  </div>
+
+  <div class="section" id="section-summary">
+    <div class="section-title">Summary in Three Sentences</div>
+    <p>The peak month for new enquiries is <strong>September every year</strong>, by a wide margin. The intake curve from January to December is the same shape year after year: a slow first half, a steady ramp from June, a sharp September spike, then a fast tail through November and December.</p>
+    <p>Both stated growth views from the 22 April calls turn out to be <em>partly</em> right but neither is the full picture: annual totals are roughly stable year-over-year (Gurmej's "not wildly different" is closer than +10%), and Jess's instinct about a ramp was directionally correct but mistimed by about two months, the ramp is real, but it lands in <strong>August through October</strong>, not June and July.</p>
+    <p>For the scaling decision, this means the deliverability cliffs in the <a href="/docs/meji-media/scaling">Scaling document</a> need to be evaluated against a September peak that historically hits <strong>20 to 25 enquiries per day sustained for several weeks</strong>, not a flat year-round average.</p>
+  </div>
+
+  <div class="section" id="section-headline">
+    <div class="section-title">The Headline Finding</div>
+    <div class="headline-stat">
+      <div class="big">Every year for at least a decade, intake peaks in <span>the same 7-week window</span></div>
+      <div class="sub">August through mid-October. Eight of nine complete seasons peaked in September. The exception (2018) peaked in October.</div>
+    </div>
+    <p>This is not a 2025 fluke and not a recent trend. The pattern is visible in every year of data we have, going back to 2015. It is so consistent that it can be used as a planning input directly: every staffing, automation, and marketing decision should treat August through October as a fundamentally different operating regime from the other nine months.</p>
+    <p>The single biggest day on record was <strong>3 September 2025</strong>: 42 new enquiries arrived in 24 hours. The runner-up days are also September (15th, 16th, and 22nd of 2025; 25 September 2024; 18 September 2019).</p>
+  </div>
+
+  <div class="section" id="section-2025">
+    <div class="section-title">The 2025 Curve, Month by Month</div>
+    <p>2025 is the most recent complete season. 2,762 enquiries arrived across the year. Look at how unevenly they were distributed.</p>
+    <div class="month-chart">
+      <div class="month-cell"><div class="month-bar-track"><div class="month-bar purple" style="height:0.3%"></div></div><div class="month-value">2</div><div class="month-label">Jan</div></div>
+      <div class="month-cell"><div class="month-bar-track"><div class="month-bar purple" style="height:0.7%"></div></div><div class="month-value">5</div><div class="month-label">Feb</div></div>
+      <div class="month-cell"><div class="month-bar-track"><div class="month-bar purple" style="height:0.7%"></div></div><div class="month-value">5</div><div class="month-label">Mar</div></div>
+      <div class="month-cell"><div class="month-bar-track"><div class="month-bar purple" style="height:2%"></div></div><div class="month-value">14</div><div class="month-label">Apr</div></div>
+      <div class="month-cell"><div class="month-bar-track"><div class="month-bar purple" style="height:10%"></div></div><div class="month-value">71</div><div class="month-label">May</div></div>
+      <div class="month-cell"><div class="month-bar-track"><div class="month-bar purple" style="height:28%"></div></div><div class="month-value">199</div><div class="month-label">Jun</div></div>
+      <div class="month-cell"><div class="month-bar-track"><div class="month-bar purple" style="height:70%"></div></div><div class="month-value">497</div><div class="month-label">Jul</div></div>
+      <div class="month-cell"><div class="month-bar-track"><div class="month-bar purple" style="height:73%"></div></div><div class="month-value">519</div><div class="month-label">Aug</div></div>
+      <div class="month-cell"><div class="month-bar-track"><div class="month-bar purple" style="height:100%"></div></div><div class="month-value">712</div><div class="month-label">Sep</div></div>
+      <div class="month-cell"><div class="month-bar-track"><div class="month-bar purple" style="height:64%"></div></div><div class="month-value">459</div><div class="month-label">Oct</div></div>
+      <div class="month-cell"><div class="month-bar-track"><div class="month-bar purple" style="height:37%"></div></div><div class="month-value">263</div><div class="month-label">Nov</div></div>
+      <div class="month-cell"><div class="month-bar-track"><div class="month-bar purple" style="height:2%"></div></div><div class="month-value">16</div><div class="month-label">Dec</div></div>
+    </div>
+    <div class="chart-caption">2025 monthly enquiry counts (n = 2,762)</div>
+    <p style="margin-top:14px;">September alone took <strong>712 enquiries</strong>, more than the entire first half of the year combined (296 across January through June). The August through October stretch (1,690 enquiries) was <strong>61% of the entire year</strong>, packed into 25% of the calendar.</p>
+  </div>
+
+  <div class="section" id="section-cross-year">
+    <div class="section-title">Same Shape Every Year</div>
+    <p>If 2025 were anomalous you would not see the same curve in 2024. Here is 2024 (3,095 enquiries):</p>
+    <div class="month-chart">
+      <div class="month-cell"><div class="month-bar-track"><div class="month-bar blue" style="height:1.7%"></div></div><div class="month-value">9</div><div class="month-label">Jan</div></div>
+      <div class="month-cell"><div class="month-bar-track"><div class="month-bar blue" style="height:2.4%"></div></div><div class="month-value">13</div><div class="month-label">Feb</div></div>
+      <div class="month-cell"><div class="month-bar-track"><div class="month-bar blue" style="height:4.7%"></div></div><div class="month-value">25</div><div class="month-label">Mar</div></div>
+      <div class="month-cell"><div class="month-bar-track"><div class="month-bar blue" style="height:14%"></div></div><div class="month-value">76</div><div class="month-label">Apr</div></div>
+      <div class="month-cell"><div class="month-bar-track"><div class="month-bar blue" style="height:65%"></div></div><div class="month-value">349</div><div class="month-label">May</div></div>
+      <div class="month-cell"><div class="month-bar-track"><div class="month-bar blue" style="height:77%"></div></div><div class="month-value">415</div><div class="month-label">Jun</div></div>
+      <div class="month-cell"><div class="month-bar-track"><div class="month-bar blue" style="height:74%"></div></div><div class="month-value">398</div><div class="month-label">Jul</div></div>
+      <div class="month-cell"><div class="month-bar-track"><div class="month-bar blue" style="height:82%"></div></div><div class="month-value">438</div><div class="month-label">Aug</div></div>
+      <div class="month-cell"><div class="month-bar-track"><div class="month-bar blue" style="height:100%"></div></div><div class="month-value">537</div><div class="month-label">Sep</div></div>
+      <div class="month-cell"><div class="month-bar-track"><div class="month-bar blue" style="height:87%"></div></div><div class="month-value">469</div><div class="month-label">Oct</div></div>
+      <div class="month-cell"><div class="month-bar-track"><div class="month-bar blue" style="height:61%"></div></div><div class="month-value">330</div><div class="month-label">Nov</div></div>
+      <div class="month-cell"><div class="month-bar-track"><div class="month-bar blue" style="height:7%"></div></div><div class="month-value">36</div><div class="month-label">Dec</div></div>
+    </div>
+    <div class="chart-caption">2024 monthly enquiry counts (n = 3,095)</div>
+    <p style="margin-top:14px;">Same curve, slightly different proportions. The peak month is still September. The April through June ramp is steeper in 2024 because 2024 had a stronger early-year intake overall, but the September peak is the highest point in both years.</p>
+    <p>Going further back, the peak months by year:</p>
+    <div class="peak-grid">
+      <div class="peak-card"><div class="peak-card-year">2015</div><div class="peak-card-month">September</div><div class="peak-card-value">243 enquiries</div></div>
+      <div class="peak-card"><div class="peak-card-year">2016</div><div class="peak-card-month">September</div><div class="peak-card-value">156 enquiries</div></div>
+      <div class="peak-card"><div class="peak-card-year">2017</div><div class="peak-card-month">September</div><div class="peak-card-value">92 enquiries</div></div>
+      <div class="peak-card"><div class="peak-card-year">2018</div><div class="peak-card-month">October</div><div class="peak-card-value">136 enquiries</div></div>
+      <div class="peak-card"><div class="peak-card-year">2019</div><div class="peak-card-month">September</div><div class="peak-card-value">183 enquiries</div></div>
+      <div class="peak-card"><div class="peak-card-year">2023</div><div class="peak-card-month">September</div><div class="peak-card-value">372 enquiries</div></div>
+      <div class="peak-card"><div class="peak-card-year">2024</div><div class="peak-card-month">September</div><div class="peak-card-value">537 enquiries</div></div>
+      <div class="peak-card"><div class="peak-card-year">2025</div><div class="peak-card-month">September</div><div class="peak-card-value">712 enquiries</div></div>
+    </div>
+    <p style="margin-top:14px;">Eight of the nine complete seasons we could pull peak in September. The single exception (2018) peaks in October by a small margin.</p>
+  </div>
+
+  <div class="section" id="section-yearly">
+    <div class="section-title">A Decade in Totals</div>
+    <p>Pre-COVID, the business ran at roughly 600 to 800 enquiries a year. The 2020 to 2022 stretch is missing from every queryable archive table (a combination of the COVID lockdown collapse plus an archive that simply does not span those three years). Post-pandemic, the volume has scaled roughly four times.</p>
+    <div style="margin-top:16px;">
+      <div class="year-row"><span class="year-label">2015</span><div class="year-bar-track"><div class="year-bar" style="width:28%"></div></div><span class="year-value">865<span class="note">May start</span></span></div>
+      <div class="year-row"><span class="year-label">2016</span><div class="year-bar-track"><div class="year-bar" style="width:21%"></div></div><span class="year-value">647</span></div>
+      <div class="year-row"><span class="year-label">2017</span><div class="year-bar-track"><div class="year-bar" style="width:7%"></div></div><span class="year-value">227<span class="note">sparse data</span></span></div>
+      <div class="year-row"><span class="year-label">2018</span><div class="year-bar-track"><div class="year-bar" style="width:19%"></div></div><span class="year-value">594</span></div>
+      <div class="year-row"><span class="year-label">2019</span><div class="year-bar-track"><div class="year-bar" style="width:21%"></div></div><span class="year-value">665</span></div>
+      <div class="year-row"><span class="year-label">2020 to 22</span><div class="year-bar-track"><div class="year-bar gap" style="width:100%"></div></div><span class="year-value"><span class="note">data gap</span></span></div>
+      <div class="year-row"><span class="year-label">2023</span><div class="year-bar-track"><div class="year-bar" style="width:62%"></div></div><span class="year-value">1,927<span class="note">Mar start</span></span></div>
+      <div class="year-row"><span class="year-label">2024</span><div class="year-bar-track"><div class="year-bar" style="width:100%"></div></div><span class="year-value">3,095</span></div>
+      <div class="year-row"><span class="year-label">2025</span><div class="year-bar-track"><div class="year-bar" style="width:89%"></div></div><span class="year-value">2,762</span></div>
+    </div>
+    <p style="margin-top:14px;">A few observations:</p>
+    <ul>
+      <li>2024 to 2025 was a slight decline (3,095 down to 2,762, about minus 11%). This is closer to Gurmej's "not wildly different year-on-year" framing than to a +10% growth assumption.</li>
+      <li>2026 year-to-date (through 7 May): 181 enquiries in the live <code>enquiries</code> table. The day-by-day cumulative comparison against prior years would need a separate query to be precise; what we can say from the yearly totals is that 2026 is well within the post-2022 volume regime, not a regression toward the pre-COVID baseline.</li>
+      <li>The 2017 number (227) almost certainly reflects a data gap rather than an actual quiet year. Other years either side look normal.</li>
+    </ul>
+  </div>
+
+  <div class="section" id="section-implications">
+    <div class="section-title">What This Means For The Scaling Decision</div>
+    <p>The <a href="/docs/meji-media/scaling">Scaling document</a> mapped three deliverability cliffs against a flat per-day average of around 30 outbound emails. That average is misleading. The cliffs need to be evaluated against the September peak, not the year-round mean.</p>
+    <p>From the historical data, a typical September day produces around <strong>20 to 25 enquiries</strong>, sustained for several weeks. With the current pipeline pattern of 4 to 6 emails per enquiry, that is roughly <strong>100 to 150 outbound emails per day from the single mailbox</strong> for the duration of September. Plus the catch-up sends from late August enquiries still in their follow-up window.</p>
+    <p>Revised exposure to each cliff:</p>
+    <div class="implication-grid">
+      <div class="implication-card">
+        <span class="tag blue">Cliff 1 (Soft)</span>
+        <p>Going from a 30-per-day baseline to 100 to 150 per day during September is roughly a 3 to 5 times jump. That is squarely inside the trigger range for Gmail's spam-filter heuristics on volume spikes. <strong>Realistic risk for this September.</strong></p>
+      </div>
+      <div class="implication-card">
+        <span class="tag purple">Cliff 2 (Hard)</span>
+        <p>The 2,000-per-day Workspace cap stays well clear at 100 to 150 sustained. Would only become a real risk if a single day produced more than around 400 enquiries, which the historical data suggests is very unlikely (the all-time single-day peak was 42).</p>
+      </div>
+      <div class="implication-card">
+        <span class="tag green">Cliff 3 (Regulatory)</span>
+        <p>The 5,000-per-day bulk-sender threshold is far off. No realistic September scenario for the Christmas-side flow brings it close. (The Instantly outbound side is a separate story.)</p>
+      </div>
+    </div>
+    <p style="margin-top:14px;">The practical translation: <strong>Path A (monitor and stay) is genuinely at risk for the upcoming September</strong>. Path B (multi-mailbox rotation) was framed as "buys 12+ months of headroom" and that framing holds, if you spread the September load across 2 to 3 mailboxes, each one stays comfortably under the cliff. Path C remains the right answer if the Instantly outbound work moves forward and you want shared infrastructure.</p>
+  </div>
+
+  <div class="section" id="section-method">
+    <div class="section-title">How We Got This Data</div>
+    <p>This is not a guess or a survey. The numbers are pulled directly from the live database. Specifically:</p>
+    <ol>
+      <li>The MySQL connection used by the existing automations (<code>enquire@christmasofficeparty.co.uk</code> mailbox flow) is read-only. We built a small read-only diagnostic scenario in Make.com (UTIL scenario 8974201) for ad-hoc queries against the same connection, no separate credentials required.</li>
+      <li>The historical enquiry data is split across four tables: <code>enquiries</code> (the live current-season table, 181 rows), <code>all_enquiries</code> (a 2015 to 2020 archive, 3,005 rows), <code>full_data_enquiries</code> (a wider 2023 to 2026 view, 7,833 rows), and <code>enquiries_backup_23-04-2025</code> (a snapshot from April 2025, 3,859 rows).</li>
+      <li>None of these alone covers the full timeline. We reconciled them by date range, schema discovery, and de-duplication. The 2020 to 2022 period is the only stretch we could not recover, it sits in none of the four tables.</li>
+      <li>All aggregation done in SQL against the live tables. No data was extracted, exported, or persisted outside the database. The numbers in this document are the database&apos;s; we surfaced the pattern.</li>
+    </ol>
+  </div>
+
+  <div class="section" id="section-caveats">
+    <div class="section-title">Caveats &amp; Confidence</div>
+    <ul>
+      <li><strong>The 2020 to 2022 gap is real.</strong> We don&apos;t know what the COVID-era curve looked like. The pre-COVID and post-COVID patterns are consistent enough with each other that we&apos;re confident in the September-peak framing, but if the lockdown years materially shifted customer behaviour, that&apos;s not visible in this data.</li>
+      <li><strong>The <code>full_data_enquiries</code> table is slightly stale for 2026.</strong> It shows only 49 rows for 2026 but the live <code>enquiries</code> table has 181 through 7 May. Daily counts for late April and early May 2026 are based on the live table only and may be undercounted by a small amount in any historical aggregate.</li>
+      <li><strong>The 2017 yearly total (227) is suspicious.</strong> Other years in the same archive are in the 600-plus range. Most likely a partial-year data issue rather than a real volume drop.</li>
+      <li><strong>Single-day peak (42) is from 2025-09-03 specifically.</strong> Daily peaks were extracted across the full archive; a higher single day could exist in the 2020 to 2022 gap. We treat 42 as a lower bound on the historical peak.</li>
+      <li><strong>"Enquiry" is defined here as a row in the database</strong>, whatever flowed in via the website form, the phone capture, the partner referral feed, etc. We have not separated by source. If you want a per-source breakdown, that&apos;s a follow-up query.</li>
+    </ul>
+    <p>If any of these caveats matter for the path decision, say so and we&apos;ll dig further before locking in a recommendation.</p>
+  </div>
+
+</div><!-- /main -->
+
+<footer class="footer" style="margin-left:var(--sidebar-width);">
+  <p>Built and maintained by <a href="https://unpauseai.com" target="_blank" rel="noopener">UnpauseAI</a></p>
+  <p style="margin-top:4px;">Last updated: 8 May 2026 &middot; Data source: live MySQL archive, read-only</p>
+</footer>
+</div><!-- /page-layout -->
+
+<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
+  <div style="text-align:center;max-width:360px;padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span></div>
+    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Meji Media Documentation</h2>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Enter your access code to continue.</p>
+    <div style="display:flex;gap:8px;">
+      <input id="auth-input" type="password" placeholder="Access code" autocomplete="off"
+        style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;"
+        onkeydown="if(event.key==='Enter')checkAuth()" />
+      <button onclick="checkAuth()"
+        style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">Enter</button>
+    </div>
+    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Incorrect code. Please try again.</p>
+  </div>
+</div>
+
+<script>
+var MEJI_CODE = 'meji2026';
+
+function checkAuth() {
+  var input = document.getElementById('auth-input').value;
+  if (input === MEJI_CODE) {
+    localStorage.setItem('meji-docs-access', 'granted');
+    var gate = document.getElementById('auth-gate');
+    gate.style.opacity = '0';
+    setTimeout(function() { gate.style.display = 'none'; }, 300);
+  } else {
+    document.getElementById('auth-error').style.display = 'block';
+    document.getElementById('auth-input').value = '';
+    document.getElementById('auth-input').focus();
+  }
+}
+
+(function() {
+  if (localStorage.getItem('meji-docs-access') === 'granted') {
+    document.getElementById('auth-gate').style.display = 'none';
+  } else {
+    document.getElementById('auth-input').focus();
+  }
+})();
+
+function toggleTheme() {
+  var html = document.documentElement;
+  var current = html.getAttribute('data-theme');
+  var next = current === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('meji-docs-theme', next);
+  document.getElementById('theme-icon').innerHTML = next === 'dark' ? '&#9788;' : '&#9790;';
+}
+
+var saved = localStorage.getItem('meji-docs-theme');
+if (saved) {
+  document.documentElement.setAttribute('data-theme', saved);
+  if (saved === 'dark') document.getElementById('theme-icon').innerHTML = '&#9788;';
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarBackdrop').classList.toggle('active');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarBackdrop').classList.remove('active');
+}
+
+(function() {
+  var sections = document.querySelectorAll('[id^="section-"]');
+  var navLinks = document.querySelectorAll('.sidebar-nav a');
+  if (!sections.length) return;
+  var observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting) {
+        navLinks.forEach(function(link) { link.classList.remove('active'); });
+        var activeLink = document.querySelector('.sidebar-nav a[data-section="' + entry.target.id + '"]');
+        if (activeLink) activeLink.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -60% 0px', threshold: 0 });
+  sections.forEach(function(section) { observer.observe(section); });
+  navLinks.forEach(function(link) {
+    link.addEventListener('click', function() {
+      if (window.innerWidth <= 768) closeSidebar();
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

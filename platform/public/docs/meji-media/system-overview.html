@@ -618,12 +618,12 @@ body {
 <!-- Sidebar navigation -->
 <nav class="sidebar" id="sidebar">
   <ul class="sidebar-nav">
-    <li><a href="#section-overview" data-section="section-overview"><span class="nav-icon">&#9670;</span> Overview</a></li>
-    <li><a href="#section-automations" data-section="section-automations"><span class="nav-icon">&#9889;</span> Automations</a></li>
-    <li><a href="#section-cadence" data-section="section-cadence"><span class="nav-icon">&#128337;</span> Cadence</a></li>
-    <li><a href="#section-email" data-section="section-email"><span class="nav-icon">&#9993;</span> Email Routing</a></li>
-    <li><a href="#section-config" data-section="section-config"><span class="nav-icon">&#9881;</span> Configuration</a></li>
-    <li><a href="#section-testing" data-section="section-testing"><span class="nav-icon">&#10003;</span> Testing</a></li>
+    <li><a href="#section-overview" data-section="section-overview">Overview</a></li>
+    <li><a href="#section-automations" data-section="section-automations">Automations</a></li>
+    <li><a href="#section-cadence" data-section="section-cadence">Cadence</a></li>
+    <li><a href="#section-email" data-section="section-email">Email Routing</a></li>
+    <li><a href="#section-config" data-section="section-config">Configuration</a></li>
+    <li><a href="#section-testing" data-section="section-testing">Testing</a></li>
   </ul>
 </nav>
 
@@ -654,6 +654,7 @@ body {
       <a href="/docs/meji-media/lead-scoring" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Scoring</a>
       <a href="/docs/meji-media/system-overview" style="font-size:13px;font-weight:700;padding:6px 12px;border-radius:6px;background:var(--blue-light);color:var(--blue);text-decoration:none;">Overview</a>
       <a href="/docs/meji-media/scaling" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Scaling</a>
+      <a href="/docs/meji-media/volume-forecast" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Volume</a>
     </nav>
   </div>
   <div class="header-right">
@@ -668,16 +669,16 @@ body {
 
 <!-- ── Legend ── -->
 <div id="section-overview" class="legend">
-  <div class="legend-item"><span class="legend-color" style="background:#2563eb"></span>A0 &mdash; MySQL Poller</div>
-  <div class="legend-item"><span class="legend-color" style="background:#16a34a"></span>A1 &mdash; Enquiry Sequence</div>
-  <div class="legend-item"><span class="legend-color" style="background:#7c3aed"></span>A2 &mdash; Reply Detection</div>
-  <div class="legend-item"><span class="legend-color" style="background:#d97706"></span>A3 &mdash; Scheduled Follow-Ups</div>
+  <div class="legend-item"><span class="legend-color" style="background:#2563eb"></span>A0, MySQL Poller</div>
+  <div class="legend-item"><span class="legend-color" style="background:#16a34a"></span>A1, Enquiry Sequence</div>
+  <div class="legend-item"><span class="legend-color" style="background:#7c3aed"></span>A2, Reply Detection</div>
+  <div class="legend-item"><span class="legend-color" style="background:#d97706"></span>A3, Scheduled Follow-Ups</div>
   <div class="legend-item"><span class="legend-color" style="background:#e2e8f0;border:1px solid #94a3b8"></span>Configurable</div>
 </div>
 
 <!-- ── Full system flow diagram ── -->
 <div class="flow-wrapper">
-  <div class="flow-title">End-to-end flow &mdash; what happens to every enquiry</div>
+  <div class="flow-title">End-to-end flow, what happens to every enquiry</div>
 
   <!-- Part A: Pipeline overview -->
   <div class="pipeline-strip">
@@ -716,7 +717,7 @@ body {
   <div style="border-top:1px solid var(--border);margin:32px 0 28px;"></div>
 
   <!-- Part B: A1 routing logic (SVG) -->
-  <div class="flow-title" style="margin-bottom:20px">A1 routing logic &mdash; what happens inside each enquiry</div>
+  <div class="flow-title" style="margin-bottom:20px">A1 routing logic, what happens inside each enquiry</div>
 
   <div style="overflow-x:auto;">
     <svg class="flow-svg" width="760" height="510" viewBox="0 0 760 510" xmlns="http://www.w3.org/2000/svg">
@@ -806,7 +807,7 @@ body {
     <div class="card-header">
       <div class="card-icon" style="background:var(--blue-light)">&#128204;</div>
       <div>
-        <div class="card-title" style="color:var(--blue-dark)">A0 &mdash; MySQL Enquiry Poller</div>
+        <div class="card-title" style="color:var(--blue-dark)">A0, MySQL Enquiry Poller</div>
         <div class="card-sub">Every 30 minutes &middot; Always-on</div>
       </div>
     </div>
@@ -823,7 +824,7 @@ body {
     <div class="card-header">
       <div class="card-icon" style="background:var(--green-light)">&#9889;</div>
       <div>
-        <div class="card-title" style="color:var(--green)">A1 &mdash; Enquiry Follow-Up Sequence</div>
+        <div class="card-title" style="color:var(--green)">A1, Enquiry Follow-Up Sequence</div>
         <div class="card-sub">Instant webhook &middot; Fires per enquiry</div>
       </div>
     </div>
@@ -831,7 +832,7 @@ body {
       <li><span class="step-num">1</span><span>Fetches pipeline config and email templates from data stores</span></li>
       <li><span class="step-num">2</span><span>Scores lead across 9 factors using configurable weights</span></li>
       <li><span class="step-num">3</span><span>Assigns priority tier: hot (&ge;50) / warm (&ge;25) / standard</span></li>
-      <li><span class="step-num">4</span><span>Assigns A/B variant (A or B) &mdash; stored in sheet column Q</span></li>
+      <li><span class="step-num">4</span><span>Assigns A/B variant (A or B), stored in sheet column Q</span></li>
       <li><span class="step-num">5</span><span>Calls OpenAI for a personalised one-sentence opening line</span></li>
       <li><span class="step-num">6</span><span>Logs row to Google Sheet (21 columns)</span></li>
       <li><span class="step-num">7</span><span>Routes: hot &rarr; team alert + warm ack; standard &rarr; initial email</span></li>
@@ -843,7 +844,7 @@ body {
     <div class="card-header">
       <div class="card-icon" style="background:var(--purple-light)">&#128267;</div>
       <div>
-        <div class="card-title" style="color:var(--purple)">A2 &mdash; Reply Detection &amp; Stop</div>
+        <div class="card-title" style="color:var(--purple)">A2, Reply Detection &amp; Stop</div>
         <div class="card-sub">Every 10 minutes &middot; Gmail monitor</div>
       </div>
     </div>
@@ -860,14 +861,14 @@ body {
     <div class="card-header">
       <div class="card-icon" style="background:var(--amber-light)">&#128336;</div>
       <div>
-        <div class="card-title" style="color:var(--amber)">A3 &mdash; Scheduled Follow-Up Steps</div>
+        <div class="card-title" style="color:var(--amber)">A3, Scheduled Follow-Up Steps</div>
         <div class="card-sub">Every 60 minutes &middot; Processes all due leads</div>
       </div>
     </div>
     <ul class="step-list">
       <li><span class="step-num">1</span><span>Finds all leads where <code>stopped = FALSE</code></span></li>
       <li><span class="step-num">2</span><span>Filters to only leads where <code>next_step_due &le; now</code></span></li>
-      <li><span class="step-num">3</span><span>Reads A/B variant from column Q &mdash; uses matching template</span></li>
+      <li><span class="step-num">3</span><span>Reads A/B variant from column Q, uses matching template</span></li>
       <li><span class="step-num">4</span><span>Generates AI opening line, sends step 2 or step 3 email</span></li>
       <li><span class="step-num">5</span><span>Updates sheet: increments step, sets next due time per priority</span></li>
       <li><span class="step-num">6</span><span>Step 4+: marks as cold, stops the sequence</span></li>
@@ -916,7 +917,7 @@ body {
 
 <!-- ── Email routing ── -->
 <div id="section-email" class="config-section">
-  <div class="section-title">&#9993; Email Routing &mdash; Who Receives What</div>
+  <div class="section-title">&#9993; Email Routing, Who Receives What</div>
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:var(--shadow);">
     <table class="email-table">
       <thead>
@@ -938,7 +939,7 @@ body {
         </tr>
         <tr class="email-row-a1">
           <td><span class="email-badge email-badge-a1">A1</span></td>
-          <td>Hot lead &mdash; warm ack to enquirer</td>
+          <td>Hot lead, warm ack to enquirer</td>
           <td>Enquirer's email<br><span class="from-tag">&#11015; To enquirer</span></td>
           <td><span class="from-tag">client.meji-media@unpauseai.com</span></td>
           <td>Template: <code>initial_high_a</code> or <code>initial_high_b</code></td>
@@ -952,10 +953,10 @@ body {
         </tr>
         <tr class="email-row-a2">
           <td><span class="email-badge email-badge-a2">A2</span></td>
-          <td>Read-only Gmail monitor &mdash; no emails sent</td>
-          <td>&mdash;</td>
-          <td>&mdash;</td>
-          <td>&mdash;</td>
+          <td>Read-only Gmail monitor, no emails sent</td>
+          <td>, </td>
+          <td>, </td>
+          <td>, </td>
         </tr>
         <tr class="email-row-a3">
           <td><span class="email-badge email-badge-a3">A3</span></td>
@@ -1091,28 +1092,28 @@ body {
     <div style="font-size:13px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;">Live Status Summary</div>
     <div class="testing-status-grid">
       <div class="status-mini-card status-a0">
-        <div class="status-mini-title" style="color:var(--blue-dark)">A0 &mdash; MySQL Poller</div>
+        <div class="status-mini-title" style="color:var(--blue-dark)">A0, MySQL Poller</div>
         <div class="status-mini-row"><span>Status</span><span class="status-mini-val" style="color:var(--green)">Active</span></div>
         <div class="status-mini-row"><span>Trigger</span><span class="status-mini-val">Polling / 30min</span></div>
         <div class="status-mini-row"><span>Executions</span><span class="status-mini-val">1,038</span></div>
         <div class="status-mini-row"><span>Errors (lifetime)</span><span class="status-mini-val">11</span></div>
       </div>
       <div class="status-mini-card status-a1">
-        <div class="status-mini-title" style="color:var(--green)">A1 &mdash; Enquiry Sequence</div>
+        <div class="status-mini-title" style="color:var(--green)">A1, Enquiry Sequence</div>
         <div class="status-mini-row"><span>Status</span><span class="status-mini-val" style="color:var(--green)">Active</span></div>
         <div class="status-mini-row"><span>Trigger</span><span class="status-mini-val">Webhook</span></div>
         <div class="status-mini-row"><span>Executions</span><span class="status-mini-val">55</span></div>
         <div class="status-mini-row"><span>Errors (lifetime)</span><span class="status-mini-val">0</span></div>
       </div>
       <div class="status-mini-card status-a2">
-        <div class="status-mini-title" style="color:var(--purple)">A2 &mdash; Reply Detection</div>
+        <div class="status-mini-title" style="color:var(--purple)">A2, Reply Detection</div>
         <div class="status-mini-row"><span>Status</span><span class="status-mini-val" style="color:var(--green)">Active</span></div>
         <div class="status-mini-row"><span>Trigger</span><span class="status-mini-val">Polling / 10min</span></div>
         <div class="status-mini-row"><span>Executions</span><span class="status-mini-val">2,066</span></div>
         <div class="status-mini-row"><span>Errors (lifetime)</span><span class="status-mini-val">0</span></div>
       </div>
       <div class="status-mini-card status-a3">
-        <div class="status-mini-title" style="color:var(--amber)">A3 &mdash; Scheduled Follow-Ups</div>
+        <div class="status-mini-title" style="color:var(--amber)">A3, Scheduled Follow-Ups</div>
         <div class="status-mini-row"><span>Status</span><span class="status-mini-val" style="color:var(--green)">Active</span></div>
         <div class="status-mini-row"><span>Trigger</span><span class="status-mini-val">Polling / 60min</span></div>
         <div class="status-mini-row"><span>Executions</span><span class="status-mini-val">427</span></div>
@@ -1138,7 +1139,7 @@ body {
           <span class="tl-scope">A1/A2/A3 Pipeline</span>
           <span class="tl-result tl-result-pass">PASS</span>
         </div>
-        <div class="tl-desc">10/10 pass, 1 skip &mdash; Standard + hot leads, reply detection, step progression</div>
+        <div class="tl-desc">10/10 pass, 1 skip, Standard + hot leads, reply detection, step progression</div>
         <details class="tl-details">
           <summary>Details</summary>
           <div class="tl-details-content">
@@ -1154,7 +1155,7 @@ body {
           <span class="tl-scope">All 4 E2E</span>
           <span class="tl-result tl-result-pass">PASS</span>
         </div>
-        <div class="tl-desc">10/10 pass &mdash; Full integration, A0 cursor, interactions</div>
+        <div class="tl-desc">10/10 pass, Full integration, A0 cursor, interactions</div>
         <details class="tl-details">
           <summary>Details</summary>
           <div class="tl-details-content">
@@ -1170,7 +1171,7 @@ body {
           <span class="tl-scope">Live data</span>
           <span class="tl-result tl-result-pass">PASS</span>
         </div>
-        <div class="tl-desc">All pass &mdash; 3 real enquiries processed, email safety verified</div>
+        <div class="tl-desc">All pass, 3 real enquiries processed, email safety verified</div>
         <details class="tl-details">
           <summary>Details</summary>
           <div class="tl-details-content">
@@ -1186,7 +1187,7 @@ body {
           <span class="tl-scope">A3 optimization</span>
           <span class="tl-result tl-result-pass">PASS</span>
         </div>
-        <div class="tl-desc">All pass &mdash; Early-exit filter, interval 15min to 60min</div>
+        <div class="tl-desc">All pass, Early-exit filter, interval 15min to 60min</div>
         <details class="tl-details">
           <summary>Details</summary>
           <div class="tl-details-content">
@@ -1202,7 +1203,7 @@ body {
           <span class="tl-scope">A/B templates</span>
           <span class="tl-result tl-result-pass">PASS</span>
         </div>
-        <div class="tl-desc">Bug found + fixed &mdash; 10 templates deployed, venue_dates_count bug fixed</div>
+        <div class="tl-desc">Bug found + fixed, 10 templates deployed, venue_dates_count bug fixed</div>
         <details class="tl-details">
           <summary>Details</summary>
           <div class="tl-details-content">
@@ -1218,7 +1219,7 @@ body {
           <span class="tl-scope">Venue integration</span>
           <span class="tl-result tl-result-pass">PASS</span>
         </div>
-        <div class="tl-desc">All pass &mdash; 3 venues configured, A1+A3 updated</div>
+        <div class="tl-desc">All pass, 3 venues configured, A1+A3 updated</div>
         <details class="tl-details">
           <summary>Details</summary>
           <div class="tl-details-content">
@@ -1234,7 +1235,7 @@ body {
           <span class="tl-scope">Email render test</span>
           <span class="tl-result tl-result-blocked">BLOCKED</span>
         </div>
-        <div class="tl-desc">Partial &mdash; Infrastructure built, Make.com API limitation</div>
+        <div class="tl-desc">Partial, Infrastructure built, Make.com API limitation</div>
         <details class="tl-details">
           <summary>Details</summary>
           <div class="tl-details-content">
@@ -1250,7 +1251,7 @@ body {
           <span class="tl-scope">Production go-live</span>
           <span class="tl-result tl-result-pass">PASS</span>
         </div>
-        <div class="tl-desc">All pass &mdash; Gmail swap, all 4 activated</div>
+        <div class="tl-desc">All pass, Gmail swap, all 4 activated</div>
         <details class="tl-details">
           <summary>Details</summary>
           <div class="tl-details-content">
@@ -1266,7 +1267,7 @@ body {
           <span class="tl-scope">Vitals + reconciliation</span>
           <span class="tl-result tl-result-pass">PASS</span>
         </div>
-        <div class="tl-desc">All pass &mdash; All healthy, drift fixed</div>
+        <div class="tl-desc">All pass, All healthy, drift fixed</div>
         <details class="tl-details">
           <summary>Details</summary>
           <div class="tl-details-content">
@@ -1282,7 +1283,7 @@ body {
           <span class="tl-scope">Weekend health check</span>
           <span class="tl-result tl-result-pass">PASS</span>
         </div>
-        <div class="tl-desc">All pass &mdash; Zero failures, 2 new enquiries, ops 65%, BCC fix applied</div>
+        <div class="tl-desc">All pass, Zero failures, 2 new enquiries, ops 65%, BCC fix applied</div>
         <details class="tl-details">
           <summary>Details</summary>
           <div class="tl-details-content">
@@ -1298,7 +1299,7 @@ body {
           <span class="tl-scope">Health check + venue corrections</span>
           <span class="tl-result tl-result-pass">PASS</span>
         </div>
-        <div class="tl-desc">All pass &mdash; All healthy, venue corrections applied, topic update in 10 templates</div>
+        <div class="tl-desc">All pass, All healthy, venue corrections applied, topic update in 10 templates</div>
         <details class="tl-details">
           <summary>Details</summary>
           <div class="tl-details-content">
@@ -1314,7 +1315,7 @@ body {
           <span class="tl-scope">Health check + docs update</span>
           <span class="tl-result tl-result-pass">PASS</span>
         </div>
-        <div class="tl-desc">All pass &mdash; 65 MySQL rows, 4 new enquiries, ops 51.1%, all data stores verified</div>
+        <div class="tl-desc">All pass, 65 MySQL rows, 4 new enquiries, ops 51.1%, all data stores verified</div>
         <details class="tl-details">
           <summary>Details</summary>
           <div class="tl-details-content">
@@ -1330,7 +1331,7 @@ body {
           <span class="tl-scope">Health check</span>
           <span class="tl-result tl-result-pass">PASS</span>
         </div>
-        <div class="tl-desc">All pass &mdash; 66 MySQL rows, 1 new enquiry, ops 67.2% (20,151/30,000), zero errors</div>
+        <div class="tl-desc">All pass, 66 MySQL rows, 1 new enquiry, ops 67.2% (20,151/30,000), zero errors</div>
         <details class="tl-details">
           <summary>Details</summary>
           <div class="tl-details-content">
@@ -1346,7 +1347,7 @@ body {
           <span class="tl-scope">Venue routing fix and field corrections</span>
           <span class="tl-result tl-result-pass">PASS</span>
         </div>
-        <div class="tl-desc">All pass &mdash; venue mapping expanded to 19 event IDs, greeting and guest grammar fixed</div>
+        <div class="tl-desc">All pass, venue mapping expanded to 19 event IDs, greeting and guest grammar fixed</div>
         <details class="tl-details">
           <summary>Details</summary>
           <div class="tl-details-content">
@@ -1362,7 +1363,7 @@ body {
           <span class="tl-scope">Email template overhaul</span>
           <span class="tl-result tl-result-pass">PASS</span>
         </div>
-        <div class="tl-desc">All pass &mdash; signature, venue titles, theme names, single-paragraph format, all verified with test submissions</div>
+        <div class="tl-desc">All pass, signature, venue titles, theme names, single-paragraph format, all verified with test submissions</div>
         <details class="tl-details">
           <summary>Details</summary>
           <div class="tl-details-content">
