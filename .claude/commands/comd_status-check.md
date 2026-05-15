@@ -1,6 +1,6 @@
 ---
 description: Show automation status overview with automated verification
-argument-hint: [project-name] [automation-id] [--verify]
+argument-hint: "[project-name] [automation-id] [--verify]"
 ---
 
 # Automation Status Check
