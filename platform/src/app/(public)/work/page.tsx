@@ -116,7 +116,7 @@ export default function WorkPage() {
               href="/assessment"
               className="shrink-0 rounded-full bg-accent px-6 py-2.5 text-sm font-medium text-white shadow-[0_2px_8px_rgba(37,99,235,.3)] transition-all hover:bg-accent-light hover:-translate-y-0.5"
             >
-              $1 Assessment
+              Request Assessment
             </Link>
           </div>
         </section>
@@ -153,21 +153,15 @@ export default function WorkPage() {
                   {item.tagline}
                 </p>
 
-                {/* Pricing tiers */}
+                {/* Tier options */}
                 <div className="mt-auto space-y-3 border-t border-border pt-4">
-                  <div className="flex items-baseline justify-between">
-                    <div>
-                      <span className="text-xs font-medium text-muted">Self-service</span>
-                      <p className="text-xs text-muted">Blueprint + docs</p>
-                    </div>
-                    <span className="text-lg font-bold">{item.selfServicePrice}</span>
+                  <div>
+                    <span className="text-xs font-medium text-muted">Self-service</span>
+                    <p className="text-xs text-muted">Blueprint + docs</p>
                   </div>
-                  <div className="flex items-baseline justify-between rounded-lg bg-accent/5 px-3 py-2">
-                    <div>
-                      <span className="text-xs font-semibold text-accent">Premium</span>
-                      <p className="text-xs text-muted">We implement it</p>
-                    </div>
-                    <span className="text-lg font-bold text-accent">{item.premiumPrice}</span>
+                  <div className="rounded-lg bg-accent/5 px-3 py-2">
+                    <span className="text-xs font-semibold text-accent">Premium</span>
+                    <p className="text-xs text-muted">We implement it</p>
                   </div>
                 </div>
 
@@ -208,7 +202,7 @@ export default function WorkPage() {
                 key={item.id}
                 className="rounded-xl border-l-4 border-l-accent bg-gradient-to-r from-blue-bg/50 to-transparent border border-border p-6"
               >
-                <div className="mb-1 text-sm font-bold text-accent">{item.premiumPrice}</div>
+                <div className="mb-1 text-sm font-bold text-accent">Premium engagement</div>
                 <h3 className="mb-2 text-xl font-bold">{item.name}</h3>
                 <p className="mb-4 text-sm leading-relaxed text-muted">
                   {item.description}
@@ -306,7 +300,7 @@ export default function WorkPage() {
             href="/assessment"
             className="mt-2 rounded-full bg-accent px-7 py-3 text-sm font-medium text-white shadow-[0_2px_8px_rgba(37,99,235,.3)] transition-all hover:bg-accent-light hover:-translate-y-0.5"
           >
-            Request Assessment &mdash; $1
+            Request Assessment
           </Link>
         </div>
       </section>
