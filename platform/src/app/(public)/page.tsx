@@ -60,7 +60,6 @@ const services = [
 ];
 
 const trustSignals = [
-  { label: "EUR 2,500 \u2013 5,500", sublabel: "typical project scope" },
   { label: "3 \u2013 7 weeks", sublabel: "average delivery" },
   { label: "GDPR-compliant", sublabel: "by design" },
   { label: "EU-based", sublabel: "CET timezone" },
@@ -68,7 +67,7 @@ const trustSignals = [
 
 const processSteps = [
   { step: "01", title: "Discovery", description: "We learn your tools, pain points, and workflow gaps.", color: "blue" as const },
-  { step: "02", title: "Proposal", description: "Detailed scope, architecture, timeline, and investment breakdown.", color: "purple" as const },
+  { step: "02", title: "Proposal", description: "Detailed scope, architecture, and timeline. We discuss commercials on a call.", color: "purple" as const },
   { step: "03", title: "Build & Test", description: "Built with real data, tested every path, iterated until solid.", color: "green" as const },
   { step: "04", title: "Handoff", description: "You own it. Documentation, monitoring, independent operation.", color: "orange" as const },
 ];
@@ -124,7 +123,7 @@ export default function Home() {
               href="/assessment"
               className="rounded-full bg-accent px-7 py-3 text-sm font-medium text-white shadow-[0_2px_8px_rgba(37,99,235,.3)] transition-all hover:bg-accent-light hover:-translate-y-0.5"
             >
-              Get Your $1 Assessment
+              Get Your Assessment
             </Link>
             <Link
               href="#process"
@@ -272,13 +271,13 @@ export default function Home() {
             <p className="max-w-lg text-muted">
               Describe your workflow. Within 24 hours, you&rsquo;ll receive a
               written assessment: what we&rsquo;d build, how long it takes, and
-              what it costs. $1 to filter serious inquiries.
+              how we&rsquo;d approach it.
             </p>
             <Link
               href="/assessment"
               className="mt-2 rounded-full bg-accent px-7 py-3 text-sm font-medium text-white shadow-[0_2px_8px_rgba(37,99,235,.3)] transition-all hover:bg-accent-light hover:-translate-y-0.5"
             >
-              Request Assessment &mdash; $1
+              Request Assessment
             </Link>
           </div>
         </section>
