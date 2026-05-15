@@ -262,7 +262,7 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
 
   <div class="hero">
     <h2>Volume Forecast: What 11 Years of Enquiry Data Tells Us</h2>
-    <p>The <a href="/docs/meji-media/scaling" style="color:var(--blue);">Scaling document</a> ended on an open question: Gurmej's "annual +10%" or Jess's "skyrockets June/July"? This document answers it. We pulled every enquiry on file across the full historical archive (four MySQL tables, 2015 to 2025) and the pattern is clearer than either intuition guessed.</p>
+    <p>The <a href="/docs/meji-media/scaling" style="color:var(--blue);">Scaling document</a> left one question open: Gurmej's "annual +10%" or Jess's "skyrockets June/July"? Neither. We pulled every enquiry on file (four MySQL tables, 2015 to 2025). The pattern is sharper than either guess.</p>
     <div class="hero-meta">
       <div><strong>Prepared for:</strong> Gurmej Pawar, Jess Harrar</div>
       <div><strong>Date:</strong> 8 May 2026</div>
@@ -271,10 +271,10 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
   </div>
 
   <div class="section" id="section-summary">
-    <div class="section-title">Summary in Three Sentences</div>
-    <p>The peak month for new enquiries is <strong>September every year</strong>, by a wide margin. The intake curve from January to December is the same shape year after year: a slow first half, a steady ramp from June, a sharp September spike, then a fast tail through November and December.</p>
-    <p>Both stated growth views from the 22 April calls turn out to be <em>partly</em> right but neither is the full picture: annual totals are roughly stable year-over-year (Gurmej's "not wildly different" is closer than +10%), and Jess's instinct about a ramp was directionally correct but mistimed by about two months, the ramp is real, but it lands in <strong>August through October</strong>, not June and July.</p>
-    <p>For the scaling decision, this means the deliverability cliffs in the <a href="/docs/meji-media/scaling">Scaling document</a> need to be evaluated against a September peak that historically hits <strong>20 to 25 enquiries per day sustained for several weeks</strong>, not a flat year-round average.</p>
+    <div class="section-title">Summary</div>
+    <p>Peak month is <strong>September, every year, by a wide margin</strong>. Same curve annually: slow first half, ramp from June, sharp September spike, fast tail to year-end.</p>
+    <p>Both 22 April growth views were half right. Annual totals are roughly flat (closer to Gurmej's "not wildly different" than +10%). Jess's ramp is real but lands <strong>August to October</strong>, not June to July.</p>
+    <p>Scaling impact: size the deliverability cliffs against the September peak (<strong>20 to 25 enquiries per day for weeks</strong>), not a flat year-round average.</p>
   </div>
 
   <div class="section" id="section-headline">
@@ -283,13 +283,13 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
       <div class="big">Every year for at least a decade, intake peaks in <span>the same 7-week window</span></div>
       <div class="sub">August through mid-October. Eight of nine complete seasons peaked in September. The exception (2018) peaked in October.</div>
     </div>
-    <p>This is not a 2025 fluke and not a recent trend. The pattern is visible in every year of data we have, going back to 2015. It is so consistent that it can be used as a planning input directly: every staffing, automation, and marketing decision should treat August through October as a fundamentally different operating regime from the other nine months.</p>
-    <p>The single biggest day on record was <strong>3 September 2025</strong>: 42 new enquiries arrived in 24 hours. The runner-up days are also September (15th, 16th, and 22nd of 2025; 25 September 2024; 18 September 2019).</p>
+    <p>Not a 2025 fluke. Visible in every year back to 2015. Consistent enough to plan against directly: treat August to October as a different operating regime from the other nine months.</p>
+    <p>Biggest day on record: <strong>3 September 2025</strong>, 42 enquiries in 24 hours. Every runner-up day is also September (15th, 16th, 22nd 2025; 25 Sep 2024; 18 Sep 2019).</p>
   </div>
 
   <div class="section" id="section-2025">
     <div class="section-title">The 2025 Curve, Month by Month</div>
-    <p>2025 is the most recent complete season. 2,762 enquiries arrived across the year. Look at how unevenly they were distributed.</p>
+    <p>2025, the most recent complete season: 2,762 enquiries, distributed like this.</p>
     <div class="month-chart">
       <div class="month-cell"><div class="month-bar-track"><div class="month-bar purple" style="height:0.3%"></div></div><div class="month-value">2</div><div class="month-label">Jan</div></div>
       <div class="month-cell"><div class="month-bar-track"><div class="month-bar purple" style="height:0.7%"></div></div><div class="month-value">5</div><div class="month-label">Feb</div></div>
@@ -305,12 +305,12 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
       <div class="month-cell"><div class="month-bar-track"><div class="month-bar purple" style="height:2%"></div></div><div class="month-value">16</div><div class="month-label">Dec</div></div>
     </div>
     <div class="chart-caption">2025 monthly enquiry counts (n = 2,762)</div>
-    <p style="margin-top:14px;">September alone took <strong>712 enquiries</strong>, more than the entire first half of the year combined (296 across January through June). The August through October stretch (1,690 enquiries) was <strong>61% of the entire year</strong>, packed into 25% of the calendar.</p>
+    <p style="margin-top:14px;">September alone: <strong>712 enquiries</strong>, more than January to June combined (296). August to October (1,690) was <strong>61% of the year</strong> in 25% of the calendar.</p>
   </div>
 
   <div class="section" id="section-cross-year">
     <div class="section-title">Same Shape Every Year</div>
-    <p>If 2025 were anomalous you would not see the same curve in 2024. Here is 2024 (3,095 enquiries):</p>
+    <p>If 2025 were anomalous, 2024 would look different. It doesn't (3,095 enquiries):</p>
     <div class="month-chart">
       <div class="month-cell"><div class="month-bar-track"><div class="month-bar blue" style="height:1.7%"></div></div><div class="month-value">9</div><div class="month-label">Jan</div></div>
       <div class="month-cell"><div class="month-bar-track"><div class="month-bar blue" style="height:2.4%"></div></div><div class="month-value">13</div><div class="month-label">Feb</div></div>
@@ -326,8 +326,8 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
       <div class="month-cell"><div class="month-bar-track"><div class="month-bar blue" style="height:7%"></div></div><div class="month-value">36</div><div class="month-label">Dec</div></div>
     </div>
     <div class="chart-caption">2024 monthly enquiry counts (n = 3,095)</div>
-    <p style="margin-top:14px;">Same curve, slightly different proportions. The peak month is still September. The April through June ramp is steeper in 2024 because 2024 had a stronger early-year intake overall, but the September peak is the highest point in both years.</p>
-    <p>Going further back, the peak months by year:</p>
+    <p style="margin-top:14px;">Same curve. Peak still September. 2024's spring ramp is steeper from a stronger early-year intake, but September is the highest point both years.</p>
+    <p>Peak months further back:</p>
     <div class="peak-grid">
       <div class="peak-card"><div class="peak-card-year">2015</div><div class="peak-card-month">September</div><div class="peak-card-value">243 enquiries</div></div>
       <div class="peak-card"><div class="peak-card-year">2016</div><div class="peak-card-month">September</div><div class="peak-card-value">156 enquiries</div></div>
@@ -338,12 +338,12 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
       <div class="peak-card"><div class="peak-card-year">2024</div><div class="peak-card-month">September</div><div class="peak-card-value">537 enquiries</div></div>
       <div class="peak-card"><div class="peak-card-year">2025</div><div class="peak-card-month">September</div><div class="peak-card-value">712 enquiries</div></div>
     </div>
-    <p style="margin-top:14px;">Eight of the nine complete seasons we could pull peak in September. The single exception (2018) peaks in October by a small margin.</p>
+    <p style="margin-top:14px;">Eight of nine complete seasons peak in September. The exception (2018) peaks in October by a small margin.</p>
   </div>
 
   <div class="section" id="section-yearly">
     <div class="section-title">A Decade in Totals</div>
-    <p>Pre-COVID, the business ran at roughly 600 to 800 enquiries a year. The 2020 to 2022 stretch is missing from every queryable archive table (a combination of the COVID lockdown collapse plus an archive that simply does not span those three years). Post-pandemic, the volume has scaled roughly four times.</p>
+    <p>Pre-COVID: roughly 600 to 800 enquiries a year. 2020 to 2022 is missing from every archive table (COVID collapse plus an archive that doesn't span those years). Post-pandemic: roughly 4x the volume.</p>
     <div style="margin-top:16px;">
       <div class="year-row"><span class="year-label">2015</span><div class="year-bar-track"><div class="year-bar" style="width:28%"></div></div><span class="year-value">865<span class="note">May start</span></span></div>
       <div class="year-row"><span class="year-label">2016</span><div class="year-bar-track"><div class="year-bar" style="width:21%"></div></div><span class="year-value">647</span></div>
@@ -355,18 +355,17 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
       <div class="year-row"><span class="year-label">2024</span><div class="year-bar-track"><div class="year-bar" style="width:100%"></div></div><span class="year-value">3,095</span></div>
       <div class="year-row"><span class="year-label">2025</span><div class="year-bar-track"><div class="year-bar" style="width:89%"></div></div><span class="year-value">2,762</span></div>
     </div>
-    <p style="margin-top:14px;">A few observations:</p>
-    <ul>
-      <li>2024 to 2025 was a slight decline (3,095 down to 2,762, about minus 11%). This is closer to Gurmej's "not wildly different year-on-year" framing than to a +10% growth assumption.</li>
-      <li>2026 year-to-date (through 7 May): 181 enquiries in the live <code>enquiries</code> table. The day-by-day cumulative comparison against prior years would need a separate query to be precise; what we can say from the yearly totals is that 2026 is well within the post-2022 volume regime, not a regression toward the pre-COVID baseline.</li>
-      <li>The 2017 number (227) almost certainly reflects a data gap rather than an actual quiet year. Other years either side look normal.</li>
+    <ul style="margin-top:14px;">
+      <li>2024 to 2025 declined about 11% (3,095 to 2,762). Closer to Gurmej's "not wildly different" than +10% growth.</li>
+      <li>2026 year-to-date (through 7 May): 181 enquiries. Well within the post-2022 regime, not a regression to the pre-COVID baseline.</li>
+      <li>The 2017 total (227) is almost certainly a data gap, not a quiet year. Years either side look normal.</li>
     </ul>
   </div>
 
   <div class="section" id="section-implications">
     <div class="section-title">What This Means For The Scaling Decision</div>
-    <p>The <a href="/docs/meji-media/scaling">Scaling document</a> mapped three deliverability cliffs against a flat per-day average of around 30 outbound emails. That average is misleading. The cliffs need to be evaluated against the September peak, not the year-round mean.</p>
-    <p>From the historical data, a typical September day produces around <strong>20 to 25 enquiries</strong>, sustained for several weeks. With the current pipeline pattern of 4 to 6 emails per enquiry, that is roughly <strong>100 to 150 outbound emails per day from the single mailbox</strong> for the duration of September. Plus the catch-up sends from late August enquiries still in their follow-up window.</p>
+    <p>The <a href="/docs/meji-media/scaling">Scaling document</a> mapped three deliverability cliffs against a flat ~30 outbound emails per day. That average is misleading. Size the cliffs against the September peak, not the mean.</p>
+    <p>A typical September day: <strong>20 to 25 enquiries</strong>, sustained for weeks. At 4 to 6 emails per enquiry, that's <strong>100 to 150 outbound per day from the single mailbox</strong> through September, plus catch-up sends from late-August enquiries still in their follow-up window.</p>
     <p>Revised exposure to each cliff:</p>
     <div class="implication-grid">
       <div class="implication-card">
@@ -382,30 +381,30 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
         <p>The 5,000-per-day bulk-sender threshold is far off. No realistic September scenario for the Christmas-side flow brings it close. (The Instantly outbound side is a separate story.)</p>
       </div>
     </div>
-    <p style="margin-top:14px;">The practical translation: <strong>Path A (monitor and stay) is genuinely at risk for the upcoming September</strong>. Path B (multi-mailbox rotation) was framed as "buys 12+ months of headroom" and that framing holds, if you spread the September load across 2 to 3 mailboxes, each one stays comfortably under the cliff. Path C remains the right answer if the Instantly outbound work moves forward and you want shared infrastructure.</p>
+    <p style="margin-top:14px;">Translation: <strong>Path A (monitor and stay) is genuinely at risk this September</strong>. Path B (multi-mailbox) holds: spread the September load across 2 to 3 mailboxes and each stays under the cliff. Path C is right if the Instantly outbound work moves forward and you want shared infrastructure.</p>
   </div>
 
   <div class="section" id="section-method">
     <div class="section-title">How We Got This Data</div>
-    <p>This is not a guess or a survey. The numbers are pulled directly from the live database. Specifically:</p>
+    <p>Pulled directly from the live database, not a survey or estimate:</p>
     <ol>
-      <li>The MySQL connection used by the existing automations (<code>enquire@christmasofficeparty.co.uk</code> mailbox flow) is read-only. We built a small read-only diagnostic scenario in Make.com (UTIL scenario 8974201) for ad-hoc queries against the same connection, no separate credentials required.</li>
-      <li>The historical enquiry data is split across four tables: <code>enquiries</code> (the live current-season table, 181 rows), <code>all_enquiries</code> (a 2015 to 2020 archive, 3,005 rows), <code>full_data_enquiries</code> (a wider 2023 to 2026 view, 7,833 rows), and <code>enquiries_backup_23-04-2025</code> (a snapshot from April 2025, 3,859 rows).</li>
-      <li>None of these alone covers the full timeline. We reconciled them by date range, schema discovery, and de-duplication. The 2020 to 2022 period is the only stretch we could not recover, it sits in none of the four tables.</li>
-      <li>All aggregation done in SQL against the live tables. No data was extracted, exported, or persisted outside the database. The numbers in this document are the database&apos;s; we surfaced the pattern.</li>
+      <li>Read-only MySQL via the existing automation connection (UTIL scenario 8974201, no separate credentials).</li>
+      <li>Data split across four tables: <code>enquiries</code> (live, 181 rows), <code>all_enquiries</code> (2015 to 2020, 3,005 rows), <code>full_data_enquiries</code> (2023 to 2026, 7,833 rows), <code>enquiries_backup_23-04-2025</code> (April 2025 snapshot, 3,859 rows).</li>
+      <li>Reconciled by date range, schema discovery, de-duplication. The 2020 to 2022 stretch sits in none of the four tables.</li>
+      <li>All aggregation in SQL against the live tables. Nothing extracted, exported, or persisted outside the database.</li>
     </ol>
   </div>
 
   <div class="section" id="section-caveats">
     <div class="section-title">Caveats &amp; Confidence</div>
     <ul>
-      <li><strong>The 2020 to 2022 gap is real.</strong> We don&apos;t know what the COVID-era curve looked like. The pre-COVID and post-COVID patterns are consistent enough with each other that we&apos;re confident in the September-peak framing, but if the lockdown years materially shifted customer behaviour, that&apos;s not visible in this data.</li>
-      <li><strong>The <code>full_data_enquiries</code> table is slightly stale for 2026.</strong> It shows only 49 rows for 2026 but the live <code>enquiries</code> table has 181 through 7 May. Daily counts for late April and early May 2026 are based on the live table only and may be undercounted by a small amount in any historical aggregate.</li>
-      <li><strong>The 2017 yearly total (227) is suspicious.</strong> Other years in the same archive are in the 600-plus range. Most likely a partial-year data issue rather than a real volume drop.</li>
-      <li><strong>Single-day peak (42) is from 2025-09-03 specifically.</strong> Daily peaks were extracted across the full archive; a higher single day could exist in the 2020 to 2022 gap. We treat 42 as a lower bound on the historical peak.</li>
-      <li><strong>"Enquiry" is defined here as a row in the database</strong>, whatever flowed in via the website form, the phone capture, the partner referral feed, etc. We have not separated by source. If you want a per-source breakdown, that&apos;s a follow-up query.</li>
+      <li><strong>The 2020 to 2022 gap is real.</strong> The COVID-era curve is unknown. Pre- and post-COVID patterns are consistent enough to trust the September-peak framing, but a lockdown-driven behaviour shift would not be visible here.</li>
+      <li><strong><code>full_data_enquiries</code> is stale for 2026.</strong> It shows 49 rows for 2026; the live table has 181 through 7 May. Late-April and early-May 2026 daily counts may be slightly undercounted in any historical aggregate.</li>
+      <li><strong>The 2017 total (227) is suspicious.</strong> Other archive years are 600-plus. Likely a partial-year data issue, not a real drop.</li>
+      <li><strong>Single-day peak (42) is 2025-09-03.</strong> A higher day could exist in the 2020 to 2022 gap. Treat 42 as a lower bound.</li>
+      <li><strong>"Enquiry" = a database row</strong>, from website form, phone capture, or referral feed. Not separated by source; per-source breakdown is a follow-up query.</li>
     </ul>
-    <p>If any of these caveats matter for the path decision, say so and we&apos;ll dig further before locking in a recommendation.</p>
+    <p>If any caveat matters for the path decision, say so and we'll dig further before locking a recommendation.</p>
   </div>
 
 </div><!-- /main -->
