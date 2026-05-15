@@ -1,6 +1,6 @@
 ---
 description: Generate a system digest (overview, changelog, or client report) and deliver via terminal, file, or email. Use for system awareness, client updates, or progress reports.
-argument-hint: [--overview|--changes|--client NAME] [--since DATE] [--client-facing] [--email ADDRESS] [--file] [--html]
+argument-hint: "[--overview|--changes|--client NAME] [--since DATE] [--client-facing] [--email ADDRESS] [--file] [--html]"
 ---
 
 # System Digest

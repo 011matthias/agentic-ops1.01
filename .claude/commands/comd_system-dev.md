@@ -1,6 +1,6 @@
 ---
 description: Review recent work, identify friction, and build system improvements. The self-annealing development loop.
-argument-hint: [project-name] [--audit-only]
+argument-hint: "[project-name] [--audit-only]"
 ---
 
 # System Development Loop
