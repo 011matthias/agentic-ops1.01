@@ -1,6 +1,6 @@
 # Deliverable gate config for the Meji Media client-facing doc site
 # Files: index.html, guide.html, ab-testing.html, lead-scoring.html,
-# system-overview.html, scaling.html, volume-forecast.html
+# system-overview.html, scaling.html, volume-forecast.html, build-plan.html
 #
 # This config covers the established doc-site UX convention. Adding
 # copy-clipboard and Ctrl+K search to one new page would diverge from
