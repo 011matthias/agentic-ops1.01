@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Coffee Boxx, Karlsruhe | Frischer Kaffee, Panini &amp; Kuchen, Moltkestraße</title>
+<meta name="description" content="Coffee Boxx in der Moltkestraße 44, Karlsruhe: frisch aufgebrühter Kaffee, hausgemachte Panini und Kuchen. Mo bis Fr ab 7:30 Uhr. Zum Bleiben oder für unterwegs.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script type="application/ld+json">
+{
+  "@context":"https://schema.org","@type":"CafeOrCoffeeShop",
+  "name":"Coffee Boxx",
+  "address":{"@type":"PostalAddress","streetAddress":"Moltkestraße 44","postalCode":"76133","addressLocality":"Karlsruhe","addressCountry":"DE"},
+  "telephone":"+49-721-49085949","servesCuisine":["Kaffee","Panini","Kuchen"],
+  "openingHoursSpecification":[
+    {"@type":"OpeningHoursSpecification","dayOfWeek":["Monday","Tuesday","Wednesday","Thursday","Friday"],"opens":"07:30","closes":"19:00"},
+    {"@type":"OpeningHoursSpecification","dayOfWeek":["Saturday","Sunday"],"opens":"10:00","closes":"18:00"}
+  ]
+}
+</script>
+<style>
+  :root{
+    --cream:#efe4d4; --paper:#f7efe2; --espresso:#2a1c12; --bean:#6f4a2b;
+    --crema:#c98f54; --ink:#33261a; --soft:#7c6a56; --line:#e0d2bd; --milk:#fffaf1;
+    --focus:#7a4a1f;
+    --d4:clamp(2.6rem,1.8rem + 4vw,5.2rem);
+    --d2:clamp(1.7rem,1.3rem + 1.8vw,2.7rem);
+    --b:clamp(1rem,.96rem + .2vw,1.13rem);
+    --maxw:1200px;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+  body{font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    background:var(--paper);color:var(--ink);font-size:var(--b);line-height:1.62;
+    -webkit-font-smoothing:antialiased;position:relative}
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:1;opacity:.5;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.22'/%3E%3C/svg%3E")}
+  .above{position:relative;z-index:2}
+  h1,h2,h3{font-family:"Fraunces","Iowan Old Style",Georgia,serif;font-weight:600;
+    line-height:1.04;letter-spacing:-.015em}
+  a{color:var(--bean)}
+  img{max-width:100%;display:block}
+  :focus-visible{outline:3px solid var(--focus);outline-offset:3px}
+  .skip{position:absolute;left:-999px;background:var(--espresso);color:#fff;padding:10px 16px;z-index:200}
+  .skip:focus{left:8px;top:8px}
+  .wrap{max-width:var(--maxw);margin-inline:auto;padding-inline:clamp(20px,5vw,60px)}
+  .kicker{font-family:"Inter";text-transform:uppercase;letter-spacing:.26em;
+    font-size:.72rem;font-weight:700;color:var(--bean)}
+
+  .ribbon{background:var(--espresso);color:#f1e2cf;text-align:center;font-size:.8rem;
+    padding:8px 16px;font-weight:500;position:relative;z-index:3}
+  header{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--paper) 90%,transparent);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  .bar{display:flex;align-items:center;gap:22px;padding:16px 0}
+  .logo{font-family:"Fraunces";font-size:1.5rem;font-weight:600;color:var(--espresso);
+    text-decoration:none;letter-spacing:-.02em}
+  nav.main{margin-left:auto;display:flex;gap:28px;align-items:center}
+  nav.main a{font-family:"Inter";font-size:.92rem;font-weight:500;color:var(--soft);text-decoration:none}
+  nav.main a:hover{color:var(--espresso)}
+  .visit{display:inline-flex;align-items:center;gap:8px;background:var(--espresso);color:#fff;
+    text-decoration:none;font-family:"Inter";font-weight:600;font-size:.9rem;
+    padding:11px 20px;border-radius:999px;transition:background .18s,transform .18s}
+  .visit:hover{background:var(--bean);transform:translateY(-1px)}
+  @media (max-width:860px){nav.main a:not(.visit){display:none}}
+
+  /* magazine hero: oversized type left, location card overlapping a warm panel right */
+  .hero{padding:clamp(40px,7vw,86px) 0 clamp(36px,5vw,64px)}
+  .hero-grid{display:grid;grid-template-columns:1.25fr .85fr;gap:clamp(26px,4vw,56px);align-items:center}
+  .hero h1{font-size:var(--d4);color:var(--espresso)}
+  .hero h1 .ital{font-style:italic;font-weight:500;color:var(--bean)}
+  .hero p.lede{margin-top:20px;max-width:42ch;color:var(--soft);font-size:1.1rem}
+  .hero .row{margin-top:30px;display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .btn{display:inline-flex;align-items:center;gap:9px;background:var(--espresso);color:#fff;
+    text-decoration:none;font-family:"Inter";font-weight:600;padding:15px 26px;border-radius:999px;
+    transition:background .18s,transform .18s}
+  .btn:hover{background:var(--bean);transform:translateY(-2px)}
+  .link{font-family:"Inter";font-weight:600;color:var(--espresso);text-decoration:none;
+    border-bottom:2px solid var(--crema);padding-bottom:3px}
+  .visual{position:relative;aspect-ratio:4/5;border-radius:18px;overflow:hidden;
+    background:
+      radial-gradient(circle at 32% 28%,rgba(255,240,214,.55),transparent 52%),
+      linear-gradient(150deg,#6f4a2b,#3c2516 70%);
+    display:flex;align-items:flex-end;padding:24px}
+  .visual::after{content:"";position:absolute;inset:0;
+    background:repeating-linear-gradient(115deg,rgba(255,255,255,.04) 0 2px,transparent 2px 9px)}
+  .visual .cap{position:relative;color:#f3e6d3;font-family:"Inter";font-size:.82rem;line-height:1.5}
+  .visual .cap b{display:block;font-family:"Fraunces";font-size:1.6rem;margin-bottom:6px;color:#fff}
+  .loc-card{position:absolute;left:-26px;bottom:26px;background:var(--milk);border:1px solid var(--line);
+    border-radius:14px;padding:18px 20px;box-shadow:0 18px 40px rgba(60,37,22,.22);
+    font-family:"Inter";font-size:.86rem;max-width:230px}
+  .loc-card b{display:block;font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--bean);margin-bottom:7px}
+  .loc-card .open{color:#3f7d4e;font-weight:600;margin-top:6px}
+  @media (max-width:860px){.hero-grid{grid-template-columns:1fr}.loc-card{position:static;margin-top:16px;max-width:none}}
+
+  section{padding:clamp(54px,8vw,98px) 0;border-top:1px solid var(--line);position:relative;z-index:2}
+  .sec-head{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;
+    flex-wrap:wrap;margin-bottom:clamp(28px,4vw,48px)}
+  .sec-head h2{font-size:var(--d2);color:var(--espresso);max-width:16ch}
+  .sec-head p{color:var(--soft);max-width:34ch;font-size:.96rem}
+
+  /* menu as real HTML, editorial two-column with leaders */
+  .menu{display:grid;grid-template-columns:1fr 1fr;gap:6px 56px}
+  .mrow{display:grid;grid-template-columns:1fr auto;align-items:baseline;gap:12px;
+    padding:16px 0;border-bottom:1px dashed var(--line)}
+  .mrow .nm{font-family:"Fraunces";font-size:1.22rem;color:var(--espresso)}
+  .mrow .ds{display:block;font-family:"Inter";font-size:.88rem;color:var(--soft);margin-top:3px}
+  .mrow .pr{font-family:"Inter";font-weight:700;color:var(--bean);white-space:nowrap}
+  .mrow .pr.tbd{font-weight:600;color:var(--soft);font-size:.82rem}
+  @media (max-width:760px){.menu{grid-template-columns:1fr;gap:0 0}}
+
+  /* editorial offset gallery, not uniform squares */
+  .gal{display:grid;grid-template-columns:repeat(6,1fr);gap:16px;grid-auto-rows:140px}
+  .gal figure{position:relative;border-radius:14px;overflow:hidden;
+    background:linear-gradient(150deg,var(--cream),#d8c3a3);display:grid;place-items:center;
+    color:var(--bean);font-family:"Inter";font-size:.78rem;text-align:center;padding:14px}
+  .gal figure:nth-child(1){grid-column:span 3;grid-row:span 2}
+  .gal figure:nth-child(2){grid-column:span 3}
+  .gal figure:nth-child(3){grid-column:span 2}
+  .gal figure:nth-child(4){grid-column:span 1}
+  @media (max-width:760px){.gal{grid-template-columns:repeat(2,1fr);grid-auto-rows:120px}
+    .gal figure:nth-child(1){grid-column:span 2;grid-row:span 2}.gal figure:nth-child(n){grid-column:span 1}}
+
+  .find{display:grid;grid-template-columns:1fr 1fr;gap:clamp(28px,5vw,64px);align-items:center}
+  .find h2{font-size:var(--d2);color:var(--espresso);margin-bottom:14px}
+  .find address{font-style:normal;font-family:"Inter";line-height:1.9;color:var(--ink)}
+  .find a{color:var(--bean);font-weight:600}
+  .find .hrs{list-style:none;margin-top:18px;font-family:"Inter"}
+  .find .hrs li{display:flex;justify-content:space-between;gap:16px;padding:9px 0;
+    border-bottom:1px solid var(--line);font-size:.94rem;color:var(--soft);max-width:340px}
+  .find .hrs li b{color:var(--ink);font-weight:600}
+  .find .hrs li[aria-current="true"],.find .hrs li[aria-current="true"] b{color:var(--bean)}
+  .mapbox{aspect-ratio:1.1/1;border-radius:16px;border:1px solid var(--line);
+    background:linear-gradient(150deg,#e7d6ba,#cdb083);display:grid;place-items:center;text-align:center;padding:24px}
+  .mapbox a{background:var(--espresso);color:#fff;text-decoration:none;font-family:"Inter";
+    font-weight:600;font-size:.88rem;padding:11px 20px;border-radius:999px;margin-top:12px;display:inline-block}
+
+  footer{background:var(--espresso);color:#cdbba2;font-family:"Inter";font-size:.9rem;
+    padding:46px 0 34px;position:relative;z-index:2}
+  footer a{color:#f0e2cf;text-decoration:none}footer a:hover{text-decoration:underline}
+  .fg{display:flex;justify-content:space-between;gap:28px;flex-wrap:wrap}
+  .fl{display:flex;gap:20px;flex-wrap:wrap}
+  .fb{margin-top:26px;padding-top:18px;border-top:1px solid #4a3522;display:flex;
+    justify-content:space-between;gap:14px;flex-wrap:wrap;font-size:.8rem;color:#8d795f}
+  .draft{color:var(--crema);font-weight:600}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Zum Inhalt springen</a>
+<div class="ribbon">Konzept-Vorschau für Coffee Boxx. Echte Eckdaten; finale Speisekarte, Preise und Fotos stimmen wir gemeinsam ab.</div>
+
+<header class="above">
+  <div class="wrap bar">
+    <a class="logo" href="#">Coffee Boxx</a>
+    <nav class="main" aria-label="Hauptnavigation">
+      <a href="#karte">Karte</a>
+      <a href="#galerie">Einblicke</a>
+      <a href="#finden">Finden</a>
+      <a class="visit" href="#finden">Vorbeikommen</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="above">
+<section class="hero" style="border:0" aria-labelledby="t">
+  <div class="wrap hero-grid">
+    <div>
+      <p class="kicker">Karlsruhe &middot; Moltkestraße</p>
+      <h1>Guter Kaffee <span class="ital">braucht</span> keine Eile.</h1>
+      <p class="lede">Frisch aufgebrühter Kaffee, hausgemachte Panini und Kuchen. Klein, ehrlich, von Marco und Team. Zum Bleiben oder für unterwegs.</p>
+      <div class="row">
+        <a class="btn" href="#karte">Zur Karte</a>
+        <a class="link" href="tel:+4972149085949">0721 49085949</a>
+      </div>
+    </div>
+    <div>
+      <div class="visual" role="img" aria-label="Platzhalter für ein echtes Foto von Theke und Kaffee">
+        <span class="cap"><b>Ihr Foto</b>Bei einem Café entscheidet das Bild. Hier kommt eine echte Aufnahme von Theke, Tasse oder Gebäck hin, kein Stockfoto.</span>
+        <div class="loc-card">
+          <b>Heute</b>
+          Moltkestraße 44<br>76133 Karlsruhe
+          <div class="open" id="openNow">Öffnungszeiten unten</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="karte" aria-labelledby="s1">
+  <div class="wrap">
+    <div class="sec-head">
+      <div><p class="kicker">Die Karte</p><h2 id="s1">Wenig, aber richtig.</h2></div>
+      <p>Eine kleine, ehrliche Auswahl. Vollständige Karte und Preise pflegen wir gemeinsam ein, als echte Seite, nicht als PDF.</p>
+    </div>
+    <div class="menu">
+      <div class="mrow"><div><span class="nm">Espresso &amp; Co.</span><span class="ds">Espresso, Cappuccino, Latte, frisch gemahlen</span></div><span class="pr tbd">Preise [PRÜFEN]</span></div>
+      <div class="mrow"><div><span class="nm">Filterkaffee</span><span class="ds">Tagesröstung, zum Bleiben oder mitnehmen</span></div><span class="pr tbd">Preise [PRÜFEN]</span></div>
+      <div class="mrow"><div><span class="nm">Panini, warm gepresst</span><span class="ds">Knusprig, mit wechselnden Belägen</span></div><span class="pr tbd">Preise [PRÜFEN]</span></div>
+      <div class="mrow"><div><span class="nm">Kuchen des Tages</span><span class="ds">Hausgemacht, der beste Begleiter zum Kaffee</span></div><span class="pr tbd">Preise [PRÜFEN]</span></div>
+      <div class="mrow"><div><span class="nm">Kalte Getränke</span><span class="ds">Hausgemachte Limo, Eiskaffee im Sommer</span></div><span class="pr tbd">Preise [PRÜFEN]</span></div>
+      <div class="mrow"><div><span class="nm">Saisonales</span><span class="ds">Wechselnde Spezialitäten, fragen Sie Marco</span></div><span class="pr tbd">Preise [PRÜFEN]</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="galerie" aria-labelledby="s2">
+  <div class="wrap">
+    <div class="sec-head"><div><p class="kicker">Einblicke</p><h2 id="s2">Coffee Boxx in Bildern.</h2></div>
+      <p class="draft">Platzhalter: hier kommen echte Fotos hin, mit einheitlicher warmer Bildsprache.</p></div>
+    <div class="gal">
+      <figure>Ihr Foto: Theke / Atmosphäre (groß)</figure>
+      <figure>Ihr Foto: Kaffee</figure>
+      <figure>Ihr Foto: Panini</figure>
+      <figure>Ihr Foto: Kuchen</figure>
+      <figure>Ihr Foto: Detail</figure>
+      <figure>Ihr Foto: Marco &amp; Team</figure>
+    </div>
+  </div>
+</section>
+
+<section id="finden" aria-labelledby="s3">
+  <div class="wrap find">
+    <div>
+      <p class="kicker">Finden</p>
+      <h2 id="s3">Mitten in der Moltkestraße.</h2>
+      <address>
+        Coffee Boxx<br>Moltkestraße 44<br>76133 Karlsruhe<br>
+        <a href="tel:+4972149085949">0721 49085949</a>
+      </address>
+      <ul class="hrs">
+        <li data-d="1"><b>Mo &ndash; Fr</b><span>07:30 &ndash; 19:00</span></li>
+        <li data-d="6"><b>Sa &amp; So</b><span>10:00 &ndash; 18:00</span></li>
+      </ul>
+      <p class="draft" style="margin-top:14px;font-size:.86rem">Zweiter Standort Kaiserstraße: [BITTE PRÜFEN]</p>
+    </div>
+    <div class="mapbox">
+      <div><strong style="font-family:'Fraunces';font-size:1.3rem;color:var(--espresso)">Moltkestraße 44</strong><br>
+      <span style="font-family:'Inter';font-size:.9rem;color:var(--soft)">76133 Karlsruhe</span>
+      <br><a href="https://www.google.com/maps/search/?api=1&query=Coffee+Boxx+Moltkestraße+44+Karlsruhe" target="_blank" rel="noopener">Route öffnen</a></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="above">
+  <div class="wrap">
+    <div class="fg">
+      <div>
+        <div style="font-family:'Fraunces';font-size:1.4rem;color:#fff">Coffee Boxx</div>
+        <p style="margin-top:8px;max-width:32ch">Moltkestraße 44, 76133 Karlsruhe &middot; 0721 49085949</p>
+      </div>
+      <nav class="fl" aria-label="Rechtliches">
+        <a href="#" class="draft">Impressum (Entwurf)</a>
+        <a href="#" class="draft">Datenschutz (Entwurf)</a>
+      </nav>
+    </div>
+    <div class="fb">
+      <span>&copy; <span id="yr"></span> Coffee Boxx</span>
+      <span class="draft">Konzept-Vorschau &middot; rechtliche Seiten prüfen lassen</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  document.getElementById('yr').textContent=new Date().getFullYear();
+  (function(){
+    var d=new Date().getDay(),sel=(d>=1&&d<=5)?'1':'6';
+    var li=document.querySelector('.hrs li[data-d="'+sel+'"]');
+    if(li) li.setAttribute('aria-current','true');
+    document.getElementById('openNow').textContent =
+      (d>=1&&d<=5)?'Heute 07:30 bis 19:00 Uhr':'Heute 10:00 bis 18:00 Uhr';
+  })();
+</script>
+</body>
+</html>

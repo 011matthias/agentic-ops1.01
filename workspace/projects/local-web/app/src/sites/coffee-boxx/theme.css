@@ -1,0 +1,14 @@
+/* coffee-boxx: warm independent-roaster editorial. */
+[data-site="coffee-boxx"] {
+  --color-paper: #f4ece0;
+  --color-surface: #fffaf2;
+  --color-ink: #2a201a;
+  --color-muted: #7a6a59;
+  --color-line: #e3d6c4;
+  --color-accent: #b5562b;
+  --color-accent-ink: #fff7ee;
+  --color-accent-soft: #f3e3d2;
+
+  --font-display: "Fraunces Variable", Georgia, serif;
+  --font-body: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+}

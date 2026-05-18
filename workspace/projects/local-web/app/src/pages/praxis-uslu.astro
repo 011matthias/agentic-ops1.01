@@ -1,0 +1,643 @@
+---
+import BaseLayout from "@layouts/BaseLayout.astro";
+import ImageSlot from "@components/ImageSlot.astro";
+import "@fontsource-variable/newsreader";
+import "@sites/praxis-uslu/theme.css";
+import { praxis, CHECK } from "@sites/praxis-uslu/data";
+
+const fullAddress = `${praxis.address.street}, ${praxis.address.zip} ${praxis.address.city}`;
+
+const dayMap: Record<string, string> = {
+  Montag: "Monday",
+  Dienstag: "Tuesday",
+  Mittwoch: "Wednesday",
+  Donnerstag: "Thursday",
+  Freitag: "Friday",
+};
+
+const openingHoursSpecification = praxis.hours
+  .filter((h) => h.times.length > 0)
+  .flatMap((h) =>
+    h.times.map((t) => {
+      const [opens, closes] = t.split(" – ");
+      return {
+        "@type": "OpeningHoursSpecification",
+        dayOfWeek: `https://schema.org/${dayMap[h.day]}`,
+        opens,
+        closes,
+      };
+    }),
+  );
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "MedicalClinic",
+  name: praxis.name,
+  description: praxis.tagline,
+  medicalSpecialty: "PrimaryCare",
+  address: {
+    "@type": "PostalAddress",
+    streetAddress: praxis.address.street,
+    postalCode: praxis.address.zip,
+    addressLocality: praxis.address.city,
+    addressCountry: "DE",
+  },
+  telephone: praxis.phone,
+  faxNumber: praxis.fax,
+  url: "https://praxis-uslu.de",
+  openingHoursSpecification,
+};
+
+const title = `${praxis.name}: Hausärztin in Karlsruhe-Mühlburg`;
+const description =
+  "Hausärztliche Praxis Dr. med. Sema Uslu in Karlsruhe-Mühlburg: Allgemeinmedizin, Naturheilverfahren, Akupunktur, Hautkrebsscreening. Sprechzeiten und Kontakt.";
+---
+
+<BaseLayout
+  site="praxis-uslu"
+  lang="de"
+  title={title}
+  description={description}
+  path="/praxis-uslu"
+  jsonLd={jsonLd}
+>
+  <header class="site-head">
+    <div class="wrap site-head__row">
+      <a href="#main" class="brand">
+        <span class="brand__name">{praxis.doctor}</span>
+        <span class="brand__role">{praxis.role}</span>
+      </a>
+      <nav class="site-nav" aria-label="Hauptnavigation">
+        <a href="#leistungen">Leistungen</a>
+        <a href="#praxis">Praxis</a>
+        <a href="#kontakt">Sprechzeiten</a>
+        <a class="btn btn-primary site-nav__cta" href={praxis.phoneHref}>
+          Anrufen
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    {/* Hero: type-led editorial, calm. The serif statement carries it. */}
+    <section class="hero">
+      <div class="wrap hero__grid">
+        <div class="hero__lede">
+          <p class="eyebrow">Hausarztpraxis · Karlsruhe-Mühlburg</p>
+          <h1>
+            Eine Hausarztpraxis, die sich
+            <em>Zeit</em> nimmt.
+          </h1>
+          <p class="hero__sub">{praxis.tagline}</p>
+          <div class="hero__actions">
+            <a class="btn btn-primary" href={praxis.phoneHref}>
+              Termin telefonisch · {praxis.phone}
+            </a>
+            <a class="btn btn-ghost" href="#kontakt">Sprechzeiten ansehen</a>
+          </div>
+          <p class="hero__meta">
+            {fullAddress}
+            <span aria-hidden="true"> · </span>
+            <span id="open-state" class="open-state">Sprechzeiten unten</span>
+          </p>
+        </div>
+
+        <aside class="hero__card card" aria-label="Auf einen Blick">
+          <p class="eyebrow">Auf einen Blick</p>
+          <dl class="facts">
+            <div>
+              <dt>Fachrichtung</dt>
+              <dd>{praxis.role}</dd>
+            </div>
+            <div>
+              <dt>Schwerpunkte</dt>
+              <dd>{praxis.specialisations.join(", ")}</dd>
+            </div>
+            <div>
+              <dt>Telefon</dt>
+              <dd><a href={praxis.phoneHref}>{praxis.phone}</a></dd>
+            </div>
+            <div>
+              <dt>Adresse</dt>
+              <dd>{fullAddress}</dd>
+            </div>
+          </dl>
+        </aside>
+      </div>
+
+      <div class="wrap hero__figure">
+        <ImageSlot
+          label="Praxis / Empfang, warmes Tageslicht"
+          ratio="21 / 9"
+        />
+      </div>
+    </section>
+
+    {/* Leistungen: editorial hairline list, NOT a card grid. */}
+    <section id="leistungen" class="section">
+      <div class="wrap">
+        <header class="section__head">
+          <p class="eyebrow">Leistungen</p>
+          <h2>Was wir in der Praxis abdecken</h2>
+          <p class="section__intro">
+            Allgemeinmedizinische Versorgung, ergänzt um Naturheilverfahren
+            und Akupunktur, abgestimmt auf den einzelnen Menschen.
+          </p>
+        </header>
+        <ol class="leistungen">
+          {
+            praxis.services.map((s, i) => (
+              <li class="leistung">
+                <span class="leistung__no">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <div class="leistung__body">
+                  <h3>{s.title}</h3>
+                  <p>{s.body}</p>
+                </div>
+              </li>
+            ))
+          }
+        </ol>
+      </div>
+    </section>
+
+    {/* Signature band "In der Praxis": bespoke, accent-soft surface. */}
+    <section id="praxis" class="signature">
+      <div class="wrap signature__grid">
+        <div class="signature__media">
+          <ImageSlot
+            label="Behandlungsraum / Hände, ruhig"
+            ratio="4 / 5"
+            rounded="var(--radius-xl)"
+          />
+        </div>
+        <div class="signature__text">
+          <p class="eyebrow">In der Praxis</p>
+          <h2>Schulmedizin und Naturheilkunde, in einer Hand.</h2>
+          <p>
+            Die Praxis verbindet die hausärztliche Grundversorgung mit
+            Naturheilverfahren und Akupunktur. Das heißt: erst zuhören und
+            untersuchen, dann gemeinsam entscheiden, welcher Weg, ob
+            schulmedizinisch, naturheilkundlich oder beides, im konkreten
+            Fall der richtige ist.
+          </p>
+          <dl class="signature__facts">
+            <div>
+              <dt>Sprachen</dt>
+              <dd>
+                {
+                  praxis.languages === CHECK ? (
+                    <span class="tbc">{CHECK}</span>
+                  ) : (
+                    praxis.languages
+                  )
+                }
+              </dd>
+            </div>
+            <div>
+              <dt>Kassen</dt>
+              <dd>
+                {
+                  praxis.kassen === CHECK ? (
+                    <span class="tbc">{CHECK}</span>
+                  ) : (
+                    praxis.kassen
+                  )
+                }
+              </dd>
+            </div>
+            <div>
+              <dt>Team</dt>
+              <dd>
+                {
+                  praxis.team === CHECK ? (
+                    <span class="tbc">{CHECK}</span>
+                  ) : (
+                    praxis.team
+                  )
+                }
+              </dd>
+            </div>
+          </dl>
+          <p class="signature__note">
+            Felder mit <span class="tbc">[BITTE PRÜFEN]</span> trägt die
+            Praxis vor Veröffentlichung selbst ein, sie werden nicht erfunden.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    {/* Sprechzeiten und Anfahrt: precise data block (what patients need). */}
+    <section id="kontakt" class="section">
+      <div class="wrap contact__grid">
+        <div>
+          <p class="eyebrow">Sprechzeiten</p>
+          <h2>Wann Sie uns erreichen</h2>
+          <table class="hours">
+            <tbody>
+              {
+                praxis.hours.map((h) => (
+                  <tr class={h.times.length === 0 ? "is-closed" : ""}>
+                    <th scope="row">{h.day}</th>
+                    <td>
+                      {h.times.length === 0
+                        ? "geschlossen"
+                        : h.times.join("  ·  ")}
+                    </td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div class="contact__side">
+          <div class="card contact__card">
+            <p class="eyebrow">Kontakt & Anfahrt</p>
+            <address class="contact__addr">
+              <strong>{praxis.name}</strong><br />
+              {praxis.address.street}<br />
+              {praxis.address.zip}
+              {praxis.address.city} ({praxis.address.district})
+            </address>
+            <dl class="facts">
+              <div>
+                <dt>Telefon</dt>
+                <dd><a href={praxis.phoneHref}>{praxis.phone}</a></dd>
+              </div>
+              <div>
+                <dt>Fax</dt>
+                <dd>{praxis.fax}</dd>
+              </div>
+              <div>
+                <dt>E-Mail</dt>
+                <dd><span class="tbc">{praxis.email}</span></dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="card emergency" role="note">
+            <p class="eyebrow">Im Notfall</p>
+            <p>
+              Außerhalb der Sprechzeiten: ärztlicher Bereitschaftsdienst
+              <a href="tel:116117"><strong>{praxis.emergency.bereitschaft}</strong></a
+              >. Bei akuter Lebensgefahr immer
+              <a href="tel:112"><strong>{praxis.emergency.notruf}</strong></a>.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-foot">
+    <div class="wrap site-foot__row">
+      <p>
+        {praxis.name} · {fullAddress} ·
+        <a href={praxis.phoneHref}>{praxis.phone}</a>
+      </p>
+      <p class="site-foot__legal">
+        <span class="tbc">Impressum</span> und
+        <span class="tbc">Datenschutz</span> sind rechtlich verpflichtend und
+        werden vor Veröffentlichung juristisch geprüft ergänzt.
+      </p>
+    </div>
+  </footer>
+</BaseLayout>
+
+<script>
+  // Progressive enhancement: upgrade the open-state line if JS is on.
+  // Hours mirror src/sites/praxis-uslu/data.ts (kept in sync by hand).
+  const SCHEDULE: Record<number, [number, number][]> = {
+    1: [
+      [8, 12],
+      [14, 18],
+    ],
+    2: [[8, 13]],
+    3: [[7, 13]],
+    4: [
+      [8, 12],
+      [14, 18],
+    ],
+    5: [[8, 13]],
+  };
+  const el = document.getElementById("open-state");
+  if (el) {
+    const now = new Date();
+    const blocks = SCHEDULE[now.getDay()] ?? [];
+    const h = now.getHours() + now.getMinutes() / 60;
+    const open = blocks.some(([a, b]) => h >= a && h < b);
+    el.textContent = open ? "Jetzt geöffnet" : "Aktuell geschlossen";
+    el.classList.add(open ? "is-open" : "is-shut");
+  }
+</script>
+
+<style>
+  /* praxis-uslu bespoke layout. Tokens come from theme.css. */
+  .site-head {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: color-mix(in srgb, var(--color-paper) 88%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--color-line);
+  }
+  .site-head__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-block: 0.9rem;
+  }
+  .brand {
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+  }
+  .brand__name {
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    font-weight: 600;
+  }
+  .brand__role {
+    font-size: var(--text-xs);
+    color: var(--color-muted);
+    letter-spacing: 0.04em;
+  }
+  .site-nav {
+    display: flex;
+    align-items: center;
+    gap: 1.75rem;
+  }
+  .site-nav a {
+    text-decoration: none;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--color-muted);
+  }
+  .site-nav a:hover {
+    color: var(--color-ink);
+  }
+  .site-nav__cta {
+    color: var(--color-accent-ink);
+    padding: 0.6rem 1.1rem;
+    font-size: var(--text-sm);
+  }
+  .site-nav__cta:hover {
+    color: var(--color-accent-ink);
+  }
+  @media (max-width: 640px) {
+    .site-nav a:not(.site-nav__cta) {
+      display: none;
+    }
+  }
+
+  .hero {
+    padding-block: clamp(3rem, 7vw, 6.5rem) clamp(2.5rem, 5vw, 4rem);
+  }
+  .hero__grid {
+    display: grid;
+    grid-template-columns: 1.55fr 1fr;
+    gap: clamp(2rem, 5vw, 4.5rem);
+    align-items: end;
+  }
+  .hero h1 {
+    font-size: var(--text-5xl);
+    font-weight: 500;
+    margin-block: 0.6rem 0;
+  }
+  .hero h1 em {
+    font-style: italic;
+    color: var(--color-accent);
+  }
+  .hero__sub {
+    font-size: var(--text-xl);
+    color: var(--color-muted);
+    max-width: 32ch;
+    margin-block: 1.4rem 0;
+  }
+  .hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.85rem;
+    margin-block: 2rem 1.25rem;
+  }
+  .hero__meta {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+  }
+  .open-state {
+    font-weight: 600;
+  }
+  .open-state.is-open {
+    color: var(--color-accent);
+  }
+  .hero__card {
+    padding: 1.75rem;
+    align-self: stretch;
+  }
+  .facts {
+    margin: 1rem 0 0;
+    display: grid;
+    gap: 1rem;
+  }
+  .facts div {
+    display: grid;
+    gap: 0.15rem;
+  }
+  .facts dt {
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-muted);
+  }
+  .facts dd {
+    margin: 0;
+    font-size: var(--text-base);
+  }
+  .facts a {
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+  .hero__figure {
+    margin-top: clamp(2.5rem, 5vw, 4rem);
+  }
+
+  .section {
+    padding-block: clamp(3rem, 6vw, 5.5rem);
+  }
+  .section__head {
+    max-width: 46rem;
+    margin-bottom: clamp(2rem, 4vw, 3.25rem);
+  }
+  .section__head h2,
+  .signature h2,
+  .contact__grid h2 {
+    font-size: var(--text-3xl);
+    font-weight: 500;
+    margin-block: 0.5rem 0;
+  }
+  .section__intro {
+    color: var(--color-muted);
+    font-size: var(--text-lg);
+    margin-top: 1rem;
+  }
+
+  .leistungen {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--color-line);
+  }
+  .leistung {
+    display: grid;
+    grid-template-columns: 4rem 1fr;
+    gap: 1.5rem;
+    padding-block: 1.75rem;
+    border-bottom: 1px solid var(--color-line);
+  }
+  .leistung__no {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    color: var(--color-accent);
+  }
+  .leistung__body h3 {
+    font-size: var(--text-xl);
+    font-weight: 600;
+  }
+  .leistung__body p {
+    color: var(--color-muted);
+    margin-block: 0.5rem 0;
+    max-width: 60ch;
+  }
+
+  .signature {
+    background: var(--color-accent-soft);
+    padding-block: clamp(3rem, 7vw, 6rem);
+  }
+  .signature__grid {
+    display: grid;
+    grid-template-columns: 0.85fr 1.15fr;
+    gap: clamp(2rem, 5vw, 4.5rem);
+    align-items: center;
+  }
+  .signature__text h2 {
+    max-width: 16ch;
+  }
+  .signature__text > p {
+    margin-top: 1.25rem;
+    max-width: 58ch;
+  }
+  .signature__facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2.25rem;
+    margin-block: 2rem 0;
+  }
+  .signature__facts dt {
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-muted);
+  }
+  .signature__facts dd {
+    margin: 0.2rem 0 0;
+    font-weight: 600;
+  }
+  .signature__note {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    margin-top: 1.75rem;
+  }
+
+  .contact__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(2rem, 5vw, 4rem);
+  }
+  .hours {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1.5rem;
+  }
+  .hours th,
+  .hours td {
+    text-align: left;
+    padding: 0.85rem 0;
+    border-bottom: 1px solid var(--color-line);
+    font-weight: 500;
+  }
+  .hours td {
+    text-align: right;
+    color: var(--color-ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .hours .is-closed th,
+  .hours .is-closed td {
+    color: var(--color-muted);
+  }
+  .contact__side {
+    display: grid;
+    gap: 1.25rem;
+    align-content: start;
+  }
+  .contact__card,
+  .emergency {
+    padding: 1.75rem;
+  }
+  .contact__addr {
+    font-style: normal;
+    margin-block: 1rem;
+    line-height: 1.7;
+  }
+  .emergency {
+    background: var(--color-ink);
+    color: var(--color-paper);
+  }
+  .emergency .eyebrow {
+    color: color-mix(in srgb, var(--color-paper) 70%, transparent);
+  }
+  .emergency a {
+    color: var(--color-paper);
+  }
+
+  .tbc {
+    font-family: var(--font-body);
+    font-size: 0.92em;
+    font-weight: 600;
+    color: #9a5a2a;
+    background: color-mix(in srgb, #9a5a2a 12%, transparent);
+    padding: 0.05em 0.45em;
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+  }
+
+  .site-foot {
+    border-top: 1px solid var(--color-line);
+    padding-block: 2.5rem;
+  }
+  .site-foot__row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 1rem;
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+  }
+  .site-foot a {
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+
+  @media (max-width: 860px) {
+    .hero__grid,
+    .signature__grid,
+    .contact__grid {
+      grid-template-columns: 1fr;
+    }
+    .hero__grid {
+      align-items: start;
+    }
+  }
+</style>

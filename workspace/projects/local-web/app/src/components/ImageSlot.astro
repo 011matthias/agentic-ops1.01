@@ -1,0 +1,57 @@
+---
+// Honest pending-image slot. NOT a finished gradient (REBUILD-SPEC
+// failure-mode #2 / quality bar: "zero gradient placeholders in the
+// shipped state"). This reads as intentional scaffolding until the
+// imagery pipeline (REBUILD-SPEC step 4) supplies a curated photo.
+interface Props {
+  label: string;
+  ratio?: string; // e.g. "16 / 9"
+  rounded?: string; // radius token
+}
+const { label, ratio = "16 / 9", rounded = "var(--radius-lg)" } = Astro.props;
+---
+
+<figure
+  class="img-slot"
+  style={`aspect-ratio:${ratio};border-radius:${rounded};`}
+  role="img"
+  aria-label={`Bildplatz: ${label}`}
+>
+  <span class="img-slot__tag">Bildplatz · {label}</span>
+  <span class="img-slot__hint">kuratiertes Foto folgt (Imagery-Pipeline)</span>
+</figure>
+
+<style>
+  .img-slot {
+    position: relative;
+    width: 100%;
+    display: grid;
+    place-content: center;
+    gap: 0.4rem;
+    text-align: center;
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    overflow: hidden;
+  }
+  /* Hairline corner marker in the brand accent: signals "designed slot",
+     not "unfinished gradient". */
+  .img-slot::after {
+    content: "";
+    position: absolute;
+    inset: 0.75rem;
+    border: 1px dashed color-mix(in srgb, var(--color-accent) 45%, transparent);
+    border-radius: inherit;
+    pointer-events: none;
+  }
+  .img-slot__tag {
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--color-accent);
+  }
+  .img-slot__hint {
+    font-size: var(--text-xs);
+    color: var(--color-muted);
+  }
+</style>

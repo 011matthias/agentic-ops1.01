@@ -2,6 +2,11 @@
 
 _Auto-updated by /comd_checkpoint. Most recent first within each section._
 
+## local-web
+| Date | Topic | Type | Link |
+|------|-------|------|------|
+| 2026-05-18 | Website-Build Capability Rebuild | system-infra | [Checkpoint](docs/2026-05-18%20-%20Website-Build%20Capability%20Rebuild/Checkpoint.md) |
+
 ## meji-media
 | Date | Topic | Link |
 |------|-------|------|

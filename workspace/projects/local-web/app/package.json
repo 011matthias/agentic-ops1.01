@@ -1,0 +1,23 @@
+{
+  "name": "local-web-app",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Multi-site Astro project: preemptive demo sites for local Karlsruhe businesses. One repo, one Fly app, many sites.",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "astro": "^5.6.1",
+    "@tailwindcss/vite": "^4.0.17",
+    "tailwindcss": "^4.0.17",
+    "sharp": "^0.33.5",
+    "@fontsource-variable/newsreader": "^5.1.1",
+    "@fontsource-variable/fraunces": "^5.2.5",
+    "@fontsource-variable/inter": "^5.1.1",
+    "@fontsource-variable/space-grotesk": "^5.1.1"
+  }
+}

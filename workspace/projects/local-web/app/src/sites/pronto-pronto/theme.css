@@ -1,0 +1,15 @@
+/* pronto-pronto: appetite-first, warm-charcoal, ember accent (not red). */
+[data-site="pronto-pronto"] {
+  --color-paper: #1c1a17;
+  --color-surface: #262220;
+  --color-ink: #f4efe7;
+  --color-muted: #a99e8d;
+  --color-line: #3a3430;
+  --color-accent: #e0612b;
+  --color-accent-ink: #1c1a17;
+  --color-accent-soft: #33271f;
+
+  --font-display: "Space Grotesk Variable", ui-sans-serif, system-ui,
+    sans-serif;
+  --font-body: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+}
