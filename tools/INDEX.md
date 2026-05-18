@@ -16,6 +16,7 @@ One-line index of `tools/` scripts. Auto-loaded at session start to reduce `miss
 | `notion-restructure-v18.py` | Notion page restructuring helper (Wärme Wimmer doc site). Client-specific. |
 | `build-warme-wimmer-doc-site.py` | Wärme Wimmer doc site generator. Client-specific. |
 | `rename-chat.py "{scope}--{task}"` | Auto-rename current chat per rule_session-start.md. Called by `/comd_resume` and other session-start commands. |
+| `vercel-force-deploy.sh [--domain X]` | Force a production Vercel deploy and guard against concurrent git-integration rebuilds superseding it. Run after a platform merge per the Deploy verification gate (rule_behaviors.md step 6). Parses the deploy URL from CLI output, settles, confirms the intended deployment is live via `vercel ls --prod`, and `vercel promote`s it back if a concurrent rebuild won the race. |
 
 ## Output validators — JSON contract
 
