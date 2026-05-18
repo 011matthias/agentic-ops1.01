@@ -80,6 +80,12 @@ unscanned.)
 ### 6. Deploy + the real quality gate
 One Astro project, one Fly app (`app/Dockerfile` -> nginx, `app/fly.toml`,
 `app/nginx.conf`). `flyctl deploy {app-abs-path} --config {fly.toml} --remote-only`.
+**`nginx.conf` MUST keep `absolute_redirect off; port_in_redirect off;
+server_name_in_redirect off;`** — nginx behind the Fly TLS edge only sees
+`http` on `:8080`, so without these the trailing-slash 301 leaks
+`http://host:8080/...` and every `/<slug>` page dies with
+`ERR_CONNECTION_RESET` in-browser (server-side curl still 200s — verify by
+following redirects, not just status). Regression class, 2026-05-18.
 Then, non-negotiable:
 - **Lighthouse mobile >=95** P/A/BP/SEO on the deployed Fly URL.
 - **Reference-parity gate:** does the build sit credibly next to its
