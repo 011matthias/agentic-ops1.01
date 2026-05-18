@@ -5,6 +5,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## meji-media
 | Date | Topic | Link |
 |------|-------|------|
+| 2026-05-18 | Meji Credit Limit and n8n Migration Analysis | [Checkpoint](docs/2026-05-18%20-%20Meji%20Credit%20Limit%20and%20n8n%20Migration%20Analysis/Checkpoint.md) |
 | 2026-03-23 | Meji Media Client Documentation Portal | [Checkpoint](docs/2026-03-23%20-%20Meji%20Media%20Client%20Documentation%20Portal/Checkpoint.md) |
 | 2026-03-23 | Meji Media Weekend Health Check and BCC Fix | [Checkpoint](docs/2026-03-23%20-%20Meji%20Media%20Weekend%20Health%20Check%20and%20BCC%20Fix/Checkpoint.md) |
 | 2026-03-20 | Meji Media Vitals and Infrastructure Reconciliation | [Checkpoint](docs/2026-03-20%20-%20Meji%20Media%20Vitals%20and%20Infrastructure%20Reconciliation/Checkpoint.md) |

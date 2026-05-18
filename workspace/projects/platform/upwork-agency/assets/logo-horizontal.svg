@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="180" viewBox="0 0 800 180" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif">
+  <title>UnpauseAI horizontal logo</title>
+  <g transform="translate(20 38) scale(4.5)" fill="#2563eb">
+    <path d="M8 5.14v13.72a1 1 0 001.5.86l11.04-6.86a1 1 0 000-1.72L9.5 4.28a1 1 0 00-1.5.86z"/>
+  </g>
+  <text x="155" y="125" font-size="96" letter-spacing="-2">
+    <tspan font-weight="700" fill="#111827">Unpause</tspan><tspan font-weight="800" fill="#2563eb">AI</tspan>
+  </text>
+</svg>

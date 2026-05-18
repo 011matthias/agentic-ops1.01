@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>UnpauseAI Upwork emblems: preview</title>
+<style>
+  :root { color-scheme: light dark; --bg: #f5f6f8; --surface: #fff; --border: #e5e7eb; --muted: #6b7280; --fg: #111827; }
+  [data-theme="dark"] { --bg: #0a0a0a; --surface: #141414; --border: #262626; --muted: #9ca3af; --fg: #f5f5f5; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 40px 20px; font-family: Inter, system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--fg); line-height: 1.5; }
+  .container { max-width: 1500px; margin: 0 auto; }
+  h1 { font-size: 28px; margin: 0 0 8px; letter-spacing: -0.5px; }
+  .sub { color: var(--muted); margin: 0 0 32px; }
+  .grid { display: grid; gap: 24px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-bottom: 32px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+  .card h2 { font-size: 16px; margin: 0 0 4px; }
+  .card .meta { font-size: 13px; color: var(--muted); margin: 0 0 16px; }
+  .swatches { display: flex; gap: 24px; flex-wrap: wrap; align-items: center; margin-top: 16px; }
+  .swatch { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .swatch .lbl { font-size: 11px; color: var(--muted); }
+  .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; background: rgba(37,99,235,.1); color: #2563eb; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; }
+  .banner-wrap { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 32px; }
+  .banner-wrap img { display: block; width: 100%; height: auto; }
+  .light-bg { background: #ffffff; }
+  .dark-bg { background: #0a0a0a; }
+  .toggle { position: fixed; top: 20px; right: 20px; padding: 8px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; cursor: pointer; font: inherit; color: inherit; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; background: rgba(127,127,127,.12); padding: 2px 6px; border-radius: 4px; }
+  .filerow { display: flex; justify-content: space-between; font-size: 13px; padding: 8px 0; border-top: 1px solid var(--border); }
+  .filerow:first-child { border-top: 0; }
+</style>
+</head>
+<body>
+<button class="toggle" onclick="document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'">Toggle theme</button>
+<div class="container">
+  <span class="pill">Upwork agency assets</span>
+  <h1>UnpauseAI emblems</h1>
+  <p class="sub">Generated from the Logo.tsx component path. Same triangle geometry as the website nav.</p>
+
+  <h2 style="margin-top: 32px; font-size: 18px;">Banner (Upwork agency cover, 1600 &times; 160)</h2>
+  <div class="banner-wrap">
+    <img src="banner-upwork-1600x160.svg" alt="banner light"/>
+  </div>
+
+  <h2 style="font-size: 18px;">Square emblem (profile picture)</h2>
+  <div class="grid">
+    <div class="card">
+      <h2>Blue background</h2>
+      <p class="meta">Recommended primary. <code>emblem-square-1024.svg</code></p>
+      <div class="swatches">
+        <div class="swatch light-bg" style="padding: 24px; border-radius: 12px;">
+          <img src="emblem-square-1024.svg" width="160" height="160" alt=""/>
+          <span class="lbl">on light</span>
+        </div>
+        <div class="swatch dark-bg" style="padding: 24px; border-radius: 12px;">
+          <img src="emblem-square-1024.svg" width="160" height="160" alt=""/>
+          <span class="lbl">on dark</span>
+        </div>
+        <div class="swatch" style="padding: 24px;">
+          <img src="emblem-square-1024.svg" width="48" height="48" alt=""/>
+          <span class="lbl">tiny (avatar)</span>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>White background</h2>
+      <p class="meta">Alternate. <code>emblem-square-white-bg-1024.svg</code></p>
+      <div class="swatches">
+        <div class="swatch light-bg" style="padding: 24px; border-radius: 12px;">
+          <img src="emblem-square-white-bg-1024.svg" width="160" height="160" alt=""/>
+          <span class="lbl">on light</span>
+        </div>
+        <div class="swatch dark-bg" style="padding: 24px; border-radius: 12px;">
+          <img src="emblem-square-white-bg-1024.svg" width="160" height="160" alt=""/>
+          <span class="lbl">on dark</span>
+        </div>
+        <div class="swatch" style="padding: 24px;">
+          <img src="emblem-square-white-bg-1024.svg" width="48" height="48" alt=""/>
+          <span class="lbl">tiny (avatar)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h2 style="font-size: 18px;">Horizontal lockup</h2>
+  <div class="card">
+    <p class="meta">For email signatures, footers, social headers. <code>logo-horizontal.svg</code></p>
+    <div class="swatches">
+      <div class="light-bg" style="padding: 32px; border-radius: 12px; width: 100%;">
+        <img src="logo-horizontal.svg" style="max-width: 100%; height: auto;" alt=""/>
+      </div>
+    </div>
+  </div>
+
+  <h2 style="margin-top: 32px; font-size: 18px;">Files</h2>
+  <div class="card">
+    <div class="filerow"><span><code>emblem-square-1024.svg</code></span><span class="meta">Profile pic primary, 1024 &times; 1024</span></div>
+    <div class="filerow"><span><code>emblem-square-white-bg-1024.svg</code></span><span class="meta">Profile pic alternate, 1024 &times; 1024</span></div>
+    <div class="filerow"><span><code>logo-horizontal.svg</code></span><span class="meta">Horizontal lockup, 800 &times; 180</span></div>
+    <div class="filerow"><span><code>banner-upwork-1600x160.svg</code></span><span class="meta">Agency cover banner, 1600 &times; 160</span></div>
+  </div>
+
+  <p class="sub" style="margin-top: 32px;">Upwork accepts PNG/JPG, not SVG. PNGs have been generated alongside each SVG via <code>uv run tools/svg-to-png.py workspace/projects/platform/upwork-agency/assets/</code>. Upload <code>emblem-square-1024.png</code> as the profile picture and <code>banner-upwork-1400x425.png</code> as the cover.</p>
+</div>
+</body>
+</html>
