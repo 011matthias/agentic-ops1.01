@@ -1275,44 +1275,7 @@ function closeSidebar(){document.getElementById('guideSidebar').classList.remove
 })();
 </script>
 
-<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
-  <div style="text-align:center;max-width:360px;padding:24px;">
-    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span></div>
-    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Meji Media Documentation</h2>
-    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Enter your access code to continue.</p>
-    <div style="display:flex;gap:8px;">
-      <input id="auth-input" type="password" placeholder="Access code" autocomplete="off"
-        style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;"
-        onkeydown="if(event.key==='Enter')checkAuth()" />
-      <button onclick="checkAuth()"
-        style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">Enter</button>
-    </div>
-    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Incorrect code. Please try again.</p>
-  </div>
-</div>
-
 <script>
-var MEJI_CODE = 'meji2026';var MEJI_MASTER='Natthias07';
-function checkAuth() {
-  var input = document.getElementById('auth-input').value;
-  if (input === MEJI_CODE || input === MEJI_MASTER) {
-    localStorage.setItem('meji-docs-access', 'granted');
-    var gate = document.getElementById('auth-gate');
-    gate.style.opacity = '0';
-    setTimeout(function() { gate.style.display = 'none'; }, 300);
-  } else {
-    document.getElementById('auth-error').style.display = 'block';
-    document.getElementById('auth-input').value = '';
-    document.getElementById('auth-input').focus();
-  }
-}
-(function() {
-  if (localStorage.getItem('meji-docs-access') === 'granted') {
-    document.getElementById('auth-gate').style.display = 'none';
-  } else {
-    document.getElementById('auth-input').focus();
-  }
-})();
 </script>
 
 </body>

@@ -1,22 +1,25 @@
-// Server-rendered login page for the Wärme Wimmer doc site.
-// Visually identical to the in-page overlay it replaces (same logo, card,
-// gradient OK button, error line). Form posts to /api/wimmer-unlock which
-// validates and sets the HMAC cookie.
+// Server-rendered login page for every gated client doc site. The proxy
+// rewrites here (URL bar keeps the original doc path) with ?site=&from=.
+// Form posts to /api/gate-unlock which validates the site code OR the
+// master password and sets the HMAC grant cookie.
 
-import { safeFromUrl } from "@/lib/wimmer-auth"
+import { siteById, safeFromUrl, GATED_SITES } from "@/lib/gated-sites"
 
 export const metadata = {
-  title: "Wärme Wimmer Documentation",
+  title: "Documentation Access",
   robots: { index: false, follow: false },
 }
 
 type Props = {
-  searchParams: Promise<{ from?: string; err?: string }>
+  searchParams: Promise<{ site?: string; from?: string; err?: string }>
 }
 
-export default async function WimmerLoginPage({ searchParams }: Props) {
-  const { from, err } = await searchParams
-  const target = safeFromUrl(from)
+export default async function GateLoginPage({ searchParams }: Props) {
+  const { site: siteId, from, err } = await searchParams
+  // Fall back to the first registered site if the param is missing/unknown,
+  // so the form still posts somewhere sane rather than 500-ing.
+  const site = siteById(siteId) ?? GATED_SITES[0]
+  const target = safeFromUrl(from, site)
   const showError = err === "1"
 
   return (
@@ -33,7 +36,7 @@ export default async function WimmerLoginPage({ searchParams }: Props) {
       }}
     >
       <form
-        action="/api/wimmer-unlock"
+        action="/api/gate-unlock"
         method="POST"
         style={{ textAlign: "center", maxWidth: 360, padding: 24, width: "100%" }}
       >
@@ -69,17 +72,18 @@ export default async function WimmerLoginPage({ searchParams }: Props) {
             marginBottom: 4,
           }}
         >
-          Wärme Wimmer Documentation
+          {site.label}
         </h2>
         <p style={{ fontSize: 14, color: "#475569", marginBottom: 24 }}>
-          Bitte Zugangscode eingeben.
+          Enter your access code to continue.
         </p>
+        <input type="hidden" name="site" value={site.id} />
         <input type="hidden" name="from" value={target} />
         <div style={{ display: "flex", gap: 8 }}>
           <input
             name="code"
             type="password"
-            placeholder="Zugangscode"
+            placeholder="Access code"
             autoComplete="off"
             autoFocus
             required
@@ -112,7 +116,7 @@ export default async function WimmerLoginPage({ searchParams }: Props) {
         </div>
         {showError && (
           <p style={{ color: "#dc2626", fontSize: 13, marginTop: 8 }}>
-            Falscher Code, bitte erneut versuchen.
+            Incorrect code. Please try again.
           </p>
         )}
       </form>
