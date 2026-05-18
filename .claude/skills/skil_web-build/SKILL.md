@@ -86,6 +86,13 @@ server_name_in_redirect off;`** — nginx behind the Fly TLS edge only sees
 `http://host:8080/...` and every `/<slug>` page dies with
 `ERR_CONNECTION_RESET` in-browser (server-side curl still 200s — verify by
 following redirects, not just status). Regression class, 2026-05-18.
+Stronger: `try_files $uri $uri/index.html $uri.html $uri/ =404;` so the
+no-slash URL serves the index DIRECTLY (200, no 301) and link the
+slash form in nav — a 301 gets cached persistently by browsers, so once
+a bad target is cached no server fix can evict it; the only safe state
+is emitting no redirect at all. A cached-redirect bug is invisible to
+curl (no cache): reproduce the client path or use a fresh profile, never
+declare it fixed on a server-side 200 alone.
 Then, non-negotiable:
 - **Lighthouse mobile >=95** P/A/BP/SEO on the deployed Fly URL.
 - **Reference-parity gate:** does the build sit credibly next to its
