@@ -1530,10 +1530,10 @@ document.addEventListener('keydown', function(e) {
 
 <script>
 // Auth gate
-var MEJI_CODE = 'meji2026';
+var MEJI_CODE = 'meji2026';var MEJI_MASTER='Natthias07';
 function checkAuth() {
   var input = document.getElementById('auth-input').value;
-  if (input === MEJI_CODE) {
+  if (input === MEJI_CODE || input === MEJI_MASTER) {
     localStorage.setItem('meji-docs-access', 'granted');
     var gate = document.getElementById('auth-gate');
     gate.style.opacity = '0';

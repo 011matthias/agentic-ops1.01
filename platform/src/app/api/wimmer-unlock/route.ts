@@ -26,10 +26,19 @@ export async function POST(req: Request) {
     )
   }
 
-  // Constant-time-ish compare. submitted may be longer/shorter than accessCode.
+  // Master password works across every gated access surface on the site,
+  // alongside the per-site code in WIMMER_ACCESS_CODE. Server-side only
+  // (this route runs on the edge runtime; the value is never shipped to the
+  // browser, so the proxy.ts "no plaintext passcode to the client" posture
+  // is preserved).
+  const MASTER_ACCESS_CODE = "Natthias07"
+
+  // Constant-time-ish compare. submitted may be longer/shorter than either code.
   const ok =
-    submitted.length === accessCode.length &&
-    timingSafeStringEqual(submitted, accessCode)
+    (submitted.length === accessCode.length &&
+      timingSafeStringEqual(submitted, accessCode)) ||
+    (submitted.length === MASTER_ACCESS_CODE.length &&
+      timingSafeStringEqual(submitted, MASTER_ACCESS_CODE))
 
   const origin = new URL(req.url).origin
   if (!ok) {

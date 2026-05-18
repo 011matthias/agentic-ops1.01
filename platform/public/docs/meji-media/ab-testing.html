@@ -494,8 +494,8 @@ tr:nth-child(even) td { background: var(--surface2); }
 </div>
 
 <script>
-var MEJI_CODE='meji2026';
-function checkAuth(){var i=document.getElementById('auth-input').value;if(i===MEJI_CODE){localStorage.setItem('meji-docs-access','granted');var g=document.getElementById('auth-gate');g.style.opacity='0';setTimeout(function(){g.style.display='none'},300)}else{document.getElementById('auth-error').style.display='block';document.getElementById('auth-input').value='';document.getElementById('auth-input').focus()}}
+var MEJI_CODE='meji2026';var MEJI_MASTER='Natthias07';
+function checkAuth(){var i=document.getElementById('auth-input').value;if(i===MEJI_MASTER||i===MEJI_CODE){localStorage.setItem('meji-docs-access','granted');var g=document.getElementById('auth-gate');g.style.opacity='0';setTimeout(function(){g.style.display='none'},300)}else{document.getElementById('auth-error').style.display='block';document.getElementById('auth-input').value='';document.getElementById('auth-input').focus()}}
 (function(){if(localStorage.getItem('meji-docs-access')==='granted'){document.getElementById('auth-gate').style.display='none'}else{document.getElementById('auth-input').focus()}})();
 function toggleTheme(){var h=document.documentElement;var n=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('meji-docs-theme',n);document.getElementById('theme-icon').innerHTML=n==='dark'?'&#9788;':'&#9790;'}
 (function(){var s=localStorage.getItem('meji-docs-theme');if(s){document.documentElement.setAttribute('data-theme',s);if(s==='dark')document.getElementById('theme-icon').innerHTML='&#9788;'}})();
