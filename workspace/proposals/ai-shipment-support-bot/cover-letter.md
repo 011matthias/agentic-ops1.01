@@ -1,6 +1,7 @@
 Hi there,
 
-Short Loom walkthrough plus the full build plan: https://unpauseai.com/clients/ai-shipment-support-bot/ (access code: ai-shipment-support-bot-2026)
+Short Loom walkthrough: https://www.loom.com/share/2c6cd58f7180477487efd370b8ec4f4d
+Full build plan and the downloadable workflow skeleton: https://unpauseai.com/clients/ai-shipment-support-bot/ (access code: ai-shipment-support-bot-2026)
 
 I built the plan around the one thing that makes a shipment bot safe: it should never invent a tracking status. So the design splits cleanly. A small model handles the judgment (which order is this, what is the customer asking, how to phrase the German reply) and your ERP supplies every fact. The tracking number, link, and carrier are read from your existing interface and dropped into the reply word for word. The model never writes a tracking number. If the ERP has no answer, the bot does not guess, it hands the message to a person with full context.
 
