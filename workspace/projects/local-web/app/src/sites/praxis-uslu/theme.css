@@ -3,9 +3,12 @@
   --color-paper: #f6f3ec;
   --color-surface: #fffdf9;
   --color-ink: #23211d;
-  --color-muted: #6b6459;
+  /* muted + accent deepened to clear WCAG AA 4.5:1 on paper / for
+     accent-ink buttons (Lighthouse color-contrast). Hue preserved:
+     same sage/clinical DNA, one step deeper. */
+  --color-muted: #5f584d;
   --color-line: #e4ddcd;
-  --color-accent: #5c7a63;
+  --color-accent: #4f6a57;
   --color-accent-ink: #ffffff;
   --color-accent-soft: #eaf0ea;
 

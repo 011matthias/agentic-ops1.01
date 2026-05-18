@@ -3,9 +3,11 @@
   --color-paper: #f4ece0;
   --color-surface: #fffaf2;
   --color-ink: #2a201a;
-  --color-muted: #7a6a59;
+  /* muted + accent deepened to clear WCAG AA 4.5:1 on warm cream / for
+     accent-ink buttons. Same burnt-terracotta DNA, one step deeper. */
+  --color-muted: #61533f;
   --color-line: #e3d6c4;
-  --color-accent: #b5562b;
+  --color-accent: #a8481f;
   --color-accent-ink: #fff7ee;
   --color-accent-soft: #f3e3d2;
 
