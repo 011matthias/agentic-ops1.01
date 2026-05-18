@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GDPR, AI Shipment Support Bot | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+* { box-sizing: border-box; margin: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px; transition: background .2s, color .2s; }
+.access-gate { position: fixed; inset: 0; z-index: 9999; background: var(--bg); display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; transition: opacity .3s; }
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input { padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px; font-size: 15px; width: 240px; background: var(--surface); color: var(--text); outline: none; transition: border-color .15s; }
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button { padding: 10px 24px; background: var(--blue); color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background .15s; }
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+.site-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: var(--nav-bg); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s; }
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; flex-wrap: wrap; }
+.nav-links a { font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px; color: var(--text2); text-decoration: none; transition: background .15s, color .15s; }
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-theme { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 13px; color: var(--text2); transition: background .15s; }
+.nav-theme:hover { background: var(--border); }
+.main-content { margin-left: 0; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+.page-head { padding: 40px 0 28px; border-bottom: 1px solid var(--border); margin-bottom: 36px; }
+.page-head .ph-kicker { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--blue); }
+.page-head h1 { font-size: 28px; font-weight: 800; color: var(--text-strong); margin: 8px 0 10px; line-height: 1.2; }
+.page-head p { font-size: 15px; color: var(--text2); margin: 0; }
+h2 { font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue); padding-bottom: 8px; margin-top: 44px; margin-bottom: 18px; }
+h3 { font-size: 16px; color: var(--text-strong); margin-top: 24px; margin-bottom: 10px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul { padding-left: 22px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+table.ptable { width: 100%; border-collapse: collapse; margin: 24px 0; font-size: 14px; }
+table.ptable th { background: var(--th-bg); color: #fff; text-align: left; padding: 10px 14px; font-size: 13px; }
+table.ptable td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+table.ptable tr:nth-child(even) td { background: var(--surface); }
+.callout { border-left: 4px solid var(--blue); background: var(--blue-bg); padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0; }
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); margin-top: 48px; }
+.footer a { color: var(--text2); }
+@media (max-width: 768px) {
+    .nav-links { display: none; }
+    .page-head h1 { font-size: 22px; }
+}
+</style>
+<script>
+(function(){var t=localStorage.getItem('ai-shipment-support-bot-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<div class="access-gate" id="accessGate">
+    <h2>Project Access</h2>
+    <p>This proposal was prepared as a detailed build plan for the shipment support bot. Enter the access code to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<nav class="site-nav">
+    <div class="nav-left">
+        <a href="/clients/ai-shipment-support-bot/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Shipment Support Bot</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/ai-shipment-support-bot/">Overview</a>
+        <a href="/clients/ai-shipment-support-bot/solution">Solution</a>
+        <a href="/clients/ai-shipment-support-bot/workflow">Workflow</a>
+        <a href="/clients/ai-shipment-support-bot/timeline">Timeline</a>
+        <a href="/clients/ai-shipment-support-bot/investment">Investment</a>
+        <a href="/clients/ai-shipment-support-bot/faq">FAQ</a>
+        <a href="/clients/ai-shipment-support-bot/onboarding">Onboarding</a>
+        <a href="/clients/ai-shipment-support-bot/gdpr" class="active">GDPR</a>
+    </div>
+    <div class="nav-right">
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<div class="main-content">
+<div class="content-inner">
+
+<div class="page-head">
+    <div class="ph-kicker">GDPR</div>
+    <h1>How customer personal data is handled</h1>
+    <p>A German shop processing customer and Amazon buyer data under the GDPR. This is how the bot stays inside that.</p>
+</div>
+
+<h2>What data the bot touches</h2>
+<p>To answer "where is my shipment" the bot necessarily processes personal data: a customer name, an email address, an order reference, and a delivery-related address held in your ERP. This is normal order-fulfilment processing, but it has to be deliberate, not accidental.</p>
+<table class="ptable">
+    <tr><th>Data</th><th>Where it comes from</th><th>What the bot does with it</th></tr>
+    <tr><td>Customer message and email</td><td>All-Inkl mailbox or Amazon Message Center</td><td>Read to identify the order and intent, then replied to</td></tr>
+    <tr><td>Order reference and tracking</td><td>Your ERP interface</td><td>Looked up read-only, inserted into the reply verbatim</td></tr>
+    <tr><td>Reply content</td><td>Generated from your German template</td><td>Sent on the original channel, stored in the audit log</td></tr>
+</table>
+
+<h2>The principles built into the design</h2>
+<h3>Data minimisation</h3>
+<p>The bot only requests from the ERP what it needs to answer the specific message. It does not bulk-pull customer records. The model receives only the message text and the minimum fields needed for the judgment call, never your full ERP dataset.</p>
+<h3>Processing location and sub-processors</h3>
+<p>The model call is the one place data leaves your own systems. Both candidate providers offer data-processing terms suitable for business use, and the model can be set so message content is not used for training. The exact provider, region, and data-processing agreement are confirmed with you in phase 1, before any live customer message is processed. If you require EU-only processing, that constraint is set at the start, not retrofitted.</p>
+<h3>Retention</h3>
+<p>The audit log exists to make the bot debuggable and to meet your own record-keeping needs. Its retention period is your decision and is configurable. Old records are purged on the schedule you set rather than kept indefinitely by default.</p>
+<h3>Right to erasure and access</h3>
+<p>Because every interaction is logged against an order reference, a customer data request can be answered: their bot interactions can be found and removed on request. This is easier with the audit log than without it.</p>
+
+<div class="callout orange">
+    <div class="callout-title">Honest scope note</div>
+    <p>I build the system to respect these principles and to give you the controls (retention, processing region, training opt-out, erasure support). I am not your data protection officer and this page is not legal advice. The data-processing agreement with the model provider and your own GDPR documentation are things we confirm together during phase 1.</p>
+</div>
+
+<h2>Amazon buyer data, the extra rule</h2>
+<p>Amazon buyer data carries Amazon's own handling rules on top of the GDPR. The bot uses Amazon buyer messages only to answer the buyer through Amazon's own channel, never exporting that data elsewhere or reusing it for anything outside answering that specific message. This keeps both the GDPR position and the Amazon seller-account position clean.</p>
+
+<div class="footer">
+    Prepared by Matthias, UnpauseAI &middot; <a href="mailto:admin@unpauseai.com">admin@unpauseai.com</a> &middot; 2026
+</div>
+
+</div>
+</div>
+
+<script>
+function toggleTheme() {
+    var html = document.documentElement;
+    var current = html.getAttribute('data-theme');
+    var next = current === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+    localStorage.setItem('ai-shipment-support-bot-theme', next);
+}
+function checkAccess() {
+    var input = document.getElementById('accessCode').value.trim().toLowerCase();
+    var expected = 'ai-shipment-support-bot-2026';
+    if (input === expected) {
+        localStorage.setItem('ai-shipment-support-bot-access', 'granted');
+        document.getElementById('accessGate').classList.add('hidden');
+        setTimeout(function(){ document.getElementById('accessGate').style.display = 'none'; }, 300);
+    } else {
+        document.getElementById('accessError').textContent = 'Invalid code, check your invitation.';
+    }
+}
+if (localStorage.getItem('ai-shipment-support-bot-access') === 'granted') {
+    document.getElementById('accessGate').style.display = 'none';
+}
+</script>
+
+<script>
+(function() {
+    var s = document.createElement('style');
+    s.textContent = '.copy-btn{position:absolute;top:6px;right:6px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-size:11px;padding:3px 8px;border-radius:4px;cursor:pointer;opacity:0;transition:opacity .15s;font-family:inherit}pre:hover .copy-btn{opacity:1}.copy-btn:hover{background:var(--blue-light);color:var(--blue-dark)}.copy-btn.copied{background:var(--green-bg);color:var(--green-dark);border-color:var(--green);opacity:1}.kbd-hint{font-size:11px;color:var(--text2);border:1px solid var(--border);border-radius:4px;padding:2px 6px;background:var(--surface2);cursor:pointer;font-family:ui-monospace,monospace;margin-right:6px}.kbd-hint:hover{background:var(--border);color:var(--text)}.search-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;display:none;align-items:flex-start;justify-content:center;padding-top:100px}.search-overlay.active{display:flex}.search-overlay-inner{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px;width:480px;max-width:90%;box-shadow:0 12px 40px rgba(0,0,0,.3)}.search-overlay input{width:100%;padding:12px 16px;font-size:15px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);outline:none}.search-overlay input:focus{border-color:var(--blue)}.search-overlay-hint{font-size:12px;color:var(--text2);margin-top:10px;text-align:center}h2.search-match,h3.search-match{background:var(--orange-bg);transition:background .2s}';
+    document.head.appendChild(s);
+    var ov = document.createElement('div');
+    ov.className = 'search-overlay';
+    ov.id = 'searchOverlay';
+    ov.innerHTML = '<div class="search-overlay-inner"><input id="searchInput" type="text" placeholder="Search section headings..." autocomplete="off"><div class="search-overlay-hint">Press Esc to close. Highlights matching headings on this page.</div></div>';
+    document.body.appendChild(ov);
+    var nr = document.querySelector('.nav-right');
+    if (nr) {
+        var hk = document.createElement('span');
+        hk.className = 'kbd-hint';
+        hk.textContent = 'Ctrl+K';
+        hk.title = 'Search this page (Ctrl/Cmd+K)';
+        hk.addEventListener('click', function() { ov.classList.add('active'); document.getElementById('searchInput').focus(); });
+        nr.insertBefore(hk, nr.firstChild);
+    }
+    document.querySelectorAll('pre').forEach(function(p) {
+        p.style.position = 'relative';
+        var b = document.createElement('button');
+        b.className = 'copy-btn';
+        b.type = 'button';
+        b.textContent = 'Copy';
+        b.setAttribute('aria-label', 'Copy code to clipboard');
+        b.addEventListener('click', function() {
+            navigator.clipboard.writeText(p.textContent).then(function() {
+                b.textContent = 'Copied';
+                b.classList.add('copied');
+                setTimeout(function() { b.textContent = 'Copy'; b.classList.remove('copied'); }, 1500);
+            });
+        });
+        p.appendChild(b);
+    });
+    document.addEventListener('keydown', function(e) {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+            e.preventDefault();
+            ov.classList.add('active');
+            document.getElementById('searchInput').focus();
+        }
+        if (e.key === 'Escape' && ov.classList.contains('active')) {
+            ov.classList.remove('active');
+            var si = document.getElementById('searchInput');
+            if (si) si.value = '';
+            document.querySelectorAll('h2.search-match, h3.search-match').forEach(function(h) { h.classList.remove('search-match'); });
+        }
+    });
+    ov.addEventListener('click', function(e) { if (e.target === ov) ov.classList.remove('active'); });
+    document.getElementById('searchInput').addEventListener('input', function() {
+        var q = this.value.toLowerCase().trim();
+        var first = null;
+        document.querySelectorAll('h2, h3').forEach(function(h) {
+            h.classList.remove('search-match');
+            if (q && h.textContent.toLowerCase().includes(q)) {
+                h.classList.add('search-match');
+                if (!first) first = h;
+            }
+        });
+        if (first) first.scrollIntoView({behavior: 'smooth', block: 'center'});
+    });
+})();
+</script>
+
+</body>
+</html>

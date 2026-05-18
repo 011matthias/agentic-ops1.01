@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Onboarding, AI Shipment Support Bot | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+* { box-sizing: border-box; margin: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px; transition: background .2s, color .2s; }
+.access-gate { position: fixed; inset: 0; z-index: 9999; background: var(--bg); display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; transition: opacity .3s; }
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input { padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px; font-size: 15px; width: 240px; background: var(--surface); color: var(--text); outline: none; transition: border-color .15s; }
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button { padding: 10px 24px; background: var(--blue); color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background .15s; }
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+.site-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: var(--nav-bg); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s; }
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; flex-wrap: wrap; }
+.nav-links a { font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px; color: var(--text2); text-decoration: none; transition: background .15s, color .15s; }
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-theme { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 13px; color: var(--text2); transition: background .15s; }
+.nav-theme:hover { background: var(--border); }
+.main-content { margin-left: 0; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+.page-head { padding: 40px 0 28px; border-bottom: 1px solid var(--border); margin-bottom: 36px; }
+.page-head .ph-kicker { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--blue); }
+.page-head h1 { font-size: 28px; font-weight: 800; color: var(--text-strong); margin: 8px 0 10px; line-height: 1.2; }
+.page-head p { font-size: 15px; color: var(--text2); margin: 0; }
+h2 { font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue); padding-bottom: 8px; margin-top: 44px; margin-bottom: 18px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ol { padding-left: 22px; margin-bottom: 16px; }
+ol li { margin-bottom: 10px; }
+.checklist { list-style: none; padding: 0; margin: 20px 0; }
+.checklist li { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; color: var(--text); }
+.checklist li:last-child { border-bottom: none; }
+.check-icon { width: 20px; height: 20px; border-radius: 50%; background: var(--green-bg); border: 2px solid var(--green); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+.check-icon::after { content: ''; width: 6px; height: 10px; border: 2px solid var(--green); border-top: none; border-left: none; transform: rotate(45deg) translateY(-1px); }
+.form-card { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 26px 26px 30px; margin: 24px 0; }
+.form-grid { display: flex; flex-direction: column; gap: 18px; }
+.form-row { display: flex; flex-direction: column; gap: 6px; }
+.form-row label { font-size: 13px; font-weight: 700; color: var(--text-strong); }
+.form-row input, .form-row textarea, .form-row select { padding: 11px 13px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font-size: 14px; font-family: inherit; outline: none; transition: border-color .15s; }
+.form-row input:focus, .form-row textarea:focus, .form-row select:focus { border-color: var(--blue); }
+.form-row textarea { resize: vertical; min-height: 80px; }
+.form-note { font-size: 12px; color: var(--text2); }
+.form-submit { margin-top: 22px; display: inline-flex; align-items: center; gap: 8px; background: var(--blue); color: #fff; padding: 12px 26px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background .15s; font-family: inherit; }
+.form-submit:hover { background: var(--blue-dark); }
+.form-status { margin-top: 14px; font-size: 13px; color: var(--green-dark); min-height: 18px; }
+.callout { border-left: 4px solid var(--blue); background: var(--blue-bg); padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0; }
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); margin-top: 48px; }
+.footer a { color: var(--text2); }
+@media (max-width: 768px) {
+    .nav-links { display: none; }
+    .page-head h1 { font-size: 22px; }
+}
+</style>
+<script>
+(function(){var t=localStorage.getItem('ai-shipment-support-bot-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<div class="access-gate" id="accessGate">
+    <h2>Project Access</h2>
+    <p>This proposal was prepared as a detailed build plan for the shipment support bot. Enter the access code to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<nav class="site-nav">
+    <div class="nav-left">
+        <a href="/clients/ai-shipment-support-bot/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Shipment Support Bot</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/ai-shipment-support-bot/">Overview</a>
+        <a href="/clients/ai-shipment-support-bot/solution">Solution</a>
+        <a href="/clients/ai-shipment-support-bot/workflow">Workflow</a>
+        <a href="/clients/ai-shipment-support-bot/timeline">Timeline</a>
+        <a href="/clients/ai-shipment-support-bot/investment">Investment</a>
+        <a href="/clients/ai-shipment-support-bot/faq">FAQ</a>
+        <a href="/clients/ai-shipment-support-bot/onboarding" class="active">Onboarding</a>
+        <a href="/clients/ai-shipment-support-bot/gdpr">GDPR</a>
+    </div>
+    <div class="nav-right">
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<div class="main-content">
+<div class="content-inner">
+
+<div class="page-head">
+    <div class="ph-kicker">Onboarding</div>
+    <h1>What I need to start the core phase</h1>
+    <p>Five things unblock day one. None of them require code from your side.</p>
+</div>
+
+<h2>What unblocks the build</h2>
+<ul class="checklist">
+    <li><span class="check-icon"></span><span><strong>ERP interface docs and a test credential.</strong> Whatever your existing API or interface returns for tracking link, number, carrier, and status. This is the single most important item.</span></li>
+    <li><span class="check-icon"></span><span><strong>A dedicated All-Inkl mailbox or alias.</strong> Where shipment questions land, with IMAP and SMTP access for that mailbox only.</span></li>
+    <li><span class="check-icon"></span><span><strong>20 to 30 real German tickets.</strong> Anonymized is fine. Both intents, including the messy and ambiguous ones. This becomes the test set.</span></li>
+    <li><span class="check-icon"></span><span><strong>Your reply tone.</strong> An example of how your team currently answers these, so the German templates sound like your shop.</span></li>
+    <li><span class="check-icon"></span><span><strong>The correction list.</strong> Which correction types you want handled, so we can check each against what the ERP can safely action.</span></li>
+</ul>
+
+<div class="callout">
+    <div class="callout-title">Amazon comes in phase 2</div>
+    <p>Amazon Selling Partner API access is only needed for phase 2. Phase 1 ships on email alone, so you are not blocked waiting on Amazon developer approval to see the bot working.</p>
+</div>
+
+<h2>Tell me about your setup</h2>
+<p>Fill this in and I will come back with a concrete kickoff plan and any follow-up questions. Nothing here is binding.</p>
+
+<div class="form-card">
+    <form class="form-grid" id="onboardForm" onsubmit="return submitOnboard(event)">
+        <div class="form-row">
+            <label for="contactName">Your name and role</label>
+            <input type="text" id="contactName" name="contactName" placeholder="e.g. Anna, customer service lead">
+        </div>
+        <div class="form-row">
+            <label for="contactEmail">Best email to reach you</label>
+            <input type="email" id="contactEmail" name="contactEmail" placeholder="you@yourshop.de">
+        </div>
+        <div class="form-row">
+            <label for="erpName">What is your ERP or backend system?</label>
+            <input type="text" id="erpName" name="erpName" placeholder="e.g. plentymarkets, JTL, Xentral, custom">
+        </div>
+        <div class="form-row">
+            <label for="erpAccess">Does the ERP interface already return tracking data to external systems?</label>
+            <select id="erpAccess" name="erpAccess">
+                <option value="">Select one</option>
+                <option value="yes-documented">Yes, and it is documented</option>
+                <option value="yes-undocumented">Yes, but documentation is thin</option>
+                <option value="unsure">Not sure, need to check internally</option>
+            </select>
+        </div>
+        <div class="form-row">
+            <label for="volume">Roughly how many shipment questions per week?</label>
+            <input type="text" id="volume" name="volume" placeholder="e.g. around 150 across email and Amazon">
+        </div>
+        <div class="form-row">
+            <label for="corrections">Which correction or update requests matter most?</label>
+            <textarea id="corrections" name="corrections" placeholder="e.g. broken tracking link, wrong parcel, address change before dispatch"></textarea>
+        </div>
+        <div class="form-row">
+            <label for="notes">Anything else I should know before quoting precisely?</label>
+            <textarea id="notes" name="notes" placeholder="Constraints, deadlines, the future automations you have in mind"></textarea>
+        </div>
+        <button type="submit" class="form-submit">Prepare my kickoff plan</button>
+        <div class="form-status" id="formStatus"></div>
+    </form>
+</div>
+
+<h2>What happens after you send this</h2>
+<ol>
+    <li>I review your ERP situation and the correction list, and confirm which corrections are safe to automate in phase 1.</li>
+    <li>You get a concrete kickoff plan with the two-week phase 1 scope locked.</li>
+    <li>We agree the German tone from your example replies before any auto-send is enabled.</li>
+    <li>Phase 1 ships, you judge real reply quality, then we decide on phase 2 and the Amazon channel.</li>
+</ol>
+
+<div class="footer">
+    Prepared by Matthias, UnpauseAI &middot; <a href="mailto:admin@unpauseai.com">admin@unpauseai.com</a> &middot; 2026
+</div>
+
+</div>
+</div>
+
+<script>
+function toggleTheme() {
+    var html = document.documentElement;
+    var current = html.getAttribute('data-theme');
+    var next = current === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+    localStorage.setItem('ai-shipment-support-bot-theme', next);
+}
+function checkAccess() {
+    var input = document.getElementById('accessCode').value.trim().toLowerCase();
+    var expected = 'ai-shipment-support-bot-2026';
+    if (input === expected) {
+        localStorage.setItem('ai-shipment-support-bot-access', 'granted');
+        document.getElementById('accessGate').classList.add('hidden');
+        setTimeout(function(){ document.getElementById('accessGate').style.display = 'none'; }, 300);
+    } else {
+        document.getElementById('accessError').textContent = 'Invalid code, check your invitation.';
+    }
+}
+if (localStorage.getItem('ai-shipment-support-bot-access') === 'granted') {
+    document.getElementById('accessGate').style.display = 'none';
+}
+function submitOnboard(e) {
+    e.preventDefault();
+    var name = document.getElementById('contactName').value.trim();
+    var status = document.getElementById('formStatus');
+    var subject = encodeURIComponent('Shipment bot onboarding' + (name ? ' from ' + name : ''));
+    var lines = [
+        'Name and role: ' + document.getElementById('contactName').value,
+        'Email: ' + document.getElementById('contactEmail').value,
+        'ERP / backend: ' + document.getElementById('erpName').value,
+        'ERP returns tracking externally: ' + document.getElementById('erpAccess').value,
+        'Weekly volume: ' + document.getElementById('volume').value,
+        'Key corrections: ' + document.getElementById('corrections').value,
+        'Other notes: ' + document.getElementById('notes').value
+    ];
+    var body = encodeURIComponent(lines.join('\n'));
+    status.textContent = 'Opening your email client with this prefilled. If nothing opens, send the same details to admin@unpauseai.com.';
+    window.location.href = 'mailto:admin@unpauseai.com?subject=' + subject + '&body=' + body;
+    return false;
+}
+</script>
+
+<script>
+(function() {
+    var s = document.createElement('style');
+    s.textContent = '.copy-btn{position:absolute;top:6px;right:6px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-size:11px;padding:3px 8px;border-radius:4px;cursor:pointer;opacity:0;transition:opacity .15s;font-family:inherit}pre:hover .copy-btn{opacity:1}.copy-btn:hover{background:var(--blue-light);color:var(--blue-dark)}.copy-btn.copied{background:var(--green-bg);color:var(--green-dark);border-color:var(--green);opacity:1}.kbd-hint{font-size:11px;color:var(--text2);border:1px solid var(--border);border-radius:4px;padding:2px 6px;background:var(--surface2);cursor:pointer;font-family:ui-monospace,monospace;margin-right:6px}.kbd-hint:hover{background:var(--border);color:var(--text)}.search-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;display:none;align-items:flex-start;justify-content:center;padding-top:100px}.search-overlay.active{display:flex}.search-overlay-inner{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px;width:480px;max-width:90%;box-shadow:0 12px 40px rgba(0,0,0,.3)}.search-overlay input{width:100%;padding:12px 16px;font-size:15px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);outline:none}.search-overlay input:focus{border-color:var(--blue)}.search-overlay-hint{font-size:12px;color:var(--text2);margin-top:10px;text-align:center}h2.search-match{background:var(--orange-bg);transition:background .2s}';
+    document.head.appendChild(s);
+    var ov = document.createElement('div');
+    ov.className = 'search-overlay';
+    ov.id = 'searchOverlay';
+    ov.innerHTML = '<div class="search-overlay-inner"><input id="searchInput" type="text" placeholder="Search section headings..." autocomplete="off"><div class="search-overlay-hint">Press Esc to close. Highlights matching headings on this page.</div></div>';
+    document.body.appendChild(ov);
+    var nr = document.querySelector('.nav-right');
+    if (nr) {
+        var hk = document.createElement('span');
+        hk.className = 'kbd-hint';
+        hk.textContent = 'Ctrl+K';
+        hk.title = 'Search this page (Ctrl/Cmd+K)';
+        hk.addEventListener('click', function() { ov.classList.add('active'); document.getElementById('searchInput').focus(); });
+        nr.insertBefore(hk, nr.firstChild);
+    }
+    document.querySelectorAll('pre').forEach(function(p) {
+        p.style.position = 'relative';
+        var b = document.createElement('button');
+        b.className = 'copy-btn';
+        b.type = 'button';
+        b.textContent = 'Copy';
+        b.setAttribute('aria-label', 'Copy code to clipboard');
+        b.addEventListener('click', function() {
+            navigator.clipboard.writeText(p.textContent).then(function() {
+                b.textContent = 'Copied';
+                b.classList.add('copied');
+                setTimeout(function() { b.textContent = 'Copy'; b.classList.remove('copied'); }, 1500);
+            });
+        });
+        p.appendChild(b);
+    });
+    document.addEventListener('keydown', function(e) {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+            e.preventDefault();
+            ov.classList.add('active');
+            document.getElementById('searchInput').focus();
+        }
+        if (e.key === 'Escape' && ov.classList.contains('active')) {
+            ov.classList.remove('active');
+            var si = document.getElementById('searchInput');
+            if (si) si.value = '';
+            document.querySelectorAll('h2.search-match').forEach(function(h) { h.classList.remove('search-match'); });
+        }
+    });
+    ov.addEventListener('click', function(e) { if (e.target === ov) ov.classList.remove('active'); });
+    document.getElementById('searchInput').addEventListener('input', function() {
+        var q = this.value.toLowerCase().trim();
+        var first = null;
+        document.querySelectorAll('h2').forEach(function(h) {
+            h.classList.remove('search-match');
+            if (q && h.textContent.toLowerCase().includes(q)) {
+                h.classList.add('search-match');
+                if (!first) first = h;
+            }
+        });
+        if (first) first.scrollIntoView({behavior: 'smooth', block: 'center'});
+    });
+})();
+</script>
+
+</body>
+</html>
