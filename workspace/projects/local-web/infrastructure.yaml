@@ -1,0 +1,61 @@
+# local-web — infrastructure
+# Internal initiative: preemptive bespoke demo sites for local Karlsruhe
+# businesses. One Astro repo, one Fly app, many sites.
+
+type: internal
+orchestrator: n/a
+
+deployment:
+  platform: fly
+  app: local-web-ka
+  region: fra
+  url: https://local-web-ka.fly.dev
+  fly_account: matneumann07@gmail.com
+  flyctl_path: 'C:\Users\neuma_p1qrsic\.fly\bin\flyctl.exe'
+  deploy_cmd: >
+    flyctl deploy {app-abs-path} --config {fly.toml} --remote-only --now
+  notes: >
+    Remote builder (no local Docker). 2 machines, auto_stop=stop,
+    min_machines_running=0. nginx serves Astro static dist; build is
+    hermetic (curated images committed under app/src/assets, no Pexels
+    key needed at deploy).
+
+source:
+  app_dir: workspace/projects/local-web/app
+  stack: Astro 5 + Tailwind v4 + nginx (Dockerfile)
+  build: npm run build  # runs postbuild -> tools/validate-dist.py gate
+
+sites:
+  - slug: praxis-uslu
+    business: Praxis Dr. med. Sema Uslu (Hausarztpraxis, Karlsruhe-Mühlburg)
+    url: https://local-web-ka.fly.dev/praxis-uslu
+    jsonld: MedicalClinic
+  - slug: coffee-boxx
+    business: Coffee Boxx (Café, Karlsruhe)
+    url: https://local-web-ka.fly.dev/coffee-boxx
+    jsonld: CafeOrCoffeeShop
+  - slug: pronto-pronto
+    business: Pronto-Pronto Heimservice und Restaurant (Karlsruhe)
+    url: https://local-web-ka.fly.dev/pronto-pronto
+    jsonld: Restaurant
+
+indexing:
+  demos: index, follow            # owner directive 2026-05-18
+  internal_directory: noindex     # / (BaseLayout indexable={false})
+
+imagery:
+  source: Pexels API
+  pipeline: app/scripts/fetch-imagery.mjs  # npm run imagery
+  key_env: PEXELS_API_KEY  # app/.env (gitignored); images committed so deploy needs no key
+  attribution: app/src/sites/{slug}/imagery.json
+
+quality_gates:
+  performance: '100 (all 3)'
+  best_practices: '96 (all 3)'
+  accessibility: '0 WCAG 2 A/AA violations (axe-core via CDP — authoritative; Lighthouse CLI unreliable in the Windows dev env)'
+  deliverable_rule: tools/validate-dist.py (npm postbuild; fails build on em-dash/&mdash;/typographic --)
+  reference_parity: owner visual call vs BRIEF anchors (subjective; not automatable)
+
+skill: .claude/skills/skil_web-build/SKILL.md
+
+status: live  # deployed + verified 2026-05-18; PR #21 merged (commit 71d8703)
