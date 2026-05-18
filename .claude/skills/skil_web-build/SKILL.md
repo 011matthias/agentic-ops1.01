@@ -87,6 +87,22 @@ Then, non-negotiable:
 - WCAG AA contrast, keyboard nav, semantic HTML.
 Only after these pass is the site "done".
 
+> **A11y verification — use axe-core via CDP, not the Lighthouse CLI.**
+> The Lighthouse CLI is unreliable in the Windows dev env (silently
+> re-parses stale JSON across deploys; disagrees with `curl`/CDP). The
+> authoritative check is axe-core (the same engine Lighthouse uses) run
+> directly: launch headless Chrome with a **forward-slash** binary path
+> (`C:/Program Files/...`) — backslashes get mangled through bash
+> heredocs — connect via `chrome-remote-interface`, inject
+> `axe-core/axe.min.js`, run `axe.run` with `wcag2a/2aa/21a/21aa`. For a
+> contrast root-cause, `CSS.getMatchedStylesForNode` +
+> `getComputedStyleForNode` give ground truth in one shot — read the
+> computed style, never theorize a fix from axe's HTML snippet (that is
+> verification theater; cost a 3-iteration breach on 2026-05-18).
+> SEO `is-crawlable` failing is expected if a page is intentionally
+> `noindex`; gate it as "all non-noindex SEO audits pass", do not strip
+> noindex to chase the number unless the owner directs it.
+
 ### 7. Handoff readiness
 Each site owns its route, theme tokens, content, JSON-LD — designed to
 split cleanly into the client's own repo at handoff. No shared business
