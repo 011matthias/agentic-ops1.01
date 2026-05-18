@@ -1,0 +1,57 @@
+---
+import "@fontsource-variable/inter";
+import "../styles/global.css";
+
+interface Props {
+  /** Site slug, also written to <body data-site> so theme.css scopes apply. */
+  site: string;
+  lang?: string;
+  title: string;
+  description: string;
+  /** LocalBusiness-family JSON-LD object (hand-written per vertical). */
+  jsonLd?: Record<string, unknown>;
+  /** Canonical path, e.g. "/praxis-uslu". */
+  path: string;
+}
+
+const {
+  site,
+  lang = "de",
+  title,
+  description,
+  jsonLd,
+  path,
+} = Astro.props;
+
+const canonical = new URL(path, Astro.site).href;
+---
+
+<!doctype html>
+<html lang={lang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="theme-color" content="#111111" />
+    {
+      jsonLd && (
+        <script
+          type="application/ld+json"
+          set:html={JSON.stringify(jsonLd)}
+        />
+      )
+    }
+    <slot name="head" />
+  </head>
+  <body data-site={site}>
+    <a class="skip-link" href="#main">Zum Inhalt springen</a>
+    <slot />
+  </body>
+</html>

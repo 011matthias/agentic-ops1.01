@@ -1,0 +1,62 @@
+---
+import BaseLayout from "@layouts/BaseLayout.astro";
+
+// Internal directory only (noindex). Not a pitched artifact.
+const demos = [
+  {
+    slug: "praxis-uslu",
+    name: "Praxis Dr. med. Sema Uslu",
+    kind: "Hausarztpraxis, Karlsruhe-Mühlburg",
+  },
+  {
+    slug: "coffee-boxx",
+    name: "Coffee Boxx",
+    kind: "Café, Karlsruhe",
+  },
+  {
+    slug: "pronto-pronto",
+    name: "Pronto-Pronto",
+    kind: "Pizza Heimservice & Restaurant, Karlsruhe",
+  },
+];
+---
+
+<BaseLayout
+  site="index"
+  lang="de"
+  title="Local-Web Demo-Verzeichnis (intern)"
+  description="Internes Verzeichnis der Demo-Seiten."
+  path="/"
+>
+  <main id="main" class="wrap" style="padding-block: 4rem;">
+    <p class="eyebrow">Local-Web</p>
+    <h1 style="font-size: var(--text-3xl); margin-block: 0.5rem 1rem;">
+      Demo-Verzeichnis
+    </h1>
+    <p style="color: var(--color-muted); max-width: 42rem;">
+      Internes Verzeichnis. Jede Seite ist eine eigenständige, maßgeschneiderte
+      Demo für ein lokales Unternehmen in Karlsruhe.
+    </p>
+    <ul
+      style="list-style: none; padding: 0; margin-top: 2.5rem; display: grid; gap: 1rem;"
+    >
+      {
+        demos.map((d) => (
+          <li class="card" style="padding: 1.5rem 1.75rem;">
+            <a
+              href={`/${d.slug}`}
+              style="text-decoration: none; display: flex; flex-direction: column; gap: 0.25rem;"
+            >
+              <span style="font-family: var(--font-display); font-size: var(--text-lg); font-weight: 600;">
+                {d.name}
+              </span>
+              <span style="color: var(--color-muted); font-size: var(--text-sm);">
+                {d.kind} · /{d.slug}
+              </span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </main>
+</BaseLayout>

@@ -1,0 +1,14 @@
+/* praxis-uslu: editorial-calm clinical. Overrides shared brand slots. */
+[data-site="praxis-uslu"] {
+  --color-paper: #f6f3ec;
+  --color-surface: #fffdf9;
+  --color-ink: #23211d;
+  --color-muted: #6b6459;
+  --color-line: #e4ddcd;
+  --color-accent: #5c7a63;
+  --color-accent-ink: #ffffff;
+  --color-accent-soft: #eaf0ea;
+
+  --font-display: "Newsreader Variable", Georgia, "Times New Roman", serif;
+  --font-body: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+}
