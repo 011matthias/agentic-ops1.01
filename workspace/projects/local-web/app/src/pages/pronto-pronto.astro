@@ -1,0 +1,681 @@
+---
+import BaseLayout from "@layouts/BaseLayout.astro";
+import Figure from "@components/Figure.astro";
+import "@fontsource-variable/space-grotesk";
+import "@sites/pronto-pronto/theme.css";
+import { pronto, CHECK } from "@sites/pronto-pronto/data";
+
+const fullAddress = `${pronto.address.street}, ${pronto.address.zip} ${pronto.address.city}`;
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Restaurant",
+  name: pronto.fullName,
+  description: pronto.tagline,
+  servesCuisine: pronto.menu.map((m) => m.category),
+  address: {
+    "@type": "PostalAddress",
+    streetAddress: pronto.address.street,
+    postalCode: pronto.address.zip,
+    addressLocality: pronto.address.city,
+    addressCountry: "DE",
+  },
+  telephone: pronto.phone,
+  url: "https://prontopronto-ka.de",
+  hasDeliveryMethod: "https://schema.org/OnSitePickup",
+  openingHoursSpecification: [
+    {
+      "@type": "OpeningHoursSpecification",
+      dayOfWeek: [
+        "https://schema.org/Monday",
+        "https://schema.org/Tuesday",
+        "https://schema.org/Wednesday",
+        "https://schema.org/Thursday",
+        "https://schema.org/Sunday",
+      ],
+      opens: "10:45",
+      closes: "22:30",
+    },
+    {
+      "@type": "OpeningHoursSpecification",
+      dayOfWeek: [
+        "https://schema.org/Friday",
+        "https://schema.org/Saturday",
+      ],
+      opens: "10:45",
+      closes: "23:59",
+    },
+  ],
+};
+
+const title =
+  "Pronto-Pronto: Pizza Heimservice und Restaurant in Karlsruhe";
+const description =
+  "Pronto-Pronto Karlsruhe: Pizza, Pasta, Burger und mehr. Lieferung in 19 Gebiete, 10% Rabatt online, Mindestbestellwert 0,00 Euro. Karte und Liefergebiete.";
+---
+
+<BaseLayout
+  site="pronto-pronto"
+  lang="de"
+  title={title}
+  description={description}
+  path="/pronto-pronto"
+  jsonLd={jsonLd}
+>
+  <header class="site-head">
+    <div class="wrap site-head__row">
+      <a href="#main" class="brand">
+        <span class="brand__name">Pronto-Pronto</span>
+        <span class="brand__role">Heimservice & Restaurant</span>
+      </a>
+      <nav class="site-nav" aria-label="Hauptnavigation">
+        <a href="#karte">Speisekarte</a>
+        <a href="#liefern">Liefergebiet</a>
+        <a href="#besuch">Kontakt</a>
+        <a class="btn btn-primary site-nav__cta" href={pronto.phoneHref}>
+          Bestellen
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    {/* Full-bleed appetite hero: food image + tight headline + order CTA
+        + the 10% offer as a headline asset. */}
+    <section class="hero">
+      <div class="hero__media">
+        <Figure
+          site="pronto-pronto"
+          name="hero"
+          label="Pizza, dunkel und appetitlich"
+          ratio="16 / 9"
+          rounded="0"
+          priority
+          sizes="100vw"
+        />
+      </div>
+      <div class="hero__scrim"></div>
+      <div class="wrap hero__inner">
+        <p class="offer-chip">{pronto.promo.discount}</p>
+        <h1>Heiß bestellt, schnell geliefert.</h1>
+        <p class="hero__sub">{pronto.tagline}</p>
+        <div class="hero__actions">
+          <a class="btn btn-primary" href={pronto.phoneHref}>
+            Jetzt bestellen · {pronto.phone}
+          </a>
+          <a class="btn btn-ghost" href="#karte">Zur Speisekarte</a>
+        </div>
+        <p class="hero__meta">
+          {fullAddress}
+          <span aria-hidden="true"> · </span>
+          {pronto.promo.minOrder}
+        </p>
+      </div>
+    </section>
+
+    {/* Signature: a real client-side searchable Speisekarte. The precise
+        inversion of the current site (no prices, no search, PDF-tier). */}
+    <section id="karte" class="section">
+      <div class="wrap">
+        <header class="section__head">
+          <p class="eyebrow">Speisekarte</p>
+          <h2>Such dir was Gutes raus</h2>
+          <p class="section__intro">
+            Filtere direkt durch die Küche. Die einzelnen Gerichte und
+            Preise pflegt Pronto-Pronto selbst ein, sie werden nicht
+            erfunden.
+          </p>
+        </header>
+
+        <div class="menu-search">
+          <label for="menu-q" class="sr-only">Speisekarte durchsuchen</label>
+          <input
+            id="menu-q"
+            type="search"
+            placeholder="Suche: Pizza, Pasta, Calzone …"
+            autocomplete="off"
+          />
+          <p id="menu-count" class="menu-search__count" aria-live="polite">
+            {pronto.menu.length} Kategorien
+          </p>
+        </div>
+
+        <ul id="menu-list" class="menu">
+          {
+            pronto.menu.map((m) => (
+              <li class="dish" data-cat={m.category.toLowerCase()}>
+                <div class="dish__body">
+                  <h3>{m.category}</h3>
+                  <p>{m.note}</p>
+                </div>
+                <span class="dish__leader" aria-hidden="true" />
+                <span class="dish__price tbc">{CHECK}</span>
+              </li>
+            ))
+          }
+        </ul>
+        <p id="menu-empty" class="menu-empty" hidden>
+          Keine Kategorie gefunden. Ganze Karte zeigt sich, wenn das
+          Suchfeld leer ist.
+        </p>
+      </div>
+    </section>
+
+    {/* Liefergebiet band: 19 zones as scannable chips + the hard offers. */}
+    <section id="liefern" class="liefern">
+      <div class="wrap">
+        <header class="section__head">
+          <p class="eyebrow">Liefergebiet</p>
+          <h2>{pronto.zonesTotal} Gebiete rund um Karlsruhe</h2>
+        </header>
+        <ul class="chips">
+          {pronto.zonesNamed.map((z) => <li class="chip">{z}</li>)}
+          <li class="chip chip--more">
+            + weitere bis {pronto.zonesTotal} Gebiete
+          </li>
+        </ul>
+        <div class="liefern__facts">
+          <div>
+            <span class="liefern__big">10%</span>
+            <span>Rabatt bei Online-Bestellung</span>
+          </div>
+          <div>
+            <span class="liefern__big">0,00 €</span>
+            <span>Mindestbestellwert</span>
+          </div>
+          <div>
+            <span class="liefern__big">{pronto.zonesTotal}</span>
+            <span>Liefergebiete</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    {/* Kontakt: hours + payment + socials, practical block. */}
+    <section id="besuch" class="section">
+      <div class="wrap contact__grid">
+        <div>
+          <p class="eyebrow">Öffnungszeiten</p>
+          <h2>Wann wir liefern</h2>
+          <table class="hours">
+            <tbody>
+              {
+                pronto.hours.map((h) => (
+                  <tr>
+                    <th scope="row">{h.day}</th>
+                    <td>{h.times}</td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div class="contact__side">
+          <div class="card contact__card">
+            <p class="eyebrow">Kontakt & Anfahrt</p>
+            <address class="contact__addr">
+              <strong>{pronto.fullName}</strong><br />
+              {pronto.address.street}<br />
+              {pronto.address.zip}
+              {pronto.address.city}
+            </address>
+            <dl class="facts">
+              <div>
+                <dt>Telefon</dt>
+                <dd><a href={pronto.phoneHref}>{pronto.phone}</a></dd>
+              </div>
+              <div>
+                <dt>E-Mail</dt>
+                <dd><span class="tbc">{pronto.email}</span></dd>
+              </div>
+              <div>
+                <dt>Zahlung</dt>
+                <dd>{pronto.payment.join(", ")}</dd>
+              </div>
+              <div>
+                <dt>Social</dt>
+                <dd class="contact__social">
+                  {
+                    pronto.socials.map((s) => (
+                      <a href={s.href} rel="noopener">
+                        {s.label}
+                      </a>
+                    ))
+                  }
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-foot">
+    <div class="wrap site-foot__row">
+      <p>
+        {pronto.fullName} · {fullAddress} ·
+        <a href={pronto.phoneHref}>{pronto.phone}</a>
+      </p>
+      <p class="site-foot__legal">
+        Bilder: Pexels ·
+        <span class="tbc">Impressum</span> und
+        <span class="tbc">Datenschutz</span> werden vor Veröffentlichung
+        juristisch geprüft ergänzt.
+      </p>
+    </div>
+  </footer>
+</BaseLayout>
+
+<script>
+  // Client-side instant filter over the Speisekarte categories.
+  const q = document.getElementById("menu-q") as HTMLInputElement | null;
+  const list = document.getElementById("menu-list");
+  const countEl = document.getElementById("menu-count");
+  const empty = document.getElementById("menu-empty");
+  if (q && list && countEl && empty) {
+    const dishes = Array.from(
+      list.querySelectorAll<HTMLElement>(".dish"),
+    );
+    const total = dishes.length;
+    q.addEventListener("input", () => {
+      const term = q.value.trim().toLowerCase();
+      let shown = 0;
+      for (const d of dishes) {
+        const hit =
+          term === "" ||
+          (d.dataset.cat ?? "").includes(term) ||
+          (d.textContent ?? "").toLowerCase().includes(term);
+        d.hidden = !hit;
+        if (hit) shown++;
+      }
+      countEl.textContent =
+        term === ""
+          ? `${total} Kategorien`
+          : `${shown} von ${total} Kategorien`;
+      empty.hidden = shown !== 0;
+    });
+  }
+</script>
+
+<style>
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .site-head {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: color-mix(in srgb, var(--color-paper) 86%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--color-line);
+  }
+  .site-head__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-block: 0.9rem;
+  }
+  .brand {
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+  }
+  .brand__name {
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .brand__role {
+    font-size: var(--text-xs);
+    color: var(--color-muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .site-nav {
+    display: flex;
+    align-items: center;
+    gap: 1.75rem;
+  }
+  .site-nav a:not(.site-nav__cta) {
+    text-decoration: none;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--color-muted);
+  }
+  .site-nav a:not(.site-nav__cta):hover {
+    color: var(--color-ink);
+  }
+  /* Beat `.site-nav a` (0,1,1) so the CTA keeps accent-ink, not muted. */
+  .site-nav a.site-nav__cta {
+    color: var(--color-accent-ink);
+    padding: 0.6rem 1.2rem;
+    font-size: var(--text-sm);
+    font-weight: 700;
+  }
+  .site-nav a.site-nav__cta:hover {
+    color: var(--color-accent-ink);
+  }
+  @media (max-width: 640px) {
+    .site-nav a:not(.site-nav__cta) {
+      display: none;
+    }
+  }
+
+  .hero {
+    position: relative;
+    isolation: isolate;
+    min-height: clamp(28rem, 64vh, 40rem);
+    display: flex;
+    align-items: flex-end;
+    overflow: hidden;
+  }
+  .hero__media {
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+  }
+  .hero__media :global(.figure),
+  .hero__media :global(.img-slot) {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto !important;
+  }
+  .hero__scrim {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-paper) 35%, transparent) 0%,
+      color-mix(in srgb, var(--color-paper) 55%, transparent) 45%,
+      var(--color-paper) 100%
+    );
+  }
+  .hero__inner {
+    padding-block: clamp(2.5rem, 7vw, 5rem);
+  }
+  .offer-chip {
+    display: inline-block;
+    background: var(--color-accent);
+    color: var(--color-accent-ink);
+    font-weight: 700;
+    font-size: var(--text-sm);
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    margin: 0 0 1.25rem;
+  }
+  .hero h1 {
+    font-family: var(--font-display);
+    font-size: var(--text-5xl);
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    max-width: 16ch;
+  }
+  .hero__sub {
+    font-size: var(--text-xl);
+    color: var(--color-ink);
+    max-width: 46ch;
+    margin-block: 1.25rem 0;
+  }
+  .hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.85rem;
+    margin-block: 2rem 1.25rem;
+  }
+  .hero__meta {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+  }
+
+  .section {
+    padding-block: clamp(3rem, 6vw, 5.5rem);
+  }
+  .section__head {
+    max-width: 46rem;
+    margin-bottom: clamp(2rem, 4vw, 3rem);
+  }
+  .section__head h2,
+  .contact__grid h2,
+  .liefern h2 {
+    font-family: var(--font-display);
+    font-size: var(--text-3xl);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-block: 0.5rem 0;
+  }
+  .section__intro {
+    color: var(--color-muted);
+    font-size: var(--text-lg);
+    margin-top: 1rem;
+  }
+
+  .menu-search {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+  }
+  .menu-search input {
+    flex: 1 1 18rem;
+    background: var(--color-surface);
+    color: var(--color-ink);
+    border: 1.5px solid var(--color-line);
+    border-radius: var(--radius-md);
+    padding: 0.9rem 1.1rem;
+    font: inherit;
+    font-size: var(--text-base);
+  }
+  .menu-search input:focus-visible {
+    border-color: var(--color-accent);
+  }
+  .menu-search__count {
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    margin: 0;
+  }
+
+  .menu {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--color-line);
+  }
+  .dish {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: baseline;
+    gap: 1rem;
+    padding-block: 1.4rem;
+    border-bottom: 1px solid var(--color-line);
+  }
+  .dish[hidden] {
+    display: none;
+  }
+  .dish__body h3 {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    font-weight: 700;
+  }
+  .dish__body p {
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    margin: 0.25rem 0 0;
+  }
+  .dish__leader {
+    border-bottom: 2px dotted
+      color-mix(in srgb, var(--color-muted) 55%, transparent);
+    align-self: center;
+    min-width: 3rem;
+  }
+  .menu-empty {
+    color: var(--color-muted);
+    margin-top: 1.5rem;
+  }
+
+  .liefern {
+    background: var(--color-accent-soft);
+    padding-block: clamp(3rem, 7vw, 6rem);
+  }
+  .chips {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin: 0;
+    padding: 0;
+  }
+  .chip {
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: 999px;
+    padding: 0.5rem 1rem;
+    font-size: var(--text-sm);
+    font-weight: 500;
+  }
+  .chip--more {
+    background: transparent;
+    color: var(--color-muted);
+    border-style: dashed;
+  }
+  .liefern__facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: clamp(2rem, 6vw, 5rem);
+    margin-top: clamp(2.5rem, 5vw, 3.5rem);
+  }
+  .liefern__facts div {
+    display: grid;
+    gap: 0.25rem;
+  }
+  .liefern__big {
+    font-family: var(--font-display);
+    font-size: var(--text-4xl);
+    font-weight: 700;
+    color: var(--color-accent);
+    line-height: 1;
+  }
+  .liefern__facts span:last-child {
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+  }
+
+  .contact__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(2rem, 5vw, 4rem);
+  }
+  .hours {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1.5rem;
+  }
+  .hours th,
+  .hours td {
+    text-align: left;
+    padding: 0.8rem 0;
+    border-bottom: 1px solid var(--color-line);
+    font-weight: 500;
+  }
+  .hours td {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .contact__card {
+    padding: 1.75rem;
+  }
+  .contact__addr {
+    font-style: normal;
+    margin-block: 1rem;
+    line-height: 1.7;
+  }
+  .facts {
+    margin: 1rem 0 0;
+    display: grid;
+    gap: 1rem;
+  }
+  .facts div {
+    display: grid;
+    gap: 0.15rem;
+  }
+  .facts dt {
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-muted);
+  }
+  .facts dd {
+    margin: 0;
+    font-size: var(--text-base);
+  }
+  /* Lighter ember for in-text links on the dark contact-card surface:
+     --color-accent (#e0612b) on #262220 is 4.43:1, just under AA 4.5.
+     #ef7a42 clears it (~5.1:1), stays ember (not delivery-red), and the
+     link is underlined via the global a:not([class]) rule. Link-only;
+     the brand accent token is unchanged for buttons / the 10% figure. */
+  .facts a {
+    color: #ef7a42;
+    text-decoration: none;
+  }
+  .contact__social {
+    display: flex;
+    gap: 1rem;
+  }
+
+  .tbc {
+    font-family: var(--font-body);
+    font-size: 0.92em;
+    font-weight: 600;
+    color: var(--color-ink);
+    background: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface));
+    border: 1px solid color-mix(in srgb, var(--color-accent) 55%, transparent);
+    padding: 0.05em 0.45em;
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+  }
+
+  .site-foot {
+    border-top: 1px solid var(--color-line);
+    padding-block: 2.5rem;
+  }
+  .site-foot__row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 1rem;
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+  }
+  .site-foot a {
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+
+  @media (max-width: 860px) {
+    .contact__grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media (max-width: 560px) {
+    .dish {
+      grid-template-columns: 1fr auto;
+    }
+    .dish__leader {
+      display: none;
+    }
+  }
+</style>

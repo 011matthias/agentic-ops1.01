@@ -12,6 +12,9 @@ interface Props {
   jsonLd?: Record<string, unknown>;
   /** Canonical path, e.g. "/praxis-uslu". */
   path: string;
+  /** Search-engine indexing. Demos are indexable (owner directive
+      2026-05-18); the internal directory passes indexable={false}. */
+  indexable?: boolean;
 }
 
 const {
@@ -21,6 +24,7 @@ const {
   description,
   jsonLd,
   path,
+  indexable = true,
 } = Astro.props;
 
 const canonical = new URL(path, Astro.site).href;
@@ -34,7 +38,10 @@ const canonical = new URL(path, Astro.site).href;
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
-    <meta name="robots" content="noindex, nofollow" />
+    <meta
+      name="robots"
+      content={indexable ? "index, follow" : "noindex, nofollow"}
+    />
     <meta property="og:type" content="website" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />

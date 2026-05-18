@@ -1,0 +1,573 @@
+---
+import BaseLayout from "@layouts/BaseLayout.astro";
+import Figure from "@components/Figure.astro";
+import "@fontsource-variable/fraunces";
+import "@sites/coffee-boxx/theme.css";
+import { coffee, CHECK } from "@sites/coffee-boxx/data";
+
+const fullAddress = `${coffee.address.street}, ${coffee.address.zip} ${coffee.address.city}`;
+
+const dayMap: Record<string, string> = {
+  Montag: "Monday",
+  Dienstag: "Tuesday",
+  Mittwoch: "Wednesday",
+  Donnerstag: "Thursday",
+  Freitag: "Friday",
+  Samstag: "Saturday",
+  Sonntag: "Sunday",
+};
+
+const openingHoursSpecification = coffee.hours.map((h) => {
+  const [opens, closes] = h.times.split(" – ");
+  return {
+    "@type": "OpeningHoursSpecification",
+    dayOfWeek: `https://schema.org/${dayMap[h.day]}`,
+    opens,
+    closes,
+  };
+});
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "CafeOrCoffeeShop",
+  name: coffee.name,
+  description: coffee.tagline,
+  servesCuisine: "Coffee",
+  address: {
+    "@type": "PostalAddress",
+    streetAddress: coffee.address.street,
+    postalCode: coffee.address.zip,
+    addressLocality: coffee.address.city,
+    addressCountry: "DE",
+  },
+  telephone: coffee.phone,
+  url: "https://coffee-boxx.de",
+  openingHoursSpecification,
+};
+
+const title = "Coffee Boxx: Café in Karlsruhe, Kaffee, Panini, Kuchen";
+const description =
+  "Coffee Boxx in der Moltkestraße, Karlsruhe: Kaffeespezialitäten, frische Panini und hausgemachter Kuchen. Karte, Öffnungszeiten und Kontakt auf einen Blick.";
+---
+
+<BaseLayout
+  site="coffee-boxx"
+  lang="de"
+  title={title}
+  description={description}
+  path="/coffee-boxx"
+  jsonLd={jsonLd}
+>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="site-head">
+    <div class="wrap site-head__row">
+      <a href="#main" class="brand">
+        <span class="brand__name">Coffee Boxx</span>
+        <span class="brand__role">Café · Karlsruhe</span>
+      </a>
+      <nav class="site-nav" aria-label="Hauptnavigation">
+        <a href="#karte">Die Karte</a>
+        <a href="#galerie">Galerie</a>
+        <a href="#besuch">Besuch</a>
+        <a class="btn btn-primary site-nav__cta" href={coffee.phoneHref}>
+          Anrufen
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    {/* Hero: oversized warm serif carries it; address + open-state above fold. */}
+    <section class="hero">
+      <div class="wrap hero__grid">
+        <div class="hero__lede">
+          <p class="eyebrow">Kaffee · Panini · Kuchen</p>
+          <h1>
+            Ein Kaffee, der den Tag
+            <em>ordentlich</em> anfängt.
+          </h1>
+          <p class="hero__sub">{coffee.tagline}</p>
+          <div class="hero__actions">
+            <a class="btn btn-primary" href="#karte">Die Karte ansehen</a>
+            <a class="btn btn-ghost" href={coffee.phoneHref}>
+              Anrufen · {coffee.phone}
+            </a>
+          </div>
+          <p class="hero__meta">
+            {fullAddress}
+            <span aria-hidden="true"> · </span>
+            <span id="open-state" class="open-state">Öffnungszeiten unten</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="wrap hero__figure">
+        <Figure
+          site="coffee-boxx"
+          name="hero"
+          label="Espresso, warmer Dampf, nah"
+          ratio="21 / 9"
+          priority
+        />
+      </div>
+    </section>
+
+    {/* Signature "Die Karte": the menu as the hero feature. This is the
+        exact thing the current site hides in a PDF. */}
+    <section id="karte" class="karte">
+      <div class="wrap">
+        <header class="section__head">
+          <p class="eyebrow">Die Karte</p>
+          <h2>Was bei uns über den Tresen geht</h2>
+          <p class="section__intro">
+            Die vollständige Karte mit allen Sorten und Preisen pflegt
+            Coffee Boxx selbst ein. Hier steht, was wir führen, klar und
+            lesbar, nicht in einem PDF vergraben.
+          </p>
+        </header>
+        <dl class="menu">
+          {
+            coffee.menu.map((m) => (
+              <div class="menu__row">
+                <dt>
+                  <span class="menu__cat">{m.category}</span>
+                  <span class="menu__note">{m.note}</span>
+                </dt>
+                <span class="menu__leader" aria-hidden="true" />
+                <dd class="tbc">{CHECK}</dd>
+              </div>
+            ))
+          }
+        </dl>
+        <p class="karte__foot">
+          Sorten und Preise mit <span class="tbc">[BITTE PRÜFEN]</span>
+          trägt Coffee Boxx vor Veröffentlichung selbst ein, sie werden
+          nicht erfunden.
+        </p>
+      </div>
+    </section>
+
+    {/* Offset asymmetric gallery (varied aspect ratios), not a grid. */}
+    <section id="galerie" class="gallery">
+      <div class="wrap">
+        <header class="section__head">
+          <p class="eyebrow">Galerie</p>
+          <h2>Ein Blick hinein</h2>
+        </header>
+        <div class="gallery__stagger">
+          {
+            coffee.gallery.map((g, i) => (
+              <div class={`gallery__item gallery__item--${i + 1}`}>
+                <Figure
+                  site="coffee-boxx"
+                  name={g.name}
+                  label={g.label}
+                  ratio={g.ratio}
+                  sizes="(min-width: 60rem) 22rem, 80vw"
+                />
+              </div>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    {/* Besuch: hours + contact, the practical block. */}
+    <section id="besuch" class="section">
+      <div class="wrap contact__grid">
+        <div>
+          <p class="eyebrow">Öffnungszeiten</p>
+          <h2>Wann wir offen haben</h2>
+          <table class="hours">
+            <tbody>
+              {
+                coffee.hours.map((h) => (
+                  <tr>
+                    <th scope="row">{h.day}</th>
+                    <td>{h.times}</td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div class="contact__side">
+          <div class="card contact__card">
+            <p class="eyebrow">Kontakt & Anfahrt</p>
+            <address class="contact__addr">
+              <strong>{coffee.name}</strong><br />
+              {coffee.address.street}<br />
+              {coffee.address.zip}
+              {coffee.address.city}
+            </address>
+            <dl class="facts">
+              <div>
+                <dt>Telefon</dt>
+                <dd><a href={coffee.phoneHref}>{coffee.phone}</a></dd>
+              </div>
+              <div>
+                <dt>E-Mail</dt>
+                <dd><span class="tbc">{coffee.email}</span></dd>
+              </div>
+              <div>
+                <dt>Social</dt>
+                <dd><span class="tbc">{coffee.socials}</span></dd>
+              </div>
+              <div>
+                <dt>Standort</dt>
+                <dd><span class="tbc">{coffee.address.note}</span></dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-foot">
+    <div class="wrap site-foot__row">
+      <p>
+        {coffee.name} · {fullAddress} ·
+        <a href={coffee.phoneHref}>{coffee.phone}</a>
+      </p>
+      <p class="site-foot__legal">
+        Bilder: Pexels ·
+        <span class="tbc">Impressum</span> und
+        <span class="tbc">Datenschutz</span> werden vor Veröffentlichung
+        juristisch geprüft ergänzt.
+      </p>
+    </div>
+  </footer>
+</BaseLayout>
+
+<script>
+  // Open-state from sourced hours (Mo–Fr 07:30–19:00, Sa–So 10:00–18:00).
+  const SCHEDULE: Record<number, [number, number]> = {
+    1: [7.5, 19],
+    2: [7.5, 19],
+    3: [7.5, 19],
+    4: [7.5, 19],
+    5: [7.5, 19],
+    6: [10, 18],
+    0: [10, 18],
+  };
+  const el = document.getElementById("open-state");
+  if (el) {
+    const now = new Date();
+    const span = SCHEDULE[now.getDay()];
+    const h = now.getHours() + now.getMinutes() / 60;
+    const open = !!span && h >= span[0] && h < span[1];
+    el.textContent = open ? "Jetzt geöffnet" : "Gerade geschlossen";
+    el.classList.add(open ? "is-open" : "is-shut");
+  }
+</script>
+
+<style>
+  /* coffee-boxx bespoke layout. Tokens from theme.css. */
+  .grain {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.04;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  main,
+  .site-head,
+  .site-foot {
+    position: relative;
+    z-index: 1;
+  }
+
+  .site-head {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: color-mix(in srgb, var(--color-paper) 88%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--color-line);
+  }
+  .site-head__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-block: 0.9rem;
+  }
+  .brand {
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+  }
+  .brand__name {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    font-weight: 600;
+    font-optical-sizing: auto;
+  }
+  .brand__role {
+    font-size: var(--text-xs);
+    color: var(--color-muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .site-nav {
+    display: flex;
+    align-items: center;
+    gap: 1.75rem;
+  }
+  .site-nav a:not(.site-nav__cta) {
+    text-decoration: none;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--color-muted);
+  }
+  .site-nav a:not(.site-nav__cta):hover {
+    color: var(--color-ink);
+  }
+  /* Beat `.site-nav a` (0,1,1) so the CTA keeps accent-ink, not muted. */
+  .site-nav a.site-nav__cta {
+    color: var(--color-accent-ink);
+    padding: 0.6rem 1.15rem;
+    font-size: var(--text-sm);
+  }
+  .site-nav a.site-nav__cta:hover {
+    color: var(--color-accent-ink);
+  }
+  @media (max-width: 640px) {
+    .site-nav a:not(.site-nav__cta) {
+      display: none;
+    }
+  }
+
+  .hero {
+    padding-block: clamp(3rem, 7vw, 6.5rem) clamp(2rem, 4vw, 3.5rem);
+  }
+  .hero__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 52rem);
+  }
+  .hero h1 {
+    font-family: var(--font-display);
+    font-size: var(--text-5xl);
+    font-weight: 600;
+    font-optical-sizing: auto;
+    margin-block: 0.6rem 0;
+  }
+  .hero h1 em {
+    font-style: italic;
+    color: var(--color-accent);
+  }
+  .hero__sub {
+    font-size: var(--text-xl);
+    color: var(--color-muted);
+    max-width: 40ch;
+    margin-block: 1.4rem 0;
+  }
+  .hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.85rem;
+    margin-block: 2rem 1.25rem;
+  }
+  .hero__meta {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+  }
+  .open-state {
+    font-weight: 700;
+  }
+  .open-state.is-open {
+    color: var(--color-accent);
+  }
+  .hero__figure {
+    margin-top: clamp(2rem, 5vw, 3.5rem);
+  }
+
+  .section {
+    padding-block: clamp(3rem, 6vw, 5.5rem);
+  }
+  .section__head {
+    max-width: 46rem;
+    margin-bottom: clamp(2rem, 4vw, 3rem);
+  }
+  .section__head h2,
+  .contact__grid h2 {
+    font-family: var(--font-display);
+    font-size: var(--text-3xl);
+    font-weight: 600;
+    margin-block: 0.5rem 0;
+  }
+  .section__intro {
+    color: var(--color-muted);
+    font-size: var(--text-lg);
+    margin-top: 1rem;
+  }
+
+  .karte {
+    background: var(--color-accent-soft);
+    padding-block: clamp(3rem, 7vw, 6rem);
+  }
+  .menu {
+    margin: 0;
+    border-top: 1px solid var(--color-line);
+  }
+  .menu__row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: baseline;
+    gap: 1rem;
+    padding-block: 1.6rem;
+    border-bottom: 1px solid var(--color-line);
+  }
+  .menu__cat {
+    display: block;
+    font-family: var(--font-display);
+    font-size: var(--text-2xl);
+    font-weight: 600;
+  }
+  .menu__note {
+    display: block;
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    margin-top: 0.3rem;
+  }
+  .menu__leader {
+    border-bottom: 2px dotted
+      color-mix(in srgb, var(--color-muted) 55%, transparent);
+    align-self: center;
+    min-width: 3rem;
+  }
+  .menu dd {
+    margin: 0;
+  }
+
+  .karte__foot {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    margin-top: 1.75rem;
+  }
+
+  .gallery {
+    padding-block: clamp(3rem, 6vw, 5.5rem);
+  }
+  .gallery__stagger {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: clamp(1rem, 3vw, 2.25rem);
+    align-items: start;
+  }
+  .gallery__item--1 {
+    margin-top: clamp(1.5rem, 4vw, 3rem);
+  }
+  .gallery__item--3 {
+    margin-top: clamp(2.5rem, 6vw, 4.5rem);
+  }
+
+  .contact__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(2rem, 5vw, 4rem);
+  }
+  .hours {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1.5rem;
+  }
+  .hours th,
+  .hours td {
+    text-align: left;
+    padding: 0.8rem 0;
+    border-bottom: 1px solid var(--color-line);
+    font-weight: 500;
+  }
+  .hours td {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .contact__card {
+    padding: 1.75rem;
+  }
+  .contact__addr {
+    font-style: normal;
+    margin-block: 1rem;
+    line-height: 1.7;
+  }
+  .facts {
+    margin: 1rem 0 0;
+    display: grid;
+    gap: 1rem;
+  }
+  .facts div {
+    display: grid;
+    gap: 0.15rem;
+  }
+  .facts dt {
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-muted);
+  }
+  .facts dd {
+    margin: 0;
+    font-size: var(--text-base);
+  }
+  .facts a {
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+
+  .tbc {
+    font-family: var(--font-body);
+    font-size: 0.92em;
+    font-weight: 600;
+    color: var(--color-ink);
+    background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface));
+    border: 1px solid color-mix(in srgb, var(--color-accent) 50%, transparent);
+    padding: 0.05em 0.45em;
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+  }
+
+  .site-foot {
+    border-top: 1px solid var(--color-line);
+    padding-block: 2.5rem;
+  }
+  .site-foot__row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 1rem;
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+  }
+  .site-foot a {
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+
+  @media (max-width: 860px) {
+    .gallery__stagger {
+      grid-template-columns: 1fr 1fr;
+    }
+    .gallery__item {
+      margin-top: 0 !important;
+    }
+    .contact__grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media (max-width: 560px) {
+    .gallery__stagger {
+      grid-template-columns: 1fr;
+    }
+    .menu__row {
+      grid-template-columns: 1fr auto;
+    }
+    .menu__leader {
+      display: none;
+    }
+  }
+</style>

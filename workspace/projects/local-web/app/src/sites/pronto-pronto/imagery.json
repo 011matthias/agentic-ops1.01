@@ -1,0 +1,30 @@
+{
+  "hero": {
+    "alt": "Close-up of a Margherita pizza with cherry tomatoes and basil on a wooden board.",
+    "photographer": "Jonathan Valdes",
+    "photographer_url": "https://www.pexels.com/@jonathan-valdes-286676880",
+    "pexels_url": "https://www.pexels.com/photo/delicious-margherita-pizza-close-up-shot-35017347/",
+    "query": "pizza margherita dark moody food photography overhead"
+  },
+  "dish-1": {
+    "alt": "Flatlay of fresh Italian ingredients including pasta, tomatoes, and spices on a dark blue background.",
+    "photographer": "Nataliya Vaitkevich",
+    "photographer_url": "https://www.pexels.com/@n-voitkevich",
+    "pexels_url": "https://www.pexels.com/photo/fusilli-pasta-and-cherry-tomatoes-5794876/",
+    "query": "italian pasta tomato closeup dark background"
+  },
+  "dish-2": {
+    "alt": "Delicious calzone surrounded by fresh ingredients on a rustic kitchen table in Riga, Latvia.",
+    "photographer": "Vilnis Husko",
+    "photographer_url": "https://www.pexels.com/@vhusko",
+    "pexels_url": "https://www.pexels.com/photo/a-delicious-folded-pizza-on-gray-surface-13457628/",
+    "query": "calzone folded pizza on dark surface"
+  },
+  "dish-3": {
+    "alt": "A close-up of a stone oven with bright flames, showcasing the baking process of a pizza.",
+    "photographer": "Florian Hillmann",
+    "photographer_url": "https://www.pexels.com/@florian-hillmann-266260525",
+    "pexels_url": "https://www.pexels.com/photo/charcoal-in-the-oven-13366357/",
+    "query": "wood fired pizza oven flame restaurant"
+  }
+}

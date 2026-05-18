@@ -1,6 +1,6 @@
 ---
 import BaseLayout from "@layouts/BaseLayout.astro";
-import ImageSlot from "@components/ImageSlot.astro";
+import Figure from "@components/Figure.astro";
 import "@fontsource-variable/newsreader";
 import "@sites/praxis-uslu/theme.css";
 import { praxis, CHECK } from "@sites/praxis-uslu/data";
@@ -126,9 +126,12 @@ const description =
       </div>
 
       <div class="wrap hero__figure">
-        <ImageSlot
+        <Figure
+          site="praxis-uslu"
+          name="hero"
           label="Praxis / Empfang, warmes Tageslicht"
           ratio="21 / 9"
+          priority
         />
       </div>
     </section>
@@ -166,10 +169,13 @@ const description =
     <section id="praxis" class="signature">
       <div class="wrap signature__grid">
         <div class="signature__media">
-          <ImageSlot
+          <Figure
+            site="praxis-uslu"
+            name="signature"
             label="Behandlungsraum / Hände, ruhig"
             ratio="4 / 5"
             rounded="var(--radius-xl)"
+            sizes="(min-width: 54rem) 28rem, 92vw"
           />
         </div>
         <div class="signature__text">
@@ -370,21 +376,26 @@ const description =
     align-items: center;
     gap: 1.75rem;
   }
-  .site-nav a {
+  /* Exclude the CTA so it never receives muted; its colour comes solely
+     from .btn-primary / .site-nav__cta (accent-ink). Removes the cascade
+     conflict entirely rather than out-specifying it. */
+  .site-nav a:not(.site-nav__cta) {
     text-decoration: none;
     font-size: var(--text-sm);
     font-weight: 500;
     color: var(--color-muted);
   }
-  .site-nav a:hover {
+  .site-nav a:not(.site-nav__cta):hover {
     color: var(--color-ink);
   }
-  .site-nav__cta {
+  /* Specificity must beat `.site-nav a` (0,1,1) or the CTA text inherits
+     --color-muted on the accent bg (1.18:1). a.class = 0,2,1. */
+  .site-nav a.site-nav__cta {
     color: var(--color-accent-ink);
     padding: 0.6rem 1.1rem;
     font-size: var(--text-sm);
   }
-  .site-nav__cta:hover {
+  .site-nav a.site-nav__cta:hover {
     color: var(--color-accent-ink);
   }
   @media (max-width: 640px) {
@@ -606,8 +617,9 @@ const description =
     font-family: var(--font-body);
     font-size: 0.92em;
     font-weight: 600;
-    color: #9a5a2a;
-    background: color-mix(in srgb, #9a5a2a 12%, transparent);
+    color: var(--color-ink);
+    background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface));
+    border: 1px solid color-mix(in srgb, var(--color-accent) 50%, transparent);
     padding: 0.05em 0.45em;
     border-radius: var(--radius-sm);
     white-space: nowrap;

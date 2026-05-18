@@ -1,0 +1,92 @@
+---
+/*
+  Figure: the single image primitive for every site.
+
+  - If the imagery pipeline (scripts/fetch-imagery.mjs) has placed a curated
+    photo at src/assets/{site}/{name}.jpg, render it as an optimized,
+    responsive Astro <Image> (webp, srcset, lazy unless priority).
+  - If not, fall back to the honest designed ImageSlot (a labelled slot,
+    NOT a gradient pretending to be finished — REBUILD-SPEC failure-mode #2).
+
+  This makes the slot -> real-photo swap fully automatic: build is green
+  with or without imagery, and no page markup changes when photos land.
+*/
+import { Image } from "astro:assets";
+import ImageSlot from "@components/ImageSlot.astro";
+
+interface Props {
+  site: string;
+  /** Slot key, matches scripts/fetch-imagery.mjs and assets/{site}/{name}.jpg */
+  name: string;
+  /** Human label: used as the slot caption AND the image alt fallback. */
+  label: string;
+  ratio?: string;
+  rounded?: string;
+  /** Above-the-fold image: eager-load + high priority. */
+  priority?: boolean;
+  /** Responsive sizes hint; default assumes a near-full-width block. */
+  sizes?: string;
+}
+const {
+  site,
+  name,
+  label,
+  ratio = "16 / 9",
+  rounded = "var(--radius-lg)",
+  priority = false,
+  sizes = "(min-width: 72rem) 68rem, 92vw",
+} = Astro.props;
+
+const assets = import.meta.glob<{ default: ImageMetadata }>(
+  "/src/assets/**/*.{jpg,jpeg,png,webp}",
+  { eager: true },
+);
+const manifests = import.meta.glob<{ default: Record<string, { alt?: string }> }>(
+  "/src/sites/**/imagery.json",
+  { eager: true },
+);
+
+const assetKey = Object.keys(assets).find((k) =>
+  k.includes(`/src/assets/${site}/${name}.`),
+);
+const img = assetKey ? assets[assetKey].default : null;
+const alt =
+  manifests[`/src/sites/${site}/imagery.json`]?.default?.[name]?.alt ?? label;
+---
+
+{
+  img ? (
+    <figure
+      class="figure"
+      style={`aspect-ratio:${ratio};border-radius:${rounded};`}
+    >
+      <Image
+        src={img}
+        alt={alt}
+        sizes={sizes}
+        widths={[480, 768, 1100, 1600, 2000]}
+        quality={72}
+        loading={priority ? "eager" : "lazy"}
+        fetchpriority={priority ? "high" : "auto"}
+        decoding="async"
+      />
+    </figure>
+  ) : (
+    <ImageSlot label={label} ratio={ratio} rounded={rounded} />
+  )
+}
+
+<style>
+  .figure {
+    margin: 0;
+    width: 100%;
+    overflow: hidden;
+    background: var(--color-surface);
+  }
+  .figure :global(img) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+</style>
