@@ -1,6 +1,7 @@
 ---
 import BaseLayout from "@layouts/BaseLayout.astro";
 import Figure from "@components/Figure.astro";
+import DepthHero from "@components/DepthHero.astro";
 import "@fontsource-variable/fraunces";
 import "@sites/coffee-boxx/theme.css";
 import { coffee, CHECK } from "@sites/coffee-boxx/data";
@@ -103,7 +104,7 @@ const description =
       </div>
 
       <div class="wrap hero__figure" data-reveal>
-        <Figure
+        <DepthHero
           site="coffee-boxx"
           name="hero"
           label="Espresso, warmer Dampf, nah"
