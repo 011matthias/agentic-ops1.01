@@ -1,0 +1,1 @@
+vendored from anthropics/skills @ 690f15c on 2026-05-19; re-pull manually for updates
