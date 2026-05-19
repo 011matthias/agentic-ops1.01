@@ -1,0 +1,371 @@
+---
+/*
+  DepthHero: the budgeted WebGL hero (skil_web-build section 4b).
+
+  Exactly ONE WebGL element per site. It is a transparent enhancement of
+  <Figure>: the poster is the unchanged optimized responsive <Image>
+  (still the LCP element, still the only thing in the no-JS / pre-init /
+  reduced-motion / mobile / no-WebGL tree). A depth-displacement canvas
+  fades in OVER that poster only on a capable pointer desktop, after idle
+  + in-viewport. The image separates into depth layers as the pointer
+  moves — a real 3D-feel, never a flat photo wall.
+
+  Guardrails (all enforced in the client script, non-negotiable per 4b):
+    - lazy-init on idle + IntersectionObserver (never blocks paint/LCP)
+    - static poster is the no-JS / pre-init fallback (zero markup change)
+    - prefers-reduced-motion: reduce  -> never inits, poster only
+    - <=768px or coarse pointer        -> never inits, poster only
+    - Save-Data / no WebGL / context loss -> never inits, poster only
+  If the depth map is missing, this degrades to a plain <Figure>.
+*/
+import { getImage } from "astro:assets";
+import Figure from "@components/Figure.astro";
+
+interface Props {
+  site: string;
+  name?: string;
+  depthName?: string;
+  label: string;
+  ratio?: string;
+  rounded?: string;
+  priority?: boolean;
+  sizes?: string;
+  kenburns?: boolean;
+  /** Max pointer displacement, fraction of uv. Calm by default. */
+  strength?: number;
+}
+const {
+  site,
+  name = "hero",
+  depthName = "hero-depth",
+  label,
+  ratio = "16 / 9",
+  rounded = "var(--radius-lg)",
+  priority = false,
+  sizes = "(min-width: 72rem) 68rem, 92vw",
+  kenburns = false,
+  strength = 0.035,
+} = Astro.props;
+
+const assets = import.meta.glob<{ default: ImageMetadata }>(
+  "/src/assets/**/*.{jpg,jpeg,png,webp}",
+  { eager: true },
+);
+const photoKey = Object.keys(assets).find((k) =>
+  k.includes(`/src/assets/${site}/${name}.`),
+);
+const depthKey = Object.keys(assets).find((k) =>
+  k.includes(`/src/assets/${site}/${depthName}.`),
+);
+
+let photoSrc = "";
+let depthSrc = "";
+if (photoKey && depthKey) {
+  const photo = await getImage({
+    src: assets[photoKey].default,
+    width: 1600,
+    format: "webp",
+    quality: 70,
+  });
+  const depth = await getImage({
+    src: assets[depthKey].default,
+    width: 1100,
+    format: "webp",
+    quality: 82,
+  });
+  photoSrc = photo.src;
+  depthSrc = depth.src;
+}
+const enhance = Boolean(photoSrc && depthSrc);
+---
+
+{
+  enhance ? (
+    <div
+      class="depthhero"
+      data-photo={photoSrc}
+      data-depth={depthSrc}
+      data-strength={String(strength)}
+      style={`border-radius:${rounded};`}
+    >
+      <Figure
+        site={site}
+        name={name}
+        label={label}
+        ratio={ratio}
+        rounded={rounded}
+        priority={priority}
+        sizes={sizes}
+        kenburns={kenburns}
+      />
+      <canvas class="depthhero__gl" aria-hidden="true"></canvas>
+    </div>
+  ) : (
+    <Figure
+      site={site}
+      name={name}
+      label={label}
+      ratio={ratio}
+      rounded={rounded}
+      priority={priority}
+      sizes={sizes}
+      kenburns={kenburns}
+    />
+  )
+}
+
+<style>
+  .depthhero {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    isolation: isolate;
+  }
+  /* The poster figure keeps its own aspect-ratio and defines the box. */
+  .depthhero :global(.figure) {
+    position: relative;
+    z-index: 0;
+  }
+  .depthhero__gl {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    z-index: 1;
+    opacity: 0;
+    transition: opacity 0.7s ease;
+    pointer-events: none;
+  }
+  .depthhero.is-on .depthhero__gl {
+    opacity: 1;
+  }
+  /* Belt-and-braces: even if JS misfires, never show the canvas to a
+     reduced-motion or small-screen user. */
+  @media (prefers-reduced-motion: reduce) {
+    .depthhero__gl { display: none !important; }
+  }
+  @media (max-width: 768px) {
+    .depthhero__gl { display: none !important; }
+  }
+</style>
+
+<script>
+  type GL = WebGLRenderingContext;
+
+  function initDepthHero(root: HTMLElement) {
+    const canvas = root.querySelector<HTMLCanvasElement>(".depthhero__gl");
+    if (!canvas) return;
+
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const small = window.matchMedia("(max-width: 768px)");
+    const coarse = window.matchMedia("(pointer: coarse)");
+    const saveData = (navigator as any).connection?.saveData === true;
+
+    // Hard guardrails: bail to the poster, no canvas work at all.
+    if (reduced.matches || small.matches || coarse.matches || saveData) return;
+
+    const photoUrl = root.dataset.photo;
+    const depthUrl = root.dataset.depth;
+    const strength = parseFloat(root.dataset.strength || "0.035");
+    if (!photoUrl || !depthUrl) return;
+
+    let gl: GL | null = null;
+    let raf = 0;
+    let running = false;
+    let started = false;
+    let disposed = false;
+
+    const target = { x: 0, y: 0 }; // pointer, -1..1
+    const cur = { x: 0, y: 0 }; // lerped
+
+    function onPointer(e: PointerEvent) {
+      const r = root.getBoundingClientRect();
+      target.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+      target.y = ((e.clientY - r.top) / r.height) * 2 - 1;
+    }
+
+    function teardown() {
+      disposed = true;
+      running = false;
+      cancelAnimationFrame(raf);
+      window.removeEventListener("pointermove", onPointer);
+      root.classList.remove("is-on");
+      const ext = gl?.getExtension("WEBGL_lose_context");
+      ext?.loseContext();
+      gl = null;
+    }
+
+    // If the user switches to reduced-motion after init, drop to poster.
+    reduced.addEventListener?.("change", (e) => {
+      if (e.matches) teardown();
+    });
+
+    function start() {
+      if (started || disposed) return;
+      started = true;
+
+      gl =
+        (canvas.getContext("webgl", {
+          antialias: false,
+          alpha: false,
+          powerPreference: "low-power",
+        }) as GL | null) || null;
+      if (!gl) return; // no WebGL -> poster stays
+
+      const vs = `attribute vec2 p; varying vec2 vUv;
+        void main(){ vUv = p*0.5+0.5; gl_Position = vec4(p,0.0,1.0); }`;
+      const fs = `precision mediump float;
+        uniform sampler2D uPhoto; uniform sampler2D uDepth;
+        uniform vec2 uOffset; uniform vec2 uCover; uniform float uStr;
+        varying vec2 vUv;
+        void main(){
+          // object-fit: cover, then a tiny inset zoom so displaced
+          // samples never reveal a stretched edge.
+          vec2 uv = (vUv - 0.5) * uCover * 0.94 + 0.5;
+          float d = texture2D(uDepth, uv).r;        // near=1 far=0
+          vec2 disp = uOffset * (d - 0.45) * uStr;
+          vec3 col = texture2D(uPhoto, uv + disp).rgb;
+          gl_FragColor = vec4(col, 1.0);
+        }`;
+
+      const sh = (type: number, src: string) => {
+        const s = gl!.createShader(type)!;
+        gl!.shaderSource(s, src);
+        gl!.compileShader(s);
+        return s;
+      };
+      const prog = gl.createProgram()!;
+      gl.attachShader(prog, sh(gl.VERTEX_SHADER, vs));
+      gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, fs));
+      gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return;
+      gl.useProgram(prog);
+
+      const buf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.bufferData(
+        gl.ARRAY_BUFFER,
+        new Float32Array([-1, -1, 3, -1, -1, 3]),
+        gl.STATIC_DRAW,
+      );
+      const loc = gl.getAttribLocation(prog, "p");
+      gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+      const uOffset = gl.getUniformLocation(prog, "uOffset");
+      const uCover = gl.getUniformLocation(prog, "uCover");
+      const uStr = gl.getUniformLocation(prog, "uStr");
+      gl.uniform1i(gl.getUniformLocation(prog, "uPhoto"), 0);
+      gl.uniform1i(gl.getUniformLocation(prog, "uDepth"), 1);
+      gl.uniform1f(uStr, strength);
+
+      let imgAspect = 1;
+      let loaded = 0;
+      const mkTex = (unit: number, url: string) => {
+        const tex = gl!.createTexture();
+        gl!.activeTexture(gl!.TEXTURE0 + unit);
+        gl!.bindTexture(gl!.TEXTURE_2D, tex);
+        gl!.texImage2D(
+          gl!.TEXTURE_2D, 0, gl!.RGBA, 1, 1, 0,
+          gl!.RGBA, gl!.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]),
+        );
+        gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_WRAP_S, gl!.CLAMP_TO_EDGE);
+        gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_WRAP_T, gl!.CLAMP_TO_EDGE);
+        gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_MIN_FILTER, gl!.LINEAR);
+        gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_MAG_FILTER, gl!.LINEAR);
+        const im = new Image();
+        im.decoding = "async";
+        im.onload = () => {
+          if (disposed || !gl) return;
+          if (unit === 0) imgAspect = im.naturalWidth / im.naturalHeight;
+          gl.activeTexture(gl.TEXTURE0 + unit);
+          gl.bindTexture(gl.TEXTURE_2D, tex);
+          gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
+          gl.texImage2D(
+            gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, im,
+          );
+          if (++loaded === 2) {
+            resize();
+            root.classList.add("is-on");
+            running = true;
+            loop();
+          }
+        };
+        im.src = url;
+      };
+
+      const dpr = () => Math.min(window.devicePixelRatio || 1, 2);
+      function resize() {
+        if (!gl) return;
+        const w = root.clientWidth;
+        const h = root.clientHeight;
+        canvas.width = Math.round(w * dpr());
+        canvas.height = Math.round(h * dpr());
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        const viewAspect = w / Math.max(h, 1);
+        // cover: shrink the over-long axis of the sampled region.
+        if (viewAspect > imgAspect) {
+          gl.uniform2f(uCover, 1, imgAspect / viewAspect);
+        } else {
+          gl.uniform2f(uCover, viewAspect / imgAspect, 1);
+        }
+      }
+      const ro = new ResizeObserver(resize);
+      ro.observe(root);
+
+      let t = 0;
+      function loop() {
+        if (!running || disposed || !gl) return;
+        t += 0.0045;
+        // ease pointer; idle sinus drift so it breathes without input.
+        const dx = target.x + Math.sin(t) * 0.12;
+        const dy = target.y + Math.cos(t * 0.8) * 0.09;
+        cur.x += (dx - cur.x) * 0.06;
+        cur.y += (dy - cur.y) * 0.06;
+        gl.uniform2f(uOffset, cur.x, cur.y);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        raf = requestAnimationFrame(loop);
+      }
+
+      window.addEventListener("pointermove", onPointer, { passive: true });
+      mkTex(0, photoUrl!);
+      mkTex(1, depthUrl!);
+
+      // Pause the RAF whenever the hero is off-screen (battery/CPU).
+      const vis = new IntersectionObserver(
+        (ents) => {
+          const on = ents[0]?.isIntersecting;
+          if (on && !running && started && loaded === 2 && !disposed) {
+            running = true;
+            loop();
+          } else if (!on) {
+            running = false;
+            cancelAnimationFrame(raf);
+          }
+        },
+        { threshold: 0.01 },
+      );
+      vis.observe(root);
+    }
+
+    // Lazy: only when the hero is near, and only when the main thread is idle.
+    const io = new IntersectionObserver(
+      (ents) => {
+        if (ents[0]?.isIntersecting) {
+          io.disconnect();
+          const ric =
+            (window as any).requestIdleCallback ||
+            ((fn: () => void) => setTimeout(fn, 200));
+          ric(start);
+        }
+      },
+      { rootMargin: "200px" },
+    );
+    io.observe(root);
+  }
+
+  document
+    .querySelectorAll<HTMLElement>(".depthhero")
+    .forEach(initDepthHero);
+</script>

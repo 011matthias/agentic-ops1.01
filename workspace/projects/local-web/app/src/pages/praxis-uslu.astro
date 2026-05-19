@@ -1,6 +1,7 @@
 ---
 import BaseLayout from "@layouts/BaseLayout.astro";
 import Figure from "@components/Figure.astro";
+import DepthHero from "@components/DepthHero.astro";
 import "@fontsource-variable/newsreader";
 import "@sites/praxis-uslu/theme.css";
 import { praxis, CHECK } from "@sites/praxis-uslu/data";
@@ -126,7 +127,7 @@ const description =
       </div>
 
       <div class="wrap hero__figure" data-reveal>
-        <Figure
+        <DepthHero
           site="praxis-uslu"
           name="hero"
           label="Praxis / Empfang, warmes Tageslicht"

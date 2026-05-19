@@ -1,6 +1,7 @@
 ---
 import BaseLayout from "@layouts/BaseLayout.astro";
 import Figure from "@components/Figure.astro";
+import DepthHero from "@components/DepthHero.astro";
 import "@fontsource-variable/space-grotesk";
 import "@sites/pronto-pronto/theme.css";
 import { pronto, CHECK } from "@sites/pronto-pronto/data";
@@ -84,7 +85,7 @@ const description =
         + the 10% offer as a headline asset. */}
     <section class="hero">
       <div class="hero__media">
-        <Figure
+        <DepthHero
           site="pronto-pronto"
           name="hero"
           label="Pizza, dunkel und appetitlich"
