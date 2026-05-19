@@ -56,9 +56,56 @@ const canonical = new URL(path, Astro.site).href;
       )
     }
     <slot name="head" />
+    {/* Reveal-arm: runs in <head> BEFORE first paint. The class (and the
+        whole hide-then-reveal) exists ONLY when motion is allowed; no-JS
+        or reduced-motion -> class absent -> [data-reveal] stays opacity:1.
+        A 2.5s failsafe strips the class if the observer never signals. */}
+    <script
+      is:inline
+      set:html={`try{if(!matchMedia('(prefers-reduced-motion: reduce)').matches){var r=document.documentElement;r.classList.add('reveal-on');setTimeout(function(){if(!window.__revealReady)r.classList.remove('reveal-on')},2500)}}catch(e){}`}
+    />
   </head>
   <body data-site={site}>
     <a class="skip-link" href="#main">Zum Inhalt springen</a>
     <slot />
+    <script>
+      const root = document.documentElement;
+      if (root.classList.contains("reveal-on")) {
+        (window as unknown as { __revealReady?: boolean }).__revealReady =
+          true;
+        const nodes = Array.from(
+          document.querySelectorAll<HTMLElement>("[data-reveal]"),
+        );
+        const reveal = (el: HTMLElement) => el.classList.add("is-visible");
+        if ("IntersectionObserver" in window) {
+          const io = new IntersectionObserver(
+            (entries) => {
+              for (const e of entries) {
+                if (e.isIntersecting) {
+                  reveal(e.target as HTMLElement);
+                  io.unobserve(e.target);
+                }
+              }
+            },
+            { rootMargin: "0px 0px -10% 0px", threshold: 0.1 },
+          );
+          nodes.forEach((el) => {
+            const group = el.closest("[data-reveal-group]");
+            if (group) {
+              const sibs = Array.from(
+                group.querySelectorAll("[data-reveal]"),
+              );
+              el.style.setProperty(
+                "--reveal-delay",
+                `${Math.min(sibs.indexOf(el), 5) * 80}ms`,
+              );
+            }
+            io.observe(el);
+          });
+        } else {
+          nodes.forEach(reveal);
+        }
+      }
+    </script>
   </body>
 </html>

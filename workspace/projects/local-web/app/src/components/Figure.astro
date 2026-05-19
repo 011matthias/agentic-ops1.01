@@ -26,6 +26,9 @@ interface Props {
   priority?: boolean;
   /** Responsive sizes hint; default assumes a near-full-width block. */
   sizes?: string;
+  /** Ken Burns slow drift (skil_web-build 4b). Hero use only; ignored by
+      the honest slot fallback. Reduced-motion safe (global.css). */
+  kenburns?: boolean;
 }
 const {
   site,
@@ -35,6 +38,7 @@ const {
   rounded = "var(--radius-lg)",
   priority = false,
   sizes = "(min-width: 72rem) 68rem, 92vw",
+  kenburns = false,
 } = Astro.props;
 
 const assets = import.meta.glob<{ default: ImageMetadata }>(
@@ -57,7 +61,7 @@ const alt =
 {
   img ? (
     <figure
-      class="figure"
+      class:list={["figure", { "is-kenburns": kenburns }]}
       style={`aspect-ratio:${ratio};border-radius:${rounded};`}
     >
       <Image

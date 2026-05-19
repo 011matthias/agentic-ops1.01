@@ -92,6 +92,7 @@ const description =
           rounded="0"
           priority
           sizes="100vw"
+          kenburns
         />
       </div>
       <div class="hero__scrim"></div>
@@ -117,7 +118,7 @@ const description =
         inversion of the current site (no prices, no search, PDF-tier). */}
     <section id="karte" class="section">
       <div class="wrap">
-        <header class="section__head">
+        <header class="section__head" data-reveal>
           <p class="eyebrow">Speisekarte</p>
           <h2>Such dir was Gutes raus</h2>
           <p class="section__intro">
@@ -140,7 +141,7 @@ const description =
           </p>
         </div>
 
-        <ul id="menu-list" class="menu">
+        <ul id="menu-list" class="menu" data-reveal>
           {
             pronto.menu.map((m) => (
               <li class="dish" data-cat={m.category.toLowerCase()}>
@@ -164,26 +165,26 @@ const description =
     {/* Liefergebiet band: 19 zones as scannable chips + the hard offers. */}
     <section id="liefern" class="liefern">
       <div class="wrap">
-        <header class="section__head">
+        <header class="section__head" data-reveal>
           <p class="eyebrow">Liefergebiet</p>
           <h2>{pronto.zonesTotal} Gebiete rund um Karlsruhe</h2>
         </header>
-        <ul class="chips">
+        <ul class="chips" data-reveal>
           {pronto.zonesNamed.map((z) => <li class="chip">{z}</li>)}
           <li class="chip chip--more">
             + weitere bis {pronto.zonesTotal} Gebiete
           </li>
         </ul>
-        <div class="liefern__facts">
-          <div>
+        <div class="liefern__facts" data-reveal-group>
+          <div data-reveal>
             <span class="liefern__big">10%</span>
             <span>Rabatt bei Online-Bestellung</span>
           </div>
-          <div>
+          <div data-reveal>
             <span class="liefern__big">0,00 €</span>
             <span>Mindestbestellwert</span>
           </div>
-          <div>
+          <div data-reveal>
             <span class="liefern__big">{pronto.zonesTotal}</span>
             <span>Liefergebiete</span>
           </div>
@@ -194,7 +195,7 @@ const description =
     {/* Kontakt: hours + payment + socials, practical block. */}
     <section id="besuch" class="section">
       <div class="wrap contact__grid">
-        <div>
+        <div data-reveal>
           <p class="eyebrow">Öffnungszeiten</p>
           <h2>Wann wir liefern</h2>
           <table class="hours">
@@ -211,7 +212,7 @@ const description =
           </table>
         </div>
 
-        <div class="contact__side">
+        <div class="contact__side" data-reveal>
           <div class="card contact__card">
             <p class="eyebrow">Kontakt & Anfahrt</p>
             <address class="contact__addr">
