@@ -41,10 +41,36 @@ VALIDATE_PATTERNS = [
     r"\bpytest\b",
     r"\buv\s+run\s+(pytest|tools/validate)",
     r"\btsc\b",
+    # F2a: the original set only recognized npm/pytest/tsc/validate-* as a
+    # validation step, so behavioral / non-npm validation (the norm for hook
+    # and tooling work) read as "no validation" and the pre-publish gate
+    # false-fired. Confirmed FP twice in the 2026-05-19 F1 session after a
+    # full py_compile + sandbox-test + json.load verification run.
+    r"\bpy_compile\b",                       # python syntax check
+    r"--check\b",                            # assertion-mode tools (wire-hooks --check)
+    r"--dry-run\b",                          # dry-run validation
+    r"\.claude/hooks/[\w.-]+\.py",           # invoking a hook directly = behavioral hook test
+    r"\bjson\.load\b",                       # json.load(open(...)) JSON structural check
+    r"\bjson\.tool\b",                       # python -m json.tool validation
+    r"\b(smoke|sandbox)\w*\b",               # smoke / sandbox test phrasing
+    r"\btests?[\\/]\w",                      # tests/ or test-harness path invocation
 ]
 MCP_UPDATE_PATTERNS = [
     (r"scenarios_update", r"scenarios_get"),
     (r"n8n_update_full_workflow", r"n8n_get_workflow"),
+]
+# F2c: a repeated command only signals a stuck fix-then-test loop if it is a
+# MUTATING / build attempt. Repeated read-only or idempotent commands (status
+# checks, re-running an assertion that passes, data-prep reads, hook-test
+# harness invocations) are not a fix loop -- firing iteration-3x on them was
+# the documented misfire. These are excluded from the 3x count.
+READONLY_PATTERNS = [
+    r"^\s*(git\s+(status|log|diff|show|branch|fetch|cat-file|rev-parse)|ls|cat|head|tail|grep|rg|find|echo|pwd|wc|stat)\b",
+    r"--check\b", r"--dry-run\b", r"--list\b",
+    r"\.claude/hooks/[\w.-]+\.py",           # hook test harness re-runs
+    r"\b(validate-|py_compile)\b",
+    r"\bjson\.load\b", r"\bjson\.tool\b",
+    r"(_get|_list)\b", r"\bscenarios_get\b", r"\bn8n_get_workflow\b",
 ]
 
 
@@ -84,6 +110,33 @@ def fingerprint(cmd: str) -> str:
     return hashlib.sha1(norm.encode("utf-8", errors="ignore")).hexdigest()[:12]
 
 
+_QUOTED = re.compile(r"\"[^\"\n]*\"|'[^'\n]*'")
+_HEREDOC = re.compile(r"<<-?\s*'?\w+'?.*?^\s*\w+\s*$", re.DOTALL | re.MULTILINE)
+
+
+def publish_residue(cmd: str) -> str:
+    """Return the part of `cmd` that can be a REAL publish invocation.
+
+    F2b: a publish verb appearing only inside a quoted string, a heredoc
+    body, or a hook-test payload is not a publish -- e.g. piping
+    {"command":"git push"} into a stop-b1 test, or a heredoc PR body that
+    mentions `gh pr merge`. Strip quoted spans + heredoc bodies; if the
+    command invokes a .claude/hooks script at all, it is a hook test, not a
+    publish -> return empty so PUBLISH_PATTERNS cannot match.
+    """
+    if ".claude/hooks/" in cmd:
+        return ""
+    residue = _HEREDOC.sub(" ", cmd)
+    residue = _QUOTED.sub(" ", residue)
+    return residue
+
+
+def is_readonly(cmd: str) -> bool:
+    """F2c: True if `cmd` is read-only / idempotent and so must not count
+    toward the iteration-3x stuck-loop signal."""
+    return any(re.search(p, cmd) for p in READONLY_PATTERNS)
+
+
 def emit(text: str) -> None:
     print(json.dumps({
         "hookSpecificOutput": {
@@ -111,7 +164,8 @@ def main() -> int:
 
     advisories = []
 
-    if any(re.search(p, cmd) for p in PUBLISH_PATTERNS):
+    pub_scan = publish_residue(cmd)
+    if pub_scan and any(re.search(p, pub_scan) for p in PUBLISH_PATTERNS):
         recent_text = "\n".join(buf[-BUFFER_MAX:])
         had_validate = any(re.search(vp, recent_text) for vp in VALIDATE_PATTERNS)
         if not had_validate:
@@ -135,7 +189,7 @@ def main() -> int:
                 )
 
     fp_count = sum(1 for ln in buf[-15:] if ln.startswith(fp + "\t"))
-    if fp_count >= 3:
+    if fp_count >= 3 and not is_readonly(cmd):
         log_fire(f"friction-event:gate-skip-iteration-3x fp={fp}")
         advisories.append(
             "[GATE-SKIP: iteration-3x] You have run the same command (or near-identical) "
