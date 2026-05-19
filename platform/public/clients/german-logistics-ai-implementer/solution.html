@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Capabilities, Implementation Engineer | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+* { box-sizing: border-box; margin: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px; transition: background .2s, color .2s; }
+.access-gate { position: fixed; inset: 0; z-index: 9999; background: var(--bg); display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; transition: opacity .3s; }
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input { padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px; font-size: 15px; width: 240px; background: var(--surface); color: var(--text); outline: none; transition: border-color .15s; }
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button { padding: 10px 24px; background: var(--blue); color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background .15s; }
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+.site-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: var(--nav-bg); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s; }
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; flex-wrap: wrap; }
+.nav-links a { font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px; color: var(--text2); text-decoration: none; transition: background .15s, color .15s; }
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-theme { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 13px; color: var(--text2); transition: background .15s; }
+.nav-theme:hover { background: var(--border); }
+.main-content { margin-left: 0; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+.page-head { padding: 40px 0 28px; border-bottom: 1px solid var(--border); margin-bottom: 36px; }
+.page-head .ph-kicker { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--blue); }
+.page-head h1 { font-size: 28px; font-weight: 800; color: var(--text-strong); margin: 8px 0 10px; line-height: 1.2; }
+.page-head p { font-size: 15px; color: var(--text2); margin: 0; }
+h2 { font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue); padding-bottom: 8px; margin-top: 48px; margin-bottom: 20px; }
+h3 { font-size: 17px; color: var(--text-strong); margin-top: 28px; margin-bottom: 12px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+code { font-family: ui-monospace, "SF Mono", Monaco, monospace; font-size: 13px; background: var(--surface2); padding: 2px 6px; border-radius: 4px; color: var(--purple-dark); }
+pre { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-x: auto; margin: 20px 0; font-size: 13px; line-height: 1.55; }
+pre code { background: none; padding: 0; color: var(--text); }
+.callout { border-left: 4px solid var(--blue); background: var(--blue-bg); padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0; }
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+.checklist { list-style: none; padding: 0; margin: 24px 0; }
+.checklist li { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; color: var(--text); }
+.checklist li:last-child { border-bottom: none; }
+.check-icon { width: 20px; height: 20px; border-radius: 50%; background: var(--green-bg); border: 2px solid var(--green); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+.check-icon::after { content: ''; width: 6px; height: 10px; border: 2px solid var(--green); border-top: none; border-left: none; transform: rotate(45deg) translateY(-1px); }
+table.ptable { width: 100%; border-collapse: collapse; margin: 24px 0; font-size: 14px; }
+table.ptable th { background: var(--th-bg); color: #fff; text-align: left; padding: 10px 14px; font-size: 13px; }
+table.ptable td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+table.ptable tr:nth-child(even) td { background: var(--surface); }
+.flow { display: flex; flex-direction: column; gap: 0; margin: 28px 0; }
+.flow-step { border: 1px solid var(--border); border-left: 4px solid var(--blue); background: var(--surface); border-radius: 0 10px 10px 0; padding: 16px 20px; }
+.flow-step .fs-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--blue); }
+.flow-step .fs-title { font-size: 15px; font-weight: 700; color: var(--text-strong); margin: 2px 0 4px; }
+.flow-step .fs-desc { font-size: 13px; color: var(--text2); }
+.flow-arrow { text-align: center; color: var(--text2); font-size: 18px; line-height: 1; padding: 6px 0; }
+.flow-step.green { border-left-color: var(--green); }
+.flow-step.green .fs-label { color: var(--green); }
+.flow-step.orange { border-left-color: var(--orange); }
+.flow-step.orange .fs-label { color: var(--orange); }
+.flow-step.purple { border-left-color: var(--purple); }
+.flow-step.purple .fs-label { color: var(--purple); }
+.page-links { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 28px 0; }
+.page-link-card { border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; text-decoration: none; transition: transform .15s, box-shadow .15s, border-color .15s; display: flex; flex-direction: column; gap: 4px; }
+.page-link-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); border-color: var(--blue); text-decoration: none; }
+.page-link-card .plc-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text2); }
+.page-link-card .plc-title { font-size: 14px; font-weight: 600; color: var(--text-strong); }
+.page-link-card .plc-desc { font-size: 12px; color: var(--text2); }
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); margin-top: 48px; }
+.footer a { color: var(--text2); }
+@media (max-width: 768px) {
+    .nav-links { display: none; }
+    .page-links { grid-template-columns: 1fr; }
+    .page-head h1 { font-size: 22px; }
+}
+</style>
+<script>
+(function(){var t=localStorage.getItem('german-logistics-ai-implementer-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<div class="access-gate" id="accessGate">
+    <h2>Project Access</h2>
+    <p>This proposal is prepared for the German logistics AI implementation-engineer role. Enter the access code to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<nav class="site-nav">
+    <div class="nav-left">
+        <a href="/clients/german-logistics-ai-implementer/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Implementation Engineer</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/german-logistics-ai-implementer/">Overview</a>
+        <a href="/clients/german-logistics-ai-implementer/solution" class="active">Capabilities</a>
+        <a href="/clients/german-logistics-ai-implementer/workflow">Onboarding playbook</a>
+        <a href="/clients/german-logistics-ai-implementer/timeline">First tenants</a>
+        <a href="/clients/german-logistics-ai-implementer/investment">Partnership</a>
+        <a href="/clients/german-logistics-ai-implementer/onboarding">Get started</a>
+        <a href="/clients/german-logistics-ai-implementer/faq">FAQ</a>
+    </div>
+    <div class="nav-right">
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<div class="main-content">
+<div class="content-inner">
+
+<div class="page-head">
+    <div class="ph-kicker">Capabilities</div>
+    <h1>What I bring to the implementation seat</h1>
+    <p>The product is yours. My job is to be the person who makes it land cleanly inside each new logistics tenant, in their language, on their stack.</p>
+</div>
+
+<h2>Python and FastAPI</h2>
+<p>I'd be productive in your codebase by tenant 2. I read service boundaries quickly: where the API layer ends, where the worker tasks pick up, where tenant-scoped config branches. ARQ on Redis is a known pattern for me (job queue with retries and scheduled work), so no surprises there. AWS Bedrock with Claude is the API I already use professionally, so per-tenant model selection and prompt versioning are config touches, not architecture decisions.</p>
+<p>The tenant 1 onboarding is where the learning curve sits. By tenant 2 the unknowns are tenant-specific (their tone, their terminology, their escalation rules), not stack-specific.</p>
+
+<h2>Multi-tenant SaaS configuration</h2>
+<p>Tenant setup in practice means a fairly long checklist: branding (logos, accent colors, sender display name), module flags (which workflows are enabled for this tenant), IMAP and SMTP credentials, per-tenant business rules, and the human escalation contacts. UnpauseAI's pattern is to enumerate every config touchpoint up front before touching anything, so nothing gets missed at handoff.</p>
+<p>The risk in multi-tenant config is the silent skip: a flag left at the default, a credential set against the wrong tenant ID, a template that still has the previous tenant's voice. The fix is a kickoff intake form that mirrors the config surface 1:1 and a smoke test before the onboarding call, not after.</p>
+
+<h2>Prompt and workflow customization</h2>
+<p>Adapting prompts, templates, and rules to fit a specific logistics company means a few things, in order:</p>
+<ul class="checklist">
+    <li><span class="check-icon"></span><span><strong>Tone.</strong> Formal Sie by default, but some tenants run a friendlier register with their B2B customers. That's a template choice, not a prompt choice.</span></li>
+    <li><span class="check-icon"></span><span><strong>Terminology.</strong> Sendung vs. Lieferung, Lieferschein vs. Frachtbrief, Paket vs. Sendung. Each tenant has its own house vocabulary; the templates pick that up.</span></li>
+    <li><span class="check-icon"></span><span><strong>Escalation rules.</strong> Where model judgment ends and a human takes over is a per-tenant design decision: address corrections, refund mentions, complaint language. I make those boundaries explicit per tenant, not implicit.</span></li>
+</ul>
+<p>Where the rules end and the model's judgment begins is the design call. I document it per tenant so the post-30-day quality check is comparing actuals against something written down, not against a vibe.</p>
+
+<h2>German customer calls</h2>
+<p>The onboarding call format I'd run, by default:</p>
+<ul class="checklist">
+    <li><span class="check-icon"></span><span>60 to 90 minutes, in German, recorded on request.</span></li>
+    <li><span class="check-icon"></span><span>Walkthrough of the configured tenant: branding live, module flags visible, credentials wired.</span></li>
+    <li><span class="check-icon"></span><span>IMAP and SMTP live test with one real test ticket end to end.</span></li>
+    <li><span class="check-icon"></span><span>Q&amp;A, then a written summary in German sent within 24 hours.</span></li>
+</ul>
+<p>The format flexes per tenant: some teams want a longer Q&amp;A, some want a shorter walkthrough and more dry-run tickets. The call is the moment the tenant decides whether they trust the system, so I treat it as the actual deliverable, not paperwork around the deliverable.</p>
+
+<h2>First weeks of support</h2>
+<p>"First weeks" in practice:</p>
+<ul class="checklist">
+    <li><span class="check-icon"></span><span>A Slack or email channel I'm on, responsive within the same business day for the first 2 weeks.</span></li>
+    <li><span class="check-icon"></span><span>A daily check of the tenant's error log for the first 2 weeks. Tune anything that surfaces.</span></li>
+    <li><span class="check-icon"></span><span>A weekly summary email: what triggered, what was auto-handled, what needed human attention, what got tuned and why.</span></li>
+    <li><span class="check-icon"></span><span>A 30-day quality check on the calendar, in writing, with the bonus criteria attached.</span></li>
+</ul>
+<p>This is the part that turns "the tenant went live" into "the tenant stays live". It's also the part that surfaces whatever the kickoff intake missed.</p>
+
+<div class="callout orange">
+    <div class="callout-title">Where I stay out</div>
+    <p>I deliberately don't try to be the architect. The stack is yours. I'm the person who takes it from sold to live for tenant N, then for tenant N+1.</p>
+</div>
+
+<div class="page-links">
+    <a href="/clients/german-logistics-ai-implementer/workflow" class="page-link-card">
+        <span class="plc-label">Next</span>
+        <span class="plc-title">The onboarding playbook</span>
+        <span class="plc-desc">Six steps, same each tenant</span>
+    </a>
+    <a href="/clients/german-logistics-ai-implementer/timeline" class="page-link-card">
+        <span class="plc-label">First tenants</span>
+        <span class="plc-title">Proposed Q3 2026 ramp</span>
+        <span class="plc-desc">One first, then 2 and 3</span>
+    </a>
+</div>
+
+<div class="footer">
+    Prepared by Matthias, UnpauseAI &middot; <a href="mailto:admin@unpauseai.com">admin@unpauseai.com</a> &middot; 2026
+</div>
+
+</div>
+</div>
+
+<script>
+function toggleTheme() {
+    var html = document.documentElement;
+    var current = html.getAttribute('data-theme');
+    var next = current === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+    localStorage.setItem('german-logistics-ai-implementer-theme', next);
+}
+function checkAccess() {
+    var input = document.getElementById('accessCode').value.trim().toLowerCase();
+    var expected = 'german-logistics-2026';
+    if (input === expected) {
+        localStorage.setItem('german-logistics-ai-implementer-access', 'granted');
+        document.getElementById('accessGate').classList.add('hidden');
+        setTimeout(function(){ document.getElementById('accessGate').style.display = 'none'; }, 300);
+    } else {
+        document.getElementById('accessError').textContent = 'Invalid code, check your invitation.';
+    }
+}
+if (localStorage.getItem('german-logistics-ai-implementer-access') === 'granted') {
+    document.getElementById('accessGate').style.display = 'none';
+}
+</script>
+
+<script>
+(function() {
+    var s = document.createElement('style');
+    s.textContent = '.copy-btn{position:absolute;top:6px;right:6px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-size:11px;padding:3px 8px;border-radius:4px;cursor:pointer;opacity:0;transition:opacity .15s;font-family:inherit}pre:hover .copy-btn{opacity:1}.copy-btn:hover{background:var(--blue-light);color:var(--blue-dark)}.copy-btn.copied{background:var(--green-bg);color:var(--green-dark);border-color:var(--green);opacity:1}.kbd-hint{font-size:11px;color:var(--text2);border:1px solid var(--border);border-radius:4px;padding:2px 6px;background:var(--surface2);cursor:pointer;font-family:ui-monospace,monospace;margin-right:6px}.kbd-hint:hover{background:var(--border);color:var(--text)}.search-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;display:none;align-items:flex-start;justify-content:center;padding-top:100px}.search-overlay.active{display:flex}.search-overlay-inner{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px;width:480px;max-width:90%;box-shadow:0 12px 40px rgba(0,0,0,.3)}.search-overlay input{width:100%;padding:12px 16px;font-size:15px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);outline:none}.search-overlay input:focus{border-color:var(--blue)}.search-overlay-hint{font-size:12px;color:var(--text2);margin-top:10px;text-align:center}h2.search-match,h3.search-match{background:var(--orange-bg);transition:background .2s}';
+    document.head.appendChild(s);
+    var ov = document.createElement('div');
+    ov.className = 'search-overlay';
+    ov.id = 'searchOverlay';
+    ov.innerHTML = '<div class="search-overlay-inner"><input id="searchInput" type="text" placeholder="Search section headings..." autocomplete="off"><div class="search-overlay-hint">Press Esc to close. Highlights matching headings on this page.</div></div>';
+    document.body.appendChild(ov);
+    var nr = document.querySelector('.nav-right');
+    if (nr) {
+        var hk = document.createElement('span');
+        hk.className = 'kbd-hint';
+        hk.textContent = 'Ctrl+K';
+        hk.title = 'Search this page (Ctrl/Cmd+K)';
+        hk.addEventListener('click', function() { ov.classList.add('active'); document.getElementById('searchInput').focus(); });
+        nr.insertBefore(hk, nr.firstChild);
+    }
+    document.querySelectorAll('pre').forEach(function(p) {
+        p.style.position = 'relative';
+        var b = document.createElement('button');
+        b.className = 'copy-btn';
+        b.type = 'button';
+        b.textContent = 'Copy';
+        b.setAttribute('aria-label', 'Copy code to clipboard');
+        b.addEventListener('click', function() {
+            navigator.clipboard.writeText(p.textContent).then(function() {
+                b.textContent = 'Copied';
+                b.classList.add('copied');
+                setTimeout(function() { b.textContent = 'Copy'; b.classList.remove('copied'); }, 1500);
+            });
+        });
+        p.appendChild(b);
+    });
+    document.addEventListener('keydown', function(e) {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+            e.preventDefault();
+            ov.classList.add('active');
+            document.getElementById('searchInput').focus();
+        }
+        if (e.key === 'Escape' && ov.classList.contains('active')) {
+            ov.classList.remove('active');
+            var si = document.getElementById('searchInput');
+            if (si) si.value = '';
+            document.querySelectorAll('h2.search-match, h3.search-match').forEach(function(h) { h.classList.remove('search-match'); });
+        }
+    });
+    ov.addEventListener('click', function(e) { if (e.target === ov) ov.classList.remove('active'); });
+    document.getElementById('searchInput').addEventListener('input', function() {
+        var q = this.value.toLowerCase().trim();
+        var first = null;
+        document.querySelectorAll('h2, h3').forEach(function(h) {
+            h.classList.remove('search-match');
+            if (q && h.textContent.toLowerCase().includes(q)) {
+                h.classList.add('search-match');
+                if (!first) first = h;
+            }
+        });
+        if (first) first.scrollIntoView({behavior: 'smooth', block: 'center'});
+    });
+})();
+</script>
+
+</body>
+</html>
