@@ -57,7 +57,7 @@ PDF generation is a high-stakes deliverable, not a quick output. This protocol f
 
 Wait for the user's pick. Do not assume. If the chosen format doesn't fit the content (e.g., "short and valuable" requested for material that's clearly a 15-page inventory), recommend the alternative rather than silently compromising.
 
-**Step 2. Read `/mnt/skills/public/pdf/SKILL.md`** (or current equivalent) to refresh on PDF generation in this environment.
+**Step 2. Invoke the `pdf` skill** (Skill tool, from the `document-skills@anthropic-agent-skills` plugin) to refresh on PDF generation. On the hosted Anthropic env this also lives at `/mnt/skills/public/pdf/SKILL.md`; that path does not exist on local Windows, so the skill is the canonical entry point.
 
 **Step 3. Build a fact inventory with attribution before drafting.** Every fact, number, quote, name, and table row tracked back to its source (screenshot, correction, derived). The inventory is the reference for verification in step 5.
 
