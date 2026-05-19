@@ -68,6 +68,7 @@ Asking for information findable in project files = friction event (`agent-deferr
 1. Name the source system (data store, database, API, config file).
 2. Query it — fetch actual values via MCP/API. If no query path: write "TBD" and state "UNVERIFIED — no query path for {source}."
 3. Never invent plausible-sounding values. "TBD" > fabricated number.
+4. This extends to client-facing PROBLEM-claims, not just values: "X is actively damaging Y", "deliverability has dropped", "we're losing leads" are data assertions — query the live source before asserting one in a client message, or phrase it as a hypothesis. Structurally enforced: `validate-output.py` `unsourced-claim` (HIGH) fires via the post-write-gate hook on comms drafts / deliverables when a flat problem-claim has no source attribution within ±2 lines (memory failed this twice — 2026-03-23 + register #7).
 
 **Batch manifest:** When a task touches 2+ instances of the same thing (modules, env vars, files, scenarios), output a visible manifest BEFORE starting work. After completion, output the checked version. This forces enumeration and makes gaps visible. Email module changes (BCC, sender, template) are batch operations — enumerate ALL `sendAnEmail`/`sendEmail` modules in the scenario before changing any.
 ```

@@ -63,13 +63,19 @@ RULES: list[tuple[str, str, str, str]] = [
 
     # === Verification-theater patterns (from 2026-03-23) ===
     # Plausible-sounding round-number stats with no source
-    (r"\b(?:less than |under |<\s*)\d+\s*s(?:ec(?:onds?)?)?\s+(?:response|delivery|reply)\s+time\b",
+    # NOTE: the symbol branches use `(?:\b(?:words)\s+|<\s*)` -- a leading
+    # `\b` before a `<`/`>` literal never matches when the symbol follows
+    # whitespace (space->`<` is non-word->non-word, no boundary), which is
+    # the common phrasing. Pre-F3 these HIGH rules silently no-op'd on
+    # `< 30s response time` -- the exact 2026-03-23 #15 shape they exist to
+    # catch. Anchor the word branches only; let the symbol branch float.
+    (r"(?:\b(?:less than|under)\s+|<\s*)\d+\s*s(?:ec(?:onds?)?)?\s+(?:response|delivery|reply)\s+time\b",
      "unverified-claim", "HIGH",
      "Performance claim with no source. Verify against runtime data or remove."),
     (r"\b\d{2,3}%\s+(?:accuracy|uptime|success|reliability|delivery)\b",
      "unverified-claim", "HIGH",
      "Percentage stat with no source. Trace to a queried metric or replace with 'TBD'."),
-    (r"\b(?:over|more than|>)\s*\d{3,}\s+(?:leads|customers|users|requests|deliveries)\b",
+    (r"(?:\b(?:over|more than)\s+|>\s*)\d{3,}\s+(?:leads|customers|users|requests|deliveries)\b",
      "unverified-claim", "MEDIUM",
      "Volume claim with no source. Cite the metric or remove."),
 
@@ -113,6 +119,86 @@ RULES: list[tuple[str, str, str, str]] = [
 ]
 
 
+# === F3: pre-client-message data-verification gate ===
+# The 2026-03-23 stat/field-name fixes above are in RULES, yet the
+# 2026-05-19 register #7 verification-theater regressed: a client-facing
+# PROBLEM-CLAIM ("the C/D overclaim is actively damaging the campaign",
+# recommend a worried client message) was asserted BEFORE querying live
+# Instantly analytics; the analytics then refuted it. Memory
+# (feedback_verify_against_live_data.md) failed to hold this twice
+# (2026-03-23 + 2026-05-19). Register #7's prescribed fix is an enforced
+# "query the source before asserting a client-facing problem claim" gate.
+#
+# Structural mechanism (not detection of whether a query happened -- a hook
+# cannot know that): flag any present-tense factual PROBLEM/IMPACT assertion
+# in client-facing text that has NO source attribution within a +/-2 line
+# window. To pass, the author must either attribute it (which forces the
+# query), soften it to a hypothesis, or add an explicit
+# `<!-- output-allow:unsourced-claim reason -->` waiver. HIGH severity:
+# this shape nearly sent a wrong worried message to a client.
+CLAIM_PATTERNS = [
+    r"\bis\s+(?:actively\s+)?(?:damaging|hurting|harming|breaking|killing|tanking|crippling|destroying)\b",
+    r"\bare\s+(?:actively\s+)?(?:damaging|hurting|harming|breaking|failing)\b",
+    r"\bis\s+(?:significantly\s+|seriously\s+|badly\s+)?(?:impacting|affecting|degrading|suffering)\b",
+    r"\b(?:is|are)\s+causing\s+(?:a\s+)?(?:problem|issue|drop|loss|damage|harm)\b",
+    r"\b(?:deliverability|reputation|open rate|reply rate|performance|the campaign)\s+(?:is|has)\s+(?:dropped|tanked|collapsed|suffered|been hurt|been damaged)\b",
+    r"\bthis (?:over\s?claim|mistake|bug|error|issue) is (?:actively |seriously |badly )?(?:damaging|hurting|impacting|costing|affecting)\b",
+    r"\b(?:we'?re|we are) (?:losing|bleeding|burning) (?:leads|opportunities|revenue|money|deliverability)\b",
+]
+CLAIM_RE = [re.compile(p, re.IGNORECASE) for p in CLAIM_PATTERNS]
+# Hypothesis / hedge cues -> not the regressed shape (a flat assertion). If
+# the claim line is hedged, do not flag.
+HEDGE_RE = re.compile(
+    r"\b(?:could|would|might|may|possibly|potentially|if\s|risk(?:s|ed)?\b|"
+    r"i\s+(?:suspect|think|believe|worry)|seems?\s+to|appears?\s+to|likely|"
+    r"probably|hypothes|my\s+(?:guess|hunch))\b", re.IGNORECASE)
+# Source-attribution cues. Presence within +/-2 lines == the claim is tied
+# to queried evidence -> not flagged.
+SOURCE_RE = re.compile(
+    r"\b(?:per|according to|based on|queried|i\s+queried|i\s+checked|i\s+pulled|"
+    r"we\s+measured|the\s+(?:data\s+store|database|analytics|export|metrics|numbers|logs)\s+(?:show|shows|say|confirm)|"
+    r"analytics\s+(?:show|shows|confirm)|live\s+(?:data|analytics|count)|"
+    r"mysql|instantly\s+analytics|\(source:|\[source:|measured\s+at|"
+    r"as\s+of\s+\d|from\s+the\s+(?:data\s+store|export|dashboard|api))\b",
+    re.IGNORECASE)
+
+
+def check_unsourced_claims(
+    lines: list[str], suppress: dict, eligible: set[int]
+) -> list[dict]:
+    """Flag present-tense client-facing PROBLEM-claims with no source
+    attribution within a +/-2 line window. See F3 block above."""
+    hits: list[dict] = []
+    for i, line in enumerate(lines, 1):
+        if i not in eligible:
+            continue
+        if "unsourced-claim" in suppress.get(i, set()):
+            continue
+        if not any(rx.search(line) for rx in CLAIM_RE):
+            continue
+        if HEDGE_RE.search(line):  # a hypothesis is not the regressed shape
+            continue
+        window = "\n".join(
+            lines[j - 1] for j in range(max(1, i - 2), min(len(lines), i + 2) + 1)
+        )
+        if SOURCE_RE.search(window):
+            continue
+        hits.append({
+            "line": i,
+            "category": "unsourced-claim",
+            "severity": "HIGH",
+            "message": (
+                "Client-facing PROBLEM-claim asserted as fact with no source "
+                "attribution nearby (B4 / register #7 verification-theater). "
+                "Before sending: query the live source (analytics, data store, "
+                "DB) and cite it inline, OR soften to a hypothesis, OR add "
+                "`<!-- output-allow:unsourced-claim reason -->`."
+            ),
+            "snippet": line.strip()[:160],
+        })
+    return hits
+
+
 SUPPRESS_RE = re.compile(r"<!--\s*output-allow:([\w,-]+)(?::(\d+))?(?:\s+(.*?))?\s*-->")
 
 
@@ -140,6 +226,7 @@ def check_text(text: str) -> list[dict]:
     suppress = parse_suppressions(lines)
 
     hits: list[dict] = []
+    eligible: set[int] = set()
     in_fence = False
     for i, line in enumerate(lines, 1):
         stripped = line.lstrip()
@@ -151,6 +238,7 @@ def check_text(text: str) -> list[dict]:
         # Skip blockquoted citations
         if stripped.startswith("> "):
             continue
+        eligible.add(i)
         suppressed_here = suppress.get(i, set())
         for regex, category, severity, message in RULES:
             if category in suppressed_here:
@@ -163,6 +251,10 @@ def check_text(text: str) -> list[dict]:
                     "message": message,
                     "snippet": line.strip()[:160],
                 })
+    # F3: contextual pre-client-message problem-claim gate (needs the
+    # +/-2 line window, so it runs after the per-line eligible set is built).
+    hits.extend(check_unsourced_claims(lines, suppress, eligible))
+    hits.sort(key=lambda h: h["line"])
     return hits
 
 
