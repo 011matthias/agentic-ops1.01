@@ -109,10 +109,25 @@ def last_assistant_text(transcript_path: str) -> str:
 
 
 def strip_code(text: str) -> str:
-    """Drop fenced and inline code so quoted example phrasings (e.g. a doc
-    that literally contains 'want me to') don't trigger a false block."""
+    """Drop code AND short double-quoted example spans so the classifier
+    cannot match its OWN trigger phrases when they are quoted as examples in
+    prose.
+
+    Backticked/fenced code was already neutralized. The remaining blind spot
+    (2026-05-19 register, deferred into F2): a status report that lists
+    "Want me to" / "Should I deploy" as test-case examples false-blocked the
+    stop. A genuine deferral is the agent's live closing offer, never a
+    double-quote of one, so stripping short double-quoted spans is
+    high-precision. Single quotes are deliberately NOT stripped -- English
+    contractions/possessives ("don't", "user's") would mis-pair and blank
+    real text. Curly double-quotes are covered too. Span length is capped at
+    80 chars so a substantive quoted sentence is left intact (fail-open: a
+    missed deferral is cheaper than taxing a clean turn -- the existing
+    contract)."""
     text = re.sub(r"```.*?```", " ", text, flags=re.DOTALL)
     text = re.sub(r"`[^`]*`", " ", text)
+    text = re.sub(r'"[^"\n]{1,80}"', " ", text)
+    text = re.sub(r"[“][^“”\n]{1,80}[”]", " ", text)
     return text
 
 
