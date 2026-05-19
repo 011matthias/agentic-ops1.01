@@ -4,7 +4,7 @@ One-line index of `tools/` scripts. Auto-loaded at session start to reduce `miss
 
 | Tool | When to use |
 |------|-------------|
-| `validate-output.py FILE` | Universal text validator (em-dashes, brand misspellings, AI-tells, fabrication risk). Auto-fires via post-write-gate hook on any file in deliverable or comms scope. |
+| `validate-output.py FILE` | Universal text validator (em-dashes, brand misspellings, AI-tells, fabrication risk, `unsourced-claim`: client-facing problem-claims with no source attribution within ±2 lines — B4/register #7). Auto-fires via post-write-gate hook on any file in deliverable or comms scope. |
 | `validate-deliverable.py FILE.html` | HTML deliverable QoL features check (dark mode, copy-clipboard, Ctrl/Cmd+K, state persistence) per rule_deliverables.md. Auto-fires on HTML writes. |
 | `validate-html.py FILE.html` | HTML structural validation (unclosed tags, duplicate IDs, missing head, relative paths). B2 gate extension before deploy. Use `--dir` for cross-page consistency. |
 | `lint-comms-draft.py FILE.md` | Anti-AI lint for comms drafts and comms-log entries. Auto-fires on writes to `/context/drafts/`, `/proposals/`, or `comms-log.md`. |
