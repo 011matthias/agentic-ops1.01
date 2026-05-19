@@ -70,6 +70,31 @@ the honest slot — zero markup change when photos land. **Commit
 `src/assets/`** so the Docker/Fly build is hermetic (no key at deploy).
 Add a "Bilder: Pexels" footer credit.
 
+### 4b. Motion & 3D-feel imagery (gate-budgeted)
+The visuals should have depth and motion, never a flat photo wall. This
+is an imagery quality bar, not an interactive-3D-scene mandate.
+
+**Default tier (every site, ~0 perf cost, do this first):** CSS-driven
+only -- Ken Burns slow zoom/pan on the hero photo, scroll-driven reveal
++ layered parallax, hover-tilt on cards (`vanilla-tilt`/Atropos, lazy).
+Reads premium, zero WebGL, never threatens the gates.
+
+**Budgeted WebGL hero (at most ONE element per site, optional):**
+typically a depth-map parallax photo (one still + a grayscale depth map,
+a small shader displaces it on mouse/gyro -> the image visibly pops into
+layers) or a single `<model-viewer>` GLTF object. Permitted only with
+ALL of:
+- Lazy-init on idle/scroll (never blocks first paint or LCP)
+- Static poster image as the no-JS / pre-init fallback
+- `prefers-reduced-motion: reduce` -> render the static poster, no loop
+- Mobile (<=768px) serves the static image, not the WebGL canvas
+- Re-run the section-6 Lighthouse + axe gate AFTER adding it; a 3D
+  canvas is a classic silent perf/a11y regression. Perf 100 / 0 WCAG2AA
+  stays absolute -- if the hero can't pass, it ships as the poster.
+
+Full multi-element interactive Three.js scenes are out of scope for this
+stack; the gate is non-negotiable, the hero is the only WebGL budget.
+
 ### 5. Deliverable-rule gate (structural)
 `npm run build` runs `postbuild` -> `tools/validate-dist.py ./dist`:
 fails on em-dash U+2014, `&mdash;`/`&#8212;`, or typographic `--` in
