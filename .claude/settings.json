@@ -42,6 +42,16 @@
             "command": "bash -c 'LATEST=$(ls -t docs/sessions/*-context.yaml 2>/dev/null | head -1); if [ -n \"$LATEST\" ]; then echo \"[SESSION RESTORED FROM AUTO-CHECKPOINT]\"; cat \"$LATEST\"; fi'"
           }
         ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run python tools/wire-hooks.py --ensure",
+            "timeout": 10000
+          }
+        ]
       }
     ]
   }
