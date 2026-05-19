@@ -95,6 +95,20 @@ ALL of:
 Full multi-element interactive Three.js scenes are out of scope for this
 stack; the gate is non-negotiable, the hero is the only WebGL budget.
 
+**Implemented (2026-05-19, all 3 sites):** depth-map parallax via
+`DepthHero.astro` (transparent enhancement of `<Figure>`; zero-dep
+hand-rolled WebGL1 shader; poster `<Image>` stays the LCP + the entire
+no-JS/pre-init/reduced-motion/<=768px/no-WebGL/Save-Data tree;
+`canvas aria-hidden`). Depth maps: `app/scripts/depth-map.py`
+(Depth-Anything-V2-Small ONNX, CPU, uv; PNGs committed -> hermetic
+build). **Verify the live effect with `tools/depth-live.cjs`** (fresh
+zero-cache profile, A/B pointer parallax, full-page
+`captureBeyondViewport` capture). Hard lesson: a bespoke CDP-`clip`
+screenshot probe reads the wrong region after `scrollIntoView` — use
+the full-page capture path, and trust composited screenshots over a
+`readPixels` of a non-`preserveDrawingBuffer` context (that read is
+undefined post-composite and will false-fail).
+
 ### 5. Deliverable-rule gate (structural)
 `npm run build` runs `postbuild` -> `tools/validate-dist.py ./dist`:
 fails on em-dash U+2014, `&mdash;`/`&#8212;`, or typographic `--` in

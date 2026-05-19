@@ -61,5 +61,7 @@ skill: .claude/skills/skil_web-build/SKILL.md
 status: live  # deployed + verified 2026-05-19. PRs #21 (rebuild),
               # #24-#27 (nginx relative-redirect + no-301 connection-reset
               # fix), #32/#36 (4b motion tier all 3 sites), #37 (HTML
-              # no-cache — ends recurring stale-demo class). Live render
-              # proven via fresh-profile headless probe (tools/local-web-shot.cjs).
+              # no-cache — ends recurring stale-demo class),
+              # #43 (4b budgeted WebGL depth-parallax hero on all 3 sites).
+              # Live render + A/B parallax proven via fresh-profile
+              # headless (tools/local-web-shot.cjs, tools/depth-live.cjs).
