@@ -102,13 +102,14 @@ const description =
         </div>
       </div>
 
-      <div class="wrap hero__figure">
+      <div class="wrap hero__figure" data-reveal>
         <Figure
           site="coffee-boxx"
           name="hero"
           label="Espresso, warmer Dampf, nah"
           ratio="21 / 9"
           priority
+          kenburns
         />
       </div>
     </section>
@@ -117,7 +118,7 @@ const description =
         exact thing the current site hides in a PDF. */}
     <section id="karte" class="karte">
       <div class="wrap">
-        <header class="section__head">
+        <header class="section__head" data-reveal>
           <p class="eyebrow">Die Karte</p>
           <h2>Was bei uns über den Tresen geht</h2>
           <p class="section__intro">
@@ -126,10 +127,10 @@ const description =
             lesbar, nicht in einem PDF vergraben.
           </p>
         </header>
-        <dl class="menu">
+        <dl class="menu" data-reveal-group>
           {
             coffee.menu.map((m) => (
-              <div class="menu__row">
+              <div class="menu__row" data-reveal>
                 <dt>
                   <span class="menu__cat">{m.category}</span>
                   <span class="menu__note">{m.note}</span>
@@ -151,14 +152,14 @@ const description =
     {/* Offset asymmetric gallery (varied aspect ratios), not a grid. */}
     <section id="galerie" class="gallery">
       <div class="wrap">
-        <header class="section__head">
+        <header class="section__head" data-reveal>
           <p class="eyebrow">Galerie</p>
           <h2>Ein Blick hinein</h2>
         </header>
-        <div class="gallery__stagger">
+        <div class="gallery__stagger" data-reveal-group>
           {
             coffee.gallery.map((g, i) => (
-              <div class={`gallery__item gallery__item--${i + 1}`}>
+              <div class={`gallery__item gallery__item--${i + 1}`} data-reveal>
                 <Figure
                   site="coffee-boxx"
                   name={g.name}
@@ -176,7 +177,7 @@ const description =
     {/* Besuch: hours + contact, the practical block. */}
     <section id="besuch" class="section">
       <div class="wrap contact__grid">
-        <div>
+        <div data-reveal>
           <p class="eyebrow">Öffnungszeiten</p>
           <h2>Wann wir offen haben</h2>
           <table class="hours">
@@ -193,7 +194,7 @@ const description =
           </table>
         </div>
 
-        <div class="contact__side">
+        <div class="contact__side" data-reveal>
           <div class="card contact__card">
             <p class="eyebrow">Kontakt & Anfahrt</p>
             <address class="contact__addr">

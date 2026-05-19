@@ -125,13 +125,14 @@ const description =
         </aside>
       </div>
 
-      <div class="wrap hero__figure">
+      <div class="wrap hero__figure" data-reveal>
         <Figure
           site="praxis-uslu"
           name="hero"
           label="Praxis / Empfang, warmes Tageslicht"
           ratio="21 / 9"
           priority
+          kenburns
         />
       </div>
     </section>
@@ -139,7 +140,7 @@ const description =
     {/* Leistungen: editorial hairline list, NOT a card grid. */}
     <section id="leistungen" class="section">
       <div class="wrap">
-        <header class="section__head">
+        <header class="section__head" data-reveal>
           <p class="eyebrow">Leistungen</p>
           <h2>Was wir in der Praxis abdecken</h2>
           <p class="section__intro">
@@ -147,10 +148,10 @@ const description =
             und Akupunktur, abgestimmt auf den einzelnen Menschen.
           </p>
         </header>
-        <ol class="leistungen">
+        <ol class="leistungen" data-reveal-group>
           {
             praxis.services.map((s, i) => (
-              <li class="leistung">
+              <li class="leistung" data-reveal>
                 <span class="leistung__no">
                   {String(i + 1).padStart(2, "0")}
                 </span>
@@ -168,7 +169,7 @@ const description =
     {/* Signature band "In der Praxis": bespoke, accent-soft surface. */}
     <section id="praxis" class="signature">
       <div class="wrap signature__grid">
-        <div class="signature__media">
+        <div class="signature__media" data-reveal>
           <Figure
             site="praxis-uslu"
             name="signature"
@@ -178,7 +179,7 @@ const description =
             sizes="(min-width: 54rem) 28rem, 92vw"
           />
         </div>
-        <div class="signature__text">
+        <div class="signature__text" data-reveal>
           <p class="eyebrow">In der Praxis</p>
           <h2>Schulmedizin und Naturheilkunde, in einer Hand.</h2>
           <p>
@@ -237,7 +238,7 @@ const description =
     {/* Sprechzeiten und Anfahrt: precise data block (what patients need). */}
     <section id="kontakt" class="section">
       <div class="wrap contact__grid">
-        <div>
+        <div data-reveal>
           <p class="eyebrow">Sprechzeiten</p>
           <h2>Wann Sie uns erreichen</h2>
           <table class="hours">
@@ -258,7 +259,7 @@ const description =
           </table>
         </div>
 
-        <div class="contact__side">
+        <div class="contact__side" data-reveal>
           <div class="card contact__card">
             <p class="eyebrow">Kontakt & Anfahrt</p>
             <address class="contact__addr">
