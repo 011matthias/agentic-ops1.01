@@ -58,4 +58,8 @@ quality_gates:
 
 skill: .claude/skills/skil_web-build/SKILL.md
 
-status: live  # deployed + verified 2026-05-18; PR #21 merged (commit 71d8703)
+status: live  # deployed + verified 2026-05-19. PRs #21 (rebuild),
+              # #24-#27 (nginx relative-redirect + no-301 connection-reset
+              # fix), #32/#36 (4b motion tier all 3 sites), #37 (HTML
+              # no-cache — ends recurring stale-demo class). Live render
+              # proven via fresh-profile headless probe (tools/local-web-shot.cjs).
