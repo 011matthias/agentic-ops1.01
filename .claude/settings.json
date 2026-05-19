@@ -19,7 +19,8 @@
   },
   "enabledPlugins": {
     "productivity-suite@riccardovandra": true,
-    "playground@claude-plugins-official": true
+    "playground@claude-plugins-official": true,
+    "document-skills@anthropic-agent-skills": true
   },
   "hooks": {
     "PreCompact": [
