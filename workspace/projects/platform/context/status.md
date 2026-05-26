@@ -75,15 +75,12 @@ Primary driver: handoff of Meji Media from Nicolas's solo profile to Matthias. U
 
 ## Active Clients
 
-`workspace/clients/` contains 5 client folders. Operational state varies.
+`workspace/clients/` contains 2 client folders. Operational state varies.
 
 | Client | Status |
 |--------|--------|
 | meji-media | **Active.** Solo contract on Nicolas's profile. Two Upwork threads. Recent deliverables: Instantly audit (2026-05-11), volume forecast doc, deliverability + scaling report. Handoff to Matthias via agency pending Gurmej/Jess buy-in. |
 | brisken | Status: read directly from spec folder |
-| kunde-inc | Status: read directly from spec folder |
-| peakora | Status: read directly from spec folder |
-| ulf-incorporated | Status: read directly from spec folder |
 
 Run `/comd_status-check` for live status across all clients. This doc only tracks the operationally hot ones.
 
