@@ -2,15 +2,26 @@
 
 _Auto-updated by /comd_checkpoint. Most recent first within each section._
 
+## system
+| Date | Topic | Type | Link |
+|------|-------|------|------|
+| 2026-05-20 | Morning Briefing Routine Setup | system-infra | [Checkpoint](docs/2026-05-20%20-%20Morning%20Briefing%20Routine%20Setup/Checkpoint.md) |
+
 ## local-web
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-05-20 | Local-Web 3D Depth Hero and HTML Cache | system-infra | [Checkpoint](docs/2026-05-20%20-%20Local-Web%203D%20Depth%20Hero%20and%20HTML%20Cache/Checkpoint.md) |
+| 2026-05-19 | Local-Web Motion and Connection-Reset Fix | system-infra | [Checkpoint](docs/2026-05-19%20-%20Local-Web%20Motion%20and%20Connection-Reset%20Fix/Checkpoint.md) |
 | 2026-05-18 | Website-Build Deploy and A11y | system-infra | [Checkpoint](docs/2026-05-18%20-%20Website-Build%20Deploy%20and%20A11y/Checkpoint.md) |
 | 2026-05-18 | Website-Build Capability Rebuild | system-infra | [Checkpoint](docs/2026-05-18%20-%20Website-Build%20Capability%20Rebuild/Checkpoint.md) |
 
 ## meji-media
 | Date | Topic | Link |
 |------|-------|------|
+| 2026-05-25 | Meji Piece 1 Acceptance Cold Domain Iteration and Comms Log Refresh | [Checkpoint](docs/2026-05-25%20-%20Meji%20Piece%201%20Acceptance%20Cold%20Domain%20Iteration%20and%20Comms%20Log%20Refresh/Checkpoint.md) |
+| 2026-05-24 | Meji Two-Piece Pilot State Lock and Piece 1 Cadence | [Checkpoint](docs/2026-05-24%20-%20Meji%20Two-Piece%20Pilot%20State%20Lock%20and%20Piece%201%20Cadence/Checkpoint.md) |
+| 2026-05-19 | Meji Gurmej Billing Pushback Reply | [Checkpoint](docs/2026-05-19%20-%20Meji%20Gurmej%20Billing%20Pushback%20Reply/Checkpoint.md) |
+| 2026-05-19 | Meji Pricing Reply and Build Estimate | [Checkpoint](docs/2026-05-19%20-%20Meji%20Pricing%20Reply%20and%20Build%20Estimate/Checkpoint.md) |
 | 2026-05-19 | Meji Commercial Model and Retainer Pricing | [Checkpoint](docs/2026-05-19%20-%20Meji%20Commercial%20Model%20and%20Retainer%20Pricing/Checkpoint.md) |
 | 2026-05-18 | Meji Credit Limit and n8n Migration Analysis | [Checkpoint](docs/2026-05-18%20-%20Meji%20Credit%20Limit%20and%20n8n%20Migration%20Analysis/Checkpoint.md) |
 | 2026-05-18 | Meji Banter Origin and Christmas Variant Verification | [Checkpoint](docs/2026-05-18%20-%20Meji%20Banter%20Origin%20and%20Christmas%20Variant%20Verification/Mini-Checkpoint-1.md) |
@@ -43,6 +54,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## platform
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-05-20 | German Logistics AI Implementation Engineer Proposal | client-dev | [Checkpoint](docs/2026-05-20%20-%20German%20Logistics%20AI%20Implementation%20Engineer%20Proposal/Checkpoint.md) |
+| 2026-05-19 | Shipment Bot Proposal, Repo Hygiene, Meji Prod Fix | system-infra | [Checkpoint](docs/2026-05-19%20-%20Shipment%20Bot%20Proposal%20Repo%20Hygiene%20Meji%20Prod%20Fix/Checkpoint.md) |
 | 2026-05-19 | Server-Side Gate Standard | system-infra | [Checkpoint](docs/2026-05-19%20-%20Server-Side%20Gate%20Standard/Checkpoint.md) |
 | 2026-03-23 | Platform Portal and Logo Unification | system-infra | [Checkpoint](docs/2026-03-23%20-%20Platform%20Portal%20and%20Logo%20Unification/Checkpoint.md) |
 | 2026-03-23 | Platform Stabilization and Professionalization | system-infra | [Checkpoint](docs/2026-03-23%20-%20Platform%20Stabilization%20and%20Professionalization/Checkpoint.md) |
@@ -76,6 +89,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Link |
 |------|-------|------|
+| 2026-05-19 | Anthropic Skills Repo Integration | [Checkpoint](docs/2026-05-19%20-%20Anthropic%20Skills%20Repo%20Integration/Checkpoint.md) |
 | 2026-05-19 | System Development Large-Scale Self-Anneal | [Checkpoint](docs/2026-05-19%20-%20System%20Development%20Large-Scale%20Self-Anneal/Checkpoint.md) |
 | 2026-03-20 | System Dev Friction Detection Blind Spots | [Checkpoint](docs/2026-03-20%20-%20System%20Dev%20Friction%20Detection%20Blind%20Spots/Checkpoint.md) |
 | 2026-03-20 | System Dev Decision Boundary Restructure | [Checkpoint](docs/2026-03-20%20-%20System%20Dev%20Decision%20Boundary%20Restructure/Checkpoint.md) |
@@ -134,3 +148,9 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 |------|-------|------|
 | 2026-03-20 | Arthur Project Professionalization | [Checkpoint](docs/2026-03-20%20-%20Arthur%20Project%20Professionalization/Checkpoint.md) |
 | 2026-03-20 | Arthur Project Folder Classification | [Checkpoint](docs/2026-03-20%20-%20Arthur%20Project%20Folder%20Classification/Checkpoint.md) |
+
+## brisken
+| Date | Topic | Type | Link |
+|------|-------|------|------|
+| 2026-05-25 | Brisken Functional Spec v2 and Build Start | client-dev | [Checkpoint](docs/2026-05-25%20-%20Brisken%20Functional%20Spec%20v2%20and%20Build%20Start/Checkpoint.md) |
+| 2026-05-20 | Brisken Expense Recon Call Outcomes | comms | [Checkpoint](docs/2026-05-20%20-%20Brisken%20Expense%20Recon%20Call%20Outcomes/Checkpoint.md) |

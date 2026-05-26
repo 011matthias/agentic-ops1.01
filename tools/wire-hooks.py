@@ -2,7 +2,7 @@
 # requires-python = ">=3.9"
 # dependencies = []
 # ///
-"""Idempotently wire the 9 enforcement hooks into .claude/settings.local.json.
+"""Idempotently wire the 10 enforcement hooks into .claude/settings.local.json.
 
 WHY THIS EXISTS
 ---------------
@@ -18,7 +18,7 @@ F1 re-wired this machine by hand. But settings.local.json is gitignored
 (.gitignore:85), so the fix did NOT travel: any OTHER device, or this device
 after a settings reset, still boots with ZERO enforcement and no signal that
 anything is wrong. This script is the cross-device recurrence kill: it is
-TRACKED, it carries the canonical 9-hook block as the single source of truth,
+TRACKED, it carries the canonical 10-hook block as the single source of truth,
 and it writes that block into the local (gitignored) settings file on demand
 or automatically at session start (--ensure), preserving every other key
 (permissions, enabledPlugins, ...) untouched.
@@ -86,7 +86,12 @@ CANONICAL_HOOKS = {
                     "type": "command",
                     "command": "uv run python .claude/hooks/instantly-invasive-gate.py",
                     "timeout": 10000,
-                }
+                },
+                {
+                    "type": "command",
+                    "command": "uv run python .claude/hooks/cd-guard.py",
+                    "timeout": 10000,
+                },
             ],
         },
     ],
@@ -142,6 +147,7 @@ EXPECTED_HOOK_SCRIPTS = {
     "auto-approve-protected.py",
     "reference-anchor-gate.py",
     "instantly-invasive-gate.py",
+    "cd-guard.py",
     "em-dash-strip-gate.py",
     "post-write-gate.py",
     "post-action-gate.py",
@@ -216,7 +222,7 @@ def main(argv: list[str]) -> int:
 
     if mode == "check":
         if intact:
-            print("[wire-hooks] OK: all 9 enforcement hooks wired in "
+            print("[wire-hooks] OK: all 10 enforcement hooks wired in "
                   ".claude/settings.local.json")
             return 0
         _loud(
@@ -231,12 +237,12 @@ def main(argv: list[str]) -> int:
 
     if mode == "ensure":
         if intact:
-            print("[wire-hooks] OK: enforcement layer intact (9/9 hooks).")
+            print("[wire-hooks] OK: enforcement layer intact (10/10 hooks).")
             return 0
         _write(settings)
         _loud(
             "[wire-hooks] ENFORCEMENT LAYER WAS DOWN -- AUTO-REPAIRED\n"
-            f"  Rewrote the 9-hook block into .claude/settings.local.json.\n"
+            f"  Rewrote the 10-hook block into .claude/settings.local.json.\n"
             f"  (was missing: {sorted(missing) or 'block absent / drifted'})\n"
             "  Hooks take effect from the NEXT tool call this session.\n"
             "  Root cause if recurring: a device sync or settings reset.\n"
@@ -249,7 +255,7 @@ def main(argv: list[str]) -> int:
         print("[wire-hooks] No change: all 9 hooks already wired correctly.")
         return 0
     _write(settings)
-    print("[wire-hooks] Wrote canonical 9-hook block into "
+    print("[wire-hooks] Wrote canonical 10-hook block into "
           ".claude/settings.local.json "
           f"(was missing: {sorted(missing) or 'block absent / drifted'}). "
           "Other keys (permissions, enabledPlugins) preserved.")

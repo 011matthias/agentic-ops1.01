@@ -28,12 +28,14 @@ Load these modules at the indicated steps. Do NOT load all at once -- load per s
 |------|----------------|
 | Step 1 | (none -- just slug/ID generation) |
 | Step 2 | `POSITIONING.md`, `SYSTEM-THINKING.md` |
-| Step 3 | `PROPOSAL-CONFIG.md` (page inventory, research schema) |
-| Step 4 | `AGENT-CONSTRAINTS.md` (mandatory), `PROFILE-CONTEXT.md`, `PROPOSAL-TEMPLATES.md`, `VIDEO-SCRIPT.md` |
+| Step 3 | (page inventory inlined in Step 3b below; research schema inlined in Step 2b) |
+| Step 4 | `PROPOSAL-TEMPLATES.md`, `VIDEO-SCRIPT.md` + read `workspace/projects/platform/upwork-agency/profile-copy.md` for authority/bio content |
 
 All modules are in `.claude/skills/skil_upwork-proposals/modules/`.
 
 Also load `feedback_upwork_formatting.md` (memory) for cover letter text formatting rules, and `skil_client-comms/modules/STYLE-RULES.md` for all proposal text.
+
+**The structural source of truth for proposal quality rules is `tools/validate-proposal.py`** — every check it runs is a rule. AGENT-CONSTRAINTS.md / PROPOSAL-CONFIG.md / PROFILE-CONTEXT.md were referenced by earlier versions of this command but never landed as files; the validator is the contract.
 
 ---
 
@@ -71,7 +73,7 @@ Default to Track 2 for jobs > $200 or involving multiple integrations. State the
 - Extract: requirements, systems mentioned, budget, timeline, tone, pain points, must-haves vs nice-to-haves
 
 ### 2b: Populate Research Context
-Fill the `research:` block per the schema in PROPOSAL-CONFIG.md:
+Fill the `research:` block (schema below):
 
 ```yaml
 research:
@@ -83,7 +85,7 @@ research:
   prospect_pain_points: []
   job_language_echoes: []      # Exact phrases from the posting
   location_advantage: ""        # Why Nico's location helps (or "")
-  relevant_proof_points: []     # Cherry-picked from PROFILE-CONTEXT.md
+  relevant_proof_points: []     # Cherry-picked from profile-copy.md
   budget_gap: ""                # Price mismatch (or "")
   profile_cherry_picks: []      # Reasoning for what to highlight
 ```
@@ -129,15 +131,12 @@ Gather from user (or infer from job posting):
 
 ## Step 3: Design Decisions
 
-**Load:** `PROPOSAL-CONFIG.md`
-
 Present these decisions to the user for confirmation:
 
 ### 3a: Track Confirmation
 Confirm Track 1 or Track 2 (determined in Step 1, user can override).
 
-### 3b: Page Selection (Track 2 only)
-Using the Page Inventory table in PROPOSAL-CONFIG.md:
+### 3b: Page Selection (Track 2 only) — Page Inventory
 - **Required:** index.html, solution.html, timeline.html, investment.html, faq.html, onboarding.html
 - **Conditional:** workflow.html (if visual demo adds value), gdpr.html (if EU/personal data)
 - **Design decision:** brief.html (client understanding + market context -- include when problem interpretation is the differentiator)
@@ -150,7 +149,7 @@ Generate access code: `{slug-year}` format (e.g., `fieldnation-2026`). Every Tra
 ### 3d: Pricing
 - State the posted budget (if any)
 - State our proposed price
-- If budget gap exists: note it -- cover letter must address it (AGENT-CONSTRAINTS.md rule)
+- If budget gap exists: note it -- cover letter must address it (enforced by validate-proposal.py)
 - Pricing must be scope-based (phases/deliverables), never technology-based
 
 ### 3e: Artifact Type (Track 2 only)
@@ -171,7 +170,7 @@ Present all design decisions as a summary. Wait for user confirmation before bui
 
 ## Step 4: Generate Deliverables
 
-**Load:** `AGENT-CONSTRAINTS.md` (mandatory -- literal checklist), `PROFILE-CONTEXT.md`, `PROPOSAL-TEMPLATES.md`, `VIDEO-SCRIPT.md`
+**Load:** `PROPOSAL-TEMPLATES.md`, `VIDEO-SCRIPT.md` + read `workspace/projects/platform/upwork-agency/profile-copy.md` for authority content. The quality contract is `tools/validate-proposal.py` (run in Step 5 — fix all FAILs before deploy).
 
 ### 4a: Create Proposal Markdown
 Create `platform/src/content/proposals/{slug}.md` with full frontmatter:
@@ -221,7 +220,7 @@ Create `workspace/proposals/{slug}/video-script.md`:
 - Format: `.md` file with `###` headers and `---` dividers
 - Opening: "Hi there, Nico here."
 - Structure: Beat 1 (Reframe) -> Authority -> Beat 2 (Structure/Demo) -> Beat 3+ -> Close
-- Authority section: between Beat 1 and Beat 2, cherry-picked from PROFILE-CONTEXT.md, max 20s/3 sentences
+- Authority section: between Beat 1 and Beat 2, cherry-picked from profile-copy.md, max 20s/3 sentences
 - SAY:/>> interleaving: max 2 consecutive SAY, max 3 consecutive >>
 - Every `>> Nav:` / `>> Sidebar:` must match actual HTML headings (grep to verify after site build)
 - Prospect name in Beat 1 and Close minimum
@@ -239,7 +238,7 @@ Every page must include:
 - Footer ("Prepared by UnpauseAI" + contact + year)
 - Responsive design (hamburger menu on mobile < 768px)
 
-Page-specific requirements per PROPOSAL-CONFIG.md and AGENT-CONSTRAINTS.md:
+Page-specific requirements (enforced by validate-proposal.py):
 - **FAQ:** `<details>/<summary>` accordion, min 3 items
 - **Onboarding:** All form inputs enabled (no `disabled`/`readonly`)
 - **Investment:** Comparison table with 3+ rows, external links, source footnotes
@@ -253,7 +252,7 @@ Create the artifact file in `platform/public/clients/{slug}/`:
 - Must be linked from a relevant page with a working download button
 
 ### Quality Checks (apply to ALL deliverables)
-Run the AGENT-CONSTRAINTS.md pre-delivery self-check (18 items). Key checks:
+Pre-delivery self-check (validate-proposal.py enforces these structurally; this list is for awareness):
 - Zero em dashes (all files)
 - Zero banned AI phrases (all files)
 - Contractions used ("I've" not "I have")
@@ -352,6 +351,6 @@ Next steps:
 
 - Track 2 sites are self-contained HTML -- no build step needed, deployed as static files via Vercel
 - Access codes are set per proposal, not globally
-- The validator (`tools/validate-proposal.py`) is the source of truth for quality checks -- it encodes all rules from AGENT-CONSTRAINTS.md structurally
+- The validator (`tools/validate-proposal.py`) is the source of truth for quality checks -- treat its FAILs as the contract
 - Run `/proposal-retro {slug}` after submission to capture what went well and what to improve
 - To check all proposals: `/proposal-status`
