@@ -27,6 +27,8 @@ One-line index of `tools/` scripts. Auto-loaded at session start to reduce `miss
 | `gh-merge.sh PR_NUM` | Wraps `gh pr merge --squash --delete-branch` with a `state == MERGED` assertion via `gh pr view`. Closes the 2026-05-20 #107 silent-merge-failure class (invalid `-q` flag swallowed by `2>&1 \| tail -1`). Use for any PR merge from an agent. |
 | `safe-edit.py FILE old_string new_string` | Edit wrapper with EBUSY retry-with-backoff for the Windows+IDE-open file-lock class (register #81). Falls back to a clear `LIMITATION: file locked` message after 5 retries (500ms apart). |
 | `spec-staleness.py [--days N]` | Surface in-flight specs (stage 2-build / 3-test) with `updated:` older than N days. Default 30. Use to identify dormant client work without mutating spec data. Run periodically or from `/comd_system-dev`. |
+| `validate-spec.py FILE.md` | Spec frontmatter + stage/folder validator. Auto-fires via post-write-gate on any write under `workspace/clients/*/specs/`. Catches missing required keys, stage/folder mismatches, and surfaces `needs_fixes: true`. Per-file companion to the on-demand skil_spec-cleanup audit. |
+| `handoff-readiness.py {client}` | Score a client's handoff readiness: specs in 4-live, infrastructure.yaml status, comms-log currency, automations present. Use before proposing a client handoff or marking dormant. |
 
 ## Output validators — JSON contract
 

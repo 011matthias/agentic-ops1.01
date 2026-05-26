@@ -139,6 +139,18 @@ CANONICAL_HOOKS = {
             ],
         }
     ],
+    "SessionStart": [
+        {
+            "matcher": "",
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": "uv run python tools/friction-watch.py --once-per-day --quiet",
+                    "timeout": 10000,
+                }
+            ],
+        }
+    ],
 }
 
 # Count of distinct hook scripts the layer must run (for the loud assertion).

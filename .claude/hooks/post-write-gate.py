@@ -85,6 +85,18 @@ def in_output_scope(file_path: str) -> bool:
     return in_deliverable_scope(file_path) or in_comms_scope(file_path)
 
 
+def in_spec_scope(file_path: str) -> bool:
+    """Spec frontmatter validator scope: any .md file written under a client's
+    specs/ tree. Catches malformed-spec drift at write-time so it doesn't
+    accumulate until someone runs /spec-cleanup."""
+    if not file_path:
+        return False
+    p = normalize_for_match(file_path)
+    if not p.endswith((".md", ".markdown")):
+        return False
+    return "/workspace/clients/" in p and "/specs/" in p
+
+
 def run_tool(tool_name: str, args: list[str], timeout: int = 30) -> tuple[int, dict]:
     tool_path = TOOLS_DIR / tool_name
     if not tool_path.is_file():
@@ -174,6 +186,8 @@ def main() -> None:
                         [file_path, "--skip-em-dash"], 30))
     if in_output_scope(file_path):
         planned.append(("OUTPUT GATE", "validate-output.py", [file_path], 15))
+    if in_spec_scope(file_path):
+        planned.append(("SPEC GATE", "validate-spec.py", [file_path], 10))
 
     if not planned:
         log_fire("SKIP:out-of-scope")
