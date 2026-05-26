@@ -1,0 +1,181 @@
+"""Tests for the deterministic matching engine.
+
+Synthetic fixtures only for this first session. Real Brisken-month
+fixtures land once Chris provides a representative month (see
+../README.md "Data we need from Chris").
+"""
+from datetime import date
+from decimal import Decimal
+
+from expense_recon.matching.deterministic import (
+    MatchingConfig,
+    match_month,
+)
+from expense_recon.matching.types import (
+    MatchType,
+    Receipt,
+    Transaction,
+)
+
+LE = "brisken-us"
+ACCOUNT_USD = "brisken-amex-usd"
+
+
+def tx(
+    tid: str,
+    amount: str,
+    txdate: date,
+    posting: date | None = None,
+    currency: str = "USD",
+    vendor: str = "VENDOR",
+) -> Transaction:
+    return Transaction(
+        transaction_id=tid,
+        legal_entity_id=LE,
+        account_id=ACCOUNT_USD,
+        transaction_date=txdate,
+        posting_date=posting,
+        amount=Decimal(amount),
+        transaction_currency=currency,
+        account_card_currency="USD",
+        vendor_from_statement=vendor,
+    )
+
+
+def receipt(
+    rid: str,
+    amount: str | None,
+    rdate: date | None,
+    currency: str | None = "USD",
+    vendor: str | None = "VENDOR",
+) -> Receipt:
+    return Receipt(
+        document_id=rid,
+        legal_entity_id=LE,
+        detected_date=rdate,
+        detected_total=Decimal(amount) if amount else None,
+        detected_currency=currency,
+        detected_vendor=vendor,
+    )
+
+
+def test_exact_match_usd_on_usd_returns_high_confidence():
+    """The common case Dirk cited as ~99%: USD card + USD expense,
+    same date, same amount."""
+    txs = [tx("t1", "42.50", date(2026, 4, 12))]
+    rs = [receipt("r1", "42.50", date(2026, 4, 12))]
+    out = match_month(txs, rs)
+    assert len(out.matches) == 1
+    m = out.matches[0]
+    assert m.match_type == MatchType.EXACT
+    assert m.confidence >= 0.99
+    assert not out.unmatched_transactions
+    assert not out.unmatched_receipts
+
+
+def test_posting_date_within_tolerance_still_matches():
+    """Purchase date Friday, posting date Monday — common bank delay."""
+    txs = [
+        tx("t1", "100.00", date(2026, 4, 10), posting=date(2026, 4, 13))
+    ]
+    rs = [receipt("r1", "100.00", date(2026, 4, 10))]
+    out = match_month(txs, rs)
+    assert len(out.matches) == 1
+    assert out.matches[0].match_type == MatchType.EXACT
+
+
+def test_eur_receipt_on_usd_card_routes_to_judgment_layer():
+    """The FX hard case Dirk specified on the call — handed to the LLM
+    judgment layer, not auto-resolved."""
+    txs = [tx("t1", "112.30", date(2026, 4, 15))]
+    rs = [receipt("r1", "100.00", date(2026, 4, 15), currency="EUR")]
+    out = match_month(txs, rs)
+    assert not out.matches
+    assert len(out.judgment_required) == 1
+    j = out.judgment_required[0]
+    assert j.match_type == MatchType.FX_JUDGMENT
+    assert "Currency mismatch" in j.reason
+    assert j.requires_review
+
+
+def test_unmatched_transaction_when_no_receipt():
+    """Reconciliation guarantee (v2 spec §25.5): the system surfaces
+    every unmatched transaction; never silently drops them."""
+    txs = [tx("t1", "9.99", date(2026, 4, 20))]
+    rs: list[Receipt] = []
+    out = match_month(txs, rs)
+    assert out.unmatched_transactions == ["t1"]
+    assert not out.matches
+
+
+def test_unmatched_receipt_when_no_transaction():
+    """Mirror invariant: orphan receipts surface, never silently dropped."""
+    txs: list[Transaction] = []
+    rs = [receipt("r1", "20.00", date(2026, 4, 20))]
+    out = match_month(txs, rs)
+    assert out.unmatched_receipts == ["r1"]
+
+
+def test_amount_within_tip_tolerance_probable():
+    """Restaurant tip causes a small receipt/card mismatch — still a
+    probable match, flagged for review."""
+    txs = [tx("t1", "57.50", date(2026, 4, 22))]
+    rs = [receipt("r1", "50.00", date(2026, 4, 22))]
+    out = match_month(txs, rs)
+    assert len(out.matches) == 1
+    m = out.matches[0]
+    assert m.match_type == MatchType.PROBABLE
+    assert m.requires_review
+
+
+def test_ambiguous_when_two_identical_receipts():
+    """Two equally-strong candidates — surface as ambiguous, do not
+    auto-pick. Per v2 spec §15.4 ambiguous outcome."""
+    txs = [tx("t1", "20.00", date(2026, 4, 25))]
+    rs = [
+        receipt("r1", "20.00", date(2026, 4, 25)),
+        receipt("r2", "20.00", date(2026, 4, 25)),
+    ]
+    out = match_month(txs, rs)
+    assert not out.matches
+    assert len(out.ambiguous) == 2
+
+
+def test_entity_scope_prevents_cross_entity_match():
+    """v2 spec §4.2: legal entity is a row-level access field.
+    A receipt belonging to a different entity does not match."""
+    txs = [tx("t1", "10.00", date(2026, 4, 26))]
+    other_entity_receipt = Receipt(
+        document_id="r_other",
+        legal_entity_id="brisken-uk",
+        detected_date=date(2026, 4, 26),
+        detected_total=Decimal("10.00"),
+        detected_currency="USD",
+        detected_vendor="VENDOR",
+    )
+    out = match_month(txs, [other_entity_receipt])
+    assert out.unmatched_transactions == ["t1"]
+    assert out.unmatched_receipts == ["r_other"]
+
+
+def test_reconciliation_guarantee_invariant_holds():
+    """v2 spec §25.5: every transaction ends up in exactly one of
+    matches / judgment_required / ambiguous / unmatched_transactions.
+    Never silently dropped."""
+    txs = [
+        tx("t-exact", "10.00", date(2026, 4, 1)),
+        tx("t-fx", "112.30", date(2026, 4, 2)),
+        tx("t-unmatched", "9.99", date(2026, 4, 3)),
+    ]
+    rs = [
+        receipt("r-exact", "10.00", date(2026, 4, 1)),
+        receipt("r-fx", "100.00", date(2026, 4, 2), currency="EUR"),
+    ]
+    out = match_month(txs, rs)
+
+    accounted = set()
+    accounted.update(m.transaction_id for m in out.matches)
+    accounted.update(m.transaction_id for m in out.judgment_required)
+    accounted.update(m.transaction_id for m in out.ambiguous)
+    accounted.update(out.unmatched_transactions)
+    assert accounted == {"t-exact", "t-fx", "t-unmatched"}

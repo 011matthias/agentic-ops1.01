@@ -1,36 +1,151 @@
 type: client
 
+# ACTIVE project: Expense Reconciliation Platform (p1)
+# Functional spec v2: workspace/clients/brisken/specs/1-spec/p1-expense-reconciliation-functional-spec.md
+# v1 (Dirk's original 2026-05-14): workspace/clients/brisken/reference/2026-05-14-functional-spec-original.md
+# Authority on what is active vs paused: workspace/clients/brisken/PROJECT-BOUNDARIES.md
+
 platform:
-  tier: "unknown"              # operations budget TBD — custom app build, not a workflow-engine op count
-  feasibility: "unassessed"    # must complete before /build-automation
+  active_project: "expense-reconciliation (p1)"
+  tier: "unknown"              # operations budget TBD — custom SaaS build, not a workflow-engine op count
+  feasibility: "assessed-partial"  # call + v2 spec retired the build-scope blocker; stack research still pending before /build-automation
+  assessed: "2026-05-24"       # v2 spec lands the requirements; remaining gating items are research, not requirements
+  build_started: "2026-05-25"  # Phase 4 deterministic matching engine shipped (stack-independent piece, started ahead of Phase 0 per Dirk's "begin the build" directive)
+  build_artifacts:
+    - path: "automations/expense-reconciliation/"
+      contains: "Phase 4 matching engine + Phase 2 statement ingest (CSV + Excel), shared parse helpers, tests, pyproject"
+      tests_passing: 32
+      tests_status: "all green (2026-05-26)"
+      stack_dependent: false   # pure Python logic; survives any §38 outcome
+      modules:
+        - "matching/types.py + matching/deterministic.py — v2 §15.1 engine"
+        - "ingest/_common.py — StatementParseError, parse_date, parse_amount, validate_required_map"
+        - "ingest/statement_csv.py — parse_statement_csv (v2 §7.1)"
+        - "ingest/statement_xlsx.py — parse_statement_xlsx (v2 §7.1 sibling, native datetime / float / string cell handling)"
+    - layer: "LLM judgment layer (matching/judgment.py)"
+      status: "stubbed — pending Anthropic API access to Brisken Pro subscription + §38.2 sign-off"
+    - layer: "Multi-tenant persistence, OCR, mobile-capture page, review UI"
+      status: "gated on §38 stack pick"
   blockers:
-    - "Platform build scope + sequencing (Phase 1 vs broader app) to confirm on call"
-    - "Upwork contract not yet set up"
-  assessed: null
+    # Updated 2026-05-24: previous blockers ("Platform build scope + sequencing on call",
+    # "Upwork contract not yet set up") were retired or reframed.
+    # Build-scope blocker → retired by the v2 spec (requirements now defined).
+    # Upwork-contract → not currently gating; engagement is direct with Dirk, Upwork-routing
+    # was a 2026-04 framing that the 2026-05-20 call did not re-affirm.
+    - "Stack decision pending (Firebase / GCP vs alternative) — gated on the three research items in v2 spec §38: Firebase suitability for audit-heavy accounting; Anthropic direct-API region selection; mobile receipt scanning approach"
+    - "API access to Brisken's existing Anthropic Claude Pro subscription not yet provisioned (do NOT create a new account)"
+    - "Joint call with Chris (Brisken finance manager) not yet scheduled — Dirk to brief her first"
+    - "Legal retention period to confirm with Brisken's accountant (Dirk's guess ~7 yrs US, unconfirmed)"
   direction: >
-    2026-04-13 scope-site review (Dirk): direction is a **custom multi-tenant SaaS app**
-    framed as a unified-inbox communication tool (Outlook-like) with channel filtering,
-    Drafts / Outbox / Sent views, and a basic built-in CRM (contacts + companies).
-    Not n8n (explicit). Firebase not ruled out but Dirk's product depth (mini-CRM,
-    unified SMTP capture, markdown normalisation, activity logging) leans toward
-    custom backend. Confirm on platform call.
+    Per the 2026-05-20 Dirk call (see workspace/clients/brisken/context/2026-05-20-call-outcomes.md):
+    multi-tenant, multi-entity, RBAC-enforced AI-assisted reconciliation SaaS. Receipt scanning
+    is mandatory in MVP (not Release 3). Matching is deterministic-first with an Anthropic
+    Claude judgment layer only for ambiguous cases (e.g., FX-on-foreign-card). Single store
+    (structured data + receipt files in the same DB). Zoho Books is the MVP posting target via
+    1:1 journal-entry API replication. Long-term direction is to replace Zoho Books with the
+    in-house system ("Brisken Books") including lightweight double-entry and light invoice
+    issuing, but MVP scope is narrowed to expenses / reconciliation. Full spec in v2.
   hard_requirements:
-    - "Multi-tenant SaaS from day 1 (no local/laptop deployment)"
-    - "GDPR compliant"
-    - "Activity logging (audit trail for all events)"
+    - "Multi-tenant from day 1 (call-outcomes A2 multi-tenant)"
+    - "Multi-entity: separate management, access, reports, plus consolidated reports (call-outcomes Part 2)"
+    - "RBAC: owner / admin / legal-entity admin / process user / viewer; scoped by legal entity AND by bank/card account (call-outcomes Part 2)"
+    - "Mandatory MVP receipt scanning via mobile web page with camera capture (call-outcomes Part 2)"
+    - "Reconciliation guarantee: zero transactions lost end-to-end (call-outcomes Scope change)"
+    - "Single store: structured data and receipt files in the same DB (call-outcomes Part 2 Storage)"
+    - "Built-in per-use consent prompt for sensitive data through AI + no-training guarantee on the AI account (call-outcomes Anthropic Claude)"
+    - "Spreadsheet-like review table with mass-edit / quick reclassify (call-outcomes Scope change)"
+    - "Three currency layers: transaction / account-card / book-currency configurable per legal entity (call-outcomes A1 currency)"
+    - "Hybrid matching: deterministic-first, LLM only for judgment (call-outcomes Matching approach)"
+    - "Zoho integration via API: 1:1 replication of journal entries (call-outcomes Zoho access)"
+    - "Audit log from day 1 (NFR §25.7 in v2 spec)"
+    - "GDPR compliant + per-jurisdiction retention configuration"
+  rejected:
+    - "Azure Document Intelligence (call-outcomes Stack reversal)"
+    - "Azure Blob Storage (call-outcomes Part 2 Storage)"
+    - "AWS Bedrock as AI provider for this build (call-outcomes Anthropic Claude)"
+  candidate:
+    # Candidates refined 2026-05-24 (v2.1 spec addendum). All require Dirk approval.
+    # Each entry that reverses a prior call decision is flagged explicitly.
+    - "Platform: stay on Google Cloud; ledger in Cloud SQL (Postgres) not Firestore; Firebase Auth + Firebase Hosting + Cloud Storage (receipts) + Cloud Functions (background jobs). REVERSES §9 single-store call decision (Cloud Storage splits the receipt files from the ledger DB). See v2 spec §26.3, §38.1."
+    - "Anthropic Claude path option A: Vertex AI (GCP) EU regions — all current Claude models in 10 EU regions; ~10% premium on regional endpoints; Belgium europe-west1 closest to Frankfurt; Google Cloud DPA. REVERSES call directive to use Brisken's existing Anthropic Pro subscription (no-train guarantee shifts to GCP DPA). Consistent with GCP platform candidate. See v2 spec §26.4, §38.2."
+    - "Anthropic Claude path option B: AWS Bedrock, eu-central-1 (Frankfurt) — Claude Haiku/Sonnet/Opus; AWS DPA; gold standard for German enterprise sales. REVERSES call directive to use Brisken Pro subscription AND REVERSES Dirk's explicit 'no AWS as provider' decision. See v2 spec §26.4, §38.2."
+    - "Mobile receipt-scanning: directive 'simplest most effective path to reducing Chris's grind' — pick whichever cuts Chris's time-on-task hardest with the least build cost. Lovable vs Zoho Expense API decided in Phase 3 (v2 spec §32). See v2 spec §26.3, §38.5."
   open_questions:
-    - "Mini-CRM built-in vs federated with external CRM -- data duplication tradeoff (Dirk is deciding)"
-    - "Unified SMTP mail capture (run app as mail client) vs Outlook auto-forward only"
-    - "Markdown normalisation of all inbound/outbound messages (store original + MD + metadata)"
-    - "Conversation-history lookup at ingest vs Stage 1 of A3 (Dirk leans toward A3 Stage 1)"
-  platform_decision: "NARROWED"   # not n8n; custom SaaS app direction; Firebase vs full-custom still open
-  upwork_routing: true         # Dirk creating Brisken Upwork account to post job
+    # Stack-decision-dependent — research items per v2 spec §38
+    - "Can Firebase carry the multi-tenant + multi-entity RBAC, GL hierarchy, reconciliation guarantee, and audit requirements without becoming unmanageable?"
+    - "Anthropic direct API region selection: EU vs US? (current understanding: direct API keys source to US — needs verification)"
+    - "Firebase AI hub: hosted Claude with region choice, or thin orchestrator over your own API key?"
+    - "Mobile receipt scanning: Lovable-built mini-app vs Zoho Expense API fallback — decision criteria: setup speed, maintenance, multi-customer scalability"
+    - "Legal retention period (Dirk's ~7-year US guess unconfirmed)"
+    # Spec-level questions still open
+    - "Whether MVP supports any split-receipt or multi-receipt case, or defers (v2 spec §31)"
+    - "Exact Zoho Expenses field mapping for personal / business / reimbursement cases (v2 spec §31)"
+    - "Exact confidence-score thresholds for high / medium / low (v2 spec §15.5)"
+    - "MVP Zoho path: file export (fast) vs API replication direct (aligned with long-term direction) — v2 spec §21.2"
+  platform_decision: "RE-OPENED"   # 2026-05-20 call reversed the v1 stack; pending research items in v2 spec §38
+  upwork_routing: false            # not currently in play; engagement is direct with Dirk per the 2026-05-20 call posture
+  ai_account: "Brisken's existing Anthropic Claude Pro subscription (do NOT create a new account; Matthias needs API access, possibly via a group within it)"
+  key_people:
+    dirk_neumann: "Brisken owner; primary stakeholder; sets direction; wants visibility into everything built"
+    chris: "Brisken finance manager (only finance person); KEY USER; holds Zoho Books + Zoho Expense admin + all bank/card statements + ~5 years historic reconciliation data; functional dialogue runs through her"
+    giuliano: "builds Brisken's 'one pilot V3' on Firebase; source of the Firebase recommendation"
+  cadence: "Dirk briefs Chris → joint call with Dirk + Chris + Matthias → regular calls thereafter, more frequent at the start"
   notes: >
     Scope evolution:
-    2026-04-10 call: "universal communicator" platform, not just 5 n8n workflows.
-    2026-04-13 scope review: firmed up as unified-inbox app with channel filtering,
-    built-in mini-CRM, HITL-first routing, activity logging, and GDPR requirements.
-    The five automations (A0-A4) become behaviours inside this app, not standalone workflows.
+      2026-04-10 — lead-nurturing universal-communicator scope (see paused_project_archive below).
+      2026-05-17 — active/paused swap: expense reconciliation set ACTIVE per PROJECT-BOUNDARIES.md.
+      2026-05-20 — Dirk call materially changed the product (stack reversed, MVP scope narrowed to
+        expenses but vision expanded to a full Zoho replacement, multi-tenant + multi-entity + RBAC
+        + mandatory mobile scanning added as hard requirements).
+      2026-05-24 — v1 functional document landed in repo (reference/2026-05-14-functional-spec-original.md);
+        revised v2 spec written to specs/1-spec/p1-expense-reconciliation-functional-spec.md.
+      2026-05-25 — Dirk directive: north star is reducing Chris's reconciliation grind days->minutes;
+        begin the build. Phase 4 deterministic matching engine shipped (automations/expense-reconciliation/),
+        9 tests green. Phase 4 was promoted ahead of Phase 0 because it is the value-prop core, is
+        stack-independent, and de-risks the LLM judgment layer sizing before §38 lands.
+      2026-05-26 — Phase 2 statement-ingest Excel sibling shipped. Shared helpers (StatementParseError,
+        parse_date, parse_amount, validate_required_map) lifted into ingest/_common.py; statement_csv.py
+        refactored to import from there; statement_xlsx.py added with native datetime / float / string
+        cell handling and an optional sheet_name argument. openpyxl>=3.1 added as a runtime dep.
+        32 tests green (9 matcher + 9 csv + 14 xlsx). Branch 3 of the resume tree fired (neither Dirk's
+        §38 sign-off nor Chris's real data has moved since the 2026-05-25 checkpoint).
 
-# Placeholder — platform instance(s) will be populated after platform call
+# Placeholder — platform instance(s) will be populated after the stack decision lands
 instances: []
+
+# Lead-nurturing project state preserved verbatim from the previous infrastructure.yaml
+# (pre-2026-05-24). Do not delete: the swap history in PROJECT-BOUNDARIES.md has reversed
+# this assignment multiple times; if lead nurturing resumes, this is the canonical state.
+paused_project_archive:
+  project: "Lead Nurturing Platform with Universal Communicator extension (a0-a4, app1, a5, a6)"
+  status: "paused 2026-05-17 per PROJECT-BOUNDARIES.md"
+  preserved_state:
+    tier: "unknown"
+    feasibility: "unassessed"
+    blockers:
+      - "Platform build scope + sequencing (Phase 1 vs broader app) to confirm on call"
+      - "Upwork contract not yet set up"
+    direction: >
+      2026-04-13 scope-site review (Dirk): direction is a **custom multi-tenant SaaS app**
+      framed as a unified-inbox communication tool (Outlook-like) with channel filtering,
+      Drafts / Outbox / Sent views, and a basic built-in CRM (contacts + companies).
+      Not n8n (explicit). Firebase not ruled out but Dirk's product depth (mini-CRM,
+      unified SMTP capture, markdown normalisation, activity logging) leans toward
+      custom backend. Confirm on platform call.
+    hard_requirements:
+      - "Multi-tenant SaaS from day 1 (no local/laptop deployment)"
+      - "GDPR compliant"
+      - "Activity logging (audit trail for all events)"
+    open_questions:
+      - "Mini-CRM built-in vs federated with external CRM -- data duplication tradeoff (Dirk is deciding)"
+      - "Unified SMTP mail capture (run app as mail client) vs Outlook auto-forward only"
+      - "Markdown normalisation of all inbound/outbound messages (store original + MD + metadata)"
+      - "Conversation-history lookup at ingest vs Stage 1 of A3 (Dirk leans toward A3 Stage 1)"
+    platform_decision: "NARROWED"   # not n8n; custom SaaS app direction; Firebase vs full-custom still open
+    upwork_routing: true            # Dirk creating Brisken Upwork account to post job
+    notes: >
+      Scope evolution:
+      2026-04-10 call: "universal communicator" platform, not just 5 n8n workflows.
+      2026-04-13 scope review: firmed up as unified-inbox app with channel filtering,
+      built-in mini-CRM, HITL-first routing, activity logging, and GDPR requirements.
+      The five automations (A0-A4) become behaviours inside this app, not standalone workflows.

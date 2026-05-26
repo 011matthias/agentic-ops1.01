@@ -1,0 +1,15 @@
+[project]
+name = "expense-recon"
+version = "0.0.1"
+description = "Brisken expense reconciliation platform (p1)"
+requires-python = ">=3.12"
+dependencies = [
+    "openpyxl>=3.1",  # Excel statement parser (v2 spec §7.1 sibling to CSV)
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
