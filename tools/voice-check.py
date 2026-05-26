@@ -1,3 +1,7 @@
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
 """Anti-slop voice checker for client-facing deliverables.
 
 Greps for LLM-style phrases, corporate-speak, vague adjectives, and

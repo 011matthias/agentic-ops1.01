@@ -220,7 +220,95 @@ def parse_suppressions(lines: list[str]) -> dict[int, set[str]]:
     return suppress
 
 
-def check_text(text: str) -> list[dict]:
+# === Cost-anchor drift (register 2026-05-25 #121) ===
+# When a client-facing draft asserts a cost figure, surface every prior cost
+# figure already stated in the same client's comms-log.md so the agent can
+# verify the new figure matches prior commitments. Pattern: agent proposed
+# Mailforge ~£120-180/yr ignoring £25/yr already committed to Gurmej on
+# 2026-05-22 in a separate message. Cross-reference is the agent's job; this
+# hook makes the prior figures visible so the agent CAN cross-reference.
+COST_FIGURE_RE = re.compile(
+    r"(?:[£$€¥]\s?\d[\d,]*(?:\.\d+)?(?:\s*[-–to]+\s*[£$€¥]?\s?\d[\d,]*(?:\.\d+)?)?"
+    r"|\b\d[\d,]*(?:\.\d+)?\s*(?:USD|EUR|GBP|CHF|pounds?|dollars?|euros?)\b)"
+    r"(?:\s*(?:per|\/|a)\s*(?:year|yr|month|mo|week|wk|hour|hr|day))?",
+    re.IGNORECASE,
+)
+
+
+def find_comms_log_for(path: Path) -> Path | None:
+    """Walk up from `path` to find a sibling/ancestor comms-log.md within
+    a workspace/clients/{client}/ tree. Returns None if not found."""
+    for parent in [path.parent, *path.parents]:
+        candidate = parent / "comms-log.md"
+        if candidate.exists() and candidate.resolve() != path.resolve():
+            return candidate
+        if parent.name == "workspace":
+            break
+    return None
+
+
+def is_clientfacing_draft(path: Path) -> bool:
+    s = str(path).replace("\\", "/").lower()
+    return (
+        "/context/drafts/" in s
+        or "/deliverables/" in s
+        or "comms-log.md" in s
+        or "/proposals/" in s
+    )
+
+
+def check_cost_anchor(path: Path, lines: list[str]) -> list[dict]:
+    """If the draft contains a cost figure and a comms-log.md exists in the
+    client's tree, emit a MEDIUM advisory listing prior cost figures from
+    that log so the agent can confirm alignment."""
+    if not is_clientfacing_draft(path):
+        return []
+    draft_text = "\n".join(lines)
+    draft_costs: list[tuple[int, str]] = []
+    for i, line in enumerate(lines, 1):
+        for m in COST_FIGURE_RE.finditer(line):
+            draft_costs.append((i, m.group(0).strip()))
+    if not draft_costs:
+        return []
+
+    log_path = find_comms_log_for(path)
+    if not log_path:
+        return []
+    try:
+        log_text = log_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    prior_costs = sorted({m.group(0).strip() for m in COST_FIGURE_RE.finditer(log_text)})
+    if not prior_costs:
+        return []
+
+    # Only emit if the draft figures aren't already verbatim in the log
+    # (a perfect string match means the agent is restating, not drifting).
+    new_costs = [(ln, c) for (ln, c) in draft_costs if c not in log_text]
+    if not new_costs:
+        return []
+
+    log_rel = log_path.as_posix()
+    listed = ", ".join(prior_costs[:8]) + (" ..." if len(prior_costs) > 8 else "")
+    hits = []
+    for ln, c in new_costs[:5]:
+        hits.append({
+            "line": ln,
+            "category": "cost-anchor-drift",
+            "severity": "MEDIUM",
+            "message": (
+                f"Draft contains cost figure '{c}' not previously stated in "
+                f"{log_rel}. Prior figures in this client's comms-log: "
+                f"[{listed}]. Verify the new figure matches what's been "
+                f"committed before; if it's a different line-item, mark that "
+                f"explicitly. (register #121: 2026-05-25 cost-anchor-drift)"
+            ),
+            "snippet": c,
+        })
+    return hits
+
+
+def check_text(text: str, path: Path | None = None) -> list[dict]:
     """Return list of hit dicts."""
     lines = text.splitlines()
     suppress = parse_suppressions(lines)
@@ -254,6 +342,10 @@ def check_text(text: str) -> list[dict]:
     # F3: contextual pre-client-message problem-claim gate (needs the
     # +/-2 line window, so it runs after the per-line eligible set is built).
     hits.extend(check_unsourced_claims(lines, suppress, eligible))
+    # Cost-anchor drift (register #121, 2026-05-25): needs the file path to
+    # locate the client's comms-log.md. Skip when called without a path.
+    if path is not None:
+        hits.extend(check_cost_anchor(path, lines))
     hits.sort(key=lambda h: h["line"])
     return hits
 
@@ -317,7 +409,7 @@ def main() -> int:
         except OSError:
             print(json.dumps({"total": 0, "hits": [], "by_category": {}, "by_severity": {}}))
             return 0
-        payload = aggregate(check_text(text))
+        payload = aggregate(check_text(text, targets[0]))
         print(json.dumps(payload))
         return 0
 
@@ -330,7 +422,7 @@ def main() -> int:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        payload = aggregate(check_text(text))
+        payload = aggregate(check_text(text, path))
         emit_text(path, payload)
         grand_total += payload["total"]
         for k, v in payload["by_category"].items():

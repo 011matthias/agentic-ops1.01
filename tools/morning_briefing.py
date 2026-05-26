@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
 """Deterministic morning-briefing generator + sender.
 
 Runs INSIDE a checkout of agentic-ops. Scans client specs, comms staleness,
