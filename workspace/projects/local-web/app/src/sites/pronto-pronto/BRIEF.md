@@ -50,6 +50,40 @@ but crafted typography. The 10% online offer is a headline asset.
   Delivery zones as a wrap of chips.
 - **Motion:** snappy reveal, hover lift on dishes; reduced-motion honored.
 
+## Articulated-WHY (§3a)
+
+Each art-direction call needs a one-line "why this, not the default".
+
+- **Type · Space Grotesk + Inter [§3a-FLAGGED]:** Space Grotesk
+  appears on §3a's typography ban list as a frequent AI-default.
+  Justification for retaining it here: the brand direction (&pizza,
+  Pizza Pilgrims, Roberta's) is geometric and energetic, and Space
+  Grotesk's tight geometric weight fits the appetite-first dark
+  editorial. **Owner action:** review §3a (2026-05-26 update) and
+  decide whether a more distinctive alternative (Plus Jakarta Sans,
+  Geist Sans, Cabinet Grotesk, Editorial New) better serves the
+  appetite-first direction. Resolve before the next live revision.
+- **Palette · warm charcoal + warm ember (NOT delivery-red):** the
+  generic delivery-red `#d6312a` is the Lieferando/aggregator
+  signature. Warm charcoal background + warm-ember accent inverts the
+  aggregator template and lets food photography do the work.
+- **Layout · full-bleed appetite hero + searchable menu:** the
+  searchable client-side menu IS the inversion of the current site's
+  PDF-tier failure. The 10% offer + MBW €0 chips above the fold are
+  the headline assets the current site buries.
+- **Motion · snappy reveal + hover lift on dishes:** §3a rules apply:
+  custom `cubic-bezier` ease-out, ≤300ms (180ms preferred over 300ms
+  for perceived responsiveness in a food-order context),
+  `transform`+`opacity` only. Press feedback uses `scale(0.97)` on
+  `:active` per §3a button-press rule. Initial scale on reveal starts
+  from `0.95`+, never `scale(0)`. `prefers-reduced-motion` honoured.
+- **Anti-references:** Lieferando.de + the generic
+  delivery-aggregator template (named explicitly in the
+  "Anti-patterns" block above) ARE the §3a anti-reference direction.
+  Second named anti-reference: `[BITTE PRÜFEN — owner to optionally
+  add one local Karlsruhe pizzeria whose site direction we are also
+  rejecting]`.
+
 ## Bespoke / signature section
 
 "Speisekarte" — a real client-side searchable menu (instant filter over

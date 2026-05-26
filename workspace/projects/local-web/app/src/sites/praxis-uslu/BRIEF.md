@@ -52,6 +52,34 @@ as trust signals, emergency numbers explicit.
 - **Motion:** minimal, reduced-motion honored. Subtle reveal on scroll
   only; nothing bouncy in a medical context.
 
+## Articulated-WHY (§3a)
+
+Each art-direction call needs a one-line "why this, not the default".
+
+- **Type · Newsreader + Inter:** humanist serif carries *editorial
+  calm and warmth* (the practice's edge over the medical-blue cliché).
+  The default for German Hausarzt sites is a clinical sans, so a serif
+  display IS the differentiator. Inter for body sits in supporting role
+  only; the display face carries the brand.
+- **Palette · paper + eucalyptus, no blue:** medical-blue is the
+  anti-pattern. Warm paper + one organic sage accent communicates
+  *time and warmth*; that is the explicit positioning vs the cliché.
+- **Layout · asymmetric editorial:** centered slab + 3-card services
+  grid IS the vertical default. Asymmetric editorial signals *practice
+  takes time with people*, not *CMS template*.
+- **Motion · scroll-only reveals:** §3a rules apply: custom
+  `cubic-bezier` ease-out, ≤300ms, `transform`+`opacity` only,
+  `prefers-reduced-motion` honoured. Restraint clause: no hover-lift
+  interactions in a medical context (services list uses hairline rules,
+  not interactive cards) — Kowalski's
+  `…/you-dont-need-animations`.
+- **Anti-references:** the "Anti-patterns" block above (medical-blue
+  hero, caduceus iconography, headset-smiler stock) IS the §3a
+  anti-direction list. One named anti-reference site: `[BITTE PRÜFEN —
+  owner to name 1-2 specific Hausarzt sites whose direction we are
+  intentionally rejecting, e.g. a jameda/doctolib profile page or a
+  local competitor]`.
+
 ## Bespoke / signature section (so it never reads as a theme)
 
 "In der Praxis" — a calm editorial band: warm imagery + a short first-person
