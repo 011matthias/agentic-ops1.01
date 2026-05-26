@@ -44,6 +44,26 @@ DEFERRAL_PATTERNS = [
     r"\b(?:can|could) you (?:run|verify|check|confirm|test|push|merge|deploy)\b",
     r"\bplease (?:run|verify|check|confirm) \b",
     r"\blmk if\b",
+    # === New: soft "natural next move" shapes (register #108 brisken 2026-05-25) ===
+    # "If you want, the natural next move is to..." — the if-you-want trailer
+    # caught the existing pattern, but the structural shape ("natural next
+    # move / obvious next step / from here you could") is a deferral even
+    # without the if-you-want trailer. Catch the shape itself.
+    r"\b(?:the )?(?:natural|obvious|logical|sensible) next (?:move|step|thing) (?:is|would be)\b",
+    r"\bfrom here (?:you could|we could|i could)\b",
+    r"\bnext (?:move|step) (?:is|would be) (?:to )?(?:drive|run|build|ship|deploy|merge|push|send|draft|fix|add|update)\b",
+    # === New: multi-option closing menu (register #125 meji 2026-05-25) ===
+    # "Want me to (a) X, (b) Y, (c) hold" — already caught by "want me to",
+    # but the menu shape "(a) ... (b) ... (c) ..." in a closing paragraph is
+    # the same anti-pattern in disguise. Triggers ONLY when paired with
+    # action verbs (avoid false-fire on user-facing genuine forks).
+    r"\([abc]\)\s+(?:draft|start|build|run|deploy|merge|push|send|fix|add|update|hold)\b.{0,80}\([abc]\)",
+    # === New: passive-queue / queued-for-resolution (register #83 system 2026-05-11) ===
+    # "I'll retry when X resolves" / "queued for when Y unlocks" — the
+    # passive-queue anti-pattern. The fix is active retry (background loop,
+    # Monitor), not waiting for user re-prompt.
+    r"\b(?:queued|waiting|will retry|will resume) (?:for )?(?:when|until|once) .{0,40}(?:resolve|unlock|finish|complete|recover)",
+    r"\bi'?ll (?:retry|resume|continue) (?:when|once|after) .{0,40}(?:resolve|unlock|free|available)",
 ]
 COMPILED = [re.compile(p, re.IGNORECASE | re.MULTILINE) for p in DEFERRAL_PATTERNS]
 
