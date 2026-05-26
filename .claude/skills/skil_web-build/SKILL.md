@@ -15,6 +15,13 @@ runs >=95 on the deployed URL.
 Canonical contract: `workspace/projects/local-web/REBUILD-SPEC.md`.
 Canonical implementation to match: `app/src/pages/praxis-uslu.astro`.
 
+**Co-load:** when this skill activates, also load the `frontend-design`
+plugin skill (`claude-plugins-official/plugins/frontend-design`). They
+compose: `frontend-design` carries the bold-aesthetic-direction
+discipline this skill assumes (anti-AI-aesthetics, typography choice,
+spatial composition); this skill carries the local-web pipeline plus
+the Kowalski-anchored motion specs in §3a.
+
 ## The four failure modes (hard gate — never reproduce)
 
 1. **Hand-rolled CSS from scratch.** Stand on the shared design foundation
@@ -57,6 +64,65 @@ Type-led hero so the design stands without photos. Hand-written meta +
 LocalBusiness-family JSON-LD per vertical (`MedicalClinic`,
 `CafeOrCoffeeShop`, `Restaurant`, ...). One real bespoke signature section
 that inverts the prospect's current biggest failure.
+
+### 3a. Taste anchors + motion craft (Kowalski + frontend-design)
+
+The build steps above produce a page; this section is what makes it
+*good*. Two anchor sources: Emil Kowalski's UI lessons
+(`emilkowal.ski/ui/*`) and the `frontend-design` plugin skill that
+this one co-loads. Award-tier quality is no longer per-session
+goodwill once these rules are cited at decision time.
+
+**Articulated-WHY in the BRIEF.** Every art-direction call (type
+pair, palette, spacing, motion easing/duration, signature section)
+gets a one-line *"why this, not the default"*. Kowalski's frame:
+every taste decision has a logical reason; document it or you're
+guessing (`emilkowal.ski/ui/developing-taste`, `…/agents-with-taste`).
+The BRIEF must also name 1-2 references it is intentionally NOT
+borrowing from (the anti-pattern direction); naming the rejection
+sharpens what the chosen references actually carry.
+
+**Typography hard bans.** Inter, Roboto, Arial, default system
+stacks, and Space Grotesk are banned as primary type unless the BRIEF
+explicitly justifies one on a non-default basis. Reach for
+distinctive display + body pairings via `@fontsource-variable`.
+Reason: these are the AI-default fonts; using them is the signature
+of generic AI-generated UI (source: `frontend-design` plugin skill).
+
+**Motion craft (quantified).** Vague motion guidance is the source
+of janky-feeling animations. These rules are structural. Cite them
+in PR descriptions or the BRIEF when a motion choice is non-obvious:
+
+| Rule | Value | Source |
+|------|-------|--------|
+| Enter/exit easing | Custom `cubic-bezier`, not built-in `ease-out` (built-ins "usually not strong enough") | `…/7-practical-animation-tips` #4 |
+| On-screen movement easing | `ease-in-out` | `…/great-animations` |
+| Hover / colour easing | `ease` | Kowalski |
+| Duration ceiling | ≤ 300ms; 180ms beats 400ms on perceived responsiveness | `…/great-animations` + tips #6 |
+| Animated properties | ONLY `transform` + `opacity` (composite layer; no layout/paint cost) | `…/great-animations` |
+| Initial scale | Never `scale(0)`; start from `0.95`+ | tips #2 |
+| Button press feedback | `scale(0.97)` on `:active` | tips #1 |
+| Transform origin | Per-element (popovers scale from trigger point, e.g. `var(--radix-…-transform-origin)`) | tips #5 |
+| Interruptibility | Required (CSS transitions or Motion lib) | `…/great-animations` |
+| Restraint | Never animate keyboard-initiated actions; skip animations on elements users see 100+×/day | `…/great-animations` + `…/you-dont-need-animations` |
+| Escape hatch | `filter: blur()` to bridge state transitions when easing/duration alone cannot | tips #7 |
+| Accessibility | `prefers-reduced-motion: reduce` always honoured | `…/great-animations` |
+
+**Comparative-judgment gate (formal).** Before deploy, place a
+screenshot of the candidate hero next to ONE named BRIEF anchor.
+Articulate *in writing* (PR description or BRIEF appendix) why it
+matches OR where it does not yet. This formalises the implicit
+"reference-parity gate" in §6. Source:
+`emilkowal.ski/ui/train-your-judgement`. The articulated judgment IS
+the gate; "looks fine to me" is not.
+
+**Background depth rule.** No flat solid-colour backgrounds in
+primary sections. Pick one of: gradient mesh, noise/grain, layered
+photography, geometric pattern, or the §4b depth-parallax hero.
+Pages of plain white sections fail the impeccable bar unless the
+BRIEF explicitly justifies the minimalism as the aesthetic direction
+(luxury / editorial restraint). Source: `frontend-design` plugin
+skill, "atmosphere + depth" rule.
 
 ### 4. Imagery pipeline (`app/scripts/fetch-imagery.mjs`)
 Curated stock per BRIEF art direction. **No people, no fake teams, no
@@ -181,3 +247,8 @@ data between sites.
   from the 2026-05-18 checkpoint.)
 - Leave-behind QR cards need the owner's real name + contact line — never
   fabricated.
+- **Kowalski + frontend-design taste anchors integrated 2026-05-26.**
+  Quantified motion craft, typography bans, comparative-judgment gate,
+  and background-depth rule now live in §3a. The "award-tier bar" the
+  prior failure mode named is operationally citable, not per-session
+  goodwill. Co-load instruction added at the top of the skill.
