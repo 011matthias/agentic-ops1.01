@@ -1,6 +1,0 @@
-instances:
-  - type: trigger-dev
-    name: trigger-hideit-equorperated
-    project_ref: hideit_equorperated
-    project_ref_env: TRIGGER_PROJECT_REF
-    access_token_env: TRIGGER_SECRET_KEY
