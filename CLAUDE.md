@@ -74,7 +74,7 @@ Required: `id`, `name`, `type`, `stage` (spec|build|test|live), `orchestrator`, 
 ## Primitives
 
 - **Commands** (27) — Your interface. Type `/command` to invoke.
-- **Skills** (27) — Domain expertise. Auto-load by context (e.g., Make.com work loads make-pack).
+- **Skills** (26) — Domain expertise. Auto-load by context (e.g., Make.com work loads make-pack).
 - **Agents** (6) — Specialists. Spawned internally by commands: build-orchestrator, implementation-agent, testing-agent, bug-fixer, deployer, api-fetcher.
 - **Rules** (3) — Always-on constraints (behaviors, session start, session pressure). Orchestrator detection deferred to build-time.
 
