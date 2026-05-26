@@ -6,13 +6,20 @@ Pattern-matches the executed command:
   npm run build / pytest / uv run    -> [B2] verification reminder
   3 consecutive build/test commands  -> [HARD LIMIT] (3-iteration cap)
 
-The 3-in-a-row counter persists in a temp file. Counter resets on any
-non-build/test bash command. See rule_behaviors.md 'Ship gate' and 'Build
-escalation'.
+The 3-in-a-row counter persists in a temp file. The counter increments only
+on REAL fix-then-test loops -- the same command (or near-identical, fuzzy by
+fingerprint) repeated -- not on a sweep of DIFFERENT verification commands
+hitting the build-test pattern set. This mirrors the gate-skip-detector
+READONLY exemption and closes the 2026-05-26 false-positive: a behavioral
+test sweep of 4 different inputs to a new hook tripped HARD LIMIT 3/3
+even though each input was a distinct test, not a fix-retry.
+
+See rule_behaviors.md 'Ship gate' and 'Build escalation'.
 
 Defensive: any error -> exit 0 silently.
 """
 import datetime
+import hashlib
 import json
 import os
 import re
@@ -38,6 +45,27 @@ BUILD_TEST_PATTERNS = [
     r"\bgo\s+test\b",
     r"\bcargo\s+(build|test)\b",
 ]
+# Commands that LOOK like build/test (match BUILD_TEST_PATTERNS) but are
+# really read-only / behavioral verification / hook tests. These never count
+# toward the streak — mirrors gate-skip-detector READONLY_PATTERNS so a sweep
+# of validators or hook-tests doesn't false-fire iteration-3x.
+EXEMPT_PATTERNS = [
+    r"\.claude/hooks/[\w.-]+\.py",          # invoking a hook directly = hook test
+    r"\btools/(?:validate|wire-hooks|friction-watch|spec-staleness|safe-edit|gh-merge|rename-chat)\b",
+    r"--check\b", r"--dry-run\b", r"--list\b", r"--help\b", r"-h\b",
+    r"\bpy_compile\b",
+    r"\bjson\.tool\b", r"\bjson\.load\b",
+    r"echo\s+'?\{",                         # piping a JSON event into a hook = hook test
+]
+
+
+def is_exempt(cmd: str) -> bool:
+    return any(re.search(p, cmd) for p in EXEMPT_PATTERNS)
+
+
+def fingerprint(cmd: str) -> str:
+    norm = re.sub(r"\s+", " ", cmd.strip())[:200]
+    return hashlib.sha1(norm.encode("utf-8", errors="ignore")).hexdigest()[:12]
 
 
 def log_fire(msg: str) -> None:
@@ -48,18 +76,32 @@ def log_fire(msg: str) -> None:
         pass
 
 
-def read_counter() -> int:
+def read_state() -> tuple[int, str]:
+    """Counter file now stores 'count\\tlast_fingerprint'. Backwards-compatible
+    with the older int-only format."""
     try:
         with open(COUNTER_FILE, "r", encoding="utf-8") as f:
-            return int(f.read().strip() or "0")
+            raw = f.read().strip()
     except Exception:
-        return 0
+        return 0, ""
+    if not raw:
+        return 0, ""
+    if "\t" in raw:
+        n_str, fp = raw.split("\t", 1)
+        try:
+            return int(n_str), fp
+        except ValueError:
+            return 0, ""
+    try:
+        return int(raw), ""
+    except ValueError:
+        return 0, ""
 
 
-def write_counter(n: int) -> None:
+def write_state(n: int, fp: str) -> None:
     try:
         with open(COUNTER_FILE, "w", encoding="utf-8") as f:
-            f.write(str(n))
+            f.write(f"{n}\t{fp}")
     except Exception:
         pass
 
@@ -107,25 +149,45 @@ def main() -> int:
         )
 
     if is_build:
-        n = read_counter() + 1
-        write_counter(n)
-        log_fire(f"B2 cmd={cmd[:80]} streak={n}")
-        advisories.append(
-            f"[B2] Build/test command executed (streak: {n}/3). Before declaring done: "
-            "did you VERIFY behavior, not just config? Name the specific test performed "
-            "(e.g., 'triggered webhook and got 200 with expected payload'). 'Compiles' != "
-            "'works'. See rule_behaviors.md B2 gate."
-        )
-        if n >= 3:
+        if is_exempt(cmd):
+            # A hook test or read-only verification: emit the B2 nudge but
+            # do NOT advance the streak (would false-fire HARD LIMIT during
+            # behavioral test sweeps). Reset to zero so a real loop after
+            # exempt commands starts fresh.
+            prev_n, _ = read_state()
+            if prev_n != 0:
+                write_state(0, "")
+            log_fire(f"B2 EXEMPT cmd={cmd[:80]}")
             advisories.append(
-                "[HARD LIMIT] You have hit 3 consecutive build/test commands. This is the "
-                "iteration cap. STOP fixing. Escalate per ITERATION-LOOP.md Hard Gate: "
-                "summarize what you tried, the current failure mode, and what you'd try "
-                "next. Do not run another fix-then-test until the user weighs in."
+                "[B2] Verification command (exempt from streak). Before declaring "
+                "done: did you VERIFY behavior, not just config? Name the specific "
+                "test performed. 'Compiles' != 'works'. See rule_behaviors.md B2 gate."
             )
+        else:
+            fp = fingerprint(cmd)
+            prev_n, prev_fp = read_state()
+            # Streak only advances when the fingerprint matches the prior
+            # build/test command. Different command = fresh streak of 1.
+            n = (prev_n + 1) if fp == prev_fp else 1
+            write_state(n, fp)
+            log_fire(f"B2 cmd={cmd[:80]} streak={n} fp={fp}")
+            advisories.append(
+                f"[B2] Build/test command executed (streak: {n}/3). Before declaring done: "
+                "did you VERIFY behavior, not just config? Name the specific test performed "
+                "(e.g., 'triggered webhook and got 200 with expected payload'). 'Compiles' != "
+                "'works'. See rule_behaviors.md B2 gate."
+            )
+            if n >= 3:
+                advisories.append(
+                    "[HARD LIMIT] You have run the SAME build/test command 3 times in a row. "
+                    "This is a fix-then-test loop. STOP fixing. Escalate per ITERATION-LOOP.md "
+                    "Hard Gate: summarize what you tried, the current failure mode, and what "
+                    "you'd try next. Do not run another fix-then-test until the user weighs in."
+                )
     else:
-        if read_counter() != 0:
-            write_counter(0)
+        prev_n, _ = read_state()
+        if prev_n != 0:
+            write_state(0, "")
 
     if advisories:
         emit("\n\n".join(advisories))
