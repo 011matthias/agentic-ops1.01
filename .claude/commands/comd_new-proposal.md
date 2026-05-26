@@ -47,9 +47,22 @@ Create a URL-safe slug from the prospect name + a short project keyword:
 - No special characters
 
 ### ID
-Determine the next proposal ID by reading existing proposals in `platform/src/content/proposals/`:
-- Pattern: `p{NNN}` (e.g., `p001`, `p015`)
-- Skip the sample proposal (`p000`)
+Determine the next proposal ID. Pattern: `p{NNN}` (e.g., `p001`, `p015`). Skip the sample proposal (`p000`).
+
+**Multi-developer safety:** to avoid two devices picking the same ID in parallel, derive the next number from BOTH the local working tree AND the remote main branch:
+
+```bash
+git fetch origin main --quiet
+local_max=$(git -C . ls-files 'platform/src/content/proposals/p*.md' 2>/dev/null \
+  | sed -E 's#.*proposals/p([0-9]+).*#\1#' | sort -n | tail -1)
+remote_max=$(git ls-tree -r origin/main --name-only 2>/dev/null \
+  | grep -E 'platform/src/content/proposals/p[0-9]+\.md' \
+  | sed -E 's#.*proposals/p([0-9]+).*#\1#' | sort -n | tail -1)
+next=$(printf "%03d" $(( ( ${local_max:-0} > ${remote_max:-0} ? ${local_max:-0} : ${remote_max:-0} ) + 1 )))
+echo "p${next}"
+```
+
+If you're working offline, use the local max + 1, and accept that a collision is possible (resolve at PR time).
 
 ### Track
 Determine the track based on job complexity:

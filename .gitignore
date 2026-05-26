@@ -79,7 +79,19 @@ workspace/playgrounds/spec-data.js
 
 # Client context — API keys, auth tokens, infrastructure IDs, comms logs
 # Per CLAUDE.md: "Client knowledge (IDs, mappings) → context/ only"
+#
+# Default: gitignore the WHOLE context/ tree because comms-log entries,
+# Instantly/Make API keys, raw lead exports, and PII frequently land here.
+# Cross-device sync via git is unsafe for the default tree.
+#
+# Cross-device opt-in: a `context/portable/` subdirectory is EXEMPTED below.
+# Move human-reviewed, secret-free files there to make them travel across
+# devices via git. The reviewer is responsible for verifying no API keys,
+# no client PII, and no GDPR-sensitive data lives in any file under
+# context/portable/. Treat that folder as publicly committable.
 workspace/clients/*/context/
+!workspace/clients/*/context/portable/
+!workspace/clients/*/context/portable/**
 
 # Session context YAMLs — contain inline API keys
 docs/sessions/*-context.yaml

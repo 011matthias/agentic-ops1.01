@@ -174,7 +174,26 @@ def main() -> int:
                     help="N+ memory-only fixes triggers sprawl signal (default 5)")
     ap.add_argument("--quiet", action="store_true",
                     help="Only print when signals present (good for hooks)")
+    ap.add_argument("--once-per-day", action="store_true",
+                    help="No-op if this flag was passed within the last 24h. "
+                         "Use for SessionStart wiring so multiple sessions/day "
+                         "don't re-emit the same advisory.")
     args = ap.parse_args()
+
+    if args.once_per_day:
+        import os, tempfile, time
+        marker = os.path.join(tempfile.gettempdir(), "agentic-ops-friction-last")
+        try:
+            last = os.path.getmtime(marker) if os.path.exists(marker) else 0
+        except OSError:
+            last = 0
+        if time.time() - last < 24 * 3600:
+            return 0  # rate-limited, silent
+        try:
+            with open(marker, "w", encoding="utf-8") as f:
+                f.write(str(int(time.time())))
+        except OSError:
+            pass
 
     if not REGISTER.is_file():
         if args.format == "json":
