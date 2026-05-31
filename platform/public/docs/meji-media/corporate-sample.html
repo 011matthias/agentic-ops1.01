@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meji Media, Corporate Cold Sample (200 UK Companies)</title>
+<style>
+:root {
+  --header-height: 72px;
+  --sidebar-width: 200px;
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface2: #f1f5f9;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --text2: #475569;
+  --text3: #94a3b8;
+  --blue: #2563eb;
+  --blue-light: #dbeafe;
+  --blue-dark: #1e40af;
+  --green: #16a34a;
+  --green-light: #dcfce7;
+  --amber: #d97706;
+  --amber-light: #fef3c7;
+  --red: #dc2626;
+  --red-light: #fee2e2;
+  --purple: #7c3aed;
+  --purple-light: #ede9fe;
+  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05);
+  --shadow-md: 0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.05);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,.1), 0 4px 6px rgba(0,0,0,.05);
+  --nav-bg: #ffffff;
+}
+[data-theme="dark"] {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface2: #0f172a;
+  --border: #334155;
+  --text: #f1f5f9;
+  --text2: #94a3b8;
+  --text3: #475569;
+  --blue: #3b82f6;
+  --blue-light: #1e3a5f;
+  --blue-dark: #93c5fd;
+  --green: #22c55e;
+  --green-light: #14532d;
+  --amber: #f59e0b;
+  --amber-light: #451a03;
+  --red: #ef4444;
+  --red-light: #450a0a;
+  --purple: #a78bfa;
+  --purple-light: #2e1065;
+  --shadow: 0 1px 3px rgba(0,0,0,.3);
+  --shadow-md: 0 4px 6px rgba(0,0,0,.4);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,.5);
+  --nav-bg: #1e293b;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.6;
+  min-height: 100vh;
+  transition: background .2s, color .2s;
+  padding-top: var(--header-height);
+}
+
+.sidebar {
+  position: fixed; top: var(--header-height); left: 0;
+  width: var(--sidebar-width); height: calc(100vh - var(--header-height));
+  background: var(--surface); border-right: 1px solid var(--border);
+  z-index: 50; overflow-y: auto; transition: transform .25s ease;
+}
+.sidebar-nav { list-style: none; padding: 12px 0; }
+.sidebar-nav li { margin: 0; }
+.sidebar-nav a {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 20px; font-size: 13px; font-weight: 500;
+  color: var(--text2); text-decoration: none;
+  border-left: 3px solid transparent;
+  transition: all .15s;
+}
+.sidebar-nav a:hover { background: var(--surface2); color: var(--text); }
+.sidebar-nav a.active { background: var(--blue-light); color: var(--blue); border-left-color: var(--blue); font-weight: 600; }
+.sidebar-backdrop { display: none; }
+
+.header {
+  position: fixed; top: 0; left: 0; right: 0; height: var(--header-height);
+  background: var(--nav-bg); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; z-index: 100; box-shadow: var(--shadow);
+}
+.header-left { display: flex; align-items: center; gap: 16px; }
+.header-logo { display: flex; align-items: center; gap: 6px; font-size: 18px; letter-spacing: -0.025em; }
+.header-logo svg { display: block; }
+.logo-text { font-weight: 700; color: var(--text); }
+.logo-accent { font-weight: 700; color: var(--blue); }
+.header-title h1 { font-size: 17px; font-weight: 700; color: var(--text); line-height: 1.2; }
+.header-title p { font-size: 12px; color: var(--text2); margin-top: 1px; }
+.header-right { display: flex; align-items: center; gap: 12px; }
+.badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 999px; }
+.badge-blue { background: var(--blue-light); color: var(--blue); }
+.badge-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.theme-btn {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  padding: 6px 12px; border-radius: 8px; font-size: 13px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.theme-btn:hover { background: var(--border); }
+.hamburger { display: none; background: none; border: none; color: var(--text); font-size: 22px; cursor: pointer; padding: 0 6px; }
+
+.page-layout { margin-left: var(--sidebar-width); }
+.main { max-width: 920px; margin: 0 auto; padding: 32px 32px 80px; }
+
+.hero {
+  background: linear-gradient(135deg, var(--blue-light), var(--purple-light));
+  border-radius: 14px; padding: 28px 32px; margin-bottom: 28px;
+  border: 1px solid var(--border);
+}
+.hero h2 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: var(--text); margin-bottom: 10px; }
+.hero p { color: var(--text2); font-size: 15px; max-width: 760px; }
+.hero-meta { display: flex; gap: 24px; margin-top: 18px; font-size: 13px; color: var(--text2); flex-wrap: wrap; }
+.hero-meta strong { color: var(--text); font-weight: 600; }
+
+.section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin-bottom: 18px; box-shadow: var(--shadow); scroll-margin-top: calc(var(--header-height) + 16px); }
+.section-title { font-size: 18px; font-weight: 700; letter-spacing: -0.015em; color: var(--text); margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.section h3 { font-size: 16px; font-weight: 600; color: var(--text); margin: 18px 0 8px; }
+.section p { color: var(--text2); margin-bottom: 12px; }
+.section p strong { color: var(--text); font-weight: 600; }
+.section ul, .section ol { color: var(--text2); padding-left: 22px; margin-bottom: 12px; }
+.section li { margin-bottom: 6px; }
+.section a { color: var(--blue); text-decoration: none; }
+.section a:hover { text-decoration: underline; }
+
+code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--text); }
+
+.universe-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.universe-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+.universe-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text2); margin-bottom: 8px; }
+.universe-num { font-size: 26px; font-weight: 800; color: var(--text); letter-spacing: -0.02em; line-height: 1.15; margin-bottom: 4px; }
+.universe-sub { font-size: 12.5px; color: var(--text2); }
+
+.headline-stat {
+  background: linear-gradient(135deg, var(--blue-light), var(--purple-light));
+  border-radius: 10px; padding: 18px 22px; margin: 14px 0;
+  text-align: center;
+}
+.headline-stat .big { font-size: 26px; font-weight: 800; color: var(--text); letter-spacing: -0.02em; line-height: 1.2; }
+.headline-stat .big span { color: var(--blue); }
+.headline-stat .sub { color: var(--text2); font-size: 14px; margin-top: 6px; }
+
+.company-table-wrap { margin-top: 16px; }
+.company-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+.company-table thead th {
+  text-align: left; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--text3);
+  padding: 8px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.company-table tbody tr { border-bottom: 1px solid var(--border); }
+.company-table tbody tr:last-child { border-bottom: none; }
+.company-table tbody tr:hover { background: var(--surface2); }
+.company-table td { padding: 8px 8px; }
+.row-idx { width: 36px; text-align: right; color: var(--text3); font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11.5px; }
+.row-name { color: var(--text); font-weight: 500; }
+.row-title { width: 35%; color: var(--text2); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+
+.question-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 10px;
+}
+.question-card .tag { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 8px; border-radius: 4px; margin-bottom: 8px; background: var(--blue-light); color: var(--blue); }
+.question-card p { font-size: 14px; color: var(--text); line-height: 1.55; margin: 0; }
+
+.footer { padding: 30px 32px 30px; text-align: center; font-size: 13px; color: var(--text3); border-top: 1px solid var(--border); }
+.footer a { color: var(--text2); text-decoration: none; }
+.footer a:hover { color: var(--blue); }
+
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-backdrop { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 49; opacity: 0; pointer-events: none; transition: opacity .2s; top: var(--header-height); }
+  .sidebar-backdrop.active { opacity: 1; pointer-events: auto; }
+  .page-layout { margin-left: 0; }
+  .footer { margin-left: 0 !important; }
+  .header-title h1 { font-size: 15px; }
+  .header-title p { display: none; }
+  .header-logo .logo-text, .header-logo .logo-accent { display: none; }
+  .hamburger { display: block; }
+  .hero { padding: 22px 20px; }
+  .hero h2 { font-size: 20px; }
+  .hero-meta { flex-wrap: wrap; gap: 12px; }
+  .main { padding: 24px 16px 60px; }
+  .header-left nav { display: none; }
+  .universe-grid { grid-template-columns: repeat(2, 1fr); }
+  .company-table { font-size: 12.5px; }
+  .row-title { font-size: 11px; }
+}
+
+@media print {
+  body { padding-top: 0; background: white; color: black; }
+  .sidebar, .sidebar-backdrop, .header, .footer .theme-btn, .hamburger { display: none !important; }
+  .page-layout { margin-left: 0; }
+  .main { max-width: none; padding: 24px; }
+  .section { box-shadow: none; page-break-inside: avoid; border: 1px solid #ccc; }
+  .hero { background: #f1f5f9 !important; }
+  .company-table tbody tr { page-break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+
+<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
+
+<nav class="sidebar" id="sidebar">
+  <ul class="sidebar-nav">
+    <li><a href="#section-summary" data-section="section-summary">Summary</a></li>
+    <li><a href="#section-segments" data-section="section-segments">The Four Segments</a></li>
+    <li><a href="#section-tier1-pa" data-section="section-tier1-pa">PA / EA / Office Manager</a></li>
+    <li><a href="#section-tier1-hr" data-section="section-tier1-hr">HR Manager / Head of HR</a></li>
+    <li><a href="#section-tier2-ceo" data-section="section-tier2-ceo">CEO</a></li>
+    <li><a href="#section-tier2-md" data-section="section-tier2-md">Managing Director</a></li>
+    <li><a href="#section-questions" data-section="section-questions">What I'd Like Back</a></li>
+    <li><a href="#section-method" data-section="section-method">How We Got This</a></li>
+  </ul>
+</nav>
+
+<header class="header">
+  <div class="header-left">
+    <button class="hamburger" id="hamburgerBtn" onclick="toggleSidebar()">&#9776;</button>
+    <div class="header-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></div>
+    <div class="header-title">
+      <h1>Meji Media</h1>
+      <p>Corporate Cold Sample (200 UK Companies)</p>
+    </div>
+    <span style="color:var(--border);font-size:20px;margin:0 4px;">|</span>
+    <nav style="display:flex;gap:4px;">
+      <a href="/docs/meji-media/" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Hub</a>
+      <a href="/docs/meji-media/guide" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Guide</a>
+      <a href="/docs/meji-media/ab-testing" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">A/B Testing</a>
+      <a href="/docs/meji-media/lead-scoring" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Scoring</a>
+      <a href="/docs/meji-media/system-overview" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Overview</a>
+      <a href="/docs/meji-media/scaling" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Scaling</a>
+      <a href="/docs/meji-media/volume-forecast" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Volume</a>
+      <a href="/docs/meji-media/corporate-sample" style="font-size:13px;font-weight:700;padding:6px 12px;border-radius:6px;background:var(--blue-light);color:var(--blue);text-decoration:none;">Sample</a>
+    </nav>
+  </div>
+  <div class="header-right">
+    <span class="badge badge-blue"><span class="badge-dot"></span> Sample Approval Gate</span>
+    <button class="theme-btn" onclick="toggleTheme()">
+      <span id="theme-icon">&#9790;</span> Theme
+    </button>
+  </div>
+</header>
+
+<div class="page-layout">
+<div class="main">
+
+  <div class="hero">
+    <h2>Corporate Cold Sample: 200 UK Companies for Review</h2>
+    <p>Per your 31 May green light on Managing Director, here is the corporate cold sample list across the four ICP segments. Names only at this stage. No contacts pulled, no Apollo credit spend. This is the sample-approval gate before the verified contacts get pulled and the campaign loaded.</p>
+    <div class="hero-meta">
+      <div><strong>Prepared for:</strong> Gurmej Pawar</div>
+      <div><strong>Date:</strong> 1 June 2026</div>
+      <div><strong>Source:</strong> Apollo people-search (free, no credit spend)</div>
+      <div><strong>Geography:</strong> UK-wide</div>
+    </div>
+  </div>
+
+  <div class="section" id="section-summary">
+    <div class="section-title">Summary</div>
+    <p>200 unique UK companies pulled across the four ICP segments locked on 31 May. Each company appears once, deduplicated across the four cuts.</p>
+    <div class="headline-stat">
+      <div class="big">Apollo holds about <span>91,478</span> matching UK contacts across these segments.</div>
+      <div class="sub">The 200 companies below are a representative cut for your approval. Once you give the go, the verified contacts get pulled at the per-segment proportions you confirm and loaded into the Meji Media Corporate Events campaign.</div>
+    </div>
+    <p>The Moonlight &amp; Mistletoe past-customer exclusion gets applied at the enrichment step (when we have email domains to cross-reference against your booking archive), not now.</p>
+  </div>
+
+  <div class="section" id="section-segments">
+    <div class="section-title">The Four ICP Segments</div>
+    <p>The locked ICP from the 22 May plus 31 May exchange:</p>
+    <ul>
+      <li><strong>51 to 500 employee UK companies:</strong> PA, EA, Office Manager, HR Manager, Head of HR.</li>
+      <li><strong>11 to 50 employee UK companies:</strong> CEO and Managing Director only (not generic Director).</li>
+    </ul>
+    <p>Apollo's UK universe for each cut sits well above what we would use in a single sourcing pass. The sample below pulls roughly proportional volume from each.</p>
+    <div class="universe-grid">
+      <div class="universe-card">
+        <div class="universe-label">PA / EA / Office Manager</div>
+        <div class="universe-num">23,600</div>
+        <div class="universe-sub">51 to 500 emp, 100 in sample</div>
+      </div>
+      <div class="universe-card">
+        <div class="universe-label">HR Manager / Head of HR</div>
+        <div class="universe-num">14,575</div>
+        <div class="universe-sub">51 to 500 emp, 40 in sample</div>
+      </div>
+      <div class="universe-card">
+        <div class="universe-label">CEO</div>
+        <div class="universe-num">20,569</div>
+        <div class="universe-sub">11 to 50 emp, 30 in sample</div>
+      </div>
+      <div class="universe-card">
+        <div class="universe-label">Managing Director</div>
+        <div class="universe-num">32,734</div>
+        <div class="universe-sub">11 to 50 emp, 30 in sample</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section" id="section-tier1-pa">
+    <div class="section-title">Segment 1: PA / EA / Office Manager (51 to 500 employees)</div>
+    <p><strong>100 unique companies</strong> in this segment, out of an Apollo universe of <strong>23,600 matching UK people</strong> at the 51 to 500 emp band.</p>
+    <p>Decision-influencer or actual decision-maker on corporate events at mid-market companies. The dominant cut.</p>
+    <div class="company-table-wrap">
+      <table class="company-table">
+        <thead>
+          <tr><th class="row-idx">#</th><th class="row-name">Company</th><th class="row-title">Match title</th></tr>
+        </thead>
+        <tbody>
+      <tr><td class="row-idx">1</td><td class="row-name">Regenta</td><td class="row-title">PA/ Ea</td></tr>
+      <tr><td class="row-idx">2</td><td class="row-name">Energy</td><td class="row-title">PA/EA</td></tr>
+      <tr><td class="row-idx">3</td><td class="row-name">Thrive Homes UK</td><td class="row-title">EA/PA</td></tr>
+      <tr><td class="row-idx">4</td><td class="row-name">ICICI Bank UK</td><td class="row-title">EA/ Pa</td></tr>
+      <tr><td class="row-idx">5</td><td class="row-name">Nexus Infrastructure plc</td><td class="row-title">EA/PA</td></tr>
+      <tr><td class="row-idx">6</td><td class="row-name">Motofix Group</td><td class="row-title">Executive Assistant/PA</td></tr>
+      <tr><td class="row-idx">7</td><td class="row-name">Lowes: A Saltus Business</td><td class="row-title">Executive Assistant/PA</td></tr>
+      <tr><td class="row-idx">8</td><td class="row-name">Scottish Woodlands Ltd</td><td class="row-title">PA/Executive Assistant</td></tr>
+      <tr><td class="row-idx">9</td><td class="row-name">Shipley College</td><td class="row-title">PA/Executive Assistant</td></tr>
+      <tr><td class="row-idx">10</td><td class="row-name">Eden Brown Built Environment</td><td class="row-title">Executive Assistant/PA</td></tr>
+      <tr><td class="row-idx">11</td><td class="row-name">Argenbright Security Europe Limited - ASEL</td><td class="row-title">Executive Assistant &amp; PA</td></tr>
+      <tr><td class="row-idx">12</td><td class="row-name">Sacro</td><td class="row-title">PA/ Executive Assistant</td></tr>
+      <tr><td class="row-idx">13</td><td class="row-name">Business in the Community</td><td class="row-title">Executive Assistant &amp; Personal Assistant</td></tr>
+      <tr><td class="row-idx">14</td><td class="row-name">Direkshinz</td><td class="row-title">PA/EA to CEO</td></tr>
+      <tr><td class="row-idx">15</td><td class="row-name">Curral</td><td class="row-title">PA &amp; EA to Founder</td></tr>
+      <tr><td class="row-idx">16</td><td class="row-name">Mount Anvil</td><td class="row-title">EA/PA to Chairman</td></tr>
+      <tr><td class="row-idx">17</td><td class="row-name">Drees &amp; Sommer UK</td><td class="row-title">EA/PA to Director</td></tr>
+      <tr><td class="row-idx">18</td><td class="row-name">Cooper Associates Group</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">19</td><td class="row-name">Sheffield United Football Club</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">20</td><td class="row-name">Global Risk Solutions</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">21</td><td class="row-name">London Wall Partners</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">22</td><td class="row-name">Navera Investment Management</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">23</td><td class="row-name">H2eCommerce</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">24</td><td class="row-name">Talbots Law</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">25</td><td class="row-name">Montagu Evans</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">26</td><td class="row-name">Belfast Harbour</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">27</td><td class="row-name">Pricecheck Brand Partners</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">28</td><td class="row-name">i2r Packaging Solutions</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">29</td><td class="row-name">DAS UK</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">30</td><td class="row-name">Andrews Sykes Group plc</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">31</td><td class="row-name">Provide</td><td class="row-title">Executive PA, Executive Assistant</td></tr>
+      <tr><td class="row-idx">32</td><td class="row-name">Kuflink</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">33</td><td class="row-name">Compass Pathways</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">34</td><td class="row-name">Mortgage Brain</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">35</td><td class="row-name">Sovereign Wealth Ltd</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">36</td><td class="row-name">The Environmental Dimension Partnership Ltd</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">37</td><td class="row-name">James Cowper Kreston</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">38</td><td class="row-name">The Vita Group</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">39</td><td class="row-name">Vitality Group</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">40</td><td class="row-name">Swanlea School</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">41</td><td class="row-name">Phab</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">42</td><td class="row-name">Cornish Mutual</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">43</td><td class="row-name">Westrock</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">44</td><td class="row-name">Dagenham Park Church of England School</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">45</td><td class="row-name">Haute Dolci</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">46</td><td class="row-name">Partners&amp;.</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">47</td><td class="row-name">South Yorkshire Mayoral Combined Authority</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">48</td><td class="row-name">Wax Lyrical</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">49</td><td class="row-name">Adelphi Values</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">50</td><td class="row-name">East Herts District Council</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">51</td><td class="row-name">Chartwell</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">52</td><td class="row-name">Complete Childcare Nurseries Ltd</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">53</td><td class="row-name">TrustMark</td><td class="row-title">Executive / Personal Assistant</td></tr>
+      <tr><td class="row-idx">54</td><td class="row-name">Windsor Academy Trust</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">55</td><td class="row-name">Casablanca Paris</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">56</td><td class="row-name">Age Scotland</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">57</td><td class="row-name">The Glenmorangie Company</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">58</td><td class="row-name">Sureserve Energy Services Meters</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">59</td><td class="row-name">National Museums Liverpool</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">60</td><td class="row-name">The Hammond</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">61</td><td class="row-name">Cumbria Health</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">62</td><td class="row-name">ECITB</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">63</td><td class="row-name">OrganOx</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">64</td><td class="row-name">ADSS Dementia</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">65</td><td class="row-name">Building Materials Nationwide</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">66</td><td class="row-name">NHS 24</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">67</td><td class="row-name">Thrings</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">68</td><td class="row-name">Loch Lomond Golf Club</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">69</td><td class="row-name">Farncombe Estate</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">70</td><td class="row-name">TT Club</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">71</td><td class="row-name">Neogen iEMEA</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">72</td><td class="row-name">Microtech</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">73</td><td class="row-name">Liverpool ONE</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">74</td><td class="row-name">Inspire Education Group (IEG)</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">75</td><td class="row-name">Unity Schools Trust</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">76</td><td class="row-name">Commonwealth Sport</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">77</td><td class="row-name">Solopress</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">78</td><td class="row-name">Timor</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">79</td><td class="row-name">Forte Securities Limited</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">80</td><td class="row-name">The Cambridge Building Society</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">81</td><td class="row-name">Origin Housing</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">82</td><td class="row-name">Stewart Milne Group</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">83</td><td class="row-name">Langley Trust</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">84</td><td class="row-name">Pepsi Lipton</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">85</td><td class="row-name">Meadow</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">86</td><td class="row-name">TUDORKNIGHT LIMITED</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">87</td><td class="row-name">Association of Surgeons in Training</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">88</td><td class="row-name">TMG Mortgage Network</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">89</td><td class="row-name">Tindle Newspapers Ltd.</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">90</td><td class="row-name">Fintech Company</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">91</td><td class="row-name">British Ice Skating</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">92</td><td class="row-name">Sigma</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">93</td><td class="row-name">Advertising Standards Authority</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">94</td><td class="row-name">Castle Mead Academy</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">95</td><td class="row-name">Koch Technology Solutions</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">96</td><td class="row-name">The Methodist Church in Ireland</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">97</td><td class="row-name">BBSRC</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">98</td><td class="row-name">CapVest</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">99</td><td class="row-name">Enko Capital</td><td class="row-title">Executive Personal Assistant</td></tr>
+      <tr><td class="row-idx">100</td><td class="row-name">AMPLIFY EDUCATION</td><td class="row-title">Executive Personal Assistant</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section" id="section-tier1-hr">
+    <div class="section-title">Segment 2: HR Manager / Head of HR / Head of People (51 to 500 employees)</div>
+    <p><strong>40 unique companies</strong> in this segment, out of an Apollo universe of <strong>14,575 matching UK people</strong> at the 51 to 500 emp band.</p>
+    <p>Owns staff events, team morale, year-end celebrations at mid-market companies. Strong fit for the venue offer.</p>
+    <div class="company-table-wrap">
+      <table class="company-table">
+        <thead>
+          <tr><th class="row-idx">#</th><th class="row-name">Company</th><th class="row-title">Match title</th></tr>
+        </thead>
+        <tbody>
+      <tr><td class="row-idx">1</td><td class="row-name">NQA</td><td class="row-title">HR Manager / Head of HR</td></tr>
+      <tr><td class="row-idx">2</td><td class="row-name">Westholme School</td><td class="row-title">Head of HR/Operations, HR Manager</td></tr>
+      <tr><td class="row-idx">3</td><td class="row-name">TopCashback UK</td><td class="row-title">Head of People Development, Head of HR</td></tr>
+      <tr><td class="row-idx">4</td><td class="row-name">Ethical Trading Initiative</td><td class="row-title">People &amp; Human Resources Manager</td></tr>
+      <tr><td class="row-idx">5</td><td class="row-name">We The Curious</td><td class="row-title">People /HR Manager</td></tr>
+      <tr><td class="row-idx">6</td><td class="row-name">MJMK Restaurants</td><td class="row-title">People &amp; HR Manager</td></tr>
+      <tr><td class="row-idx">7</td><td class="row-name">IP Group plc</td><td class="row-title">People (HR) Manager</td></tr>
+      <tr><td class="row-idx">8</td><td class="row-name">Konekt</td><td class="row-title">People &amp; HR Manager</td></tr>
+      <tr><td class="row-idx">9</td><td class="row-name">Maydencroft</td><td class="row-title">People &amp; HR Manager</td></tr>
+      <tr><td class="row-idx">10</td><td class="row-name">Foresight Factory</td><td class="row-title">People and HR Manager</td></tr>
+      <tr><td class="row-idx">11</td><td class="row-name">KPS UK</td><td class="row-title">People and HR Manager</td></tr>
+      <tr><td class="row-idx">12</td><td class="row-name">Rock Power Connections Ltd</td><td class="row-title">HR Manager</td></tr>
+      <tr><td class="row-idx">13</td><td class="row-name">Wakam</td><td class="row-title">HR Manager</td></tr>
+      <tr><td class="row-idx">14</td><td class="row-name">Inspired Villages</td><td class="row-title">HR Manager</td></tr>
+      <tr><td class="row-idx">15</td><td class="row-name">The Yard</td><td class="row-title">Human Resources Manager</td></tr>
+      <tr><td class="row-idx">16</td><td class="row-name">LPL Construction Services</td><td class="row-title">HR Manager</td></tr>
+      <tr><td class="row-idx">17</td><td class="row-name">BREAD AHEAD</td><td class="row-title">Human Resource Manager</td></tr>
+      <tr><td class="row-idx">18</td><td class="row-name">Shiplake College</td><td class="row-title">Human Resources Manager</td></tr>
+      <tr><td class="row-idx">19</td><td class="row-name">Border To Coast Pensions Partnership</td><td class="row-title">HR Manager</td></tr>
+      <tr><td class="row-idx">20</td><td class="row-name">The Mill Hill School Foundation</td><td class="row-title">Human Resource Manager</td></tr>
+      <tr><td class="row-idx">21</td><td class="row-name">Natural Innovations</td><td class="row-title">Human Resources Manager</td></tr>
+      <tr><td class="row-idx">22</td><td class="row-name">BFT MASTCLIMBING</td><td class="row-title">HR Manager</td></tr>
+      <tr><td class="row-idx">23</td><td class="row-name">Ripe Thinking Limited</td><td class="row-title">Human Resources Manager</td></tr>
+      <tr><td class="row-idx">24</td><td class="row-name">VOLAIR LIMITED</td><td class="row-title">HR Manager</td></tr>
+      <tr><td class="row-idx">25</td><td class="row-name">Calder Ltd</td><td class="row-title">HR Manager</td></tr>
+      <tr><td class="row-idx">26</td><td class="row-name">Oxford Instruments Life Science</td><td class="row-title">HR Manager</td></tr>
+      <tr><td class="row-idx">27</td><td class="row-name">LSTC Group</td><td class="row-title">HR Manager</td></tr>
+      <tr><td class="row-idx">28</td><td class="row-name">IIH Global</td><td class="row-title">Human Resources Manager</td></tr>
+      <tr><td class="row-idx">29</td><td class="row-name">Brecher LLP</td><td class="row-title">HR Manager</td></tr>
+      <tr><td class="row-idx">30</td><td class="row-name">AMP Rose</td><td class="row-title">HR Manager</td></tr>
+      <tr><td class="row-idx">31</td><td class="row-name">JBi Digital</td><td class="row-title">HR Manager</td></tr>
+      <tr><td class="row-idx">32</td><td class="row-name">Food Service Logistics</td><td class="row-title">HR Manager</td></tr>
+      <tr><td class="row-idx">33</td><td class="row-name">Sahara</td><td class="row-title">Human Resources Manager</td></tr>
+      <tr><td class="row-idx">34</td><td class="row-name">White Lodge</td><td class="row-title">HR Manager</td></tr>
+      <tr><td class="row-idx">35</td><td class="row-name">Extons Foods Ltd</td><td class="row-title">HR Manager</td></tr>
+      <tr><td class="row-idx">36</td><td class="row-name">London Marriott Hotel Park Lane</td><td class="row-title">Human Resources Manager</td></tr>
+      <tr><td class="row-idx">37</td><td class="row-name">Everything Tech Group</td><td class="row-title">HR Manager</td></tr>
+      <tr><td class="row-idx">38</td><td class="row-name">EDF Heat Pumps</td><td class="row-title">Human Resources Manager</td></tr>
+      <tr><td class="row-idx">39</td><td class="row-name">CubicWorks</td><td class="row-title">Human Resources Manager</td></tr>
+      <tr><td class="row-idx">40</td><td class="row-name">Radicon Transmission UK Limited</td><td class="row-title">HR Manager</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section" id="section-tier2-ceo">
+    <div class="section-title">Segment 3: CEO (11 to 50 employees)</div>
+    <p><strong>30 unique companies</strong> in this segment, out of an Apollo universe of <strong>20,569 matching UK people</strong> at the 11 to 50 emp band.</p>
+    <p>Direct decision-maker at small companies where there is no dedicated organiser.</p>
+    <div class="company-table-wrap">
+      <table class="company-table">
+        <thead>
+          <tr><th class="row-idx">#</th><th class="row-name">Company</th><th class="row-title">Match title</th></tr>
+        </thead>
+        <tbody>
+      <tr><td class="row-idx">1</td><td class="row-name">Black Thrive</td><td class="row-title">Chief Executive Officer (CEO) (CEO)</td></tr>
+      <tr><td class="row-idx">2</td><td class="row-name">Job Crystal</td><td class="row-title">Chief Executive Officer (CEO)</td></tr>
+      <tr><td class="row-idx">3</td><td class="row-name">Tector</td><td class="row-title">Chief Executive Officer (CEO)</td></tr>
+      <tr><td class="row-idx">4</td><td class="row-name">Emmaus Catholic Multi Academy Company</td><td class="row-title">Chief Executive Officer (CEO)</td></tr>
+      <tr><td class="row-idx">5</td><td class="row-name">Storelectric</td><td class="row-title">Chief Executive Officer (CEO)</td></tr>
+      <tr><td class="row-idx">6</td><td class="row-name">Digital Rewards Group Ltd</td><td class="row-title">Chief Executive Officer (CEO)</td></tr>
+      <tr><td class="row-idx">7</td><td class="row-name">Elite Renewables</td><td class="row-title">Chief Executive Officer (CEO)</td></tr>
+      <tr><td class="row-idx">8</td><td class="row-name">The Abingdon Bridge</td><td class="row-title">Chief Executive Officer (CEO)</td></tr>
+      <tr><td class="row-idx">9</td><td class="row-name">Ava Medical</td><td class="row-title">Chief Executive Officer (CEO)</td></tr>
+      <tr><td class="row-idx">10</td><td class="row-name">MarineSolar Energy Solutions™</td><td class="row-title">(CEO) Chief Executive Officer</td></tr>
+      <tr><td class="row-idx">11</td><td class="row-name">GS Verde Group</td><td class="row-title">Chief Executive Officer (CEO)</td></tr>
+      <tr><td class="row-idx">12</td><td class="row-name">TATAMI FIGHTWEAR</td><td class="row-title">Chief Executive Officer (CEO)</td></tr>
+      <tr><td class="row-idx">13</td><td class="row-name">Construction EPA Company ®</td><td class="row-title">Chief Executive Officer (CEO)</td></tr>
+      <tr><td class="row-idx">14</td><td class="row-name">Method Grid</td><td class="row-title">Chief Executive Officer (CEO)</td></tr>
+      <tr><td class="row-idx">15</td><td class="row-name">International Prader-Willi Syndrome Organisation (IPWSO)</td><td class="row-title">Chief Executive Officer (CEO)</td></tr>
+      <tr><td class="row-idx">16</td><td class="row-name">Equator Principles</td><td class="row-title">Chief Executive Officer (CEO)</td></tr>
+      <tr><td class="row-idx">17</td><td class="row-name">Azotic Technologies</td><td class="row-title">Chief Executive Officer (CEO)</td></tr>
+      <tr><td class="row-idx">18</td><td class="row-name">Parentkind</td><td class="row-title">Chief Executive Officer (CEO)</td></tr>
+      <tr><td class="row-idx">19</td><td class="row-name">Innovation Agritech Group (IAG)</td><td class="row-title">Chief Executive Officer (CEO)</td></tr>
+      <tr><td class="row-idx">20</td><td class="row-name">Jramsys Infotech Private limited</td><td class="row-title">Chief Executive Officer [CEO]</td></tr>
+      <tr><td class="row-idx">21</td><td class="row-name">DapTechnology B.V.</td><td class="row-title">Chief Executive Officer (CEO)</td></tr>
+      <tr><td class="row-idx">22</td><td class="row-name">Doctors  Abroad International Healthcare Recruitment</td><td class="row-title">Chief Executive Officer (CEO)</td></tr>
+      <tr><td class="row-idx">23</td><td class="row-name">C-Serv</td><td class="row-title">CEO</td></tr>
+      <tr><td class="row-idx">24</td><td class="row-name">GLOBAL MUSLIM WEIGHT MANAGEMENT GROUP LTD</td><td class="row-title">Chief Executive Officer</td></tr>
+      <tr><td class="row-idx">25</td><td class="row-name">Stratence Partners</td><td class="row-title">Chief Executive Officer</td></tr>
+      <tr><td class="row-idx">26</td><td class="row-name">PinPoint Media</td><td class="row-title">Chief Executive Officer</td></tr>
+      <tr><td class="row-idx">27</td><td class="row-name">1fs Wealth</td><td class="row-title">CEO</td></tr>
+      <tr><td class="row-idx">28</td><td class="row-name">Cordoba Rewards</td><td class="row-title">CEO</td></tr>
+      <tr><td class="row-idx">29</td><td class="row-name">Link Humans</td><td class="row-title">CEO</td></tr>
+      <tr><td class="row-idx">30</td><td class="row-name">Cloud9</td><td class="row-title">CEO</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section" id="section-tier2-md">
+    <div class="section-title">Segment 4: Managing Director (11 to 50 employees)</div>
+    <p><strong>30 unique companies</strong> in this segment, out of an Apollo universe of <strong>32,734 matching UK people</strong> at the 11 to 50 emp band.</p>
+    <p>Direct decision-maker at small companies. Tightened from generic &#x27;Director&#x27; per your 31 May confirmation, to cut out Marketing / Sales / Finance Directors.</p>
+    <div class="company-table-wrap">
+      <table class="company-table">
+        <thead>
+          <tr><th class="row-idx">#</th><th class="row-name">Company</th><th class="row-title">Match title</th></tr>
+        </thead>
+        <tbody>
+      <tr><td class="row-idx">1</td><td class="row-name">eWATERservices</td><td class="row-title">Managing Director (MD)</td></tr>
+      <tr><td class="row-idx">2</td><td class="row-name">Brooks Wealth Peterborough</td><td class="row-title">Managing Director (MD)</td></tr>
+      <tr><td class="row-idx">3</td><td class="row-name">Solarcentury Africa</td><td class="row-title">Managing Director (MD)</td></tr>
+      <tr><td class="row-idx">4</td><td class="row-name">Rave</td><td class="row-title">Managing Director, Managing Director</td></tr>
+      <tr><td class="row-idx">5</td><td class="row-name">Marketing Signals</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">6</td><td class="row-name">Platform Marketing Agency</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">7</td><td class="row-name">TrueNorth®</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">8</td><td class="row-name">Kremer Signs</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">9</td><td class="row-name">Recruit 2 You Ltd</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">10</td><td class="row-name">Gosling Creative Ltd</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">11</td><td class="row-name">Trinity Finance (London)</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">12</td><td class="row-name">Novaris Search</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">13</td><td class="row-name">The Booth Group</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">14</td><td class="row-name">Enlight Group</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">15</td><td class="row-name">Hospitality Search International</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">16</td><td class="row-name">SIAN Wholesale Ltd.</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">17</td><td class="row-name">Paragon Search Partners</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">18</td><td class="row-name">SGS Talent</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">19</td><td class="row-name">GroundShore</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">20</td><td class="row-name">Gravitas International</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">21</td><td class="row-name">Fides &amp; Co</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">22</td><td class="row-name">Wallace Print</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">23</td><td class="row-name">BFS Enterprise (Fabrications) Ltd</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">24</td><td class="row-name">Specialized Signs &amp; Wraps</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">25</td><td class="row-name">Charter Brands Ltd | Certified B Corp®</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">26</td><td class="row-name">FryerMiles</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">27</td><td class="row-name">Global Energy Network</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">28</td><td class="row-name">Midsummer Fire Protection</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">29</td><td class="row-name">Bid Writing Service</td><td class="row-title">Managing Director</td></tr>
+      <tr><td class="row-idx">30</td><td class="row-name">Delyn Safety UK Ltd</td><td class="row-title">Managing Director</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section" id="section-questions">
+    <div class="section-title">What I'd Like Back From You</div>
+    <p>Three quick reads. None of these need long answers, a one-liner each is enough.</p>
+    <div class="question-card">
+      <span class="tag">Question 1</span>
+      <p>Does the mix across the four segments look roughly right for a corporate Christmas party pitch? If you would weight one segment heavier or lighter, just say.</p>
+    </div>
+    <div class="question-card">
+      <span class="tag">Question 2</span>
+      <p>Any companies in here that obviously do not fit (companies you already have a relationship with that would feel awkward, charities you would not pitch, anything else)? Note them in a reply and I will drop them, plus apply the Moonlight &amp; Mistletoe past-customer exclusion at the enrich step.</p>
+    </div>
+    <div class="question-card">
+      <span class="tag">Question 3</span>
+      <p>Anything missing in the shape you would expect to see (a specific industry vertical you would want over-weighted, for example)?</p>
+    </div>
+    <p style="margin-top:14px;">If the shape looks right as-is, a simple "go" is all I need. From there I pull the verified contacts (around 1,500 across the 200 companies, roughly 60% of your monthly Apollo budget) and load the Corporate Events campaign ready for activation.</p>
+  </div>
+
+  <div class="section" id="section-method">
+    <div class="section-title">How We Got This Data</div>
+    <p>Pulled directly from Apollo's <code>mixed_people/api_search</code> endpoint, the free read path that returns company names and titles without spending verification credits.</p>
+    <ol>
+      <li>Four separate searches, one per ICP segment, each filtered on UK location plus the size band plus the title list.</li>
+      <li>Results deduplicated by company name within each segment, then across segments.</li>
+      <li>Universe counts are the full <code>total_entries</code> returned by Apollo for each segment (the addressable population), the sample is the first N unique companies returned.</li>
+      <li>No personal data, no email addresses, no phone numbers have been pulled or revealed at this stage. That happens at the enrich step after your go.</li>
+      <li>The Moonlight &amp; Mistletoe past-customer exclusion runs at enrich time against the booking archive (<code>full_data_parties.leader_email</code> and <code>delegates.email</code>) by domain match.</li>
+    </ol>
+  </div>
+
+</div>
+<footer class="footer" style="margin-left:var(--sidebar-width);">
+  <p>Built and maintained by <a href="https://unpauseai.com" target="_blank" rel="noopener">UnpauseAI</a></p>
+  <p style="margin-top:4px;">Last updated: 1 June 2026 &middot; Source: Apollo people-search</p>
+</footer>
+</div>
+
+<script>
+function toggleTheme() {
+  var html = document.documentElement;
+  var current = html.getAttribute('data-theme');
+  var next = current === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('meji-docs-theme', next);
+  document.getElementById('theme-icon').innerHTML = next === 'dark' ? '&#9788;' : '&#9790;';
+}
+
+var saved = localStorage.getItem('meji-docs-theme');
+if (saved) {
+  document.documentElement.setAttribute('data-theme', saved);
+  if (saved === 'dark') document.getElementById('theme-icon').innerHTML = '&#9788;';
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarBackdrop').classList.toggle('active');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarBackdrop').classList.remove('active');
+}
+
+(function() {
+  var sections = document.querySelectorAll('[id^="section-"]');
+  var navLinks = document.querySelectorAll('.sidebar-nav a');
+  if (!sections.length) return;
+  var observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting) {
+        navLinks.forEach(function(link) { link.classList.remove('active'); });
+        var activeLink = document.querySelector('.sidebar-nav a[data-section="' + entry.target.id + '"]');
+        if (activeLink) activeLink.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -60% 0px', threshold: 0 });
+  sections.forEach(function(section) { observer.observe(section); });
+  navLinks.forEach(function(link) {
+    link.addEventListener('click', function() {
+      if (window.innerWidth <= 768) closeSidebar();
+    });
+  });
+})();
+</script>
+
+</body>
+</html>
