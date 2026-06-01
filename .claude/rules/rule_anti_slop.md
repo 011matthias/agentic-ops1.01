@@ -1,0 +1,140 @@
+# Anti AI-Slop Standard (Layer 2 voice rule)
+
+**Hard constraint.** Every paragraph, bullet, sentence, and section
+in any agent-written artifact has to earn its keep. Volume that does
+not carry novel information is slop. Slop dilutes signal: every
+unearned paragraph teaches the reader to skim, and in client-facing
+context it reads as AI-generated even when the underlying judgment
+is human-quality.
+
+This rule supersedes the older PDF voice pass in
+`rule_deliverables.md` (still valid, but narrower) by stating the
+general principle and routing the specific bans to it.
+
+## What counts as slop (banned)
+
+**Per-category narration on intuitive variance.** When N values vary
+across N categories under ONE intuitive structural rule, state the
+rule once and stop. Do not give each category a sentence of similar
+shape and similar information density. The smell: every row reads
+"category X is large/small because reason X" with the same sentence
+shape. If the structural rule is itself intuitive once stated, the
+narration is slop. Source: 2026-06-01 meji corporate-sample bloat
+on universe-size variance. See [[feedback_no_per_category_narration]].
+
+**Three-part lists where two work.** Symmetry of categories is NOT a
+reason to enumerate. If three bullets read in the same shape with
+the same information density, collapse them.
+
+**Empty section intros.** Do not start a section by summarizing what
+the section is about to say. Just start it.
+
+**Hedging / buffer language.** "It's worth noting", "to be clear",
+"keep in mind", "worth mentioning", "as you can see", and similar
+meta-commentary about the writing itself. Cut.
+
+**Corporate thesaurus.** Banned verbs: robust, leverage, ensure,
+facilitate, comprehensive, streamline, optimize, holistic, drive,
+unlock, empower. Banned adverbs at sentence open: notably,
+importantly, interestingly, ultimately, fundamentally, essentially.
+
+**Performed humanness.** "Honestly,", "Look,", "Here's the thing,",
+"At the end of the day". The opposite failure mode of corporate
+thesaurus, equally slop.
+
+**Em-dashes.** Zero in client-facing HTML / PDF / web deliverables
+per `rule_deliverables.md`. Auto-stripped by the
+`em-dash-strip-gate.py` hook on Write/Edit to client paths.
+
+**"Not just X but Y" constructions.** "This is not just a sample,
+it's a strategic framework." Banned. Just say what it is.
+
+**Headings that re-state the body.** If an H3 reads "Why X Happens"
+and the body says "X happens because Y," fold the heading into the
+body sentence. The H3 adds no signal.
+
+**Closing meta-summary.** "In summary", "in conclusion", "to
+summarize", "the bottom line". The last sentence of the section IS
+the close; do not announce it.
+
+## What is NOT slop (allowed)
+
+- Per-category narration where each category breaks the pattern in
+  a way the reader cannot infer (e.g., "CEO segment is the smallest
+  because Apollo under-indexes UK family businesses at that band" is
+  non-obvious operator judgment, earns the sentence).
+- Lists with variable sentence shape and unique information per row.
+- Specific facts and numbers with sources, even when "long" — length
+  earned by load-bearing detail is not slop.
+- Brief contextual note before a code/config block ("the SPF push
+  drops the Porkbun include") is necessary scaffolding, not slop.
+
+## Required protocol
+
+Before publishing a paragraph, bullet, sentence, or section into
+any agent-written artifact, run the slop check at write-time:
+
+1. **Information-per-token check.** Does each sentence carry novel
+   information that the prior sentences did not establish? If no,
+   delete the sentence.
+2. **Symmetry-collapse check.** Do my bullets / paragraphs read in
+   the same shape with the same information density? If yes,
+   collapse to a single statement of the underlying rule.
+3. **Heading-earns-it check.** Does this H2/H3/H4 add a navigation
+   anchor I will reference, OR introduce a body that itself adds
+   signal? If neither, drop the heading and fold the body into the
+   surrounding flow.
+4. **Voice scan.** Sentence by sentence, scan for banned constructions
+   above. Fix in place.
+
+For deliverables that pass through the PostToolUse dispatcher
+(`platform/public/`, `workspace/clients/*/deliverables/`,
+`workspace/clients/*/context/drafts/`), the validators
+`validate-output.py` and `lint-comms-draft.py` already catch some
+banned constructions (em-dashes via strip gate, cost-anchor drift,
+unsourced claims). Symmetry-collapse and information-per-token are
+agent discipline; the slop check is the manual gate.
+
+## Why
+
+Three failure modes converge on this rule:
+
+1. **Performed thoroughness.** Writing more paragraphs to "look
+   thorough" when transparency requires brevity. The bloat reads as
+   uncertainty padded with words.
+2. **Symmetry illusion.** N categories triggers N sentences because
+   the structure of the data feels like it demands the structure of
+   the prose. It doesn't.
+3. **AI-tell.** Bloated, evenly-paced, per-category narration is the
+   strongest AI-output tell across every client-facing surface. On
+   Upwork-style trust contexts, this is direct credibility damage.
+
+Repeated user corrections at 2026-05-30 (mejievent routing slop in
+draft) and 2026-06-01 (universe-variance narration on
+corporate-sample) escalated this from per-incident memory to a
+rule-layer standard.
+
+## Enforcement
+
+Honored at write-time by the agent on every paragraph, bullet,
+section in any client-facing artifact. Hooks that already operate
+in this space:
+
+- `em-dash-strip-gate.py` (auto-strip on Write/Edit to client paths)
+- `post-write-gate.py` dispatcher routing to
+  `validate-output.py` + `lint-comms-draft.py`
+- `validate-pilot-routing.py` (piece cross-wire check)
+
+Future enforcement candidates (not yet built):
+
+- `validate-output.py` "symmetry-collapse" detector: scan for N
+  bullets or N paragraphs with similar shape + length within a
+  section, flag as suspected slop.
+- `validate-output.py` "per-category-narration" detector: detect
+  N-row tables / lists where each entry's prose follows the same
+  grammar template, flag for collapse.
+
+Related rules and memories: [[rule_deliverables]] (PDF voice pass,
+banned constructions), [[feedback_no_per_category_narration]] (the
+2026-06-01 triggering incident), [[feedback_video_script_human_language]]
+(spoken-aloud variant of the same discipline).
