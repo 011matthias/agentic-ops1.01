@@ -5,6 +5,17 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-06-01 | Skills.sh Vendor Install and Remotion | system-infra | [Checkpoint](docs/2026-06-01%20-%20Skills.sh%20Vendor%20Install%20and%20Remotion/Checkpoint.md) |
+| 2026-06-01 | Platform Style Standards Trio | system-infra | [Checkpoint](docs/2026-06-01%20-%20Platform%20Style%20Standards%20Trio/Checkpoint.md) |
+| 2026-05-26 | Agent Teams Phases 4 to 6 | system-infra | [Checkpoint](docs/2026-05-26%20-%20Agent%20Teams%20Phases%204%20to%206/Checkpoint.md) |
+| 2026-05-26 | Web-Build Taste Integration and No-Auto-Commit Rule | system-infra | [Checkpoint](docs/2026-05-26%20-%20Web-Build%20Taste%20Integration%20and%20No-Auto-Commit%20Rule/Checkpoint.md) |
+| 2026-05-26 | Scrapling Skill Add | system-infra | [Checkpoint](docs/2026-05-26%20-%20Scrapling%20Skill%20Add/Checkpoint.md) |
+| 2026-05-26 | Agent Teams Phase 6 | system-infra | [Mini-Checkpoint-1](docs/2026-05-26%20-%20Agent%20Teams%20Phase%206/Mini-Checkpoint-1.md) |
+| 2026-05-26 | Agent Teams Phase 5 | system-infra | [Mini-Checkpoint-1](docs/2026-05-26%20-%20Agent%20Teams%20Phase%205/Mini-Checkpoint-1.md) |
+| 2026-05-26 | Agent Teams Phase 4 | system-infra | [Mini-Checkpoint-1](docs/2026-05-26%20-%20Agent%20Teams%20Phase%204/Mini-Checkpoint-1.md) |
+| 2026-05-26 | Agent Teams Phase 3 | system-infra | [Mini-Checkpoint-1](docs/2026-05-26%20-%20Agent%20Teams%20Phase%203/Mini-Checkpoint-1.md) |
+| 2026-05-26 | Agent Teams Phase 2 | system-infra | [Mini-Checkpoint-1](docs/2026-05-26%20-%20Agent%20Teams%20Phase%202/Mini-Checkpoint-1.md) |
+| 2026-05-26 | Agent Teams Phase 1 | system-infra | [Mini-Checkpoint-1](docs/2026-05-26%20-%20Agent%20Teams%20Phase%201/Mini-Checkpoint-1.md) |
 | 2026-05-20 | Morning Briefing Routine Setup | system-infra | [Checkpoint](docs/2026-05-20%20-%20Morning%20Briefing%20Routine%20Setup/Checkpoint.md) |
 
 ## local-web
@@ -18,6 +29,9 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## meji-media
 | Date | Topic | Link |
 |------|-------|------|
+| 2026-06-01 | Meji Piece 2 Sample Ship Anti Slop Rule | [Checkpoint](docs/2026-06-01%20-%20Meji%20Piece%202%20Sample%20Ship%20Anti%20Slop%20Rule/Checkpoint.md) |
+| 2026-06-01 | Meji Piece 3 mejixmas Domain Setup | [Checkpoint](docs/2026-06-01%20-%20Meji%20Piece%203%20mejixmas%20Domain%20Setup/Checkpoint.md) |
+| 2026-05-26 | Meji 3-Piece Pilot Restructure | [Checkpoint](docs/2026-05-26%20-%20Meji%203-Piece%20Pilot%20Restructure/Checkpoint.md) |
 | 2026-05-25 | Meji Piece 1 Acceptance Cold Domain Iteration and Comms Log Refresh | [Checkpoint](docs/2026-05-25%20-%20Meji%20Piece%201%20Acceptance%20Cold%20Domain%20Iteration%20and%20Comms%20Log%20Refresh/Checkpoint.md) |
 | 2026-05-24 | Meji Two-Piece Pilot State Lock and Piece 1 Cadence | [Checkpoint](docs/2026-05-24%20-%20Meji%20Two-Piece%20Pilot%20State%20Lock%20and%20Piece%201%20Cadence/Checkpoint.md) |
 | 2026-05-19 | Meji Gurmej Billing Pushback Reply | [Checkpoint](docs/2026-05-19%20-%20Meji%20Gurmej%20Billing%20Pushback%20Reply/Checkpoint.md) |
@@ -50,6 +64,11 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-03-03 | Meji Media Email Fix and Audit | [Checkpoint](docs/2026-03-03%20-%20Meji%20Media%20Email%20Fix%20and%20Audit/Checkpoint.md) |
 | 2026-03-03 | Meji Media AB Testing | [Checkpoint](docs/2026-03-03%20-%20Meji%20Media%20AB%20Testing/Checkpoint.md) |
 | 2026-03-02 | Meji Media Production Deployment | [Checkpoint](docs/2026-03-02%20-%20Meji%20Media%20Production%20Deployment/Checkpoint.md) |
+
+## openclaw
+| Date       | Topic                        | Type | Link                                                                                   |
+|------------|------------------------------|------|----------------------------------------------------------------------------------------|
+| 2026-05-26 | OpenClaw AI Character IP Bet | misc | [Checkpoint](docs/2026-05-26%20-%20OpenClaw%20AI%20Character%20IP%20Bet/Checkpoint.md) |
 
 ## platform
 | Date | Topic | Type | Link |
@@ -152,5 +171,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-06-01 | Brisken Expense Recon Slice 2 LLM Categorizer | client-dev | [Checkpoint](docs/2026-06-01%20-%20Brisken%20Expense%20Recon%20Slice%202%20LLM%20Categorizer/Checkpoint.md) |
+| 2026-05-26 | Brisken Expense Recon Excel Parser | client-dev | [Checkpoint](docs/2026-05-26%20-%20Brisken%20Expense%20Recon%20Excel%20Parser/Checkpoint.md) |
 | 2026-05-25 | Brisken Functional Spec v2 and Build Start | client-dev | [Checkpoint](docs/2026-05-25%20-%20Brisken%20Functional%20Spec%20v2%20and%20Build%20Start/Checkpoint.md) |
 | 2026-05-20 | Brisken Expense Recon Call Outcomes | comms | [Checkpoint](docs/2026-05-20%20-%20Brisken%20Expense%20Recon%20Call%20Outcomes/Checkpoint.md) |

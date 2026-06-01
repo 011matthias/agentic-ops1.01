@@ -29,6 +29,7 @@ One-line index of `tools/` scripts. Auto-loaded at session start to reduce `miss
 | `spec-staleness.py [--days N]` | Surface in-flight specs (stage 2-build / 3-test) with `updated:` older than N days. Default 30. Use to identify dormant client work without mutating spec data. Run periodically or from `/comd_system-dev`. |
 | `validate-spec.py FILE.md` | Spec frontmatter + stage/folder validator. Auto-fires via post-write-gate on any write under `workspace/clients/*/specs/`. Catches missing required keys, stage/folder mismatches, and surfaces `needs_fixes: true`. Per-file companion to the on-demand skil_spec-cleanup audit. |
 | `handoff-readiness.py {client}` | Score a client's handoff readiness: specs in 4-live, infrastructure.yaml status, comms-log currency, automations present. Use before proposing a client handoff or marking dormant. |
+| `openclaw-sandbox-init.py {slug}` | Scaffold an isolated prototype sandbox for an openclaw idea OUTSIDE this repo (default `~/Repo/openclaw-sandbox/{slug}/`). Refuses if target is inside `agentic-ops1` to prevent capture by a client `git subtree push`. Writes Dockerfile (non-root, read-only fs, cap_drop:ALL, no host mounts beyond `./scratch`), docker-compose with narrow defaults, `.env.example` (scoped-keys-only guidance), `.gitignore`, and a README pre-flight checklist (no-training tier confirmation, no client-data copy, TOS/GDPR/TCPA stance per idea). |
 
 ## Output validators — JSON contract
 
