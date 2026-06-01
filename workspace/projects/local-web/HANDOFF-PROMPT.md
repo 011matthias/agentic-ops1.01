@@ -15,7 +15,7 @@ I'm continuing work on the "local-web" internal project of my agentic-ops repo
 (C:\Users\neuma_p1qrsic\Repo\agentic-ops1).
 
 Latest state — shipped + verified live 2026-05-20:
-- 3 demo sites live on Fly: https://local-web-ka.fly.dev/{praxis-uslu,coffee-boxx,pronto-pronto}/
+- 2 demo sites live on Fly: https://local-web-ka.fly.dev/{praxis-uslu,pronto-pronto}/ (coffee-boxx deleted 2026-06-01)
 - PR #37: nginx HTML Cache-Control: no-cache (ends recurring stale-demo class)
 - PR #43: budgeted WebGL depth-parallax hero on all 3 sites (skil_web-build §4b)
   - app/scripts/depth-map.py (Depth-Anything-V2-Small ONNX via uv) generates depth maps

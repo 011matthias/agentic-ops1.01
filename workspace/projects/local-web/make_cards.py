@@ -16,7 +16,6 @@ OUT.mkdir(exist_ok=True)
 
 PROSPECTS = [
     ("praxis-uslu",  "Praxis Dr. med. Sema Uslu", "Ihre neue Praxis-Website"),
-    ("coffee-boxx",  "Coffee Boxx",               "Die neue Website für Ihr Café"),
     ("pronto-pronto","Pronto-Pronto",             "Die neue Website für Ihren Lieferservice"),
 ]
 

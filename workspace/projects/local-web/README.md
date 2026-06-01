@@ -22,7 +22,6 @@ Validation batch 1 (manual builds, Karlsruhe):
 | Prospect | Type | Slug | Demo | Pitched | Outcome |
 |----------|------|------|------|---------|---------|
 | Dr. med. Sema Uslu | Hausarztpraxis | `praxis-uslu` | built | no | — |
-| Coffee Boxx | Café | `coffee-boxx` | built | no | — |
 | Pronto-Pronto | Pizza Heimservice | `pronto-pronto` | built | no | — |
 
 ## Data accuracy (B4)
