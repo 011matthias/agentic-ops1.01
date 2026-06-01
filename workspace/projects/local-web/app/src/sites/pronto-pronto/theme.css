@@ -1,15 +1,52 @@
-/* pronto-pronto: appetite-first, warm-charcoal, ember accent (not red). */
+/* pronto-pronto: warm-vintage Italian neighbourhood pizzeria (1970s-80s).
+   EVERY token here is derived from the logo
+   (app/src/assets/pronto-pronto/logo.png); see BRIEF.md "Logo-DNA" for the
+   sampled hex values. This retires the cold-charcoal + neon-delivery-orange
+   scheme that fought the logo's warmth (the rework's whole reason). */
 [data-site="pronto-pronto"] {
-  --color-paper: #1c1a17;
-  --color-surface: #262220;
-  --color-ink: #f4efe7;
-  --color-muted: #a99e8d;
-  --color-line: #3a3430;
-  --color-accent: #e0612b;
-  --color-accent-ink: #1c1a17;
-  --color-accent-soft: #33271f;
+  /* Base = the logo's espresso-brown keyline (#5A2A02) taken near-black.
+     WHY warm-dark, not neutral charcoal: the logo's darks are brown, and a
+     brown-black reads "wood-fired oven / printed menu", not "ghost kitchen". */
+  --color-paper: #18100b;
+  /* Raised surface: same espresso one step up, for cards + the contact block. */
+  --color-surface: #241711;
+  /* Ink = the logo's ivory script (#FDFCFA) warmed to a printed cream so large
+     headings do not glare on the dark espresso. */
+  --color-ink: #f3e7d6;
+  /* Muted = aged-paper taupe (espresso<->cream midpoint). ~7:1 on paper. */
+  --color-muted: #b89b82;
+  /* Hairlines = warm brown (espresso base lightened), never a cool grey. */
+  --color-line: #3c2a1e;
+  /* Accent (button/badge BACKGROUNDS) = the logo's DARKER burnt-sienna banner
+     tone (sampled #BA4B01 / #C45303). WHY: this terracotta already lives in
+     the brand and replaces the generic neon #e0612b. Pinned to #b0470c so the
+     printed-cream label clears AA at button size (~4.9:1); a brighter
+     terracotta (#c2541c) measured only 4.16:1 on the nav CTA. Deepening the
+     BACKGROUND (staying inside the logo's own sienna family) is the fix, not
+     darkening the type or cooling the hue. */
+  --color-accent: #b0470c;
+  /* Accent TEXT on dark = a lighter ember tint of the same hue. WHY split:
+     the deep terracotta on near-black is only ~3:1, which fails AA for the
+     stat figures + in-text links; this lighter ember clears 4.5:1 on both
+     paper and accent-soft WITHOUT darkening the type or cooling the warmth
+     (the "third option" the rework brief mandates). */
+  --color-accent-text: #e0843c;
+  /* Soft accent ground = terracotta dropped into the espresso, for the
+     Liefergebiet band tint (no flat slab; pairs with the grain overlay). */
+  --color-accent-soft: #2e1a10;
+  /* Text on the terracotta accent = printed cream (the logo ivory). */
+  --color-accent-ink: #fbf3e7;
+  /* Brass / amber secondary = the logo's metallic warmth (#B16F04), used only
+     for the vintage-stamp frame + eyebrow tick. Sparing, so it stays special. */
+  --color-brass: #b5832e;
 
-  --font-display: "Space Grotesk Variable", ui-sans-serif, system-ui,
-    sans-serif;
-  --font-body: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  /* Display = Fraunces: warm old-style humanist serif with SOFT + WONK +
+     optical-size axes; the closest free + installed type-world to a 1970s
+     hand-painted pizzeria sign. Replaces the banned Space Grotesk (read
+     modern-tech). Per-element variation settings live in the page. */
+  --font-display: "Fraunces Variable", "Newsreader Variable", Georgia, serif;
+  /* Body = Newsreader: calm low-contrast text serif, warm + readable; holds
+     the all-serif heritage voice (Italian deli / bakery brands) while staying
+     crisp at body size. Replaces the banned Inter. */
+  --font-body: "Newsreader Variable", Georgia, serif;
 }

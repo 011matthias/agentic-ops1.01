@@ -4,7 +4,8 @@ import Figure from "@components/Figure.astro";
 import DepthHero from "@components/DepthHero.astro";
 import { Image } from "astro:assets";
 import logo from "../assets/pronto-pronto/logo.png";
-import "@fontsource-variable/space-grotesk";
+import "@fontsource-variable/fraunces/full.css";
+import "@fontsource-variable/newsreader";
 import "@sites/pronto-pronto/theme.css";
 import { pronto, CHECK } from "@sites/pronto-pronto/data";
 
@@ -106,6 +107,7 @@ const description =
         />
       </div>
       <div class="hero__scrim"></div>
+      <div class="hero__grain" aria-hidden="true"></div>
       <div class="wrap hero__inner">
         <p class="offer-chip">{pronto.promo.discount}</p>
         <h1>Heiß bestellt, schnell geliefert.</h1>
@@ -346,6 +348,12 @@ const description =
     height: clamp(2.75rem, 7vw, 3.25rem);
     width: auto;
     display: block;
+    /* Seat the vivid cartoon logo into the muted dark palette: pull
+       saturation + brightness back so it reads as part of the scheme,
+       not a sticker. Warm orange (= --color-accent) survives the
+       desaturation, so the harmony with the ember accent shows. */
+    filter: saturate(0.62) brightness(0.92) contrast(0.96);
+    opacity: 0.95;
   }
   .site-nav {
     display: flex;
@@ -407,25 +415,53 @@ const description =
       var(--color-paper) 100%
     );
   }
+  /* Paper-grain texture layer (background-depth rule: no flat field). A
+     fractal-noise SVG at soft-light, ~10%, gives the hero a printed-menu
+     tooth without a raster asset or a measurable perf cost. */
+  .hero__grain {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.1;
+    mix-blend-mode: soft-light;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 160px 160px;
+  }
   .hero__inner {
     padding-block: clamp(2.5rem, 7vw, 5rem);
   }
+  /* The 10% offer as a vintage gummed STAMP, not a modern pill: squared
+     corners, a brass keyline doubled by an accent ring, slight rotation and
+     a printed-ink inset shadow. Echoes the logo's ribbon-banner frame. */
   .offer-chip {
     display: inline-block;
     background: var(--color-accent);
     color: var(--color-accent-ink);
+    font-family: var(--font-body);
     font-weight: 700;
     font-size: var(--text-sm);
-    padding: 0.5rem 1rem;
-    border-radius: 999px;
-    margin: 0 0 1.25rem;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    padding: 0.55rem 1.05rem;
+    border-radius: var(--radius-sm);
+    border: 1.5px solid var(--color-brass);
+    box-shadow: 0 0 0 1.5px var(--color-accent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.18),
+      inset 0 -2px 4px rgba(0, 0, 0, 0.25);
+    transform: rotate(-1.6deg);
+    margin: 0 0 1.5rem;
   }
   .hero h1 {
     font-family: var(--font-display);
     font-size: var(--text-5xl);
-    font-weight: 700;
-    letter-spacing: -0.03em;
-    max-width: 16ch;
+    /* Fraunces dialled to its hand-painted-sign register: large optical
+       size, high softness, WONK on, for the warm 1970s pizzeria character
+       (a plain grotesk weight here is exactly what read modern-tech). */
+    font-variation-settings: "opsz" 144, "SOFT" 60, "WONK" 1, "wght" 600;
+    letter-spacing: -0.01em;
+    line-height: 1.02;
+    max-width: 15ch;
   }
   .hero__sub {
     font-size: var(--text-xl);
@@ -438,6 +474,14 @@ const description =
     flex-wrap: wrap;
     gap: 0.85rem;
     margin-block: 2rem 1.25rem;
+  }
+  /* CTAs squared off + brass-keylined so they read printed/stamped rather
+     than modern-app-pill; tap target stays well above 44px. */
+  .hero__actions .btn {
+    border-radius: var(--radius-sm);
+  }
+  .hero__actions .btn-primary {
+    border: 1.5px solid var(--color-brass);
   }
   .hero__meta {
     font-size: var(--text-sm);
@@ -456,9 +500,21 @@ const description =
   .liefern h2 {
     font-family: var(--font-display);
     font-size: var(--text-3xl);
-    font-weight: 700;
-    letter-spacing: -0.02em;
+    font-variation-settings: "opsz" 110, "SOFT" 50, "WONK" 1, "wght" 600;
+    letter-spacing: -0.005em;
     margin-block: 0.5rem 0;
+  }
+  /* Brass tick before each eyebrow: a vintage menu / signage detail. The
+     tick is decorative (non-text contrast); the eyebrow TEXT stays muted
+     taupe so it keeps its AA ratio. */
+  .eyebrow::before {
+    content: "";
+    display: inline-block;
+    width: 1.5rem;
+    height: 2px;
+    margin-right: 0.6rem;
+    vertical-align: middle;
+    background: var(--color-brass);
   }
   .section__intro {
     color: var(--color-muted);
@@ -568,8 +624,10 @@ const description =
   .liefern__big {
     font-family: var(--font-display);
     font-size: var(--text-4xl);
-    font-weight: 700;
-    color: var(--color-accent);
+    font-variation-settings: "opsz" 120, "SOFT" 50, "WONK" 1, "wght" 620;
+    /* lighter ember (text-on-dark token), clears AA where deep terracotta
+       would not; see theme.css --color-accent-text rationale. */
+    color: var(--color-accent-text);
     line-height: 1;
   }
   .liefern__facts span:last-child {
@@ -625,13 +683,10 @@ const description =
     margin: 0;
     font-size: var(--text-base);
   }
-  /* Lighter ember for in-text links on the dark contact-card surface:
-     --color-accent (#e0612b) on #262220 is 4.43:1, just under AA 4.5.
-     #ef7a42 clears it (~5.1:1), stays ember (not delivery-red), and the
-     link is underlined via the global a:not([class]) rule. Link-only;
-     the brand accent token is unchanged for buttons / the 10% figure. */
+  /* In-text links use the lighter ember text token (clears AA on the warm
+     dark surface); underlined via the global a:not([class]) rule. */
   .facts a {
-    color: #ef7a42;
+    color: var(--color-accent-text);
     text-decoration: none;
   }
   .contact__social {
@@ -664,7 +719,7 @@ const description =
     color: var(--color-muted);
   }
   .site-foot a {
-    color: var(--color-accent);
+    color: var(--color-accent-text);
     text-decoration: none;
   }
 
