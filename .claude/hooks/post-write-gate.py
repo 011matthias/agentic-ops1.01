@@ -85,6 +85,21 @@ def in_output_scope(file_path: str) -> bool:
     return in_deliverable_scope(file_path) or in_comms_scope(file_path)
 
 
+def in_pilot_routing_scope(file_path: str) -> bool:
+    """Pilot-routing cross-wire validator scope: comms drafts in client trees.
+
+    Only fires when the client has a `context/pilot-routing.md` table to
+    validate against. The validator itself short-circuits if no routing
+    table exists; this scope check is the broader gate (drafts only).
+    """
+    if not file_path:
+        return False
+    p = normalize_for_match(file_path)
+    if not p.endswith((".md", ".markdown")):
+        return False
+    return "workspace/clients/" in p and "/context/drafts/" in p
+
+
 def in_spec_scope(file_path: str) -> bool:
     """Spec frontmatter validator scope: any .md file written under a client's
     specs/ tree. Catches malformed-spec drift at write-time so it doesn't
@@ -188,6 +203,9 @@ def main() -> None:
         planned.append(("OUTPUT GATE", "validate-output.py", [file_path], 15))
     if in_spec_scope(file_path):
         planned.append(("SPEC GATE", "validate-spec.py", [file_path], 10))
+    if in_pilot_routing_scope(file_path):
+        planned.append(("PILOT ROUTING GATE", "validate-pilot-routing.py",
+                        [file_path], 10))
 
     if not planned:
         log_fire("SKIP:out-of-scope")

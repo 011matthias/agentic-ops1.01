@@ -81,11 +81,15 @@ Using Task tool:
     Process:
     1. Create session and handoff directory
     2. Phase 1: Plan (skil_spec-creator) - unless --skip-spec
-    3. Phase 2: Implement (agnt_implementation-agent)
-    4. Phase 3: Test - Local (agnt_testing-agent) - unless --skip-test
-    5. Phase 3.5: Test - Dev (agnt_testing-agent with /test dev) - unless --skip-test
-    6. Phase 4: Deploy (agnt_deployer) - unless --skip-deploy
-    7. Phase 5: Verify (status-check)
+    3. Phase 1.5: Intent review (agnt_intent-reviewer) — between spec creation and implementation, route the spec through intent-reviewer to catch over-literal / intent-misalignment / strategic-gap patterns BEFORE the builders spend effort. Skip ONLY if --skip-spec is also set (no spec written this session means no intent diff to audit). If reviewer returns a FAIL list, halt Phase 2 until the spec is reconciled or the user explicitly waives the findings.
+    4. Phase 2: Implement — route by orchestrator (see routing table below):
+       - Make.com → agnt_make-builder
+       - n8n → agnt_n8n-builder
+       - Trigger.dev / FastAPI → agnt_implementation-agent
+    5. Phase 3: Test - Local (agnt_testing-agent) - unless --skip-test
+    6. Phase 3.5: Test - Dev (agnt_testing-agent with /test dev) - unless --skip-test
+    7. Phase 4: Deploy (agnt_deployer) - unless --skip-deploy
+    8. Phase 5: Verify (status-check)
 
     After each phase:
     - Generate phase report
@@ -144,7 +148,10 @@ The orchestrator will prompt for approval at:
 | Phase | Agent | Output | Status Update |
 |-------|-------|--------|---------------|
 | Plan | skil_spec-creator | Spec file | `planned` |
-| Implement | agnt_implementation-agent | Code + tests | `implemented` |
+| Intent review | agnt_intent-reviewer | `OK` or intent findings list | (halts on FAIL) |
+| Implement (Make.com) | agnt_make-builder | Blueprint + deploy + build report | `implemented` |
+| Implement (n8n) | agnt_n8n-builder | Workflow JSON + build report | `implemented` |
+| Implement (Trigger.dev / FastAPI) | agnt_implementation-agent | Code + tests | `implemented` |
 | Test - Local | agnt_testing-agent | Local test report | `tested_locally` |
 | Test - Dev | agnt_testing-agent + /test dev | Dev test report (real APIs) | `tested_dev` |
 | Fix (if needed) | agnt_bug-fixer | Fixed code | (revert to previous) |

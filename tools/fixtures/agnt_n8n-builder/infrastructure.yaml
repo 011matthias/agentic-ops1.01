@@ -1,0 +1,18 @@
+# Fixture infrastructure.yaml for agnt_n8n-builder smoke tests.
+# Synthetic — not a real client. Do NOT point real automations at this.
+
+client: _fixture-n8n-builder
+
+n8n_instances:
+  fixture_dev:
+    mcp_server: n8n-fixture-not-connected
+    api_url: https://fixture.app.n8n.cloud/api/v1
+    host_type: cloud
+    plan_executions_limit: 10000
+    executions_used_this_period: 500
+    credentials:
+      google_sheets_dev: 7777
+      smartlead_dev: 8888
+      gmail_dev: 9999
+    workflows:
+      # Empty — new workflows get created by smoke-tested builds.

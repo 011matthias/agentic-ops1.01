@@ -85,8 +85,30 @@ Default to Track 2 for jobs > $200 or involving multiple integrations. State the
 - If user provided URL: fetch via WebFetch and analyze
 - Extract: requirements, systems mentioned, budget, timeline, tone, pain points, must-haves vs nice-to-haves
 
+### 2a.5: Invoke agnt_proposal-research (parallel research fan-out)
+
+Route the posting through the **agnt_proposal-research** specialist via the Task tool. The agent runs concurrent research fan-out across 6 dimensions (existing-proposal patterns, profile cherry-pick candidates, external company research, job-language echoes, budget gap, location advantage) and returns a synthesized `research:` block + requirement coverage matrix + cherry-pick reasoning + coverage notes. Invocation:
+
+```
+Task:
+  subagent_type: agnt_proposal-research
+  prompt: |
+    prospect_name: {prospect from Step 1}
+    job_posting: {absolute path to a temp file OR inline text}
+    source_url: {if applicable}
+    track_hint: {1 or 2 from Step 1}
+```
+
+- If the agent returns SUCCESS shape: lift the `research:` block + requirement coverage matrix verbatim into Step 2b. The cherry-pick reasoning + coverage notes flow into Step 3's design-decision summary so the user sees the cherry-pick rationale before confirming.
+- If the agent returns BLOCKED shape: halt Step 2. Surface the blocker list to the user. Common cases: anonymous posting + Track 2 hint, posting under 50 words, source_url unreachable.
+
+The agent does NOT decide Track 1 vs Track 2 (that's Step 1 + Step 3a), does NOT write deliverables, and does NOT run validate-proposal.py.
+
 ### 2b: Populate Research Context
-Fill the `research:` block (schema below):
+
+If Step 2a.5 returned SUCCESS, the `research:` block is already populated — review it and continue.
+
+If Step 2a.5 was skipped (rare: simple/short posting where the manual path is faster), fill the `research:` block manually per the schema below:
 
 ```yaml
 research:
