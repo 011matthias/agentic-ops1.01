@@ -22,6 +22,34 @@ discipline this skill assumes (anti-AI-aesthetics, typography choice,
 spatial composition); this skill carries the local-web pipeline plus
 the Kowalski-anchored motion specs in §3a.
 
+## Session entry (cold-load reading order)
+
+When this skill auto-loads on a fresh session with a web-build task,
+read in this order BEFORE touching code (skip files already loaded
+by `/comd_resume local-web`):
+
+1. `workspace/projects/local-web/REBUILD-SPEC.md` — the contract
+2. `workspace/projects/local-web/infrastructure.yaml` — deploy + gates
+3. `app/src/pages/praxis-uslu.astro` — the quality reference to match
+4. Latest `docs/{YYYY-MM-DD} - Local-Web …/Checkpoint.md` — last
+   shipped state
+5. `app/src/sites/{slug}/BRIEF.md` + `theme.css` for every site in scope
+6. `prospects/{slug}/data.md` for every site in scope (B4 source)
+
+Scope clarification is case-by-case, not a fixed pre-flight checklist.
+Directive input ("rebuild the coffee-boxx hero with a new anchor")
+executes; exploratory input ("what should the 4th site be?") asks one
+or two targeted questions, not a mandatory six-part interrogation.
+Per the input-interpretation rule (`rule_behaviors.md`), gating
+directive work behind clarification theatre is friction.
+
+When asking IS warranted (genuinely ambiguous scope), the high-value
+forks are: (a) site scope — new prospect / rework / personalise /
+cards / pipeline automation; (b) deploy posture — local dry build
+vs live deploy (live still needs explicit ship order per
+`rule_no_auto_commit`); (c) for a new prospect — vertical, city,
+public sources, and any taste-anchor references already in mind.
+
 ## The four failure modes (hard gate — never reproduce)
 
 1. **Hand-rolled CSS from scratch.** Stand on the shared design foundation
@@ -108,13 +136,28 @@ in PR descriptions or the BRIEF when a motion choice is non-obvious:
 | Escape hatch | `filter: blur()` to bridge state transitions when easing/duration alone cannot | tips #7 |
 | Accessibility | `prefers-reduced-motion: reduce` always honoured | `…/great-animations` |
 
-**Comparative-judgment gate (formal).** Before deploy, place a
-screenshot of the candidate hero next to ONE named BRIEF anchor.
-Articulate *in writing* (PR description or BRIEF appendix) why it
-matches OR where it does not yet. This formalises the implicit
-"reference-parity gate" in §6. Source:
-`emilkowal.ski/ui/train-your-judgement`. The articulated judgment IS
-the gate; "looks fine to me" is not.
+**Comparative-judgment gate (formal — match-then-exceed).** Before
+deploy, place a screenshot of the candidate hero next to ONE named
+BRIEF anchor. The anchor is a FLOOR, not a ceiling. Articulate *in
+writing* (PR description or BRIEF appendix), region by region:
+
+1. **Parity** — for each load-bearing region of the hero (type
+   treatment, palette, layout structure, imagery role, motion,
+   trust/info surfacing, primary CTA), does the candidate sit
+   credibly next to the anchor? If not yet, name the gap.
+2. **Exceed** — for each region that already reaches parity, name
+   where the candidate can go BEYOND the anchor. The anchors are
+   often years old, sometimes drifted (rebrands, acquisitions),
+   and may carry their own anti-pattern violations the BRIEF was
+   written against. Best-in-class is the target, not "looks like
+   the reference."
+
+Both passes are mandatory. A page that matches the anchor in every
+region but exceeds in none is shipped at the floor of the quality
+bar, not the ceiling. Sources: `emilkowal.ski/ui/train-your-judgement`,
+plus owner directive 2026-06-01. The articulated judgment IS the
+gate; "looks fine to me" is not, and neither is "matches the
+reference."
 
 **Background depth rule.** No flat solid-colour backgrounds in
 primary sections. Pick one of: gradient mesh, noise/grain, layered
@@ -225,6 +268,64 @@ Only after these pass is the site "done".
 Each site owns its route, theme tokens, content, JSON-LD — designed to
 split cleanly into the client's own repo at handoff. No shared business
 data between sites.
+
+### 8. Definition of done (consolidated ship checklist)
+
+A site is shippable only when ALL of these are true. Re-read the list
+before declaring done; the gates in §1–§6 are the source of truth, this
+is the consolidation. If this list and an upstream section disagree,
+the upstream section wins.
+
+1. **BRIEF.md complete** — 2-3 named award-tier anchors, extracted
+   design DNA, explicit anti-patterns, articulated-WHY per major
+   art-direction call, 1-2 references intentionally NOT borrowed from
+   (§3a).
+2. **B4 data integrity** — every fact on the page traces to
+   `prospects/{slug}/data.md`, or carries the `[BITTE PRÜFEN]` chip
+   (§2). No invented prices, menus, emails, phones, teams, hours,
+   addresses.
+3. **Deliverable-rule gate** — zero em-dash U+2014, `&mdash;`,
+   `&#8212;`, or typographic `--` in source; `npm run build` →
+   `tools/validate-dist.py ./dist` passes (§5). Fix at SOURCE.
+4. **Real imagery in every photo slot** — no gradient placeholders in
+   the shipped state (§4). `src/assets/{slug}/` committed (hermetic
+   build, no Pexels key at deploy). `imagery.json` carries attribution.
+   "Bilder: Pexels" footer credit present.
+5. **Background depth rule honoured** — no flat solid-colour primary
+   sections unless the BRIEF explicitly justifies the minimalism (§3a).
+6. **Typography matches BRIEF** — banned defaults (Inter / Roboto /
+   Arial / Space Grotesk / system stacks) only appear if §3a
+   non-default justification is written down (§3a).
+7. **Motion craft** — every animation matches the §3a quantified
+   table: custom cubic-bezier (no built-in `ease-out`), ≤300ms,
+   `transform`/`opacity` only, never `scale(0)`, `scale(0.97)` on
+   `:active`, per-element transform origin, interruptible,
+   `prefers-reduced-motion: reduce` honoured.
+8. **Depth hero (if used)** — at most ONE per site; poster fallback
+   verified on no-JS, `prefers-reduced-motion`, viewport ≤768px,
+   no-WebGL, and `Save-Data`; depth maps committed; `tools/depth-live.cjs`
+   confirms live parallax in a fresh zero-cache profile (§4b).
+9. **nginx config locked** — `absolute_redirect off; port_in_redirect
+   off; server_name_in_redirect off;` and the
+   `try_files $uri $uri/index.html $uri.html $uri/ =404;` chain (§6).
+   No 301s ever — cached 301s are persistent and unfixable
+   client-side.
+10. **Performance gate** — Lighthouse mobile ≥95 on Performance,
+    Best Practices, SEO on the DEPLOYED Fly URL (not localhost). SEO
+    `is-crawlable` waived only for intentionally `noindex` pages (§6).
+11. **Accessibility gate** — axe-core via CDP returns zero WCAG 2 A/AA
+    violations on the deployed URL. Lighthouse CLI a11y output is NOT
+    authoritative in this env (§6 quote block).
+12. **Comparative-judgment paragraph** — a written articulation in the
+    PR description (or BRIEF appendix) of why the candidate hero
+    matches ONE named BRIEF anchor, or where it does not yet (§3a).
+    "Looks fine to me" is not the gate.
+13. **Owner ship order** — explicit go-ahead in the current
+    conversation. Edits stop at the staging boundary per
+    `rule_no_auto_commit`; no auto-deploy, no auto-PR, no auto-merge.
+
+If any item is open, the site is not shipped. Surface what is open and
+wait.
 
 ## Quick reference
 

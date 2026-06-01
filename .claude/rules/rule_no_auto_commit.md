@@ -9,6 +9,20 @@ pushes, PRs, or merges. The user must explicitly order the action
 pre-authorize a named scope for the session ("ship everything to PR
 today, I'll review at the end").
 
+**Prototype carve-out.** Ship-class commands whose scope is 100%
+within `workspace/projects/local-web/**` bypass this gate
+automatically. These are preemptive local-business demo sites
+(prototype iteration, low blast radius, no production client data).
+The B6 incident on 2026-05-26 was on system/skill files, not
+prototype sites; gating prototype iteration creates friction without
+protecting against anything. Bypass is structural: the hook
+inspects `git diff --cached --name-only` (commit), the upstream
+diff (push), or the base-branch diff (PR) and allows when every
+touched file is under the prototype path. A mixed commit (one
+local-web file + one client file + a system rule edit) does NOT
+bypass — the gate fires normally. This carve-out is the source of
+truth; `no-auto-commit-gate.py` is the structural backstop.
+
 ## What counts as ship-class (gated)
 
 These require an explicit order or session pre-authorization:
@@ -92,10 +106,27 @@ memory (depends on agent recall).
 
 ## Enforcement
 
-Honored at decision time as a B-gate (B6). A `PreToolUse:Bash` hook
-matching `git commit|git push|gh pr (create|merge)|flyctl deploy|
-vercel deploy` that requires explicit prior user authorization in
-the current turn is the natural Layer 1 evolution of this gate
-(operationalizes the rule so it cannot be forgotten by a future
-session). Not yet built; logging as `infrastructure-deferred` for
-the next hook pass.
+Honored at decision time as a B-gate (B6). The structural backstop
+is `.claude/hooks/no-auto-commit-gate.py` (PreToolUse:Bash, wired
+in `tools/wire-hooks.py` as one of the 11 canonical hooks): it
+intercepts ship-class commands (git commit / push / tag / subtree
+push, gh pr create / merge / close, gh release create, flyctl /
+vercel / railway / vercel-force-deploy), scans the last 3 user
+turns of the transcript for an explicit ship order ("commit",
+"push", "ship it", "PR it", "merge", "land it", "deploy", "ship
+everything", etc.), and returns `permissionDecision: "ask"` with
+a plain-language B6-grounded reason if no authorization is found.
+The agent cannot bypass; the user authorizes via the permission
+prompt OR cancels. Built 2026-05-26 (Phase 6 of the Agent Teams
+series). Mirrors the `instantly-invasive-gate.py` always-ask
+pattern.
+
+Edge: `git log`, `git status`, `git diff`, `git tag -l|--list`,
+and other read-class git commands are NOT ship-class and pass
+through silently. Smoke-test fixtures live in
+`tools/fixtures/no-auto-commit-gate/` (auth.jsonl + no-auth.jsonl)
+and the 5-test matrix is documented in the fixture README.
+
+This rule + this hook together replace the memory-only fix
+([[feedback_no_auto_commit]]) that demonstrably failed within
+hours of being written (PR #57/#58/#60 regressions on 2026-05-26).
