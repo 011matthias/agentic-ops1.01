@@ -306,7 +306,7 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
       <li><strong>51 to 500 employee UK companies:</strong> PA, EA, Office Manager, HR Manager, Head of HR.</li>
       <li><strong>11 to 50 employee UK companies:</strong> CEO and Managing Director only (not generic Director).</li>
     </ul>
-    <p>Apollo's UK universe for each cut sits well above what we would use in a single sourcing pass. The sample below pulls roughly proportional volume from each.</p>
+    <p>Each universe number below is the count of UK <strong>people</strong> Apollo holds who match that exact cut (title plus location plus employee band). Not companies: a 300-employee firm can contribute 2-3 PAs or EAs to its universe.</p>
     <div class="universe-grid">
       <div class="universe-card">
         <div class="universe-label">PA / EA / Office Manager</div>
@@ -329,6 +329,19 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
         <div class="universe-sub">11 to 50 emp, 30 in sample</div>
       </div>
     </div>
+    <h3>Why the four universe numbers differ</h3>
+    <p>The variance is structural, not random. <strong>PA / EA / Office Manager</strong> pools five title variants and mid-market companies typically carry 2-3 such roles, so it's the largest of the four. <strong>HR Manager / Head of HR</strong> sits in the same employee band but companies usually have one HR person, so the universe drops. <strong>CEO</strong> and <strong>Managing Director</strong> are both literally one-per-company at the small end, but the UK culturally prefers "Managing Director" as the small-company head title, so MD pulls the biggest single number of the four despite being one-per-org.</p>
+    <h3>Why the 100 / 40 / 30 / 30 split (and not raw-proportional)</h3>
+    <p>A strict universe-proportional split would over-weight Managing Director and under-represent the highest-conversion cut. The 200-company sample is instead weighted to where the buyer actually sits for a corporate Christmas party at each company size:</p>
+    <ul>
+      <li><strong>PA / EA / Office Manager (100 in sample, biggest slot).</strong> At mid-market companies, the PA tier typically researches venues, opens the booking inquiry, and decides the shortlist. The CEO might sign off, but the PA pulled the trigger. This is the buyer.</li>
+      <li><strong>HR Manager / Head of HR (40).</strong> Same company-size band, secondary slot. Owns staff events and year-end celebrations, but venue selection is often co-owned with the PA tier rather than HR-led.</li>
+      <li><strong>CEO and Managing Director (30 each).</strong> At small companies (11-50 employees) there is no dedicated organiser, so the CEO or MD IS the buyer by default. Smaller slot allocation reflects lower revenue per booking at this company size, not weaker conversion.</li>
+    </ul>
+    <h3>What this means for pilot runway</h3>
+    <p>Total addressable UK universe across the four cuts is roughly <strong>91,000 people</strong> before de-overlap and the Moonlight &amp; Mistletoe past-customer exclusion. Your Apollo Basic plan supports about 2,500 verified contacts per month at current credit pricing, which works out to roughly <strong>3% of the addressable universe per month</strong>. There is multiple months of ICP-fit volume to scale into before we would need to refine the cuts further.</p>
+    <h3>What we explicitly do not see at this stage</h3>
+    <p>The Apollo people-search free path returns company name, role title, and "has-this-field-on-record" flags for email, industry, and employee count. It does NOT return person names, email addresses, phone numbers, exact employee counts, company websites, or industry classifications. Those all sit behind the per-credit enrichment endpoints, which is why this sample is "names only, no credit spend": you get the company-shape signal you need to approve the direction, without burning the budget that pays for actually reaching them.</p>
   </div>
 
   <div class="section" id="section-tier1-pa">
