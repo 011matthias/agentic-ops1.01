@@ -2,6 +2,8 @@
 import BaseLayout from "@layouts/BaseLayout.astro";
 import Figure from "@components/Figure.astro";
 import DepthHero from "@components/DepthHero.astro";
+import { Image } from "astro:assets";
+import logo from "../assets/pronto-pronto/logo.png";
 import "@fontsource-variable/space-grotesk";
 import "@sites/pronto-pronto/theme.css";
 import { pronto, CHECK } from "@sites/pronto-pronto/data";
@@ -65,9 +67,16 @@ const description =
 >
   <header class="site-head">
     <div class="wrap site-head__row">
-      <a href="#main" class="brand">
-        <span class="brand__name">Pronto-Pronto</span>
-        <span class="brand__role">Heimservice & Restaurant</span>
+      <a href="#main" class="brand" aria-label="Pronto-Pronto Heimservice und Restaurant Karlsruhe">
+        <Image
+          src={logo}
+          alt="Pronto-Pronto Heimservice und Restaurant Karlsruhe"
+          class="brand__logo"
+          widths={[180, 280, 360]}
+          sizes="(min-width: 720px) 180px, 140px"
+          loading="eager"
+          decoding="async"
+        />
       </a>
       <nav class="site-nav" aria-label="Hauptnavigation">
         <a href="#karte">Speisekarte</a>
@@ -331,20 +340,22 @@ const description =
   .brand {
     text-decoration: none;
     display: flex;
-    flex-direction: column;
-    line-height: 1.15;
+    align-items: center;
+    line-height: 1;
   }
-  .brand__name {
-    font-family: var(--font-display);
-    font-size: var(--text-lg);
-    font-weight: 700;
-    letter-spacing: -0.02em;
+  /* Real client logo. Sized to a 48px-tall header band; the logo's
+     dark background squares onto the header's warm-charcoal paper
+     so no scrim/mask needed. */
+  .brand__logo {
+    height: 48px;
+    width: auto;
+    display: block;
+    border-radius: var(--radius-sm);
   }
-  .brand__role {
-    font-size: var(--text-xs);
-    color: var(--color-muted);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+  @media (max-width: 640px) {
+    .brand__logo {
+      height: 40px;
+    }
   }
   .site-nav {
     display: flex;

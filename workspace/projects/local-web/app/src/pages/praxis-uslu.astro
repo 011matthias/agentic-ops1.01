@@ -407,7 +407,43 @@ const description =
   }
 
   .hero {
+    position: relative;
     padding-block: clamp(3rem, 7vw, 6.5rem) clamp(2.5rem, 5vw, 4rem);
+    isolation: isolate;
+  }
+  /* §3a background-depth: warm atmospheric glow + paper grain.
+     Closes the flat-background drift without restructuring the
+     type-led layout. Two layers: a soft radial atmosphere top-right
+     (accent-soft to paper), and a subtle paper-grain noise overlay.
+     prefers-reduced-motion N/A (no animation), no perf cost
+     (pure CSS, composite layer via isolate). */
+  .hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    background:
+      radial-gradient(
+        ellipse 60% 70% at 88% 12%,
+        color-mix(in srgb, var(--color-accent-soft) 80%, transparent) 0%,
+        transparent 60%
+      ),
+      radial-gradient(
+        ellipse 50% 60% at 8% 92%,
+        color-mix(in srgb, var(--color-accent-soft) 35%, transparent) 0%,
+        transparent 55%
+      );
+    pointer-events: none;
+  }
+  .hero::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.08;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+    mix-blend-mode: multiply;
   }
   .hero__grid {
     display: grid;

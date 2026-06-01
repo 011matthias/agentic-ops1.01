@@ -79,9 +79,25 @@ const description =
   </header>
 
   <main id="main">
-    {/* Hero: oversized warm serif carries it; address + open-state above fold. */}
+    {/* Hero: photography-led editorial. DepthHero lives ABOVE the fold
+        as a partial-bleed background; warm cream paper-scrim fades from
+        left so the serif statement reads cleanly. Closes the coffee-
+        boxx imagery-led gap from the §3a comparative-judgment gate. */}
     <section class="hero">
-      <div class="wrap hero__grid">
+      <div class="hero__media">
+        <DepthHero
+          site="coffee-boxx"
+          name="hero"
+          label="Espresso, warmer Dampf, nah"
+          ratio="16 / 9"
+          rounded="0"
+          priority
+          sizes="100vw"
+          kenburns
+        />
+      </div>
+      <div class="hero__scrim" aria-hidden="true"></div>
+      <div class="wrap hero__inner">
         <div class="hero__lede">
           <p class="eyebrow">Kaffee · Panini · Kuchen</p>
           <h1>
@@ -101,17 +117,6 @@ const description =
             <span id="open-state" class="open-state">Öffnungszeiten unten</span>
           </p>
         </div>
-      </div>
-
-      <div class="wrap hero__figure" data-reveal>
-        <DepthHero
-          site="coffee-boxx"
-          name="hero"
-          label="Espresso, warmer Dampf, nah"
-          ratio="21 / 9"
-          priority
-          kenburns
-        />
       </div>
     </section>
 
@@ -268,13 +273,17 @@ const description =
 
 <style>
   /* coffee-boxx bespoke layout. Tokens from theme.css. */
+  /* §3a background-depth: grain was shipped at 0.04 (invisible).
+     Bumped to 0.10 — visible texture, still well below ink contrast.
+     mix-blend-mode multiply lets the paper tint show through. */
   .grain {
     position: fixed;
     inset: 0;
     z-index: 0;
     pointer-events: none;
-    opacity: 0.04;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.10;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
   }
   main,
   .site-head,
@@ -344,12 +353,54 @@ const description =
     }
   }
 
+  /* Photography-led hero: full-bleed DepthHero behind a warm-cream
+     paper scrim that fades left-to-right. Type sits on the legible
+     left ~60%; the espresso photo emerges on the right ~40%. */
   .hero {
-    padding-block: clamp(3rem, 7vw, 6.5rem) clamp(2rem, 4vw, 3.5rem);
+    position: relative;
+    isolation: isolate;
+    min-height: clamp(30rem, 68vh, 42rem);
+    display: flex;
+    align-items: center;
+    overflow: hidden;
   }
-  .hero__grid {
-    display: grid;
-    grid-template-columns: minmax(0, 52rem);
+  .hero__media {
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+  }
+  .hero__media :global(.figure),
+  .hero__media :global(.img-slot) {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto !important;
+  }
+  .hero__scrim {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      linear-gradient(
+        100deg,
+        var(--color-paper) 0%,
+        color-mix(in srgb, var(--color-paper) 88%, transparent) 38%,
+        color-mix(in srgb, var(--color-paper) 55%, transparent) 65%,
+        color-mix(in srgb, var(--color-paper) 28%, transparent) 100%
+      ),
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--color-paper) 25%, transparent) 0%,
+        transparent 30%,
+        transparent 70%,
+        color-mix(in srgb, var(--color-paper) 40%, transparent) 100%
+      );
+  }
+  .hero__inner {
+    padding-block: clamp(2.5rem, 6vw, 4.5rem);
+  }
+  .hero__lede {
+    max-width: 38rem;
   }
   .hero h1 {
     font-family: var(--font-display);
@@ -384,8 +435,17 @@ const description =
   .open-state.is-open {
     color: var(--color-accent);
   }
-  .hero__figure {
-    margin-top: clamp(2rem, 5vw, 3.5rem);
+  /* On narrow viewports the photo can't emerge cleanly on the right;
+     fall back to a full paper-tinted scrim so type stays readable. */
+  @media (max-width: 720px) {
+    .hero__scrim {
+      background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--color-paper) 55%, transparent) 0%,
+        color-mix(in srgb, var(--color-paper) 80%, transparent) 60%,
+        var(--color-paper) 100%
+      );
+    }
   }
 
   .section {
