@@ -30,15 +30,25 @@ const SLOTS = [
   { site: "praxis-uslu", name: "signature", orientation: "portrait",
     query: "naturopathy herbal medicine acupuncture still life warm" },
 
-  // coffee-boxx — warm independent-roaster editorial, no people.
-  { site: "coffee-boxx", name: "hero", orientation: "landscape",
-    query: "espresso pour coffee steam dark moody close up" },
-  { site: "coffee-boxx", name: "gallery-1", orientation: "landscape",
-    query: "espresso machine independent cafe interior warm" },
-  { site: "coffee-boxx", name: "gallery-2", orientation: "portrait",
-    query: "panini sandwich rustic wood board" },
-  { site: "coffee-boxx", name: "gallery-3", orientation: "square",
-    query: "cake slice pastry on plate coffee shop" },
+  // meinzer-maler — Werkstatt-warm trades, real work, no people/no headset stock.
+  { site: "meinzer-maler", name: "hero", orientation: "landscape",
+    query: "freshly painted house facade renovation warm daylight" },
+
+  // helmle-physio — calm hands-on therapy, warm daylight, no headset-smiler stock.
+  { site: "helmle-physio", name: "hero", orientation: "landscape",
+    query: "physiotherapist hands treating patient back warm daylight calm" },
+  { site: "helmle-physio", name: "signature", orientation: "portrait",
+    query: "manual therapy hands on knee close warm natural light" },
+
+  // beauty-lounge — warm tactile beauty, no garish stock, no hair.
+  { site: "beauty-lounge", name: "hero-gesicht", orientation: "portrait",
+    query: "facial skincare treatment warm soft light spa close up" },
+  { site: "beauty-lounge", name: "hero-nageldesign", orientation: "portrait",
+    query: "manicure nail detail elegant hands warm tactile neutral" },
+  { site: "beauty-lounge", name: "hero-wellness", orientation: "portrait",
+    query: "hot stone massage warm stones linen calm spa still life" },
+  { site: "beauty-lounge", name: "signature", orientation: "portrait",
+    query: "warm tactile beauty studio interior lamplight neutral elegant" },
 
   // pronto-pronto — appetite-first dark editorial, food only, no clipart.
   { site: "pronto-pronto", name: "hero", orientation: "landscape",

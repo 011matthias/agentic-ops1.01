@@ -1,0 +1,30 @@
+{
+  "hero-gesicht": {
+    "alt": "Close-up portrait of a woman applying skincare cream with closed eyes, blending beauty and tranquility.",
+    "photographer": "Atlantic Ambience",
+    "photographer_url": "https://www.pexels.com/@freestockpro",
+    "pexels_url": "https://www.pexels.com/photo/a-woman-in-white-tank-top-with-pink-lipstick-12944624/",
+    "query": "facial skincare treatment warm soft light spa close up"
+  },
+  "hero-nageldesign": {
+    "alt": "Close-up of a woman's hand with manicured nails resting on a checkered blazer.",
+    "photographer": "Ilya Komov",
+    "photographer_url": "https://www.pexels.com/@palefire",
+    "pexels_url": "https://www.pexels.com/photo/close-up-photo-of-woman-s-manicured-nails-on-a-checkered-blazer-9947831/",
+    "query": "manicure nail detail elegant hands warm tactile neutral"
+  },
+  "hero-wellness": {
+    "alt": "From above of crop masseuse with anonymous woman using stone during massage therapy in spa salon",
+    "photographer": "Anete Lusina",
+    "photographer_url": "https://www.pexels.com/@anete-lusina",
+    "pexels_url": "https://www.pexels.com/photo/crop-massage-therapist-massaging-back-of-tattooed-client-5240634/",
+    "query": "hot stone massage warm stones linen calm spa still life"
+  },
+  "signature": {
+    "alt": "Vintage table lamp casting a warm glow in a cozy, dimly lit room.",
+    "photographer": "정규송 Nui MALAMA",
+    "photographer_url": "https://www.pexels.com/@nui-malama-169330637",
+    "pexels_url": "https://www.pexels.com/photo/cozy-vintage-table-lamp-in-dimly-lit-room-37183025/",
+    "query": "warm tactile beauty studio interior lamplight neutral elegant"
+  }
+}

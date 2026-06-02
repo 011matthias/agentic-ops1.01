@@ -40,6 +40,18 @@ sites:
     business: Pronto-Pronto Heimservice und Restaurant (Karlsruhe)
     url: https://local-web-ka.fly.dev/pronto-pronto
     jsonld: Restaurant
+  - slug: meinzer-maler
+    business: Michael Meinzer Malerfachbetrieb (Maler/Handwerk, Karlsruhe-Knielingen)
+    url: https://local-web-ka.fly.dev/meinzer-maler
+    jsonld: HousePainter
+  - slug: helmle-physio
+    business: Krankengymnastik- und Massagepraxis Helmle & Helmle (Karlsruhe-Suedweststadt)
+    url: https://local-web-ka.fly.dev/helmle-physio
+    jsonld: Physiotherapy
+  - slug: beauty-lounge
+    business: Beauty Lounge Karlsruhe (Kosmetik + Nageldesign, Inh. Ilona Fait)
+    url: https://local-web-ka.fly.dev/beauty-lounge
+    jsonld: BeautySalon
 
 indexing:
   demos: index, follow            # owner directive 2026-05-18

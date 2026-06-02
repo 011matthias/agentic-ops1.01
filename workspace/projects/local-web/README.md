@@ -23,6 +23,9 @@ Validation batch 1 (manual builds, Karlsruhe):
 |----------|------|------|------|---------|---------|
 | Dr. med. Sema Uslu | Hausarztpraxis | `praxis-uslu` | built | no | — |
 | Pronto-Pronto | Pizza Heimservice | `pronto-pronto` | built | no | — |
+| Michael Meinzer Malerfachbetrieb | Handwerk / Maler | `meinzer-maler` | built | no | — |
+| Helmle & Helmle | Physiotherapie / Massage | `helmle-physio` | built | no | — |
+| Beauty Lounge Karlsruhe | Kosmetik / Nageldesign | `beauty-lounge` | built | no | — |
 
 ## Data accuracy (B4)
 

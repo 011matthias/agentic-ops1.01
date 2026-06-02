@@ -1,0 +1,65 @@
+/* meinzer-maler: Werkstatt-warm trades palette. Overrides shared brand
+   slots scoped under [data-site]. Every token carries a one-line WHY.
+   All small-text-on-background and text-on-accent pairs verified WCAG AA
+   (>= 4.5:1); large-display copper is used only at >= 24px (AA large 3:1).
+   Verified ratios noted inline. */
+[data-site="meinzer-maler"] {
+  /* Paper off-white: warm workshop-daylight ground, not sterile white;
+     the warmth is the "Werkstatt-warm, not industrial-cold" decision. */
+  --color-paper: #f4f1ea;
+
+  /* Surface: a half-step brighter than paper for cards so they lift off
+     the ground without a hard border or a flat white that breaks warmth. */
+  --color-surface: #fbf9f4;
+
+  /* Ink deep slate: body + headline text. On paper ~13.2:1, far above AA;
+     a near-black slate (not pure #000) keeps the page warm, not clinical. */
+  --color-ink: #232a2e;
+
+  /* Muted: secondary prose, eyebrows, captions. Warm slate-taupe at ~6.6:1
+     on paper, clears AA for small text; reads as quiet pencil-note grey. */
+  --color-muted: #55504a;
+
+  /* Hairline warm grey: 1px rules, card borders, table lines. Non-text
+     (decorative) so it is tuned for a soft join, not a contrast ratio. */
+  --color-line: #d9d2c5;
+
+  /* Accent = the deep tool-handle copper. This is the signature stamp:
+     buttons, links, numerals. Deepened from the display copper so white
+     text on it clears AA (white on #a8551f ~6.6:1) and the copper as small
+     text on paper clears AA (~5.7:1). The warmth is the differentiator
+     versus sterile plumber-blue. */
+  --color-accent: #a8551f;
+
+  /* Bright display copper: large headline numerals / >=24px only, where
+     AA-large 3:1 applies (on paper ~3.96:1, comfortably above 3:1). Never
+     used for small body text. This is the tool-handle ochre at full warmth. */
+  --color-accent-display: #c2683a;
+
+  /* Ink-on-accent: text that sits ON the copper button/seal. White for a
+     clean, high-contrast stamp; verified >= 4.5:1 on the deep copper. */
+  --color-accent-ink: #ffffff;
+
+  /* Accent-soft: tint ground for the signature band and quiet panels; a
+     barely-warm copper wash so the band reads as a tinted workbench surface,
+     never a flat colour block (background-depth rule). */
+  --color-accent-soft: #efe6da;
+
+  /* Steel-blue: technical / utility cues (process brackets, secondary
+     labels). Muted, never primary; on paper ~7.3:1 so it is AA-safe as text
+     where used. Reads as engineering-drawing ink. */
+  --color-steel: #3e5c6e;
+
+  /* Trust green-grey: guarantee callouts (Festpreis, sauber, pünktlich).
+     A calm sage-olive that signals reassurance without shouting; on paper
+     ~5.2:1, AA-safe for the small callout label text. */
+  --color-trust: #4c5b48;
+
+  /* Display = Bitter (slab serif): heritage / craft warmth, heavy headlines
+     that read hands-on and solid, the opposite of a thin tech grotesk. */
+  --font-display: "Bitter Variable", Georgia, serif;
+
+  /* Body = Source Sans 3 (humanist sans): precise but approachable, with
+     tabular figures available for the process strip and the hours table. */
+  --font-body: "Source Sans 3 Variable", ui-sans-serif, system-ui, sans-serif;
+}

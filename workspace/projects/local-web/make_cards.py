@@ -17,6 +17,9 @@ OUT.mkdir(exist_ok=True)
 PROSPECTS = [
     ("praxis-uslu",  "Praxis Dr. med. Sema Uslu", "Ihre neue Praxis-Website"),
     ("pronto-pronto","Pronto-Pronto",             "Die neue Website für Ihren Lieferservice"),
+    ("meinzer-maler","Michael Meinzer Malerfachbetrieb", "Die neue Website für Ihren Malerbetrieb"),
+    ("helmle-physio","Helmle & Helmle Physiotherapie",   "Die neue Website für Ihre Praxis"),
+    ("beauty-lounge","Beauty Lounge Karlsruhe",          "Die neue Website für Ihr Kosmetikstudio"),
 ]
 
 # Identity line: filled from identity.txt if present, else visible placeholder.

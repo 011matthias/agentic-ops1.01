@@ -1,0 +1,65 @@
+/* helmle-physio: warm-grounded body-wellness physiotherapy. Calm, hands-on,
+   credible neighbourhood Praxis. NOT clinical-cold, NOT luxury-spa.
+   Overrides the shared brand slots from global.css under [data-site].
+   Every token carries a WHY and a verified WCAG AA (>= 4.5:1) note where
+   it touches small text. Contrast ratios computed against paper #F6F3EC. */
+[data-site="helmle-physio"] {
+  /* Warm off-white paper. WHY: a cool clinical white reads sterile; a warm
+     paper tone communicates the practice's hands-on, human warmth. */
+  --color-paper: #f6f3ec;
+
+  /* Soft stone card surface. WHY: a warmer, grounded card tone (not pure
+     white) keeps the body-wellness mood; ink on it = 9.78:1 (AA pass). */
+  --color-surface: #e4ded2;
+
+  /* Green-near-black ink, never pure black. WHY: pure #000 is harsh and
+     cold; a green-cast near-black sits in the sage family and reads softer.
+     On paper = 11.82:1, on surface = 9.78:1 (both AAA for body text). */
+  --color-ink: #2c322e;
+
+  /* Calm muted slate, used for secondary/supporting prose. WHY: a muted
+     slate (not grey) keeps the calm/focus register. Deepened to #4d5961 so
+     it also clears AA on the STONE card surface (#5c6b73 was only 4.11:1 on
+     the card labels; #4d5961 is ~5.4:1 on the card, higher on paper). */
+  --color-muted: #4d5961;
+
+  /* Warm hairline rule. WHY: a warm stone line keeps section dividers from
+     reading as a cold UI grid; decorative (non-text), no contrast gate. */
+  --color-line: #d8d0c0;
+
+  /* Warm CTA accent: clay/terracotta, deepened. WHY: terracotta is the warm
+     hands-on counterpoint to the sage calm; the design-direction clay
+     (#C57B57) gives only 3.31:1 with white text (FAILS), so it is deepened
+     to #A85734 -> white text = 5.15:1 (AA pass). Clay-on-paper = 4.65:1,
+     so the same token is also AA-safe as small link/accent text. */
+  --color-accent: #a85734;
+  --color-accent-ink: #ffffff;
+
+  /* Sage tint surface for the signature band / soft sections. WHY: a faint
+     sage wash gives the calm-wellness background depth without a flat field;
+     ink on it = 11.3:1 (AAA). */
+  --color-accent-soft: #eaf0ea;
+
+  /* Sage display/large-only token. WHY: calm sage #6F8F7D on paper = 3.21:1,
+     which FAILS AA for small text; per the art-direction rule it is used
+     ONLY for large display headings (>= 24px / 3:1 large-text threshold)
+     and decorative fills, never body copy. */
+  --color-sage: #6f8f7d;
+
+  /* Deep sage for small accent text (eyebrow ticks, the progress rail when
+     it carries a label, in-text accent). WHY: deep sage #4F6A57 on paper =
+     5.37:1 (AA pass for small text); keeps the sage hue where #6F8F7D could
+     not legally be used. */
+  --color-sage-deep: #45604c;
+
+  /* WHY Fraunces: a warm, soft optical serif. The German physio-practice
+     default is a clinical grotesk; a humanist soft-serif display IS the
+     differentiator (warmth + care). Georgia as the metric-compatible
+     fallback. */
+  --font-display: "Fraunces Variable", Georgia, serif;
+
+  /* WHY Hanken Grotesk: a friendly humanist sans, highly legible for German
+     prose (long compound words, umlauts). Sits in the supporting body role;
+     the display face carries the brand. */
+  --font-body: "Hanken Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
+}
