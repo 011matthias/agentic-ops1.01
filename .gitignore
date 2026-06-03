@@ -127,3 +127,6 @@ platform/public/docs/*/.build-report.txt
 
 # Scheduled-tasks runtime lock
 .claude/scheduled_tasks.lock
+
+# Serena MCP project cache (index/memories) - regenerated per project, machine-local
+.serena/
