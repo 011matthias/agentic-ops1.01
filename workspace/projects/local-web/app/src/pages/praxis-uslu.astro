@@ -67,7 +67,11 @@ const description =
         <span class="brand__name">{praxis.doctor}</span>
         <span class="brand__role">{praxis.role}</span>
       </a>
-      <nav class="site-nav" aria-label="Hauptnavigation">
+      <button class="nav-toggle" aria-expanded="false" aria-controls="site-nav" aria-label="Menü öffnen">
+        <span class="nav-toggle__bar"></span>
+        <span class="nav-toggle__bar"></span>
+      </button>
+      <nav id="site-nav" class="site-nav" aria-label="Hauptnavigation">
         <a href="#leistungen">Leistungen</a>
         <a href="#praxis">Praxis</a>
         <a href="#kontakt">Sprechzeiten</a>
@@ -317,6 +321,30 @@ const description =
     el.textContent = open ? "Jetzt geöffnet" : "Aktuell geschlossen";
     el.classList.add(open ? "is-open" : "is-shut");
   }
+
+  // Mobile nav: full-screen overlay toggle + sticky scroll-shrink.
+  const head = document.querySelector(".site-head");
+  const toggle = document.querySelector(".nav-toggle");
+  const nav = document.getElementById("site-nav");
+  if (head && toggle && nav) {
+    toggle.addEventListener("click", () => {
+      const isOpen = head.classList.toggle("is-menu-open");
+      toggle.setAttribute("aria-expanded", String(isOpen));
+      document.body.style.overflow = isOpen ? "hidden" : "";
+    });
+    nav.querySelectorAll("a").forEach((a) =>
+      a.addEventListener("click", () => {
+        head.classList.remove("is-menu-open");
+        toggle.setAttribute("aria-expanded", "false");
+        document.body.style.overflow = "";
+      })
+    );
+  }
+  if (head) {
+    const onScroll = () => head.classList.toggle("is-scrolled", window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+  }
 </script>
 
 <style>
@@ -333,7 +361,11 @@ const description =
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding-block: 0.9rem;
+    padding-block: 1.35rem;
+    transition: padding-block 0.2s ease;
+  }
+  .site-head.is-scrolled .site-head__row {
+    padding-block: 0.95rem;
   }
   .brand {
     text-decoration: none;
@@ -375,9 +407,75 @@ const description =
   .site-nav a.site-nav__cta:hover {
     color: var(--color-accent-ink);
   }
+  .nav-toggle {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    box-sizing: border-box;
+    min-width: 44px;
+    min-height: 44px;
+    background: none;
+    border: 0;
+    padding: 0.5rem;
+    cursor: pointer;
+    z-index: 60;
+  }
+  .nav-toggle__bar {
+    display: block;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--color-ink);
+    transition: transform 0.2s ease, width 0.2s ease;
+  }
+  .nav-toggle__bar:first-child { width: 26px; }
+  .nav-toggle__bar:last-child { width: 18px; }
+  .site-head.is-menu-open .nav-toggle__bar:first-child {
+    width: 26px;
+    transform: translateY(3.5px) rotate(45deg);
+  }
+  .site-head.is-menu-open .nav-toggle__bar:last-child {
+    width: 26px;
+    transform: translateY(-3.5px) rotate(-45deg);
+  }
   @media (max-width: 640px) {
+    .nav-toggle {
+      display: inline-flex;
+    }
+    .site-nav {
+      position: fixed;
+      inset: 0;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 1.75rem;
+      background: var(--color-paper);
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-6px);
+      transition: opacity 0.25s ease, transform 0.25s ease, visibility 0.25s;
+      z-index: 55;
+    }
+    .site-head.is-menu-open .site-nav {
+      opacity: 1;
+      visibility: visible;
+      transform: none;
+    }
     .site-nav a:not(.site-nav__cta) {
-      display: none;
+      font-size: var(--text-2xl);
+    }
+    .site-nav a.site-nav__cta {
+      margin-top: 0.5rem;
+      padding: 0.85rem 1.6rem;
+      font-size: var(--text-lg);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .site-head__row,
+    .nav-toggle__bar,
+    .site-nav {
+      transition: none;
     }
   }
 
