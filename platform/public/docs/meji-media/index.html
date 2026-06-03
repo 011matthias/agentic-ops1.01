@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Meji Media &ndash; Automation Documentation</title>
 <style>
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+    h2 { page-break-before: always; }
+    h2:first-of-type { page-break-before: avoid; }
+}
+
 :root {
   --header-height: 72px;
   --sidebar-width: 200px;
@@ -323,6 +331,7 @@ body {
   .auto-item { flex-wrap: wrap; }
 }
 </style>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
 </head>
 <body>
 

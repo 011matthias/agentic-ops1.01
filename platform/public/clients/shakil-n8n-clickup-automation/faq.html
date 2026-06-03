@@ -4,9 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FAQ | Shakil's Automation | UnpauseAI</title>
-<script>
-(function(){var t=localStorage.getItem('shakil-n8n-clickup-automation-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
-</script>
 <style>
 :root {
     --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
@@ -195,6 +192,7 @@ details summary::after { content: '+'; font-size: 18px; font-weight: 700; color:
 details[open] summary::after { content: '-'; }
 details .faq-body { padding: 0 20px 16px; font-size: 14px; color: var(--text); line-height: 1.7; }
 </style>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
 </head>
 <body>
 
@@ -317,7 +315,7 @@ details .faq-body { padding: 0 20px 16px; font-size: 14px; color: var(--text); l
 <p><a href="/clients/shakil-n8n-clickup-automation/onboarding" class="cta-btn" style="margin-top: 8px;">Go to Onboarding Form &rarr;</a></p>
 
 <div class="footer">
-    <p>Prepared by UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
+    <p>Prepared by UnpauseAI &middot; <a href="mailto:admin@unpauseai.com">admin@unpauseai.com</a> &middot; 2026</p>
 </div>
 
 </div>
@@ -328,7 +326,7 @@ function toggleTheme(){
     var h=document.documentElement;
     var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
     h.setAttribute('data-theme',t);
-    localStorage.setItem('shakil-n8n-clickup-automation-theme',t);
+    localStorage.setItem('theme',t);
 }
 
 var links = document.querySelectorAll('.step-link');

@@ -301,6 +301,7 @@ tr:hover td { background: var(--blue-bg); }
     .form-checkbox-grid { grid-template-columns: 1fr; }
 }
 </style>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
 </head>
 <body>
 
@@ -748,7 +749,7 @@ tr:hover td { background: var(--blue-bg); }
 <section class="cta-section">
     <h2>Ready to get started?</h2>
     <p>Submit the form above, or get in touch directly.</p>
-    <a href="mailto:nicolas.neumann@unpauseai.com" class="cta-btn">Get in touch</a>
+    <a href="mailto:admin@unpauseai.com" class="cta-btn">Get in touch</a>
 </section>
 
 <footer class="footer" style="border-top: 1px solid var(--border); text-align: center; color: var(--text2); font-size: 13px; padding: 24px 0 40px;">
@@ -765,7 +766,7 @@ function toggleTheme() {
     var el = document.documentElement;
     var t = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     el.setAttribute('data-theme', t);
-    localStorage.setItem('menovia-theme', t);
+    localStorage.setItem('theme', t);
 }
 
 function toggleSetup(btn) {
@@ -846,7 +847,7 @@ if (onboardingForm) {
         }).catch(function() {
             var subject = encodeURIComponent('Menovia Onboarding - ' + data.contact_name);
             var body = encodeURIComponent('Contact: ' + data.contact_name + '\nEmail: ' + data.email + '\nRole: ' + data.role + '\nTools: ' + data.tools.join(', ') + '\nChannel: ' + data.comm_channel + '\nNotes: ' + data.notes);
-            window.location.href = 'mailto:nicolas.neumann@unpauseai.com?subject=' + subject + '&body=' + body;
+            window.location.href = 'mailto:admin@unpauseai.com?subject=' + subject + '&body=' + body;
             btn.textContent = 'Submit Onboarding Info';
             btn.disabled = false;
         });
@@ -860,7 +861,7 @@ if (onboardingForm) {
 
 // Restore theme
 (function() {
-    var t = localStorage.getItem('menovia-theme');
+    var t = localStorage.getItem('theme');
     if (t) document.documentElement.setAttribute('data-theme', t);
 })();
 </script>

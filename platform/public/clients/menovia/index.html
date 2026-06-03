@@ -297,9 +297,7 @@ tr:hover td { background: var(--blue-bg); }
     .stat-value { font-size: 20px; }
 }
 </style>
-<script>
-(function(){var t=localStorage.getItem('menovia-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
-</script>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
 </head>
 <body>
 
@@ -597,7 +595,7 @@ tr:hover td { background: var(--blue-bg); }
 <section class="cta-section" id="next-steps">
     <h2>Ready to get started?</h2>
     <p>Reply to our message on Upwork, or reach out directly.</p>
-    <a href="mailto:nicolas.neumann@unpauseai.com" class="cta-btn">Let's Talk, Menovia</a>
+    <a href="mailto:admin@unpauseai.com" class="cta-btn">Let's Talk, Menovia</a>
     <a href="/clients/menovia/proposal-pdf?print" class="cta-secondary" target="_blank">&#128196; Download Proposal PDF</a>
 </section>
 
@@ -618,7 +616,7 @@ function toggleTheme() {
     var el = document.documentElement;
     var t = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     el.setAttribute('data-theme', t);
-    localStorage.setItem('menovia-theme', t);
+    localStorage.setItem('theme', t);
 }
 
 // Active sidebar tracking

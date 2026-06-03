@@ -236,9 +236,7 @@ tr:hover td { background: var(--blue-bg); }
 .page-hero h1 { font-size: 30px; font-weight: 800; color: var(--text-strong); margin-bottom: 10px; }
 .page-hero p { font-size: 15px; color: var(--text2); max-width: 560px; margin: 0; }
 </style>
-<script>
-(function(){var t=localStorage.getItem('menovia-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
-</script>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
 </head>
 <body>
 
@@ -510,7 +508,7 @@ tr:hover td { background: var(--blue-bg); }
 
 <div class="callout green">
     <div class="callout-title">Request our specifications</div>
-    <p>We are happy to share our full technical specifications so you can evaluate our scope against any provider. If you decide to work with someone else, you keep the starter template and all documentation we have provided so far &mdash; no strings attached. <a href="mailto:nicolas.neumann@unpauseai.com">Request specs</a></p>
+    <p>We are happy to share our full technical specifications so you can evaluate our scope against any provider. If you decide to work with someone else, you keep the starter template and all documentation we have provided so far &mdash; no strings attached. <a href="mailto:admin@unpauseai.com">Request specs</a></p>
 </div>
 
 <!-- Section 7: What's Included -->
@@ -545,9 +543,9 @@ tr:hover td { background: var(--blue-bg); }
 <section class="cta-section">
     <h2>Ready to start?</h2>
     <p>Send us a message and we can get Phase 1 underway within a few days of agreement.</p>
-    <a href="mailto:nicolas.neumann@unpauseai.com" class="cta-btn">
+    <a href="mailto:admin@unpauseai.com" class="cta-btn">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,12 2,6"/></svg>
-        nicolas.neumann@unpauseai.com
+        admin@unpauseai.com
     </a>
     <a href="/clients/menovia/menovia-proposal.pdf" class="cta-secondary">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -569,7 +567,7 @@ function toggleTheme() {
     var el = document.documentElement;
     var t = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     el.setAttribute('data-theme', t);
-    localStorage.setItem('menovia-theme', t);
+    localStorage.setItem('theme', t);
 }
 
 // Active sidebar tracking on scroll

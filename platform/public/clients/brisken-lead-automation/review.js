@@ -12,7 +12,7 @@
     'use strict';
 
     var STORE = 'brisken-rv3';
-    var MAIL = 'nicolas.neumann@unpauseai.com';
+    var MAIL = 'admin@unpauseai.com';
     var WEBHOOK = 'https://hook.eu1.make.com/ixia13ls7admv5salw3h1p7lmcasmjuh';
     var page = location.pathname.split('/').filter(Boolean).pop() || 'overview';
     var PAGES = { 'brisken-lead-automation': 'Overview', solution: 'Solution', timeline: 'Timeline', faq: 'FAQ' };

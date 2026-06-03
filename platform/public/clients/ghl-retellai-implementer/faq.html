@@ -4,9 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FAQ | GHL + Retell AI Technical Implementer | UnpauseAI</title>
-<script>
-(function(){var t=localStorage.getItem('ghl-retellai-implementer-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
-</script>
 <style>
 :root {
     --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
@@ -210,6 +207,7 @@ details .faq-body p { margin-bottom: 10px; font-size: 14px; }
 details .faq-body p:last-child { margin-bottom: 0; }
 details[open] summary { color: var(--blue-dark); }
 </style>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
 </head>
 <body>
 
@@ -363,7 +361,7 @@ details[open] summary { color: var(--blue-dark); }
 </section>
 
 <div class="footer">
-    <p>Prepared by UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
+    <p>Prepared by UnpauseAI &middot; <a href="mailto:admin@unpauseai.com">admin@unpauseai.com</a> &middot; 2026</p>
 </div>
 
 </div>
@@ -374,7 +372,7 @@ function toggleTheme(){
     var h=document.documentElement;
     var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
     h.setAttribute('data-theme',t);
-    localStorage.setItem('ghl-retellai-implementer-theme',t);
+    localStorage.setItem('theme',t);
 }
 
 var links = document.querySelectorAll('.step-link');

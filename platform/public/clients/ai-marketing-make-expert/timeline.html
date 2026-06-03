@@ -235,9 +235,7 @@ tr:hover td { background: var(--blue-bg); }
     .tl-header { flex-direction: column; gap: 4px; }
 }
 </style>
-<script>
-(function(){var t=localStorage.getItem('aimarketing-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
-</script>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
 </head>
 <body>
 
@@ -632,7 +630,7 @@ function toggleTheme(){
     var h=document.documentElement;
     var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
     h.setAttribute('data-theme',t);
-    localStorage.setItem('aimarketing-theme',t);
+    localStorage.setItem('theme',t);
 }
 (function(){
     var links=document.querySelectorAll('.step-link');

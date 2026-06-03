@@ -271,12 +271,7 @@ li { margin-bottom: 6px; }
     .phases-grid { grid-template-columns: 1fr; }
 }
 </style>
-<script>
-(function(){
-    var t = localStorage.getItem('stackaudit-theme');
-    if(t === 'dark') document.documentElement.setAttribute('data-theme','dark');
-})();
-</script>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
 </head>
 <body>
 
@@ -487,7 +482,7 @@ function toggleTheme() {
     var html = document.documentElement;
     var next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     html.setAttribute('data-theme', next);
-    localStorage.setItem('stackaudit-theme', next);
+    localStorage.setItem('theme', next);
 }
 </script>
 </body>

@@ -282,9 +282,7 @@ li { margin-bottom: 6px; }
     .submit-row { flex-direction: column; align-items: flex-start; }
 }
 </style>
-<script>
-(function(){var t=localStorage.getItem('meditation-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
-</script>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
 </head>
 <body>
 
@@ -531,7 +529,7 @@ function toggleTheme(){
     var h=document.documentElement;
     var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
     h.setAttribute('data-theme',t);
-    localStorage.setItem('meditation-theme',t);
+    localStorage.setItem('theme',t);
 }
 
 // Show/hide "Other" text input

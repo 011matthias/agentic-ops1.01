@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Timeline | UnpauseAI</title>
 <style>
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+    h2 { page-break-before: always; }
+    h2:first-of-type { page-break-before: avoid; }
+}
+
 :root { --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827; --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff; --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6; --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857; --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309; --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9; --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08); }
 [data-theme="dark"] { --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9; --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554; --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd; --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7; --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d; --border: #334155; --surface: #1e293b; --surface2: #1e293b; --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3); }
 * { box-sizing: border-box; margin: 0; }
@@ -57,9 +65,7 @@ li { margin-bottom: 6px; }
 .footer a { color: var(--text2); }
 @media (max-width: 768px) { .nav-links { display: none; } .hero h1 { font-size: 24px; } }
 </style>
-<script>
-(function(){var t=localStorage.getItem('ai-mvp-builder-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
-</script>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
 </head>
 <body>
 
@@ -157,7 +163,7 @@ function toggleTheme() {
     var current = html.getAttribute('data-theme');
     var next = current === 'dark' ? 'light' : 'dark';
     html.setAttribute('data-theme', next);
-    localStorage.setItem('ai-mvp-builder-theme', next);
+    localStorage.setItem('theme', next);
 }
 function checkAccess() {
     var input = document.getElementById('accessCode').value.trim().toLowerCase();
