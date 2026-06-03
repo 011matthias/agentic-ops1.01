@@ -93,61 +93,53 @@ const description =
   </header>
 
   <main id="main">
-    {/* Type-led full-bleed hero (Plumbly pattern): slab headline carries
-        the page; Fassade photo with Ken Burns sits behind a warm scrim
-        + paper-grain, so it stands even with the honest slot in place. */}
+    {/* Hero: solid worked panel + real-work photo split. The heavy Bitter
+        slab + the Meister/Festpreis trust marks sit on a warm copper-washed
+        panel (copper top-rule), the painter-at-work photo fills the column
+        beside it. Deliberately NOT the pronto-pronto full-bleed-overlay, so
+        the SET reads as five sites, not one template. */}
     <section class="hero">
-      <div class="hero__media">
-        <Figure
-          site="meinzer-maler"
-          name="hero"
-          label="Hausfassade, frisch gestrichen, warmes Tageslicht"
-          ratio="16 / 9"
-          rounded="0"
-          priority
-          sizes="100vw"
-          kenburns
-        />
-      </div>
-      <div class="hero__scrim"></div>
-      <div class="hero__grain" aria-hidden="true"></div>
-      <div class="wrap hero__inner">
-        <p class="eyebrow hero__eyebrow">
-          Malerfachbetrieb · Karlsruhe-Knielingen
-        </p>
-        <h1>Wände, Fassaden und Sanierung, sauber gemacht.</h1>
-        <p class="hero__sub">{meinzer.tagline}</p>
-        <div class="hero__actions">
-          <a class="btn btn-primary" href={meinzer.phoneHref}>
-            Anrufen · {meinzer.phone}
-          </a>
-          <a class="btn btn-ghost" href="#leistungen">Leistungen ansehen</a>
+      <div class="wrap hero__grid">
+        <div class="hero__panel" data-reveal>
+          <p class="eyebrow hero__eyebrow">
+            Malerfachbetrieb · Karlsruhe-Knielingen
+          </p>
+          <h1>Wände, Fassaden und Sanierung, sauber gemacht.</h1>
+          <p class="hero__sub">{meinzer.tagline}</p>
+          <ul class="hero__marks" aria-label="Auf einen Blick">
+            <li>
+              <span class="hero__mark-k">Meister</span>
+              <span class="hero__mark-v">Geführt von {meinzer.owner}</span>
+            </li>
+            <li>
+              <span class="hero__mark-k">Festpreis</span>
+              <span class="hero__mark-v">Klares Angebot, keine Überraschungen</span>
+            </li>
+          </ul>
+          <div class="hero__actions">
+            <a class="btn btn-primary" href={meinzer.phoneHref}>
+              Anrufen · {meinzer.phone}
+            </a>
+            <a class="btn btn-ghost" href="#leistungen">Leistungen ansehen</a>
+          </div>
+          <p class="hero__meta">
+            {fullAddress}
+            <span aria-hidden="true"> · </span>
+            Meisterbetrieb, {meinzer.owner}
+          </p>
         </div>
-        <p class="hero__meta">
-          {fullAddress}
-          <span aria-hidden="true"> · </span>
-          Meisterbetrieb, {meinzer.owner}
-        </p>
-      </div>
-    </section>
 
-    {/* Trust strip (SPS Plumbers pattern): credentials high on the page.
-        Years-in-trade unverified -> [BITTE PRÜFEN] chip, never invented. */}
-    <section class="trust" aria-label="Auf einen Blick">
-      <div class="wrap trust__row" data-reveal-group>
-        <div class="trust__item" data-reveal>
-          <span class="trust__big">Meister</span>
-          <span class="trust__label">Geführt von {meinzer.owner}</span>
-        </div>
-        <div class="trust__item" data-reveal>
-          <span class="trust__big">Festpreis</span>
-          <span class="trust__label">Klares Angebot, keine Überraschungen</span>
-        </div>
-        <div class="trust__item" data-reveal>
-          <span class="trust__big trust__big--chip">
-            <span class="tbc">{meinzer.yearsInTrade}</span>
-          </span>
-          <span class="trust__label">Jahre Erfahrung im Handwerk</span>
+        <div class="hero__media" data-reveal>
+          <Figure
+            site="meinzer-maler"
+            name="hero"
+            label="Maler bei der Arbeit, frische Wand, warmes Tageslicht"
+            ratio="3 / 4"
+            rounded="0"
+            priority
+            sizes="(min-width: 60rem) 40vw, 100vw"
+            kenburns
+          />
         </div>
       </div>
     </section>
@@ -258,10 +250,14 @@ const description =
                 <dt>Fax</dt>
                 <dd>{meinzer.fax}</dd>
               </div>
-              <div>
-                <dt>E-Mail</dt>
-                <dd><span class="tbc">{meinzer.email}</span></dd>
-              </div>
+              {
+                meinzer.email !== CHECK && (
+                  <div>
+                    <dt>E-Mail</dt>
+                    <dd>{meinzer.email}</dd>
+                  </div>
+                )
+              }
             </dl>
           </div>
 
@@ -284,10 +280,8 @@ const description =
         <a href={meinzer.phoneHref}>{meinzer.phone}</a>
       </p>
       <p class="site-foot__legal">
-        Zuletzt aktualisiert: {meinzer.updated} · Bilder: Pexels ·
-        <span class="tbc">Impressum</span> und
-        <span class="tbc">Datenschutz</span> sind rechtlich verpflichtend und
-        werden vor Veröffentlichung juristisch geprüft ergänzt.
+        Zuletzt aktualisiert: {meinzer.updated} · Bilder: Pexels · Impressum
+        und Datenschutz folgen vor Veröffentlichung.
       </p>
     </div>
   </footer>
@@ -351,36 +345,39 @@ const description =
     }
   }
 
-  /* Hero: full-bleed photo behind a warm paper scrim + grain. */
+  /* Hero: solid worked panel + real-work photo split. */
   .hero {
-    position: relative;
-    isolation: isolate;
-    min-height: clamp(30rem, 70vh, 44rem);
+    padding-block: clamp(2.5rem, 6vw, 4.5rem);
+  }
+  .hero__grid {
+    display: grid;
+    grid-template-columns: 1.05fr 0.92fr;
+    gap: clamp(1.5rem, 4vw, 3rem);
+    align-items: stretch;
+  }
+  .hero__panel {
+    background: var(--color-accent-soft);
+    border-top: 5px solid var(--color-accent);
+    border-radius: var(--radius-md);
+    padding: clamp(1.75rem, 4vw, 3rem);
     display: flex;
-    align-items: flex-end;
-    overflow: hidden;
+    flex-direction: column;
+    justify-content: center;
   }
   .hero__media {
-    position: absolute;
-    inset: 0;
-    z-index: -2;
+    position: relative;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    min-height: 22rem;
   }
   .hero__media :global(.figure),
   .hero__media :global(.img-slot) {
-    width: 100%;
     height: 100%;
     aspect-ratio: auto !important;
   }
-  .hero__scrim {
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--color-paper) 30%, transparent) 0%,
-      color-mix(in srgb, var(--color-paper) 60%, transparent) 48%,
-      var(--color-paper) 100%
-    );
+  /* One warm grade on the single hero photograph (skil_web-build B4). */
+  .hero__media :global(img) {
+    filter: saturate(1.06) sepia(0.05) brightness(1.02) contrast(1.02);
   }
   /* Paper-grain texture (background-depth rule: no flat field). A fractal-
      noise SVG at soft-light, ~9%, gives the hero a worked-surface tooth at
@@ -395,31 +392,61 @@ const description =
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
     background-size: 160px 160px;
   }
-  .hero__inner {
-    padding-block: clamp(2.5rem, 7vw, 5rem);
-  }
   .hero__eyebrow {
     margin: 0 0 1.1rem;
   }
   .hero h1 {
     font-family: var(--font-display);
-    font-size: var(--text-5xl);
+    /* Heavy Bitter slab, sized to fill the panel column and hyphenated for
+       German compounds so it reads confident-BIG without overflowing. */
+    font-size: clamp(2.3rem, 1.7rem + 2.5vw, 3.4rem);
     font-weight: 800;
     letter-spacing: -0.02em;
-    line-height: 1.02;
+    line-height: 1.04;
     max-width: 16ch;
+    hyphens: auto;
+    overflow-wrap: break-word;
   }
   .hero__sub {
-    font-size: var(--text-xl);
+    font-size: var(--text-lg);
     color: var(--color-ink);
-    max-width: 46ch;
-    margin-block: 1.3rem 0;
+    max-width: 44ch;
+    margin-block: 1.2rem 0;
+  }
+  /* Meister + Festpreis trust marks, folded into the hero panel as two
+     copper-keyed stamps. The unverified years stat is omitted, not faked. */
+  .hero__marks {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.1rem 2.25rem;
+    padding: 0;
+    margin: 1.6rem 0 0;
+  }
+  .hero__marks li {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .hero__mark-k {
+    font-family: var(--font-display);
+    font-weight: 800;
+    /* text-xl (>=21.6px) keeps the copper marks above the bold large-text
+       threshold so copper-on-panel is gated at 3:1 (4.26:1 actual), AA. */
+    font-size: var(--text-xl);
+    color: var(--color-accent);
+    line-height: 1;
+  }
+  .hero__mark-v {
+    font-size: var(--text-xs);
+    color: var(--color-muted);
+    max-width: 24ch;
   }
   .hero__actions {
     display: flex;
     flex-wrap: wrap;
     gap: 0.85rem;
-    margin-block: 2rem 1.25rem;
+    margin-block: 1.8rem 1.1rem;
   }
   /* Press feedback per skil_web-build §3a motion table (scale(0.97) on
      :active); transform-only, interruptible, reduced-motion safe. */
@@ -429,37 +456,6 @@ const description =
   .hero__meta {
     font-size: var(--text-sm);
     color: var(--color-muted);
-  }
-
-  /* Trust strip. */
-  .trust {
-    border-bottom: 1px solid var(--color-line);
-    background: var(--color-surface);
-  }
-  .trust__row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: clamp(2rem, 6vw, 5rem);
-    padding-block: clamp(2rem, 4vw, 2.75rem);
-  }
-  .trust__item {
-    display: grid;
-    gap: 0.3rem;
-  }
-  .trust__big {
-    font-family: var(--font-display);
-    font-size: var(--text-2xl);
-    font-weight: 800;
-    color: var(--color-accent);
-    line-height: 1;
-  }
-  .trust__big--chip {
-    color: inherit;
-  }
-  .trust__label {
-    color: var(--color-muted);
-    font-size: var(--text-sm);
-    max-width: 26ch;
   }
 
   .section {
@@ -721,15 +717,14 @@ const description =
     background: var(--color-paper);
   }
 
+  /* Quiet editorial note, not a loud "broken" badge: muted italic inline so
+     a pitch visitor reads it as "the owner will confirm this", not an error. */
   .tbc {
     font-family: var(--font-body);
-    font-size: 0.92em;
-    font-weight: 700;
-    color: var(--color-ink);
-    background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface));
-    border: 1px solid color-mix(in srgb, var(--color-accent) 50%, transparent);
-    padding: 0.05em 0.45em;
-    border-radius: var(--radius-sm);
+    font-size: 0.9em;
+    font-weight: 500;
+    font-style: italic;
+    color: var(--color-muted);
     white-space: nowrap;
   }
 
@@ -751,8 +746,17 @@ const description =
   }
 
   @media (max-width: 860px) {
+    .hero__grid,
     .contact__grid {
       grid-template-columns: 1fr;
+    }
+    .hero__media {
+      min-height: 0;
+    }
+    .hero__media :global(.figure),
+    .hero__media :global(.img-slot) {
+      aspect-ratio: 4 / 3 !important;
+      height: auto;
     }
     .werkbank__strip {
       grid-template-columns: 1fr 1fr;

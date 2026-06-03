@@ -32,9 +32,10 @@ const SLOTS = [
   { site: "praxis-uslu", name: "signature", orientation: "portrait",
     query: "acupuncture needles dried herbs warm linen still life soft window light" },
 
-  // meinzer-maler — Werkstatt-warm trades, real work, no people/no headset stock.
-  { site: "meinzer-maler", name: "hero", orientation: "landscape",
-    query: "freshly painted house facade renovation warm daylight" },
+  // meinzer-maler — Werkstatt-warm trades: real work in progress (a painter
+  // at the wall), warm daylight; NOT a wrong-place facade stock photo.
+  { site: "meinzer-maler", name: "hero", orientation: "portrait",
+    query: "close up hand with paint roller painting wall warm beige tone natural light" },
 
   // helmle-physio — calm hands-on Krankengymnastik, warm window light, hands
   // on the work, faces out of frame; NO gym / kinesio-tape / sports-rehab.

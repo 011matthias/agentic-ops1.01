@@ -86,7 +86,7 @@ export const meinzer = {
   team: CHECK,
   certifications: CHECK,
 
-  updated: "2026-06-02",
+  updated: "2026-06-03",
 } as const;
 
 export type Meinzer = typeof meinzer;
