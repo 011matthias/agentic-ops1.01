@@ -167,7 +167,7 @@ const description =
                   <p>{m.note}</p>
                 </div>
                 <span class="dish__leader" aria-hidden="true" />
-                <span class="dish__price tbc">{CHECK}</span>
+                <span class="dish__price tbc">auf Anfrage</span>
               </li>
             ))
           }
@@ -243,10 +243,14 @@ const description =
                 <dt>Telefon</dt>
                 <dd><a href={pronto.phoneHref}>{pronto.phone}</a></dd>
               </div>
-              <div>
-                <dt>E-Mail</dt>
-                <dd><span class="tbc">{pronto.email}</span></dd>
-              </div>
+              {
+                pronto.email !== CHECK && (
+                  <div>
+                    <dt>E-Mail</dt>
+                    <dd>{pronto.email}</dd>
+                  </div>
+                )
+              }
               <div>
                 <dt>Zahlung</dt>
                 <dd>{pronto.payment.join(", ")}</dd>
@@ -277,10 +281,8 @@ const description =
         <a href={pronto.phoneHref}>{pronto.phone}</a>
       </p>
       <p class="site-foot__legal">
-        Bilder: Pexels ·
-        <span class="tbc">Impressum</span> und
-        <span class="tbc">Datenschutz</span> werden vor Veröffentlichung
-        juristisch geprüft ergänzt.
+        Zuletzt aktualisiert: 2026-06-03 · Bilder: Pexels · Impressum und
+        Datenschutz folgen vor Veröffentlichung.
       </p>
     </div>
   </footer>
@@ -491,9 +493,9 @@ const description =
     /* Fraunces dialled to its hand-painted-sign register: large optical
        size, high softness, WONK on, for the warm 1970s pizzeria character
        (a plain grotesk weight here is exactly what read modern-tech). */
-    font-variation-settings: "opsz" 144, "SOFT" 60, "WONK" 1, "wght" 600;
-    letter-spacing: -0.01em;
-    line-height: 1.02;
+    font-variation-settings: "opsz" 144, "SOFT" 60, "WONK" 1, "wght" 660;
+    letter-spacing: -0.012em;
+    line-height: 1.0;
     max-width: 15ch;
   }
   .hero__sub {
@@ -533,8 +535,8 @@ const description =
   .liefern h2 {
     font-family: var(--font-display);
     font-size: var(--text-3xl);
-    font-variation-settings: "opsz" 110, "SOFT" 50, "WONK" 1, "wght" 600;
-    letter-spacing: -0.005em;
+    font-variation-settings: "opsz" 110, "SOFT" 50, "WONK" 1, "wght" 640;
+    letter-spacing: -0.008em;
     margin-block: 0.5rem 0;
   }
   /* Brass tick before each eyebrow: a vintage menu / signage detail. The
@@ -727,15 +729,13 @@ const description =
     gap: 1rem;
   }
 
+  /* Quiet editorial note, not a loud "broken" badge: muted italic inline. */
   .tbc {
     font-family: var(--font-body);
-    font-size: 0.92em;
-    font-weight: 600;
-    color: var(--color-ink);
-    background: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface));
-    border: 1px solid color-mix(in srgb, var(--color-accent) 55%, transparent);
-    padding: 0.05em 0.45em;
-    border-radius: var(--radius-sm);
+    font-size: 0.9em;
+    font-weight: 500;
+    font-style: italic;
+    color: var(--color-muted);
     white-space: nowrap;
   }
 
