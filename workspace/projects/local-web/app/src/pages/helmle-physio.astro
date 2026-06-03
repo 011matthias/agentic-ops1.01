@@ -94,50 +94,23 @@ const description =
   </header>
 
   <main id="main">
-    {/* Hero: serif statement + a real warm therapy photo (Ken Burns). Not a
-        centered slab, not DepthHero (medical-context restraint). */}
+    {/* Hero: stacked cinematic. A confident serif statement, then a wide
+        cinemascope therapy photo, then a quiet horizontal contact rail. No
+        right-rail facts card, no side-by-side split: deliberately distinct
+        from praxis-uslu so the SET does not read as one template. */}
     <section class="hero">
-      <div class="wrap hero__grid">
-        <div class="hero__lede">
-          <p class="eyebrow">Physiotherapie · Karlsruhe-Südweststadt</p>
-          <h1>
-            Wieder <em>beweglich</em> werden, in aller Ruhe.
-          </h1>
-          <p class="hero__sub">{helmle.tagline}</p>
-          <div class="hero__actions">
-            <a class="btn btn-primary" href={helmle.phoneHref}>
-              Termin telefonisch · {helmle.phone}
-            </a>
-            <a class="btn btn-ghost" href="#kontakt">Zeiten ansehen</a>
-          </div>
-          <p class="hero__meta">
-            {fullAddress}
-            <span aria-hidden="true"> · </span>
-            <span id="open-state" class="open-state">Zeiten unten</span>
-          </p>
+      <div class="wrap hero__head">
+        <p class="eyebrow">Physiotherapie · Karlsruhe-Südweststadt</p>
+        <h1>
+          Wieder <em>beweglich</em> werden, in aller Ruhe.
+        </h1>
+        <p class="hero__sub">{helmle.tagline}</p>
+        <div class="hero__actions">
+          <a class="btn btn-primary" href={helmle.phoneHref}>
+            Termin telefonisch · {helmle.phone}
+          </a>
+          <a class="btn btn-ghost" href="#kontakt">Zeiten ansehen</a>
         </div>
-
-        <aside class="hero__card card" aria-label="Auf einen Blick">
-          <p class="eyebrow">Auf einen Blick</p>
-          <dl class="facts">
-            <div>
-              <dt>Praxis</dt>
-              <dd>{helmle.role}</dd>
-            </div>
-            <div>
-              <dt>Telefon</dt>
-              <dd><a href={helmle.phoneHref}>{helmle.phone}</a></dd>
-            </div>
-            <div>
-              <dt>Mobil</dt>
-              <dd>{helmle.mobile}</dd>
-            </div>
-            <div>
-              <dt>Adresse</dt>
-              <dd>{fullAddress}</dd>
-            </div>
-          </dl>
-        </aside>
       </div>
 
       <div class="wrap hero__figure" data-reveal>
@@ -153,6 +126,25 @@ const description =
             sizes="(min-width: 72rem) 68rem, 92vw"
           />
           <div class="hero__grain" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <div class="wrap hero__rail" aria-label="Auf einen Blick">
+        <div class="hero__rail-item">
+          <span class="hero__rail-k">Telefon</span>
+          <a href={helmle.phoneHref}>{helmle.phone}</a>
+        </div>
+        <div class="hero__rail-item">
+          <span class="hero__rail-k">Mobil</span>
+          <span>{helmle.mobile}</span>
+        </div>
+        <div class="hero__rail-item">
+          <span class="hero__rail-k">Adresse</span>
+          <span>{fullAddress}</span>
+        </div>
+        <div class="hero__rail-item">
+          <span class="hero__rail-k">Aktuell</span>
+          <span id="open-state" class="open-state">Zeiten unten</span>
         </div>
       </div>
     </section>
@@ -227,7 +219,7 @@ const description =
           <Figure
             site="helmle-physio"
             name="signature"
-            label="Manuelle Therapie, Hände am Knie, ruhig"
+            label="Ruhiger Behandlungsraum, warme Tücher"
             ratio="4 / 5"
             rounded="var(--radius-xl)"
             sizes="(min-width: 54rem) 26rem, 92vw"
@@ -291,21 +283,37 @@ const description =
             <dl class="facts">
               <div>
                 <dt>Kassen / Privat</dt>
-                <dd><span class="tbc">{helmle.kassen}</span></dd>
+                <dd>
+                  {
+                    helmle.kassen === CHECK ? (
+                      <span class="tbc">alle Kassen & privat, auf Anfrage</span>
+                    ) : (
+                      helmle.kassen
+                    )
+                  }
+                </dd>
               </div>
-              <div>
-                <dt>Team</dt>
-                <dd><span class="tbc">{helmle.team}</span></dd>
-              </div>
+              {
+                helmle.team !== CHECK && (
+                  <div>
+                    <dt>Team</dt>
+                    <dd>{helmle.team}</dd>
+                  </div>
+                )
+              }
               <div>
                 <dt>Preise (Selbstzahler)</dt>
-                <dd><span class="tbc">{helmle.prices}</span></dd>
+                <dd>
+                  {
+                    helmle.prices === CHECK ? (
+                      <span class="tbc">auf Anfrage</span>
+                    ) : (
+                      helmle.prices
+                    )
+                  }
+                </dd>
               </div>
             </dl>
-            <p class="detail__note">
-              Felder mit <span class="tbc">{CHECK}</span> trägt die Praxis vor
-              Veröffentlichung selbst ein; sie werden nicht erfunden.
-            </p>
           </div>
         </div>
       </div>
@@ -319,10 +327,8 @@ const description =
         <a href={helmle.phoneHref}>{helmle.phone}</a>
       </p>
       <p class="site-foot__legal">
-        Zuletzt aktualisiert: 2026-06-02 · Bilder: Pexels ·
-        <span class="tbc">Impressum</span> und
-        <span class="tbc">Datenschutz</span> sind rechtlich verpflichtend und
-        werden vor Veröffentlichung juristisch geprüft ergänzt.
+        Zuletzt aktualisiert: 2026-06-03 · Bilder: Pexels · Impressum und
+        Datenschutz folgen vor Veröffentlichung.
       </p>
     </div>
   </footer>
@@ -411,20 +417,20 @@ const description =
   .hero {
     padding-block: clamp(3rem, 7vw, 6.5rem) clamp(2.5rem, 5vw, 4rem);
   }
-  .hero__grid {
-    display: grid;
-    grid-template-columns: 1.55fr 1fr;
-    gap: clamp(2rem, 5vw, 4.5rem);
-    align-items: end;
+  .hero__head {
+    max-width: 52rem;
   }
   .hero h1 {
     font-family: var(--font-display);
     /* Fraunces at a soft, warm optical register: large opsz + high SOFT for
-       the calm body-wellness character (a plain grotesk weight reads cold). */
-    font-variation-settings: "opsz" 130, "SOFT" 60, "wght" 460;
+       the calm body-wellness character. Weight pushed to 580 + tight tracking
+       so the statement reads confident-BIG, not "nice" (skil_web-build B1). */
+    font-variation-settings: "opsz" 130, "SOFT" 56, "wght" 580;
     font-size: var(--text-5xl);
-    margin-block: 0.6rem 0;
-    max-width: 16ch;
+    letter-spacing: -0.012em;
+    line-height: 1.03;
+    margin-block: 0.7rem 0;
+    max-width: 18ch;
   }
   .hero h1 em {
     font-style: italic;
@@ -455,9 +461,32 @@ const description =
   .open-state.is-open {
     color: var(--color-sage-deep);
   }
-  .hero__card {
-    padding: 1.75rem;
-    align-self: stretch;
+  /* Inline contact rail under the cinemascope photo: a quiet horizontal
+     strip of the essentials (findability, List A4) instead of a boxed
+     side card. Part of what makes this hero structurally distinct. */
+  .hero__rail {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem clamp(1.75rem, 4vw, 3.25rem);
+    margin-top: clamp(1.5rem, 3vw, 2.25rem);
+    padding-top: 1.4rem;
+    border-top: 1px solid var(--color-line);
+  }
+  .hero__rail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-size: var(--text-sm);
+  }
+  .hero__rail-k {
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-muted);
+  }
+  .hero__rail a {
+    color: var(--color-sage-deep);
+    text-decoration: none;
   }
   .facts {
     margin: 1rem 0 0;
@@ -492,6 +521,13 @@ const description =
     isolation: isolate;
     border-radius: var(--radius-xl);
     overflow: hidden;
+  }
+  /* One consistent warm grade across hero + signature so the two photos read
+     as one set (skil_web-build B4). Subtle: warm white-balance + a touch of
+     saturation, identical on both. */
+  .hero__media :global(img),
+  .weg__signature :global(img) {
+    filter: saturate(1.05) sepia(0.06) brightness(1.02) contrast(1.01);
   }
   .hero__grain {
     position: absolute;
@@ -748,15 +784,14 @@ const description =
     margin-top: 1.25rem;
   }
 
+  /* Quiet editorial note, not a loud "broken" badge: muted italic inline so
+     a pitch visitor reads it as "the practice will confirm this", not an error. */
   .tbc {
     font-family: var(--font-body);
-    font-size: 0.92em;
-    font-weight: 600;
-    color: var(--color-ink);
-    background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface));
-    border: 1px solid color-mix(in srgb, var(--color-accent) 50%, transparent);
-    padding: 0.05em 0.45em;
-    border-radius: var(--radius-sm);
+    font-size: 0.9em;
+    font-weight: 500;
+    font-style: italic;
+    color: var(--color-muted);
     white-space: nowrap;
   }
 

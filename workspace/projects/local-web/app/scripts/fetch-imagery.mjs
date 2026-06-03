@@ -36,11 +36,12 @@ const SLOTS = [
   { site: "meinzer-maler", name: "hero", orientation: "landscape",
     query: "freshly painted house facade renovation warm daylight" },
 
-  // helmle-physio — calm hands-on therapy, warm daylight, no headset-smiler stock.
+  // helmle-physio — calm hands-on Krankengymnastik, warm window light, hands
+  // on the work, faces out of frame; NO gym / kinesio-tape / sports-rehab.
   { site: "helmle-physio", name: "hero", orientation: "landscape",
-    query: "physiotherapist hands treating patient back warm daylight calm" },
+    query: "physiotherapist hands on patient back manual therapy warm window daylight calm neutral linen" },
   { site: "helmle-physio", name: "signature", orientation: "portrait",
-    query: "manual therapy hands on knee close warm natural light" },
+    query: "folded towels rolled linen on massage treatment couch warm window light still life no people" },
 
   // beauty-lounge — warm tactile beauty, no garish stock, no hair.
   { site: "beauty-lounge", name: "hero-gesicht", orientation: "portrait",

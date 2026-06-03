@@ -27,30 +27,30 @@
      reading as a cold UI grid; decorative (non-text), no contrast gate. */
   --color-line: #d8d0c0;
 
-  /* Warm CTA accent: clay/terracotta, deepened. WHY: terracotta is the warm
-     hands-on counterpoint to the sage calm; the design-direction clay
-     (#C57B57) gives only 3.31:1 with white text (FAILS), so it is deepened
-     to #A85734 -> white text = 5.15:1 (AA pass). Clay-on-paper = 4.65:1,
-     so the same token is also AA-safe as small link/accent text. */
-  --color-accent: #a85734;
+  /* Single action accent: deep petrol-teal, echoing the practice's own
+     teal/blue-green logo mark (the prior clay #A85734 fought the teal logo
+     on the header; owner-flagged). ONE accent now carries CTA + in-text +
+     decorative, so the mark and the site read as one identity. WHY this hex:
+     #30656A gives white text = 6.6:1 and teal-on-paper = 5.95:1, both AA
+     (AAA at large). The warmth lives in the paper, ink, soft serif and the
+     warm-graded photography, not in the accent. */
+  --color-accent: #30656a;
   --color-accent-ink: #ffffff;
 
-  /* Sage tint surface for the signature band / soft sections. WHY: a faint
-     sage wash gives the calm-wellness background depth without a flat field;
-     ink on it = 11.3:1 (AAA). */
-  --color-accent-soft: #eaf0ea;
+  /* Teal tint surface for the signature band / soft sections. WHY: a faint
+     teal wash gives the calm background depth without a flat field; ink on
+     it stays AAA. */
+  --color-accent-soft: #e6efee;
 
-  /* Sage display/large-only token. WHY: calm sage #6F8F7D on paper = 3.21:1,
-     which FAILS AA for small text; per the art-direction rule it is used
-     ONLY for large display headings (>= 24px / 3:1 large-text threshold)
-     and decorative fills, never body copy. */
-  --color-sage: #6f8f7d;
+  /* Light teal, large/decorative only (rail track tint, eyebrow tick). WHY:
+     used >= 24px / non-text per the large-text 3:1 threshold, never body. */
+  --color-sage: #5e9296;
 
-  /* Deep sage for small accent text (eyebrow ticks, the progress rail when
-     it carries a label, in-text accent). WHY: deep sage #4F6A57 on paper =
-     5.37:1 (AA pass for small text); keeps the sage hue where #6F8F7D could
-     not legally be used. */
-  --color-sage-deep: #45604c;
+  /* Deep teal for small accent text + fills (eyebrow ticks, links, h1 em,
+     progress rail, step dots, list numerals). Same hue as --color-accent so
+     the whole accent story is ONE colour echoing the logo; on paper = 5.95:1
+     (AA for small text). Token name kept for blast-radius; value is teal. */
+  --color-sage-deep: #30656a;
 
   /* WHY Fraunces: a warm, soft optical serif. The German physio-practice
      default is a clinical grotesk; a humanist soft-serif display IS the
