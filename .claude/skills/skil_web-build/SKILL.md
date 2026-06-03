@@ -42,7 +42,7 @@ Each rule's detail lives in one place — follow the pointer.
 - **One CTA per nav bar.** Four-zone structure, brand-traceable CTA colour. → `components/nav-bar.md`
 - **Banned default fonts.** No Inter / Roboto / Arial / Space Grotesk / system stacks as primary type without a written non-default justification. → `modules/CONCEIVE.md`
 - **No flat solid-colour primary sections** (background-depth rule). → `modules/CONCEIVE.md`
-- **B4 data integrity.** Every field traces to `prospects/{slug}/data.md`; unverified → `[BITTE PRÜFEN]` chip; never invent. → `modules/DATA.md`
+- **B4 data integrity.** Every field traces to `prospects/{slug}/data.md`; unverified → the data-layer `CHECK` sentinel, rendered quietly ("auf Anfrage" / omitted row), never the raw bracketed string on a pitchable page; never invent. → `modules/DATA.md`
 - **Zero em-dash** (U+2014, `&mdash;`, `&#8212;`, typographic `--`). Fix at source; `validate-dist.py` enforces. → `modules/SHIP.md`
 - **Motion envelope:** ≤300ms, custom `cubic-bezier`, `transform`/`opacity` only, `scale(0.97)` on `:active`, `prefers-reduced-motion` honoured. → `references/motion-craft.md`
 - **"Live" = the `fly.dev` origin** serving this exact build, not a localhost render. → `modules/SHIP.md`
@@ -100,11 +100,11 @@ line; the *how* lives in the linked module/reference. There is no competing chec
 14. **Live-origin parity** — `uv run tools/local-web-deploy.py` reports `VERIFIED LIVE: … serves the current build`; a localhost render never satisfies this. → `modules/SHIP.md`
 15. **Nav bar passes its component standard** — the 10-item acceptance checklist (one CTA, non-default type, brand-traceable CTA colour, full-screen mobile overlay, zero bar contrast violations, comparative-judgment paragraph). → `components/nav-bar.md`
 16. **Confident-big hero type** — the display face set BIG (scale + weight + tight tracking), sized to fill its column; reads confident, not "nice". → `modules/CONCEIVE.md` §0 (List B1)
-17. **One accent on warm neutrals** — warm off-white (not `#fff`), near-black (not `#000`), ONE disciplined accent used sparingly; no multi-accent, no pure-black-on-white. → `modules/CONCEIVE.md` §0 (List B3)
+17. **One accent on warm neutrals** — single disciplined accent, warm-neutral base, no multi-accent, no pure-black-on-white. → `modules/CONCEIVE.md` §0 (List B3)
 18. **Per-SET hero diversity** — a new or reworked site does not clone an existing site's hero *structure*; the set reads as N singular businesses, not one template. → `modules/CONCEIVE.md` §0 (List A1)
-19. **Logo / palette harmony** — a real brand mark's hue is echoed (or deliberately reconciled) by the site accent so mark and site read as one identity; no real mark → the wordmark IS the mark, never invent a logo. → `modules/CONCEIVE.md` §0
+19. **Logo / palette harmony** — the site accent echoes (or deliberately reconciles) a real brand mark's hue. → `modules/CONCEIVE.md` §0 (Logo / palette harmony gate)
 20. **No raw sentinel on a pitchable page** — every `CHECK` field renders as a quiet "auf Anfrage" / "wird ergänzt" or an omitted row, never the bracketed `[BITTE PRÜFEN]` string; `data.ts` keeps `CHECK` as the source of truth. → `modules/DATA.md`
-21. **Quiet-depth detail polish** — hairline borders, ONE shadow tier, consistent radii, faint texture; never a flat slab. → `modules/CONCEIVE.md` §0 (List B5)
+21. **Quiet-depth detail polish** — hairline borders, one shadow tier, no flat slab. → `modules/CONCEIVE.md` §0 (List B5)
 22. **German-sober tone** — no exclamation-marketing, no hype; calibrated craft over spectacle. → `modules/CONCEIVE.md` §0 (List A8)
 
 Items 16-22 are mechanically pre-screened (advisory) by `tools/audit-local-web-aesthetics.py`; that script never replaces the visual call — it just frees the eyeball pass to focus on grade, register, and "would the owner pay".

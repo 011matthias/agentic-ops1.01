@@ -105,7 +105,7 @@ Before declaring the nav done, take a 1440px screenshot of the bar in isolation.
 
 Write a paragraph answering: does this bar look like it belongs to the same world as the BRIEF anchor, and does it visibly outclass the competitor's bar? If the competitor's bar holds its own against this one, the bar is not done.
 
-This nav-specific gate sits beside the hero-level comparative-judgment gate in `SKILL.md` §3a (match-then-exceed). Both fire; the nav gate isolates the bar, the §3a gate judges the whole hero.
+This nav-specific gate sits beside the hero-level comparative-judgment gate in `modules/CONCEIVE.md` §5 (match-then-exceed). Both fire; the nav gate isolates the bar, the hero gate judges the whole hero.
 
 ## Acceptance checklist
 
@@ -119,5 +119,5 @@ Before merging a site that uses this capability:
 6. Background is not pure white or pure black
 7. No drop shadow under the bar in the default scroll state
 8. Mobile menu is full-screen overlay with custom hamburger or `Menü` text
-9. axe-core via CDP returns zero contrast violations in the bar (same CDP method as `SKILL.md` §6, not the Lighthouse CLI)
+9. axe-core via CDP returns zero contrast violations in the bar (same CDP method as `references/a11y-verify.md`, not the Lighthouse CLI)
 10. Comparative-judgment paragraph written against one BRIEF anchor and one local competitor
