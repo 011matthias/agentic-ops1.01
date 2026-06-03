@@ -53,6 +53,11 @@ Analyze the current conversation and gather:
 
 Before writing the checkpoint, review the conversation for friction events. Include any events already noted mid-session (per the friction logging rule in rule_behaviors.md) plus any newly discovered ones.
 
+**0. Drain the candidate buffer (instrumented detections).** Run `uv run tools/session_state.py --list-candidates`. The instrumentation hooks (gate-skip-detector, no-auto-commit-gate, instantly-invasive-gate) auto-capture *detectable* friction signals during the session so noticing doesn't depend on recall. For EACH candidate, make the judgment call the hook cannot:
+   - **Promote** to a register row if it was real friction (assign type, gate B1–B6, run the regression check below). Example: a `gate-fired-no-auto-commit` because the agent tried to ship unprompted.
+   - **Discard** if the gate fired *correctly* and the system worked as designed (note the reason in the session log, do not promote). Example: a `gate-fired-no-auto-commit` where the agent correctly paused and the user then authorized.
+   A candidate is NOT automatically friction. After classifying all of them, run `uv run tools/session_state.py --clear-candidates`. Then continue the conversation scan below for friction the hooks cannot detect (the judgment categories: verification-theater, over-literal, strategic-gap, intent-misalignment).
+
 1. **Scan for user corrections:** Did the user redirect your approach? ("No, use X instead", "You can just...", "Try Y", "Figure it out")
 2. **Scan for user-performed tasks:** Did the user check something you could have checked via fixtures/tools? ("I checked the sheet and...", "The email looks like...")
 3. **Scan for missed tools:** Did you ask the user to do something that `tools/make-api.py`, test fixtures, or MCP tools could have done?

@@ -23,6 +23,17 @@ import os
 import re
 import sys
 
+# Optional shared session-state store (tools/, repo-root-relative). Used ONLY
+# to persist a friction candidate when this gate fires "ask" -- a pure
+# side-effect that never alters the gate's decision.
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools")
+)
+try:
+    import session_state  # noqa: E402
+except Exception:
+    session_state = None
+
 HOOK_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hook-log.txt")
 READ_PATHS = ("/leads/list", "/campaigns/analytics", "/analytics")
 MUTATING = re.compile(r"(-X\s*|--request\s+)(POST|PUT|PATCH|DELETE)", re.IGNORECASE)
@@ -56,6 +67,16 @@ def main() -> None:
 
     # Mutating call to a non-read path -> force a permission stop.
     log("ASK:invasive-instantly-call")
+    # Side-effect only: persist a friction candidate for the checkpoint drain.
+    # Must never affect the decision below.
+    if session_state is not None:
+        try:
+            session_state.add_candidate(
+                "gate-fired-instantly-invasive", "instantly-invasive-gate",
+                cmd[:240],
+            )
+        except Exception:
+            pass
     print(json.dumps({
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",

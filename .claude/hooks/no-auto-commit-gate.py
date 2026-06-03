@@ -46,6 +46,18 @@ import re
 import subprocess
 import sys
 
+# Optional shared session-state store (tools/, repo-root-relative). Used ONLY
+# to persist a friction candidate when this gate fires "ask" -- a pure
+# side-effect that never alters the gate's decision. If the import fails the
+# gate behaves exactly as before.
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools")
+)
+try:
+    import session_state  # noqa: E402
+except Exception:
+    session_state = None
+
 HOOK_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hook-log.txt")
 
 # Ship-class shell command patterns. Matched against the FULL command string
@@ -294,6 +306,17 @@ def main() -> None:
 
     # No authorization found -> ask. The user can authorize via the prompt.
     log(f"ASK:{ship_tag} (no user authorization in last {USER_TURN_LOOKBACK} user turns)")
+    # Side-effect only: persist a friction candidate. A gate firing here is
+    # often the system working (agent paused for an order); the checkpoint
+    # drain decides promote-vs-discard. Must never affect the decision below.
+    if session_state is not None:
+        try:
+            session_state.add_candidate(
+                "gate-fired-no-auto-commit", "no-auto-commit-gate",
+                f"{ship_tag}: {cmd[:240]}",
+            )
+        except Exception:
+            pass
     print(json.dumps({
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",

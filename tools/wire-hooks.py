@@ -2,7 +2,7 @@
 # requires-python = ">=3.9"
 # dependencies = []
 # ///
-"""Idempotently wire the 11 enforcement hooks into .claude/settings.local.json.
+"""Idempotently wire the canonical enforcement hooks into .claude/settings.local.json.
 
 WHY THIS EXISTS
 ---------------
@@ -18,7 +18,7 @@ F1 re-wired this machine by hand. But settings.local.json is gitignored
 (.gitignore:85), so the fix did NOT travel: any OTHER device, or this device
 after a settings reset, still boots with ZERO enforcement and no signal that
 anything is wrong. This script is the cross-device recurrence kill: it is
-TRACKED, it carries the canonical 10-hook block as the single source of truth,
+TRACKED, it carries the canonical enforcement-hook block as the single source of truth,
 and it writes that block into the local (gitignored) settings file on demand
 or automatically at session start (--ensure), preserving every other key
 (permissions, enabledPlugins, ...) untouched.
@@ -131,6 +131,20 @@ CANONICAL_HOOKS = {
                 },
             ],
         },
+        {
+            # All-tools meter: counts tool calls + distinct files and emits a
+            # band-crossing pressure advisory once per band. Self-manages the
+            # session boundary via the payload session_id (no SessionStart
+            # reset hook needed). See rule_session-pressure.md.
+            "matcher": "",
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": "uv run python .claude/hooks/session-pressure-meter.py",
+                    "timeout": 10000,
+                }
+            ],
+        },
     ],
     "Stop": [
         {
@@ -170,8 +184,15 @@ EXPECTED_HOOK_SCRIPTS = {
     "post-write-gate.py",
     "post-action-gate.py",
     "gate-skip-detector.py",
+    "session-pressure-meter.py",
     "stop-b1-gate.py",
 }
+
+# Canonical hook count, derived so the assertion strings can never drift out
+# of sync with the set above (the old hardcoded "11"/"10" literals had already
+# diverged). Add a hook to CANONICAL_HOOKS + EXPECTED_HOOK_SCRIPTS and this
+# updates itself.
+HOOK_COUNT = len(EXPECTED_HOOK_SCRIPTS)
 
 
 def _scripts_in(hooks_block: dict) -> set[str]:
@@ -240,7 +261,7 @@ def main(argv: list[str]) -> int:
 
     if mode == "check":
         if intact:
-            print("[wire-hooks] OK: all 11 enforcement hooks wired in "
+            print(f"[wire-hooks] OK: all {HOOK_COUNT} enforcement hooks wired in "
                   ".claude/settings.local.json")
             return 0
         _loud(
@@ -255,12 +276,12 @@ def main(argv: list[str]) -> int:
 
     if mode == "ensure":
         if intact:
-            print("[wire-hooks] OK: enforcement layer intact (11/11 hooks).")
+            print(f"[wire-hooks] OK: enforcement layer intact ({HOOK_COUNT}/{HOOK_COUNT} hooks).")
             return 0
         _write(settings)
         _loud(
             "[wire-hooks] ENFORCEMENT LAYER WAS DOWN -- AUTO-REPAIRED\n"
-            f"  Rewrote the 10-hook block into .claude/settings.local.json.\n"
+            f"  Rewrote the {HOOK_COUNT}-hook block into .claude/settings.local.json.\n"
             f"  (was missing: {sorted(missing) or 'block absent / drifted'})\n"
             "  Hooks take effect from the NEXT tool call this session.\n"
             "  Root cause if recurring: a device sync or settings reset.\n"
@@ -270,10 +291,10 @@ def main(argv: list[str]) -> int:
 
     # write / default
     if intact:
-        print("[wire-hooks] No change: all 11 hooks already wired correctly.")
+        print(f"[wire-hooks] No change: all {HOOK_COUNT} hooks already wired correctly.")
         return 0
     _write(settings)
-    print("[wire-hooks] Wrote canonical 10-hook block into "
+    print(f"[wire-hooks] Wrote canonical {HOOK_COUNT}-hook block into "
           ".claude/settings.local.json "
           f"(was missing: {sorted(missing) or 'block absent / drifted'}). "
           "Other keys (permissions, enabledPlugins) preserved.")
