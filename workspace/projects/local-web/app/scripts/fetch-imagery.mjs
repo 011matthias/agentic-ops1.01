@@ -44,15 +44,16 @@ const SLOTS = [
   { site: "helmle-physio", name: "signature", orientation: "portrait",
     query: "folded towels rolled linen on massage treatment couch warm window light still life no people" },
 
-  // beauty-lounge — warm tactile beauty, no garish stock, no hair.
+  // beauty-lounge — warm tactile beauty: detail + place, NO faces, no
+  // face-forward model stock, no hair. The brief forbids people's faces.
   { site: "beauty-lounge", name: "hero-gesicht", orientation: "portrait",
-    query: "facial skincare treatment warm soft light spa close up" },
+    query: "hands holding skincare cream jar close up warm beige neutral background soft light no face" },
   { site: "beauty-lounge", name: "hero-nageldesign", orientation: "portrait",
-    query: "manicure nail detail elegant hands warm tactile neutral" },
+    query: "manicured hands close up nail detail warm natural light wood table" },
   { site: "beauty-lounge", name: "hero-wellness", orientation: "portrait",
-    query: "hot stone massage warm stones linen calm spa still life" },
+    query: "stacked smooth black hot massage stones on towel warm candlelight spa still life close" },
   { site: "beauty-lounge", name: "signature", orientation: "portrait",
-    query: "warm tactile beauty studio interior lamplight neutral elegant" },
+    query: "warm minimalist salon treatment room interior lamplight clay wall plants no people" },
 
   // pronto-pronto — appetite-first dark editorial, food only, no clipart.
   { site: "pronto-pronto", name: "hero", orientation: "landscape",

@@ -1,30 +1,30 @@
 {
   "hero-gesicht": {
-    "alt": "Close-up portrait of a woman applying skincare cream with closed eyes, blending beauty and tranquility.",
-    "photographer": "Atlantic Ambience",
-    "photographer_url": "https://www.pexels.com/@freestockpro",
-    "pexels_url": "https://www.pexels.com/photo/a-woman-in-white-tank-top-with-pink-lipstick-12944624/",
-    "query": "facial skincare treatment warm soft light spa close up"
+    "alt": "A woman's hand applying face cream from a jar against a beige background.",
+    "photographer": "Mikhail Nilov",
+    "photographer_url": "https://www.pexels.com/@mikhail-nilov",
+    "pexels_url": "https://www.pexels.com/photo/woman-holding-a-face-cream-6707140/",
+    "query": "hands holding skincare cream jar close up warm beige neutral background soft light no face"
   },
   "hero-nageldesign": {
-    "alt": "Close-up of a woman's hand with manicured nails resting on a checkered blazer.",
-    "photographer": "Ilya Komov",
-    "photographer_url": "https://www.pexels.com/@palefire",
-    "pexels_url": "https://www.pexels.com/photo/close-up-photo-of-woman-s-manicured-nails-on-a-checkered-blazer-9947831/",
-    "query": "manicure nail detail elegant hands warm tactile neutral"
+    "alt": "A hand gracefully hovers over a lit candle, creating a calm and soothing atmosphere.",
+    "photographer": "Yan Krukau",
+    "photographer_url": "https://www.pexels.com/@yankrukov",
+    "pexels_url": "https://www.pexels.com/photo/a-person-touching-a-candle-in-a-round-container-7019714/",
+    "query": "manicured hands close up nail detail warm natural light wood table"
   },
   "hero-wellness": {
-    "alt": "From above of crop masseuse with anonymous woman using stone during massage therapy in spa salon",
-    "photographer": "Anete Lusina",
-    "photographer_url": "https://www.pexels.com/@anete-lusina",
-    "pexels_url": "https://www.pexels.com/photo/crop-massage-therapist-massaging-back-of-tattooed-client-5240634/",
-    "query": "hot stone massage warm stones linen calm spa still life"
+    "alt": "Top view of aromatherapy essentials including candles, massage tools, and essential oils on a table.",
+    "photographer": "KoolShooters",
+    "photographer_url": "https://www.pexels.com/@koolshooters",
+    "pexels_url": "https://www.pexels.com/photo/brown-bottles-on-the-table-6628476/",
+    "query": "stacked smooth black hot massage stones on towel warm candlelight spa still life close"
   },
   "signature": {
-    "alt": "Vintage table lamp casting a warm glow in a cozy, dimly lit room.",
-    "photographer": "정규송 Nui MALAMA",
-    "photographer_url": "https://www.pexels.com/@nui-malama-169330637",
-    "pexels_url": "https://www.pexels.com/photo/cozy-vintage-table-lamp-in-dimly-lit-room-37183025/",
-    "query": "warm tactile beauty studio interior lamplight neutral elegant"
+    "alt": "Stylish plant and book display on wooden shelves with warm natural lighting.",
+    "photographer": "cottonbro studio",
+    "photographer_url": "https://www.pexels.com/@cottonbro",
+    "pexels_url": "https://www.pexels.com/photo/brown-wooden-wall-mounted-rack-4503943/",
+    "query": "warm minimalist salon treatment room interior lamplight clay wall plants no people"
   }
 }
