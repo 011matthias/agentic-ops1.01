@@ -11,3 +11,8 @@ dist/
 build/
 .env
 .env.local
+
+# Generated reports — examples/report.xlsx is produced by the smoke run.
+examples/report.xlsx
+examples/*report*.xlsx
+examples/report-llm.xlsx

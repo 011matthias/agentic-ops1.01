@@ -1,0 +1,534 @@
+# Annealing Register — Expense Reconciliation Build
+
+Single coherent list of quality items noticed during the slice-1
+working-tool build (session 2026-05-27) that were deferred to keep
+the ship lean. Re-read this when Chris's first real month lands or
+when starting slice 2.
+
+**Posture (Dirk 2026-05-27):** "We just need a working tool. Anneal
+quality through real-data use, not architecture up front."
+This register is the deferred-quality backlog that posture creates.
+Nothing here is a slice-1 bug — slice 1 ships intentionally narrow.
+
+**Legend.** Effort: S (~hours), M (~day), L (~week+).
+Trigger = the moment this becomes urgent enough to revisit.
+
+---
+
+## What already works (do not regress)
+
+Brief deliberate list so annealing changes don't break what's clean.
+
+- **Deterministic-first split.** The matcher is pure logic; LLM is
+  invoked only at the judgment boundary. Dirk-aligned and slice-2-ready.
+- **Reconciliation invariant.** Every tx lands in exactly one of
+  `matches` / `judgment_required` / `ambiguous` / `unmatched_transactions`.
+  No silent drops. Verified by `test_reconciliation_guarantee_invariant_holds`
+  and the integration-test Summary assertion.
+- **Shared parser helpers.** `_common.py` keeps CSV / XLSX / receipts
+  CSV on a single source of truth for date/amount tolerance + error
+  type. Avoided silent divergence when the XLSX sibling landed.
+- **Stub LLM doesn't auto-resolve.** `judge_fx_match` returns
+  `requires_review=True` with `[STUB]` reason. Slice 2 swaps the body
+  without breaking the slice-1 contract.
+- **Build system + entry point.** `uv sync && uv run expense-recon`
+  works end-to-end on a clean clone. Hatchling configured.
+- **40/40 tests green in <1s.** Fast suite = cheap regression catch.
+
+---
+
+## A. Matcher quality (the noise that bites real data first)
+
+### A1. FX cross-product noise *(README annealing #1)*
+
+**Where:** [`src/expense_recon/matching/deterministic.py`](src/expense_recon/matching/deterministic.py) `match_one`, lines 60-75
+**Symptom:** Every USD transaction generates an `FX_JUDGMENT`
+candidate against every non-USD receipt in the pool, regardless of
+amount or date proximity. One EUR receipt in a 30-row month produces
+30 spurious "needs review" entries.
+**Why it happens:** The currency-mismatch branch returns immediately
+without checking amount or date plausibility — design comment says
+"vendor / reference / mock-FX is the LLM's job" but in practice this
+floods the LLM (and the review sheet) with junk pairs.
+**Fix direction:** Require BOTH date proximity (within ±N days) AND
+rough amount plausibility (e.g., within ±50% after a 0.8–1.4 FX-band
+sanity check) before emitting `FX_JUDGMENT`. Tighter band = less LLM
+spend, less Chris review.
+**Effort:** M
+**Trigger:** First real Brisken month with ≥1 non-USD receipt
+(near-certain on month 1 — UK / EU presence).
+
+### A2. Receipt double-binding *(README annealing #2)*
+
+**Where:** [`src/expense_recon/matching/deterministic.py`](src/expense_recon/matching/deterministic.py) `match_month`, the `by_tx` loop
+**Symptom:** The same receipt can be the "best" match for two
+different transactions when amounts are close. Confirmed in the
+slice-1 fixture-design phase: Hotel Paris ($112.30) probable-matched
+the Amazon receipt ($89.99) because it sat within the 20% / 5-day
+window, AND Amazon's own transaction also matched that receipt as
+EXACT. Both go into `matches`.
+**Why it happens:** `matched_receipts: set[str]` tracks receipts only
+for the unmatched-receipts residual calculation; it does not feed
+back into candidate filtering.
+**Fix direction:** Bipartite assignment over the candidate matrix
+(Hungarian algorithm or greedy-by-confidence with consumption). Each
+receipt lands at most once. Drop the second-best candidate to the
+next outcome tier instead.
+**Effort:** M
+**Trigger:** First real month — guaranteed to hit this on any month
+with 20+ transactions of similar amounts (Uber, coffee, lunch).
+
+### A3. No vendor / reference signal in matching *(README annealing #3)*
+
+**Where:** [`src/expense_recon/matching/deterministic.py`](src/expense_recon/matching/deterministic.py) `match_one`
+**Symptom:** A $100 Amazon receipt and a $100 Uber receipt on the
+same day are equally good candidates for a $100 transaction. Scoring
+ignores `vendor_from_statement` ↔ `detected_vendor` and
+`detected_reference`.
+**Fix direction:** Add a vendor fuzzy-match score (RapidFuzz / Jaro-
+Winkler) and a reference-number exact-match bonus to the confidence
+calculation. Tip the ties; do not gate the whole match (some banks
+strip vendor names to gibberish).
+**Effort:** M (with rapidfuzz dep) / S (with stdlib `difflib`)
+**Trigger:** First real month — same-amount-same-day collisions will
+otherwise produce ambiguous-bucket noise.
+
+### A4. Probable-match window may double-bind even with bipartite assignment
+
+**Where:** `match_one` — 20% amount / 5-day date probable window
+**Symptom:** Even after A2's bipartite fix, the probable window is
+loose enough that one tx can claim a receipt the user would have
+intuitively assigned elsewhere. Confirmed by slice-1 fixture: Hotel
+matched Amazon's receipt at 19.9% / 5-day.
+**Fix direction:** Tighten probable window OR break ties on vendor
+similarity (depends on A3). Likely both. Per-bank profiles (A7) may
+also help.
+**Effort:** S (window tuning) — but tune AGAINST Chris's real data,
+never against synthetic.
+**Trigger:** After A2 + A3 land; tune empirically on month-2 data.
+
+### A5. Negative-amount (refund) matching gap
+
+**Where:** `match_one` — the `tx.amount > 0` guard on the probable branch
+**Symptom:** Refund transactions ($-15 Amazon return) cannot
+probable-match anything; they only match if EXACT to a negative
+receipt. The synthetic Amazon-return test left it correctly in
+`unmatched_transactions`, but real refund flows (Amazon return →
+return-confirmation receipt) need pair matching.
+**Fix direction:** Either (a) add an explicit refund-matching path
+that pairs negative-tx to negative-receipt with relaxed amount/date
+tolerance, or (b) accept that refunds always go through human review
+(simplest; Chris probably wants to confirm refunds anyway).
+**Effort:** S (option b: a single explanatory comment + a separate
+"refunds" outcome bucket).
+**Trigger:** First month with any return / refund. Likely month 1.
+
+### A6. Default tip tolerance assumes US
+
+**Where:** `MatchingConfig.amount_probable_tolerance_pct = Decimal("0.20")`
+**Symptom:** 20% tolerance is US-restaurant-tip shaped. Brisken
+has UK / EU presence where tips are typically 0–12.5%. A 20% pad
+there is over-loose and lets unrelated charges into probable.
+**Fix direction:** Per-card or per-region tolerance profile passed
+via the run config. Default stays 20% (US); per-card override sets
+0.12 (UK) or 0.00 (strict).
+**Effort:** S
+**Trigger:** First reconciliation of a UK / EU card.
+
+### A7. Per-bank tolerance profiles
+
+**Where:** `MatchingConfig` (today a single shared config)
+**Symptom:** Some banks post 2 days after purchase consistently
+(Amex US), some post next-day (Chase), some same-day (most EU
+debit). One global `date_exact_window_days` over-pads tighter
+banks and under-pads looser ones.
+**Fix direction:** `MatchingConfig` keyed by `account_id` (or by
+bank profile name). Config is per-run; per-account overrides
+specified in `run.json`.
+**Effort:** M
+**Trigger:** Second card added to the same run (multi-card
+reconciliation, A11 below) — not before, no point.
+
+### A8. Matcher emits no explanation trail
+
+**Where:** `match_one` returns a `reason` string; no structured
+breakdown of why this beat that.
+**Symptom:** When Chris asks "why was this matched and not that?",
+all we have is the reason string. For debugging A2 / A3 / A4
+behavior we need per-tx scoring breakdowns.
+**Fix direction:** Optional `--explain` flag → write a per-tx
+decision log as a 5th sheet (or a separate JSON). Off by default.
+**Effort:** S
+**Trigger:** First time we need to debug a "why did this match"
+question from Chris.
+
+---
+
+## B. Tool / UX ergonomics
+
+### ~~B1. No error-output sheet for malformed rows~~
+
+**Resolved 2026-06-01** — slice 3a defensive pass. All three
+parsers expose tolerant variants (`parse_statement_csv_tolerant`,
+`parse_statement_xlsx_tolerant`, `parse_receipts_csv_tolerant`)
+returning `(rows, list[ParseIssue])`. Header errors still raise
+(config-class). CLI uses tolerant mode by default; issues land in
+the Errors sheet with file basename + line number + message. Good
+rows continue to parse + reconcile. Verified by
+`test_bad_row_in_receipts_collects_to_errors_continues_with_good_rows`,
+`test_bad_row_in_statement_collects_to_errors_continues`,
+`test_duplicate_receipt_document_id_lands_in_errors_sheet`.
+
+### ~~B2. No column auto-detection / preview~~
+
+**Resolved 2026-06-01** — slice 3a defensive pass.
+`expense-recon-inspect <statement>` ships as a second console
+script. Heuristic library: regex against English + DE bank-export
+header conventions (Date / Description / Amount / Posting Date /
+Currency, plus DE Amex: Buchungsdatum / Beschreibung / Betrag /
+Währung). Posting-date doesn't steal transaction-date (greedy
+assignment in priority order). Outputs a copy-paste-able
+`column_map` JSON block; when a required field can't be guessed,
+lists the available headers under `// MISSING ... TBD` markers.
+Verified by 12 tests in `tests/test_inspect.py` covering: Amex US
++ Chase + DE Amex headers, posting-date priority, unknown
+headers, partial match, CSV + xlsx end-to-end, unsupported
+extension, BOM handling. Real CLI smoke run produces clean JSON
+on the example fixture.
+
+### B3. Single statement per run
+
+**Where:** `_load_statement` accepts one file
+**Symptom:** Brisken has multiple cards and accounts per legal
+entity per call-outcomes. Today Chris must run the CLI N times
+and concat the reports manually.
+**Fix direction:** `statements: [...]` array in config, each with
+its own `account_id` / `column_map`. Pipeline reconciles all
+statements against the shared receipts pool. Report Summary sheet
+breaks down by account.
+**Effort:** M (also surfaces A2 / A7 sooner)
+**Trigger:** First month where Chris reconciles ≥2 cards in one
+session.
+
+### ~~B4. No `--dry-run` / `--preview`~~
+
+**Resolved 2026-06-01** — slice 3a defensive pass. CLI accepts
+`--dry-run`; `run(..., dry_run=True)` returns None, prints
+`DRY RUN` header + counts (Transactions, Receipts, Matched, Needs
+review, Unmatched tx, Parse errors) + first 5 parse errors to
+stdout. No xlsx written. Verified by
+`test_dry_run_skips_xlsx_and_prints_summary`.
+
+### ~~B5. Receipts CSV row de-duplication~~
+
+**Resolved 2026-05-31** (slice 1.5) — receipts_csv tracks `seen_ids`,
+raises on duplicate `document_id` with both row numbers. Now under
+the B1 tolerant umbrella: duplicates land in the Errors sheet
+instead of aborting the run. Verified by
+`test_duplicate_receipt_document_id_lands_in_errors_sheet`.
+
+**Historical fix direction:** Raise `StatementParseError` on duplicate
+`document_id` with both line numbers. Cheap, prevents a confusing
+class of "why is this ambiguous" question.
+**Effort:** S
+**Trigger:** Anytime — defensive, low ROI now, free to add.
+
+### B6. CSV / JSON alternative outputs
+
+**Where:** [`src/expense_recon/output/report_xlsx.py`](src/expense_recon/output/report_xlsx.py) — single writer
+**Symptom:** Only xlsx today. Zoho import wants CSV. A future
+review UI wants JSON.
+**Fix direction:** `--format {xlsx,csv,json}` flag. Writer
+interface shared across formats (write a `MatchOutcome` →
+file).
+**Effort:** S (CSV) / M (with structured JSON schema)
+**Trigger:** When the Zoho posting slice starts.
+
+### ~~B7. No example `run.json` committed~~
+
+**Resolved 2026-06-01** — slice 3a defensive pass.
+`examples/run.example.json` + `examples/statement.example.csv` +
+`examples/receipts.example.csv` + `examples/README.md` committed.
+Smoke-tested end-to-end: `uv run expense-recon --config
+examples/run.example.json` writes a 9272-byte report.xlsx with the
+expected 5+N sheet structure. JSON `_*_help` fields used for inline
+comments (sibling fields, not inside `column_map` since the parser
+iterates that literally). `.gitignore` updated to skip
+`examples/report.xlsx`.
+
+### ~~B8. No command runner shortcuts~~
+
+**Resolved 2026-06-01** — slice 3a defensive pass. `justfile`
+committed at the automation root with targets: `sync`, `recon
+CONFIG`, `dry-run CONFIG`, `inspect FILE`, `example`, `test`,
+`test-x`, `clean`. Works on any machine with [just](https://github.com/casey/just)
+installed. README still shows the raw `uv run ...` commands so the
+tool works without `just` too.
+
+---
+
+## C. Output completeness
+
+### C1. No idempotency / run-log
+
+**Where:** Whole pipeline — re-runs overwrite the report
+**Symptom:** Chris re-runs with new month → no record of what
+the previous run decided. No way to ask "show me everything
+auto-approved in February."
+**Fix direction:** Light SQLite (`runs.db`) next to the output:
+one row per run, one row per tx-decision. Index on (account_id,
+transaction_id, run_timestamp). The matcher pipeline writes;
+Chris's review-edits write back (slice 3+).
+**Effort:** M
+**Trigger:** Month 3 — by then Chris has wanted "show me last
+month's matches" at least once.
+
+### C2. No vendor / category enrichment from chart-of-accounts
+
+**Where:** Pipeline ends at the match — no Zoho category assigned
+**Symptom:** Chris still has to look up the right Zoho expense
+category for each matched row. The chart-of-accounts is a known
+input (per spec) but not yet fed in.
+**Fix direction:** Optional `chart_of_accounts` in `run.json`
+(CSV of category names + match patterns). Output report gets a
+"Suggested category" column populated from vendor → category
+mapping, with confidence. LLM judgment (slice 2) handles the
+uncertain ones.
+**Effort:** M
+**Trigger:** When the Zoho posting slice starts, or sooner if
+Chris asks "what category" repeatedly during review.
+
+### C3. No structured logging
+
+**Where:** Whole pipeline — silent (just final stdout line)
+**Symptom:** Debugging "why didn't this match?" needs adding
+prints or running pytest. No persistent log per run.
+**Fix direction:** Python `logging` module, default WARNING,
+`--verbose` flag for INFO, `--debug` for DEBUG. Optional
+`--log-file run.log` for structured JSON output.
+**Effort:** S
+**Trigger:** First production debugging session.
+
+### C4. Excel report uses float for amounts at display boundary
+
+**Where:** [`src/expense_recon/output/report_xlsx.py`](src/expense_recon/output/report_xlsx.py) `_decimal_to_float`
+**Symptom:** Amounts converted Decimal → float for the xlsx
+cell. Source of truth stays Decimal upstream, but the displayed
+value loses precision below 0.01 if it ever existed.
+**Why deferred:** Real bank statements never use sub-cent
+precision; in practice this is fine.
+**Fix direction:** If Brisken ever shows sub-cent (FX-conversion
+fractional rounding), switch to writing strings with explicit
+formatting and a numeric format string on the cell.
+**Effort:** S (only if symptom appears)
+**Trigger:** Only if real-data inspection shows precision loss.
+
+### C5. No telemetry on Chris's review decisions
+
+**Where:** Nothing — slice 1 is fire-and-forget
+**Symptom:** No signal to anneal tolerances on. Tip-tolerance
+should be calibrated from "Chris confirmed this probable match
+N% of the time," but that data doesn't exist.
+**Fix direction:** Tied to C1's run-log. When Chris edits a
+review row (slice 3+), persist the edit. After N months we have
+a real distribution to retune `MatchingConfig` against.
+**Effort:** L (needs review UI to exist)
+**Trigger:** Slice 3 (review UI). Don't build before that — no
+data source.
+
+---
+
+## D. Slice-2 prep (LLM wiring)
+
+### ~~D1. LLM client abstraction~~
+
+**Resolved 2026-06-01** (provider pivoted to OpenAI per BLUEPRINT
+"Provider Pivot" block). `src/expense_recon/llm/client.py` ships
+the `LLMClient` Protocol + `OpenAIClient` (production, gpt-4o-mini
+by default) + `MockLLMClient` (tests). Cost tracking in
+`llm/cost.py` (`TokenUsage` + `CostTracker`). Categorizer wired
+via `categorize_receipts(receipts, client=...)`; CLI reads `llm:`
+block from config and instantiates client (or falls back to
+keyword stub when block absent). Verified by 14 tests in
+`tests/test_categorize_llm.py` + live smoke run against real
+OpenAI API ($0.0003 / 4-receipt run). Provider swap (e.g., back
+to Anthropic Vertex / Bedrock) = one new class implementing the
+same protocol; no other code changes.
+
+### D1b. FX judgment LLM call (still STUB)
+
+**Where:** [`src/expense_recon/matching/judgment.py`](src/expense_recon/matching/judgment.py) `judge_fx_match`
+**Status:** Stubbed since slice 1; not yet swapped to LLMClient
+even though D1 is done. Same interface, narrower scope — the
+judgment client method (a `judge_fx_match(tx, receipt) -> Match`
+addition to LLMClient Protocol) is small and would land in ~30
+min. Deferred this session because no Brisken receipt to date
+has triggered an FX case to validate against.
+**Effort:** S
+**Trigger:** First Brisken month with a foreign-currency receipt.
+
+### D2. Receipt OCR pipeline replaces receipts_csv
+
+**Where:** [`src/expense_recon/ingest/receipts_csv.py`](src/expense_recon/ingest/receipts_csv.py)
+**Plan:** Slice 2 part 2 swaps `parse_receipts_csv` for a vision
+pipeline (OpenAI gpt-4o vision on receipt images / PDFs →
+structured `Receipt` objects with `line_items` populated). The
+matcher contract stays identical; nothing else changes.
+**Fix direction:** `ingest/receipts_vision.py` with the same
+return shape. CLI takes a receipts folder instead of a CSV
+(`receipts.dir = "./receipts-may/"`). Vision call uses OpenAI's
+structured-output JSON schema → `Receipt` validator → list.
+Batch parallelism via `max_concurrent` config field (BLUEPRINT
+2.6).
+**Effort:** M
+**Trigger:** D1 done ✓ — next session. Defer until Chris's first
+receipt folder lands so the vision prompt can be tuned against
+real receipt shapes (some OCR-noisy, some PDF, some email
+attachments).
+
+### ~~D3. Cost / token tracking per run~~
+
+**Resolved 2026-06-01** — `src/expense_recon/llm/cost.py` ships
+`TokenUsage` (per-call) + `CostTracker` (per-run aggregate).
+OpenAIClient records each call's `prompt_tokens` + `completion_tokens`;
+cost computed against `_PRICING_PER_MILLION` table (gpt-4o-mini:
+$0.15/M input + $0.60/M output). CLI passes `cost_tracker.total_cost_usd`
+to the report writer; Summary sheet shows "Estimated cost (USD)".
+Persisted to run-log: deferred to slice 5b (C1). Verified by
+`test_cost_tracker_accumulates_one_per_call` +
+`test_token_usage_cost_calculation_matches_published_pricing` +
+real LLM smoke (live $0.00029 cost displayed on Summary).
+
+---
+
+## E. Code health / tests / project meta
+
+### E1. Unit-test coverage for report writer
+
+**Where:** [`src/expense_recon/output/report_xlsx.py`](src/expense_recon/output/report_xlsx.py)
+**Symptom:** `_autosize`, `_fill_last_row`, empty-`MatchOutcome`
+edge case aren't exercised directly. Integration test covers
+the happy path only.
+**Fix direction:** Add `tests/test_report_xlsx.py` with: empty
+outcome → 4 sheets exist with only headers; mixed-outcome →
+fills applied per match type; receipt-without-tx in unmatched
+section.
+**Effort:** S
+**Trigger:** Anytime — defensive, fast to add.
+
+### E2. Subprocess-based CLI test
+
+**Where:** Tests call `run()` directly; no end-to-end script test
+**Symptom:** `expense-recon` entry point regression (wrong
+module path, bad `__main__`) would not be caught.
+**Fix direction:** One pytest case: `subprocess.run(["uv",
+"run", "expense-recon", "--config", str(cfg)], check=True)`.
+Slow (cold venv) but catches packaging regressions.
+**Effort:** S
+**Trigger:** Any change to `pyproject.toml` or `cli.py:main`.
+
+### E3. README ordering implies slice 1 is older than Phase 2/4
+
+**Where:** [README.md](README.md)
+**Symptom:** Slice 1 section appears before the existing Phase 2 /
+Phase 4 sections. A reader sees "Slice 1" first, then "Phase 4
+matching engine", which inverts the actual layering.
+**Fix direction:** Restructure README around what the tool DOES
+(top-level flow) rather than build chronology. Slice 1 / Phase 2
+/ Phase 4 become implementation notes under collapsible headings,
+not the primary navigation.
+**Effort:** S
+**Trigger:** Next README touch.
+
+### E4. Spec divorced from build state
+
+**Where:** v2 spec §32 phase ordering says Phase 0 first
+**Symptom:** We did Phase 4 (matching), then Phase 2 (ingest),
+then a CLI tool that isn't really one of the spec's phases.
+The spec doesn't reflect the "tool-first" pivot.
+**Fix direction:** Add a `## §32.1 Tool-first build path` block
+to the v2 spec acknowledging Dirk's 2026-05-27 directive and the
+slice-numbered roadmap. Spec phases remain the long-term map;
+slices are the path through them.
+**Effort:** S
+**Trigger:** Next spec update OR before any new joint-call with
+Dirk where build sequencing comes up.
+
+### E5. No CI
+
+**Where:** No `.github/workflows/` for this automation
+**Symptom:** Tests pass locally; nothing prevents a regression
+on push. The 40-test suite is fast enough that CI cost is near
+zero.
+**Fix direction:** `.github/workflows/expense-recon-tests.yml`
+that runs `uv sync && uv run pytest` on PRs touching
+`workspace/clients/brisken/automations/expense-reconciliation/`.
+**Effort:** S
+**Trigger:** Anytime — defensive, especially before slice 2
+adds LLM-touching code.
+
+### E6. `MatchOutcome` mutability subtlety
+
+**Where:** [`src/expense_recon/cli.py`](src/expense_recon/cli.py) `_apply_judgment_stub` — replaces `outcome.judgment_required`
+**Symptom:** Works today because the LIST is replaced (not
+mutated in place) and `Match` is frozen. Next reader might try
+to mutate matches in place and break the invariant.
+**Fix direction:** Add a one-line comment OR make `MatchOutcome`
+also frozen (which forces consumers to construct new outcomes
+rather than mutate). Defensive only.
+**Effort:** S
+**Trigger:** Anytime — pure code-health.
+
+### E7. Per-account currency confusion
+
+**Where:** Receipt's `detected_currency` vs Transaction's
+`transaction_currency` vs `account_card_currency`
+**Symptom:** Three currency fields per the spec's 3-layer
+design. Slice 1 collapses some of this in defaults
+(`default_currency` for receipts). Real data with mixed-currency
+cards (Wise multi-currency, Revolut) may surface bugs.
+**Fix direction:** Document the 3-layer convention explicitly
+at the top of `types.py` (already partially there, expand).
+Add a test for the 3-layer case (Wise card in USD, transaction
+posted in EUR, receipt in EUR).
+**Effort:** S
+**Trigger:** First multi-currency card.
+
+---
+
+## Anneal order (when build lands and you re-read this)
+
+Not strict — depends on which item Chris's data hits hardest. But a
+reasonable default ordering for the first session after this lands:
+
+1. **B1 (error-output sheet)** — instant value, defensive.
+   First real CSV has a malformed row. ~1 hour.
+2. **A1 (FX cross-product noise)** — first real month with EU
+   receipts floods Needs Review. ~1 day.
+3. **A2 + A3 together (bipartite + vendor signal)** — fix the
+   double-binding properly with vendor as the tie-breaker. ~1 day.
+4. **A5 (refund handling)** — explicit refund bucket, document
+   the design choice. ~few hours.
+5. **D1 (Anthropic client abstraction)** — preps slice 2 the day
+   API access lands. Independent of Chris-data work.
+6. **B3 (multi-statement input)** — when Chris adds her second card.
+7. **C1 (run-log)** — first time we need "show me what was matched
+   last month."
+8. The rest as need surfaces — most are S-effort and can land
+   opportunistically.
+
+---
+
+## How this register updates
+
+- **New items go in.** Add to the right category (A/B/C/D/E),
+  number sequentially, include Where / Symptom / Fix / Effort /
+  Trigger.
+- **Items completed → strike through with `~~text~~`** and a
+  dated line: `Resolved 2026-XX-XX by {commit / PR / session}`.
+- **Items that turn out to be wrong → just delete with a note in
+  the next session checkpoint** so the deletion is traceable.
+- **This file replaces the inline annealing notes in README.md.**
+  README annealing items #1-3 are the same as A1, A2, A3 below
+  and should be removed from README when this file is committed
+  (deferred to keep slice 1 ship lean).

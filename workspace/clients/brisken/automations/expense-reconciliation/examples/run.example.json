@@ -1,0 +1,40 @@
+{
+  "_comment_": "Example run config. Copy to runs/<month>-<card>.json and edit. Paths resolve relative to THIS file's directory.",
+
+  "statement": {
+    "_": "REQUIRED block. One credit card per run (multi-card support is BLUEPRINT B3).",
+    "path": "statement.example.csv",
+    "_path_help": ".csv or .xlsx (or .xlsm). Filename relative to this config file.",
+
+    "account_id": "amex-9001",
+    "_account_id_help": "Free-form identifier for this card. Drives the per-card tab name in the report.",
+
+    "legal_entity_id": "brisken-llc",
+    "_legal_entity_id_help": "Brisken entity that owns this card. Free-form for slice 1.",
+
+    "account_card_currency": "USD",
+    "_account_card_currency_help": "Currency of the card itself (v2 spec layer 2). Used as the default transaction currency when no per-row currency column is mapped.",
+
+    "_column_map_help": "Logical field -> source CSV/Excel column header. Required keys: transaction_date, amount, vendor. Optional: posting_date, transaction_currency.",
+    "column_map": {
+      "transaction_date": "Date",
+      "amount": "Amount",
+      "vendor": "Description"
+    },
+
+    "_sheet_name_help": "Optional. Only used for .xlsx multi-sheet workbooks. Defaults to the active sheet."
+  },
+
+  "receipts": {
+    "_": "REQUIRED block. Slice 1: receipts come from a CSV of already-extracted fields. Slice 2 replaces this with a folder of receipt images + Claude vision OCR.",
+    "path": "receipts.example.csv",
+
+    "default_currency": "USD",
+    "_default_currency_help": "Optional. Applied to receipt rows that have no detected_currency value."
+  },
+
+  "output": {
+    "_": "OPTIONAL block. If absent, default report.xlsx is written next to this config. --out CLI flag overrides this.",
+    "path": "report.xlsx"
+  }
+}

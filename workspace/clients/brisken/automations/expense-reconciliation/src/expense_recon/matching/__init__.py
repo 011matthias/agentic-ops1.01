@@ -7,5 +7,8 @@ Two layers, deliberately separated:
   deterministic match works" (call-outcomes "Matching approach").
 - `judgment` — LLM judgment layer, invoked only when the
   deterministic layer cannot resolve (e.g., EUR-on-USD-card FX
-  case). Pending Anthropic API access (v2 spec §38.2).
+  case). Slice 1: stubbed — every FX / ambiguous case is flagged
+  for human review with `[STUB]` reason. Real Claude call wires
+  in slice 2 when API access to Brisken's Pro subscription is
+  provisioned (v2 spec §38.2).
 """
