@@ -1,10 +1,11 @@
-# Session Index
+﻿# Session Index
 
 _Auto-updated by /comd_checkpoint. Most recent first within each section._
 
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-06-03 | Web-Build Skill Restructure + Nav-Bar Standard | system-infra | [Mini-Checkpoint-1](docs/2026-06-03%20-%20Local-Web%20Prototypes%20And%20Aesthetic%20Standard/Mini-Checkpoint-1.md) |
 | 2026-06-01 | Skills.sh Vendor Install and Remotion | system-infra | [Checkpoint](docs/2026-06-01%20-%20Skills.sh%20Vendor%20Install%20and%20Remotion/Checkpoint.md) |
 | 2026-06-01 | Platform Style Standards Trio | system-infra | [Checkpoint](docs/2026-06-01%20-%20Platform%20Style%20Standards%20Trio/Checkpoint.md) |
 | 2026-05-26 | Agent Teams Phases 4 to 6 | system-infra | [Checkpoint](docs/2026-05-26%20-%20Agent%20Teams%20Phases%204%20to%206/Checkpoint.md) |
@@ -21,6 +22,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## local-web
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-06-03 | Local-Web Prototypes And Aesthetic Standard | system-infra | [Checkpoint](docs/2026-06-03%20-%20Local-Web%20Prototypes%20And%20Aesthetic%20Standard/Checkpoint.md) |
 | 2026-05-20 | Local-Web 3D Depth Hero and HTML Cache | system-infra | [Checkpoint](docs/2026-05-20%20-%20Local-Web%203D%20Depth%20Hero%20and%20HTML%20Cache/Checkpoint.md) |
 | 2026-05-19 | Local-Web Motion and Connection-Reset Fix | system-infra | [Checkpoint](docs/2026-05-19%20-%20Local-Web%20Motion%20and%20Connection-Reset%20Fix/Checkpoint.md) |
 | 2026-05-18 | Website-Build Deploy and A11y | system-infra | [Checkpoint](docs/2026-05-18%20-%20Website-Build%20Deploy%20and%20A11y/Checkpoint.md) |
