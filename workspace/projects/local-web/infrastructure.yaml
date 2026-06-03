@@ -53,6 +53,22 @@ sites:
     url: https://local-web-ka.fly.dev/beauty-lounge
     jsonld: BeautySalon
 
+# Real warm leads (not preemptive Fly demos). First contact already made;
+# engagement tracked per-prospect in prospects/{slug}/data.md.
+leads:
+  - slug: suderman
+    business: Suderman (Cocktailbar / Eventlocation, Köln-Agnesviertel)
+    site: https://sudermanbar.de
+    channel: WhatsApp (warm, "du")
+    rep: Matthias Neumann (in Zusammenarbeit mit UnpauseAI)
+    offer: >
+      Website-Integration 800 €, Automatisierung 1.500 €, Paket 2.000 €
+      (Ratenzahlung möglich); Betreuung 100 €/Mo (Website) oder 200 €/Mo
+      (Website + Automation). Scope: zentrale Verwaltung von Kursbuchungen,
+      Reservierungen und Event-/B2B-Anfragen.
+    deliverable: prospects/suderman/angebot-suderman.pdf  # erstellt 2026-06-02
+    status: angebot-ready  # PDF fertig + versandbereit; nächster Schritt: Demo zeigen / senden
+
 indexing:
   demos: index, follow            # owner directive 2026-05-18
   internal_directory: noindex     # / (BaseLayout indexable={false})

@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import shutil
 import subprocess
 import sys
 import urllib.error
@@ -50,8 +51,12 @@ ASSET_RE = re.compile(r"/_astro/[A-Za-z0-9._-]+\.(?:webp|js|css)")
 
 
 def run(cmd: list[str], cwd: Path | None = None) -> int:
+    # On Windows, npm/npx are .cmd shims that CreateProcess won't resolve
+    # from a bare name — resolve the real path before spawning.
+    exe = shutil.which(cmd[0]) or cmd[0]
+    resolved = [exe, *cmd[1:]]
     print(f"  $ {' '.join(cmd)}")
-    return subprocess.run(cmd, cwd=cwd).returncode
+    return subprocess.run(resolved, cwd=cwd).returncode
 
 
 def slugs_from_dist() -> list[str]:
