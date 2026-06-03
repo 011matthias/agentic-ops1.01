@@ -199,6 +199,8 @@ def check_directory(d: Path) -> list[dict]:
     link_map: dict[Path, set[str]] = {}
     for f in files:
         text = f.read_text(encoding="utf-8", errors="replace")
+        if "chrome-allow: chromeless" in text[:2000]:
+            continue  # PDF/print/redirect-stub pages carry no nav by design (rule §2)
         refs = set()
         for m in re.finditer(r'href=["\']([^"\']+)["\']', text):
             href = m.group(1)
