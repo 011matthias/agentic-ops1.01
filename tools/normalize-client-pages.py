@@ -41,6 +41,78 @@ BOOT_SIGNATURE = "localStorage.getItem('theme')"
 
 TOGGLE_ONCLICK = "(function(){var d=document.documentElement;var c=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',c);localStorage.setItem('theme',c);})()"
 
+# --- Theme-key reconcile (collision repair) -------------------------------
+# Canonical storage key is 'theme'. Many pages predate the canonical boot
+# script and use a PER-SITE key (e.g. 'alpha-theme', 'menovia-theme'). If the
+# boot script (this file) is injected on top of such a page WITHOUT first
+# reconciling, the page ends up with TWO boot scripts reading two different
+# keys: the legacy one reads '<site>-theme', the canonical one reads 'theme'.
+# The canonical script runs last and wins, but it reads a key the page's
+# toggle never writes -> the user's choice is silently lost on every reload.
+# (Observed 2026-06-03: all 208 swept client pages were broken this way.)
+#
+# Reconcile FIRST, unconditionally when a non-'theme' theme key is present:
+#   1. delete the legacy dark-only boot script block (it is superseded by the
+#      canonical boot's matchMedia-aware logic), and
+#   2. rename every remaining '<site>-theme' storage key -> 'theme' (this is
+#      where the toggle's setItem/getItem live).
+# Then needs_boot_script() injects exactly one canonical boot where none
+# remains. Idempotent: a reconciled page has no non-'theme' key, so re-runs
+# no-op. This runs BEFORE boot injection in process_file().
+THEME_KEY_RE = re.compile(r"localStorage\.(?:get|set)Item\('([a-z0-9_-]*theme[a-z0-9_-]*)'")
+# A legacy theme-boot IIFE: distinguished from the canonical boot by the
+# `if(<var>)...setAttribute('data-theme',...)` form and the ABSENCE of
+# matchMedia. Tolerant of the several shorthand shapes observed across the
+# 29 client folders: compact/spaced/multiline, `if(t==='dark')` or `if(s)`,
+# `setAttribute('data-theme','dark')` or `...,s)`, with or without trailing
+# semicolons. The key class is generic so it matches both per-site keys
+# (pre-reconcile) and 'theme' (post-reconcile). The canonical boot is NEVER
+# matched: it has `var d=document.documentElement;` + a ternary, no bare `if`.
+LEGACY_BOOT_RE = re.compile(
+    r"<script>\s*\(function\(\)\{\s*"
+    r"var\s+[a-z]\s*=\s*localStorage\.getItem\('[a-z0-9_-]*theme[a-z0-9_-]*'\)\s*;\s*"
+    r"if\s*\(\s*[a-z]\s*(?:===\s*'dark'\s*)?\)\s*"
+    r"document\.documentElement\.setAttribute\(\s*'data-theme'\s*,\s*(?:'dark'|[a-z])\s*\)\s*;?\s*"
+    r"\}\)\(\)\s*;?\s*</script>\s*",
+    re.IGNORECASE,
+)
+CANONICAL_BOOT_SIG = "matchMedia('(prefers-color-scheme:dark)')"
+
+
+def legacy_theme_keys(text: str) -> set[str]:
+    """All theme storage keys in use that are NOT the canonical 'theme'."""
+    keys = {m.group(1) for m in THEME_KEY_RE.finditer(text)}
+    keys.discard("theme")
+    return keys
+
+
+def needs_theme_reconcile(text: str) -> bool:
+    return bool(legacy_theme_keys(text))
+
+
+def reconcile_theme_keys(text: str) -> str:
+    """Migrate per-site storage keys (the toggle's set/getItem) onto 'theme'.
+    Boot-script de-duplication is handled separately by strip_legacy_boot()."""
+    keys = legacy_theme_keys(text)
+    for k in sorted(keys, key=len, reverse=True):  # longest first: avoid substring clashes
+        text = text.replace(f"getItem('{k}')", "getItem('theme')")
+        text = text.replace(f"setItem('{k}'", "setItem('theme'")
+    return text
+
+
+def needs_boot_dedupe(text: str) -> bool:
+    """A legacy boot to remove exists AND the canonical boot is present (or
+    will be injected) to take over. We only require a legacy match here;
+    strip is a no-op-safe operation guarded in process_file by injection."""
+    return LEGACY_BOOT_RE.search(text) is not None
+
+
+def strip_legacy_boot(text: str) -> str:
+    """Remove legacy (non-matchMedia) theme-boot scripts. The canonical boot
+    either already follows them or is injected immediately after by
+    inject_boot_script(), so the page is never left with zero boot scripts."""
+    return LEGACY_BOOT_RE.sub("", text)
+
 PRINT_BLOCK = """@media print {
     .site-nav, .sidebar, .mobile-nav-toggle, .cta-section { display: none !important; }
     .main-content { margin-left: 0 !important; }
@@ -91,7 +163,11 @@ def find_pages() -> list[Path]:
 
 
 def needs_boot_script(text: str) -> bool:
-    return BOOT_SIGNATURE not in text
+    # Inject only when the CANONICAL (matchMedia-aware) boot is absent. A page
+    # carrying only a legacy boot still needs the canonical one (the legacy is
+    # stripped first by strip_legacy_boot), so key on the canonical signature,
+    # not the bare `getItem('theme')` which a toggle may also contain.
+    return CANONICAL_BOOT_SIG not in text
 
 
 def inject_boot_script(text: str) -> str:
@@ -163,6 +239,17 @@ def process_file(path: Path, *, apply: bool, backfill_dates: bool) -> dict:
     changes = []
     new_text = text
 
+    # Order is load-bearing: (1) migrate per-site keys onto 'theme', (2) strip
+    # any legacy non-matchMedia boot, (3) inject the canonical boot if none
+    # remains. The result is exactly one canonical boot reading 'theme'.
+    if needs_theme_reconcile(new_text):
+        new_text = reconcile_theme_keys(new_text)
+        changes.append("theme-reconcile")
+
+    if needs_boot_dedupe(new_text):
+        new_text = strip_legacy_boot(new_text)
+        changes.append("boot-dedupe")
+
     if needs_boot_script(new_text) and HEAD_RE.search(new_text):
         new_text = inject_boot_script(new_text)
         changes.append("boot-script")
@@ -202,8 +289,9 @@ def main() -> int:
 
     pages = find_pages()
     print(f"Scanning {len(pages)} client pages...")
-    counts = {"boot-script": 0, "toggle-onclick": 0, "print-block": 0,
-              "last-updated": 0, "chromeless": 0, "unchanged": 0}
+    counts = {"theme-reconcile": 0, "boot-dedupe": 0, "boot-script": 0,
+              "toggle-onclick": 0, "print-block": 0, "last-updated": 0,
+              "chromeless": 0, "unchanged": 0}
     touched: list[str] = []
     for p in pages:
         res = process_file(p, apply=args.apply, backfill_dates=args.backfill_dates)
@@ -221,14 +309,14 @@ def main() -> int:
 
     print()
     print("Per-fix counts:")
-    for k in ("boot-script", "toggle-onclick", "print-block", "last-updated"):
+    for k in ("theme-reconcile", "boot-dedupe", "boot-script", "toggle-onclick", "print-block", "last-updated"):
         print(f"  {k:<16} {counts.get(k, 0):>4}")
     print(f"  unchanged       {counts['unchanged']:>4}")
     print(f"  chromeless      {counts['chromeless']:>4}")
     print(f"  files touched   {len(touched):>4}")
     if args.apply:
         print()
-        print(f"Mode: APPLIED ({sum(counts.get(k,0) for k in ('boot-script','toggle-onclick','print-block','last-updated'))} edits)")
+        print(f"Mode: APPLIED ({sum(counts.get(k,0) for k in ('theme-reconcile','boot-dedupe','boot-script','toggle-onclick','print-block','last-updated'))} edits)")
     else:
         print()
         print("Mode: DRY-RUN (re-run with --apply to write)")
