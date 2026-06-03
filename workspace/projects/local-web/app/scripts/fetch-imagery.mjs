@@ -25,20 +25,35 @@ const FORCE = process.argv.includes("--force");
 // Per BRIEF.md art direction. orientation: landscape | portrait | square.
 const SLOTS = [
   // praxis-uslu — calm editorial-clinical, warm, NOT medical-blue.
-  { site: "praxis-uslu", name: "hero", orientation: "landscape",
-    query: "calm modern medical practice waiting room daylight plants" },
+  // Editorial-split hero: tall right-column photo (portrait), real warm
+  // EMPTY interior (no people — kills the masked-pandemic stock tell).
+  { site: "praxis-uslu", name: "hero", orientation: "portrait",
+    query: "empty sunlit waiting room wooden bench potted plants warm daylight interior no people" },
   { site: "praxis-uslu", name: "signature", orientation: "portrait",
-    query: "naturopathy herbal medicine acupuncture still life warm" },
+    query: "acupuncture needles dried herbs warm linen still life soft window light" },
 
-  // coffee-boxx — warm independent-roaster editorial, no people.
-  { site: "coffee-boxx", name: "hero", orientation: "landscape",
-    query: "espresso pour coffee steam dark moody close up" },
-  { site: "coffee-boxx", name: "gallery-1", orientation: "landscape",
-    query: "espresso machine independent cafe interior warm" },
-  { site: "coffee-boxx", name: "gallery-2", orientation: "portrait",
-    query: "panini sandwich rustic wood board" },
-  { site: "coffee-boxx", name: "gallery-3", orientation: "square",
-    query: "cake slice pastry on plate coffee shop" },
+  // meinzer-maler — Werkstatt-warm trades: real work in progress (a painter
+  // at the wall), warm daylight; NOT a wrong-place facade stock photo.
+  { site: "meinzer-maler", name: "hero", orientation: "portrait",
+    query: "close up hand with paint roller painting wall warm beige tone natural light" },
+
+  // helmle-physio — calm hands-on Krankengymnastik, warm window light, hands
+  // on the work, faces out of frame; NO gym / kinesio-tape / sports-rehab.
+  { site: "helmle-physio", name: "hero", orientation: "landscape",
+    query: "physiotherapist hands on patient back manual therapy warm window daylight calm neutral linen" },
+  { site: "helmle-physio", name: "signature", orientation: "portrait",
+    query: "folded towels rolled linen on massage treatment couch warm window light still life no people" },
+
+  // beauty-lounge — warm tactile beauty: detail + place, NO faces, no
+  // face-forward model stock, no hair. The brief forbids people's faces.
+  { site: "beauty-lounge", name: "hero-gesicht", orientation: "portrait",
+    query: "hands holding skincare cream jar close up warm beige neutral background soft light no face" },
+  { site: "beauty-lounge", name: "hero-nageldesign", orientation: "portrait",
+    query: "manicured hands close up nail detail warm natural light wood table" },
+  { site: "beauty-lounge", name: "hero-wellness", orientation: "portrait",
+    query: "stacked smooth black hot massage stones on towel warm candlelight spa still life close" },
+  { site: "beauty-lounge", name: "signature", orientation: "portrait",
+    query: "warm minimalist salon treatment room interior lamplight clay wall plants no people" },
 
   // pronto-pronto — appetite-first dark editorial, food only, no clipart.
   { site: "pronto-pronto", name: "hero", orientation: "landscape",

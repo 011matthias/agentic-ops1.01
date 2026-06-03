@@ -50,7 +50,7 @@ For each new client, we select the relevant agents, configure the dashboard, and
 | 4. Test | We run the system with test data, fix edge cases | Us |
 | 5. Handoff | You get: working system, admin docs, maintenance runbook | Both |
 
-## Timeline
+## Timeline & Milestones
 
 **First client system:** 2-3 weeks from brief to handoff.
 

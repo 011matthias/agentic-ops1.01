@@ -32,6 +32,6 @@ export async function sendEmail(opts: {
 
 export async function notifyAdmin(subject: string, text: string) {
   const adminEmail =
-    process.env.ADMIN_NOTIFICATION_EMAIL ?? "nicolas.neumann@unpauseai.com"
+    process.env.ADMIN_NOTIFICATION_EMAIL ?? "admin@unpauseai.com"
   return sendEmail({ to: adminEmail, subject, text })
 }

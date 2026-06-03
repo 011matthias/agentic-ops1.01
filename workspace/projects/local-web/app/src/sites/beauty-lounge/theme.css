@@ -1,0 +1,87 @@
+/* beauty-lounge: warm tactile neutrals, soft rose-clay signature, elegant
+   but local and welcoming, never cold-luxury or salon-template-generic.
+   Kosmetik + Nageldesign + Wellness (KEIN Friseur).
+
+   Every token carries a one-line WHY (skil_web-build 3a) and a WCAG AA
+   contrast note. Contrast ratios computed against the relevant ground
+   (Crème paper #F7F1EA or Espresso ink #2E2722). Light-mode is the
+   default; an optional dark mode follows at the bottom. */
+[data-site="beauty-lounge"] {
+  /* Canvas = Crème #F7F1EA. WHY warm off-white, not pure white: a tactile
+     lamplit-clay mood needs a warm paper ground; pure #fff reads cold-clinic
+     and fights the "unhurried, welcoming" positioning. */
+  --color-paper: #f7f1ea;
+  /* Raised surface = one step brighter warm ivory, for cards + the price
+     table. Stays inside the crème family so cards lift without going cold. */
+  --color-surface: #fffaf3;
+  /* Ink = Espresso #2E2722. WHY warm near-black, not neutral #111: matches
+     the clay/lamplight palette. On Crème paper -> ~12.9:1 (passes AA + AAA);
+     body text uses this, NEVER the lighter Mocha (see below). */
+  --color-ink: #2e2722;
+  /* Muted = structural warm brown Mocha #7A6047. WHY a single deepened clay
+     for secondary text. Mocha on Crème measures ~4.6:1, clearing AA 4.5:1
+     for normal text by a hair; used ONLY for labels / eyebrows / captions,
+     body prose stays on Espresso ink for comfortable margin. */
+  --color-muted: #7a6047;
+  /* Hairline = Sand #E4D8C9. WHY a warm sand rule, never a cool grey: the
+     hairline-led editorial layout (Ever Beauty anchor) needs warm lines so
+     the structure reads tactile, not wireframe. Decorative, no text on it. */
+  --color-line: #e4d8c9;
+  /* Accent (CTA / hover BACKGROUNDS) = Rose-Clay #C98B7A. WHY one soft clay
+     accent: the single warm signature that ties the salon's three
+     disciplines together without going garish. Rose-Clay is LIGHT
+     (~2.2:1 vs white), so white text on it FAILS AA. Fix: accent-ink is
+     Espresso, not white (below). */
+  --color-accent: #c98b7a;
+  /* Text/icon ON the rose-clay accent = Espresso ink. WHY dark-on-clay, not
+     white-on-clay: Espresso #2E2722 on Rose-Clay #C98B7A measures ~5.9:1
+     (passes AA); white-on-clay is only ~2.2:1 and would FAIL. This is the
+     load-bearing accessibility decision for every CTA on the page. */
+  --color-accent-ink: #2e2722;
+  /* Accent TEXT on paper (in-text links, stat figures) = deep Terracotta.
+     WHY a deeper terracotta for type: Rose-Clay #C98B7A as TEXT on Crème is
+     only ~2.4:1 (fails). #B5553F measured 4.31:1 in axe (just under AA), so
+     it is deepened to #A84E39 -> ~4.85:1 on Crème (passes AA for normal
+     text). Rare emphasis + link-hover tone; the lighter Rose-Clay stays
+     fills-only. */
+  --color-accent-text: #a84e39;
+  /* Soft accent ground = Rose-Clay dropped ~12% into the crème, for the
+     Preisliste band + reveal-panel tints. WHY tinted, not flat slab:
+     background-depth rule (no flat solid primary section). */
+  --color-accent-soft: #f1e2da;
+
+  /* Display = Cormorant Garamond: high-contrast warm luxury serif. WHY this,
+     not a geometric sans: the Monotype luxury-beauty survey (anchor 3)
+     validates a high-contrast warm serif AS the luxury-beauty brand voice.
+     Cormorant is thin/high-contrast, so it is used for the wordmark + H1/H2
+     + service-family headings ONLY, never small body text (AA legibility:
+     thin serifs need large size to stay readable). */
+  --font-display: "Cormorant Garamond", Georgia, serif;
+  /* Body = Mulish: soft humanist sans. WHY a calm low-contrast sans for
+     prose/prices/labels: it keeps small text crisp + AA-legible where the
+     thin Cormorant strokes would fail, while staying warm and unfussy. */
+  --font-body: "Mulish Variable", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Optional dark mode (soft lamplight on a clay wall). Same Rose-Clay accent;
+   ground flips to a deep Espresso #211C18, text to Crème. Engaged only when
+   the OS prefers dark, so the warm light-mode stays the default brand face. */
+@media (prefers-color-scheme: dark) {
+  [data-site="beauty-lounge"] {
+    /* Espresso ground #211C18; Crème text on it -> ~13:1 (AA + AAA). */
+    --color-paper: #211c18;
+    --color-surface: #2b2420;
+    --color-ink: #f7f1ea;
+    /* Muted lifted to a warm sand so secondary text clears AA on the dark
+       espresso ground (~7:1), where Mocha would be too dark. */
+    --color-muted: #cbb69f;
+    --color-line: #3a322b;
+    /* Accent fill stays Rose-Clay; Espresso-ink on it still ~5.9:1. */
+    --color-accent: #c98b7a;
+    --color-accent-ink: #211c18;
+    /* In-text accent on the dark ground = a lighter clay-rose so links clear
+       AA (~5.5:1) where the deep terracotta would not on espresso. */
+    --color-accent-text: #e0a08f;
+    --color-accent-soft: #2f2620;
+  }
+}

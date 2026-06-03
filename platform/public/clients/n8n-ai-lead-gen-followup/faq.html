@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FAQ | AI Lead Generation System</title>
-<script>(function(){var t=localStorage.getItem('n8n-ai-lead-gen-followup-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})()</script>
 <style>
 :root{--bg:#ffffff;--text:#1a1a1a;--text2:#6b7280;--text-strong:#111827;--blue:#2563eb;--blue-dark:#1e40af;--blue-light:#dbeafe;--blue-bg:#eff6ff;--green:#059669;--green-light:#d1fae5;--green-bg:#ecfdf5;--green-dark:#047857;--purple:#7c3aed;--purple-light:#ede9fe;--purple-bg:#f5f3ff;--purple-dark:#5b21b6;--orange:#d97706;--orange-light:#fef3c7;--orange-bg:#fffbeb;--orange-dark:#b45309;--border:#e5e7eb;--surface:#f8fafc;--surface2:#f1f5f9;--nav-bg:#ffffff;--card-shadow:0 1px 3px rgba(0,0,0,.08);--th-bg:#1e40af}
 [data-theme="dark"]{--bg:#0f172a;--text:#e2e8f0;--text2:#94a3b8;--text-strong:#f1f5f9;--blue:#3b82f6;--blue-dark:#93c5fd;--blue-light:#1e3a5f;--blue-bg:#172554;--green:#34d399;--green-light:#064e3b;--green-bg:#022c22;--green-dark:#6ee7b7;--purple:#a78bfa;--purple-light:#2e1065;--purple-bg:#1e1040;--purple-dark:#c4b5fd;--orange:#fbbf24;--orange-light:#78350f;--orange-bg:#451a03;--orange-dark:#fcd34d;--border:#334155;--surface:#1e293b;--surface2:#1e293b;--nav-bg:#1e293b;--card-shadow:0 1px 3px rgba(0,0,0,.3);--th-bg:#1e3a5f}
@@ -33,6 +32,7 @@ summary:hover{background:var(--surface2)}
 @media(max-width:1100px){.nav-links a{font-size:12px;padding:5px 8px}.nav-status{display:none}}
 @media(max-width:768px){.sidebar{transform:translateX(-100%);width:260px}.sidebar.open{transform:translateX(0)}.main-content{margin-left:0!important}.mobile-nav-toggle{display:block}.nav-links{display:none}.hero h1{font-size:24px}}
 </style>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
 </head>
 <body>
 <div class="access-gate" id="accessGate"><h2>Proposal Access</h2><p>Enter the access code from your Upwork message to continue.</p><input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()"><button onclick="checkAccess()">Continue</button><div class="error" id="accessError"></div></div>
@@ -133,14 +133,14 @@ summary:hover{background:var(--surface2)}
     <a href="/clients/n8n-ai-lead-gen-followup/onboarding" class="cta-btn">Get Started &rarr;</a>
 </div>
 
-<div class="footer"><p>Prepared by <a href="mailto:nicolas.neumann@unpauseai.com">UnpauseAI</a> &middot; 2026</p></div>
+<div class="footer"><p>Prepared by <a href="mailto:admin@unpauseai.com">UnpauseAI</a> &middot; 2026</p></div>
 
 </div></div>
 
 <script>
 function checkAccess(){var c=document.getElementById('accessCode').value.trim().toLowerCase();if(c==='leadgen-2026'){document.getElementById('accessGate').classList.add('hidden');localStorage.setItem('n8n-ai-lead-gen-followup-access','granted')}else{document.getElementById('accessError').textContent='Incorrect code.'}}
 if(localStorage.getItem('n8n-ai-lead-gen-followup-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}
-function toggleTheme(){var h=document.documentElement;var t=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',t);localStorage.setItem('n8n-ai-lead-gen-followup-theme',t)}
+function toggleTheme(){var h=document.documentElement;var t=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',t);localStorage.setItem('theme',t)}
 var links=document.querySelectorAll('.step-link');var sections=[];links.forEach(function(a){var id=a.getAttribute('href').replace('#','');var el=document.getElementById(id);if(el)sections.push({el:el,link:a})});function updateActive(){var scrollY=window.scrollY+120;var active=sections[0];for(var i=0;i<sections.length;i++){if(sections[i].el.offsetTop<=scrollY)active=sections[i]}links.forEach(function(l){l.classList.remove('active')});if(active)active.link.classList.add('active')}window.addEventListener('scroll',updateActive);
 </script>
 </body>

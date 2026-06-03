@@ -12,8 +12,14 @@ deployment:
   url: https://local-web-ka.fly.dev
   fly_account: matneumann07@gmail.com
   flyctl_path: 'C:\Users\neuma_p1qrsic\.fly\bin\flyctl.exe'
-  deploy_cmd: >
+  deploy_cmd: 'uv run tools/local-web-deploy.py'  # canonical: build + deploy + live-origin verify
+  deploy_cmd_raw: >
     flyctl deploy {app-abs-path} --config {fly.toml} --remote-only --now
+  deploy_note: >
+    Always ship via tools/local-web-deploy.py — it fetches each fly.dev URL
+    after deploy and asserts the live origin serves THIS build (content-hash
+    match), so "live" can never be claimed off a localhost preview again
+    (2026-06-01 incident). Raw flyctl is the fallback for one-offs only.
   notes: >
     Remote builder (no local Docker). 2 machines, auto_stop=stop,
     min_machines_running=0. nginx serves Astro static dist; build is
@@ -30,14 +36,22 @@ sites:
     business: Praxis Dr. med. Sema Uslu (Hausarztpraxis, Karlsruhe-Mühlburg)
     url: https://local-web-ka.fly.dev/praxis-uslu
     jsonld: MedicalClinic
-  - slug: coffee-boxx
-    business: Coffee Boxx (Café, Karlsruhe)
-    url: https://local-web-ka.fly.dev/coffee-boxx
-    jsonld: CafeOrCoffeeShop
   - slug: pronto-pronto
     business: Pronto-Pronto Heimservice und Restaurant (Karlsruhe)
     url: https://local-web-ka.fly.dev/pronto-pronto
     jsonld: Restaurant
+  - slug: meinzer-maler
+    business: Michael Meinzer Malerfachbetrieb (Maler/Handwerk, Karlsruhe-Knielingen)
+    url: https://local-web-ka.fly.dev/meinzer-maler
+    jsonld: HousePainter
+  - slug: helmle-physio
+    business: Krankengymnastik- und Massagepraxis Helmle & Helmle (Karlsruhe-Suedweststadt)
+    url: https://local-web-ka.fly.dev/helmle-physio
+    jsonld: Physiotherapy
+  - slug: beauty-lounge
+    business: Beauty Lounge Karlsruhe (Kosmetik + Nageldesign, Inh. Ilona Fait)
+    url: https://local-web-ka.fly.dev/beauty-lounge
+    jsonld: BeautySalon
 
 indexing:
   demos: index, follow            # owner directive 2026-05-18

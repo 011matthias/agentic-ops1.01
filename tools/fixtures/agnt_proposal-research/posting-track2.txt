@@ -1,0 +1,30 @@
+Title: n8n / Make.com automation specialist needed — recovering from a broken Zapier-to-Make migration (urgent)
+
+Budget: $1,500 fixed (open to slightly more for the right person)
+Duration: 2-3 weeks, possibly retainer afterwards
+Posted: 2 days ago by Atlas Greenhouses GmbH (Berlin, Germany)
+
+About us:
+Atlas Greenhouses is a 22-person team running commercial greenhouse operations across northern Germany. We handle wholesale produce ordering, contractor scheduling, and supplier invoicing — all of which lived in a Zapier workflow that a previous contractor migrated to Make.com last month. Since the migration, our operations have been a mess. Some scenarios are silently failing, our supplier invoices are duplicating in Xero, and the contractor scheduling Google Sheet has become inconsistent with what's actually scheduled. We need someone who can come in, audit what was migrated, fix what's broken, and get us to a stable state before our Q4 ordering peak in 6 weeks.
+
+Must-haves:
+- Proven Make.com experience (not just Zapier or n8n) — we need someone who can read a Make scenario and know what's wrong with it
+- Direct experience debugging silent failures (no error → wrong data downstream)
+- Comfortable with Xero API and the Google Sheets module's batch quirks
+- EU / GDPR awareness — we hold supplier data and can't ship it to US tooling
+- Available for a 30-min screening call this week
+
+Nice-to-haves:
+- n8n experience (we may move some flows there post-stabilization)
+- Background in operations or logistics-flavored automations
+- Native or fluent German for supplier-facing emails (but the work is mostly internal)
+
+What we don't want:
+- "Let me rebuild it from scratch" — we don't have the budget or time, and the migration is mostly correct
+- A fixed price that doesn't include a verification step — last contractor told us it was working and it wasn't
+- Anyone who hasn't actually shipped Make.com to production (we've been burned)
+
+How to apply:
+Send a Loom (max 5 minutes) walking through how you'd audit a Make.com scenario for silent failures. Bonus: a short example of a real Make scenario you debugged. Please include "GREENHOUSE" in your cover letter so I know you read this through.
+
+Contact: Sebastian Reiff, Operations Lead (will join the screening call)

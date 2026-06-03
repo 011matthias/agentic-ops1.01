@@ -1,0 +1,30 @@
+{
+  "hero-gesicht": {
+    "alt": "A woman's hand applying face cream from a jar against a beige background.",
+    "photographer": "Mikhail Nilov",
+    "photographer_url": "https://www.pexels.com/@mikhail-nilov",
+    "pexels_url": "https://www.pexels.com/photo/woman-holding-a-face-cream-6707140/",
+    "query": "hands holding skincare cream jar close up warm beige neutral background soft light no face"
+  },
+  "hero-nageldesign": {
+    "alt": "A hand gracefully hovers over a lit candle, creating a calm and soothing atmosphere.",
+    "photographer": "Yan Krukau",
+    "photographer_url": "https://www.pexels.com/@yankrukov",
+    "pexels_url": "https://www.pexels.com/photo/a-person-touching-a-candle-in-a-round-container-7019714/",
+    "query": "manicured hands close up nail detail warm natural light wood table"
+  },
+  "hero-wellness": {
+    "alt": "Top view of aromatherapy essentials including candles, massage tools, and essential oils on a table.",
+    "photographer": "KoolShooters",
+    "photographer_url": "https://www.pexels.com/@koolshooters",
+    "pexels_url": "https://www.pexels.com/photo/brown-bottles-on-the-table-6628476/",
+    "query": "stacked smooth black hot massage stones on towel warm candlelight spa still life close"
+  },
+  "signature": {
+    "alt": "Stylish plant and book display on wooden shelves with warm natural lighting.",
+    "photographer": "cottonbro studio",
+    "photographer_url": "https://www.pexels.com/@cottonbro",
+    "pexels_url": "https://www.pexels.com/photo/brown-wooden-wall-mounted-rack-4503943/",
+    "query": "warm minimalist salon treatment room interior lamplight clay wall plants no people"
+  }
+}

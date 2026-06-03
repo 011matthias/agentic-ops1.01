@@ -52,7 +52,7 @@ export default async function BuyPage({ params }: Props) {
       {/* Self-service tier */}
       <div className="mb-6 rounded-lg border border-border p-6">
         <h2 className="mb-4 text-sm font-medium uppercase tracking-wide">
-          Self-Service &mdash; What&rsquo;s included
+          Self-Service: what&rsquo;s included
         </h2>
         <ul className="space-y-3">
           {item.whatYouGet.map((benefit) => (
@@ -74,7 +74,7 @@ export default async function BuyPage({ params }: Props) {
       {/* Premium tier */}
       <div className="mb-8 rounded-lg border-2 border-accent/20 bg-gradient-to-br from-blue-bg/50 to-transparent p-6">
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-accent">
-          Premium &mdash; We implement it for you
+          Premium: we implement it for you
         </h2>
         <ul className="space-y-3">
           {item.premiumIncludes.map((benefit) => (

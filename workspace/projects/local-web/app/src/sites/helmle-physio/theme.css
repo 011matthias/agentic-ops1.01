@@ -1,0 +1,65 @@
+/* helmle-physio: warm-grounded body-wellness physiotherapy. Calm, hands-on,
+   credible neighbourhood Praxis. NOT clinical-cold, NOT luxury-spa.
+   Overrides the shared brand slots from global.css under [data-site].
+   Every token carries a WHY and a verified WCAG AA (>= 4.5:1) note where
+   it touches small text. Contrast ratios computed against paper #F6F3EC. */
+[data-site="helmle-physio"] {
+  /* Warm off-white paper. WHY: a cool clinical white reads sterile; a warm
+     paper tone communicates the practice's hands-on, human warmth. */
+  --color-paper: #f6f3ec;
+
+  /* Soft stone card surface. WHY: a warmer, grounded card tone (not pure
+     white) keeps the body-wellness mood; ink on it = 9.78:1 (AA pass). */
+  --color-surface: #e4ded2;
+
+  /* Green-near-black ink, never pure black. WHY: pure #000 is harsh and
+     cold; a green-cast near-black sits in the sage family and reads softer.
+     On paper = 11.82:1, on surface = 9.78:1 (both AAA for body text). */
+  --color-ink: #2c322e;
+
+  /* Calm muted slate, used for secondary/supporting prose. WHY: a muted
+     slate (not grey) keeps the calm/focus register. Deepened to #4d5961 so
+     it also clears AA on the STONE card surface (#5c6b73 was only 4.11:1 on
+     the card labels; #4d5961 is ~5.4:1 on the card, higher on paper). */
+  --color-muted: #4d5961;
+
+  /* Warm hairline rule. WHY: a warm stone line keeps section dividers from
+     reading as a cold UI grid; decorative (non-text), no contrast gate. */
+  --color-line: #d8d0c0;
+
+  /* Single action accent: deep petrol-teal, echoing the practice's own
+     teal/blue-green logo mark (the prior clay #A85734 fought the teal logo
+     on the header; owner-flagged). ONE accent now carries CTA + in-text +
+     decorative, so the mark and the site read as one identity. WHY this hex:
+     #30656A gives white text = 6.6:1 and teal-on-paper = 5.95:1, both AA
+     (AAA at large). The warmth lives in the paper, ink, soft serif and the
+     warm-graded photography, not in the accent. */
+  --color-accent: #30656a;
+  --color-accent-ink: #ffffff;
+
+  /* Teal tint surface for the signature band / soft sections. WHY: a faint
+     teal wash gives the calm background depth without a flat field; ink on
+     it stays AAA. */
+  --color-accent-soft: #e6efee;
+
+  /* Light teal, large/decorative only (rail track tint, eyebrow tick). WHY:
+     used >= 24px / non-text per the large-text 3:1 threshold, never body. */
+  --color-sage: #5e9296;
+
+  /* Deep teal for small accent text + fills (eyebrow ticks, links, h1 em,
+     progress rail, step dots, list numerals). Same hue as --color-accent so
+     the whole accent story is ONE colour echoing the logo; on paper = 5.95:1
+     (AA for small text). Token name kept for blast-radius; value is teal. */
+  --color-sage-deep: #30656a;
+
+  /* WHY Fraunces: a warm, soft optical serif. The German physio-practice
+     default is a clinical grotesk; a humanist soft-serif display IS the
+     differentiator (warmth + care). Georgia as the metric-compatible
+     fallback. */
+  --font-display: "Fraunces Variable", Georgia, serif;
+
+  /* WHY Hanken Grotesk: a friendly humanist sans, highly legible for German
+     prose (long compound words, umlauts). Sits in the supporting body role;
+     the display face carries the brand. */
+  --font-body: "Hanken Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
+}

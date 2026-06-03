@@ -2,7 +2,10 @@
 import BaseLayout from "@layouts/BaseLayout.astro";
 import Figure from "@components/Figure.astro";
 import DepthHero from "@components/DepthHero.astro";
-import "@fontsource-variable/space-grotesk";
+import { Image } from "astro:assets";
+import logo from "../assets/pronto-pronto/logo.png";
+import "@fontsource-variable/fraunces/full.css";
+import "@fontsource-variable/newsreader";
 import "@sites/pronto-pronto/theme.css";
 import { pronto, CHECK } from "@sites/pronto-pronto/data";
 
@@ -64,11 +67,23 @@ const description =
   jsonLd={jsonLd}
 >
   <header class="site-head">
-    <div class="wrap site-head__row">
-      <a href="#main" class="brand">
-        <span class="brand__name">Pronto-Pronto</span>
-        <span class="brand__role">Heimservice & Restaurant</span>
+    <div class="wrap site-head__inner">
+      <a
+        href="#main"
+        class="masthead"
+        aria-label="Pronto-Pronto Heimservice und Restaurant, Karlsruhe"
+      >
+        <Image
+          src={logo}
+          alt="Pronto-Pronto Heimservice und Restaurant Karlsruhe"
+          class="masthead__logo"
+          widths={[160, 240, 320]}
+          sizes="160px"
+          loading="eager"
+          decoding="async"
+        />
       </a>
+      <p class="masthead__descriptor">Pizza &middot; Pasta &middot; Heimservice</p>
       <nav class="site-nav" aria-label="Hauptnavigation">
         <a href="#karte">Speisekarte</a>
         <a href="#liefern">Liefergebiet</a>
@@ -97,6 +112,7 @@ const description =
         />
       </div>
       <div class="hero__scrim"></div>
+      <div class="hero__grain" aria-hidden="true"></div>
       <div class="wrap hero__inner">
         <p class="offer-chip">{pronto.promo.discount}</p>
         <h1>Heiß bestellt, schnell geliefert.</h1>
@@ -151,7 +167,7 @@ const description =
                   <p>{m.note}</p>
                 </div>
                 <span class="dish__leader" aria-hidden="true" />
-                <span class="dish__price tbc">{CHECK}</span>
+                <span class="dish__price tbc">auf Anfrage</span>
               </li>
             ))
           }
@@ -227,10 +243,14 @@ const description =
                 <dt>Telefon</dt>
                 <dd><a href={pronto.phoneHref}>{pronto.phone}</a></dd>
               </div>
-              <div>
-                <dt>E-Mail</dt>
-                <dd><span class="tbc">{pronto.email}</span></dd>
-              </div>
+              {
+                pronto.email !== CHECK && (
+                  <div>
+                    <dt>E-Mail</dt>
+                    <dd>{pronto.email}</dd>
+                  </div>
+                )
+              }
               <div>
                 <dt>Zahlung</dt>
                 <dd>{pronto.payment.join(", ")}</dd>
@@ -261,10 +281,8 @@ const description =
         <a href={pronto.phoneHref}>{pronto.phone}</a>
       </p>
       <p class="site-foot__legal">
-        Bilder: Pexels ·
-        <span class="tbc">Impressum</span> und
-        <span class="tbc">Datenschutz</span> werden vor Veröffentlichung
-        juristisch geprüft ergänzt.
+        Zuletzt aktualisiert: 2026-06-03 · Bilder: Pexels · Impressum und
+        Datenschutz folgen vor Veröffentlichung.
       </p>
     </div>
   </footer>
@@ -322,34 +340,60 @@ const description =
     backdrop-filter: blur(8px);
     border-bottom: 1px solid var(--color-line);
   }
-  .site-head__row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding-block: 0.9rem;
-  }
-  .brand {
-    text-decoration: none;
+  /* Signage masthead: brand emblem centered as the centerpiece, a small-caps
+     descriptor flanked by brass hairline rules (the printed-sign line), nav
+     centered beneath. Fills the dead middle the old left/right bar left, and
+     reads like a trattoria shopfront sign. The logo itself carries the
+     "Pronto-Pronto" name, so no redundant typeset wordmark is added. */
+  .site-head__inner {
     display: flex;
     flex-direction: column;
-    line-height: 1.15;
+    align-items: center;
+    gap: 0.55rem;
+    padding-block: 0.85rem;
+    text-align: center;
   }
-  .brand__name {
-    font-family: var(--font-display);
-    font-size: var(--text-lg);
-    font-weight: 700;
-    letter-spacing: -0.02em;
+  .masthead {
+    text-decoration: none;
+    display: block;
   }
-  .brand__role {
+  .masthead__logo {
+    /* The emblem is the centerpiece now, so it sizes up from the old corner
+       mark. Same desaturation that seats the vivid cartoon into the warm
+       palette (its terracotta banner already matches --color-accent). */
+    height: clamp(3.25rem, 8vw, 4.5rem);
+    width: auto;
+    display: block;
+    filter: saturate(0.62) brightness(0.92) contrast(0.96);
+    opacity: 0.95;
+  }
+  .masthead__descriptor {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(0.6rem, 2vw, 1rem);
+    margin: 0;
+    font-family: var(--font-body);
     font-size: var(--text-xs);
-    color: var(--color-muted);
-    letter-spacing: 0.06em;
+    font-weight: 600;
+    letter-spacing: 0.26em;
     text-transform: uppercase;
+    color: var(--color-muted);
+  }
+  /* Brass hairline rules flanking the descriptor (the printed-sign frame). */
+  .masthead__descriptor::before,
+  .masthead__descriptor::after {
+    content: "";
+    height: 1px;
+    width: clamp(1.75rem, 7vw, 5rem);
+    background: var(--color-brass);
   }
   .site-nav {
     display: flex;
     align-items: center;
-    gap: 1.75rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 1.5rem;
   }
   .site-nav a:not(.site-nav__cta) {
     text-decoration: none;
@@ -406,25 +450,53 @@ const description =
       var(--color-paper) 100%
     );
   }
+  /* Paper-grain texture layer (background-depth rule: no flat field). A
+     fractal-noise SVG at soft-light, ~10%, gives the hero a printed-menu
+     tooth without a raster asset or a measurable perf cost. */
+  .hero__grain {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.1;
+    mix-blend-mode: soft-light;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 160px 160px;
+  }
   .hero__inner {
     padding-block: clamp(2.5rem, 7vw, 5rem);
   }
+  /* The 10% offer as a vintage gummed STAMP, not a modern pill: squared
+     corners, a brass keyline doubled by an accent ring, slight rotation and
+     a printed-ink inset shadow. Echoes the logo's ribbon-banner frame. */
   .offer-chip {
     display: inline-block;
     background: var(--color-accent);
     color: var(--color-accent-ink);
+    font-family: var(--font-body);
     font-weight: 700;
     font-size: var(--text-sm);
-    padding: 0.5rem 1rem;
-    border-radius: 999px;
-    margin: 0 0 1.25rem;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    padding: 0.55rem 1.05rem;
+    border-radius: var(--radius-sm);
+    border: 1.5px solid var(--color-brass);
+    box-shadow: 0 0 0 1.5px var(--color-accent),
+      inset 0 1px 0 rgba(255, 255, 255, 0.18),
+      inset 0 -2px 4px rgba(0, 0, 0, 0.25);
+    transform: rotate(-1.6deg);
+    margin: 0 0 1.5rem;
   }
   .hero h1 {
     font-family: var(--font-display);
     font-size: var(--text-5xl);
-    font-weight: 700;
-    letter-spacing: -0.03em;
-    max-width: 16ch;
+    /* Fraunces dialled to its hand-painted-sign register: large optical
+       size, high softness, WONK on, for the warm 1970s pizzeria character
+       (a plain grotesk weight here is exactly what read modern-tech). */
+    font-variation-settings: "opsz" 144, "SOFT" 60, "WONK" 1, "wght" 660;
+    letter-spacing: -0.012em;
+    line-height: 1.0;
+    max-width: 15ch;
   }
   .hero__sub {
     font-size: var(--text-xl);
@@ -437,6 +509,14 @@ const description =
     flex-wrap: wrap;
     gap: 0.85rem;
     margin-block: 2rem 1.25rem;
+  }
+  /* CTAs squared off + brass-keylined so they read printed/stamped rather
+     than modern-app-pill; tap target stays well above 44px. */
+  .hero__actions .btn {
+    border-radius: var(--radius-sm);
+  }
+  .hero__actions .btn-primary {
+    border: 1.5px solid var(--color-brass);
   }
   .hero__meta {
     font-size: var(--text-sm);
@@ -455,9 +535,21 @@ const description =
   .liefern h2 {
     font-family: var(--font-display);
     font-size: var(--text-3xl);
-    font-weight: 700;
-    letter-spacing: -0.02em;
+    font-variation-settings: "opsz" 110, "SOFT" 50, "WONK" 1, "wght" 640;
+    letter-spacing: -0.008em;
     margin-block: 0.5rem 0;
+  }
+  /* Brass tick before each eyebrow: a vintage menu / signage detail. The
+     tick is decorative (non-text contrast); the eyebrow TEXT stays muted
+     taupe so it keeps its AA ratio. */
+  .eyebrow::before {
+    content: "";
+    display: inline-block;
+    width: 1.5rem;
+    height: 2px;
+    margin-right: 0.6rem;
+    vertical-align: middle;
+    background: var(--color-brass);
   }
   .section__intro {
     color: var(--color-muted);
@@ -567,8 +659,10 @@ const description =
   .liefern__big {
     font-family: var(--font-display);
     font-size: var(--text-4xl);
-    font-weight: 700;
-    color: var(--color-accent);
+    font-variation-settings: "opsz" 120, "SOFT" 50, "WONK" 1, "wght" 620;
+    /* lighter ember (text-on-dark token), clears AA where deep terracotta
+       would not; see theme.css --color-accent-text rationale. */
+    color: var(--color-accent-text);
     line-height: 1;
   }
   .liefern__facts span:last-child {
@@ -624,13 +718,10 @@ const description =
     margin: 0;
     font-size: var(--text-base);
   }
-  /* Lighter ember for in-text links on the dark contact-card surface:
-     --color-accent (#e0612b) on #262220 is 4.43:1, just under AA 4.5.
-     #ef7a42 clears it (~5.1:1), stays ember (not delivery-red), and the
-     link is underlined via the global a:not([class]) rule. Link-only;
-     the brand accent token is unchanged for buttons / the 10% figure. */
+  /* In-text links use the lighter ember text token (clears AA on the warm
+     dark surface); underlined via the global a:not([class]) rule. */
   .facts a {
-    color: #ef7a42;
+    color: var(--color-accent-text);
     text-decoration: none;
   }
   .contact__social {
@@ -638,15 +729,13 @@ const description =
     gap: 1rem;
   }
 
+  /* Quiet editorial note, not a loud "broken" badge: muted italic inline. */
   .tbc {
     font-family: var(--font-body);
-    font-size: 0.92em;
-    font-weight: 600;
-    color: var(--color-ink);
-    background: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface));
-    border: 1px solid color-mix(in srgb, var(--color-accent) 55%, transparent);
-    padding: 0.05em 0.45em;
-    border-radius: var(--radius-sm);
+    font-size: 0.9em;
+    font-weight: 500;
+    font-style: italic;
+    color: var(--color-muted);
     white-space: nowrap;
   }
 
@@ -663,7 +752,7 @@ const description =
     color: var(--color-muted);
   }
   .site-foot a {
-    color: var(--color-accent);
+    color: var(--color-accent-text);
     text-decoration: none;
   }
 

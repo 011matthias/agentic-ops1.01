@@ -41,22 +41,22 @@ research:
     - "event-based architecture (not manual scripts)"
     - "no data is retained or used for training externally"
   relevant_proof_points:
-    - "EU-based -- understands UK GDPR firsthand"
+    - "EU-based; understands UK GDPR firsthand"
     - "Built compliance-grade automation pipelines for enterprise clients"
-  budget_gap: "Client budget $600, proposed $3,250 -- 5x gap requires explicit justification"
+  budget_gap: "Client budget $600, proposed $3,250; 5x gap requires explicit justification"
 ---
 
 ## What We Understood
 
 You're building two connected systems for a large UK team:
 
-1. A secure AI chat interface so staff can use Claude (Anthropic) internally -- without any data leaking to external training sets or third-party storage.
+1. A secure AI chat interface so staff can use Claude (Anthropic) internally; without any data leaking to external training sets or third-party storage.
 
-2. An automated email monitoring pipeline that catches complaints, negative sentiment, urgent messages, and legal risk -- flagging them before they escalate.
+2. An automated email monitoring pipeline that catches complaints, negative sentiment, urgent messages, and legal risk; flagging them before they escalate.
 
 The previous version of this (the Azure/OpenAI project) was likely a first pass. This time you want it production-grade: event-driven, self-healing, GDPR-compliant, and hands-off after deployment.
 
-The part most proposals will underestimate: this isn't just an API integration. A 100+ person UK company routing customer emails through AI has real GDPR exposure -- international data transfers, automated decision-making rights, retention liability. That compliance layer is what separates a script from a system.
+The part most proposals will underestimate: this isn't just an API integration. A 100+ person UK company routing customer emails through AI has real GDPR exposure; international data transfers, automated decision-making rights, retention liability. That compliance layer is what separates a script from a system.
 
 ## Our Proposed Solution
 
@@ -67,7 +67,7 @@ The part most proposals will underestimate: this isn't just an API integration. 
 - No email content, chat logs, or PII stored externally
 
 ### Pipeline 2: Email Compliance Monitor
-- Email ingestion via Microsoft 365 Graph API (or Gmail API) -- near real-time webhooks
+- Email ingestion via Microsoft 365 Graph API (or Gmail API); near real-time webhooks
 - Pre-processing: extract text, strip attachments, minimize data before AI analysis
 - Anthropic API analysis per email: sentiment, complaint detection, key tags, severity score
 - Results stored in encrypted RDS (AWS-managed, retention-automated)
@@ -97,7 +97,7 @@ The part most proposals will underestimate: this isn't just an API integration. 
 
 **Total: $3,250** (phased)
 
-Phase 1 -- Email Compliance Monitor + GDPR Framework: **$1,850**
+Phase 1; Email Compliance Monitor + GDPR Framework: **$1,850**
 - Email ingestion pipeline (M365/Gmail)
 - AI analysis with Anthropic API
 - Structured storage with encryption
@@ -105,15 +105,15 @@ Phase 1 -- Email Compliance Monitor + GDPR Framework: **$1,850**
 - Retention automation
 - DPIA template + compliance documentation
 
-Phase 2 -- Open WebUI + Integration + Hardening: **$1,400**
+Phase 2; Open WebUI + Integration + Hardening: **$1,400**
 - Open WebUI deployment on AWS
 - Staff authentication system
 - Cost monitoring + billing alerts
 - Architecture documentation
 - Handoff guide
 
-Post-deployment: included in scope -- no time-limited support window.
+Post-deployment: included in scope; no time-limited support window.
 
-## About UnpausAI
+## About UnpauseAI
 
-We build automation systems for companies that need things to work reliably in production, not just in demos. EU-based, which means we understand UK GDPR requirements firsthand -- not as a checkbox, but as a design constraint that shapes the architecture from day one.
+We build automation systems for companies that need things to work reliably in production, not just in demos. EU-based, which means we understand UK GDPR requirements firsthand; not as a checkbox, but as a design constraint that shapes the architecture from day one.

@@ -234,9 +234,7 @@ li { margin-bottom: 6px; }
 .submit-area p:last-child { margin-bottom: 0; }
 .submit-area .email-link { font-weight: 600; color: var(--blue); }
 </style>
-<script>
-(function(){var t=localStorage.getItem('alpha-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
-</script>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
 </head>
 <body>
 
@@ -504,7 +502,7 @@ li { margin-bottom: 6px; }
 <!-- Submit Area -->
 <div class="submit-area">
     <h2 style="border:none;margin-top:0;font-size:20px;">How to Submit</h2>
-    <p>Reply on Upwork with this information, or send to <a href="mailto:hello@unpauseai.com" class="email-link">hello@unpauseai.com</a></p>
+    <p>Reply on Upwork with this information, or send to <a href="mailto:admin@unpauseai.com" class="email-link">admin@unpauseai.com</a></p>
     <p style="font-size:13px;color:var(--text2);">This form does not submit automatically. Copy your answers into an Upwork message or email.</p>
 </div>
 
@@ -512,7 +510,7 @@ li { margin-bottom: 6px; }
 <section class="cta-section">
     <h2>Ready to start?</h2>
     <p>Reply on Upwork or email us and we will schedule the kickoff.</p>
-    <a href="mailto:hello@unpauseai.com" class="cta-btn">Email Us &rarr;</a>
+    <a href="mailto:admin@unpauseai.com" class="cta-btn">Email Us &rarr;</a>
 </section>
 
 <footer class="footer" style="border-top: 1px solid var(--border); padding: 24px 0 40px;">
@@ -529,7 +527,7 @@ function toggleTheme() {
     var el = document.documentElement;
     var t = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     el.setAttribute('data-theme', t);
-    localStorage.setItem('alpha-theme', t);
+    localStorage.setItem('theme', t);
 }
 
 function toggleApiInput(checkbox, inputId) {

@@ -1,0 +1,857 @@
+---
+import BaseLayout from "@layouts/BaseLayout.astro";
+import Figure from "@components/Figure.astro";
+import "@fontsource/cormorant-garamond/400.css";
+import "@fontsource/cormorant-garamond/500.css";
+import "@fontsource/cormorant-garamond/600.css";
+import "@fontsource-variable/mulish";
+import "@sites/beauty-lounge/theme.css";
+import { beautyLounge, CHECK } from "@sites/beauty-lounge/data";
+
+const fullAddress = `${beautyLounge.address.street}, ${beautyLounge.address.zip} ${beautyLounge.address.city}`;
+
+const dayMap: Record<string, string> = {
+  Montag: "Monday",
+  Dienstag: "Tuesday",
+  Mittwoch: "Wednesday",
+  Donnerstag: "Thursday",
+  Freitag: "Friday",
+  Samstag: "Saturday",
+};
+
+const openingHoursSpecification = beautyLounge.hours
+  .filter((h) => h.times !== "geschlossen")
+  .map((h) => {
+    const [opens, closes] = h.times.split(" bis ");
+    return {
+      "@type": "OpeningHoursSpecification",
+      dayOfWeek: `https://schema.org/${dayMap[h.day]}`,
+      opens,
+      closes,
+    };
+  });
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "BeautySalon",
+  name: beautyLounge.fullName,
+  description: beautyLounge.tagline,
+  address: {
+    "@type": "PostalAddress",
+    streetAddress: beautyLounge.address.street,
+    postalCode: beautyLounge.address.zip,
+    addressLocality: beautyLounge.address.city,
+    addressCountry: "DE",
+  },
+  telephone: beautyLounge.phone,
+  openingHoursSpecification,
+  makesOffer: beautyLounge.families.flatMap((f) =>
+    f.treatments.map((t) => ({
+      "@type": "Offer",
+      itemOffered: { "@type": "Service", name: t, category: f.label },
+    })),
+  ),
+};
+
+const title =
+  "Beauty Lounge Karlsruhe: Kosmetik, Nageldesign und Wellness";
+const description =
+  "Beauty Lounge in der Karlsruher Innenstadt-West (Inh. Ilona Fait): Gesichtsbehandlungen, Nageldesign und Hot-Stone-Massage. Öffnungszeiten und Termin telefonisch.";
+
+// Price list grouped by family for a scannable Preisliste.
+const priceGroups = beautyLounge.families.map((f) => ({
+  label: f.label,
+  rows: beautyLounge.priceList.filter((p) => p.family === f.label),
+}));
+---
+
+<BaseLayout
+  site="beauty-lounge"
+  lang="de"
+  title={title}
+  description={description}
+  path="/beauty-lounge"
+  jsonLd={jsonLd}
+>
+  <header class="site-head">
+    <div class="wrap site-head__row">
+      {/* Brand = typeset Cormorant Garamond wordmark. No logo asset exists,
+          so the wordmark IS the mark (see BRIEF "Wordmark"). */}
+      <a href="#main" class="brand" aria-label="Beauty Lounge Karlsruhe, zum Inhalt">
+        <span class="brand__mark">Beauty Lounge</span>
+        <span class="brand__role">Kosmetik · Nageldesign · Wellness</span>
+      </a>
+      <nav class="site-nav" aria-label="Hauptnavigation">
+        <a href="#disziplinen">Behandlungen</a>
+        <a href="#preise">Preisliste</a>
+        <a href="#kontakt">Kontakt</a>
+        <a class="btn btn-primary site-nav__cta" href={beautyLounge.phoneHref}>
+          Termin
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    {/* Signature: multi-discipline tri-band hero. The three REAL families
+        (no hair). Cormorant wordmark centered across the panels; on desktop
+        hovering/focusing a panel widens it and reveals its treatment list. */}
+    <section class="discipline-hero" aria-labelledby="hero-wordmark">
+      <div class="dh__lede wrap">
+        <p class="eyebrow">Karlsruhe · Innenstadt-West</p>
+        <h1 id="hero-wordmark" class="dh__wordmark">Beauty Lounge</h1>
+        <p class="dh__sub">{beautyLounge.tagline}</p>
+      </div>
+
+      <ul class="bands" role="list">
+        {
+          beautyLounge.families.map((f, i) => (
+            <li class="band" data-band={f.key} style={`--band-i:${i}`}>
+              <div class="band__media" aria-hidden="true">
+                <Figure
+                  site="beauty-lounge"
+                  name={`hero-${f.key}`}
+                  label={`${f.label}, warme Studio-Stimmung`}
+                  ratio="3 / 4"
+                  rounded="0"
+                  priority={i === 0}
+                  kenburns={i === 0}
+                  sizes="(min-width: 56rem) 34vw, 92vw"
+                />
+              </div>
+              <div class="band__scrim" aria-hidden="true" />
+              <div class="band__body">
+                <h2 id={`band-${f.key}`} class="band__title">
+                  {f.label}
+                </h2>
+                <p class="band__lede">{f.lede}</p>
+                <ul class="band__list">
+                  {f.treatments.map((t) => (
+                    <li>{t}</li>
+                  ))}
+                </ul>
+                <a class="btn btn-primary band__cta" href={beautyLounge.phoneHref}>
+                  Termin buchen
+                </a>
+              </div>
+            </li>
+          ))
+        }
+      </ul>
+      <p class="dh__hint wrap">
+        Alle drei Bereiche unter einem Dach. Tippen oder zeigen Sie auf einen
+        Bereich für die Behandlungen.
+      </p>
+    </section>
+
+    {/* Category-organized treatment overview (Ever Beauty anchor): the three
+        families as editorial hairline lists, not an icon grid. */}
+    <section id="disziplinen" class="section">
+      <div class="wrap">
+        <header class="section__head" data-reveal>
+          <p class="eyebrow">Behandlungen</p>
+          <h2 id="behandlungen-h">Drei Bereiche, ein ruhiger Ort</h2>
+          <p class="section__intro">
+            Gesicht und Kosmetik, Nageldesign, Wellness und Massage. Was wir
+            tun, steht hier vollständig; was wir nicht tun, versprechen wir
+            auch nicht.
+          </p>
+        </header>
+
+        <div class="families" data-reveal-group>
+          {
+            beautyLounge.families.map((f) => (
+              <article class="family" data-reveal aria-labelledby={`fam-${f.key}`}>
+                <h3 id={`fam-${f.key}`} class="family__title">
+                  {f.label}
+                </h3>
+                <p class="family__lede">{f.lede}</p>
+                <ul class="family__list">
+                  {f.treatments.map((t) => (
+                    <li>{t}</li>
+                  ))}
+                </ul>
+              </article>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    {/* Preisliste: quiet table, every price [BITTE PRÜFEN] (B4). */}
+    <section id="preise" class="prices">
+      <div class="wrap">
+        <header class="section__head" data-reveal>
+          <p class="eyebrow">Preisliste</p>
+          <h2 id="preise-h">Preise auf einen Blick</h2>
+          <p class="section__intro">
+            Die genauen Preise trägt die Beauty Lounge vor Veröffentlichung
+            selbst ein; bis dahin stehen sie als auf Anfrage. Erfunden wird
+            hier nichts.
+          </p>
+        </header>
+
+        {
+          priceGroups.map((g) => (
+            <div class="price-group" data-reveal>
+              <h3 class="price-group__title">{g.label}</h3>
+              <table class="price-table">
+                <tbody>
+                  {g.rows.map((r) => (
+                    <tr>
+                      <th scope="row">{r.treatment}</th>
+                      <td>
+                        <span class="tbc">{r.price === CHECK ? "auf Anfrage" : r.price}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))
+        }
+      </div>
+    </section>
+
+    {/* Signature band: warm tactile atmosphere + the owner's standing. */}
+    <section class="signature">
+      <div class="wrap signature__grid">
+        <div class="signature__media" data-reveal>
+          <Figure
+            site="beauty-lounge"
+            name="signature"
+            label="Warme, taktile Studio-Atmosphäre, Lampenlicht auf einer Lehmwand"
+            ratio="4 / 5"
+            rounded="var(--radius-xl)"
+            sizes="(min-width: 54rem) 28rem, 92vw"
+          />
+        </div>
+        <div class="signature__text" data-reveal>
+          <p class="eyebrow">In der Beauty Lounge</p>
+          <h2 id="signature-h">Warm, ruhig, und für Sie da.</h2>
+          <p>
+            Die Beauty Lounge in der Amalienstraße verbindet Kosmetik,
+            Nageldesign und Wellness an einem Ort. Statt Hektik gibt es Zeit:
+            erst zuhören, dann gemeinsam entscheiden, welche Behandlung gerade
+            passt.
+          </p>
+          <dl class="signature__facts">
+            <div>
+              <dt>Inhaberin</dt>
+              <dd>{beautyLounge.owner}</dd>
+            </div>
+            <div>
+              <dt>Lage</dt>
+              <dd>{beautyLounge.address.district}, {beautyLounge.address.city}</dd>
+            </div>
+            <div>
+              <dt>Termine</dt>
+              <dd>Telefonisch unter {beautyLounge.phone}</dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+    </section>
+
+    {/* Kontakt + Öffnungszeiten: the precise block visitors actually need. */}
+    <section id="kontakt" class="section">
+      <div class="wrap contact__grid">
+        <div data-reveal>
+          <p class="eyebrow">Öffnungszeiten</p>
+          <h2 id="zeiten-h">Wann Sie uns erreichen</h2>
+          <table class="hours">
+            <tbody>
+              {
+                beautyLounge.hours.map((h) => (
+                  <tr class={h.times === "geschlossen" ? "is-closed" : ""}>
+                    <th scope="row">{h.day}</th>
+                    <td>{h.times}</td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+          <p class="hours__note">{beautyLounge.hoursNote}</p>
+        </div>
+
+        <div class="contact__side" data-reveal>
+          <div class="card contact__card">
+            <p class="eyebrow">Kontakt & Anfahrt</p>
+            <address class="contact__addr">
+              <strong>{beautyLounge.fullName}</strong><br />
+              Inh. {beautyLounge.owner}<br />
+              {beautyLounge.address.street}<br />
+              {beautyLounge.address.zip}
+              {beautyLounge.address.city} ({beautyLounge.address.district})
+            </address>
+            <dl class="facts">
+              <div>
+                <dt>Telefon</dt>
+                <dd><a href={beautyLounge.phoneHref}>{beautyLounge.phone}</a></dd>
+              </div>
+              {
+                beautyLounge.email !== CHECK && (
+                  <div>
+                    <dt>E-Mail</dt>
+                    <dd>{beautyLounge.email}</dd>
+                  </div>
+                )
+              }
+            </dl>
+            <a class="btn btn-primary contact__cta" href={beautyLounge.phoneHref}>
+              Jetzt anrufen · {beautyLounge.phone}
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  {/* Sticky warm-clay booking bar (mobile-first; the persistent CTA). */}
+  <aside class="bookbar" aria-label="Termin vereinbaren">
+    <div class="wrap bookbar__row">
+      <span class="bookbar__label">Termin in der Beauty Lounge</span>
+      <a class="btn btn-primary bookbar__cta" href={beautyLounge.phoneHref}>
+        {beautyLounge.phone}
+      </a>
+    </div>
+  </aside>
+
+  <footer class="site-foot">
+    <div class="wrap site-foot__row">
+      <p>
+        {beautyLounge.fullName} · {fullAddress} ·
+        <a href={beautyLounge.phoneHref}>{beautyLounge.phone}</a>
+      </p>
+      <p class="site-foot__legal">
+        Bilder: Pexels · Zuletzt aktualisiert: 2026-06-03 · Impressum und
+        Datenschutz folgen vor Veröffentlichung.
+      </p>
+    </div>
+  </footer>
+</BaseLayout>
+
+<style>
+  .site-head {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: color-mix(in srgb, var(--color-paper) 88%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--color-line);
+  }
+  .site-head__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-block: 0.85rem;
+  }
+  .brand {
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.05;
+  }
+  /* Cormorant wordmark, large enough that the thin high-contrast strokes
+     stay AA-legible (display-only rule). */
+  .brand__mark {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: var(--text-2xl);
+    letter-spacing: 0.01em;
+    color: var(--color-ink);
+  }
+  .brand__role {
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+    margin-top: 0.2rem;
+  }
+  .site-nav {
+    display: flex;
+    align-items: center;
+    gap: 1.6rem;
+  }
+  .site-nav a:not(.site-nav__cta) {
+    text-decoration: none;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--color-muted);
+  }
+  .site-nav a:not(.site-nav__cta):hover {
+    color: var(--color-ink);
+  }
+  /* Specificity beats `.site-nav a`; CTA keeps accent-ink (Espresso on
+     rose-clay = AA), never inherits muted on the accent fill. */
+  .site-nav a.site-nav__cta {
+    color: var(--color-accent-ink);
+    padding: 0.55rem 1.15rem;
+    font-size: var(--text-sm);
+  }
+  .site-nav a.site-nav__cta:hover {
+    color: var(--color-accent-ink);
+  }
+  @media (max-width: 640px) {
+    .site-nav a:not(.site-nav__cta) {
+      display: none;
+    }
+  }
+
+  /* Buttons: rose-clay fill, Espresso ink, soft-cornered. Press feedback
+     scale(0.97) per §3a; hover lift inherited from .btn-primary. */
+  :global([data-site="beauty-lounge"]) .btn {
+    border-radius: 999px;
+    font-family: var(--font-body);
+  }
+  .btn-primary:active {
+    transform: scale(0.97);
+  }
+
+  /* ---- Discipline tri-band hero (bespoke signature) ---- */
+  .discipline-hero {
+    padding-top: clamp(2.5rem, 6vw, 4.5rem);
+    background:
+      radial-gradient(
+        120% 80% at 50% 0%,
+        var(--color-surface) 0%,
+        var(--color-paper) 60%
+      );
+  }
+  .dh__lede {
+    text-align: center;
+    margin-bottom: clamp(1.75rem, 4vw, 2.75rem);
+  }
+  .dh__wordmark {
+    font-family: var(--font-display);
+    /* weight 600 + tight tracking so the high-contrast serif reads as a
+       deliberate masthead, not "nice" (skil_web-build B1). */
+    font-weight: 600;
+    font-size: var(--text-5xl);
+    letter-spacing: -0.015em;
+    line-height: 0.95;
+    margin-block: 0.4rem 0;
+  }
+  .dh__sub {
+    font-family: var(--font-body);
+    color: var(--color-muted);
+    font-size: var(--text-lg);
+    max-width: 46ch;
+    margin: 1rem auto 0;
+  }
+
+  .bands {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    width: min(100% - 2.5rem, 80rem);
+    margin-inline: auto;
+  }
+  .band {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border-radius: var(--radius-xl);
+    min-height: clamp(20rem, 42vw, 30rem);
+    display: flex;
+    align-items: flex-end;
+  }
+  .band__media {
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+  }
+  .band__media :global(.figure),
+  .band__media :global(.img-slot) {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto !important;
+    border-radius: 0;
+  }
+  /* One consistent warm grade across the three band photos + the signature
+     so the set reads tonally unified, not three mismatched stock tiles
+     (skil_web-build B4). */
+  .band__media :global(img),
+  .signature__media :global(img) {
+    filter: saturate(1.05) sepia(0.06) brightness(1.02) contrast(1.01);
+  }
+  /* Crème-tinted overlay so the warm wordmark + lists read on any photo. */
+  .band__scrim {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-paper) 18%, transparent) 0%,
+      color-mix(in srgb, var(--color-paper) 48%, transparent) 50%,
+      color-mix(in srgb, var(--color-ink) 78%, transparent) 100%
+    );
+  }
+  .band__body {
+    padding: clamp(1.5rem, 3vw, 2.25rem);
+    color: var(--color-paper);
+  }
+  .band__title {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: var(--text-3xl);
+    color: var(--color-paper);
+  }
+  .band__lede {
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    margin-block: 0.5rem 0;
+    max-width: 36ch;
+    color: color-mix(in srgb, var(--color-paper) 90%, transparent);
+  }
+  .band__list {
+    list-style: none;
+    margin: 1rem 0 0;
+    padding: 0;
+    display: grid;
+    gap: 0.3rem;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: color-mix(in srgb, var(--color-paper) 88%, transparent);
+  }
+  .band__cta {
+    margin-top: 1.25rem;
+  }
+
+  /* Desktop: side-by-side panels; hover/focus widens one, recedes others.
+     Animated property = flex (grid-template-columns) on a custom
+     cubic-bezier, <=300ms; transform-origin per-element; interruptible. */
+  @media (min-width: 56rem) {
+    .bands {
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 0.75rem;
+    }
+    .band {
+      transition: flex 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    /* Use a flex row so panels can grow/shrink fluidly on hover. */
+    .bands {
+      display: flex;
+      align-items: stretch;
+    }
+    .band {
+      flex: 1 1 0;
+    }
+    @media (hover: hover) and (pointer: fine) {
+      .bands:hover .band {
+        flex-grow: 0.7;
+      }
+      .bands:hover .band:hover {
+        flex-grow: 1.9;
+      }
+      /* Lists/CTA fade in only on the widened panel; calm, no layout jank. */
+      .band .band__list,
+      .band .band__cta {
+        opacity: 0;
+        transform: translateY(8px);
+        transition:
+          opacity 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+          transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      .band:hover .band__list,
+      .band:hover .band__cta,
+      .band:focus-within .band__list,
+      .band:focus-within .band__cta {
+        opacity: 1;
+        transform: none;
+      }
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .band,
+    .band .band__list,
+    .band .band__cta {
+      transition: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+  }
+  .dh__hint {
+    text-align: center;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    margin-top: 1.25rem;
+  }
+
+  /* ---- Shared section scaffolding ---- */
+  .section {
+    padding-block: clamp(3rem, 6vw, 5.5rem);
+  }
+  .section__head {
+    max-width: 46rem;
+    margin-bottom: clamp(2rem, 4vw, 3rem);
+  }
+  .section__head h2,
+  .signature h2,
+  .contact__grid h2,
+  .prices h2 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: var(--text-3xl);
+    margin-block: 0.5rem 0;
+  }
+  .section__intro {
+    font-family: var(--font-body);
+    color: var(--color-muted);
+    font-size: var(--text-lg);
+    margin-top: 1rem;
+  }
+  .eyebrow {
+    font-family: var(--font-body);
+  }
+
+  /* ---- Families (category-organized treatment lists) ---- */
+  .families {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: clamp(1.5rem, 4vw, 3rem);
+    border-top: 1px solid var(--color-line);
+    padding-top: clamp(1.75rem, 4vw, 2.75rem);
+  }
+  .family__title {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: var(--text-2xl);
+  }
+  .family__lede {
+    font-family: var(--font-body);
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    margin-block: 0.4rem 0;
+  }
+  .family__list {
+    list-style: none;
+    margin: 1.1rem 0 0;
+    padding: 0;
+    display: grid;
+    gap: 0.6rem;
+    font-family: var(--font-body);
+  }
+  .family__list li {
+    padding-block: 0.55rem;
+    border-bottom: 1px solid var(--color-line);
+    font-size: var(--text-base);
+  }
+  @media (max-width: 56rem) {
+    .families {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* ---- Preisliste ---- */
+  .prices {
+    background: var(--color-accent-soft);
+    padding-block: clamp(3rem, 7vw, 6rem);
+  }
+  .price-group {
+    margin-top: clamp(1.75rem, 4vw, 2.5rem);
+  }
+  .price-group__title {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: var(--text-xl);
+    margin-bottom: 0.5rem;
+  }
+  .price-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .price-table th,
+  .price-table td {
+    font-family: var(--font-body);
+    text-align: left;
+    padding: 0.85rem 0;
+    border-bottom: 1px solid var(--color-line);
+    font-weight: 500;
+    font-size: var(--text-base);
+  }
+  .price-table td {
+    text-align: right;
+  }
+
+  /* ---- Signature band ---- */
+  .signature {
+    padding-block: clamp(3rem, 7vw, 6rem);
+  }
+  .signature__grid {
+    display: grid;
+    grid-template-columns: 0.85fr 1.15fr;
+    gap: clamp(2rem, 5vw, 4.5rem);
+    align-items: center;
+  }
+  .signature__text > p {
+    font-family: var(--font-body);
+    margin-top: 1.25rem;
+    max-width: 58ch;
+  }
+  .signature__text h2 {
+    max-width: 18ch;
+  }
+  .signature__facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2.25rem;
+    margin-block: 2rem 0;
+  }
+  .signature__facts dt {
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-muted);
+  }
+  .signature__facts dd {
+    font-family: var(--font-body);
+    margin: 0.2rem 0 0;
+    font-weight: 700;
+  }
+  .signature__facts a {
+    color: var(--color-accent-text);
+    text-decoration: none;
+  }
+
+  /* ---- Kontakt ---- */
+  .contact__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(2rem, 5vw, 4rem);
+  }
+  .hours {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1.5rem;
+  }
+  .hours th,
+  .hours td {
+    font-family: var(--font-body);
+    text-align: left;
+    padding: 0.8rem 0;
+    border-bottom: 1px solid var(--color-line);
+    font-weight: 500;
+  }
+  .hours td {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .hours .is-closed th,
+  .hours .is-closed td {
+    color: var(--color-muted);
+  }
+  .hours__note {
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    margin-top: 1rem;
+  }
+  .contact__card {
+    padding: 1.75rem;
+  }
+  .contact__addr {
+    font-family: var(--font-body);
+    font-style: normal;
+    margin-block: 1rem;
+    line-height: 1.7;
+  }
+  .facts {
+    margin: 1rem 0 0;
+    display: grid;
+    gap: 1rem;
+  }
+  .facts div {
+    display: grid;
+    gap: 0.15rem;
+  }
+  .facts dt {
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-muted);
+  }
+  .facts dd {
+    font-family: var(--font-body);
+    margin: 0;
+    font-size: var(--text-base);
+  }
+  .facts a {
+    color: var(--color-accent-text);
+    text-decoration: none;
+  }
+  .contact__cta {
+    margin-top: 1.5rem;
+  }
+
+  /* Quiet editorial note, not a loud "broken" badge: muted italic inline. */
+  .tbc {
+    font-family: var(--font-body);
+    font-size: 0.9em;
+    font-weight: 500;
+    font-style: italic;
+    color: var(--color-muted);
+    white-space: nowrap;
+  }
+
+  /* ---- Sticky booking bar ---- */
+  .bookbar {
+    position: sticky;
+    bottom: 0;
+    z-index: 40;
+    background: color-mix(in srgb, var(--color-accent-soft) 92%, transparent);
+    backdrop-filter: blur(8px);
+    border-top: 1px solid var(--color-line);
+  }
+  .bookbar__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-block: 0.75rem;
+  }
+  .bookbar__label {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: var(--text-lg);
+    color: var(--color-ink);
+  }
+  .bookbar__cta {
+    padding: 0.6rem 1.2rem;
+  }
+
+  /* ---- Footer ---- */
+  .site-foot {
+    border-top: 1px solid var(--color-line);
+    padding-block: 2.5rem;
+  }
+  .site-foot__row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 1rem;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+  }
+  .site-foot a {
+    color: var(--color-accent-text);
+    text-decoration: none;
+  }
+
+  @media (max-width: 860px) {
+    .signature__grid,
+    .contact__grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

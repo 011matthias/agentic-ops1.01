@@ -289,9 +289,7 @@ tr:hover td { background: var(--blue-bg); }
 .doc-card ul { padding-left: 18px; margin: 0; }
 .doc-card li { font-size: 12px; color: var(--text2); margin-bottom: 4px; }
 </style>
-<script>
-(function(){var t=localStorage.getItem('aimarketing-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
-</script>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
 </head>
 <body>
 
@@ -370,7 +368,7 @@ tr:hover td { background: var(--blue-bg); }
 </section>
 
 <!-- Methodology -->
-<h2 id="methodology">Our Build Methodology</h2>
+<h2 id="methodology-overview">Our Build Methodology</h2>
 
 <p>Your 1,300+ paragraph system design document is the specification. We don't reinterpret it or improvise around it - we implement against it. The prompts you wrote, the JSON schemas you defined, the guardrail specs you laid out: those are the source of truth. Our job is to translate them into working Make.com scenarios.</p>
 
@@ -557,7 +555,7 @@ function toggleTheme(){
     var h=document.documentElement;
     var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
     h.setAttribute('data-theme',t);
-    localStorage.setItem('aimarketing-theme',t);
+    localStorage.setItem('theme',t);
 }
 // Sidebar active section tracking
 (function(){

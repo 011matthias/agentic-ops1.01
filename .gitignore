@@ -112,3 +112,21 @@ platform/.env.local
 
 # Per-build artifacts (anchor validation report) — regenerated each build
 platform/public/docs/*/.build-report.txt
+
+# Playwright MCP runtime snapshots — scratch artifacts, regenerated per session
+.playwright-mcp/
+
+# Scratch screenshots dropped at repo root by local-web / browser work
+/after-*.jpeg
+/anchor-*.jpeg
+/*-live-hero.jpeg
+
+# Office lock files (open-document temp markers)
+~$*.xlsx
+**/~$*.xlsx
+
+# Scheduled-tasks runtime lock
+.claude/scheduled_tasks.lock
+
+# Serena MCP project cache (index/memories) - regenerated per project, machine-local
+.serena/

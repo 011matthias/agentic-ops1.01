@@ -5,228 +5,130 @@ description: Build a bespoke, award-tier-quality marketing site for a local busi
 
 # Web Build
 
-The operationalized website-build capability. Born from the 2026-05-18
-rebuild: the prior single-file HTML approach produced aesthetically poor
-output because quality was per-session goodwill, not structural. This skill
-makes the bar structural. **Build success is not aesthetic success** — a
-site is not done until reference-parity is visually verified and Lighthouse
-runs >=95 on the deployed URL.
+The operationalized website-build capability. Born from the 2026-05-18 rebuild: the
+prior single-file HTML approach produced aesthetically poor output because quality was
+per-session goodwill, not structural. This skill makes the bar structural.
 
-Canonical contract: `workspace/projects/local-web/REBUILD-SPEC.md`.
-Canonical implementation to match: `app/src/pages/praxis-uslu.astro`.
+**Build success is not aesthetic success**, and a green build is not a live site. A
+site is not done until reference-parity is visually verified and Lighthouse runs ≥95
+on the deployed `fly.dev` URL.
 
-**Co-load:** when this skill activates, also load the `frontend-design`
-plugin skill (`claude-plugins-official/plugins/frontend-design`). They
-compose: `frontend-design` carries the bold-aesthetic-direction
-discipline this skill assumes (anti-AI-aesthetics, typography choice,
-spatial composition); this skill carries the local-web pipeline plus
-the Kowalski-anchored motion specs in §3a.
+- Canonical contract: `workspace/projects/local-web/REBUILD-SPEC.md`
+- Quality reference to match: `app/src/pages/praxis-uslu.astro`
+- **Co-load** the `frontend-design` plugin skill
+  (`claude-plugins-official/plugins/frontend-design`): it carries the bold-aesthetic /
+  anti-AI-aesthetics / typography / spatial-composition discipline this skill assumes;
+  this skill carries the local-web pipeline + the quantified gates.
 
 ## The four failure modes (hard gate — never reproduce)
 
-1. **Hand-rolled CSS from scratch.** Stand on the shared design foundation
-   (`app/src/styles/global.css`: fluid type scale, 8px rhythm, a11y
-   defaults, themed primitives). Never blank CSS.
-2. **Gradient/placeholder where a photo belongs.** Real imagery pipeline.
-   A designed `ImageSlot`/`Figure` slot is honest scaffolding pre-launch;
-   a gradient pretending to be finished is the failure. Zero gradient
-   placeholders in the shipped state.
-3. **No external taste anchor.** Lock 2-3 award-tier real reference sites
-   per vertical in `app/src/sites/{slug}/BRIEF.md` BEFORE building. The
-   extracted design DNA + explicit anti-patterns are the binding contract.
-4. **Self-imposed single-file/offline constraints.** Real Astro build,
-   real assets, Fly runtime. Offline leave-behind (screenshot/export) is a
-   separate concern, never a design constraint on the site.
+1. **Hand-rolled CSS from scratch.** Stand on the shared foundation
+   (`app/src/styles/global.css`: fluid type scale, 8px rhythm, a11y defaults, themed
+   primitives). Never blank CSS.
+2. **Gradient/placeholder where a photo belongs.** Real imagery pipeline. A designed
+   `ImageSlot`/`Figure` slot is honest scaffolding pre-launch; a gradient pretending to
+   be finished is the failure. Zero gradient placeholders in the shipped state.
+3. **No external taste anchor.** Lock 2-3 award-tier real reference sites per vertical
+   in the BRIEF BEFORE building. The extracted design DNA + explicit anti-patterns are
+   the binding contract.
+4. **Self-imposed single-file/offline constraints.** Real Astro build, real assets,
+   Fly runtime. Offline leave-behind (screenshot/export) is a separate concern, never a
+   design constraint on the site.
 
-## Process (in order)
+## Critical rules (always apply)
 
-### 1. Lock the BRIEF (anti-generic gate)
-`app/src/sites/{slug}/BRIEF.md` with: 2-3 named award-tier references,
-extracted design DNA, explicit anti-patterns (the clichéd vertical
-template to avoid), full art direction (type pairing, hex palette, layout
-system, motion), one bespoke signature section concept, imagery plan, B4
-data rules. Add `app/src/sites/{slug}/theme.css` — brand tokens scoped
-under `[data-site="{slug}"]` (paper/surface/ink/muted/line/accent/
-accent-soft + display/body fonts). Self-host fonts via `@fontsource-variable/*`
-(no Google Fonts request).
+Each rule's detail lives in one place — follow the pointer.
 
-### 2. B4-safe data (`app/src/sites/{slug}/data.ts`)
-Every field traces to `prospects/{slug}/data.md`. Sourced facts verbatim.
-Anything unverified -> `CHECK = "[BITTE PRÜFEN]"` sentinel, rendered as a
-visible `.tbc` chip. **Never invent** a price, menu item, email, phone,
-team, or zone. Categories are often sourced even when items are not — list
-the sourced layer, flag the rest.
+- **One CTA per nav bar.** Four-zone structure, brand-traceable CTA colour. → `components/nav-bar.md`
+- **Banned default fonts.** No Inter / Roboto / Arial / Space Grotesk / system stacks as primary type without a written non-default justification. → `modules/CONCEIVE.md`
+- **No flat solid-colour primary sections** (background-depth rule). → `modules/CONCEIVE.md`
+- **B4 data integrity.** Every field traces to `prospects/{slug}/data.md`; unverified → the data-layer `CHECK` sentinel, rendered quietly ("auf Anfrage" / omitted row), never the raw bracketed string on a pitchable page; never invent. → `modules/DATA.md`
+- **Zero em-dash** (U+2014, `&mdash;`, `&#8212;`, typographic `--`). Fix at source; `validate-dist.py` enforces. → `modules/SHIP.md`
+- **Motion envelope:** ≤300ms, custom `cubic-bezier`, `transform`/`opacity` only, `scale(0.97)` on `:active`, `prefers-reduced-motion` honoured. → `references/motion-craft.md`
+- **"Live" = the `fly.dev` origin** serving this exact build, not a localhost render. → `modules/SHIP.md`
+- **No auto-ship.** Edits stop at the staging boundary; deploy/commit need an explicit owner order. → `rule_no_auto_commit`
 
-### 3. Build the page to the praxis-uslu bar
-Bespoke per BRIEF, reusing shared primitives (`.wrap`, `.btn`, `.card`,
-`.eyebrow`) + `BaseLayout` (head/SEO/canonical/noindex/JSON-LD/`data-site`).
-Type-led hero so the design stands without photos. Hand-written meta +
-LocalBusiness-family JSON-LD per vertical (`MedicalClinic`,
-`CafeOrCoffeeShop`, `Restaurant`, ...). One real bespoke signature section
-that inverts the prospect's current biggest failure.
+## Build procedure
 
-### 3a. Taste anchors + motion craft (Kowalski + frontend-design)
+Load ONE module per phase; do not preload all four.
 
-The build steps above produce a page; this section is what makes it
-*good*. Two anchor sources: Emil Kowalski's UI lessons
-(`emilkowal.ski/ui/*`) and the `frontend-design` plugin skill that
-this one co-loads. Award-tier quality is no longer per-session
-goodwill once these rules are cited at decision time.
+| Step | Phase | Load |
+|------|-------|------|
+| 1 | Conceive — BRIEF, anchors, art direction, articulated-why | `modules/CONCEIVE.md` |
+| 2 | Populate — B4-safe data | `modules/DATA.md` |
+| 3 | Build — primitives, hero, signature section, motion, imagery, components | `modules/BUILD.md` |
+| 4 | Verify & ship — deliverable gate, deploy, Lighthouse, a11y, live-origin | `modules/SHIP.md` |
 
-**Articulated-WHY in the BRIEF.** Every art-direction call (type
-pair, palette, spacing, motion easing/duration, signature section)
-gets a one-line *"why this, not the default"*. Kowalski's frame:
-every taste decision has a logical reason; document it or you're
-guessing (`emilkowal.ski/ui/developing-taste`, `…/agents-with-taste`).
-The BRIEF must also name 1-2 references it is intentionally NOT
-borrowing from (the anti-pattern direction); naming the rejection
-sharpens what the chosen references actually carry.
+## Session entry (cold-load reading order)
 
-**Typography hard bans.** Inter, Roboto, Arial, default system
-stacks, and Space Grotesk are banned as primary type unless the BRIEF
-explicitly justifies one on a non-default basis. Reach for
-distinctive display + body pairings via `@fontsource-variable`.
-Reason: these are the AI-default fonts; using them is the signature
-of generic AI-generated UI (source: `frontend-design` plugin skill).
+On a fresh session with a web-build task, read in this order BEFORE touching code
+(skip files already loaded by `/comd_resume local-web`):
 
-**Motion craft (quantified).** Vague motion guidance is the source
-of janky-feeling animations. These rules are structural. Cite them
-in PR descriptions or the BRIEF when a motion choice is non-obvious:
+1. `workspace/projects/local-web/REBUILD-SPEC.md` — the contract
+2. `workspace/projects/local-web/infrastructure.yaml` — deploy + gates
+3. `app/src/pages/praxis-uslu.astro` — the quality reference to match
+4. Latest `docs/{YYYY-MM-DD} - Local-Web …/Checkpoint.md` — last shipped state
+5. `app/src/sites/{slug}/BRIEF.md` + `theme.css` for every site in scope
+6. `prospects/{slug}/data.md` for every site in scope (B4 source)
 
-| Rule | Value | Source |
-|------|-------|--------|
-| Enter/exit easing | Custom `cubic-bezier`, not built-in `ease-out` (built-ins "usually not strong enough") | `…/7-practical-animation-tips` #4 |
-| On-screen movement easing | `ease-in-out` | `…/great-animations` |
-| Hover / colour easing | `ease` | Kowalski |
-| Duration ceiling | ≤ 300ms; 180ms beats 400ms on perceived responsiveness | `…/great-animations` + tips #6 |
-| Animated properties | ONLY `transform` + `opacity` (composite layer; no layout/paint cost) | `…/great-animations` |
-| Initial scale | Never `scale(0)`; start from `0.95`+ | tips #2 |
-| Button press feedback | `scale(0.97)` on `:active` | tips #1 |
-| Transform origin | Per-element (popovers scale from trigger point, e.g. `var(--radix-…-transform-origin)`) | tips #5 |
-| Interruptibility | Required (CSS transitions or Motion lib) | `…/great-animations` |
-| Restraint | Never animate keyboard-initiated actions; skip animations on elements users see 100+×/day | `…/great-animations` + `…/you-dont-need-animations` |
-| Escape hatch | `filter: blur()` to bridge state transitions when easing/duration alone cannot | tips #7 |
-| Accessibility | `prefers-reduced-motion: reduce` always honoured | `…/great-animations` |
+Scope clarification is case-by-case, not a fixed checklist. Directive input ("rebuild
+the coffee-boxx hero with a new anchor") executes; exploratory input ("what should the
+4th site be?") asks one or two targeted questions. Gating directive work behind
+clarification theatre is friction (`rule_behaviors.md`). When asking IS warranted, the
+high-value forks are: (a) site scope — new prospect / rework / personalise / cards /
+pipeline; (b) deploy posture — local dry build vs live deploy (live needs an explicit
+ship order); (c) for a new prospect — vertical, city, public sources, taste anchors.
 
-**Comparative-judgment gate (formal).** Before deploy, place a
-screenshot of the candidate hero next to ONE named BRIEF anchor.
-Articulate *in writing* (PR description or BRIEF appendix) why it
-matches OR where it does not yet. This formalises the implicit
-"reference-parity gate" in §6. Source:
-`emilkowal.ski/ui/train-your-judgement`. The articulated judgment IS
-the gate; "looks fine to me" is not.
+## Definition of done (the single gate)
 
-**Background depth rule.** No flat solid-colour backgrounds in
-primary sections. Pick one of: gradient mesh, noise/grain, layered
-photography, geometric pattern, or the §4b depth-parallax hero.
-Pages of plain white sections fail the impeccable bar unless the
-BRIEF explicitly justifies the minimalism as the aesthetic direction
-(luxury / editorial restraint). Source: `frontend-design` plugin
-skill, "atmosphere + depth" rule.
+This checklist IS the contract — re-read it before declaring done. Each item is one
+line; the *how* lives in the linked module/reference. There is no competing checklist.
 
-### 4. Imagery pipeline (`app/scripts/fetch-imagery.mjs`)
-Curated stock per BRIEF art direction. **No people, no fake teams, no
-headset-smiler stock.** One consistent treatment per brand. Add slot
-entries to the `SLOTS` array (site, name, query, orientation). Run
-`npm run imagery` (needs `PEXELS_API_KEY` in `app/.env`, gitignored).
-Photos land in `src/assets/{site}/{name}.jpg`; attribution -> 
-`src/sites/{site}/imagery.json`. Use `<Figure>` (not raw `<Image>`): it
-auto-renders the optimized responsive photo when the asset exists, else
-the honest slot — zero markup change when photos land. **Commit
-`src/assets/`** so the Docker/Fly build is hermetic (no key at deploy).
-Add a "Bilder: Pexels" footer credit.
+1. **BRIEF complete** — 2-3 named anchors, design DNA, anti-patterns, articulated-WHY per call, 1-2 references intentionally NOT borrowed from. → `modules/CONCEIVE.md`
+2. **B4 data integrity** — every fact traces to `data.md` or carries `[BITTE PRÜFEN]`; no invented prices/menus/emails/phones/teams/hours/addresses. → `modules/DATA.md`
+3. **Deliverable-rule gate** — zero em-dash forms in source; `npm run build` → `validate-dist.py ./dist` passes; fix at source. → `modules/SHIP.md`
+4. **Real imagery, real-work, one grade** — every photo slot filled (no gradient placeholders); favour real-work/real-place over headset-smiler stock; ONE consistent warm grade across the page; `src/assets/{slug}/` committed (hermetic); `imagery.json` attribution; "Bilder: Pexels" credit. → `modules/BUILD.md`
+5. **Background depth honoured** — no flat solid-colour primary sections unless the BRIEF justifies the minimalism. → `modules/CONCEIVE.md`
+6. **Typography matches BRIEF** — banned defaults only with a written non-default justification. → `modules/CONCEIVE.md`
+7. **Motion craft** — every animation matches the quantified table. → `references/motion-craft.md`
+8. **Depth hero (if used)** — at most ONE; poster fallback verified on no-JS / reduced-motion / ≤768px / no-WebGL / Save-Data; `depth-live.cjs` confirms live parallax. → `references/depth-hero.md`
+9. **nginx config locked** — `absolute_redirect off; port_in_redirect off; server_name_in_redirect off;` + the `try_files … =404` chain; no 301s ever. → `references/deploy-internals.md`
+10. **Performance gate** — Lighthouse mobile ≥95 P/BP/SEO on the DEPLOYED Fly URL; SEO `is-crawlable` waived only for intentional `noindex`. → `modules/SHIP.md`
+11. **Accessibility gate** — axe-core via CDP returns zero WCAG 2 A/AA violations on the deployed URL; Lighthouse CLI a11y is NOT authoritative here. → `references/a11y-verify.md`
+12. **Comparative-judgment paragraph** — written match-then-exceed articulation vs ONE named anchor. "Looks fine to me" is not the gate. → `modules/CONCEIVE.md`
+13. **Owner ship order** — explicit go-ahead in the current conversation; no auto-deploy/PR/merge. → `rule_no_auto_commit`
+14. **Live-origin parity** — `uv run tools/local-web-deploy.py` reports `VERIFIED LIVE: … serves the current build`; a localhost render never satisfies this. → `modules/SHIP.md`
+15. **Nav bar passes its component standard** — the 10-item acceptance checklist (one CTA, non-default type, brand-traceable CTA colour, full-screen mobile overlay, zero bar contrast violations, comparative-judgment paragraph). → `components/nav-bar.md`
+16. **Confident-big hero type** — the display face set BIG (scale + weight + tight tracking), sized to fill its column; reads confident, not "nice". → `modules/CONCEIVE.md` §0 (List B1)
+17. **One accent on warm neutrals** — single disciplined accent, warm-neutral base, no multi-accent, no pure-black-on-white. → `modules/CONCEIVE.md` §0 (List B3)
+18. **Per-SET hero diversity** — a new or reworked site does not clone an existing site's hero *structure*; the set reads as N singular businesses, not one template. → `modules/CONCEIVE.md` §0 (List A1)
+19. **Logo / palette harmony** — the site accent echoes (or deliberately reconciles) a real brand mark's hue. → `modules/CONCEIVE.md` §0 (Logo / palette harmony gate)
+20. **No raw sentinel on a pitchable page** — every `CHECK` field renders as a quiet "auf Anfrage" / "wird ergänzt" or an omitted row, never the bracketed `[BITTE PRÜFEN]` string; `data.ts` keeps `CHECK` as the source of truth. → `modules/DATA.md`
+21. **Quiet-depth detail polish** — hairline borders, one shadow tier, no flat slab. → `modules/CONCEIVE.md` §0 (List B5)
+22. **German-sober tone** — no exclamation-marketing, no hype; calibrated craft over spectacle. → `modules/CONCEIVE.md` §0 (List A8)
 
-### 4b. Motion & 3D-feel imagery (gate-budgeted)
-The visuals should have depth and motion, never a flat photo wall. This
-is an imagery quality bar, not an interactive-3D-scene mandate.
+Items 16-22 are mechanically pre-screened (advisory) by `tools/audit-local-web-aesthetics.py`; that script never replaces the visual call — it just frees the eyeball pass to focus on grade, register, and "would the owner pay".
 
-**Default tier (every site, ~0 perf cost, do this first):** CSS-driven
-only -- Ken Burns slow zoom/pan on the hero photo, scroll-driven reveal
-+ layered parallax, hover-tilt on cards (`vanilla-tilt`/Atropos, lazy).
-Reads premium, zero WebGL, never threatens the gates.
+If any item is open, the site is not shipped. Surface what is open and wait.
 
-**Budgeted WebGL hero (at most ONE element per site, optional):**
-typically a depth-map parallax photo (one still + a grayscale depth map,
-a small shader displaces it on mouse/gyro -> the image visibly pops into
-layers) or a single `<model-viewer>` GLTF object. Permitted only with
-ALL of:
-- Lazy-init on idle/scroll (never blocks first paint or LCP)
-- Static poster image as the no-JS / pre-init fallback
-- `prefers-reduced-motion: reduce` -> render the static poster, no loop
-- Mobile (<=768px) serves the static image, not the WebGL canvas
-- Re-run the section-6 Lighthouse + axe gate AFTER adding it; a 3D
-  canvas is a classic silent perf/a11y regression. Perf 100 / 0 WCAG2AA
-  stays absolute -- if the hero can't pass, it ships as the poster.
+## Module / reference / component index
 
-Full multi-element interactive Three.js scenes are out of scope for this
-stack; the gate is non-negotiable, the hero is the only WebGL budget.
+Load the smallest unit that answers the current need.
 
-**Implemented (2026-05-19, all 3 sites):** depth-map parallax via
-`DepthHero.astro` (transparent enhancement of `<Figure>`; zero-dep
-hand-rolled WebGL1 shader; poster `<Image>` stays the LCP + the entire
-no-JS/pre-init/reduced-motion/<=768px/no-WebGL/Save-Data tree;
-`canvas aria-hidden`). Depth maps: `app/scripts/depth-map.py`
-(Depth-Anything-V2-Small ONNX, CPU, uv; PNGs committed -> hermetic
-build). **Verify the live effect with `tools/depth-live.cjs`** (fresh
-zero-cache profile, A/B pointer parallax, full-page
-`captureBeyondViewport` capture). Hard lesson: a bespoke CDP-`clip`
-screenshot probe reads the wrong region after `scrollIntoView` — use
-the full-page capture path, and trust composited screenshots over a
-`readPixels` of a non-`preserveDrawingBuffer` context (that read is
-undefined post-composite and will false-fail).
+| When | Load | Kind |
+|------|------|------|
+| Step 1 — BRIEF, anchors, art direction, comparative-judgment | `modules/CONCEIVE.md` | module |
+| Step 2 — B4-safe data | `modules/DATA.md` | module |
+| Step 3 — build, motion, imagery | `modules/BUILD.md` | module |
+| Step 4 — deliverable gate, deploy, a11y, live-origin | `modules/SHIP.md` | module |
+| The quantified motion table | `references/motion-craft.md` | reference |
+| The axe-core-via-CDP a11y method | `references/a11y-verify.md` | reference |
+| Fly + nginx deploy internals, cached-301 trap | `references/deploy-internals.md` | reference |
+| The budgeted WebGL depth hero | `references/depth-hero.md` | reference |
+| Per-element standard: navigation bar | `components/nav-bar.md` | component |
+| Why a rule exists / debugging a regression | `incidents.md` | log |
 
-### 5. Deliverable-rule gate (structural)
-`npm run build` runs `postbuild` -> `tools/validate-dist.py ./dist`:
-fails on em-dash U+2014, `&mdash;`/`&#8212;`, or typographic `--` in
-visible HTML. A failing build must not deploy. Fix at SOURCE, never rely
-on the minifier. (This closes the 2026-05-08 regression where dist/ was
-unscanned.)
-
-### 6. Deploy + the real quality gate
-One Astro project, one Fly app (`app/Dockerfile` -> nginx, `app/fly.toml`,
-`app/nginx.conf`). `flyctl deploy {app-abs-path} --config {fly.toml} --remote-only`.
-**`nginx.conf` MUST keep `absolute_redirect off; port_in_redirect off;
-server_name_in_redirect off;`** — nginx behind the Fly TLS edge only sees
-`http` on `:8080`, so without these the trailing-slash 301 leaks
-`http://host:8080/...` and every `/<slug>` page dies with
-`ERR_CONNECTION_RESET` in-browser (server-side curl still 200s — verify by
-following redirects, not just status). Regression class, 2026-05-18.
-Stronger: `try_files $uri $uri/index.html $uri.html $uri/ =404;` so the
-no-slash URL serves the index DIRECTLY (200, no 301) and link the
-slash form in nav — a 301 gets cached persistently by browsers, so once
-a bad target is cached no server fix can evict it; the only safe state
-is emitting no redirect at all. A cached-redirect bug is invisible to
-curl (no cache): reproduce the client path or use a fresh profile, never
-declare it fixed on a server-side 200 alone.
-Then, non-negotiable:
-- **Lighthouse mobile >=95** P/A/BP/SEO on the deployed Fly URL.
-- **Reference-parity gate:** does the build sit credibly next to its
-  BRIEF anchor sites? Screenshot-compare vs the old build.
-- WCAG AA contrast, keyboard nav, semantic HTML.
-Only after these pass is the site "done".
-
-> **A11y verification — use axe-core via CDP, not the Lighthouse CLI.**
-> The Lighthouse CLI is unreliable in the Windows dev env (silently
-> re-parses stale JSON across deploys; disagrees with `curl`/CDP). The
-> authoritative check is axe-core (the same engine Lighthouse uses) run
-> directly: launch headless Chrome with a **forward-slash** binary path
-> (`C:/Program Files/...`) — backslashes get mangled through bash
-> heredocs — connect via `chrome-remote-interface`, inject
-> `axe-core/axe.min.js`, run `axe.run` with `wcag2a/2aa/21a/21aa`. For a
-> contrast root-cause, `CSS.getMatchedStylesForNode` +
-> `getComputedStyleForNode` give ground truth in one shot — read the
-> computed style, never theorize a fix from axe's HTML snippet (that is
-> verification theater; cost a 3-iteration breach on 2026-05-18).
-> SEO `is-crawlable` failing is expected if a page is intentionally
-> `noindex`; gate it as "all non-noindex SEO audits pass", do not strip
-> noindex to chase the number unless the owner directs it.
-
-### 7. Handoff readiness
-Each site owns its route, theme tokens, content, JSON-LD — designed to
-split cleanly into the client's own repo at handoff. No shared business
-data between sites.
-
-## Quick reference
+## Quick reference (file map)
 
 | Need | Where |
 |---|---|
@@ -237,18 +139,19 @@ data between sites.
 | Image primitive (auto photo-or-slot) | `app/src/components/Figure.astro` |
 | Imagery pipeline | `app/scripts/fetch-imagery.mjs` (`npm run imagery`) |
 | Deliverable-rule gate | `tools/validate-dist.py` (npm `postbuild`) |
-| Deploy | `app/Dockerfile`, `app/fly.toml`, `app/nginx.conf` |
+| Deploy + live-origin verify (canonical) | `uv run tools/local-web-deploy.py` |
+| Deploy internals | `app/Dockerfile`, `app/fly.toml`, `app/nginx.conf` |
+| Depth-hero live verify | `tools/depth-live.cjs` |
+| Advisory List-B pre-ship checklist (per site) | `tools/audit-local-web-aesthetics.py` |
 
-## Decision log (carry forward)
+## Maintaining this skill (keep it from rotting back into a monolith)
 
-- **Design-from-references vs buy a premium theme base:** still designing
-  from references directly. Revisit before scaling past ~3 sites — it
-  changes the per-site cost model and this skill's shape. (Open question
-  from the 2026-05-18 checkpoint.)
-- Leave-behind QR cards need the owner's real name + contact line — never
-  fabricated.
-- **Kowalski + frontend-design taste anchors integrated 2026-05-26.**
-  Quantified motion craft, typography bans, comparative-judgment gate,
-  and background-depth rule now live in §3a. The "award-tier bar" the
-  prior failure mode named is operationally citable, not per-session
-  goodwill. Co-load instruction added at the top of the skill.
+Three invariants. Breaking one is how the skill drifts back to a 400-line dump.
+
+1. **One home per rule.** A rule lives in exactly one module/reference/component; the
+   spine links to it, never restates the detail. Two copies = drift.
+2. **Growth routes itself.** A new recurring element → `components/{element}.md` + a
+   Definition-of-Done item (same change). A new war-story → `incidents.md`, dated. New
+   method detail → a `references/` file. None of these get inlined into the spine.
+3. **The Definition of Done is the only gate.** Modules explain how to pass items;
+   they never become a second checklist with its own tie-breaker.

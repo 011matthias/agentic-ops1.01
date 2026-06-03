@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 
-const CONTACT_EMAIL = process.env.CONTACT_EMAIL || "nicolas.neumann@unpauseai.com";
+const CONTACT_EMAIL = process.env.CONTACT_EMAIL || "admin@unpauseai.com";
 
 export async function POST(request: Request) {
   try {

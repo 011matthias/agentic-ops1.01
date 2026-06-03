@@ -39,17 +39,17 @@ Three things stand out from your brief:
 
 We design around your patient's experience, not your tool list. Here is how the system works end to end:
 
-- **Patient Intake Flow** -- A screening form (Typeform or Tally) triggers an n8n workflow that creates a contact in Zoho CRM, sends a confirmation email via Brevo, and prompts the patient to book their introductory call. Every step logs back to the CRM.
+- **Patient Intake Flow**; A screening form (Typeform or Tally) triggers an n8n workflow that creates a contact in Zoho CRM, sends a confirmation email via Brevo, and prompts the patient to book their introductory call. Every step logs back to the CRM.
 
-- **Booking and Payment** -- Cal.com handles appointment scheduling with automatic Google Meet link generation. When the patient books, n8n triggers a Mollie payment link for the deposit. Payment confirmation updates the CRM, notifies the physician, and triggers the next communication sequence. All three packages (Basic, Plus, Complete) are supported with the correct payment amounts and subscription handling.
+- **Booking and Payment**; Cal.com handles appointment scheduling with automatic Google Meet link generation. When the patient books, n8n triggers a Mollie payment link for the deposit. Payment confirmation updates the CRM, notifies the physician, and triggers the next communication sequence. All three packages (Basic, Plus, Complete) are supported with the correct payment amounts and subscription handling.
 
-- **Communication Sequences** -- Automated email (Brevo) and SMS (MessageBird) flows handle every touchpoint: appointment reminders at 24h, 6h, and 1h before each consultation, blood kit dispatch notifications with track-and-trace, lab receipt confirmations, treatment plan invitations, monitoring appointment scheduling, and aftercare check-ins at month 1, 3, 6, and 12. All content in Dutch, using your drafts as the starting point.
+- **Communication Sequences**; Automated email (Brevo) and SMS (MessageBird) flows handle every touchpoint: appointment reminders at 24h, 6h, and 1h before each consultation, blood kit dispatch notifications with track-and-trace, lab receipt confirmations, treatment plan invitations, monitoring appointment scheduling, and aftercare check-ins at month 1, 3, 6, and 12. All content in Dutch, using your drafts as the starting point.
 
-- **CRM as Central Hub** -- Zoho CRM serves as the single source of truth for patient status. Every touchpoint (form submission, booking, payment, email, SMS, Intercom chat) logs back to the patient record. Your team gets a dashboard showing the full patient pipeline: who is in intake, who is in testing, who is in active treatment, and who is in aftercare.
+- **CRM as Central Hub**; Zoho CRM serves as the single source of truth for patient status. Every touchpoint (form submission, booking, payment, email, SMS, Intercom chat) logs back to the patient record. Your team gets a dashboard showing the full patient pipeline: who is in intake, who is in testing, who is in active treatment, and who is in aftercare.
 
-- **Intercom Integration** -- Your existing Intercom instance gets connected to the CRM and n8n. Website visitors who start a chat are automatically matched to their CRM record. FAQ responses, screening chat flows, and support routing are configured. The EU workspace is set up to ensure data stays in Europe.
+- **Intercom Integration**; Your existing Intercom instance gets connected to the CRM and n8n. Website visitors who start a chat are automatically matched to their CRM record. FAQ responses, screening chat flows, and support routing are configured. The EU workspace is set up so data stays in Europe.
 
-- **GDPR by Design** -- Consent tracking is built into every data collection point. We verify EU data hosting for every tool in your stack. Data Processing Agreements are documented. Opt-in and opt-out flows work correctly in every email and SMS. A data retention policy is defined and, where possible, automated. Medical data never enters the CRM, it stays exclusively in your NEN 7510-certified EHR.
+- **GDPR by Design**; Consent tracking is built into every data collection point. We verify EU data hosting for every tool in your stack. Data Processing Agreements are documented. Opt-in and opt-out flows work correctly in every email and SMS. A data retention policy is defined and, where possible, automated. Medical data never enters the CRM, it stays exclusively in your NEN 7510-certified EHR.
 
 ## Your Starter Template
 
@@ -81,7 +81,7 @@ This is one workflow out of the 8-10 that make up the full system. We can walk y
 
 All tools in your proposed stack support EU data hosting and provide Data Processing Agreements. No US-only services. This is a strong foundation for GDPR compliance.
 
-## Timeline and Milestones
+## Timeline & Milestones
 
 **Phase 1: Core Patient Journey (Weeks 1-4)**
 
@@ -100,7 +100,7 @@ Phase 1 delivers a fully working automation system. Phase 2 hardens it for compl
 
 ## Investment
 
-**Phase 1: Core Patient Journey -- EUR 3,500**
+**Phase 1: Core Patient Journey; EUR 3,500**
 - Zoho CRM fully configured (patient profiles, pipeline, dashboards)
 - 8-10 n8n workflows covering the full patient journey
 - Mollie payment integration (deposits, package payments, subscriptions)
@@ -108,7 +108,7 @@ Phase 1 delivers a fully working automation system. Phase 2 hardens it for compl
 - Cal.com booking with automatic video link generation
 - End-to-end testing of the complete patient flow
 
-**Phase 2: Compliance, Content and Handover -- EUR 2,000**
+**Phase 2: Compliance, Content and Handover; EUR 2,000**
 - GDPR compliance audit with consent flows and data retention
 - Intercom EU workspace with CRM integration and FAQ bot
 - All Dutch email and SMS content finalised in the platform

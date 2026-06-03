@@ -208,9 +208,7 @@ li { margin-bottom: 6px; }
     .form-row { grid-template-columns: 1fr; }
 }
 </style>
-<script>
-(function(){var t=localStorage.getItem('dae-course-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
-</script>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
 </head>
 <body>
 
@@ -422,7 +420,7 @@ li { margin-bottom: 6px; }
 </div>
 
 <footer class="footer" style="margin-top:48px;">
-    <p>Prepared for <strong>Dae</strong> by UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
+    <p>Prepared for <strong>Dae</strong> by UnpauseAI &middot; <a href="mailto:admin@unpauseai.com">admin@unpauseai.com</a> &middot; 2026</p>
 </footer>
 
 </div>
@@ -446,7 +444,7 @@ function toggleTheme(){
     var h=document.documentElement;
     var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
     h.setAttribute('data-theme',t);
-    localStorage.setItem('dae-course-theme',t);
+    localStorage.setItem('theme',t);
 }
 
 // Form submit

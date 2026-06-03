@@ -27,10 +27,10 @@ research:
     - "Apollo.io"
     - "Instantly.ai"
   prospect_pain_points:
-    - "No automated lead scraping -- manual prospecting limits scale"
-    - "Generic cold emails get ignored -- needs AI-driven personalization"
+    - "No automated lead scraping; manual prospecting limits scale"
+    - "Generic cold emails get ignored; needs AI-driven personalization"
     - "Deliverability risk if not configured correctly"
-    - "Multiple open positions for overlapping outbound work -- needs systems, not more hires"
+    - "Multiple open positions for overlapping outbound work; needs systems, not more hires"
   job_language_echoes:
     - "AI-driven cold email tool"
     - "grabs targeted leads"
@@ -44,9 +44,9 @@ research:
     - "Previous cold email automation proposal (accessibility audit + Instantly.ai pipeline)"
   budget_gap: "$5-$35/hr posted vs $800 fixed proposed"
   profile_cherry_picks:
-    - "n8n primary platform -- direct match for workflow orchestration"
-    - "Marketing ops background -- understands outreach strategy beyond plumbing"
-    - "AI integration experience (Claude API, OpenAI) -- real personalization, not templates"
+    - "n8n primary platform; direct match for workflow orchestration"
+    - "Marketing ops background; understands outreach strategy beyond plumbing"
+    - "AI integration experience (Claude API, OpenAI); real personalization, not templates"
   scope_estimate:
     phases:
       - name: "Phase 1: Lead Scraping Pipeline"

@@ -1,0 +1,823 @@
+---
+import BaseLayout from "@layouts/BaseLayout.astro";
+import Figure from "@components/Figure.astro";
+import { Image } from "astro:assets";
+import logo from "../assets/helmle-physio/logo.jpg";
+import "@fontsource-variable/fraunces";
+import "@fontsource-variable/hanken-grotesk";
+import "@sites/helmle-physio/theme.css";
+import { helmle, CHECK } from "@sites/helmle-physio/data";
+
+const fullAddress = `${helmle.address.street}, ${helmle.address.zip} ${helmle.address.city}`;
+
+const dayMap: Record<string, string> = {
+  Montag: "Monday",
+  Dienstag: "Tuesday",
+  Mittwoch: "Wednesday",
+  Donnerstag: "Thursday",
+  Freitag: "Friday",
+};
+
+const openingHoursSpecification = helmle.hours
+  .filter((h) => h.times.length > 0)
+  .flatMap((h) =>
+    h.times.map((t) => {
+      const [opens, closes] = t.split(" – ");
+      return {
+        "@type": "OpeningHoursSpecification",
+        dayOfWeek: `https://schema.org/${dayMap[h.day]}`,
+        opens,
+        closes,
+      };
+    }),
+  );
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Physiotherapy",
+  name: helmle.fullName,
+  description: helmle.tagline,
+  medicalSpecialty: "Physiotherapy",
+  availableService: helmle.services.map((s) => ({
+    "@type": "MedicalTherapy",
+    name: s.title,
+  })),
+  address: {
+    "@type": "PostalAddress",
+    streetAddress: helmle.address.street,
+    postalCode: helmle.address.zip,
+    addressLocality: helmle.address.city,
+    addressCountry: "DE",
+  },
+  telephone: helmle.phone,
+  email: helmle.email,
+  url: "https://helmle-physio.de",
+  openingHoursSpecification,
+};
+
+const title =
+  "Helmle & Helmle: Physiotherapie und Krankengymnastik in Karlsruhe";
+const description =
+  "Krankengymnastik- und Massagepraxis Helmle & Helmle in der Karlsruher Südweststadt: Krankengymnastik, Manuelle Therapie, Massagen, Lymphdrainagen und Hausbesuche. Behandlungszeiten und Kontakt.";
+---
+
+<BaseLayout
+  site="helmle-physio"
+  lang="de"
+  title={title}
+  description={description}
+  path="/helmle-physio"
+  jsonLd={jsonLd}
+>
+  <header class="site-head">
+    <div class="wrap site-head__row">
+      <a href="#main" class="brand" aria-label="Helmle und Helmle Physiotherapie, Karlsruhe">
+        <Image
+          src={logo}
+          alt="Helmle & Helmle Physiotherapie Karlsruhe"
+          class="brand__logo"
+          widths={[180, 270, 360]}
+          sizes="180px"
+          loading="eager"
+          decoding="async"
+        />
+      </a>
+      <nav class="site-nav" aria-label="Hauptnavigation">
+        <a href="#leistungen">Leistungen</a>
+        <a href="#weg">Behandlungsreise</a>
+        <a href="#kontakt">Zeiten &amp; Kontakt</a>
+        <a class="btn btn-primary site-nav__cta" href={helmle.phoneHref}>
+          Anrufen
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    {/* Hero: stacked cinematic. A confident serif statement, then a wide
+        cinemascope therapy photo, then a quiet horizontal contact rail. No
+        right-rail facts card, no side-by-side split: deliberately distinct
+        from praxis-uslu so the SET does not read as one template. */}
+    <section class="hero">
+      <div class="wrap hero__head">
+        <p class="eyebrow">Physiotherapie · Karlsruhe-Südweststadt</p>
+        <h1>
+          Wieder <em>beweglich</em> werden, in aller Ruhe.
+        </h1>
+        <p class="hero__sub">{helmle.tagline}</p>
+        <div class="hero__actions">
+          <a class="btn btn-primary" href={helmle.phoneHref}>
+            Termin telefonisch · {helmle.phone}
+          </a>
+          <a class="btn btn-ghost" href="#kontakt">Zeiten ansehen</a>
+        </div>
+      </div>
+
+      <div class="wrap hero__figure" data-reveal>
+        <div class="hero__media">
+          <Figure
+            site="helmle-physio"
+            name="hero"
+            label="Physiotherapeutische Behandlung, warmes Tageslicht"
+            ratio="21 / 9"
+            rounded="var(--radius-xl)"
+            priority
+            kenburns
+            sizes="(min-width: 72rem) 68rem, 92vw"
+          />
+          <div class="hero__grain" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <div class="wrap hero__rail" aria-label="Auf einen Blick">
+        <div class="hero__rail-item">
+          <span class="hero__rail-k">Telefon</span>
+          <a href={helmle.phoneHref}>{helmle.phone}</a>
+        </div>
+        <div class="hero__rail-item">
+          <span class="hero__rail-k">Mobil</span>
+          <span>{helmle.mobile}</span>
+        </div>
+        <div class="hero__rail-item">
+          <span class="hero__rail-k">Adresse</span>
+          <span>{fullAddress}</span>
+        </div>
+        <div class="hero__rail-item">
+          <span class="hero__rail-k">Aktuell</span>
+          <span id="open-state" class="open-state">Zeiten unten</span>
+        </div>
+      </div>
+    </section>
+
+    {/* Leistungen: editorial hairline list, NOT a card grid. All 12 verbatim. */}
+    <section id="leistungen" class="section">
+      <div class="wrap">
+        <header class="section__head" data-reveal>
+          <p class="eyebrow">Leistungen</p>
+          <h2 id="leistungen-titel">Was wir in der Praxis behandeln</h2>
+          <p class="section__intro">
+            Von der Krankengymnastik über Manuelle Therapie bis zu Massagen
+            und Lymphdrainagen, abgestimmt auf den einzelnen Befund.
+          </p>
+        </header>
+        <ol class="leistungen" data-reveal-group aria-labelledby="leistungen-titel">
+          {
+            helmle.services.map((s, i) => (
+              <li class="leistung" data-reveal>
+                <span class="leistung__no" aria-hidden="true">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <div class="leistung__body">
+                  <h3>{s.title}</h3>
+                  <p>{s.body}</p>
+                </div>
+              </li>
+            ))
+          }
+        </ol>
+      </div>
+    </section>
+
+    {/* Bespoke signature "Behandlungsreise": a calm vertical scroll spine with
+        a CSS scroll-driven sage progress rail. Beschwerde -> Behandlung ->
+        Erholung. No WebGL, no JS scroll listener (Lighthouse-safe). */}
+    <section id="weg" class="weg">
+      <div class="wrap">
+        <header class="section__head" data-reveal>
+          <p class="eyebrow">Behandlungsreise</p>
+          <h2 id="weg-titel">Von der Beschwerde zur Erholung</h2>
+          <p class="section__intro">
+            Ein ruhiger Weg in drei Schritten: erst verstehen, dann behandeln,
+            dann beweglich bleiben.
+          </p>
+        </header>
+
+        <div class="weg__track">
+          <div class="weg__rail" aria-hidden="true">
+            <span class="weg__rail-fill"></span>
+          </div>
+          <ol class="weg__steps" aria-labelledby="weg-titel">
+            {
+              helmle.journey.map((j, i) => (
+                <li class="weg__step" data-reveal>
+                  <span class="weg__dot" aria-hidden="true" />
+                  <p class="weg__phase">
+                    <span class="weg__phase-no">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    {j.phase}
+                  </p>
+                  <h3>{j.title}</h3>
+                  <p class="weg__body">{j.body}</p>
+                </li>
+              ))
+            }
+          </ol>
+        </div>
+
+        <div class="weg__signature" data-reveal>
+          <Figure
+            site="helmle-physio"
+            name="signature"
+            label="Ruhiger Behandlungsraum, warme Tücher"
+            ratio="4 / 5"
+            rounded="var(--radius-xl)"
+            sizes="(min-width: 54rem) 26rem, 92vw"
+          />
+        </div>
+      </div>
+    </section>
+
+    {/* Behandlungszeiten und Kontakt: precise quiet data block. */}
+    <section id="kontakt" class="section">
+      <div class="wrap contact__grid">
+        <div data-reveal>
+          <p class="eyebrow">Behandlungszeiten</p>
+          <h2 id="zeiten-titel">Wann Sie uns erreichen</h2>
+          <table class="hours" aria-labelledby="zeiten-titel">
+            <tbody>
+              {
+                helmle.hours.map((h) => (
+                  <tr class={h.times.length === 0 ? "is-closed" : ""}>
+                    <th scope="row">{h.day}</th>
+                    <td>
+                      {h.times.length === 0
+                        ? "geschlossen"
+                        : h.times.join("  ·  ")}
+                    </td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+          <p class="hours__note">{helmle.bestReach}</p>
+        </div>
+
+        <div class="contact__side" data-reveal>
+          <div class="card contact__card">
+            <p class="eyebrow">Kontakt &amp; Anfahrt</p>
+            <address class="contact__addr">
+              <strong>{helmle.fullName}</strong><br />
+              {helmle.address.street}<br />
+              {helmle.address.zip}
+              {helmle.address.city} ({helmle.address.district})
+            </address>
+            <dl class="facts">
+              <div>
+                <dt>Telefon</dt>
+                <dd><a href={helmle.phoneHref}>{helmle.phone}</a></dd>
+              </div>
+              <div>
+                <dt>Mobil</dt>
+                <dd>{helmle.mobile}</dd>
+              </div>
+              <div>
+                <dt>E-Mail</dt>
+                <dd><a href={`mailto:${helmle.email}`}>{helmle.email}</a></dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="card detail" role="note">
+            <p class="eyebrow">Gut zu wissen</p>
+            <dl class="facts">
+              <div>
+                <dt>Kassen / Privat</dt>
+                <dd>
+                  {
+                    helmle.kassen === CHECK ? (
+                      <span class="tbc">alle Kassen & privat, auf Anfrage</span>
+                    ) : (
+                      helmle.kassen
+                    )
+                  }
+                </dd>
+              </div>
+              {
+                helmle.team !== CHECK && (
+                  <div>
+                    <dt>Team</dt>
+                    <dd>{helmle.team}</dd>
+                  </div>
+                )
+              }
+              <div>
+                <dt>Preise (Selbstzahler)</dt>
+                <dd>
+                  {
+                    helmle.prices === CHECK ? (
+                      <span class="tbc">auf Anfrage</span>
+                    ) : (
+                      helmle.prices
+                    )
+                  }
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-foot">
+    <div class="wrap site-foot__row">
+      <p>
+        {helmle.fullName} · {fullAddress} ·
+        <a href={helmle.phoneHref}>{helmle.phone}</a>
+      </p>
+      <p class="site-foot__legal">
+        Zuletzt aktualisiert: 2026-06-03 · Bilder: Pexels · Impressum und
+        Datenschutz folgen vor Veröffentlichung.
+      </p>
+    </div>
+  </footer>
+</BaseLayout>
+
+<script>
+  // Progressive enhancement: upgrade the open-state line if JS is on.
+  // Hours mirror src/sites/helmle-physio/data.ts (kept in sync by hand).
+  const SCHEDULE: Record<number, [number, number][]> = {
+    1: [[7, 19]],
+    2: [[7, 14]],
+    3: [[7, 19]],
+    4: [[8.5, 15.5]],
+    5: [[7, 13]],
+  };
+  const el = document.getElementById("open-state");
+  if (el) {
+    const now = new Date();
+    const blocks = SCHEDULE[now.getDay()] ?? [];
+    const h = now.getHours() + now.getMinutes() / 60;
+    const open = blocks.some(([a, b]) => h >= a && h < b);
+    el.textContent = open ? "Jetzt geöffnet" : "Aktuell geschlossen";
+    el.classList.add(open ? "is-open" : "is-shut");
+  }
+</script>
+
+<style>
+  .site-head {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: color-mix(in srgb, var(--color-paper) 88%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--color-line);
+  }
+  .site-head__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-block: 0.75rem;
+  }
+  .brand {
+    text-decoration: none;
+    display: block;
+    line-height: 0;
+  }
+  /* The real logo carries the brand name itself, so no typeset wordmark is
+     added beside it. Sized to sit comfortably in the sticky bar. */
+  .brand__logo {
+    height: clamp(2.6rem, 6vw, 3.4rem);
+    width: auto;
+    display: block;
+  }
+  .site-nav {
+    display: flex;
+    align-items: center;
+    gap: 1.75rem;
+  }
+  /* Exclude the CTA so it never inherits muted; its colour comes solely from
+     .btn-primary / .site-nav__cta (accent-ink). */
+  .site-nav a:not(.site-nav__cta) {
+    text-decoration: none;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--color-muted);
+  }
+  .site-nav a:not(.site-nav__cta):hover {
+    color: var(--color-ink);
+  }
+  /* a.class = (0,2,1) beats .site-nav a (0,1,1): CTA keeps accent-ink. */
+  .site-nav a.site-nav__cta {
+    color: var(--color-accent-ink);
+    padding: 0.6rem 1.15rem;
+    font-size: var(--text-sm);
+  }
+  .site-nav a.site-nav__cta:active {
+    transform: scale(0.97);
+  }
+  @media (max-width: 640px) {
+    .site-nav a:not(.site-nav__cta) {
+      display: none;
+    }
+  }
+
+  .hero {
+    padding-block: clamp(3rem, 7vw, 6.5rem) clamp(2.5rem, 5vw, 4rem);
+  }
+  .hero__head {
+    max-width: 52rem;
+  }
+  .hero h1 {
+    font-family: var(--font-display);
+    /* Fraunces at a soft, warm optical register: large opsz + high SOFT for
+       the calm body-wellness character. Weight pushed to 580 + tight tracking
+       so the statement reads confident-BIG, not "nice" (skil_web-build B1). */
+    font-variation-settings: "opsz" 130, "SOFT" 56, "wght" 580;
+    font-size: var(--text-5xl);
+    letter-spacing: -0.012em;
+    line-height: 1.03;
+    margin-block: 0.7rem 0;
+    max-width: 18ch;
+  }
+  .hero h1 em {
+    font-style: italic;
+    color: var(--color-sage-deep);
+  }
+  .hero__sub {
+    font-size: var(--text-xl);
+    color: var(--color-muted);
+    max-width: 34ch;
+    margin-block: 1.4rem 0;
+  }
+  .hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.85rem;
+    margin-block: 2rem 1.25rem;
+  }
+  .hero__actions .btn-primary:active {
+    transform: scale(0.97);
+  }
+  .hero__meta {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+  }
+  .open-state {
+    font-weight: 600;
+  }
+  .open-state.is-open {
+    color: var(--color-sage-deep);
+  }
+  /* Inline contact rail under the cinemascope photo: a quiet horizontal
+     strip of the essentials (findability, List A4) instead of a boxed
+     side card. Part of what makes this hero structurally distinct. */
+  .hero__rail {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem clamp(1.75rem, 4vw, 3.25rem);
+    margin-top: clamp(1.5rem, 3vw, 2.25rem);
+    padding-top: 1.4rem;
+    border-top: 1px solid var(--color-line);
+  }
+  .hero__rail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-size: var(--text-sm);
+  }
+  .hero__rail-k {
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-muted);
+  }
+  .hero__rail a {
+    color: var(--color-sage-deep);
+    text-decoration: none;
+  }
+  .facts {
+    margin: 1rem 0 0;
+    display: grid;
+    gap: 1rem;
+  }
+  .facts div {
+    display: grid;
+    gap: 0.15rem;
+  }
+  .facts dt {
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-muted);
+  }
+  .facts dd {
+    margin: 0;
+    font-size: var(--text-base);
+  }
+  .facts a {
+    color: var(--color-sage-deep);
+  }
+  .hero__figure {
+    margin-top: clamp(2.5rem, 5vw, 4rem);
+  }
+  /* Background-depth rule: the hero photo gets a faint paper grain so it is
+     never a flat field. Fractal-noise SVG at soft-light, ~8%, no raster
+     asset, no perf cost. */
+  .hero__media {
+    position: relative;
+    isolation: isolate;
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+  }
+  /* One consistent warm grade across hero + signature so the two photos read
+     as one set (skil_web-build B4). Subtle: warm white-balance + a touch of
+     saturation, identical on both. */
+  .hero__media :global(img),
+  .weg__signature :global(img) {
+    filter: saturate(1.05) sepia(0.06) brightness(1.02) contrast(1.01);
+  }
+  .hero__grain {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0.08;
+    mix-blend-mode: soft-light;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 160px 160px;
+  }
+
+  .section {
+    padding-block: clamp(3rem, 6vw, 5.5rem);
+  }
+  .section__head {
+    max-width: 46rem;
+    margin-bottom: clamp(2rem, 4vw, 3.25rem);
+  }
+  .section__head h2 {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 110, "SOFT" 55, "wght" 480;
+    font-size: var(--text-3xl);
+    margin-block: 0.5rem 0;
+  }
+  /* Sage tick before each eyebrow (vintage menu / signage detail). The tick
+     is decorative non-text contrast; eyebrow TEXT stays muted slate (AA). */
+  .eyebrow::before {
+    content: "";
+    display: inline-block;
+    width: 1.5rem;
+    height: 2px;
+    margin-right: 0.6rem;
+    vertical-align: middle;
+    background: var(--color-sage);
+  }
+  .section__intro {
+    color: var(--color-muted);
+    font-size: var(--text-lg);
+    margin-top: 1rem;
+  }
+
+  .leistungen {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--color-line);
+  }
+  .leistung {
+    display: grid;
+    grid-template-columns: 4rem 1fr;
+    gap: 1.5rem;
+    padding-block: 1.6rem;
+    border-bottom: 1px solid var(--color-line);
+  }
+  .leistung__no {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 40, "wght" 500;
+    font-size: var(--text-xl);
+    color: var(--color-sage-deep);
+  }
+  .leistung__body h3 {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 36, "SOFT" 40, "wght" 560;
+    font-size: var(--text-xl);
+  }
+  .leistung__body p {
+    color: var(--color-muted);
+    margin-block: 0.45rem 0;
+    max-width: 60ch;
+  }
+
+  /* Behandlungsreise: warm sage-wash band, a vertical spine on the left of
+     the steps with a CSS scroll-driven fill. */
+  .weg {
+    background: var(--color-accent-soft);
+    padding-block: clamp(3rem, 7vw, 6rem);
+  }
+  .weg__track {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1.4rem 1fr;
+    gap: clamp(1.25rem, 3vw, 2.25rem);
+  }
+  .weg__rail {
+    position: relative;
+    width: 3px;
+    justify-self: center;
+    background: color-mix(in srgb, var(--color-sage) 35%, transparent);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  /* The fill grows top-to-bottom as the band scrolls through the viewport.
+     Scroll-driven CSS only: zero main-thread cost, no JS, Lighthouse-safe.
+     Fallback (no support / reduced-motion): a full static rail, still calm
+     and correct. transform/opacity only, never layout. */
+  .weg__rail-fill {
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 100%;
+    background: var(--color-sage-deep);
+    transform-origin: top;
+    transform: scaleY(1);
+  }
+  @supports (animation-timeline: scroll()) {
+    .weg__rail-fill {
+      transform: scaleY(0);
+      animation: weg-fill linear both;
+      animation-timeline: view();
+      animation-range: cover 0% cover 85%;
+    }
+    @keyframes weg-fill {
+      from {
+        transform: scaleY(0);
+      }
+      to {
+        transform: scaleY(1);
+      }
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .weg__rail-fill {
+      animation: none;
+      transform: scaleY(1);
+    }
+  }
+  .weg__steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: clamp(2rem, 5vw, 3.5rem);
+  }
+  .weg__step {
+    position: relative;
+  }
+  .weg__dot {
+    position: absolute;
+    left: calc(-1 * (clamp(1.25rem, 3vw, 2.25rem) + 0.7rem) - 1px);
+    top: 0.35rem;
+    width: 0.85rem;
+    height: 0.85rem;
+    border-radius: 999px;
+    background: var(--color-paper);
+    border: 2.5px solid var(--color-sage-deep);
+  }
+  .weg__phase {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin: 0;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-sage-deep);
+  }
+  .weg__phase-no {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 28, "wght" 500;
+    font-size: var(--text-base);
+    letter-spacing: 0;
+    color: var(--color-muted);
+  }
+  .weg__step h3 {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 60, "SOFT" 50, "wght" 520;
+    font-size: var(--text-2xl);
+    margin-block: 0.5rem 0;
+  }
+  .weg__body {
+    color: var(--color-ink);
+    margin-block: 0.6rem 0;
+    max-width: 56ch;
+  }
+  .weg__signature {
+    margin-top: clamp(2.5rem, 5vw, 3.5rem);
+    max-width: 26rem;
+  }
+  @media (min-width: 60rem) {
+    .weg .wrap {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr;
+      gap: clamp(2.5rem, 5vw, 4.5rem);
+      align-items: start;
+    }
+    .weg .section__head {
+      grid-column: 1 / -1;
+    }
+    .weg__signature {
+      margin-top: 0;
+      align-self: stretch;
+    }
+  }
+
+  .contact__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(2rem, 5vw, 4rem);
+  }
+  .contact__grid h2 {
+    font-family: var(--font-display);
+    font-variation-settings: "opsz" 110, "SOFT" 55, "wght" 480;
+    font-size: var(--text-3xl);
+    margin-block: 0.5rem 0;
+  }
+  .hours {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1.5rem;
+  }
+  .hours th,
+  .hours td {
+    text-align: left;
+    padding: 0.8rem 0;
+    border-bottom: 1px solid var(--color-line);
+    font-weight: 500;
+  }
+  .hours td {
+    text-align: right;
+    color: var(--color-ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .hours .is-closed th,
+  .hours .is-closed td {
+    color: var(--color-muted);
+  }
+  .hours__note {
+    margin-top: 1.1rem;
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+  }
+  .contact__side {
+    display: grid;
+    gap: 1.25rem;
+    align-content: start;
+  }
+  .contact__card,
+  .detail {
+    padding: 1.75rem;
+  }
+  .contact__addr {
+    font-style: normal;
+    margin-block: 1rem;
+    line-height: 1.7;
+  }
+  .contact__card .facts a {
+    color: var(--color-sage-deep);
+  }
+  .detail__note {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+    margin-top: 1.25rem;
+  }
+
+  /* Quiet editorial note, not a loud "broken" badge: muted italic inline so
+     a pitch visitor reads it as "the practice will confirm this", not an error. */
+  .tbc {
+    font-family: var(--font-body);
+    font-size: 0.9em;
+    font-weight: 500;
+    font-style: italic;
+    color: var(--color-muted);
+    white-space: nowrap;
+  }
+
+  .site-foot {
+    border-top: 1px solid var(--color-line);
+    padding-block: 2.5rem;
+  }
+  .site-foot__row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 1rem;
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+  }
+  .site-foot a {
+    color: var(--color-sage-deep);
+  }
+
+  @media (max-width: 860px) {
+    .hero__grid,
+    .contact__grid {
+      grid-template-columns: 1fr;
+    }
+    .hero__grid {
+      align-items: start;
+    }
+  }
+</style>

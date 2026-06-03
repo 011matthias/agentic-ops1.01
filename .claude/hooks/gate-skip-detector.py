@@ -25,6 +25,29 @@ import re
 import sys
 import tempfile
 
+# Shared session-state store (tools/, repo-root-relative). Optional: if the
+# import fails the detector still emits its advisories, it just doesn't persist
+# the friction CANDIDATE for the /comd_checkpoint drain. Detection already
+# worked here; this adds the structured pickup the checkpoint never had.
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools")
+)
+try:
+    import session_state  # noqa: E402
+except Exception:
+    session_state = None
+
+
+def _capture(signal: str, context: str) -> None:
+    """Persist a friction candidate (not a register row). Never raises."""
+    if session_state is None:
+        return
+    try:
+        session_state.add_candidate(signal, "gate-skip-detector", context)
+    except Exception:
+        pass
+
+
 HOOK_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hook-log.txt")
 BUFFER_FILE = os.path.join(tempfile.gettempdir(), "agentic-ops-cmd-buffer.txt")
 BUFFER_MAX = 30
@@ -170,6 +193,7 @@ def main() -> int:
         had_validate = any(re.search(vp, recent_text) for vp in VALIDATE_PATTERNS)
         if not had_validate:
             log_fire("friction-event:gate-skip-pre-publish cmd=" + cmd[:80])
+            _capture("gate-skip-pre-publish", cmd[:300])
             advisories.append(
                 "[GATE-SKIP: pre-publish] You ran a publish-class command "
                 "(push/merge/--prod) with no validation step in the recent buffer. "
@@ -182,6 +206,7 @@ def main() -> int:
             recent_text = "\n".join(buf[-BUFFER_MAX:])
             if not re.search(get_pat, recent_text):
                 log_fire(f"friction-event:gate-skip-live-system pattern={update_pat}")
+                _capture("gate-skip-live-system", f"{update_pat}: {cmd[:240]}")
                 advisories.append(
                     f"[GATE-SKIP: live-system B1.5] Update operation '{update_pat}' "
                     f"with no prior '{get_pat}' in buffer. Read current state before "
@@ -191,6 +216,7 @@ def main() -> int:
     fp_count = sum(1 for ln in buf[-15:] if ln.startswith(fp + "\t"))
     if fp_count >= 3 and not is_readonly(cmd):
         log_fire(f"friction-event:gate-skip-iteration-3x fp={fp}")
+        _capture("gate-skip-iteration-3x", cmd[:300])
         advisories.append(
             "[GATE-SKIP: iteration-3x] You have run the same command (or near-identical) "
             "3+ times in the recent buffer. If this is a fix-then-test loop, you have "

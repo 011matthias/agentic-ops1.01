@@ -4,7 +4,15 @@ Track session depth using proxy signals. When pressure is elevated, adapt behavi
 
 ## Pressure Signals
 
-Mental count — no runtime state file needed:
+Instrumented via `.claude/hooks/session-pressure-meter.py` (PostToolUse, all
+tools): it counts tool calls and distinct files this session and emits a
+band-crossing advisory ONCE per band, so crossing a threshold no longer
+depends on the agent's mental count. The meter keys the session boundary off
+the hook payload `session_id` (a new id resets the counters; an unchanged id
+across a compaction preserves them), so no SessionStart reset hook is needed.
+Query the live reading on demand with `uv run tools/session_state.py
+--status`. Mental count is the fallback when the meter is unavailable (e.g. a
+fresh clone before the SessionStart wiring runs):
 
 | Signal | Moderate | High | Critical |
 |--------|----------|------|----------|

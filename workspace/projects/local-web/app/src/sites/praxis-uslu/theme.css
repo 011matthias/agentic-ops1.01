@@ -10,7 +10,9 @@
   --color-line: #e4ddcd;
   --color-accent: #4f6a57;
   --color-accent-ink: #ffffff;
-  --color-accent-soft: #eaf0ea;
+  /* warmed a hair off the cool sage wash (#eaf0ea) so the signature band
+     tones with the warm paper instead of reading faintly cool-grey. */
+  --color-accent-soft: #e8efe4;
 
   --font-display: "Newsreader Variable", Georgia, "Times New Roman", serif;
   --font-body: "Inter Variable", ui-sans-serif, system-ui, sans-serif;

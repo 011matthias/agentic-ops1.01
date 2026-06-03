@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Meji Media &ndash; System Overview</title>
 <style>
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+    h2 { page-break-before: always; }
+    h2:first-of-type { page-break-before: avoid; }
+}
+
 :root {
   --header-height: 72px;
   --bg: #f8fafc;
@@ -609,6 +617,7 @@ body {
 }
 
 </style>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
 </head>
 <body>
 
@@ -1413,7 +1422,7 @@ body {
 
 <div class="footer" style="margin-left:var(--sidebar-width);">
   Meji Media Enquiry Follow-Up System &middot; Built by UnpauseAI &middot; Live 19 March 2026<br>
-  For support: nicolas.neumann@unpauseai.com
+  For support: admin@unpauseai.com
 </div>
 
 <script>

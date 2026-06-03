@@ -74,7 +74,7 @@ Calendly webhook    -->   Classification  --> Notion (database)
 Fathom webhook      -->                   --> Slack (alerts)
 ```
 
-## Timeline
+## Timeline & Milestones
 
 **Days 1-3: AI Responder (Workflow 1)**
 - Day 1: n8n instance setup on Railway, webhook endpoints configured, Claude API prompt engineering for classification
@@ -91,7 +91,7 @@ Fathom webhook      -->                   --> Slack (alerts)
 
 ## Investment
 
-**$1,500 fixed -- all three workflows delivered and tested**
+**$1,500 fixed; all three workflows delivered and tested**
 
 What is included:
 - 3 production-ready n8n workflows on your Railway instance

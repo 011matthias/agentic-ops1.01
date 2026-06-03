@@ -3,7 +3,7 @@ import Link from "next/link";
 import ScrollReveal from "@/components/ScrollReveal";
 
 export const metadata: Metadata = {
-  title: "OneProposal — Upwork proposals that don't sound like ChatGPT",
+  title: "OneProposal: Upwork proposals that don't sound like ChatGPT",
   description:
     "Paste an Upwork job posting. Get a tailored cover letter and a personalized proposal page in 30 seconds. $5 per proposal, refunded on failure.",
 };
@@ -39,7 +39,7 @@ const features = [
   },
   {
     title: "A real page, not just text",
-    body: "Each proposal includes a personalized one-page site at a public URL — the kind of polish 99% of Upwork applicants don't bother with. Send the cover letter; let the page do the rest.",
+    body: "Each proposal includes a personalized one-page site at a public URL; the kind of polish 99% of Upwork applicants don't bother with. Send the cover letter; let the page do the rest.",
     color: "green" as const,
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
@@ -85,7 +85,7 @@ const stepColors = {
 const faqs = [
   {
     q: "Why $5 per proposal and not a subscription?",
-    a: "Subscriptions price for the heavy users and overcharge the light ones. Most freelancers send a handful of high-value proposals a week — pay-as-you-go fits that better. If you send 30+ proposals a month, write us; we'll work out a tier.",
+    a: "Subscriptions price for the heavy users and overcharge the light ones. Most freelancers send a handful of high-value proposals a week; pay-as-you-go fits that better. If you send 30+ proposals a month, write us; we'll work out a tier.",
   },
   {
     q: "What if the output isn't usable?",
@@ -93,11 +93,11 @@ const faqs = [
   },
   {
     q: "How is this different from just using ChatGPT?",
-    a: "ChatGPT will write you a cover letter that opens with 'I am excited to leverage my experience.' This won't. The constraint set — banned phrases, em-dash sanitization, brief-quoting requirements, sign-off discipline — is what produces output that doesn't pattern-match to AI. Plus you get the personalized page, which ChatGPT doesn't produce.",
+    a: "ChatGPT will write you a cover letter that opens with 'I am excited to leverage my experience.' This won't. The constraint set (banned phrases, em-dash sanitization, brief-quoting requirements, sign-off discipline) is what produces output that doesn't pattern-match to AI. Plus you get the personalized page, which ChatGPT doesn't produce.",
   },
   {
     q: "Does it work for non-Upwork briefs?",
-    a: "Yes. Any free-text project description works — RFPs, email threads, internal scoping notes. The engine is generic; the output style is tuned for freelancer-style proposals.",
+    a: "Yes. Any free-text project description works: RFPs, email threads, internal scoping notes. The engine is generic; the output style is tuned for freelancer-style proposals.",
   },
   {
     q: "Where does my data go?",
@@ -105,7 +105,7 @@ const faqs = [
   },
   {
     q: "Can I edit the proposal after it's generated?",
-    a: "You can regenerate with a different angle (shorter, different framing, push back on price). Inline editing of the rendered text is on the roadmap — not in this version.",
+    a: "You can regenerate with a different angle (shorter, different framing, push back on price). Inline editing of the rendered text is on the roadmap; not in this version.",
   },
 ];
 
@@ -131,7 +131,7 @@ export default function OneProposalPage() {
               href={`${APP_URL}/sign-up`}
               className="rounded-full bg-accent px-6 py-3 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-accent/90 hover:shadow-lg"
             >
-              Sign up &mdash; $5 per proposal
+              Sign up: $5 per proposal
             </Link>
             <Link
               href="/contact"

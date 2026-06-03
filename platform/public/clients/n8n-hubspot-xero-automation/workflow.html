@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Workflow | n8n HubSpot + Xero Automation</title>
 <style>
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+    h2 { page-break-before: always; }
+    h2:first-of-type { page-break-before: avoid; }
+}
+
 :root,[data-theme="light"]{--bg:#fff;--bg-s:#f8fafc;--text:#1e293b;--text-s:#64748b;--border:#e2e8f0;--primary:#2563eb;--primary-l:#dbeafe;--accent:#10b981;--accent-l:#d1fae5;--card:#fff;--shadow:0 1px 3px rgba(0,0,0,.1);--nav-bg:rgba(255,255,255,.95);--flow-line:#cbd5e1}
 [data-theme="dark"]{--bg:#0f172a;--bg-s:#1e293b;--text:#e2e8f0;--text-s:#94a3b8;--border:#334155;--primary:#3b82f6;--primary-l:#1e3a5f;--accent:#34d399;--accent-l:#064e3b;--card:#1e293b;--shadow:0 1px 3px rgba(0,0,0,.4);--nav-bg:rgba(15,23,42,.95);--flow-line:#475569}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -52,6 +60,7 @@ footer{border-top:1px solid var(--border);padding:2rem 1.5rem;text-align:center;
   .flow-step{gap:.5rem}
 }
 </style>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
 </head>
 <body>
 <div id="access-gate" class="access-gate">
@@ -226,8 +235,8 @@ footer{border-top:1px solid var(--border);padding:2rem 1.5rem;text-align:center;
 
 <script>
 (function(){var K='n8n-hubspot-xero-automation-access',C='n8n-hubspot-2026';var g=document.getElementById('access-gate');if(localStorage.getItem(K)===C){g.style.display='none';return}document.getElementById('access-form').addEventListener('submit',function(e){e.preventDefault();var v=document.getElementById('access-code').value.trim();if(v===C){localStorage.setItem(K,C);g.style.display='none'}else{document.getElementById('access-error').textContent='Invalid code. Please try again.'}})})();
-function toggleTheme(){var h=document.documentElement,c=h.getAttribute('data-theme')||'light',n=c==='light'?'dark':'light';h.setAttribute('data-theme',n);localStorage.setItem('n8n-hubspot-xero-automation-theme',n)}
-(function(){var s=localStorage.getItem('n8n-hubspot-xero-automation-theme');if(s)document.documentElement.setAttribute('data-theme',s)})();
+function toggleTheme(){var h=document.documentElement,c=h.getAttribute('data-theme')||'light',n=c==='light'?'dark':'light';h.setAttribute('data-theme',n);localStorage.setItem('theme',n)}
+(function(){var s=localStorage.getItem('theme');if(s)document.documentElement.setAttribute('data-theme',s)})();
 function toggleMenu(){document.querySelector('.nav-links').classList.toggle('open')}
 </script>
 </body>

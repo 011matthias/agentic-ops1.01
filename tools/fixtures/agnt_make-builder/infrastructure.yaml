@@ -1,0 +1,19 @@
+# Fixture infrastructure.yaml for agnt_make-builder smoke tests.
+# Synthetic — not a real client. Do NOT point real automations at this.
+
+client: _fixture-make-builder
+
+make_instances:
+  fixture_dev:
+    org_id: 999999
+    team_id: 888888
+    mcp_server: make-fixture-not-connected
+    plan_name: Core
+    plan_ops_limit: 10000
+    ops_used_this_period: 1200
+    connections:
+      gmail_dev: 7777777
+      mysql_dev: 6666666
+      sheets_dev: 5555555
+    scenarios:
+      # Empty — new scenarios get created by smoke-tested builds.

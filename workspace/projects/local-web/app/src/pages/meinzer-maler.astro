@@ -1,0 +1,779 @@
+---
+import BaseLayout from "@layouts/BaseLayout.astro";
+import Figure from "@components/Figure.astro";
+import { Image } from "astro:assets";
+import logo from "../assets/meinzer-maler/logo.jpg";
+import "@fontsource-variable/bitter";
+import "@fontsource-variable/source-sans-3";
+import "@sites/meinzer-maler/theme.css";
+import { meinzer, CHECK } from "@sites/meinzer-maler/data";
+
+const fullAddress = `${meinzer.address.street}, ${meinzer.address.zip} ${meinzer.address.city}`;
+
+const dayMap: Record<string, string> = {
+  Montag: "Monday",
+  Dienstag: "Tuesday",
+  Mittwoch: "Wednesday",
+  Donnerstag: "Thursday",
+  Freitag: "Friday",
+  Samstag: "Saturday",
+};
+
+const openingHoursSpecification = meinzer.hours
+  .filter((h) => h.times.length > 0)
+  .flatMap((h) =>
+    h.times.map((t) => {
+      const [opens, closes] = t.split(" – ");
+      return {
+        "@type": "OpeningHoursSpecification",
+        dayOfWeek: `https://schema.org/${dayMap[h.day]}`,
+        opens,
+        closes,
+      };
+    }),
+  );
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "HousePainter",
+  name: meinzer.name,
+  description: meinzer.tagline,
+  founder: meinzer.owner,
+  knowsAbout: meinzer.services.map((s) => s.title),
+  address: {
+    "@type": "PostalAddress",
+    streetAddress: meinzer.address.street,
+    postalCode: meinzer.address.zip,
+    addressLocality: meinzer.address.city,
+    addressCountry: "DE",
+  },
+  telephone: meinzer.phone,
+  faxNumber: meinzer.fax,
+  url: "https://meinzer-maler.de",
+  areaServed: "Karlsruhe",
+  openingHoursSpecification,
+};
+
+const title =
+  "Michael Meinzer Malerfachbetrieb: Maler in Karlsruhe-Knielingen";
+const description =
+  "Malerfachbetrieb Michael Meinzer in Karlsruhe-Knielingen: Malerarbeiten, Tapezierarbeiten, Fassaden, Betonsanierung, Schimmelpilzsanierung und Renovierung. Sauber und zum Festpreis vom Meister.";
+---
+
+<BaseLayout
+  site="meinzer-maler"
+  lang="de"
+  title={title}
+  description={description}
+  path="/meinzer-maler"
+  jsonLd={jsonLd}
+>
+  <header class="site-head">
+    <div class="wrap site-head__row">
+      <a href="#main" class="brand" aria-label={`${meinzer.name}, Karlsruhe-Knielingen`}>
+        <Image
+          src={logo}
+          alt="Michael Meinzer Malerfachbetrieb, Logo"
+          class="brand__logo"
+          widths={[180, 260, 360]}
+          sizes="200px"
+          loading="eager"
+          decoding="async"
+        />
+      </a>
+      <nav class="site-nav" aria-label="Hauptnavigation">
+        <a href="#leistungen">Leistungen</a>
+        <a href="#ablauf">Ablauf</a>
+        <a href="#kontakt">Kontakt</a>
+        <a class="btn btn-primary site-nav__cta" href={meinzer.phoneHref}>
+          Anrufen
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    {/* Hero: solid worked panel + real-work photo split. The heavy Bitter
+        slab + the Meister/Festpreis trust marks sit on a warm copper-washed
+        panel (copper top-rule), the painter-at-work photo fills the column
+        beside it. Deliberately NOT the pronto-pronto full-bleed-overlay, so
+        the SET reads as five sites, not one template. */}
+    <section class="hero">
+      <div class="wrap hero__grid">
+        <div class="hero__panel" data-reveal>
+          <p class="eyebrow hero__eyebrow">
+            Malerfachbetrieb · Karlsruhe-Knielingen
+          </p>
+          <h1>Wände, Fassaden und Sanierung, sauber gemacht.</h1>
+          <p class="hero__sub">{meinzer.tagline}</p>
+          <ul class="hero__marks" aria-label="Auf einen Blick">
+            <li>
+              <span class="hero__mark-k">Meister</span>
+              <span class="hero__mark-v">Geführt von {meinzer.owner}</span>
+            </li>
+            <li>
+              <span class="hero__mark-k">Festpreis</span>
+              <span class="hero__mark-v">Klares Angebot, keine Überraschungen</span>
+            </li>
+          </ul>
+          <div class="hero__actions">
+            <a class="btn btn-primary" href={meinzer.phoneHref}>
+              Anrufen · {meinzer.phone}
+            </a>
+            <a class="btn btn-ghost" href="#leistungen">Leistungen ansehen</a>
+          </div>
+          <p class="hero__meta">
+            {fullAddress}
+            <span aria-hidden="true"> · </span>
+            Meisterbetrieb, {meinzer.owner}
+          </p>
+        </div>
+
+        <div class="hero__media" data-reveal>
+          <Figure
+            site="meinzer-maler"
+            name="hero"
+            label="Maler bei der Arbeit, frische Wand, warmes Tageslicht"
+            ratio="3 / 4"
+            rounded="0"
+            priority
+            sizes="(min-width: 60rem) 40vw, 100vw"
+            kenburns
+          />
+        </div>
+      </div>
+    </section>
+
+    {/* Leistungen: editorial hairline list, numbered, NOT a tick-bullet
+        grid (anti-pattern). */}
+    <section id="leistungen" class="section">
+      <div class="wrap">
+        <header class="section__head" data-reveal>
+          <p class="eyebrow">Leistungen</p>
+          <h2 id="leistungen-titel">Was wir für Sie machen</h2>
+          <p class="section__intro">
+            Vom einzelnen Raum bis zur ganzen Fassade: ein Ansprechpartner,
+            saubere Arbeit, ein verlässlicher Termin.
+          </p>
+        </header>
+        <ol class="leistungen" data-reveal-group>
+          {
+            meinzer.services.map((s, i) => (
+              <li class="leistung" data-reveal>
+                <span class="leistung__no">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <div class="leistung__body">
+                  <h3>{s.title}</h3>
+                  <p>{s.body}</p>
+                </div>
+              </li>
+            ))
+          }
+        </ol>
+      </div>
+    </section>
+
+    {/* Bespoke signature: "Meisterbrief Werkbank". Engineering-grid band,
+        a numbered 1-2-3-4 process strip with slab numerals + steel brackets
+        + a copper Meisterbetrieb seal. Pure CSS, no image. */}
+    <section id="ablauf" class="werkbank">
+      <div class="werkbank__grid" aria-hidden="true"></div>
+      <div class="wrap">
+        <header class="section__head" data-reveal>
+          <p class="eyebrow">So läuft es ab</p>
+          <h2 id="ablauf-titel">Die Meisterbrief-Werkbank</h2>
+          <p class="section__intro">
+            Vier Schritte vom ersten Anruf bis zur besenreinen Übergabe.
+            Festpreis, sauber, pünktlich.
+          </p>
+        </header>
+
+        <ol class="werkbank__strip" data-reveal-group>
+          {
+            meinzer.process.map((p, i) => (
+              <li class="step" data-reveal>
+                <span class="step__no">{String(i + 1).padStart(2, "0")}</span>
+                <h3 class="step__title">{p.title}</h3>
+                <p class="step__body">{p.body}</p>
+              </li>
+            ))
+          }
+          <li class="seal" data-reveal aria-label="Meisterbetrieb">
+            <span class="seal__ring">
+              <span class="seal__text">Meister&shy;betrieb</span>
+            </span>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    {/* Öffnungszeiten und Anfahrt: precise data block. */}
+    <section id="kontakt" class="section">
+      <div class="wrap contact__grid">
+        <div data-reveal>
+          <p class="eyebrow">Öffnungszeiten</p>
+          <h2 id="zeiten-titel">Wann Sie uns erreichen</h2>
+          <table class="hours">
+            <tbody>
+              {
+                meinzer.hours.map((h) => (
+                  <tr class={h.times.length === 0 ? "is-closed" : ""}>
+                    <th scope="row">{h.day}</th>
+                    <td>
+                      {h.times.length === 0
+                        ? "geschlossen"
+                        : h.times.join("  ·  ")}
+                    </td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div class="contact__side" data-reveal>
+          <div class="card contact__card">
+            <p class="eyebrow">Kontakt & Anfahrt</p>
+            <address class="contact__addr">
+              <strong>{meinzer.name}</strong><br />
+              {meinzer.address.street}<br />
+              {meinzer.address.zip}
+              {meinzer.address.city} ({meinzer.address.district})
+            </address>
+            <dl class="facts">
+              <div>
+                <dt>Telefon</dt>
+                <dd><a href={meinzer.phoneHref}>{meinzer.phone}</a></dd>
+              </div>
+              <div>
+                <dt>Fax</dt>
+                <dd>{meinzer.fax}</dd>
+              </div>
+              {
+                meinzer.email !== CHECK && (
+                  <div>
+                    <dt>E-Mail</dt>
+                    <dd>{meinzer.email}</dd>
+                  </div>
+                )
+              }
+            </dl>
+          </div>
+
+          <div class="card guarantee" role="note">
+            <p class="eyebrow">Unser Versprechen</p>
+            <p>
+              Festpreis-Angebot vor dem Start, saubere und termingerechte
+              Ausführung, besenreine Übergabe. Vom Meister geführt.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-foot">
+    <div class="wrap site-foot__row">
+      <p>
+        {meinzer.name} · {fullAddress} ·
+        <a href={meinzer.phoneHref}>{meinzer.phone}</a>
+      </p>
+      <p class="site-foot__legal">
+        Zuletzt aktualisiert: {meinzer.updated} · Bilder: Pexels · Impressum
+        und Datenschutz folgen vor Veröffentlichung.
+      </p>
+    </div>
+  </footer>
+</BaseLayout>
+
+<style>
+  /* meinzer-maler bespoke layout. Tokens come from theme.css. */
+  .site-head {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: color-mix(in srgb, var(--color-paper) 88%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--color-line);
+  }
+  .site-head__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-block: 0.8rem;
+  }
+  .brand {
+    text-decoration: none;
+    display: block;
+  }
+  .brand__logo {
+    height: clamp(2.2rem, 5vw, 2.9rem);
+    width: auto;
+    display: block;
+  }
+  .site-nav {
+    display: flex;
+    align-items: center;
+    gap: 1.75rem;
+  }
+  /* Exclude the CTA so it never inherits muted on the accent bg; its colour
+     comes solely from .btn-primary / .site-nav__cta (accent-ink). */
+  .site-nav a:not(.site-nav__cta) {
+    text-decoration: none;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--color-muted);
+  }
+  .site-nav a:not(.site-nav__cta):hover {
+    color: var(--color-ink);
+  }
+  /* a.class = (0,2,1) beats `.site-nav a` (0,1,1) so the CTA keeps
+     accent-ink, not muted, on the copper fill. */
+  .site-nav a.site-nav__cta {
+    color: var(--color-accent-ink);
+    padding: 0.6rem 1.15rem;
+    font-size: var(--text-sm);
+  }
+  .site-nav a.site-nav__cta:hover {
+    color: var(--color-accent-ink);
+  }
+  @media (max-width: 640px) {
+    .site-nav a:not(.site-nav__cta) {
+      display: none;
+    }
+  }
+
+  /* Hero: solid worked panel + real-work photo split. */
+  .hero {
+    padding-block: clamp(2.5rem, 6vw, 4.5rem);
+  }
+  .hero__grid {
+    display: grid;
+    grid-template-columns: 1.05fr 0.92fr;
+    gap: clamp(1.5rem, 4vw, 3rem);
+    align-items: stretch;
+  }
+  .hero__panel {
+    background: var(--color-accent-soft);
+    border-top: 5px solid var(--color-accent);
+    border-radius: var(--radius-md);
+    padding: clamp(1.75rem, 4vw, 3rem);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .hero__media {
+    position: relative;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    min-height: 22rem;
+  }
+  .hero__media :global(.figure),
+  .hero__media :global(.img-slot) {
+    height: 100%;
+    aspect-ratio: auto !important;
+  }
+  /* One warm grade on the single hero photograph (skil_web-build B4). */
+  .hero__media :global(img) {
+    filter: saturate(1.06) sepia(0.05) brightness(1.02) contrast(1.02);
+  }
+  /* Paper-grain texture (background-depth rule: no flat field). A fractal-
+     noise SVG at soft-light, ~9%, gives the hero a worked-surface tooth at
+     zero raster cost. */
+  .hero__grain {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.09;
+    mix-blend-mode: soft-light;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 160px 160px;
+  }
+  .hero__eyebrow {
+    margin: 0 0 1.1rem;
+  }
+  .hero h1 {
+    font-family: var(--font-display);
+    /* Heavy Bitter slab, sized to fill the panel column and hyphenated for
+       German compounds so it reads confident-BIG without overflowing. */
+    font-size: clamp(2.3rem, 1.7rem + 2.5vw, 3.4rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.04;
+    max-width: 16ch;
+    hyphens: auto;
+    overflow-wrap: break-word;
+  }
+  .hero__sub {
+    font-size: var(--text-lg);
+    color: var(--color-ink);
+    max-width: 44ch;
+    margin-block: 1.2rem 0;
+  }
+  /* Meister + Festpreis trust marks, folded into the hero panel as two
+     copper-keyed stamps. The unverified years stat is omitted, not faked. */
+  .hero__marks {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.1rem 2.25rem;
+    padding: 0;
+    margin: 1.6rem 0 0;
+  }
+  .hero__marks li {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .hero__mark-k {
+    font-family: var(--font-display);
+    font-weight: 800;
+    /* text-xl (>=21.6px) keeps the copper marks above the bold large-text
+       threshold so copper-on-panel is gated at 3:1 (4.26:1 actual), AA. */
+    font-size: var(--text-xl);
+    color: var(--color-accent);
+    line-height: 1;
+  }
+  .hero__mark-v {
+    font-size: var(--text-xs);
+    color: var(--color-muted);
+    max-width: 24ch;
+  }
+  .hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.85rem;
+    margin-block: 1.8rem 1.1rem;
+  }
+  /* Press feedback per skil_web-build §3a motion table (scale(0.97) on
+     :active); transform-only, interruptible, reduced-motion safe. */
+  .hero__actions .btn:active {
+    transform: scale(0.97);
+  }
+  .hero__meta {
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+  }
+
+  .section {
+    padding-block: clamp(3rem, 6vw, 5.5rem);
+  }
+  .section__head {
+    max-width: 46rem;
+    margin-bottom: clamp(2rem, 4vw, 3.25rem);
+  }
+  .section__head h2 {
+    font-family: var(--font-display);
+    font-size: var(--text-3xl);
+    font-weight: 800;
+    letter-spacing: -0.012em;
+    margin-block: 0.5rem 0;
+  }
+  /* Copper tick before each eyebrow: a worked-detail mark. Decorative
+     (non-text contrast); the eyebrow TEXT stays muted to keep its AA. */
+  .eyebrow::before {
+    content: "";
+    display: inline-block;
+    width: 1.5rem;
+    height: 2px;
+    margin-right: 0.6rem;
+    vertical-align: middle;
+    background: var(--color-accent-display);
+  }
+  .section__intro {
+    color: var(--color-muted);
+    font-size: var(--text-lg);
+    margin-top: 1rem;
+  }
+
+  .leistungen {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--color-line);
+  }
+  .leistung {
+    display: grid;
+    grid-template-columns: 4rem 1fr;
+    gap: 1.5rem;
+    padding-block: 1.75rem;
+    border-bottom: 1px solid var(--color-line);
+  }
+  .leistung__no {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    font-weight: 800;
+    color: var(--color-accent-display);
+    font-variant-numeric: tabular-nums;
+  }
+  .leistung__body h3 {
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    font-weight: 700;
+  }
+  .leistung__body p {
+    color: var(--color-muted);
+    margin-block: 0.5rem 0;
+    max-width: 62ch;
+  }
+
+  /* Signature band: engineering-grid workbench. */
+  .werkbank {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    background: var(--color-accent-soft);
+    padding-block: clamp(3rem, 7vw, 6rem);
+  }
+  /* Faint blueprint grid (background-depth rule). Steel-blue hairlines at
+     low alpha; decorative, aria-hidden. */
+  .werkbank__grid {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.5;
+    background-image:
+      linear-gradient(
+        to right,
+        color-mix(in srgb, var(--color-steel) 14%, transparent) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        to bottom,
+        color-mix(in srgb, var(--color-steel) 14%, transparent) 1px,
+        transparent 1px
+      );
+    background-size: 2.25rem 2.25rem;
+    -webkit-mask-image: radial-gradient(
+      ellipse at 50% 40%,
+      #000 55%,
+      transparent 100%
+    );
+    mask-image: radial-gradient(
+      ellipse at 50% 40%,
+      #000 55%,
+      transparent 100%
+    );
+  }
+  .werkbank__strip {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr) auto;
+    gap: clamp(1.25rem, 3vw, 2.25rem);
+    align-items: start;
+  }
+  .step {
+    position: relative;
+    padding-right: clamp(1.25rem, 3vw, 2.25rem);
+  }
+  /* Draughtsman dimension bracket between steps: a steel hairline with a
+     copper end-tick. Decorative; hidden on the last step and on mobile. */
+  .step:not(:last-of-type)::after {
+    content: "";
+    position: absolute;
+    top: 1.1rem;
+    right: 0;
+    width: clamp(1rem, 3vw, 2.25rem);
+    height: 0;
+    border-top: 1.5px solid color-mix(in srgb, var(--color-steel) 60%, transparent);
+  }
+  .step:not(:last-of-type)::before {
+    content: "";
+    position: absolute;
+    top: 0.6rem;
+    right: 0;
+    width: 1.5px;
+    height: 1rem;
+    background: var(--color-accent-display);
+  }
+  .step__no {
+    display: block;
+    font-family: var(--font-display);
+    font-size: var(--text-4xl);
+    font-weight: 800;
+    color: var(--color-accent-display);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .step__title {
+    font-family: var(--font-display);
+    font-size: var(--text-lg);
+    font-weight: 700;
+    margin-block: 0.75rem 0;
+  }
+  .step__body {
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    margin-block: 0.4rem 0;
+  }
+  /* Copper Meisterbetrieb seal: a CSS-drawn stamp ring. */
+  .seal {
+    align-self: center;
+    display: grid;
+    place-items: center;
+  }
+  .seal__ring {
+    display: grid;
+    place-items: center;
+    width: clamp(4.5rem, 9vw, 5.5rem);
+    height: clamp(4.5rem, 9vw, 5.5rem);
+    border-radius: 999px;
+    border: 2px solid var(--color-accent);
+    box-shadow: 0 0 0 4px var(--color-accent-soft),
+      0 0 0 5.5px color-mix(in srgb, var(--color-accent) 45%, transparent);
+    color: var(--color-accent);
+    text-align: center;
+    transform: rotate(-7deg);
+  }
+  .seal__text {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: var(--text-xs);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    line-height: 1.05;
+    padding: 0.3rem;
+  }
+
+  .contact__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(2rem, 5vw, 4rem);
+  }
+  .hours {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1.5rem;
+  }
+  .hours th,
+  .hours td {
+    text-align: left;
+    padding: 0.85rem 0;
+    border-bottom: 1px solid var(--color-line);
+    font-weight: 600;
+  }
+  .hours td {
+    text-align: right;
+    color: var(--color-ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .hours .is-closed th,
+  .hours .is-closed td {
+    color: var(--color-muted);
+    font-weight: 500;
+  }
+  .contact__side {
+    display: grid;
+    gap: 1.25rem;
+    align-content: start;
+  }
+  .contact__card,
+  .guarantee {
+    padding: 1.75rem;
+  }
+  .contact__addr {
+    font-style: normal;
+    margin-block: 1rem;
+    line-height: 1.7;
+  }
+  .facts {
+    margin: 1rem 0 0;
+    display: grid;
+    gap: 1rem;
+  }
+  .facts div {
+    display: grid;
+    gap: 0.15rem;
+  }
+  .facts dt {
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-muted);
+  }
+  .facts dd {
+    margin: 0;
+    font-size: var(--text-base);
+  }
+  .facts a {
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+  /* Guarantee callout on the trust green-grey: paper text clears AA on it. */
+  .guarantee {
+    background: var(--color-trust);
+    color: var(--color-paper);
+  }
+  .guarantee .eyebrow {
+    color: color-mix(in srgb, var(--color-paper) 78%, transparent);
+  }
+  .guarantee .eyebrow::before {
+    background: var(--color-paper);
+  }
+
+  /* Quiet editorial note, not a loud "broken" badge: muted italic inline so
+     a pitch visitor reads it as "the owner will confirm this", not an error. */
+  .tbc {
+    font-family: var(--font-body);
+    font-size: 0.9em;
+    font-weight: 500;
+    font-style: italic;
+    color: var(--color-muted);
+    white-space: nowrap;
+  }
+
+  .site-foot {
+    border-top: 1px solid var(--color-line);
+    padding-block: 2.5rem;
+  }
+  .site-foot__row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 1rem;
+    font-size: var(--text-sm);
+    color: var(--color-muted);
+  }
+  .site-foot a {
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+
+  @media (max-width: 860px) {
+    .hero__grid,
+    .contact__grid {
+      grid-template-columns: 1fr;
+    }
+    .hero__media {
+      min-height: 0;
+    }
+    .hero__media :global(.figure),
+    .hero__media :global(.img-slot) {
+      aspect-ratio: 4 / 3 !important;
+      height: auto;
+    }
+    .werkbank__strip {
+      grid-template-columns: 1fr 1fr;
+    }
+    .step:not(:last-of-type)::after,
+    .step:not(:last-of-type)::before {
+      display: none;
+    }
+    .seal {
+      grid-column: 1 / -1;
+      justify-self: start;
+      margin-top: 0.5rem;
+    }
+  }
+  @media (max-width: 520px) {
+    .werkbank__strip {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
