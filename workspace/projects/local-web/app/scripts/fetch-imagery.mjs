@@ -25,10 +25,12 @@ const FORCE = process.argv.includes("--force");
 // Per BRIEF.md art direction. orientation: landscape | portrait | square.
 const SLOTS = [
   // praxis-uslu — calm editorial-clinical, warm, NOT medical-blue.
-  { site: "praxis-uslu", name: "hero", orientation: "landscape",
-    query: "calm modern medical practice waiting room daylight plants" },
+  // Editorial-split hero: tall right-column photo (portrait), real warm
+  // EMPTY interior (no people — kills the masked-pandemic stock tell).
+  { site: "praxis-uslu", name: "hero", orientation: "portrait",
+    query: "empty sunlit waiting room wooden bench potted plants warm daylight interior no people" },
   { site: "praxis-uslu", name: "signature", orientation: "portrait",
-    query: "naturopathy herbal medicine acupuncture still life warm" },
+    query: "acupuncture needles dried herbs warm linen still life soft window light" },
 
   // meinzer-maler — Werkstatt-warm trades, real work, no people/no headset stock.
   { site: "meinzer-maler", name: "hero", orientation: "landscape",

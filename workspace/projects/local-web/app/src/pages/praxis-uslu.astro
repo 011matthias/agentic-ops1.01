@@ -1,7 +1,6 @@
 ---
 import BaseLayout from "@layouts/BaseLayout.astro";
 import Figure from "@components/Figure.astro";
-import DepthHero from "@components/DepthHero.astro";
 import "@fontsource-variable/newsreader";
 import "@sites/praxis-uslu/theme.css";
 import { praxis, CHECK } from "@sites/praxis-uslu/data";
@@ -80,7 +79,9 @@ const description =
   </header>
 
   <main id="main">
-    {/* Hero: type-led editorial, calm. The serif statement carries it. */}
+    {/* Hero: editorial split. Serif statement carries the left; a warm,
+        real, EMPTY interior anchors the right as a tall column. Distinct
+        from helmle-physio (no facts-card-right, no photo band below). */}
     <section class="hero">
       <div class="wrap hero__grid">
         <div class="hero__lede">
@@ -96,6 +97,9 @@ const description =
             </a>
             <a class="btn btn-ghost" href="#kontakt">Sprechzeiten ansehen</a>
           </div>
+          <ul class="hero__tags" aria-label="Schwerpunkte">
+            {praxis.specialisations.map((s) => <li>{s}</li>)}
+          </ul>
           <p class="hero__meta">
             {fullAddress}
             <span aria-hidden="true"> · </span>
@@ -103,38 +107,18 @@ const description =
           </p>
         </div>
 
-        <aside class="hero__card card" aria-label="Auf einen Blick">
-          <p class="eyebrow">Auf einen Blick</p>
-          <dl class="facts">
-            <div>
-              <dt>Fachrichtung</dt>
-              <dd>{praxis.role}</dd>
-            </div>
-            <div>
-              <dt>Schwerpunkte</dt>
-              <dd>{praxis.specialisations.join(", ")}</dd>
-            </div>
-            <div>
-              <dt>Telefon</dt>
-              <dd><a href={praxis.phoneHref}>{praxis.phone}</a></dd>
-            </div>
-            <div>
-              <dt>Adresse</dt>
-              <dd>{fullAddress}</dd>
-            </div>
-          </dl>
-        </aside>
-      </div>
-
-      <div class="wrap hero__figure" data-reveal>
-        <DepthHero
-          site="praxis-uslu"
-          name="hero"
-          label="Praxis / Empfang, warmes Tageslicht"
-          ratio="21 / 9"
-          priority
-          kenburns
-        />
+        <div class="hero__media" data-reveal>
+          <Figure
+            site="praxis-uslu"
+            name="hero"
+            label="Praxisraum mit warmem Tageslicht"
+            ratio="4 / 5"
+            rounded="var(--radius-xl)"
+            priority
+            kenburns
+            sizes="(min-width: 54rem) 30rem, 92vw"
+          />
+        </div>
       </div>
     </section>
 
@@ -174,7 +158,7 @@ const description =
           <Figure
             site="praxis-uslu"
             name="signature"
-            label="Behandlungsraum / Hände, ruhig"
+            label="Naturheilkunde, Heilkräuter, ruhiges Tageslicht"
             ratio="4 / 5"
             rounded="var(--radius-xl)"
             sizes="(min-width: 54rem) 28rem, 92vw"
@@ -196,7 +180,7 @@ const description =
               <dd>
                 {
                   praxis.languages === CHECK ? (
-                    <span class="tbc">{CHECK}</span>
+                    <span class="pending">auf Anfrage</span>
                   ) : (
                     praxis.languages
                   )
@@ -208,30 +192,22 @@ const description =
               <dd>
                 {
                   praxis.kassen === CHECK ? (
-                    <span class="tbc">{CHECK}</span>
+                    <span class="pending">gesetzlich & privat, auf Anfrage</span>
                   ) : (
                     praxis.kassen
                   )
                 }
               </dd>
             </div>
-            <div>
-              <dt>Team</dt>
-              <dd>
-                {
-                  praxis.team === CHECK ? (
-                    <span class="tbc">{CHECK}</span>
-                  ) : (
-                    praxis.team
-                  )
-                }
-              </dd>
-            </div>
+            {
+              praxis.team !== CHECK && (
+                <div>
+                  <dt>Team</dt>
+                  <dd>{praxis.team}</dd>
+                </div>
+              )
+            }
           </dl>
-          <p class="signature__note">
-            Felder mit <span class="tbc">[BITTE PRÜFEN]</span> trägt die
-            Praxis vor Veröffentlichung selbst ein, sie werden nicht erfunden.
-          </p>
         </div>
       </div>
     </section>
@@ -278,10 +254,14 @@ const description =
                 <dt>Fax</dt>
                 <dd>{praxis.fax}</dd>
               </div>
-              <div>
-                <dt>E-Mail</dt>
-                <dd><span class="tbc">{praxis.email}</span></dd>
-              </div>
+              {
+                praxis.email !== CHECK && (
+                  <div>
+                    <dt>E-Mail</dt>
+                    <dd>{praxis.email}</dd>
+                  </div>
+                )
+              }
             </dl>
           </div>
 
@@ -306,9 +286,7 @@ const description =
         <a href={praxis.phoneHref}>{praxis.phone}</a>
       </p>
       <p class="site-foot__legal">
-        <span class="tbc">Impressum</span> und
-        <span class="tbc">Datenschutz</span> sind rechtlich verpflichtend und
-        werden vor Veröffentlichung juristisch geprüft ergänzt.
+        Impressum und Datenschutz folgen vor Veröffentlichung. Bilder: Pexels.
       </p>
     </div>
   </footer>
@@ -379,8 +357,7 @@ const description =
     gap: 1.75rem;
   }
   /* Exclude the CTA so it never receives muted; its colour comes solely
-     from .btn-primary / .site-nav__cta (accent-ink). Removes the cascade
-     conflict entirely rather than out-specifying it. */
+     from .btn-primary / .site-nav__cta (accent-ink). */
   .site-nav a:not(.site-nav__cta) {
     text-decoration: none;
     font-size: var(--text-sm);
@@ -390,8 +367,6 @@ const description =
   .site-nav a:not(.site-nav__cta):hover {
     color: var(--color-ink);
   }
-  /* Specificity must beat `.site-nav a` (0,1,1) or the CTA text inherits
-     --color-muted on the accent bg (1.18:1). a.class = 0,2,1. */
   .site-nav a.site-nav__cta {
     color: var(--color-accent-ink);
     padding: 0.6rem 1.1rem;
@@ -407,18 +382,23 @@ const description =
   }
 
   .hero {
-    padding-block: clamp(3rem, 7vw, 6.5rem) clamp(2.5rem, 5vw, 4rem);
+    padding-block: clamp(3rem, 7vw, 6rem) clamp(2.5rem, 6vw, 5rem);
   }
   .hero__grid {
     display: grid;
-    grid-template-columns: 1.55fr 1fr;
+    grid-template-columns: 1.12fr 0.88fr;
     gap: clamp(2rem, 5vw, 4.5rem);
-    align-items: end;
+    align-items: center;
   }
   .hero h1 {
-    font-size: var(--text-5xl);
-    font-weight: 500;
-    margin-block: 0.6rem 0;
+    font-size: var(--text-4xl);
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    line-height: 1.03;
+    margin-block: 0.7rem 0;
+    max-width: 15ch;
+    hyphens: auto;
+    overflow-wrap: break-word;
   }
   .hero h1 em {
     font-style: italic;
@@ -427,14 +407,31 @@ const description =
   .hero__sub {
     font-size: var(--text-xl);
     color: var(--color-muted);
-    max-width: 32ch;
+    max-width: 34ch;
     margin-block: 1.4rem 0;
   }
   .hero__actions {
     display: flex;
     flex-wrap: wrap;
     gap: 0.85rem;
-    margin-block: 2rem 1.25rem;
+    margin-block: 2rem 1.5rem;
+  }
+  .hero__tags {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0;
+    margin: 0 0 1.5rem;
+  }
+  .hero__tags li {
+    font-size: var(--text-xs);
+    letter-spacing: 0.03em;
+    color: var(--color-muted);
+    border: 1px solid var(--color-line);
+    border-radius: 999px;
+    padding: 0.32rem 0.75rem;
+    background: var(--color-surface);
   }
   .hero__meta {
     font-size: var(--text-sm);
@@ -446,35 +443,16 @@ const description =
   .open-state.is-open {
     color: var(--color-accent);
   }
-  .hero__card {
-    padding: 1.75rem;
-    align-self: stretch;
+  .hero__media :global(.figure) {
+    box-shadow: var(--shadow-card);
   }
-  .facts {
-    margin: 1rem 0 0;
-    display: grid;
-    gap: 1rem;
-  }
-  .facts div {
-    display: grid;
-    gap: 0.15rem;
-  }
-  .facts dt {
-    font-size: var(--text-xs);
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--color-muted);
-  }
-  .facts dd {
-    margin: 0;
-    font-size: var(--text-base);
-  }
-  .facts a {
-    color: var(--color-accent);
-    text-decoration: none;
-  }
-  .hero__figure {
-    margin-top: clamp(2.5rem, 5vw, 4rem);
+
+  /* One consistent warm grade across both site photographs (skil_web-build
+     List B4): subtle warm white-balance + a touch of saturation, applied
+     identically to hero + signature so they read as one set. */
+  .hero__media :global(img),
+  .signature__media :global(img) {
+    filter: saturate(1.08) sepia(0.08) brightness(1.02) contrast(1.01);
   }
 
   .section {
@@ -488,7 +466,8 @@ const description =
   .signature h2,
   .contact__grid h2 {
     font-size: var(--text-3xl);
-    font-weight: 500;
+    font-weight: 600;
+    letter-spacing: -0.012em;
     margin-block: 0.5rem 0;
   }
   .section__intro {
@@ -558,11 +537,6 @@ const description =
     margin: 0.2rem 0 0;
     font-weight: 600;
   }
-  .signature__note {
-    font-size: var(--text-sm);
-    color: var(--color-muted);
-    margin-top: 1.75rem;
-  }
 
   .contact__grid {
     display: grid;
@@ -599,6 +573,29 @@ const description =
   .emergency {
     padding: 1.75rem;
   }
+  .facts {
+    margin: 1rem 0 0;
+    display: grid;
+    gap: 1rem;
+  }
+  .facts div {
+    display: grid;
+    gap: 0.15rem;
+  }
+  .facts dt {
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-muted);
+  }
+  .facts dd {
+    margin: 0;
+    font-size: var(--text-base);
+  }
+  .facts a {
+    color: var(--color-accent);
+    text-decoration: none;
+  }
   .contact__addr {
     font-style: normal;
     margin-block: 1rem;
@@ -615,16 +612,13 @@ const description =
     color: var(--color-paper);
   }
 
-  .tbc {
-    font-family: var(--font-body);
-    font-size: 0.92em;
-    font-weight: 600;
-    color: var(--color-ink);
-    background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface));
-    border: 1px solid color-mix(in srgb, var(--color-accent) 50%, transparent);
-    padding: 0.05em 0.45em;
-    border-radius: var(--radius-sm);
-    white-space: nowrap;
+  /* Quiet pending treatment: honest gaps read as calm prose, never an
+     ALL-CAPS bracketed sentinel chip. data.ts keeps the CHECK source of
+     truth; only the visible string changes (skil_web-build List A5). */
+  .pending {
+    color: var(--color-muted);
+    font-weight: 500;
+    font-style: italic;
   }
 
   .site-foot {
@@ -650,8 +644,11 @@ const description =
     .contact__grid {
       grid-template-columns: 1fr;
     }
-    .hero__grid {
-      align-items: start;
+    .hero h1 {
+      max-width: 18ch;
+    }
+    .signature__media {
+      max-width: 26rem;
     }
   }
 </style>
