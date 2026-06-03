@@ -23,7 +23,7 @@ deliverables:
 
 ## What We Understood
 
-You're switching Make.com providers and need someone to take full ownership of your existing automation infrastructure. The core challenge isn't building new scenarios from scratch -- it's inheriting someone else's logic, understanding the dependencies between Hero Software, LexOffice, Mailgun, OpenAI API, and S3, and making sure nothing breaks during the handover.
+You're switching Make.com providers and need someone to take full ownership of your existing automation infrastructure. The core challenge isn't building new scenarios from scratch; it's inheriting someone else's logic, understanding the dependencies between Hero Software, LexOffice, Mailgun, OpenAI API, and S3, and making sure nothing breaks during the handover.
 
 Your team runs on these automations daily. A failed scenario means missed invoices, delayed notifications, or broken data sync between your field service operations in Hero and your accounting in LexOffice. The margin for error during migration is slim.
 
@@ -66,7 +66,7 @@ Critical: webhook URL changes need to be coordinated with your sysadmin to avoid
 - Proactive optimization (reducing operations count, improving error handling)
 - Coordinate with your office team and sysadmin on system changes
 
-## Timeline and Milestones
+## Timeline & Milestones
 
 | Week | Phase | Deliverable |
 |------|-------|-------------|
@@ -95,7 +95,7 @@ We build and maintain automation infrastructure for businesses that depend on th
 
 ## Research Notes
 
-**Prospect:** Warme Wimmer GmbH & Co. KG -- renewable energy company (solar, geothermal, heating, climate systems) in Grobenzell, Bavaria. Founded 2004 by Tobias Wimmer. Meisterbetrieb (master craftsman business). 11-50 employees. Energy & Utilities sector.
+**Prospect:** Warme Wimmer GmbH & Co. KG; renewable energy company (solar, geothermal, heating, climate systems) in Grobenzell, Bavaria. Founded 2004 by Tobias Wimmer. Meisterbetrieb (master craftsman business). 11-50 employees. Energy & Utilities sector.
 
 **Hero Software:** Cloud-based field service management for craftsmen. Project planning, offers/quotes, invoicing, scheduling, mobile app. German market focus. API available.
 

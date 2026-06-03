@@ -78,10 +78,10 @@ export default function Footer() {
             &copy; {new Date().getFullYear()} UnpauseAI. All rights reserved.
           </p>
           <a
-            href="mailto:nicolas.neumann@unpauseai.com"
+            href="mailto:admin@unpauseai.com"
             className="text-xs text-muted transition-colors hover:text-foreground"
           >
-            nicolas.neumann@unpauseai.com
+            admin@unpauseai.com
           </a>
         </div>
       </div>

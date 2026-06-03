@@ -183,10 +183,10 @@ export default function PrivacyPage() {
             For privacy-related questions or to exercise your rights, contact us
             at{" "}
             <a
-              href="mailto:nicolas.neumann@unpauseai.com"
+              href="mailto:admin@unpauseai.com"
               className="text-accent hover:text-accent-light"
             >
-              nicolas.neumann@unpauseai.com
+              admin@unpauseai.com
             </a>
             .
           </p>

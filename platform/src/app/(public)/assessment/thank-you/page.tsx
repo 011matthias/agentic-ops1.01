@@ -198,8 +198,8 @@ export default function AssessmentThankYouPage() {
         {status === "error" && (
           <p className="text-sm text-red-500">
             Something went wrong. Please try again or email us directly at{" "}
-            <a href="mailto:nicolas.neumann@unpauseai.com" className="underline">
-              nicolas.neumann@unpauseai.com
+            <a href="mailto:admin@unpauseai.com" className="underline">
+              admin@unpauseai.com
             </a>
           </p>
         )}

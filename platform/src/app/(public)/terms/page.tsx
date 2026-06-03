@@ -134,10 +134,10 @@ export default function TermsPage() {
           <p>
             Questions about these terms? Contact us at{" "}
             <a
-              href="mailto:nicolas.neumann@unpauseai.com"
+              href="mailto:admin@unpauseai.com"
               className="text-accent hover:text-accent-light"
             >
-              nicolas.neumann@unpauseai.com
+              admin@unpauseai.com
             </a>
             .
           </p>

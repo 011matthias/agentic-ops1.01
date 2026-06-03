@@ -16,7 +16,7 @@ export function ProposalCTA({ prospect }: ProposalCTAProps) {
       </p>
       <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
         <a
-          href="mailto:hello@unpauseai.com"
+          href="mailto:admin@unpauseai.com"
           className="inline-flex items-center rounded-full bg-accent px-8 py-3 text-sm font-medium text-white shadow-md transition-all hover:bg-accent-light hover:shadow-lg hover:-translate-y-0.5"
         >
           Let&apos;s Talk, {prospect}

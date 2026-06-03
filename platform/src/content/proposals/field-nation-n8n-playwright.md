@@ -44,8 +44,8 @@ research:
     - "AI classification systems with confidence-threshold routing"
   budget_gap: "$150 vs posted $120 fixed ($50 base + $50 bonus for 4hr delivery)"
   profile_cherry_picks:
-    - "n8n primary expertise -- exact match for job requirements"
-    - "Claude API integration -- optional email parsing with resilient format handling"
+    - "n8n primary expertise; exact match for job requirements"
+    - "Claude API integration; optional email parsing with resilient format handling"
 ---
 
 ## What We Understood
@@ -60,17 +60,17 @@ You mentioned this is a test project with ongoing work potential. The system I d
 
 A 5-stage pipeline built entirely in n8n with a Playwright automation layer:
 
-**Stage 1 -- Email Ingestion:** n8n IMAP Trigger monitors your inbox for Field Nation work order notifications. Filters by sender domain, extracts the email body.
+**Stage 1; Email Ingestion:** n8n IMAP Trigger monitors your inbox for Field Nation work order notifications. Filters by sender domain, extracts the email body.
 
-**Stage 2 -- Email Parsing:** Claude API extracts structured data from each work order email: job title, location, pay rate, work type, date/time, travel requirements. Falls back to regex parsing for standard email formats. Claude handles format changes gracefully; regex is faster but breaks when Field Nation updates their email templates.
+**Stage 2; Email Parsing:** Claude API extracts structured data from each work order email: job title, location, pay rate, work type, date/time, travel requirements. Falls back to regex parsing for standard email formats. Claude handles format changes gracefully; regex is faster but breaks when Field Nation updates their email templates.
 
-**Stage 3 -- Decision Engine:** Configurable business rules in n8n (IF/Switch nodes). You set the thresholds: minimum pay rate, maximum travel distance, preferred work types, schedule conflicts, blacklisted companies. Output: ACCEPT, REQUEST, SKIP, or MANUAL_REVIEW.
+**Stage 3; Decision Engine:** Configurable business rules in n8n (IF/Switch nodes). You set the thresholds: minimum pay rate, maximum travel distance, preferred work types, schedule conflicts, blacklisted companies. Output: ACCEPT, REQUEST, SKIP, or MANUAL_REVIEW.
 
-**Stage 4 -- Browser Automation:** Playwright script logs into Field Nation, navigates to the work order, and executes the decision. Handles session persistence (cookie storage between runs), expired session re-authentication, and "already taken" detection.
+**Stage 4; Browser Automation:** Playwright script logs into Field Nation, navigates to the work order, and executes the decision. Handles session persistence (cookie storage between runs), expired session re-authentication, and "already taken" detection.
 
-**Stage 5 -- Logging:** Every decision and action logged to Google Sheets or SQLite. Notifications for manual review items. Daily summary of actions taken.
+**Stage 5; Logging:** Every decision and action logged to Google Sheets or SQLite. Notifications for manual review items. Daily summary of actions taken.
 
-## Timeline
+## Timeline & Milestones
 
 - **Day 1:** Email parsing pipeline + decision engine (n8n workflow with Claude API integration)
 - **Day 2:** Playwright browser automation with session management and error handling
