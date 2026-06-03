@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Angebot Suderman</title>
+<style>
+  @page {
+    size: A4;
+    margin: 16mm 16mm 18mm 16mm;
+  }
+  * { box-sizing: border-box; }
+  html {
+    font-size: 10.5pt;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  :root {
+    --wine: #3b2230;
+    --wine-soft: #5a3447;
+    --gold: #b0863b;
+    --gold-soft: #e8d9bd;
+    --paper: #faf6f0;
+    --card: #ffffff;
+    --ink: #2a2220;
+    --muted: #6f6258;
+    --line: #e4d8c9;
+    --green: #4f7a52;
+  }
+  body {
+    font-family: "Segoe UI", -apple-system, "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink);
+    line-height: 1.5;
+    margin: 0;
+    background: var(--paper);
+  }
+  .serif { font-family: Georgia, "Times New Roman", serif; }
+
+  /* ---- Header ---- */
+  .masthead {
+    border-bottom: 2pt solid var(--gold);
+    padding-bottom: 10pt;
+    margin-bottom: 16pt;
+  }
+  .eyebrow {
+    font-size: 8.5pt;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gold);
+    font-weight: 700;
+    margin: 0 0 4pt 0;
+  }
+  h1 {
+    font-family: Georgia, serif;
+    font-size: 23pt;
+    color: var(--wine);
+    margin: 0 0 8pt 0;
+    line-height: 1.15;
+  }
+  .meta {
+    font-size: 9pt;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .meta strong { color: var(--ink); }
+
+  /* ---- Intro ---- */
+  .intro {
+    font-size: 11pt;
+    color: var(--ink);
+    margin: 0 0 14pt 0;
+  }
+  .intro .lead { font-weight: 700; color: var(--wine); font-family: Georgia, serif; font-size: 12.5pt; }
+
+  /* ---- Sections ---- */
+  h2 {
+    font-family: Georgia, serif;
+    font-size: 14pt;
+    color: var(--wine);
+    margin: 18pt 0 7pt 0;
+    padding-left: 9pt;
+    border-left: 3pt solid var(--gold);
+    page-break-after: avoid;
+  }
+  p { margin: 0 0 7pt 0; }
+  ul { margin: 4pt 0 9pt 0; padding-left: 0; list-style: none; }
+  li { margin: 0 0 5pt 0; padding-left: 16pt; position: relative; }
+  li::before {
+    content: "";
+    position: absolute;
+    left: 2pt; top: 6pt;
+    width: 5pt; height: 5pt;
+    background: var(--gold);
+    border-radius: 50%;
+  }
+  li strong { color: var(--wine); }
+
+  /* ---- Diagram ---- */
+  .diagram {
+    margin: 12pt 0 6pt 0;
+    page-break-inside: avoid;
+  }
+  .flow {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+  }
+  .stage {
+    flex: 1;
+    border-radius: 7pt;
+    padding: 10pt 11pt;
+    border: 1pt solid var(--line);
+    background: var(--card);
+  }
+  .stage.center { background: var(--wine); border-color: var(--wine); }
+  .stage.result { background: #f3ede2; border-color: var(--gold-soft); }
+  .stage .cap {
+    font-size: 7.5pt;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--gold);
+    margin-bottom: 6pt;
+  }
+  .stage.center .cap { color: var(--gold-soft); }
+  .stage .row { font-size: 9.5pt; margin: 3pt 0; color: var(--ink); }
+  .stage.center .row { color: #fff; }
+  .stage .sub { font-size: 7.5pt; color: var(--muted); }
+  .stage.center .sub { color: var(--gold-soft); }
+  .arrow {
+    align-self: center;
+    width: 26pt;
+    text-align: center;
+    color: var(--gold);
+    font-size: 16pt;
+    font-weight: 700;
+    flex: 0 0 26pt;
+  }
+  .dia-caption { font-size: 8pt; color: var(--muted); text-align: center; margin-top: 6pt; font-style: italic; }
+
+  /* ---- Tables ---- */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8pt 0 6pt 0;
+    font-size: 10pt;
+    page-break-inside: avoid;
+  }
+  .price th {
+    background: var(--wine);
+    color: #fff;
+    text-align: left;
+    padding: 7pt 10pt;
+    font-weight: 600;
+    font-size: 9.5pt;
+  }
+  .price td {
+    padding: 7pt 10pt;
+    border-bottom: 1pt solid var(--line);
+  }
+  .price td.amount { text-align: right; font-weight: 700; color: var(--wine); white-space: nowrap; }
+  .price tr.package td { background: #f6efe2; }
+  .price tr.package td.amount { color: var(--gold); }
+  .save-badge {
+    display: inline-block;
+    background: var(--green);
+    color: #fff;
+    font-size: 7.5pt;
+    font-weight: 700;
+    padding: 1pt 6pt;
+    border-radius: 8pt;
+    margin-left: 6pt;
+    vertical-align: middle;
+  }
+
+  /* ---- Callout ---- */
+  .callout {
+    background: #f3ede2;
+    border: 1pt solid var(--gold-soft);
+    border-radius: 7pt;
+    padding: 9pt 12pt;
+    margin: 8pt 0 12pt 0;
+    font-size: 10pt;
+    page-break-inside: avoid;
+  }
+  .callout strong { color: var(--wine); }
+  .callout .small { font-size: 9pt; color: var(--muted); margin-top: 3pt; }
+
+  .sub-h { font-size: 9.5pt; font-weight: 700; color: var(--wine); margin: 12pt 0 4pt 0; }
+
+  /* ---- Closing / signature ---- */
+  .closing {
+    margin-top: 16pt;
+    padding-top: 12pt;
+    border-top: 1pt solid var(--line);
+    page-break-inside: avoid;
+  }
+  .sign {
+    margin-top: 10pt;
+    font-size: 9.5pt;
+    color: var(--muted);
+  }
+  .sign .name { font-family: Georgia, serif; font-size: 12pt; color: var(--wine); font-weight: 700; }
+
+  .fill {
+    background: #fff3cd;
+    color: #8a5a00;
+    border-bottom: 1.5pt dashed #c79a2e;
+    padding: 0 3pt;
+    font-weight: 700;
+    font-style: normal;
+  }
+</style>
+</head>
+<body>
+
+  <header class="masthead">
+    <p class="eyebrow">Angebot &middot; Website &amp; Automatisierung</p>
+    <h1>Ein Auftritt und ein System,<br>das die Anfragen f&uuml;r Sie ordnet</h1>
+    <p class="meta">
+      <strong>F&uuml;r:</strong> Suderman, Sudermanplatz 3, 50670 K&ouml;ln<br>
+      <strong>Von:</strong> Matthias Neumann, in Zusammenarbeit mit der Agentur UnpauseAI<br>
+      <strong>Datum:</strong> 2. Juni 2026
+    </p>
+  </header>
+
+  <p class="intro">
+    <span class="lead">Vielen Dank f&uuml;r das offene Gespr&auml;ch.</span><br>
+    Ich habe mir Ihre Seite in Ruhe angesehen. Hier kurz und ohne Technik-Kauderwelsch, wie das Ganze
+    aussehen k&ouml;nnte und was es kostet. Alles l&auml;sst sich auch in Etappen umsetzen, ganz so,
+    wie es zeitlich und finanziell f&uuml;r Sie gut passt.
+  </p>
+
+  <h2>Worum es geht</h2>
+  <p>
+    Suderman hat drei sichtbare Standbeine: die Bar, die Cocktailkurse (69 &euro; pro Person, Tickets
+    &uuml;ber die Plattform &bdquo;rausgegangen&ldquo;) und die Eventlocation f&uuml;r bis zu 120 G&auml;ste.
+    Reservierungen und Event-Anfragen laufen heute &uuml;ber getrennte Online-Formulare, die von Hand
+    beantwortet werden. Genau das bringt mein Vorschlag zusammen.
+  </p>
+
+  <h2>1. Website-Integration</h2>
+  <p>
+    Ihre bestehende Domain und Ihre Seite bleiben erhalten, daf&uuml;r entstehen keine zus&auml;tzlichen
+    Kosten. Ich brauche einmalig einen Zugang und richte alles direkt bei Ihnen vor Ort ein.
+  </p>
+  <ul>
+    <li>Kurse, Gutscheine, Reservierung und Event-Anfragen klar auffindbar und sauber verbunden</li>
+    <li>Auf dem Handy genauso gut wie am Laptop</li>
+    <li>Leicht aktuell zu halten</li>
+  </ul>
+
+  <h2>2. Automatisierung <span style="font-size:9pt;color:var(--muted);font-weight:400;">(separates Projekt)</span></h2>
+  <p>
+    Heute liegen drei Wege nebeneinander: Kurse und Gutscheine &uuml;ber &bdquo;rausgegangen&ldquo;,
+    Reservierungen &uuml;ber das Buchungsfeld, Firmen- und Event-Anfragen &uuml;ber die Formulare.
+    Die Automatisierung bringt das an einer Stelle zusammen.
+  </p>
+
+  <div class="diagram">
+    <div class="flow">
+      <div class="stage">
+        <div class="cap">Heute: 3 Wege</div>
+        <div class="row">Kurse + Gutscheine</div>
+        <div class="sub">&uuml;ber rausgegangen</div>
+        <div class="row" style="margin-top:6pt;">Reservierungen</div>
+        <div class="row" style="margin-top:6pt;">Event- &amp; Firmenanfragen</div>
+      </div>
+      <div class="arrow">&rsaquo;</div>
+      <div class="stage center">
+        <div class="cap">Ein zentrales System</div>
+        <div class="row">erfasst</div>
+        <div class="row">best&auml;tigt automatisch</div>
+        <div class="row">tr&auml;gt in den Kalender ein</div>
+      </div>
+      <div class="arrow">&rsaquo;</div>
+      <div class="stage result">
+        <div class="cap">Ihr &Uuml;berblick</div>
+        <div class="row">Kalender</div>
+        <div class="row">Best&auml;tigungen</div>
+        <div class="row">Anfragen mit allen Infos</div>
+      </div>
+    </div>
+    <p class="dia-caption">Ein Eingang, ein &Uuml;berblick. Sie sehen auf einen Blick, was ansteht.</p>
+  </div>
+
+  <ul>
+    <li><strong>Cocktailkurse:</strong> Buchungen werden automatisch erfasst, best&auml;tigt und in den Kalender eingetragen</li>
+    <li><strong>Reservierungen:</strong> automatische Best&auml;tigung, ohne Hin und Her</li>
+    <li><strong>Event- und Firmenanfragen (inkl. Hochzeiten):</strong> kommen strukturiert herein, mit G&auml;stezahl, Event-Typ und Wunschtermin auf einen Blick</li>
+  </ul>
+  <p style="font-size:10pt;color:var(--muted);">
+    Was das f&uuml;r Sie hei&szlig;t: weniger Tippen, schnellere Antworten auf Anfragen, alles an einem Ort.
+  </p>
+
+  <h2>3. Investition</h2>
+  <table class="price">
+    <thead>
+      <tr><th>Leistung</th><th style="text-align:right;">Preis (einmalig)</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Website-Integration</td><td class="amount">800 &euro;</td></tr>
+      <tr><td>Automatisierung (separates Projekt)</td><td class="amount">1.500 &euro;</td></tr>
+      <tr class="package">
+        <td>Beides zusammen (Paket) <span class="save-badge">Sie sparen 300 &euro;</span></td>
+        <td class="amount">2.000 &euro;</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <strong>Ratenzahlung ist bei allen Punkten m&ouml;glich.</strong>
+    Wir teilen die Summe so auf, wie es f&uuml;r Sie gut machbar ist.
+  </div>
+
+  <p class="sub-h">Laufende Betreuung (optional, monatlich)</p>
+  <table class="price">
+    <thead>
+      <tr><th>Umfang</th><th style="text-align:right;">Preis</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Nur Website (inkl. Updates, kleine &Auml;nderungen, jederzeit ansprechbar)</td><td class="amount">100 &euro; / Monat</td></tr>
+      <tr><td>Website und Automatisierung</td><td class="amount">200 &euro; / Monat</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:9.5pt;color:var(--muted);">
+    Die Betreuung ist optional. Sie k&ouml;nnen auch ohne starten und sp&auml;ter in Ruhe entscheiden.
+  </p>
+
+  <div class="closing">
+    <h2 style="margin-top:0;">So geht es weiter</h2>
+    <p>
+      Am einfachsten zeige ich Ihnen das Ganze einmal kurz, dann sehen Sie sofort, wie es wirkt.
+      Melden Sie sich gern, wann es Ihnen passt, ganz ohne Druck.
+    </p>
+    <div class="sign">
+      <div class="name">Matthias Neumann</div>
+      in Zusammenarbeit mit UnpauseAI<br>
+      admin@unpauseai.com &middot; Tel. 0151 68437142
+    </div>
+  </div>
+
+</body>
+</html>
