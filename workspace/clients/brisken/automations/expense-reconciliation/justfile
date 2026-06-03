@@ -1,0 +1,47 @@
+# Shortcuts for the expense-reconciliation tool.
+# Install just: https://github.com/casey/just
+# (Or invoke the underlying commands directly — see comments.)
+
+default: help
+
+# Show available targets
+help:
+    @just --list
+
+# One-time install / refresh the venv
+sync:
+    uv sync
+
+# Run the reconciliation pipeline against a config
+# Usage: just recon path/to/run.json
+recon CONFIG:
+    uv run expense-recon --config {{CONFIG}}
+
+# Dry-run (counts to stdout, no xlsx written)
+# Usage: just dry-run path/to/run.json
+dry-run CONFIG:
+    uv run expense-recon --config {{CONFIG}} --dry-run
+
+# Inspect a statement file and suggest a column_map
+# Usage: just inspect path/to/statement.csv
+inspect FILE:
+    uv run expense-recon-inspect {{FILE}}
+
+# Run the example end-to-end to verify the install works
+example:
+    uv run expense-recon --config examples/run.example.json
+
+# Run the test suite
+test:
+    uv run --with 'pytest>=8.0' pytest -v
+
+# Run tests in fail-fast mode
+test-x:
+    uv run --with 'pytest>=8.0' pytest -x
+
+# Clean caches + build artifacts (leaves .venv intact; use `rm -rf .venv` for full wipe)
+clean:
+    rm -rf .pytest_cache
+    rm -rf src/expense_recon/__pycache__
+    rm -rf src/expense_recon/*/__pycache__
+    rm -rf tests/__pycache__

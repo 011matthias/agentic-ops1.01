@@ -1,0 +1,5 @@
+document_id,detected_date,detected_total,detected_currency,detected_vendor,detected_reference,line_items
+rcpt-001,2026-04-01,5.75,USD,Coffee Shop NYC,,"[{""description"":""Latte"",""line_total"":""5.75""}]"
+rcpt-002,2026-04-03,57.50,USD,Delancey Tavern,table-12,
+rcpt-003,2026-04-05,22.30,USD,Uber,,
+rcpt-004,2026-04-07,200.00,USD,Amazon,RT3-9923,"[{""description"":""Herman Miller chair"",""line_total"":""150.00""},{""description"":""Coffee beans 2kg"",""line_total"":""30.00""},{""description"":""HDMI cable"",""line_total"":""20.00""}]"

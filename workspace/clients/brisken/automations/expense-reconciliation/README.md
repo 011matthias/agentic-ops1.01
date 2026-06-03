@@ -35,6 +35,102 @@ Phase 0 foundation that still waits on the §38 stack decision.
   - Reconciliation guarantee invariant (v2 spec §25.5) covered by test:
     every transaction lands in exactly one bucket; no silent drops.
 
+**Slice 2 part 1 — LLM categorizer (OpenAI gpt-4o-mini): shipped 2026-06-01.**
+
+Per the 2026-06-01 stack pivot, the LLM provider is OpenAI (was
+Anthropic per §38.2). The `LLMClient` protocol in `src/expense_recon/llm/`
+is provider-agnostic; swap class to swap provider.
+
+- [x] `LLMClient` Protocol + `OpenAIClient` + `MockLLMClient`
+      ([`src/expense_recon/llm/client.py`](src/expense_recon/llm/client.py))
+- [x] `TokenUsage` + `CostTracker` per-run cost aggregation
+      ([`src/expense_recon/llm/cost.py`](src/expense_recon/llm/cost.py))
+- [x] Categorizer (`categorize_receipts(receipts, client=...)`) routes
+      through the LLM when wired; falls back to keyword stub otherwise.
+- [x] CLI reads `llm:` block from config, instantiates `OpenAIClient`
+      with `OPENAI_API_KEY` env var.
+- [x] Summary sheet displays "Estimated cost (USD)".
+- [x] Bug fix in `_is_vague`: word-boundary matching (was substring;
+      `"fee" in "coffee"` was silently flagging "coffee beans" as vague).
+- [x] Live OpenAI smoke run: 4-receipt example reconciled for
+      $0.00029 USD; "Coffee beans 2kg" correctly classified as
+      Office Supplies & Consumables (keyword stub returned Meals due
+      to the substring quirk).
+
+**Still to do in Slice 2:**
+
+- [ ] Slice 2 part 2: Receipt OCR / vision extraction (swap
+      `parse_receipts_csv` for `parse_receipts_vision`). Real OpenAI
+      gpt-4o vision call on receipt images → structured `Receipt`
+      with line_items. Deferred until Chris's first receipt folder
+      lands so the vision prompt can be tuned against real shapes.
+- [ ] Real LLM swap for FX judgment (`judge_fx_match`). Stub still in
+      place; add `judge_fx_match(tx, receipt)` method to `LLMClient`
+      protocol + OpenAI implementation. ~30 min when first FX case
+      hits.
+
+---
+
+**Slice 1 — End-to-end CLI tool: shipped, tested green.**
+
+Wires the existing parsers and matcher into a runnable CLI that
+produces an Excel review report. North-star posture (Dirk 2026-05-27):
+"we just need a working tool — anneal quality through real-data use,
+not architecture up front." The multi-tenant SaaS scaffolding is
+deferred; this is one Python process per reconciliation run.
+
+- [x] Receipts CSV ingest ([`src/expense_recon/ingest/receipts_csv.py`](src/expense_recon/ingest/receipts_csv.py))
+  - `parse_receipts_csv(path, legal_entity_id, default_currency) -> list[Receipt]`.
+  - Bridge for slice 1: receipts arrive already-extracted from CSV.
+    Real OCR / Claude-vision extraction lands in slice 2; matcher
+    contract stays identical, only this function gets swapped.
+- [x] LLM judgment layer ([`src/expense_recon/matching/judgment.py`](src/expense_recon/matching/judgment.py))
+  - **Stub**: `judge_fx_match` and `judge_ambiguous` return placeholder
+    Match objects flagged for human review. Reason carries `[STUB]`
+    prefix. Slice 2 wires the real Claude call when API access to
+    Brisken's Pro subscription is provisioned (v2 spec §38.2).
+  - Reconciliation guarantee preserved: stub never silently auto-resolves
+    FX / ambiguous cases.
+- [x] Excel report writer ([`src/expense_recon/output/report_xlsx.py`](src/expense_recon/output/report_xlsx.py))
+  - Four sheets, fixed order: **Summary** (counts, % match rate,
+    invariant check), **Matches** (EXACT green / PROBABLE yellow),
+    **Needs Review** (FX / ambiguous / possible — orange),
+    **Unmatched** (transactions + receipts — red).
+  - Per-row PatternFill (no Excel CF rules engine) — file opens
+    cleanly in any viewer.
+- [x] CLI entry point ([`src/expense_recon/cli.py`](src/expense_recon/cli.py))
+  - `expense-recon --config run.json [--out alt-report.xlsx]`.
+  - JSON config (stdlib only — no YAML dep). Paths in the config
+    resolve relative to the config file's directory.
+- [x] `pyproject.toml` build system (hatchling) so `uv sync`
+  installs the `expense-recon` script.
+
+**Slice-1 annealing items (matcher quality, surfaced by integration testing):**
+
+1. **FX cross-product noise.** The deterministic matcher generates
+   an `FX_JUDGMENT` candidate for every (USD tx, non-USD receipt)
+   pair regardless of amount or date — see the early-return in
+   [`deterministic.py`](src/expense_recon/matching/deterministic.py)
+   `match_one`. In real use this means one EUR receipt in the pool
+   floods Needs Review with one entry per USD transaction. Fix
+   direction: require date proximity AND amount-after-rough-FX
+   plausibility before emitting `FX_JUDGMENT`.
+2. **One receipt can match multiple transactions.** The matcher tracks
+   `matched_receipts` for the unmatched-receipts residual but does
+   not prevent the same receipt from being the best match for two
+   different transactions. Slice-1 integration fixture avoids this
+   by design; real data will hit it. Fix direction: bipartite
+   assignment (e.g., Hungarian algorithm on the confidence matrix)
+   so each receipt lands at most once.
+3. **No vendor / reference signal in matching.** Amount + date +
+   currency are the only inputs today. A $100 Amazon receipt and a
+   $100 Uber receipt on the same day are equally good candidates
+   for a $100 transaction. Vendor fuzzy match + reference-number
+   check would tip the scoring.
+
+These are matcher-behavior changes, not slice-1 plumbing. Defer
+until real Chris data shows which one bites first.
+
 **Phase 2 — Statement ingest (CSV + Excel): shipped, tested green.**
 
 - [x] Shared helpers ([`src/expense_recon/ingest/_common.py`](src/expense_recon/ingest/_common.py))
@@ -60,28 +156,91 @@ Phase 0 foundation that still waits on the §38 stack decision.
   - Bool cells in the amount column rejected explicitly (defends
     against the `bool` ⊂ `int` Python quirk).
 
-**Tests:** 32 passing across the matching engine + both parsers
-(see `tests/`). Both parsers have an end-to-end integration test that
-runs CSV/xlsx → `parse_statement_*` → `match_month` and asserts the
-reconciliation invariant.
+**Tests:** 74 passing across the matching engine, both parsers, the
+keyword + LLM categorizers, the inspect heuristic, the report writer,
+the cost tracker, and the end-to-end CLI (see `tests/`).
+The CLI tests write inline statement + receipts fixtures into
+`tmp_path`, run the full pipeline, open the resulting xlsx, and
+assert the LD-2/LD-3/LD-4 contracts (per-line categorization,
+5+N sheet structure, three-tier source coloring, Amazon multi-line
+receipt → 3 distinct rows, vendor-fallback marking, FX-stub never
+auto-resolves) AND the B1 tolerant-parsing flow (bad rows land in
+the Errors sheet without aborting the run, surrounding good rows
+still reconcile) AND the B4 dry-run flow (Summary to stdout, no
+xlsx written).
 
 **Still to do:**
-- [ ] LLM judgment layer (stubbed pending Anthropic API access; v2 spec §38.2).
-- [ ] Real-data validation against a Chris-supplied month.
 
-**Phase 0 — Foundation:** waits on the §38.1 stack decision (Cloud SQL
-+ Firebase services vs alternative). Code that depends on it (data
-model migrations, multi-tenant middleware, RBAC enforcement layer)
-starts when Dirk signs off on §38.1.
+- [ ] Slice 2: receipt OCR / Claude-vision extraction (swap
+      `parse_receipts_csv` for vision pipeline).
+- [ ] Slice 2: real LLM judgment call (swap `judge_fx_match` /
+      `judge_ambiguous` stubs for Claude). Gated on Anthropic API
+      access to Brisken's Pro subscription (v2 spec §38.2).
+- [ ] Real-data validation against a Chris-supplied month.
+- [ ] Annealing items #1–#3 above (matcher quality), prioritized by
+      what bites first on Chris's real data.
+
+**Phase 0 — Foundation:** waits on the §38.1 stack decision (Cloud
+SQL with Firebase services vs alternative). Code that depends on it
+(data model migrations, multi-tenant middleware, RBAC enforcement
+layer) starts when Dirk signs off on §38.1.
+
+## Run the tool
+
+```bash
+cd workspace/clients/brisken/automations/expense-reconciliation
+uv sync                                       # installs the CLI entry point
+uv run expense-recon --config /path/to/run.json
+uv run expense-recon --config run.json --out alt-report.xlsx   # output override
+```
+
+Config shape (JSON, stdlib only — no YAML dep). Paths resolve relative
+to the config file's directory:
+
+```json
+{
+  "statement": {
+    "path": "amex-may.csv",
+    "account_id": "amex-9001",
+    "legal_entity_id": "brisken-llc",
+    "account_card_currency": "USD",
+    "column_map": {
+      "transaction_date": "Date",
+      "amount": "Amount",
+      "vendor": "Description"
+    },
+    "sheet_name": null
+  },
+  "receipts": {
+    "path": "receipts-may.csv",
+    "default_currency": "USD"
+  },
+  "output": { "path": "report-may.xlsx" }
+}
+```
+
+Receipts CSV columns (header row):
+
+```text
+document_id, detected_date, detected_total, detected_vendor
+  (required)
+detected_currency, detected_reference, line_items
+  (optional)
+```
+
+`line_items` is a JSON array string (per BLUEPRINT LD-2). Each item:
+`{"description": "...", "line_total": "...", "quantity"?: ..., "unit_price"?: ...}`.
+Empty / missing → vendor-fallback (Tier 2) categorization path triggers.
+Real OCR (slice 2) populates this directly; CSV is the slice-1 bridge.
 
 ## Run the tests
 
 ```bash
 cd workspace/clients/brisken/automations/expense-reconciliation
-uv run --with 'pytest>=8.0' --with 'openpyxl>=3.1' pytest -v
+uv run --with 'pytest>=8.0' pytest -v
 ```
 
-Expected: 32 passed.
+Expected: 74 passed.
 
 ## Data we need from Chris (smallest viable set)
 
@@ -123,30 +282,38 @@ the next set of decisions.
 
 ## File layout
 
-```
+```text
 expense-reconciliation/
 ├── README.md                        # this file
-├── pyproject.toml                   # uv project, Python >= 3.12
+├── pyproject.toml                   # uv project, Python >= 3.12, hatchling build
 ├── .gitignore
 ├── src/
 │   └── expense_recon/
 │       ├── __init__.py
+│       ├── cli.py                   # entry point (expense-recon script)
+│       ├── categorize.py            # BLUEPRINT LD-1/LD-2 — STUB keyword classifier
 │       ├── matching/
 │       │   ├── __init__.py
-│       │   ├── types.py             # domain types (Transaction, Receipt, Match, …)
-│       │   └── deterministic.py     # v2 spec §15.1 engine
-│       └── ingest/
+│       │   ├── types.py             # Transaction, Receipt, LineItem, Categorization, …
+│       │   ├── deterministic.py     # v2 spec §15.1 engine
+│       │   └── judgment.py          # v2 spec §15.2 — STUB pending §38.2
+│       ├── ingest/
+│       │   ├── __init__.py
+│       │   ├── _common.py           # shared StatementParseError + parse_date/amount
+│       │   ├── statement_csv.py     # v2 spec §7.1 CSV parser
+│       │   ├── statement_xlsx.py    # v2 spec §7.1 Excel sibling
+│       │   └── receipts_csv.py      # slice-1 bridge (+ line_items JSON column)
+│       └── output/
 │           ├── __init__.py
-│           ├── _common.py           # shared StatementParseError + parse_date/amount
-│           ├── statement_csv.py     # v2 spec §7.1 CSV parser
-│           └── statement_xlsx.py    # v2 spec §7.1 Excel sibling
+│           └── report_xlsx.py       # Excel review report (5+N sheets, LD-3/LD-4)
 └── tests/
     ├── __init__.py
     ├── fixtures/
-    │   └── sample_amex_export.csv   # synthetic 7-row Amex shape
+    │   └── sample_amex_export.csv   # synthetic 7-row Amex shape (parser tests)
     ├── test_deterministic_matching.py  #  9 tests
     ├── test_statement_csv.py           #  9 tests
-    └── test_statement_xlsx.py          # 14 tests, openpyxl fixtures in-memory
+    ├── test_statement_xlsx.py          # 14 tests, openpyxl fixtures in-memory
+    └── test_cli_integration.py         # 13 tests, inline fixtures + LD-2/LD-3 assertions
 ```
 
 ## References

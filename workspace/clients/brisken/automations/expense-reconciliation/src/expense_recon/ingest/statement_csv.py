@@ -31,6 +31,7 @@ from ..matching.types import Transaction
 from ._common import (
     OPTIONAL_KEYS,
     REQUIRED_KEYS,
+    ParseIssue,
     StatementParseError,
     parse_amount,
     parse_date,
@@ -42,6 +43,7 @@ __all__ = [
     "REQUIRED_KEYS",
     "StatementParseError",
     "parse_statement_csv",
+    "parse_statement_csv_tolerant",
 ]
 
 
@@ -52,42 +54,41 @@ def parse_statement_csv(
     legal_entity_id: str,
     account_card_currency: str,
 ) -> list[Transaction]:
-    """Parse a CSV statement into a list of `Transaction` objects.
+    """Strict mode: raise on first row-level error.
 
-    Parameters
-    ----------
-    path
-        Path to the CSV file.
-    column_map
-        Logical field name -> source CSV column name. Required keys:
-        ``transaction_date``, ``amount``, ``vendor``. Optional keys:
-        ``posting_date``, ``transaction_currency``.
-    account_id
-        The bank/card account identifier this statement belongs to.
-    legal_entity_id
-        The legal entity that owns the account (v2 spec §4.2).
-    account_card_currency
-        Currency of the account/card per v2 spec §20 layer 2. Used as
-        the default `transaction_currency` when no per-row currency
-        column is mapped.
+    See `_common.py` module docstring for the header-vs-row error
+    distinction. This wrapper exists for backward compatibility;
+    new callers should use the tolerant variant.
+    """
+    transactions, issues = parse_statement_csv_tolerant(
+        path, column_map, account_id, legal_entity_id, account_card_currency
+    )
+    if issues:
+        raise issues[0].to_error()
+    return transactions
 
-    Returns
-    -------
-    list[Transaction]
 
-    Raises
-    ------
-    StatementParseError
-        On a missing required column-map key, a CSV missing a mapped
-        source column, or a malformed row. Carries ``.line_number``
-        for row-specific errors.
+def parse_statement_csv_tolerant(
+    path: str | Path,
+    column_map: Mapping[str, str],
+    account_id: str,
+    legal_entity_id: str,
+    account_card_currency: str,
+) -> tuple[list[Transaction], list[ParseIssue]]:
+    """Tolerant mode (ANNEALING B1): collect row-level errors, continue.
+
+    Header-level errors (missing required column-map key, CSV missing
+    a mapped source column, no header) still raise
+    `StatementParseError`. Row-level errors land in the returned
+    issues list with the source file basename + 1-indexed line number.
     """
     validate_required_map(column_map)
 
     path = Path(path)
+    file_name = path.name
     transactions: list[Transaction] = []
+    issues: list[ParseIssue] = []
 
-    # utf-8-sig handles Windows-exported CSVs that ship a BOM.
     with path.open("r", encoding="utf-8-sig", newline="") as fh:
         reader = csv.DictReader(fh)
         if reader.fieldnames is None:
@@ -102,7 +103,6 @@ def parse_statement_csv(
                     f"Available columns: {fieldnames}"
                 )
 
-        # csv.DictReader starts at line 2 (after the header).
         for row_index, row in enumerate(reader, start=2):
             if not any((v or "").strip() for v in row.values()):
                 continue  # blank row, common at EOF
@@ -124,9 +124,14 @@ def parse_statement_csv(
                     if raw_cur:
                         tx_currency = raw_cur.upper()
             except (KeyError, ValueError) as exc:
-                raise StatementParseError(
-                    f"Row {row_index}: {exc}", line_number=row_index
-                ) from exc
+                issues.append(
+                    ParseIssue(
+                        file_name=file_name,
+                        line_number=row_index,
+                        message=str(exc),
+                    )
+                )
+                continue
 
             transactions.append(
                 Transaction(
@@ -143,4 +148,4 @@ def parse_statement_csv(
                 )
             )
 
-    return transactions
+    return transactions, issues

@@ -1,0 +1,32 @@
+{
+  "_comment_": "Same as run.example.json but exercises the slice-2 LLM categorizer. Requires OPENAI_API_KEY env var. Without the env var the run fails clean with a ConfigError.",
+
+  "statement": {
+    "path": "statement.example.csv",
+    "account_id": "amex-9001",
+    "legal_entity_id": "brisken-llc",
+    "account_card_currency": "USD",
+    "_column_map_help": "Logical field -> source CSV/Excel column header.",
+    "column_map": {
+      "transaction_date": "Date",
+      "amount": "Amount",
+      "vendor": "Description"
+    }
+  },
+
+  "receipts": {
+    "path": "receipts.example.csv",
+    "default_currency": "USD"
+  },
+
+  "output": {
+    "path": "report-llm.xlsx"
+  },
+
+  "llm": {
+    "_help": "Slice 2: per-line LLM categorizer. Provider 'openai' only today (per the 2026-06-01 stack pivot from Anthropic). Model + api_key_env defaults shown. Omit this block to fall back to the keyword stub.",
+    "provider": "openai",
+    "model": "gpt-4o-mini",
+    "api_key_env": "OPENAI_API_KEY"
+  }
+}

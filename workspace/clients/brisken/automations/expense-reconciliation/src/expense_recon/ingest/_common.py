@@ -7,10 +7,25 @@ and the same date/amount tolerance rules (v2 spec §7.1).
 Row-number convention is identical across formats: header row is
 line 1, the first data row is line 2. `StatementParseError.line_number`
 points the caller at the offending row regardless of file format.
+
+Two parse modes per ANNEALING B1:
+
+* **Strict** — `parse_X(path, ...)` raises `StatementParseError` on
+  the first bad row. Backward-compatible with the slice-1 behavior;
+  used by tests that pin parser semantics.
+* **Tolerant** — `parse_X_tolerant(path, ...)` returns
+  `tuple[list[Obj], list[ParseIssue]]`. Header-level errors (missing
+  column, no header) still raise (nothing to recover). Row-level
+  errors (bad date, bad amount, dup id) land in the issues list and
+  the parser continues. The CLI uses tolerant mode and surfaces
+  issues on the Errors sheet — first real Brisken month is expected
+  to have at least one malformed row, and stack-tracing on row 5 of
+  500 would lose all the good data.
 """
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
@@ -30,6 +45,28 @@ class StatementParseError(ValueError):
     def __init__(self, message: str, line_number: int | None = None) -> None:
         super().__init__(message)
         self.line_number = line_number
+
+
+@dataclass(frozen=True)
+class ParseIssue:
+    """One row-level parse failure collected in tolerant mode.
+
+    `file_name` is the source-file basename (e.g., "receipts.csv");
+    the Errors sheet shows this so the user knows which file the
+    issue came from when a run ingests multiple files. `line_number`
+    follows the same convention as `StatementParseError.line_number`
+    (header is row 1, data starts at row 2).
+    """
+
+    file_name: str
+    line_number: int
+    message: str
+
+    def to_error(self) -> StatementParseError:
+        return StatementParseError(
+            f"{self.file_name} row {self.line_number}: {self.message}",
+            line_number=self.line_number,
+        )
 
 
 _DATE_FORMATS: tuple[str, ...] = ("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%Y/%m/%d")

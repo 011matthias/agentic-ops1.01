@@ -36,6 +36,7 @@ from ..matching.types import Transaction
 from ._common import (
     OPTIONAL_KEYS,
     REQUIRED_KEYS,
+    ParseIssue,
     StatementParseError,
     parse_amount,
     parse_date,
@@ -47,6 +48,7 @@ __all__ = [
     "REQUIRED_KEYS",
     "StatementParseError",
     "parse_statement_xlsx",
+    "parse_statement_xlsx_tolerant",
 ]
 
 
@@ -93,39 +95,34 @@ def parse_statement_xlsx(
     account_card_currency: str,
     sheet_name: str | None = None,
 ) -> list[Transaction]:
-    """Parse an Excel statement into a list of `Transaction` objects.
+    """Strict mode: raise on first row-level error.
 
-    Sibling to :func:`parse_statement_csv`; arguments and behavior are
-    identical except for `sheet_name`.
-
-    Parameters
-    ----------
-    path
-        Path to the .xlsx file.
-    column_map
-        Logical field name -> source column header (text in row 1).
-        Required keys: ``transaction_date``, ``amount``, ``vendor``.
-        Optional keys: ``posting_date``, ``transaction_currency``.
-    account_id, legal_entity_id, account_card_currency
-        Same meaning as in :func:`parse_statement_csv`.
-    sheet_name
-        Worksheet to read. Default reads the active sheet (typical
-        when banks export a single-sheet file).
-
-    Returns
-    -------
-    list[Transaction]
-
-    Raises
-    ------
-    StatementParseError
-        On a missing required column-map key, an .xlsx missing a
-        mapped source column, or a malformed row. Carries
-        ``.line_number`` for row-specific errors.
+    See `_common.py` module docstring for the header-vs-row error
+    distinction. Backward-compatible with slice-1 callers.
     """
+    transactions, issues = parse_statement_xlsx_tolerant(
+        path, column_map, account_id, legal_entity_id, account_card_currency, sheet_name
+    )
+    if issues:
+        raise issues[0].to_error()
+    return transactions
+
+
+def parse_statement_xlsx_tolerant(
+    path: str | Path,
+    column_map: Mapping[str, str],
+    account_id: str,
+    legal_entity_id: str,
+    account_card_currency: str,
+    sheet_name: str | None = None,
+) -> tuple[list[Transaction], list[ParseIssue]]:
+    """Tolerant mode (ANNEALING B1): collect row-level errors, continue."""
     validate_required_map(column_map)
 
     path = Path(path)
+    file_name = path.name
+    transactions: list[Transaction] = []
+    issues: list[ParseIssue] = []
     wb = load_workbook(filename=path, read_only=True, data_only=True)
     try:
         ws = wb[sheet_name] if sheet_name is not None else wb.active
@@ -162,7 +159,6 @@ def parse_statement_xlsx(
                     f"Available columns: {[h for h in headers if h]}"
                 )
 
-        transactions: list[Transaction] = []
         for row_index, row_values in enumerate(rows, start=2):
             mapped: dict[str, object] = {}
             for logical, source_col in column_map.items():
@@ -189,9 +185,14 @@ def parse_statement_xlsx(
                     if raw_cur:
                         tx_currency = raw_cur.upper()
             except (KeyError, ValueError) as exc:
-                raise StatementParseError(
-                    f"Row {row_index}: {exc}", line_number=row_index
-                ) from exc
+                issues.append(
+                    ParseIssue(
+                        file_name=file_name,
+                        line_number=row_index,
+                        message=str(exc),
+                    )
+                )
+                continue
 
             raw_row = dict(
                 zip(
@@ -216,4 +217,4 @@ def parse_statement_xlsx(
     finally:
         wb.close()
 
-    return transactions
+    return transactions, issues

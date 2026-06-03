@@ -6,7 +6,7 @@ read as structured columns with no interpretation
 (call-outcomes "C1 statements"); this is a tabular ingest, not a
 parsing problem.
 
-Two parsers, same interface, shared helpers:
+Two statement parsers, same interface, shared helpers:
 
 * :mod:`statement_csv` — `parse_statement_csv`
 * :mod:`statement_xlsx` — `parse_statement_xlsx`
@@ -16,6 +16,10 @@ Two parsers, same interface, shared helpers:
 Both parsers use the same column-map shape, the same error type, and
 the same 1-indexed row-number convention (header is row 1).
 
-Receipt ingest (mobile camera + browser upload) lives in a separate
-module added when the OCR component is wired (v2 spec §24).
+Receipt ingest:
+
+* :mod:`receipts_csv` — `parse_receipts_csv`: slice-1 bridge that
+  accepts already-extracted receipt rows. Real OCR / Claude-vision
+  extraction lands in slice 2 (v2 spec §24); the matcher contract
+  stays the same, only the source of `Receipt` objects changes.
 """
