@@ -19,7 +19,10 @@
   "enabledPlugins": {
     "productivity-suite@riccardovandra": true,
     "playground@claude-plugins-official": true,
-    "document-skills@anthropic-agent-skills": true
+    "document-skills@anthropic-agent-skills": true,
+    "planning-with-files@planning-with-files": true,
+    "voltagent-meta@voltagent-subagents": true,
+    "voltagent-research@voltagent-subagents": true
   },
   "hooks": {
     "PreCompact": [

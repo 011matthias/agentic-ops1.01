@@ -232,6 +232,48 @@ def send(subject: str, body: str) -> str:
         return f"RESEND_ERR {e} {detail.decode(errors='replace') if detail else ''}"
 
 
+def preflight() -> int:
+    """Precondition + connectivity check (exec-assistant blueprint element).
+
+    The silent-failure hole: a scheduled run with no key just printed NO_SEND
+    and nothing reached the inbox. This makes the preconditions explicit and
+    LOUD so a scheduler step can fail visibly BEFORE relying on delivery.
+    Run as: python3 tools/morning_briefing.py --preflight [recipient]
+    """
+    problems: list[str] = []
+    key = os.environ.get("RESEND_API_KEY")
+    to = (sys.argv[2] if len(sys.argv) > 2 else os.environ.get("BRIEFING_TO"))
+    if not key:
+        problems.append("RESEND_API_KEY not set in environment")
+    if not to:
+        problems.append("recipient not set (BRIEFING_TO env or argv[2])")
+    if key:
+        # A reachable+authed Resend returns 422 (validation) for an empty body.
+        # 401/403 means key/edge rejected; anything else means unreachable.
+        req = urllib.request.Request(
+            "https://api.resend.com/emails", data=b"{}",
+            headers={"Authorization": f"Bearer {key}",
+                     "Content-Type": "application/json",
+                     "User-Agent": "agentic-ops-morning-briefing/1.0"})
+        try:
+            urllib.request.urlopen(req, timeout=20)
+        except Exception as e:  # noqa: BLE001
+            code = getattr(e, "code", None)
+            if code in (401, 403):
+                problems.append(
+                    f"Resend rejected the key/edge (HTTP {code}) - check "
+                    "RESEND_API_KEY and that the User-Agent is set")
+            elif code not in (400, 404, 422):
+                problems.append(f"Resend unreachable: {e}")
+    if problems:
+        print("PREFLIGHT FAIL:")
+        for p in problems:
+            print(f"  - {p}")
+        return 1
+    print("PREFLIGHT OK: key present, recipient set, Resend reachable")
+    return 0
+
+
 def main() -> int:
     for stream in (sys.stdout, sys.stderr):
         try:
@@ -255,4 +297,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "--preflight":
+        raise SystemExit(preflight())
     raise SystemExit(main())

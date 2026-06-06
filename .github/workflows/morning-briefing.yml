@@ -1,0 +1,48 @@
+# Morning Briefing - reliable scheduler for tools/morning_briefing.py
+#
+# Why this exists: the briefing previously ran off a Claude scheduled routine.
+# Symptom reported: "no email arrives". Root-cause class: recurring Claude
+# routines auto-expire (7-day) and/or the routine's ephemeral environment had
+# no RESEND_API_KEY. A GitHub Actions cron does not expire and reads the key
+# from repo secrets, removing both failure modes.
+#
+# The script is stdlib-only (no pip install needed). The preflight step is the
+# exec-assistant "connectivity check, fail loud" element: the job goes RED in
+# the Actions UI if the key/recipient/Resend are misconfigured, instead of
+# silently no-op'ing.
+#
+# REQUIRED ONE-TIME SETUP (values are NOT in this public repo):
+#   gh secret set RESEND_API_KEY -R 011matthias/agentic-ops1.01   # paste re_... key
+#   gh variable set BRIEFING_TO  -R 011matthias/agentic-ops1.01 --body 'matneumann07@gmail.com'
+# Test it immediately after:  gh workflow run morning-briefing.yml -R 011matthias/agentic-ops1.01
+
+name: morning-briefing
+
+on:
+  schedule:
+    # 04:23 UTC daily (off-minute to dodge the :00 fleet stampede).
+    # GitHub cron is UTC: adjust if you want a different local landing time.
+    - cron: "23 4 * * *"
+  workflow_dispatch: {}   # manual run button + `gh workflow run`
+
+permissions:
+  contents: read
+
+concurrency:
+  group: morning-briefing
+  cancel-in-progress: false
+
+jobs:
+  briefing:
+    runs-on: ubuntu-latest
+    env:
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      BRIEFING_TO: ${{ vars.BRIEFING_TO }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preflight (fail loud before relying on delivery)
+        run: python3 tools/morning_briefing.py --preflight
+
+      - name: Send morning briefing
+        run: python3 tools/morning_briefing.py
