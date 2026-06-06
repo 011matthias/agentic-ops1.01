@@ -1,46 +1,116 @@
 # No Auto-Commit Gate (B6)
 
-**Hard constraint.** Never run a ship-class git or GitHub action
-without explicit user authorization in the current conversation.
-General autonomy grants, "ship-gate" reflexes from
-`rule_behaviors.md`, and post-edit momentum do NOT authorize commits,
-pushes, PRs, or merges. The user must explicitly order the action
-("commit this", "push", "open the PR", "merge", "ship it") OR
-pre-authorize a named scope for the session ("ship everything to PR
-today, I'll review at the end").
+**Hard constraint.** The git/GitHub ship chain runs automatically.
+Autonomy is keyed on **deterministic scope** and an **objective
+external signal**, never on the agent's judgment that a change is
+"good enough." Three bands:
+
+- **Autonomous** — feature-branch `git commit`, feature-branch
+  `git push`, and `gh pr create` run with no human order, once real
+  verification has passed.
+- **Auto-merge (CI-gated)** — `gh pr merge` runs automatically the
+  moment the target PR's CI is green. The gate decides on the
+  objective signal (`gh pr checks`), not on the agent asserting the
+  code is fine.
+- **Gated floor** — irreversible or outward-facing actions (direct
+  push-to-main, force push, commit-on-main, deploy commands,
+  tag / release, subtree push to client handoff repos, prod MCP
+  writes) need an explicit user order or a named session
+  pre-authorization. These never fire on their own.
+
+The model is automatic for the normal inner loop (commit → push →
+PR → merge) and stops only at the irreversible floor. The
+2026-05-26 incident was unverified work landing on main on the
+agent's say-so; keying the merge on the user's own CI closes that
+path while removing the per-step "ship it" tax.
 
 **Prototype carve-out.** Ship-class commands whose scope is 100%
-within `workspace/projects/local-web/**` bypass this gate
-automatically. These are preemptive local-business demo sites
-(prototype iteration, low blast radius, no production client data).
-The B6 incident on 2026-05-26 was on system/skill files, not
-prototype sites; gating prototype iteration creates friction without
-protecting against anything. Bypass is structural: the hook
-inspects `git diff --cached --name-only` (commit), the upstream
-diff (push), or the base-branch diff (PR) and allows when every
-touched file is under the prototype path. A mixed commit (one
+within `workspace/projects/local-web/**` bypass the gate entirely,
+including direct-to-main. Preemptive local-business demo sites:
+low blast radius, no production client data. Bypass is structural:
+the hook inspects `git diff --cached --name-only` (commit), the
+upstream diff (push), or the base-branch diff (PR) and allows when
+every touched file is under the prototype path. A mixed commit (one
 local-web file + one client file + a system rule edit) does NOT
-bypass — the gate fires normally. This carve-out is the source of
-truth; `no-auto-commit-gate.py` is the structural backstop.
+bypass. This carve-out is the source of truth;
+`no-auto-commit-gate.py` is the structural backstop.
 
-## What counts as ship-class (gated)
+## Band 1 — autonomous lane (no order needed)
 
-These require an explicit order or session pre-authorization:
+Runs without asking, PROVIDED the verification precondition below
+is met:
 
-- `git commit`, `git commit --amend`
-- `git push`, `git push --force`
-- `gh pr create`, `gh pr merge`, `gh pr close`
-- `gh issue close`, `gh issue comment` on shared issues
-- `git revert` on commits already on a shared branch
+- `git commit` / `git commit --amend` on a non-main feature branch
+- `git push` of a feature branch to its own remote (no `main` /
+  `master` refspec, no `--force` / `--force-with-lease`)
+- `gh pr create`
+
+**Verification precondition (agent-enforced, not hook-enforced).**
+Before using Band 1, the agent must have run real verification of
+the behavior it is shipping, not just a passing build: a named test
+(`uv run pytest ...`), a runtime check (triggered the webhook,
+fetched the URL for 200 + content), or a lint/validate pass
+appropriate to the artifact. "The build compiled" or "the file
+wrote" is NOT verification. The hook enforces the scope split; it
+cannot see whether you verified. Using the autonomous lane on
+unverified work is a friction event (`verification-theater`).
+
+## Band 2 — auto-merge, CI-gated
+
+`gh pr merge` runs automatically when the target PR's CI is green.
+The hook calls `gh pr checks` for the PR and:
+
+- **green** (all checks pass) → merge fires, no human order
+- **red / pending / undeterminable** → falls through to the floor:
+  allowed only on an explicit order ("merge anyway"), otherwise ASK
+
+CI is the objective signal that makes an autonomous merge-to-main
+safe: the repo's CI (`.github/workflows/ci.yml`) runs the platform
+type-check / lint / build, the spell check, the Playwright smoke
+suite, and the enforcement-hook pytest suite (`tools/tests`). A
+green PR has passed all of these. This is the realization of "a gate
+that decides autonomously whether something should be merged": it
+decides on the checks, not on the agent's opinion.
+
+The agent's role in Band 2 is to let CI run and merge on green
+(poll with `gh pr checks --watch` or re-check), not to ask the user
+to merge. Asking "want me to merge?" on a green PR is a deferral.
+
+## Band 3 — gated floor (explicit order required)
+
+These NEVER run autonomously, regardless of CI or verification
+state. They need an explicit order or a named session
+pre-authorization:
+
+- `git push` to `main` / `master`, or any `git push` while the
+  current branch IS main / master (bypasses the PR + CI gate; the
+  repo prohibits direct-to-main anyway)
+- `git push --force` / `--force-with-lease` (irreversible on the
+  remote)
+- `git commit` while on main / master
+- Any deploy command (`flyctl deploy`, `vercel deploy`,
+  `vercel-force-deploy.sh`, Railway deploy). Note: the normal
+  production deploy happens automatically when Vercel builds `main`
+  after an auto-merge; these explicit deploy commands are manual
+  overrides and stay gated.
 - `git tag`, `gh release create`
 - Subtree push to client handoff repos
-- Any deploy command (`flyctl deploy`, `vercel deploy`, `vercel-force-deploy.sh`, Railway deploy, etc.)
-- Hook / cron / routine creation that affects production state
-- MCP write calls that mutate shared resources (e.g. `scenarios_run` against production instances) — see also `rule_instantly_invasive.md` for the Instantly-specific equivalent
+- `gh pr close`, `gh issue close`, `gh issue comment` on shared
+  issues
+- `git revert` on commits already on a shared branch
+- MCP write calls that mutate shared resources (e.g.
+  `scenarios_run` against production instances) — see also
+  `rule_instantly_invasive.md` for the Instantly-specific equivalent
+
+Acceptable orders: "push", "force push", "deploy", "merge anyway",
+"land it", "ship it", or a named session-scoped pre-authorization
+("deploy to prod today, I'll watch it"). A session
+pre-authorization stands for that session's named scope ONLY; a new
+session resets to explicit-order-required.
 
 ## What is NOT ship-class (auto-runs)
 
-These need no explicit order under this rule:
+These need no order under this rule:
 
 - Local file edits (`Edit`, `Write`, `NotebookEdit`)
 - Reads, greps, globs
@@ -55,50 +125,63 @@ These need no explicit order under this rule:
 
 ## Required response protocol
 
-When the user gives an editing task that does NOT include an explicit
-ship order:
+When the user gives an editing task:
 
 1. Plan the work and write the code/edits.
-2. Make the local edits via `Edit` / `Write`.
-3. STOP at the staging boundary. Surface a one-line summary of what
-   changed (files touched, line counts).
-4. Wait for the user's explicit ship order. Acceptable orders:
-   "commit", "ship it", "push", "PR it", "merge", "land it", or a
-   named session-scoped pre-authorization.
-5. Only after explicit order: execute the ship chain (branch +
-   commit + push + PR + merge) as directed. If the user orders only
-   one step ("commit" but not "merge"), execute that step and stop
-   at the next ship boundary.
-
-If the user pre-authorizes a chain ("ship everything to PR today"),
-the authorization stands for that session's named scope ONLY. A new
-session resets to default (explicit order required per action).
+2. Run real verification of the behavior changed (Band 1
+   precondition). Name the test performed.
+3. If verification passed: run the chain autonomously — commit and
+   push the feature branch, open the PR (Band 1), then let CI run
+   and merge on green (Band 2). No "ship it" needed.
+4. STOP at the gated floor (Band 3): a deploy command, a force
+   push, a push-to-main, a tag/release, a client subtree push.
+   Surface the pending floor action and wait for the explicit order.
+5. If verification did NOT run, do not use Band 1 / Band 2; stop at
+   the staging boundary.
+6. If CI goes red, do not merge-anyway autonomously: surface the
+   failing checks and fix, or wait for an explicit "merge anyway".
 
 ## Overrides rule_behaviors ship-gate
 
 `rule_behaviors.md` says: *"Build passes → commit + push + PR +
-merge as ONE action. Never pause mid-chain."* That gate is overridden
-by THIS rule for ship-class actions. The auto-chain behavior remains
-valid ONLY when the user has explicitly ordered a chain ship in the
-current conversation.
+merge as ONE action. Never pause mid-chain."* This rule sharpens
+that: the chain runs as one autonomous action, but "build passes"
+is not the merge trigger; **CI green** is. The chain auto-runs
+commit → push → PR-open → (CI) → merge, and stops only at the
+gated floor (deploy / force / push-to-main / tag / client push).
 
 The *"ANTI-PATTERN: 'Should I merge?', 'Want me to push?'"* warning
-in `rule_behaviors.md` is NOT activated by an honest ship-gate check
-under this rule. Asking "ready to ship?" once after edits is the
-correct behavior, not a deferral, because the agent is required by
-this rule to surface the ship decision rather than assume it.
+applies in full to Bands 1–2: asking to commit, push, open a PR, or
+merge a green PR is a deferral. Surfacing a pending Band-3 floor
+action once is correct, not a deferral.
 
 ## Why
 
 User correction 2026-05-26 after PRs #57 and #58 auto-shipped to
 main without runtime verification (skil_web-build §3a integration +
 3 BRIEF back-fills). The skill changes passed `git commit` but the
-runtime behavior of the integrated skill on next invocation was
-unverified — build success was treated as proof of correctness, which
-is the verification-theater pattern called out in
-`rule_behaviors.md` Layer 2. The structural fix: make the commit
-boundary explicit at decision time rather than rely on per-session
-memory of a feedback rule.
+runtime behavior on next invocation was unverified; build success
+was treated as proof of correctness (verification theater per
+`rule_behaviors.md` Layer 2). The first fix was a flat gate: every
+ship-class action needed an explicit human order.
+
+Revised 2026-06-06, in two steps, on user direction ("I'd rather
+have an automated control gate that decides autonomously whether
+something should be committed / pushed / merged ... I want it to be
+automatic"):
+
+1. Tiered the gate so reversible feature-branch work (commit / push
+   / PR-open) runs autonomously and only main-landing / irreversible
+   work is gated.
+2. Made the merge automatic too, keyed on the objective CI signal
+   (`gh pr checks` green) rather than a human order. The flat gate
+   caught the 2026-05-26 incident at the wrong place (every commit)
+   and never required the verification that was the actual missing
+   piece. CI-gated auto-merge requires it structurally: a green PR
+   has passed the enforcement-hook pytest suite, the platform build,
+   and the smoke tests. The incident is still prevented — a red or
+   pending PR does NOT auto-merge, and direct push-to-main / force
+   push stay on the gated floor.
 
 This rule operationalizes [[feedback_no_auto_commit]] as a Layer 1
 structural gate (rule = fires at decision time) instead of a Layer 3
@@ -108,24 +191,34 @@ memory (depends on agent recall).
 
 Honored at decision time as a B-gate (B6). The structural backstop
 is `.claude/hooks/no-auto-commit-gate.py` (PreToolUse:Bash, wired
-in `tools/wire-hooks.py` as one of the 11 canonical hooks): it
-intercepts ship-class commands (git commit / push / tag / subtree
-push, gh pr create / merge / close, gh release create, flyctl /
-vercel / railway / vercel-force-deploy), scans the last 3 user
-turns of the transcript for an explicit ship order ("commit",
-"push", "ship it", "PR it", "merge", "land it", "deploy", "ship
-everything", etc.), and returns `permissionDecision: "ask"` with
-a plain-language B6-grounded reason if no authorization is found.
-The agent cannot bypass; the user authorizes via the permission
-prompt OR cancels. Built 2026-05-26 (Phase 6 of the Agent Teams
-series). Mirrors the `instantly-invasive-gate.py` always-ask
-pattern.
+in `tools/wire-hooks.py` as one of the canonical hooks). It:
 
-Edge: `git log`, `git status`, `git diff`, `git tag -l|--list`,
-and other read-class git commands are NOT ship-class and pass
-through silently. Smoke-test fixtures live in
-`tools/fixtures/no-auto-commit-gate/` (auth.jsonl + no-auth.jsonl)
-and the 5-test matrix is documented in the fixture README.
+1. Detects ship-class commands.
+2. Allows the prototype carve-out (100% local-web) silently.
+3. Classifies the band from the command + live current branch
+   (`git rev-parse --abbrev-ref HEAD`). Band 1 (feature-branch
+   commit / non-main non-force push / `gh pr create`) → allow.
+4. For `gh pr merge`, calls `ci_is_green()` (`gh pr checks`): green
+   → allow (Band 2); otherwise fall through.
+5. Gated floor + non-green merge → scan recent user turns for an
+   explicit order; allow if found, else `permissionDecision: "ask"`.
+
+The hook decides SCOPE deterministically and reads the CI signal; it
+does NOT and cannot verify behavior beyond what CI covers. The Band-1
+verification precondition is agent discipline plus the CI gate at
+merge. The agent cannot bypass the floor; the user authorizes via the
+permission prompt OR cancels. Mirrors the `instantly-invasive-gate.py`
+always-ask pattern. Built 2026-05-26 (Phase 6, Agent Teams series);
+tiered + auto-merge 2026-06-06.
+
+Edge cases: `git log`, `git status`, `git diff`, `git tag -l|--list`
+and other read-class git commands are NOT ship-class and pass through
+silently. Two env-var test seams force the branch and CI verdict for
+deterministic smoke tests, never set in production:
+`NO_AUTO_COMMIT_GATE_BRANCH` and `NO_AUTO_COMMIT_GATE_CI`. The pytest
+regression suite is `tools/tests/test_no_auto_commit_gate.py` (run by
+the CI `hooks` job); a human-readable matrix lives in
+`tools/fixtures/no-auto-commit-gate/README.md`.
 
 This rule + this hook together replace the memory-only fix
 ([[feedback_no_auto_commit]]) that demonstrably failed within
