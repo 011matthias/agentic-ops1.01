@@ -18,7 +18,7 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  contents: write
+  contents: write   # the agent commits + pushes its digest; also auths the git push via GITHUB_TOKEN
 
 concurrency:
   group: weekly-review
@@ -31,7 +31,7 @@ jobs:
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
       BRIEFING_TO: ${{ vars.BRIEFING_TO }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -44,6 +44,10 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Run without the Claude GitHub App: github_token is the documented
+          # alternative ("optional if using GitHub App"). Without one of the two,
+          # the action fails with "Claude Code is not installed on this repository".
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
             Execute the workflow defined in .claude/commands/comd_weekly-review.md
             for the current ISO week, end to end, unattended. Never ask
@@ -57,5 +61,6 @@ jobs:
             If nothing changed, skip the commit. Email delivery uses
             RESEND_API_KEY + BRIEFING_TO from the environment.
           claude_args: |
+            --model sonnet
             --max-turns 40
             --allowedTools "Bash,Read,Write,Edit,Glob,Grep"
