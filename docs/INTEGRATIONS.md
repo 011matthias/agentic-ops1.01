@@ -56,7 +56,11 @@ commit boundary; never auto-commit).
   appends to the session log + register, emails a digest, stops at staging.
 - `.claude/commands/comd_weekly-review.md` - Friday, unattended counterpart of
   `/comd_review` + `/comd_system-digest`. Writes `docs/digests/{YYYY}-W{WW}-review.md`,
-  emails a trimmed version.
+  emails a trimmed version. Its System Health section sources friction from
+  `tools/friction-watch.py --format json` (the canonical
+  recurrence/regression/fragile-memory-sprawl/staleness detector) instead of
+  re-deriving by hand, and names one `/comd_system-dev` candidate for the human.
+  Rule promotion stays human-gated (rule budget, dedup, B6). Wired 2026-06-06.
 - `tools/send_email.py` - reusable stdlib Resend sender for both (kept separate
   from `morning_briefing.py`, which stays self-contained for the bare CI sandbox).
 
