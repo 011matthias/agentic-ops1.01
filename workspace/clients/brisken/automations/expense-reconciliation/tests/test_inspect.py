@@ -87,7 +87,7 @@ def test_inspect_csv_end_to_end(tmp_path: Path):
 
 
 def test_inspect_xlsx_end_to_end(tmp_path: Path):
-    openpyxl = pytest.importorskip("openpyxl")
+    import openpyxl
     xlsx_path = tmp_path / "stmt.xlsx"
     wb = openpyxl.Workbook()
     ws = wb.active

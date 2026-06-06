@@ -125,6 +125,9 @@ platform/public/docs/*/.build-report.txt
 ~$*.xlsx
 **/~$*.xlsx
 
+# Local hours-tracking workbook (personal working data, not repo content)
+/workspace/hours-tracker.xlsx
+
 # Scheduled-tasks runtime lock
 .claude/scheduled_tasks.lock
 

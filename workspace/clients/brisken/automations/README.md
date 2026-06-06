@@ -1,8 +1,10 @@
-# Brisken — Make.com Scenarios
+# Brisken: Expense Reconciliation
 
-Scenarios are built and managed in the Make.com UI and via MCP tools.
-Exported blueprints are stored in `blueprints/` for version control.
+The active Brisken automation is the Python **expense-reconciliation** product in
+[`expense-reconciliation/`](expense-reconciliation/): a CLI with LLM categorization
+and an xlsx report, built and tested on UV.
 
-| Scenario ID | Name | Status | Make.com URL |
-|-------------|------|--------|--------------|
-| — | — | — | — |
+See [`expense-reconciliation/README.md`](expense-reconciliation/README.md) for build,
+test, and run instructions; spec history is in `../specs/`.
+
+No Make.com scenarios are used for this client.

@@ -46,7 +46,7 @@ Completed all 9 Phase 6 integration tests for the Herbox Order Approval Dashboar
 4. Restored original CustomerNumber (889) after test
 
 #### Test 9: Existing Dashboard Unchanged - PASSED
-1. Verified all 5 pages via HTTP Basic Auth (herbox/changeme):
+1. Verified all 5 pages via HTTP Basic Auth (herbox/REDACTED_SEE_DASHBOARD_PASSWORD_ENV):
    - `/` — HTTP 200, 18.5K chars, Orders nav present
    - `/logs` — HTTP 200, 25K chars, Orders nav present
    - `/settings` — HTTP 200, 16.5K chars, Orders nav present
@@ -154,16 +154,16 @@ Completed all 9 Phase 6 integration tests for the Herbox Order Approval Dashboar
 - Order Creator workflow: `8lcnLemNsBETASdU` (active)
 - n8n MCP server: `n8n-herbox`
 - Railway FastAPI URL: `https://herbox-automations-production.up.railway.app`
-- Railway Postgres public URL: `postgresql://postgres:SrvApTQHUUStgOewcuNXwCDTyRYbnrTm@gondola.proxy.rlwy.net:58773/railway`
+- Railway Postgres public URL: `postgresql://postgres:REDACTED_SEE_DATABASE_URL_ENV@gondola.proxy.rlwy.net:58773/railway`
 - n8n instance URL: `https://primary-production-ef56.up.railway.app`
 - Fortnox OAuth2 credential ID: `aHlEjdL3w6eDvn90`
-- Dashboard auth: HTTP Basic, username=herbox, password=changeme
+- Dashboard auth: HTTP Basic, username=herbox, password=REDACTED_SEE_DASHBOARD_PASSWORD_ENV
 
 ### Database Access
 ```bash
 uv run --with psycopg2-binary python3 -c "
 import psycopg2
-conn = psycopg2.connect('postgresql://postgres:SrvApTQHUUStgOewcuNXwCDTyRYbnrTm@gondola.proxy.rlwy.net:58773/railway')
+conn = psycopg2.connect('postgresql://postgres:REDACTED_SEE_DATABASE_URL_ENV@gondola.proxy.rlwy.net:58773/railway')
 cur = conn.cursor()
 cur.execute('SELECT id, customer_name, status FROM pending_orders')
 for r in cur.fetchall(): print(r)

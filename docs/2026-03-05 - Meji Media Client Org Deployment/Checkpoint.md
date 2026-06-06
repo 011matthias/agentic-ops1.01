@@ -119,7 +119,7 @@ Deployed all 3 Meji Media automations (A1 Enquiry Follow-Up, A2 Reply Detection,
 
 ### Reference Materials
 - A1 webhook: `https://hook.eu2.make.com/cva0g9j0ru2p9690nrxji8791grkhhya`
-- API token: `2dc52dfc-ed0c-4d7f-b9cc-bcb3b03e696a` (works for both eu1 and eu2)
+- API token: `<REDACTED: set MAKE_API_TOKEN env, never commit>` (works for both eu1 and eu2)
 - Deployment plan: `C:\Users\neuma\.claude\plans\snazzy-watching-emerson.md`
 
 ---

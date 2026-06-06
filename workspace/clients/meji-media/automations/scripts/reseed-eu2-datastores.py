@@ -12,12 +12,13 @@ Usage:
 """
 
 import json
+import os
 import sys
 
 import httpx
 
 ZONE = "eu2.make.com"
-TOKEN = "2dc52dfc-ed0c-4d7f-b9cc-bcb3b03e696a"
+TOKEN = os.environ["MAKE_API_TOKEN"]  # set MAKE_API_TOKEN in env; never hardcode
 PIPELINE_DS = 153173
 TEMPLATES_DS = 153175
 BASE = f"https://{ZONE}/api/v2"
