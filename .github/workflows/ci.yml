@@ -40,6 +40,10 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: '3.12'
+      - name: Ruff (real-bug ruleset)
+        run: uv run --no-project --with ruff ruff check tools .claude/hooks tools/tests
+      - name: tools/INDEX.md membership
+        run: uv run tools/check-index.py
       - name: Run enforcement-layer test suite
         run: uv run --no-project --with pytest pytest tools/tests
 
