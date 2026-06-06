@@ -33,8 +33,17 @@ impossible, still write the digest file and note "DELIVERY DEGRADED: {reason}".
 
 - `git log --since='7 days ago' --stat` — what shipped.
 - `docs/sessions/*.md` for the last 7 days — session focus, friction, autonomy.
-- `docs/friction-register.md` — rows added this week; group by type; flag any
-  `Regression? = Yes`.
+- **Friction signals (authoritative — do NOT re-derive by hand):** run
+  `uv run tools/friction-watch.py --format json` (the script is stdlib-only, so
+  `python3 tools/friction-watch.py --format json` works if uv is not on the
+  runner). This is the canonical recurrence / regression / fragile-memory-sprawl
+  / staleness detector. Parse its `signals` object — `concentration`
+  (`[type, count, [dates]]` for N+ same-type rows), `recurrence`
+  (`[type, snippet, count]` for a Resolved=Yes pattern that came back),
+  `memory_sprawl` (Fix=memory entries accumulating), `stale`
+  (`{date, client, type, age_days, desc}` for unresolved >7d) — plus
+  `unresolved_rows` / `total_rows`. Then open `docs/friction-register.md` only
+  to read the prose of the specific rows the signals point at.
 - `docs/*/Checkpoint.md` dated this week.
 - Each active client's `comms-log.md` — open loops, staleness.
 - Run the existing surfacing logic from `/comd_review` (patterns from logs) and
@@ -47,9 +56,21 @@ Write `docs/digests/{YYYY}-W{WW}-review.md` containing:
 **A. Week in review** — headline; what moved; what stuck; open loops; by the
 numbers (only queryable numbers, else TBD).
 
-**B. System health** — friction summary (counts by type, regressions called
-out), autonomy trend across the week's sessions, one concrete
-highest-leverage improvement (the `/comd_system-dev` candidate).
+**B. System health** — built FROM the friction-watch `signals` gathered in
+step 2, not re-derived: counts by type from `concentration`; every
+`recurrence` entry called out by name (a pattern that returned after
+Resolved=Yes is the highest-severity signal); the `memory_sprawl` count; the
+oldest 2-3 `stale` items by `age_days`; and the `unresolved_rows` total.
+Autonomy trend across the week's sessions. Then name the single
+highest-leverage `/comd_system-dev` candidate, chosen by this heuristic:
+prefer a `recurrence`, else the highest-count `concentration` whose register
+Fix column is `memory` (fragile recall, ripe for promotion to a structural
+rule or hook). Frame it as a candidate for the human to action by running
+`/comd_system-dev` — this agent surfaces the candidate; it never edits rules
+itself (rule budget, dedup, and B6 keep rule promotion human-gated). When
+quoting any register `desc` into the email, rewrite it in clean prose: the
+raw register text contains em-dashes and the digest must not, per
+`rule_human_communication.md`.
 
 **C. Client roundup** — per active client: status, staleness, the single next
 step. No drafted messages (see `feedback_no_unrequested_client_drafts`).
