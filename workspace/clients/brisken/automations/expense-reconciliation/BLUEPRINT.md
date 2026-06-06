@@ -173,7 +173,7 @@ explicit ship order).
 | Statement parser (CSV + Excel) | Done | `parse_statement_csv` / `parse_statement_xlsx`, 23 tests |
 | Deterministic matcher | Done | `match_month`, 9 tests, 5 outcome types, reconciliation invariant verified |
 | Receipts CSV ingest | Done | Slice-1 bridge; replaced by vision in slice 2 |
-| LLM judgment | Stub | `judge_fx_match` returns `[STUB]` reason; never auto-resolves |
+| LLM judgment | FX + ambiguous done | `judge_fx_match` (D1b) and `judge_ambiguous` (tie-break) both call the LLM when a client is wired (OpenAI); no-client path returns the `[STUB]` reason / leaves the tie. Never auto-resolves; both always require review and never drop a receipt. |
 | Excel review report | Done | 4 sheets: Summary / Matches / Needs Review / Unmatched |
 | CLI entry point | Done | `expense-recon --config run.json [--out report.xlsx]` |
 | Build system | Done | Hatchling + uv; `uv sync && uv run expense-recon` works |
@@ -218,8 +218,8 @@ get real Claude judgment instead of `[STUB]`.
 |---|---|---|
 | 2.1 | Anthropic client abstraction (`LLMClient` protocol) | `src/expense_recon/llm/client.py` |
 | 2.2 | Receipt vision pipeline — extracts header fields **AND `line_items: list[LineItem]`** per LD-2 | `src/expense_recon/ingest/receipts_vision.py` |
-| 2.3 | Real `judge_fx_match` body (Claude judgment call) | `src/expense_recon/matching/judgment.py` |
-| 2.4 | Real `judge_ambiguous` body | same |
+| 2.3 | Real `judge_fx_match` body (LLM judgment call) — **Done (D1b, OpenAI):** `LLMClient.judge_fx_match` + impls, FX-convert + same-purchase verdict, 8 tests, always review | `src/expense_recon/matching/judgment.py` |
+| 2.4 | Real `judge_ambiguous` body — **Done (2026-06-07):** LLM tie-break, pick annotated + promoted, all candidates kept (guarantee), 5 tests | same |
 | 2.5 | Cost / token tracking per run (covers OCR + judgment + categorization calls) | `src/expense_recon/llm/cost.py` |
 | 2.6 | Config schema extension (`llm:` block) | `cli.py` + JSON schema |
 | 2.7 | CLI receipt-source switch (CSV vs folder) | `cli.py` |

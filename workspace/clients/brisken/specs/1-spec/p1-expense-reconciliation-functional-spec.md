@@ -1174,6 +1174,20 @@ Phases revised to make multi-tenant + multi-entity + RBAC + single-store
 foundational, and to insert mobile capture before the screens that
 depend on it.
 
+> **Build-state note (2026-06-07, E4).** The phase numbers below are
+> the product-architecture order. The actual build runs slice-based and
+> deliberately front-loaded the **stack-independent value core** ahead
+> of Phase 0, per Dirk's 2026-05-25 "begin the build" directive (reduce
+> Chris's reconciliation grind first). Shipped and tested so far,
+> independent of the §38 stack decision: the deterministic matcher
+> (Phase 4 logic), CSV + Excel statement ingest (Phase 2 logic),
+> per-line-item LLM categorization, and the FX + ambiguous LLM judgment
+> layers, behind a single CLI that produces an Excel review report.
+> Phase 0 (multi-tenant DB, auth, RBAC) and the Zoho posting loop
+> remain gated, the former on §38, the latter on Zoho access. See
+> `automations/expense-reconciliation/BLUEPRINT.md` for the live slice
+> map.
+
 ### Phase 0 — Foundation (NEW)
 
 - Stack decision lands (per §38 research).

@@ -15,6 +15,42 @@ Trigger = the moment this becomes urgent enough to revisit.
 
 ---
 
+## Resolved 2026-06-07 — hardening + plumbing batch (no client input)
+
+Shipped without real data, all mock-tested (98/98 suite green). These
+items below are now done; their individual entries are superseded by
+this note.
+
+- **judge_ambiguous wired** (was BLUEPRINT 2.4 stub). LLM breaks ties
+  among candidate receipts; the pick is annotated + promoted to the
+  front, every candidate stays in the bucket (guarantee asserted in
+  `test_apply_ambiguous_judgment_promotes_pick_but_keeps_all`).
+  `LLMClient.judge_ambiguous` + OpenAI/Mock impls; `_apply_ambiguous_judgment`
+  in the CLI.
+- **C3 — structured logging.** `logging` across the CLI pipeline +
+  `--verbose` flag (DEBUG to stderr; quiet by default).
+- **A8 — `--explain` sheet.** Per-transaction outcome + confidence +
+  reason trail in the report. FX / ambiguous LLM reasoning now also
+  surfaces in the per-row Note.
+- **Zoho export skeleton (slice 4.6).** `output/zoho_export.py` —
+  journal-entry CSV in Zoho's column shape, N debits + 1 balancing
+  credit per matched tx, matches-only. Account names are placeholders
+  until chart-of-accounts ingest (4.1).
+- **E1 — report-writer unit tests** (`test_report_xlsx.py`).
+- **E2 — subprocess CLI test** (`test_cli_subprocess.py`).
+- **E5 — CI** (`.github/workflows/expense-recon-tests.yml`).
+- **E6 — `MatchOutcome` frozen.** Rebinding a bucket now raises; lists
+  still mutated in place (`outcome.judgment_required[:] = ...`).
+- **E7 — currency-layer clarity.** Docstrings on the three layers
+  (transaction / account-card / book) on `Transaction` + `Receipt`.
+- **E3 — README accuracy pass** (test counts, file layout, slice
+  status all current).
+
+Still gated on Chris's data / Zoho access: D2 vision OCR, the A-series
+matcher calibration (A1–A7), real-data validation, slice 4 posting.
+
+---
+
 ## What already works (do not regress)
 
 Brief deliberate list so annealing changes don't break what's clean.
@@ -355,17 +391,27 @@ OpenAI API ($0.0003 / 4-receipt run). Provider swap (e.g., back
 to Anthropic Vertex / Bedrock) = one new class implementing the
 same protocol; no other code changes.
 
-### D1b. FX judgment LLM call (still STUB)
+### ~~D1b. FX judgment LLM call~~
 
-**Where:** [`src/expense_recon/matching/judgment.py`](src/expense_recon/matching/judgment.py) `judge_fx_match`
-**Status:** Stubbed since slice 1; not yet swapped to LLMClient
-even though D1 is done. Same interface, narrower scope — the
-judgment client method (a `judge_fx_match(tx, receipt) -> Match`
-addition to LLMClient Protocol) is small and would land in ~30
-min. Deferred this session because no Brisken receipt to date
-has triggered an FX case to validate against.
-**Effort:** S
-**Trigger:** First Brisken month with a foreign-currency receipt.
+**Resolved 2026-06-06.** `judge_fx_match` now calls the LLM when a
+client is wired. Added `LLMClient.judge_fx_match` (provider-agnostic,
+primitive in / `FxJudgmentResult` out) + `OpenAIClient` impl
+(`_FX_JUDGMENT_PROMPT_TEMPLATE` + strict json_schema) +
+`MockLLMClient` impl (`fx_responses` queue + vendor-overlap default
+heuristic). The model FX-converts the receipt into the transaction
+currency and returns a same-purchase confidence + implied rate +
+converted amount; the Match surfaces all of it. Two invariants held:
+FX always `requires_review=True` (rate is approximate, §38-TBD; D2
+"review everything for the first months"), and the entry stays in
+`judgment_required` whatever the verdict (reconciliation guarantee).
+No-client path still returns the `[STUB]` Match (slice-1 contract
+preserved). CLI helper `_apply_judgment_stub` renamed
+`_apply_judgment` and threads the client. Verified by 8 tests in
+`tests/test_fx_judgment_llm.py` (82/82 suite green). NOT yet run
+against a live FX receipt — vision OCR (D2) is gated on Chris's data,
+so no real foreign-currency receipt has reached the matcher; the live
+prompt should be re-checked against the first real FX case.
+`judge_ambiguous` remains a stub (BLUEPRINT 2.4).
 
 ### D2. Receipt OCR pipeline replaces receipts_csv
 
@@ -469,7 +515,7 @@ adds LLM-touching code.
 
 ### E6. `MatchOutcome` mutability subtlety
 
-**Where:** [`src/expense_recon/cli.py`](src/expense_recon/cli.py) `_apply_judgment_stub` — replaces `outcome.judgment_required`
+**Where:** [`src/expense_recon/cli.py`](src/expense_recon/cli.py) `_apply_judgment` — replaces `outcome.judgment_required`
 **Symptom:** Works today because the LIST is replaced (not
 mutated in place) and `Match` is frozen. Next reader might try
 to mutate matches in place and break the invariant.
