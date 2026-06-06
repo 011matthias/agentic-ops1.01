@@ -34,8 +34,10 @@ What this slice does NOT do (deferred):
 - Receipt OCR / Claude-vision extraction — receipts come in already-
   extracted (slice 2 will swap `parse_receipts_csv` for a vision
   pipeline; nothing else here changes).
-- LLM judgment on FX / ambiguous cases — stubbed; the rows land in
-  Needs Review with the [STUB] reason.
+- FX judgment: real LLM call when the config has an `llm:` block
+  (D1b); the keyword/no-LLM path falls back to the [STUB] reason.
+  Either way every FX case lands in Needs Review. Ambiguous-candidate
+  judgment is still stubbed (BLUEPRINT 2.4).
 - Zoho journal-entry export — deferred until the review-report shape
   is validated against Chris's first real month.
 - Persistence / audit log / multi-tenant DB — slice 1 is a single
@@ -45,6 +47,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from pathlib import Path
 
@@ -59,9 +62,12 @@ from .ingest.statement_xlsx import parse_statement_xlsx_tolerant
 from .llm.client import LLMClient, OpenAIClient
 from .llm.cost import CostTracker
 from .matching.deterministic import match_month
-from .matching.judgment import judge_fx_match
-from .matching.types import MatchOutcome, Receipt, Transaction
+from .matching.judgment import judge_ambiguous, judge_fx_match
+from .matching.types import Match, MatchOutcome, Receipt, Transaction
 from .output.report_xlsx import write_report
+
+
+logger = logging.getLogger("expense_recon")
 
 
 class ConfigError(ValueError):
@@ -124,11 +130,16 @@ def _load_receipts(
     )
 
 
-def _apply_judgment_stub(outcome: MatchOutcome, tx_by_id, rec_by_id) -> None:
-    """Replace each judgment_required entry with the stub's verdict.
+def _apply_judgment(
+    outcome: MatchOutcome, tx_by_id, rec_by_id, client: LLMClient | None
+) -> None:
+    """Replace each judgment_required entry with the judgment verdict.
 
-    Today the stub returns the same Match flagged for review; this
-    keeps the call shape stable for slice 2 when Claude is wired in.
+    With an `LLMClient`, every FX case gets a real model judgment
+    (D1b); without one, `judge_fx_match` returns the stub Match. Either
+    way the entry stays in `judgment_required` with
+    `requires_review=True` — the reconciliation guarantee holds and
+    Chris reviews every FX case (call-outcomes D2).
     """
     if not outcome.judgment_required:
         return
@@ -139,8 +150,40 @@ def _apply_judgment_stub(outcome: MatchOutcome, tx_by_id, rec_by_id) -> None:
         if tx is None or rec is None:
             judged.append(m)
             continue
-        judged.append(judge_fx_match(tx, rec))
-    outcome.judgment_required = judged
+        judged.append(judge_fx_match(tx, rec, client=client))
+    # In-place: MatchOutcome is frozen (E6); rebinding the attribute
+    # would raise. Slice-assignment revises the same list object.
+    outcome.judgment_required[:] = judged
+
+
+def _apply_ambiguous_judgment(
+    outcome: MatchOutcome, tx_by_id, rec_by_id, client: LLMClient | None
+) -> None:
+    """Ask the LLM to break each ambiguous tie (D-series, judge_ambiguous).
+
+    The model's pick is promoted to the front of that transaction's
+    candidate group and annotated; every candidate stays in the bucket
+    so no receipt is silently dropped (reconciliation guarantee). No-op
+    without a client — the tie stands for human review.
+    """
+    if client is None or not outcome.ambiguous:
+        return
+
+    groups: dict[str, list[Match]] = {}
+    for m in outcome.ambiguous:
+        groups.setdefault(m.transaction_id, []).append(m)
+
+    rebuilt: list[Match] = []
+    for tx_id, group in groups.items():
+        tx = tx_by_id.get(tx_id)
+        pick = judge_ambiguous(tx, group, rec_by_id, client=client) if tx else None
+        if pick is None:
+            rebuilt.extend(group)
+            continue
+        others = [m for m in group if m.document_id != pick.document_id]
+        rebuilt.append(pick)
+        rebuilt.extend(others)
+    outcome.ambiguous[:] = rebuilt
 
 
 def run(
@@ -148,6 +191,7 @@ def run(
     out_override: Path | None = None,
     *,
     dry_run: bool = False,
+    explain: bool = False,
 ) -> Path | None:
     """Execute the reconciliation pipeline.
 
@@ -161,28 +205,52 @@ def run(
 
     cfg = json.loads(config_path.read_text(encoding="utf-8"))
     config_dir = config_path.parent
+    logger.info("run started: config=%s", config_path)
 
     transactions, stmt_issues = _load_statement(cfg, config_dir)
     receipts, receipt_issues = _load_receipts(
         cfg, config_dir, legal_entity_id=cfg["statement"]["legal_entity_id"]
+    )
+    logger.info(
+        "ingested %d transactions, %d receipts", len(transactions), len(receipts)
     )
 
     parse_errors: list[tuple[str, int, str]] = [
         (issue.file_name, issue.line_number, issue.message)
         for issue in (*stmt_issues, *receipt_issues)
     ]
+    if parse_errors:
+        logger.warning("%d parse error(s) — see Errors sheet", len(parse_errors))
+        for file_name, line_no, msg in parse_errors:
+            logger.debug("parse error %s:%s %s", file_name, line_no, msg)
 
     llm_client, cost_tracker = _build_llm_client(cfg)
+    logger.info("LLM client: %s", "enabled" if llm_client else "none (keyword stub)")
 
     # BLUEPRINT LD-2: categorize per line item BEFORE matching so the
     # report writer sees Tier 1/2/3 sources on every receipt's items.
     receipts = categorize_receipts(receipts, client=llm_client)
 
     outcome = match_month(transactions, receipts)
+    logger.info(
+        "matched=%d, judgment=%d, ambiguous=%d, unmatched_tx=%d, unmatched_rec=%d",
+        len(outcome.matches),
+        len(outcome.judgment_required),
+        len(outcome.ambiguous),
+        len(outcome.unmatched_transactions),
+        len(outcome.unmatched_receipts),
+    )
 
     tx_by_id = {tx.transaction_id: tx for tx in transactions}
     rec_by_id = {r.document_id: r for r in receipts}
-    _apply_judgment_stub(outcome, tx_by_id, rec_by_id)
+    _apply_judgment(outcome, tx_by_id, rec_by_id, llm_client)
+    _apply_ambiguous_judgment(outcome, tx_by_id, rec_by_id, llm_client)
+    if cost_tracker and cost_tracker.call_count:
+        logger.info(
+            "LLM: %d call(s), est. $%.4f",
+            cost_tracker.call_count,
+            cost_tracker.total_cost_usd,
+        )
 
     if dry_run:
         _print_dry_run_summary(
@@ -200,6 +268,7 @@ def run(
         out_path,
         parse_errors=parse_errors,
         llm_cost=cost_tracker.total_cost_usd if cost_tracker else None,
+        explain=explain,
     )
 
 
@@ -261,7 +330,7 @@ def _print_dry_run_summary(
     n_unmatched = len(outcome.unmatched_transactions)
     match_rate = (n_matched / n_tx * 100) if n_tx else 0.0
 
-    print("DRY RUN — no xlsx written")
+    print("DRY RUN: no xlsx written")
     print(f"  Transactions: {n_tx}")
     print(f"  Receipts:     {n_rec}")
     print(f"  Matched:      {n_matched}  ({match_rate:.1f}%)")
@@ -297,10 +366,26 @@ def main(argv: list[str] | None = None) -> int:
         "--dry-run", action="store_true",
         help="Print Summary counts to stdout, skip xlsx write (ANNEALING B4).",
     )
+    parser.add_argument(
+        "--verbose", "-v", action="store_true",
+        help="DEBUG-level pipeline logging to stderr (C3). Default is quiet.",
+    )
+    parser.add_argument(
+        "--explain", action="store_true",
+        help="Append an Explain sheet: per-transaction outcome + reason (A8).",
+    )
     args = parser.parse_args(argv)
 
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.WARNING,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        stream=sys.stderr,
+    )
+
     try:
-        report_path = run(args.config, args.out, dry_run=args.dry_run)
+        report_path = run(
+            args.config, args.out, dry_run=args.dry_run, explain=args.explain
+        )
     except ConfigError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

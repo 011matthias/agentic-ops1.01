@@ -64,10 +64,14 @@ is provider-agnostic; swap class to swap provider.
       gpt-4o vision call on receipt images → structured `Receipt`
       with line_items. Deferred until Chris's first receipt folder
       lands so the vision prompt can be tuned against real shapes.
-- [ ] Real LLM swap for FX judgment (`judge_fx_match`). Stub still in
-      place; add `judge_fx_match(tx, receipt)` method to `LLMClient`
-      protocol + OpenAI implementation. ~30 min when first FX case
-      hits.
+- [x] Real LLM swap for FX judgment (`judge_fx_match`) — **done
+      (D1b, 2026-06-06).** `LLMClient.judge_fx_match` + OpenAI and Mock
+      implementations; the model FX-converts the receipt into the
+      transaction currency and returns a same-purchase confidence +
+      implied rate. Always routes to review; no-client path keeps the
+      `[STUB]` Match. 8 tests in `test_fx_judgment_llm.py`. Not yet run
+      against a live FX receipt (gated on Chris's data via Slice 2 part
+      2).
 
 ---
 
@@ -85,12 +89,15 @@ deferred; this is one Python process per reconciliation run.
     Real OCR / Claude-vision extraction lands in slice 2; matcher
     contract stays identical, only this function gets swapped.
 - [x] LLM judgment layer ([`src/expense_recon/matching/judgment.py`](src/expense_recon/matching/judgment.py))
-  - **Stub**: `judge_fx_match` and `judge_ambiguous` return placeholder
-    Match objects flagged for human review. Reason carries `[STUB]`
-    prefix. Slice 2 wires the real Claude call when API access to
-    Brisken's Pro subscription is provisioned (v2 spec §38.2).
-  - Reconciliation guarantee preserved: stub never silently auto-resolves
-    FX / ambiguous cases.
+  - **`judge_fx_match`: wired (D1b).** With an `LLMClient` it returns a
+    real model verdict (same-purchase confidence + implied rate +
+    converted amount). With no client it returns the `[STUB]` Match.
+    `judge_ambiguous` is now wired too: the LLM breaks ties among
+    candidates, the pick is annotated and promoted to the front, but
+    every candidate stays in the bucket (no receipt dropped).
+  - Reconciliation guarantee preserved: FX entries always carry
+    `requires_review=True` and stay in `judgment_required` whatever the
+    verdict; nothing is auto-resolved or silently dropped.
 - [x] Excel report writer ([`src/expense_recon/output/report_xlsx.py`](src/expense_recon/output/report_xlsx.py))
   - Four sheets, fixed order: **Summary** (counts, % match rate,
     invariant check), **Matches** (EXACT green / PROBABLE yellow),
@@ -156,26 +163,27 @@ until real Chris data shows which one bites first.
   - Bool cells in the amount column rejected explicitly (defends
     against the `bool` ⊂ `int` Python quirk).
 
-**Tests:** 74 passing across the matching engine, both parsers, the
-keyword + LLM categorizers, the inspect heuristic, the report writer,
-the cost tracker, and the end-to-end CLI (see `tests/`).
+**Tests:** 98 passing across the matching engine, both parsers, the
+keyword + LLM categorizers, the FX + ambiguous judgment layers, the
+inspect heuristic, the report writer (incl. the `--explain` sheet),
+the Zoho export skeleton, the cost tracker, and the end-to-end CLI
+both in-process and via subprocess (see `tests/`).
 The CLI tests write inline statement + receipts fixtures into
 `tmp_path`, run the full pipeline, open the resulting xlsx, and
 assert the LD-2/LD-3/LD-4 contracts (per-line categorization,
 5+N sheet structure, three-tier source coloring, Amazon multi-line
-receipt → 3 distinct rows, vendor-fallback marking, FX-stub never
-auto-resolves) AND the B1 tolerant-parsing flow (bad rows land in
+receipt → 3 distinct rows, vendor-fallback marking, FX always
+routed to review) AND the B1 tolerant-parsing flow (bad rows land in
 the Errors sheet without aborting the run, surrounding good rows
 still reconcile) AND the B4 dry-run flow (Summary to stdout, no
 xlsx written).
 
 **Still to do:**
 
-- [ ] Slice 2: receipt OCR / Claude-vision extraction (swap
+- [ ] Slice 2: receipt OCR / vision extraction (swap
       `parse_receipts_csv` for vision pipeline).
-- [ ] Slice 2: real LLM judgment call (swap `judge_fx_match` /
-      `judge_ambiguous` stubs for Claude). Gated on Anthropic API
-      access to Brisken's Pro subscription (v2 spec §38.2).
+- [x] Slice 2: real `judge_ambiguous` LLM call — done (2026-06-07). FX
+      (`judge_fx_match`, D1b) and ambiguous tie-break both wired.
 - [ ] Real-data validation against a Chris-supplied month.
 - [ ] Annealing items #1–#3 above (matcher quality), prioritized by
       what bites first on Chris's real data.
@@ -240,7 +248,7 @@ cd workspace/clients/brisken/automations/expense-reconciliation
 uv run --with 'pytest>=8.0' pytest -v
 ```
 
-Expected: 74 passed.
+Expected: 98 passed.
 
 ## Data we need from Chris (smallest viable set)
 
@@ -291,12 +299,12 @@ expense-reconciliation/
 │   └── expense_recon/
 │       ├── __init__.py
 │       ├── cli.py                   # entry point (expense-recon script)
-│       ├── categorize.py            # BLUEPRINT LD-1/LD-2 — STUB keyword classifier
+│       ├── categorize.py            # BLUEPRINT LD-1/LD-2 — LLM + keyword-stub classifier
 │       ├── matching/
 │       │   ├── __init__.py
 │       │   ├── types.py             # Transaction, Receipt, LineItem, Categorization, …
 │       │   ├── deterministic.py     # v2 spec §15.1 engine
-│       │   └── judgment.py          # v2 spec §15.2 — STUB pending §38.2
+│       │   └── judgment.py          # v2 spec §15.2 — FX judgment via LLM (D1b); ambiguous still stub
 │       ├── ingest/
 │       │   ├── __init__.py
 │       │   ├── _common.py           # shared StatementParseError + parse_date/amount
@@ -305,7 +313,8 @@ expense-reconciliation/
 │       │   └── receipts_csv.py      # slice-1 bridge (+ line_items JSON column)
 │       └── output/
 │           ├── __init__.py
-│           └── report_xlsx.py       # Excel review report (5+N sheets, LD-3/LD-4)
+│           ├── report_xlsx.py       # Excel review report (5+N sheets, LD-3/LD-4, --explain)
+│           └── zoho_export.py       # Zoho journal-entry CSV skeleton (slice 4.6)
 └── tests/
     ├── __init__.py
     ├── fixtures/
@@ -313,7 +322,13 @@ expense-reconciliation/
     ├── test_deterministic_matching.py  #  9 tests
     ├── test_statement_csv.py           #  9 tests
     ├── test_statement_xlsx.py          # 14 tests, openpyxl fixtures in-memory
-    └── test_cli_integration.py         # 13 tests, inline fixtures + LD-2/LD-3 assertions
+    ├── test_cli_integration.py         # 16 tests, inline fixtures + LD-2/LD-3 assertions
+    ├── test_categorize_llm.py          # 14 tests, LLM-path categorizer + cost tracker
+    ├── test_inspect.py                 # 12 tests, column-map heuristic guesser
+    ├── test_fx_judgment_llm.py         # 13 tests, FX (D1b) + ambiguous judgment + guarantee
+    ├── test_report_xlsx.py             #  4 tests, report writer + --explain sheet (E1/A8)
+    ├── test_zoho_export.py             #  4 tests, Zoho journal-entry CSV (slice 4.6)
+    └── test_cli_subprocess.py          #  3 tests, entry point via subprocess (E2)
 ```
 
 ## References

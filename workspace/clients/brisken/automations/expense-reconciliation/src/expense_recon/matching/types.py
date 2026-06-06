@@ -106,7 +106,20 @@ class LineItem:
 
 @dataclass(frozen=True)
 class Transaction:
-    """A line on a card / bank statement (v2 spec §23.8)."""
+    """A line on a card / bank statement (v2 spec §23.8).
+
+    Currency layers (v2 spec §20, three distinct concepts — E7):
+
+    * `transaction_currency` — what THIS transaction posted in. Usually
+      the card currency, but for a foreign purchase it is the merchant's
+      currency. This is the layer the matcher compares against a
+      receipt's `detected_currency`; a mismatch routes to FX judgment.
+    * `account_card_currency` — the card / account's own currency (the
+      EUR card, the USD card). Stable across the account's transactions.
+    * book / legal-entity currency — NOT stored here; it is fixed per
+      legal entity and lives at the entity level (§20). Reporting
+      converts into it; matching never uses it.
+    """
 
     transaction_id: str
     legal_entity_id: str
@@ -114,8 +127,8 @@ class Transaction:
     transaction_date: date
     posting_date: date | None
     amount: Decimal
-    transaction_currency: str       # currency the transaction posted in (§20)
-    account_card_currency: str      # the card / account's currency (§20)
+    transaction_currency: str       # layer 1 — what this transaction posted in (§20)
+    account_card_currency: str      # layer 2 — the card / account currency (§20)
     vendor_from_statement: str
     raw_text: str = ""
 
@@ -138,7 +151,7 @@ class Receipt:
     legal_entity_id: str
     detected_date: date | None
     detected_total: Decimal | None
-    detected_currency: str | None
+    detected_currency: str | None   # compared against tx.transaction_currency (layer 1, §20); mismatch → FX judgment
     detected_vendor: str | None
     detected_reference: str | None = None
     ocr_text: str = ""
@@ -157,7 +170,7 @@ class Match:
     requires_review: bool = False
 
 
-@dataclass
+@dataclass(frozen=True)
 class MatchOutcome:
     """The result of running the matcher across a month of data.
 
@@ -166,6 +179,13 @@ class MatchOutcome:
     glance: every transaction either has a match, is in
     `unmatched_transactions`, or is in `judgment_required`. Nothing
     is silently dropped.
+
+    Frozen (E6): the dataclass is immutable so a consumer cannot
+    accidentally rebind a bucket (`outcome.matches = [...]`) and break
+    the invariant. The lists themselves are still mutable — populate
+    and revise them in place (`.append()`, `.extend()`, slice-assign
+    `outcome.judgment_required[:] = judged`), never by reattaching a
+    new list to the attribute.
     """
 
     matches: list[Match] = field(default_factory=list)

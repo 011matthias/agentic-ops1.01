@@ -1,0 +1,27 @@
+name: expense-recon tests
+
+# Brisken expense-reconciliation test gate (ANNEALING E5).
+# Runs the suite on any change under the automation's folder so a
+# regression is caught at PR time, not after merge.
+
+on:
+  pull_request:
+    paths:
+      - "workspace/clients/brisken/automations/expense-reconciliation/**"
+  push:
+    branches: [main]
+    paths:
+      - "workspace/clients/brisken/automations/expense-reconciliation/**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: workspace/clients/brisken/automations/expense-reconciliation
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Run tests
+        run: uv run --with 'pytest>=8.0' pytest -q
