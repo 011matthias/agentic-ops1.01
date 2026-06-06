@@ -25,8 +25,7 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  contents: write   # the agent commits + pushes its capture
-  id-token: write   # claude-code-action mints a GitHub App token via OIDC
+  contents: write   # the agent commits + pushes its capture; also auths the git push via GITHUB_TOKEN
 
 concurrency:
   group: eod-capture
@@ -52,6 +51,10 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Run without the Claude GitHub App: github_token is the documented
+          # alternative ("optional if using GitHub App"). Without one of the two,
+          # the action fails with "Claude Code is not installed on this repository".
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
             Execute the workflow defined in .claude/commands/comd_eod-capture.md
             for today, end to end, unattended. Never ask questions; flag in the
