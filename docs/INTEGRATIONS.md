@@ -26,15 +26,16 @@ and/or their ephemeral environment had no `RESEND_API_KEY`. The old
   expire, proper secret store) runs preflight then the briefing daily. Manual
   run via `workflow_dispatch`.
 
-**USER ACTION (required - I cannot set these; the repo is public and I do not
-hold the key value):**
-```bash
-gh secret set RESEND_API_KEY -R 011matthias/agentic-ops1.01      # paste the re_... key
-gh variable set BRIEFING_TO  -R 011matthias/agentic-ops1.01 --body 'matneumann07@gmail.com'
-gh workflow run morning-briefing.yml -R 011matthias/agentic-ops1.01   # smoke test
-```
-Then retire the dead Claude routine (`trig_015ZoMm18Evyj3PGfUPe7tC3`) via the
-`/schedule` skill so the two mechanisms do not double-fire.
+**DONE 2026-06-06.** Key fetched from the old routine, `RESEND_API_KEY` secret +
+`BRIEFING_TO` variable set, workflow merged to main and run:
+`PREFLIGHT OK` -> `RESEND_OK {"id":"7523d32e-..."}`, real email sent. The old
+routine `trig_015ZoMm18Evyj3PGfUPe7tC3` is DISABLED (not deleted; the skill
+cannot delete) so the two do not double-fire.
+
+Corrected diagnosis: the old routine was NOT expired. It fired daily with a
+valid key; its remote sandbox just could not complete the send. Same key+script
+deliver fine locally and from an Actions runner. (Key transited the session
+transcript while wiring the secret; rotate at resend.com if needed.)
 
 Note: the Resend sender is the sandbox `onboarding@resend.dev`, which only
 delivers to the Resend account owner address. To send elsewhere, verify a
@@ -61,13 +62,24 @@ commit boundary; never auto-commit).
 
 **Both are autonomous: they NEVER ask a question; they flag in the digest.**
 
-**SCHEDULING (B6-gated routine creation - needs an explicit owner order before I
-create it).** These need Claude reasoning, so they run via the `/schedule`
-skill (remote routines), not GitHub Actions. Proposed:
-- EOD capture: weekday ~21:30 local, prompt `/comd_eod-capture`
-- Weekly review: Friday ~16:30 local, prompt `/comd_weekly-review`
-The routine environment must carry `RESEND_API_KEY` + `BRIEFING_TO` for the
-email step; the file writes happen regardless.
+**SCHEDULING - decided 2026-06-06: GitHub Actions + claude-code-action** (not
+remote routines; remote routines cannot push to this repo because GitHub is not
+connected, so their captures could not persist). Built:
+- `.github/workflows/eod-capture.yml` - weekdays 19:33 UTC (~21:33 Berlin)
+- `.github/workflows/weekly-review.yml` - Friday 14:33 UTC (~16:33 Berlin)
+
+Each checks out the repo, runs its command via `anthropics/claude-code-action`,
+and (B6 relaxed for these unattended agents by owner authorization) commits +
+pushes the capture to main via `GITHUB_TOKEN`. Interactive command runs still
+stop at the boundary.
+
+**USER ACTION:** `gh secret set ANTHROPIC_API_KEY -R 011matthias/agentic-ops1.01`
+(paste an `sk-ant-...` key). RESEND + BRIEFING_TO are already set. Then smoke-test:
+`gh workflow run eod-capture.yml -R 011matthias/agentic-ops1.01`. Confirm the
+`anthropics/claude-code-action` version/inputs on first run (could not re-fetch
+the live action spec at build time due to a transient network failure). If main
+has branch protection that blocks the bot push, switch the push target to a
+`automation/captures` branch.
 
 ---
 
@@ -128,8 +140,10 @@ view is their lightweight lessons-capture format for the EOD-capture agent.
 
 ## Activation checklist (owner)
 
-- [ ] Set `RESEND_API_KEY` secret + `BRIEFING_TO` var on the repo, smoke-test the workflow (stream 1)
-- [ ] Retire the dead Claude briefing routine (stream 1)
-- [ ] Authorize creating the two `/schedule` routines for EOD + weekly (stream 2)
+- [x] Briefing: secret + variable set, workflow merged + verified (RESEND_OK), old routine disabled (stream 1)
+- [x] exec-assistant commands + send_email merged; EOD/weekly Actions workflows built (stream 2)
+- [x] Plugin marketplaces registered + enabled in settings.json (streams 3, 4)
+- [ ] **Set `ANTHROPIC_API_KEY` repo secret**, then smoke-test `eod-capture.yml` (stream 2)
 - [ ] Restart Claude Code to load the two new plugin marketplaces (streams 3, 4)
-- [ ] Ship: review the staged diff and give the commit order (B6)
+- [ ] Optional: rotate the Resend key (it transited this session's transcript)
+- [ ] Branch hygiene: you are on `system/exec-assistant-integrations`; stash the brisken changes and switch back to `system/no-auto-commit-prototype-carveout` when ready

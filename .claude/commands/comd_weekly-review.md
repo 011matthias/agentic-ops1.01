@@ -14,6 +14,9 @@ draft instead of building the review from scratch.
 - **Autonomous.** No human present. NEVER ask a question. Flag, do not ask.
 - **B6 commit boundary (hard).** Write the digest file, then STOP. Do NOT
   commit / push / PR. See `rule_no_auto_commit.md`.
+  *Exception:* the unattended `.github/workflows/weekly-review.yml` run is granted
+  explicit commit+push authority by owner authorization (2026-06-06); that grant
+  lives in the workflow prompt, not here. Interactive runs still stop.
 - **No file bloat.** One digest file per week under `docs/digests/`. Reuse, do
   not scatter. See `rule_no_file_bloat.md`.
 - **Voice.** Human-facing prose inherits `rule_human_communication.md`: no
