@@ -1,0 +1,67 @@
+# EOD Capture - scheduled exec-assistant agent (runs /comd_eod-capture)
+#
+# Why GitHub Actions (not a remote Claude routine): remote routines can't push
+# to this repo (GitHub not connected), so their captures can't persist. An
+# Actions runner pushes via GITHUB_TOKEN, so the nightly capture lands in the
+# repo. This is the same robust path that fixed the morning briefing.
+#
+# B6 NOTE: this agent AUTO-COMMITS its own captures. That relaxes
+# rule_no_auto_commit.md for THIS scheduled agent only, by explicit owner
+# authorization (2026-06-06). Interactive `/comd_eod-capture` still stops at the
+# commit boundary; only this unattended workflow commits.
+#
+# REQUIRED ONE-TIME SETUP:
+#   gh secret set ANTHROPIC_API_KEY -R 011matthias/agentic-ops1.01   # paste sk-ant-... key
+#   (RESEND_API_KEY secret + BRIEFING_TO variable already set for the briefing.)
+# Confirm the action version/inputs below against
+# https://github.com/anthropics/claude-code-action before the first real run.
+
+name: eod-capture
+
+on:
+  schedule:
+    # 19:33 UTC weekdays = ~21:33 Europe/Berlin (CEST). Off-minute on purpose.
+    - cron: "33 19 * * 1-5"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write   # the agent commits + pushes its capture
+
+concurrency:
+  group: eod-capture
+  cancel-in-progress: false
+
+jobs:
+  eod:
+    runs-on: ubuntu-latest
+    env:
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      BRIEFING_TO: ${{ vars.BRIEFING_TO }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "eod-capture-bot"
+          git config user.email "no-reply@unpauseai.com"
+
+      - name: Run EOD capture
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Execute the workflow defined in .claude/commands/comd_eod-capture.md
+            for today, end to end, unattended. Never ask questions; flag in the
+            digest instead.
+
+            COMMIT AUTHORIZED FOR THIS RUN ONLY: you are the scheduled EOD agent.
+            rule_no_auto_commit.md (B6) is relaxed for this unattended run by
+            owner authorization (2026-06-06). After writing the state files,
+            run: git add -A && git commit -m "eod: $(date +%F) capture" && git push origin HEAD:main
+            If nothing changed, skip the commit. Email delivery uses
+            RESEND_API_KEY + BRIEFING_TO from the environment.
+          claude_args: |
+            --max-turns 40
+            --allowedTools "Bash,Read,Write,Edit,Glob,Grep"

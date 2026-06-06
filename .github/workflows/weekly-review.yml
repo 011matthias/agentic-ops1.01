@@ -1,0 +1,61 @@
+# Weekly Review - scheduled exec-assistant agent (runs /comd_weekly-review)
+#
+# See eod-capture.yml for the rationale (Actions over remote routines so the
+# digest persists) and the B6 note. This agent AUTO-COMMITS its weekly digest
+# by explicit owner authorization (2026-06-06); interactive
+# /comd_weekly-review still stops at the commit boundary.
+#
+# REQUIRED: ANTHROPIC_API_KEY secret (shared with eod-capture). RESEND_API_KEY
+# secret + BRIEFING_TO variable already set. Confirm the action version/inputs
+# against https://github.com/anthropics/claude-code-action before first run.
+
+name: weekly-review
+
+on:
+  schedule:
+    # 14:33 UTC Friday = ~16:33 Europe/Berlin (CEST). Off-minute on purpose.
+    - cron: "33 14 * * 5"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: weekly-review
+  cancel-in-progress: false
+
+jobs:
+  weekly:
+    runs-on: ubuntu-latest
+    env:
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      BRIEFING_TO: ${{ vars.BRIEFING_TO }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "weekly-review-bot"
+          git config user.email "no-reply@unpauseai.com"
+
+      - name: Run weekly review
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Execute the workflow defined in .claude/commands/comd_weekly-review.md
+            for the current ISO week, end to end, unattended. Never ask
+            questions; flag in the digest instead.
+
+            COMMIT AUTHORIZED FOR THIS RUN ONLY: you are the scheduled weekly
+            agent. rule_no_auto_commit.md (B6) is relaxed for this unattended
+            run by owner authorization (2026-06-06). After writing
+            docs/digests/<YYYY>-W<WW>-review.md, run:
+            git add -A && git commit -m "weekly: $(date +%G-W%V) review" && git push origin HEAD:main
+            If nothing changed, skip the commit. Email delivery uses
+            RESEND_API_KEY + BRIEFING_TO from the environment.
+          claude_args: |
+            --max-turns 40
+            --allowedTools "Bash,Read,Write,Edit,Glob,Grep"

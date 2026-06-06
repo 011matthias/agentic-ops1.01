@@ -18,6 +18,10 @@ checkpoint by hand.
   are not ship-class), then **STOP at the staging boundary**. Do NOT
   `git commit`, push, or PR. The digest reports what changed and is staged for
   the human's morning review. See `rule_no_auto_commit.md`.
+  *Exception:* the unattended `.github/workflows/eod-capture.yml` run is granted
+  explicit commit+push authority by owner authorization (2026-06-06); that grant
+  lives in the workflow prompt, not here. Interactive runs of this command still
+  stop at the boundary.
 - **No file bloat.** Update existing canonical files. Do not create new
   per-investigation files. See `rule_no_file_bloat.md`.
 - **Voice.** Any human-facing prose (the digest) inherits
