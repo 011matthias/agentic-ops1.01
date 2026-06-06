@@ -10,11 +10,22 @@ WHAT IT DOES
 ------------
 1. Detects ship-class shell commands (git commit, git push, gh pr create/merge,
    git tag, gh release, deploy commands, subtree push).
-2. Scans recent user messages from the transcript for an explicit ship order
-   in the current turn or recent context.
-3. If an explicit order is found (commit / push / ship / merge / land / deploy /
-   etc.), allow the command and log the matched authorization.
-4. If NO explicit order is found, return permissionDecision="ask" with a
+2. Allows the prototype carve-out (100% local-web scope) silently.
+3. Classifies the BAND from the command + the live current branch:
+   - Autonomous: commit on a non-main feature branch, push of a feature
+     branch with no main refspec and no --force, and gh pr create. Reversible
+     / unmerged / the reviewable checkpoint -> allow silently. (The rule
+     requires the agent to have verified behavior first; the hook enforces
+     only the deterministic scope split.)
+   - Auto-merge (CI-gated): gh pr merge -> allow silently WHEN `gh pr checks`
+     reports the target PR green; otherwise fall through to the floor scan.
+     This is the only band that keys autonomy on an objective external signal.
+   - Gated floor: push-to-main, force push, commit-on-main, deploys, tags,
+     releases, subtree push, gh pr close, plus any non-green merge. The
+     irreversible / outward-facing steps.
+4. For the gated floor, scans recent user messages for an explicit ship order.
+   If found (push / force / deploy / merge / land / etc.), allow and log the
+   matched authorization. If NOT found, return permissionDecision="ask" with a
    plain-language scope-of-effects reason. The user can authorize via the
    prompt; the agent cannot bypass.
 
@@ -130,6 +141,9 @@ PROTOTYPE_PATH_PREFIXES = (
     "workspace\\projects\\local-web\\",
 )
 
+# Trunk branch names. Commit / push touching these is Tier 2 (gated).
+MAIN_BRANCHES = ("main", "master")
+
 
 def log(action: str) -> None:
     try:
@@ -214,6 +228,111 @@ def is_prototype_scoped(cmd: str, tag: str) -> bool:
     return False
 
 
+def current_branch() -> str | None:
+    """Return the live current git branch, or None if undeterminable.
+
+    Test seam: NO_AUTO_COMMIT_GATE_BRANCH, when set, forces the returned
+    value so the tier classifier can be smoke-tested deterministically
+    without checking out branches. Never set in production.
+    """
+    forced = os.environ.get("NO_AUTO_COMMIT_GATE_BRANCH")
+    if forced:
+        return forced.strip()
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if out.returncode == 0:
+            return out.stdout.strip()
+    except Exception:
+        pass
+    return None
+
+
+def is_autonomous_lane(cmd: str, tag: str) -> bool:
+    """Tier 1 classifier: True if the ship-class command is reversible /
+    unmerged feature-branch work that runs without an explicit order.
+
+    Conservative by construction: any uncertainty (unknown branch, main
+    refspec, force flag, non-commit/push/PR-open tag) returns False so the
+    command falls through to the Tier 2 explicit-order gate. The hook only
+    decides SCOPE; the rule requires the agent to have verified behavior
+    before relying on this lane.
+    """
+    # Opening a PR lands nothing on the base branch; it's the reviewable
+    # checkpoint. Always Tier 1 regardless of branch.
+    if tag == "gh-pr-create":
+        return True
+    # Only commit / push can be Tier 1. merge, close, deploy, tag, release,
+    # subtree push are always Tier 2.
+    if tag not in ("git-commit", "git-push"):
+        return False
+    branch = current_branch()
+    if branch is None or branch in MAIN_BRANCHES:
+        # On trunk, or branch undeterminable -> gate.
+        return False
+    if tag == "git-commit":
+        # Commit on a feature branch is reversible and unmerged.
+        return True
+    if tag == "git-push":
+        # Force push rewrites remote history irreversibly -> gate.
+        if re.search(r"(?:^|\s)(?:--force\b|-f\b|--force-with-lease\b|\+)", cmd):
+            return False
+        # Explicit main/master refspec means the push targets trunk -> gate.
+        if re.search(r"\b(?:main|master)\b", cmd):
+            return False
+        # Feature-branch push to its own remote.
+        return True
+    return False
+
+
+def _merge_pr_selector(cmd: str) -> str:
+    """Extract the PR selector (number / url / branch) from a `gh pr merge`
+    command. Returns "" when none is given (gh defaults to the current
+    branch's PR)."""
+    m = re.search(r"\bgh\s+pr\s+merge\b(.*)", cmd, re.IGNORECASE)
+    if not m:
+        return ""
+    for tok in m.group(1).split():
+        if tok.startswith("-"):
+            continue
+        return tok
+    return ""
+
+
+def ci_is_green(cmd: str) -> bool | None:
+    """Decide the auto-merge gate from the target PR's CI status.
+
+    True  -> all checks green (auto-merge sanctioned).
+    False -> a check is failing or pending (do not auto-merge).
+    None  -> undeterminable (gh missing/unauthed/no repo/timeout).
+
+    Auto-merge is the one place autonomy keys on an OBJECTIVE external
+    signal rather than the agent's judgment: the merge fires only when the
+    user's own CI is green. `gh pr checks` exit codes: 0 = all pass,
+    8 = pending, 1 = failure. Test seam: NO_AUTO_COMMIT_GATE_CI in
+    {green, red, pending} forces the verdict for deterministic smoke tests
+    (never set in production).
+    """
+    forced = os.environ.get("NO_AUTO_COMMIT_GATE_CI")
+    if forced:
+        return forced.strip().lower() == "green"
+    selector = _merge_pr_selector(cmd)
+    args = ["gh", "pr", "checks"]
+    if selector:
+        args.append(selector)
+    try:
+        out = subprocess.run(args, capture_output=True, text=True, timeout=20)
+    except Exception:
+        return None
+    if out.returncode == 0:
+        return True
+    if out.returncode in (1, 8):
+        return False
+    return None  # 2/4/other -> error resolving the PR; fail safe to ASK
+
+
 def recent_user_messages(transcript_path: str, lookback: int = USER_TURN_LOOKBACK) -> list[str]:
     """Return text of the most-recent N user messages, newest-first.
 
@@ -295,7 +414,27 @@ def main() -> None:
         log(f"allow:{ship_tag} scope=prototype (local-web)")
         sys.exit(0)
 
-    # Ship-class detected. Scan recent user turns for explicit authorization.
+    # Autonomous lane: reversible / unmerged feature-branch work (commit,
+    # non-main non-force push, gh pr create). Runs without an explicit order.
+    # See rule_no_auto_commit.md "Autonomous lane".
+    if is_autonomous_lane(cmd, ship_tag):
+        log(f"allow:{ship_tag} band=autonomous (feature-branch, no order needed)")
+        sys.exit(0)
+
+    # Auto-merge band: gh pr merge fires automatically WHEN the target PR's CI
+    # is green (objective signal, not agent judgment). Red / pending / unknown
+    # falls through to the explicit-order scan below, which preserves a manual
+    # override ("merge anyway") and otherwise ASKs.
+    if ship_tag == "gh-pr-merge":
+        verdict = ci_is_green(cmd)
+        if verdict is True:
+            log(f"allow:{ship_tag} band=auto-merge ci=green")
+            sys.exit(0)
+        log(f"fallthrough:{ship_tag} ci={'red/pending' if verdict is False else 'unknown'}")
+
+    # Gated floor (push-to-main, force push, commit-on-main, deploy, tag,
+    # release, subtree push, pr-close) + non-green merge: explicit order
+    # required. Scan recent user turns for authorization.
     transcript_path = payload.get("transcript_path", "")
     user_msgs = recent_user_messages(transcript_path)
     auth_snippet = has_authorization(user_msgs)
@@ -322,15 +461,19 @@ def main() -> None:
             "hookEventName": "PreToolUse",
             "permissionDecision": "ask",
             "permissionDecisionReason": (
-                f"SHIP-CLASS COMMAND detected ({ship_tag}). Per rule_no_auto_commit.md "
-                "(B6): commits, pushes, PRs, merges, tags, releases, and deploys may "
-                "NOT run without an explicit user order in the current turn "
-                "(\"commit\", \"push\", \"ship it\", \"PR it\", \"merge\", \"land it\", "
-                "\"deploy\") OR a named session-scoped pre-authorization (\"ship "
-                f"everything to PR today\"). Scanned the last {USER_TURN_LOOKBACK} user "
-                "turns; found no authorization. If the user did authorize and the "
-                "scan missed it, approve here. Otherwise, cancel and ask the user "
-                "for an explicit ship order before retrying."
+                f"GATED-FLOOR SHIP-CLASS COMMAND detected ({ship_tag}). Per "
+                "rule_no_auto_commit.md (B6): irreversible / outward-facing actions "
+                "(direct push-to-main, force push, commit-on-main, deploy, tag, "
+                "release, subtree push to client repos) need an explicit user order "
+                "in the current turn (\"push\", \"force push\", \"deploy\", \"land "
+                "it\") OR a named session pre-authorization. A `gh pr merge` reaches "
+                "this prompt only when its CI is NOT green (red / pending / "
+                "undeterminable); auto-merge fires on its own when CI is green. "
+                f"Scanned the last {USER_TURN_LOOKBACK} user turns; found no "
+                "authorization. (Feature-branch commit / push / PR-open run "
+                "autonomously and never reach this prompt.) If the user did "
+                "authorize and the scan missed it, approve here. Otherwise, cancel "
+                "and ask the user for an explicit ship order before retrying."
             ),
         }
     }))

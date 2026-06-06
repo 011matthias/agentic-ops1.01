@@ -32,6 +32,17 @@ jobs:
           DATABASE_URL: postgresql://placeholder:placeholder@localhost/placeholder
           AUTH_SECRET: placeholder-secret-for-build-only
 
+  hooks:
+    name: Enforcement hook tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.12'
+      - name: Run enforcement-layer test suite
+        run: uv run --no-project --with pytest pytest tools/tests
+
   spell:
     name: Spell check
     runs-on: ubuntu-latest
