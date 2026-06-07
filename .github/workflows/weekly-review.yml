@@ -60,7 +60,12 @@ jobs:
             git add -A && git commit -m "weekly: $(date +%G-W%V) review" && git push origin HEAD:main
             If nothing changed, skip the commit. Email delivery uses
             RESEND_API_KEY + BRIEFING_TO from the environment.
+          # haiku, not sonnet: the auto-loaded repo context (CLAUDE.md + the
+          # .claude/rules set) exceeds the org's tier-1 sonnet limit of 30k
+          # input-tokens/min, so a sonnet run is rejected (429) on the first
+          # request. Haiku's higher per-minute ceiling clears it (proven by the
+          # eod-capture run, which uses haiku on the same loaded context).
           claude_args: |
-            --model sonnet
+            --model haiku
             --max-turns 40
             --allowedTools "Bash,Read,Write,Edit,Glob,Grep"
