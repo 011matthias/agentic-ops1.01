@@ -1,0 +1,56 @@
+{
+  "audit": {
+    "domain": "unpauseai.com",
+    "checks": [
+      {
+        "name": "ai-crawler-access",
+        "status": "PASS",
+        "detail": "all AI crawlers may fetch the site root"
+      },
+      {
+        "name": "robots-sitemap-ref",
+        "status": "WARN",
+        "detail": "robots.txt does not reference a sitemap"
+      },
+      {
+        "name": "sitemap.xml",
+        "status": "FAIL",
+        "detail": "absent -- engines have no crawl map"
+      },
+      {
+        "name": "llms.txt",
+        "status": "WARN",
+        "detail": "absent -- no AI-context file (helps non-Google engines)"
+      },
+      {
+        "name": "machine-readable-pricing",
+        "status": "WARN",
+        "detail": "no /pricing.md|txt -- buying agents can't parse pricing"
+      },
+      {
+        "name": "structured-data",
+        "status": "FAIL",
+        "detail": "no JSON-LD -- no Organization/FAQ/Article schema for entity recognition"
+      },
+      {
+        "name": "meta-description",
+        "status": "PASS",
+        "detail": "present"
+      },
+      {
+        "name": "freshness-signal",
+        "status": "WARN",
+        "detail": "no visible last-updated date (engines weight recency)"
+      }
+    ]
+  },
+  "probe": [
+    {
+      "engine": "perplexity",
+      "query": "*",
+      "cited": false,
+      "sources": [],
+      "note": "PERPLEXITY_API_KEY not set -- skipped"
+    }
+  ]
+}
