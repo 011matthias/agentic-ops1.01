@@ -101,6 +101,7 @@ def write_report(
     *,
     parse_errors: list[tuple[str, int, str]] | None = None,
     llm_cost: Decimal | None = None,
+    explain: bool = False,
 ) -> Path:
     """Write the LD-3 reconciliation report.
 
@@ -108,6 +109,9 @@ def write_report(
     tuples from ingest (slice 3a B1 — empty in slice 1).
     `llm_cost` is the run's aggregate Claude spend in USD
     (slice 2 D3 — None in slice 1).
+    `explain` (A8) appends an "Explain" sheet: one row per transaction
+    with its outcome bucket, confidence, and the scoring / judgment
+    reason — the "why did (not) this match" debugging trail.
     """
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -127,6 +131,8 @@ def write_report(
     _write_needs_review(wb, rows)
     _write_unmatched(wb, outcome, tx_by_id, rec_by_id)
     _write_errors(wb, parse_errors or [])
+    if explain:
+        _write_explain(wb, outcome, transactions)
 
     wb.save(out_path)
     return out_path
@@ -206,7 +212,14 @@ def _rows_from_match(
     note_bits: list[str] = []
     if extra_note:
         note_bits.append(extra_note)
-    if match.match_type == MatchType.PROBABLE:
+    # Surface the scoring/judgment reasoning for the cases that carry an
+    # informative one: PROBABLE tolerances, and the LLM verdicts from the
+    # FX (D1b) and ambiguous (judge_ambiguous) judgment layers.
+    if match.match_type in (
+        MatchType.PROBABLE,
+        MatchType.FX_JUDGMENT,
+        MatchType.AMBIGUOUS,
+    ) and match.reason:
         note_bits.append(match.reason)
     note = " · ".join(note_bits)
 
@@ -508,6 +521,58 @@ def _write_errors(wb: Workbook, parse_errors: list[tuple[str, int, str]]) -> Non
     for file_name, line_no, msg in parse_errors:
         ws.append([file_name, line_no, msg])
         _fill_last_row(ws, FILL_UNMATCHED)
+    _autosize(ws)
+
+
+def _write_explain(
+    wb: Workbook,
+    outcome: MatchOutcome,
+    transactions: list[Transaction],
+) -> None:
+    """A8: per-transaction outcome + scoring trail for debugging.
+
+    One row per transaction, in input order: which bucket it landed in,
+    the confidence, and the reason string the matcher / judgment layer
+    attached. Makes "why did (not) this match" answerable at a glance.
+    """
+    ws = wb.create_sheet("Explain")
+    _write_header_row(
+        ws,
+        ("Card", "Date", "Vendor", "Amount", "Currency", "Outcome", "Confidence", "Reason"),
+    )
+
+    # tx_id -> (label, Match | None). First write wins so a tx keeps its
+    # primary bucket if it somehow appears in two.
+    disposition: dict[str, tuple[str, Match | None]] = {}
+    for m in outcome.matches:
+        disposition.setdefault(m.transaction_id, ("MATCHED", m))
+    for m in outcome.judgment_required:
+        disposition.setdefault(m.transaction_id, ("FX_JUDGMENT", m))
+    for m in outcome.ambiguous:
+        disposition.setdefault(m.transaction_id, ("AMBIGUOUS", m))
+    for tx_id in outcome.unmatched_transactions:
+        disposition.setdefault(tx_id, ("UNMATCHED", None))
+
+    for tx in transactions:
+        label, match = disposition.get(tx.transaction_id, ("UNKNOWN", None))
+        ws.append([
+            tx.account_id,
+            tx.transaction_date.isoformat() if tx.transaction_date else "",
+            tx.vendor_from_statement,
+            float(tx.amount),
+            tx.transaction_currency,
+            label,
+            f"{match.confidence:.2f}" if match else "",
+            match.reason if match else "No candidate receipt.",
+        ])
+        if label == "MATCHED":
+            fill = FILL_LINE
+        elif label in ("FX_JUDGMENT", "AMBIGUOUS"):
+            fill = FILL_REVIEW
+        else:
+            fill = FILL_UNMATCHED
+        _fill_last_row(ws, fill)
+
     _autosize(ws)
 
 

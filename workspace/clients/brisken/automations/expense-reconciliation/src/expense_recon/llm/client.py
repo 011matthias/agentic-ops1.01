@@ -52,8 +52,63 @@ class ClassificationResult:
     reasoning: str
 
 
+@dataclass(frozen=True)
+class FxJudgmentResult:
+    """One FX-judgment decision from the LLM (v2 spec §15.2).
+
+    The hard case Dirk specified on the call: a receipt paid in one
+    currency (e.g. EUR) against a card transaction posted in another
+    (e.g. USD). The amounts never match 1:1, so the model FX-converts
+    the receipt into the transaction currency and judges whether the
+    two are the same purchase, weighing the converted amount against
+    vendor / reference / date signal.
+
+    `same_purchase_confidence` is the model's probability (0.0–1.0)
+    that the receipt and the transaction are the SAME purchase.
+    `implied_rate` and `converted_amount` are the model's APPROXIMATION
+    (receipt currency → transaction currency), surfaced for the
+    reviewer to sanity-check. They are an estimate, never an
+    authoritative rate (the rate source is §38-TBD), so an FX judgment
+    always goes to human review.
+    """
+
+    is_match: bool
+    same_purchase_confidence: float
+    implied_rate: float | None
+    converted_amount: Decimal | None
+    reasoning: str
+
+
+@dataclass(frozen=True)
+class AmbiguousCandidate:
+    """One candidate receipt for a transaction that the deterministic
+    layer could not disambiguate (multiple equally-strong matches)."""
+
+    document_id: str
+    amount: Decimal | None
+    currency: str | None
+    date: str | None
+    vendor: str | None
+    reference: str | None
+
+
+@dataclass(frozen=True)
+class AmbiguousJudgmentResult:
+    """The LLM's pick among tied candidates (v2 spec §15.2).
+
+    `chosen_index` is 1-based into the candidate list, or 0 when the
+    model is not confident enough to pick — in which case the tie
+    stands and all candidates remain for human review.
+    """
+
+    chosen_index: int
+    confidence: float
+    reasoning: str
+
+
 class LLMClient(Protocol):
-    """Provider-agnostic client interface used by the categorizer."""
+    """Provider-agnostic client interface used by the categorizer and
+    the FX-judgment layer."""
 
     def classify_line_items(
         self,
@@ -73,6 +128,39 @@ class LLMClient(Protocol):
     ) -> ClassificationResult:
         """Tier 2 fallback (LD-2). Triggered only when line items are
         absent or all vague."""
+        ...
+
+    def judge_fx_match(
+        self,
+        *,
+        tx_amount: Decimal,
+        tx_currency: str,
+        tx_date: str,
+        tx_vendor: str,
+        receipt_amount: Decimal,
+        receipt_currency: str,
+        receipt_date: str | None,
+        receipt_vendor: str | None,
+        receipt_reference: str | None,
+    ) -> FxJudgmentResult:
+        """FX judgment (v2 spec §15.2). One call per FX-mismatch
+        candidate pair. Unlike LD-2 categorization, vendor name IS a
+        legitimate input here — this is a matching task, not a
+        line-item classification."""
+        ...
+
+    def judge_ambiguous(
+        self,
+        *,
+        tx_amount: Decimal,
+        tx_currency: str,
+        tx_date: str,
+        tx_vendor: str,
+        candidates: list[AmbiguousCandidate],
+    ) -> AmbiguousJudgmentResult:
+        """Pick the best of several tied candidate receipts for one
+        transaction (v2 spec §15.2). Returns `chosen_index=0` when no
+        candidate is a confident pick."""
         ...
 
 
@@ -144,6 +232,88 @@ _VENDOR_SCHEMA = {
         "reasoning": {"type": "string"},
     },
     "required": ["category", "confidence", "reasoning"],
+    "additionalProperties": False,
+}
+
+
+_FX_JUDGMENT_PROMPT_TEMPLATE = """You reconcile a card-statement transaction against a receipt that was paid in a different currency.
+
+Because the currencies differ, the amounts will not match 1:1; an FX conversion is needed. Judge whether the receipt is plausibly the SAME purchase as the transaction.
+
+Transaction (from the card statement):
+  amount: {tx_amount} {tx_currency}
+  date: {tx_date}
+  vendor as printed on the statement: {tx_vendor}
+
+Receipt:
+  amount: {receipt_amount} {receipt_currency}
+  date: {receipt_date}
+  vendor: {receipt_vendor}
+  reference: {receipt_reference}
+
+How to judge:
+- Convert the receipt amount from {receipt_currency} to {tx_currency} using your best estimate of the exchange rate around {tx_date}. Card networks usually add a small FX fee (roughly 1 to 3 percent), so the statement amount is often slightly higher than the raw converted amount.
+- Compare the converted amount to the transaction amount, then weigh vendor-name similarity, reference overlap, and how close the dates are.
+- Be honest about uncertainty. Your exchange-rate estimate is approximate and this judgment always goes to a human for review, so do not overstate confidence.
+
+Return a JSON object with:
+- is_match: true if the receipt is plausibly the same purchase, false otherwise
+- same_purchase_confidence: your probability from 0.0 to 1.0 that they are the same purchase
+- implied_rate: the {receipt_currency}-to-{tx_currency} rate you used as a number, or null
+- converted_amount: the receipt amount converted to {tx_currency} as a number, or null
+- reasoning: one or two short sentences explaining the judgment
+"""
+
+
+_FX_JUDGMENT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "is_match": {"type": "boolean"},
+        "same_purchase_confidence": {"type": "number"},
+        "implied_rate": {"type": ["number", "null"]},
+        "converted_amount": {"type": ["number", "null"]},
+        "reasoning": {"type": "string"},
+    },
+    "required": [
+        "is_match",
+        "same_purchase_confidence",
+        "implied_rate",
+        "converted_amount",
+        "reasoning",
+    ],
+    "additionalProperties": False,
+}
+
+
+_AMBIGUOUS_PROMPT_TEMPLATE = """A card-statement transaction has several candidate receipts that all match on amount and date, so a deterministic rule cannot tell them apart. Pick the one most likely to be the same purchase, or decline if none is a confident pick.
+
+Transaction (from the card statement):
+  amount: {tx_amount} {tx_currency}
+  date: {tx_date}
+  vendor as printed on the statement: {tx_vendor}
+
+Candidate receipts:
+{candidates_block}
+
+How to judge:
+- The amounts and dates are already close (that is why they tie). Use vendor-name similarity to the statement vendor, reference-number overlap, and any small date difference to break the tie.
+- Only pick a candidate if one is clearly more likely than the others. If they remain genuinely indistinguishable, decline (chosen_index 0) so a human decides.
+
+Return a JSON object with:
+- chosen_index: the 1-based number of the best candidate, or 0 if none is a confident pick
+- confidence: your probability from 0.0 to 1.0 that the chosen candidate is correct (0 when chosen_index is 0)
+- reasoning: one or two short sentences explaining the pick or why you declined
+"""
+
+
+_AMBIGUOUS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "chosen_index": {"type": "integer"},
+        "confidence": {"type": "number"},
+        "reasoning": {"type": "string"},
+    },
+    "required": ["chosen_index", "confidence", "reasoning"],
     "additionalProperties": False,
 }
 
@@ -273,6 +443,86 @@ class OpenAIClient:
             reasoning=str(payload.get("reasoning", "")),
         )
 
+    def judge_fx_match(
+        self,
+        *,
+        tx_amount: Decimal,
+        tx_currency: str,
+        tx_date: str,
+        tx_vendor: str,
+        receipt_amount: Decimal,
+        receipt_currency: str,
+        receipt_date: str | None,
+        receipt_vendor: str | None,
+        receipt_reference: str | None,
+    ) -> FxJudgmentResult:
+        prompt = _FX_JUDGMENT_PROMPT_TEMPLATE.format(
+            tx_amount=tx_amount,
+            tx_currency=tx_currency,
+            tx_date=tx_date,
+            tx_vendor=tx_vendor or "(unknown)",
+            receipt_amount=receipt_amount,
+            receipt_currency=receipt_currency or "(unknown)",
+            receipt_date=receipt_date or "(unknown)",
+            receipt_vendor=receipt_vendor or "(unknown)",
+            receipt_reference=receipt_reference or "(none)",
+        )
+        response = self._client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "fx_judgment",
+                    "schema": _FX_JUDGMENT_SCHEMA,
+                    "strict": True,
+                },
+            },
+            temperature=0,
+        )
+        self._record_usage(response)
+        payload = json.loads(response.choices[0].message.content or "{}")
+        return _fx_result_from_payload(payload)
+
+    def judge_ambiguous(
+        self,
+        *,
+        tx_amount: Decimal,
+        tx_currency: str,
+        tx_date: str,
+        tx_vendor: str,
+        candidates: list[AmbiguousCandidate],
+    ) -> AmbiguousJudgmentResult:
+        candidates_block = "\n".join(
+            f"  {i}. vendor {c.vendor or '(unknown)'}, "
+            f"{c.amount} {c.currency or ''}, date {c.date or '(unknown)'}, "
+            f"reference {c.reference or '(none)'}"
+            for i, c in enumerate(candidates, start=1)
+        )
+        prompt = _AMBIGUOUS_PROMPT_TEMPLATE.format(
+            tx_amount=tx_amount,
+            tx_currency=tx_currency,
+            tx_date=tx_date,
+            tx_vendor=tx_vendor or "(unknown)",
+            candidates_block=candidates_block,
+        )
+        response = self._client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "ambiguous_judgment",
+                    "schema": _AMBIGUOUS_SCHEMA,
+                    "strict": True,
+                },
+            },
+            temperature=0,
+        )
+        self._record_usage(response)
+        payload = json.loads(response.choices[0].message.content or "{}")
+        return _ambiguous_result_from_payload(payload)
+
     def _record_usage(self, response) -> None:
         try:
             usage = response.usage
@@ -289,6 +539,38 @@ class OpenAIClient:
 def _review_result(reason: str) -> ClassificationResult:
     return ClassificationResult(
         category=None, zoho_account=None, confidence=0.0, reasoning=reason
+    )
+
+
+def _fx_result_from_payload(payload: dict) -> FxJudgmentResult:
+    """Parse a raw FX-judgment JSON payload into a FxJudgmentResult.
+
+    Numeric amounts come back as JSON numbers; `converted_amount` is
+    re-cast through `Decimal(str(...))` to avoid IEEE-754 binary noise,
+    consistent with the ingest parsers.
+    """
+    raw_amount = payload.get("converted_amount")
+    converted = Decimal(str(raw_amount)) if raw_amount is not None else None
+    raw_rate = payload.get("implied_rate")
+    return FxJudgmentResult(
+        is_match=bool(payload.get("is_match", False)),
+        same_purchase_confidence=float(payload.get("same_purchase_confidence", 0.0)),
+        implied_rate=float(raw_rate) if raw_rate is not None else None,
+        converted_amount=converted,
+        reasoning=str(payload.get("reasoning", "")),
+    )
+
+
+def _ambiguous_result_from_payload(payload: dict) -> AmbiguousJudgmentResult:
+    """Parse a raw ambiguous-judgment JSON payload."""
+    try:
+        chosen = int(payload.get("chosen_index", 0) or 0)
+    except (TypeError, ValueError):
+        chosen = 0
+    return AmbiguousJudgmentResult(
+        chosen_index=chosen,
+        confidence=float(payload.get("confidence", 0.0)),
+        reasoning=str(payload.get("reasoning", "")),
     )
 
 
@@ -309,9 +591,13 @@ class MockLLMClient:
         self,
         responses: list[list[ClassificationResult] | ClassificationResult] | None = None,
         *,
+        fx_responses: list[FxJudgmentResult] | None = None,
+        ambiguous_responses: list[AmbiguousJudgmentResult] | None = None,
         cost_tracker: CostTracker | None = None,
     ):
         self._queue = list(responses or [])
+        self._fx_queue = list(fx_responses or [])
+        self._ambiguous_queue = list(ambiguous_responses or [])
         self.calls: list[tuple[str, object]] = []
         self.cost_tracker = cost_tracker or CostTracker()
         # Record a fixed nominal cost per call so tests can verify
@@ -353,6 +639,44 @@ class MockLLMClient:
             return queued
         return _default_for_vendor(vendor, categories)
 
+    def judge_fx_match(
+        self,
+        *,
+        tx_amount: Decimal,
+        tx_currency: str,
+        tx_date: str,
+        tx_vendor: str,
+        receipt_amount: Decimal,
+        receipt_currency: str,
+        receipt_date: str | None,
+        receipt_vendor: str | None,
+        receipt_reference: str | None,
+    ) -> FxJudgmentResult:
+        self.calls.append(("judge_fx_match", (tx_vendor, receipt_vendor)))
+        self.cost_tracker.record(self._per_call_cost)
+
+        if self._fx_queue:
+            return self._fx_queue.pop(0)
+        return _default_fx_judgment(
+            tx_amount, tx_vendor, receipt_amount, receipt_vendor
+        )
+
+    def judge_ambiguous(
+        self,
+        *,
+        tx_amount: Decimal,
+        tx_currency: str,
+        tx_date: str,
+        tx_vendor: str,
+        candidates: list[AmbiguousCandidate],
+    ) -> AmbiguousJudgmentResult:
+        self.calls.append(("judge_ambiguous", (tx_vendor, [c.document_id for c in candidates])))
+        self.cost_tracker.record(self._per_call_cost)
+
+        if self._ambiguous_queue:
+            return self._ambiguous_queue.pop(0)
+        return _default_ambiguous_judgment(tx_vendor, candidates)
+
 
 def _default_for_description(
     description: str, categories: list[str]
@@ -392,4 +716,60 @@ def _default_for_vendor(
     return ClassificationResult(
         category=cat, zoho_account=None, confidence=0.75,
         reasoning=f"mock: vendor '{vendor}' matched on keyword",
+    )
+
+
+def _default_fx_judgment(
+    tx_amount: Decimal,
+    tx_vendor: str,
+    receipt_amount: Decimal,
+    receipt_vendor: str | None,
+) -> FxJudgmentResult:
+    """Deterministic mock FX verdict — not production. Vendor-name
+    overlap drives the verdict; the implied rate is the naive
+    tx_amount / receipt_amount ratio. Used only when no `fx_responses`
+    queue is supplied to MockLLMClient.
+    """
+    tv = (tx_vendor or "").lower()
+    rv = (receipt_vendor or "").lower()
+    overlap = bool(rv) and (rv in tv or tv in rv)
+    rate = (
+        float(tx_amount) / float(receipt_amount)
+        if receipt_amount and receipt_amount != 0
+        else None
+    )
+    if overlap:
+        return FxJudgmentResult(
+            is_match=True,
+            same_purchase_confidence=0.8,
+            implied_rate=rate,
+            converted_amount=tx_amount,
+            reasoning=f"mock: vendor overlap '{tx_vendor}' / '{receipt_vendor}'",
+        )
+    return FxJudgmentResult(
+        is_match=False,
+        same_purchase_confidence=0.3,
+        implied_rate=rate,
+        converted_amount=None,
+        reasoning="mock: no vendor overlap",
+    )
+
+
+def _default_ambiguous_judgment(
+    tx_vendor: str,
+    candidates: list[AmbiguousCandidate],
+) -> AmbiguousJudgmentResult:
+    """Deterministic mock — picks the first candidate whose vendor
+    overlaps the statement vendor; declines (index 0) otherwise."""
+    tv = (tx_vendor or "").lower()
+    for i, c in enumerate(candidates, start=1):
+        cv = (c.vendor or "").lower()
+        if cv and (cv in tv or tv in cv):
+            return AmbiguousJudgmentResult(
+                chosen_index=i,
+                confidence=0.75,
+                reasoning=f"mock: vendor overlap '{tx_vendor}' / '{c.vendor}'",
+            )
+    return AmbiguousJudgmentResult(
+        chosen_index=0, confidence=0.0, reasoning="mock: no clear vendor match"
     )
