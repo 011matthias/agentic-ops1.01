@@ -1,0 +1,22 @@
+# Local pre-commit gates for the Python layer. Optional fast feedback before a
+# commit; CI runs the same checks regardless. Activate per clone with:
+#   pipx run pre-commit install   (or: pip install pre-commit && pre-commit install)
+#
+# Mirrors the CI `python` job: real-bug ruff + INDEX membership. The full pytest
+# suite is left to CI (too slow for every commit); run it locally with
+#   uv run --no-project --with pytest pytest tools/tests
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff
+        name: ruff (real-bug ruleset)
+        files: ^(tools|\.claude/hooks)/.*\.py$
+  - repo: local
+    hooks:
+      - id: tools-index
+        name: tools/INDEX.md membership
+        entry: uv run tools/check-index.py
+        language: system
+        pass_filenames: false
+        files: ^tools/.*\.(py|sh)$

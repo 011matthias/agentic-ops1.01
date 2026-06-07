@@ -28,7 +28,7 @@ from pathlib import Path
 
 import pytest
 
-openpyxl = pytest.importorskip("openpyxl")
+import openpyxl
 
 from expense_recon.cli import ConfigError, run
 from expense_recon.matching.judgment import STUB_REASON, judge_fx_match
@@ -180,7 +180,7 @@ def test_tier_distribution_on_card_tab(tmp_path: Path):
             sources.append(row[source_col_idx - 1])
 
     assert "LINE" in sources, f"Expected at least one LINE row; got: {sources}"
-    assert "VENDOR ⚠" in sources, f"Expected vendor fallback (Uber); got: {sources}"
+    assert "VENDOR (review)" in sources, f"Expected vendor fallback (Uber); got: {sources}"
     assert "REVIEW" in sources, f"Expected review row (Staples unmatched); got: {sources}"
 
 
@@ -202,7 +202,7 @@ def test_needs_review_contains_vendor_and_review_rows(tmp_path: Path):
 
     assert sources, "Needs Review sheet should have rows"
     assert "LINE" not in sources, "LINE-tier rows must NOT appear in Needs Review"
-    assert any(s in ("VENDOR ⚠", "REVIEW") for s in sources)
+    assert any(s in ("VENDOR (review)", "REVIEW") for s in sources)
 
 
 def test_unmatched_sheet_lists_staples(tmp_path: Path):

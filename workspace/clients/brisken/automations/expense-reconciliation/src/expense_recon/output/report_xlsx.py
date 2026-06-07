@@ -584,7 +584,7 @@ def _card_row_cells(r: _Row) -> list[object]:
     the Needs Review sheet (which prepends Card)."""
     source_label = r.source.value
     if r.source is ClassificationSource.VENDOR:
-        source_label = "VENDOR ⚠"
+        source_label = "VENDOR (review)"
     return [
         r.date.isoformat() if r.date else "",
         r.vendor,

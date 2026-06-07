@@ -32,6 +32,15 @@ One-line index of `tools/` scripts. Auto-loaded at session start to reduce `miss
 | `validate-spec.py FILE.md` | Spec frontmatter + stage/folder validator. Auto-fires via post-write-gate on any write under `workspace/clients/*/specs/`. Catches missing required keys, stage/folder mismatches, and surfaces `needs_fixes: true`. Per-file companion to the on-demand skil_spec-cleanup audit. |
 | `handoff-readiness.py {client}` | Score a client's handoff readiness: specs in 4-live, infrastructure.yaml status, comms-log currency, automations present. Use before proposing a client handoff or marking dormant. |
 | `openclaw-sandbox-init.py {slug}` | Scaffold an isolated prototype sandbox for an openclaw idea OUTSIDE this repo (default `~/Repo/openclaw-sandbox/{slug}/`). Refuses if target is inside `agentic-ops1` to prevent capture by a client `git subtree push`. Writes Dockerfile (non-root, read-only fs, cap_drop:ALL, no host mounts beyond `./scratch`), docker-compose with narrow defaults, `.env.example` (scoped-keys-only guidance), `.gitignore`, and a README pre-flight checklist (no-training tier confirmation, no client-data copy, TOS/GDPR/TCPA stance per idea). |
+| `check-index.py` | Assert every `tools/*.py` and `*.sh` has a row in this manifest. CI gate + pre-commit hook; closes the recurring missing-tool friction (register #74, #133). |
+| `audit-client-pages.py` | Client-page structure auditor; enforces rule_client_page_structure.md §2-§6. Run before any client-page deploy. |
+| `normalize-client-pages.py` | Client-page structure corrector; injects the theme toggle, print stylesheet, and last-updated footer per rule_client_page_structure.md. Idempotent. |
+| `validate-platform-content.py` | Platform (unpauseai.com) content standards validator: em-dashes, brand typos, banned words, dead `/paths`, proposal heading drift. Run before a platform deploy. |
+| `validate-pilot-routing.py` | Validate client-facing drafts against a client's pilot-routing.md table (piece cross-wire check). Auto-fires via post-write-gate. |
+| `audit-local-web-aesthetics.py` | Advisory visual-craft (List-B) pre-ship pass for local-web sites. Run before shipping a local-web build. |
+| `build-hours-tracker.py` | Build a blank hours tracker at `workspace/hours-tracker.xlsx`. |
+| `sync-hours.py` | Sync `workspace/hours-tracker.xlsx` with git commit activity. |
+| `send_email.py` | Reusable plain-text email sender (Resend HTTP API, stdlib only). Shared by `morning_briefing.py` and the scheduled agents. |
 
 ## Output validators — JSON contract
 

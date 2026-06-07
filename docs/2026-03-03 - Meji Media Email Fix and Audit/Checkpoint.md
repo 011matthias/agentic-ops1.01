@@ -109,7 +109,7 @@ All checks passed across A1, A2, A3:
 ### Reference Materials
 - Dev webhook: `https://hook.eu1.make.com/dr5mcybej4qjryia54np8vxugon0ehcn`
 - Sheet Reader fixture: `https://hook.eu1.make.com/a9eyx97efc4fy676j9eru796hu58ewek`
-- MAKE_API_TOKEN for dev: `2dc52dfc-ed0c-4d7f-b9cc-bcb3b03e696a` (eu1.make.com)
+- MAKE_API_TOKEN for dev: `<REDACTED: set MAKE_API_TOKEN env>` (eu1.make.com)
 - Handover docs: `workspace/clients/meji-media/handover/README.md`, `handover/setup-form.html`
 
 ---

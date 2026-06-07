@@ -131,7 +131,7 @@ def cmd_deploy(args: argparse.Namespace) -> None:
     if resp.status_code in (200, 201):
         data = resp.json()
         scenario = data.get("scenario", data)
-        print(f"Success! Scenario created:")
+        print("Success! Scenario created:")
         print(f"  ID: {scenario.get('id')}")
         print(f"  Name: {scenario.get('name', 'unnamed')}")
         if scenario.get("isinvalid"):

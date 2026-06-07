@@ -5,9 +5,9 @@
 """One-shot cell writer for eu2 Google Sheet via Make.com.
 Deploys a temp scheduled scenario with updateCell modules, runs once, deletes."""
 
-import json, sys, time, httpx
+import json, os, sys, time, httpx
 
-TOKEN = "2dc52dfc-ed0c-4d7f-b9cc-bcb3b03e696a"
+TOKEN = os.environ["MAKE_API_TOKEN"]  # set MAKE_API_TOKEN in env; never hardcode
 ZONE = "eu2.make.com"
 TEAM_ID = 2826470
 CONN_ID = 13838215
