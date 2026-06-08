@@ -72,6 +72,29 @@ def test_postable_can_narrow_types_to_drop_cogs():
     assert postable == {"E100-21", "E100-26"}  # COGS now excluded
 
 
+def test_root_group_resolves_to_top_level_ancestor():
+    coa = _coa()
+    flights = coa.by_code("E100-21")
+    assert coa.root_group(flights) == "Travel Expense"
+    # A top-level account is its own group.
+    assert coa.root_group(coa.by_code("E700")) == "COGS Core"
+
+
+def test_scope_groups_restricts_to_card_expense_subtrees():
+    coa = _coa()
+    # Only the Travel subtree is in card-expense scope here.
+    scoped = {a.code for a in coa.postable_expense_accounts(scope_groups=["Travel Expense"])}
+    assert scoped == {"E100-21", "E100-26"}
+    # COGS leaf dropped because its group is out of scope, even though it
+    # passed the type/leaf/active filters.
+    assert "E700" not in scoped
+
+
+def test_scope_groups_unknown_group_yields_nothing():
+    coa = _coa()
+    assert coa.postable_expense_accounts(scope_groups=["No Such Group"]) == []
+
+
 def test_resolve_by_code_then_name():
     coa = _coa()
     assert coa.resolve("E100-26").name == "Travel: Hotels"

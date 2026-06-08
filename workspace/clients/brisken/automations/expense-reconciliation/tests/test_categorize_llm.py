@@ -224,6 +224,50 @@ def test_token_usage_unknown_model_zero_cost():
     assert usage.cost_usd == Decimal("0")
 
 
+# ── Zoho account mapping (slice 4.2) ────────────────────────────────
+
+
+def test_chart_of_accounts_forwarded_and_zoho_account_flows_through():
+    """4.2: in-scope account labels reach the client, and the picked
+    zoho_account propagates onto the Categorization."""
+    items = [LineItem(description="Flight to Berlin", line_total=Decimal("420"))]
+    receipt = _receipt(items)
+    labels = ["E100010-21 Travel Expense:Flights", "E600010-05 Advertising"]
+    mock = MockLLMClient(responses=[
+        [
+            ClassificationResult(
+                category="Travel & Transport",
+                zoho_account="E100010-21 Travel Expense:Flights",
+                confidence=0.95, reasoning="flight → travel",
+            ),
+        ]
+    ])
+
+    [out] = categorize_receipts([receipt], client=mock, chart_of_accounts=labels)
+
+    assert mock.last_chart_of_accounts == labels
+    assert out.line_items[0].categorization.zoho_account == "E100010-21 Travel Expense:Flights"
+
+
+def test_zoho_account_forwarded_on_vendor_fallback():
+    """4.2: the account list also reaches the Tier-2 vendor call."""
+    receipt = _receipt(items=[], detected_vendor="Uber")
+    labels = ["E100010-41 Travel Expense:Taxi/Uber"]
+    mock = MockLLMClient(responses=[
+        ClassificationResult(
+            category="Travel & Transport",
+            zoho_account="E100010-41 Travel Expense:Taxi/Uber",
+            confidence=0.85, reasoning="Uber → taxi",
+        ),
+    ])
+
+    [out] = categorize_receipts([receipt], client=mock, chart_of_accounts=labels)
+
+    assert mock.calls[0][0] == "classify_by_vendor"
+    assert mock.last_chart_of_accounts == labels
+    assert out.line_items[0].categorization.zoho_account == "E100010-41 Travel Expense:Taxi/Uber"
+
+
 # ── Keyword fallback preserved when no LLM ──────────────────────────
 
 
