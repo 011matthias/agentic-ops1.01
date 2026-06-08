@@ -6,7 +6,8 @@ domain: unpauseai.com
 brand: UnpauseAI
 
 engines:
-  - perplexity   # Perplexity Search API (POST /search): ranked URLs, $5/1k requests
+  - anthropic    # Claude + web_search tool: does Claude cite us? Runs on Anthropic credits (~$0.03/query)
+  # - perplexity # Perplexity Search API (POST /search): ranked URLs, $5/1k requests
   # - openai     # enable once AI_VISIBILITY_OPENAI_KEY is set (dedicated, not a client key)
 
 queries:

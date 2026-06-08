@@ -64,15 +64,32 @@ automation consultancy":
 
 ## Citation probe
 
-No live engine key set; the probe is built and skips cleanly.
+Engine: Claude (`claude-haiku-4-5` + web-search tool). Run: 2026-06-08, 11
+buyer-intent queries. We used Anthropic because the credits already existed;
+this measures Claude's citations specifically, one engine of several. Adding
+the engines buyers use more (ChatGPT, Perplexity, Google AI Overviews) is the
+next coverage step.
 
-LIMITATION: no AI-engine key is provisioned for citation tracking.
-USER ACTION NEEDED: set `PERPLEXITY_API_KEY` (a ~$5 credit covers months of
-monthly probes and returns source URLs natively) to activate live
-share-of-voice tracking across the 11 target queries. A dedicated
-`AI_VISIBILITY_OPENAI_KEY` adds the ChatGPT-search engine; do not reuse a
-client's key (Dirk's Brisken `OPENAI_API_KEY` is off-limits).
+**Result: 0 of 11 queries cited unpauseai.com.** Not the 9 category and
+use-case queries, and not the 2 branded ones.
 
-Once keyed, this section fills with a per-query, per-engine cited/not-cited
-table plus the competitors surfacing in our place, which becomes the
-month-over-month metric.
+The branded query is the sharp one. A re-run of "what is UnpauseAI" did surface
+a single unpauseai.com source, and it was `/login`, never a value page; the
+rest of what Claude cited was PauseAI (the anti-AI advocacy org): its Wikipedia
+entry, pauseai.info, pauseai-us.org, its Instagram. Claude's own answer hedged
+in plain text: "Your search query could also relate to PauseAI (spelled
+differently) ... a separate entity." So even when we appear, the entity is
+muddy and the page is wrong.
+
+Two things this confirms:
+
+- The PauseAI collision is real and active in a live model answer, not
+  hypothetical. It is the strongest argument for remediation items 1 and 4
+  (Organization schema with `sameAs`, plus explicit disambiguation).
+- Presence is unstable: the same branded query flipped between no-citation and
+  a `/login`-only citation across two runs minutes apart. Answer-engine probing
+  is noisy run to run, which is why the monthly metric should also track the
+  Perplexity Search API retrieval rank (more stable) once that key exists.
+
+This 0/11 is the before number. Re-run after the on-site remediation ships;
+the delta is the case study.
