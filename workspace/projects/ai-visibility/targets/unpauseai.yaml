@@ -6,7 +6,7 @@ domain: unpauseai.com
 brand: UnpauseAI
 
 engines:
-  - perplexity   # primary: returns source URLs natively
+  - perplexity   # Perplexity Search API (POST /search): ranked URLs, $5/1k requests
   # - openai     # enable once AI_VISIBILITY_OPENAI_KEY is set (dedicated, not a client key)
 
 queries:
