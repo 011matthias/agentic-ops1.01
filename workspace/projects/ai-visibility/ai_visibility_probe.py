@@ -179,26 +179,35 @@ def _domain_in(domain: str, url: str) -> bool:
 
 
 def probe_perplexity(queries: list[str], domain: str) -> list[ProbeRow]:
+    """Perplexity Search API (POST /search): ranked web results per query.
+
+    Cheapest engine ($5 per 1,000 requests, no token charge) and returns the exact
+    URL list we check, so it is the right v1 instrument for monthly tracking. The
+    Sonar answer engine (/chat/completions, 'citations' field) measures citation in
+    the written answer instead of retrieval rank; add it as a second engine when the
+    'cited in the actual answer' signal is worth the extra cost.
+    """
     key = os.environ.get("PERPLEXITY_API_KEY")
     if not key:
-        return [ProbeRow("perplexity", "*", False, note="PERPLEXITY_API_KEY not set -- skipped")]
+        return [ProbeRow("perplexity-search", "*", False,
+                         note="PERPLEXITY_API_KEY not set -- skipped")]
     rows: list[ProbeRow] = []
     with httpx.Client(timeout=httpx.Timeout(60.0),
                       headers={"Authorization": f"Bearer {key}"}) as client:
         for q in queries:
             try:
-                r = client.post("https://api.perplexity.ai/chat/completions", json={
-                    "model": "sonar",
-                    "messages": [{"role": "user", "content": q}],
-                })
+                r = client.post("https://api.perplexity.ai/search",
+                                json={"query": q, "max_results": 10})
                 r.raise_for_status()
-                data = r.json()
-                cites = data.get("citations") or data.get("search_results") or []
-                urls = [c if isinstance(c, str) else c.get("url", "") for c in cites]
-                rows.append(ProbeRow("perplexity", q,
-                                     any(_domain_in(domain, u) for u in urls), urls))
+                results = r.json().get("results", [])
+                urls = [item.get("url", "") for item in results]
+                rank = next((i for i, u in enumerate(urls, 1) if _domain_in(domain, u)), None)
+                rows.append(ProbeRow(
+                    "perplexity-search", q, rank is not None,
+                    [u for u in urls if _domain_in(domain, u)],
+                    note=(f"rank {rank} of {len(urls)}" if rank else f"not in top {len(urls)}")))
             except httpx.HTTPError as exc:
-                rows.append(ProbeRow("perplexity", q, False, note=f"error: {exc}"))
+                rows.append(ProbeRow("perplexity-search", q, False, note=f"error: {exc}"))
     return rows
 
 
