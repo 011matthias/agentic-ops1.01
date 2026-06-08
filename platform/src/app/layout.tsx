@@ -32,6 +32,48 @@ export const metadata: Metadata = {
   },
 };
 
+const ORGANIZATION_SCHEMA = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://unpauseai.com/#organization",
+      name: "UnpauseAI",
+      url: "https://unpauseai.com",
+      description:
+        "EU-based automation consultancy. Production-grade workflow automation for regulated industries and scaling operations. GDPR-aware by design.",
+      disambiguatingDescription:
+        "UnpauseAI is an automation consultancy based in Karlsruhe, Germany, building production-grade workflow automation. It is a separate entity from PauseAI, the AI-safety advocacy organization; the names are similar but unrelated.",
+      slogan: "Built to stay done.",
+      email: "admin@unpauseai.com",
+      founder: { "@type": "Person", name: "Nicolas Neumann" },
+      address: {
+        "@type": "PostalAddress",
+        addressLocality: "Karlsruhe",
+        addressCountry: "DE",
+      },
+      areaServed: "EU",
+      knowsAbout: [
+        "workflow automation",
+        "Make.com",
+        "n8n",
+        "Trigger.dev",
+        "CRM integration",
+        "ERP integration",
+        "lead automation",
+        "GDPR-compliant automation",
+      ],
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://unpauseai.com/#website",
+      url: "https://unpauseai.com",
+      name: "UnpauseAI",
+      publisher: { "@id": "https://unpauseai.com/#organization" },
+    },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -41,6 +83,10 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: `(function(){var t=localStorage.getItem('theme');var d=document.documentElement;if(t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)){d.classList.add('dark')}})()` }} />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(ORGANIZATION_SCHEMA) }}
+        />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}

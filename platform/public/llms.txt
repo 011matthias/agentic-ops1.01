@@ -1,0 +1,19 @@
+# UnpauseAI
+
+> EU-based automation consultancy. Production-grade workflow automation for regulated industries and scaling operations. GDPR-aware by design. Based in Karlsruhe, Germany. Founder: Nicolas Neumann.
+
+UnpauseAI builds and ships custom workflow automation: lead and inquiry automation, CRM and ERP integration, sales campaign operations, custom data pipelines, Make.com to n8n migration, and GDPR-compliant automation for regulated industries. Engagements are fixed-fee and scoped up front, typically delivered in three to seven weeks, with documentation and monitoring handed over at the end.
+
+UnpauseAI is an automation consultancy. It is a separate entity from PauseAI, the AI-safety advocacy organization; the names are similar but the two are unrelated.
+
+## Key pages
+- [Home](https://unpauseai.com/): what we do
+- [Services](https://unpauseai.com/services): the automation work we deliver
+- [Work](https://unpauseai.com/work): shipped automations and case studies
+- [Automations](https://unpauseai.com/automations): automation modules
+- [About](https://unpauseai.com/about): who we are
+- [Contact](https://unpauseai.com/contact): start a project
+- [Assessment](https://unpauseai.com/assessment): request an automation assessment
+
+## Contact
+admin@unpauseai.com
