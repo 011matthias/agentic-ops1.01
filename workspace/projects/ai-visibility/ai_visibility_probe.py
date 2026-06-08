@@ -237,10 +237,60 @@ def probe_openai(queries: list[str], domain: str) -> list[ProbeRow]:
     return rows
 
 
+def probe_anthropic(queries: list[str], domain: str) -> list[ProbeRow]:
+    """Anthropic Messages API + server-side web_search tool.
+
+    Measures whether Claude (with web search) cites the domain when answering a
+    buyer-intent query. This is the Claude-engine citation signal: one engine, and
+    not the one most buyers shop in, but it runs on existing Anthropic credits.
+    Reads ANTHROPIC_API_KEY. Roughly $0.03 per query (1 web search + Haiku tokens).
+    """
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        return [ProbeRow("claude-search", "*", False, note="ANTHROPIC_API_KEY not set -- skipped")]
+    rows: list[ProbeRow] = []
+    headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
+    with httpx.Client(timeout=httpx.Timeout(120.0), headers=headers) as client:
+        for q in queries:
+            try:
+                r = client.post("https://api.anthropic.com/v1/messages", json={
+                    "model": "claude-haiku-4-5-20251001",
+                    "max_tokens": 1024,
+                    "messages": [{"role": "user", "content": q}],
+                    "tools": [{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}],
+                })
+                r.raise_for_status()
+                urls = _extract_anthropic_urls(r.json())
+                hits = sorted({u for u in urls if _domain_in(domain, u)})
+                rows.append(ProbeRow("claude-search", q, bool(hits), hits,
+                                     note="" if hits else f"cited {len(set(urls))} sources, none ours"))
+            except httpx.HTTPError as exc:
+                rows.append(ProbeRow("claude-search", q, False, note=f"error: {exc}"))
+    return rows
+
+
+def _extract_anthropic_urls(data: dict[str, Any]) -> list[str]:
+    """Every source URL in an Anthropic web-search response: the search-result
+    blocks plus the inline citations attached to the answer text."""
+    urls: list[str] = []
+    for block in data.get("content", []):
+        if block.get("type") == "web_search_tool_result":
+            for item in block.get("content") or []:
+                if isinstance(item, dict) and item.get("url"):
+                    urls.append(item["url"])
+        elif block.get("type") == "text":
+            for cit in block.get("citations") or []:
+                if isinstance(cit, dict) and cit.get("url"):
+                    urls.append(cit["url"])
+    return urls
+
+
 def probe_citations(queries: list[str], domain: str, engines: list[str]) -> list[ProbeRow]:
     rows: list[ProbeRow] = []
     if "perplexity" in engines:
         rows += probe_perplexity(queries, domain)
+    if "anthropic" in engines:
+        rows += probe_anthropic(queries, domain)
     if "openai" in engines:
         rows += probe_openai(queries, domain)
     return rows
