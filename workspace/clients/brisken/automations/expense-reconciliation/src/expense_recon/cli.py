@@ -38,8 +38,9 @@ What this slice does NOT do (deferred):
   (D1b); the keyword/no-LLM path falls back to the [STUB] reason.
   Either way every FX case lands in Needs Review. Ambiguous-candidate
   judgment is still stubbed (BLUEPRINT 2.4).
-- Zoho journal-entry export — deferred until the review-report shape
-  is validated against Chris's first real month.
+- Zoho journal POSTING (slice 4b) — irreversible, stays gated. The
+  tool writes a Zoho-import CSV (`zoho:` block, slice 4.6/4.9) but
+  never posts journals to Zoho itself.
 - Persistence / audit log / multi-tenant DB — slice 1 is a single
   process invocation. Re-runs overwrite the output file.
 """
@@ -56,6 +57,7 @@ from decimal import Decimal
 
 from .categorize import categorize_receipts
 from .ingest._common import ParseIssue
+from .ingest.chart_of_accounts import ChartOfAccounts
 from .ingest.receipts_csv import parse_receipts_csv_tolerant
 from .ingest.statement_csv import parse_statement_csv_tolerant
 from .ingest.statement_xlsx import parse_statement_xlsx_tolerant
@@ -65,6 +67,8 @@ from .matching.deterministic import match_month
 from .matching.judgment import judge_ambiguous, judge_fx_match
 from .matching.types import Match, MatchOutcome, Receipt, Transaction
 from .output.report_xlsx import write_report
+from .output.zoho_export import write_zoho_export
+from .zoho.client import ZohoClient, ZohoConfig
 
 
 logger = logging.getLogger("expense_recon")
@@ -227,9 +231,26 @@ def run(
     llm_client, cost_tracker = _build_llm_client(cfg)
     logger.info("LLM client: %s", "enabled" if llm_client else "none (keyword stub)")
 
+    # BLUEPRINT 4.9: load Brisken's chart of accounts (live API pull or
+    # cached CSV) and narrow it to the owner-approved operating-expense
+    # groups, so the categorizer picks a real Zoho leaf account per LD-2.
+    chart_of_accounts, zoho_cfg = _build_chart_of_accounts(cfg, config_dir)
+    account_labels: list[str] | None = None
+    if chart_of_accounts is not None:
+        postable = chart_of_accounts.postable_expense_accounts(
+            scope_groups=zoho_cfg.get("scope_groups")
+        )
+        account_labels = chart_of_accounts.llm_account_labels(postable)
+        logger.info(
+            "chart of accounts: %d accounts, %d in-scope postable",
+            len(chart_of_accounts), len(postable),
+        )
+
     # BLUEPRINT LD-2: categorize per line item BEFORE matching so the
     # report writer sees Tier 1/2/3 sources on every receipt's items.
-    receipts = categorize_receipts(receipts, client=llm_client)
+    receipts = categorize_receipts(
+        receipts, client=llm_client, chart_of_accounts=account_labels
+    )
 
     outcome = match_month(transactions, receipts)
     logger.info(
@@ -261,7 +282,7 @@ def run(
     out_cfg = cfg.get("output") or {}
     out_path = out_override or (config_dir / (out_cfg.get("path") or "report.xlsx"))
 
-    return write_report(
+    report_path = write_report(
         outcome,
         transactions,
         receipts,
@@ -270,6 +291,25 @@ def run(
         llm_cost=cost_tracker.total_cost_usd if cost_tracker else None,
         explain=explain,
     )
+
+    # BLUEPRINT 4.6 + 4.9: write the Zoho journal-entry import CSV when a
+    # chart of accounts is loaded and an export path is configured. The
+    # CoA resolves the debit accounts; `card_accounts` resolves the
+    # balancing credit. Journal POSTING to Zoho (4b) stays gated.
+    if chart_of_accounts is not None and zoho_cfg.get("export_path"):
+        export_path = (config_dir / zoho_cfg["export_path"]).resolve()
+        write_zoho_export(
+            outcome,
+            transactions,
+            receipts,
+            export_path,
+            chart_of_accounts=chart_of_accounts,
+            card_accounts=zoho_cfg.get("card_accounts"),
+        )
+        logger.info("wrote Zoho journal export: %s", export_path)
+        print(f"Wrote Zoho export: {export_path}")
+
+    return report_path
 
 
 def _build_llm_client(cfg: dict) -> tuple[LLMClient | None, CostTracker | None]:
@@ -311,6 +351,69 @@ def _build_llm_client(cfg: dict) -> tuple[LLMClient | None, CostTracker | None]:
     tracker = CostTracker()
     client = OpenAIClient(model=model, api_key=api_key, cost_tracker=tracker)
     return client, tracker
+
+
+def _build_chart_of_accounts(
+    cfg: dict, config_dir: Path
+) -> tuple[ChartOfAccounts | None, dict]:
+    """Read the `zoho:` block and load Brisken's chart of accounts.
+
+    Returns `(None, {})` when there is no `zoho:` block (or it is
+    disabled) — the categorizer then runs without account labels and no
+    Zoho export is written, preserving slice 1–3 behaviour.
+
+    Shape:
+        {
+          "zoho": {
+            "enabled": true,                  // optional, default true
+            "coa_source": "api",              // "api" | "csv"
+            "coa_csv_path": "chart.csv",      // required when source == "csv"
+            "coa_column_map": { ... },        // optional, csv only
+            "scope_groups": [                 // approved root-group names;
+              "Travel Expense",               //   lives in the run config,
+              "Marketing & Selling Expenses", //   NOT in the tool. Omit to
+              "Professional Fees",            //   leave the candidate set
+              "Office Infra and Admin",       //   un-narrowed.
+              "IT: Computer and Internet Expenses",
+              "Bank Fees and Charges",
+              "Lodging"
+            ],
+            "export_path": "zoho-journal.csv",   // optional; no export if absent
+            "card_accounts": {                   // statement account_id ->
+              "amex-usd": "A200 Amex Card"       //   Zoho bank/card account ref
+            }
+          }
+        }
+
+    Credentials for the API source come from the environment
+    (`ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN`,
+    `ZOHO_ORG_ID`), never the config file. Brisken's real chart of
+    accounts is sensitive client data and is pulled live; it is never
+    committed to this repo.
+    """
+    z = cfg.get("zoho")
+    if not isinstance(z, dict) or not z.get("enabled", True):
+        return None, {}
+
+    source = z.get("coa_source", "api")
+    if source == "csv":
+        if "coa_csv_path" not in z:
+            raise ConfigError("config.zoho.coa_csv_path required when coa_source is 'csv'")
+        coa_path = (config_dir / z["coa_csv_path"]).resolve()
+        if not coa_path.exists():
+            raise ConfigError(f"chart-of-accounts CSV not found: {coa_path}")
+        coa = ChartOfAccounts.from_csv(coa_path, column_map=z.get("coa_column_map"))
+    elif source == "api":
+        try:
+            client = ZohoClient(ZohoConfig.from_env())
+        except ValueError as exc:
+            raise ConfigError(str(exc)) from exc
+        coa = ChartOfAccounts.from_api(client.list_chart_of_accounts())
+    else:
+        raise ConfigError(
+            f"config.zoho.coa_source {source!r} not supported (use 'api' or 'csv')"
+        )
+    return coa, z
 
 
 def _print_dry_run_summary(
