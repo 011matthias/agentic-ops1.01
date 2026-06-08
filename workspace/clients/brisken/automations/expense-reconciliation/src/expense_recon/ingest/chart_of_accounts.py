@@ -171,6 +171,26 @@ class ChartOfAccounts:
     def _parent_names(self) -> set[str]:
         return {a.parent_name for a in self.accounts if a.parent_name}
 
+    def _name_map(self) -> dict[str, Account]:
+        return {a.name: a for a in self.accounts}
+
+    def root_group(self, account: Account) -> str:
+        """The name of the top-level ancestor of `account` (itself if it
+        has no parent). This is the group an account rolls up into
+        ('Travel Expense', 'Marketing & Selling Expenses', ...) and the
+        unit the card-expense scope decision is made in."""
+        name_map = self._name_map()
+        cur = account
+        seen: set[str] = set()
+        while cur.parent_name and cur.parent_name not in seen:
+            seen.add(cur.parent_name)
+            parent = name_map.get(cur.parent_name)
+            if parent is None:
+                # Parent not present in this chart; treat its name as the root.
+                return cur.parent_name
+            cur = parent
+        return cur.name
+
     def leaf_accounts(self) -> list[Account]:
         """Accounts that are not a parent of any other account. Zoho
         only allows posting to leaf accounts; parent/header accounts are
@@ -182,15 +202,21 @@ class ChartOfAccounts:
         self,
         *,
         types: Iterable[str] = EXPENSE_ACCOUNT_TYPES,
+        scope_groups: Iterable[str] | None = None,
         include_inactive: bool = False,
         include_do_not_use: bool = False,
     ) -> list[Account]:
         """Candidate accounts for categorization / posting: active +
         expense-class + leaf + not DO-NOT-USE, by default.
 
-        Narrow `types` to scope the categorizer (e.g. drop
-        `cost_of_goods_sold` once Chris confirms COGS is journal-only)."""
+        `scope_groups` restricts the result to leaves whose top-level
+        group (`root_group`) is in the given set; this is how the
+        card-expense subtree decision is applied (which operating-expense
+        groups the categorizer may assign). `types` is the coarser
+        account-type filter. Both default to permissive, so the caller
+        opts into narrowing."""
         type_set = {t.strip().lower() for t in types}
+        scope_set = {g.strip() for g in scope_groups} if scope_groups is not None else None
         parents = self._parent_names()
         out: list[Account] = []
         for a in self.accounts:
@@ -201,6 +227,8 @@ class ChartOfAccounts:
             if not include_do_not_use and a.is_do_not_use:
                 continue
             if a.name in parents:  # not a leaf
+                continue
+            if scope_set is not None and self.root_group(a) not in scope_set:
                 continue
             out.append(a)
         return out

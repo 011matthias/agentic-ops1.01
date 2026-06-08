@@ -171,7 +171,7 @@ _LINE_ITEMS_PROMPT_TEMPLATE = """You categorize line items from a business expen
 
 Categories (pick exactly one per line item, or null if you're not confident):
 {categories_block}
-
+{accounts_block}
 Rules:
 - Classify each line item from its DESCRIPTION ALONE.
 - Do NOT consider vendor name or any other context. The description must justify the category by itself.
@@ -182,7 +182,7 @@ Rules:
 Line items to classify:
 {items_block}
 
-Return a JSON object with key "results" whose value is an array of {n_items} objects, one per input item, in the same order. Each object has: index (1-based, matching the input), category (one of the listed names or null), confidence (number), reasoning (string).
+Return a JSON object with key "results" whose value is an array of {n_items} objects, one per input item, in the same order. Each object has: index (1-based, matching the input), category (one of the listed names or null), confidence (number), reasoning (string), zoho_account (copy the exact label of the single best-matching GL account from the account list above, or null if no account list was given or none clearly fits).
 """
 
 _VENDOR_PROMPT_TEMPLATE = """You categorize a business expense receipt using only the vendor name and total amount. The receipt has no line-item breakdown.
@@ -197,8 +197,8 @@ Rules:
 
 Vendor: {vendor}
 Total: {total}
-
-Return a single JSON object with: category (one of the listed names or null), confidence (number), reasoning (string).
+{accounts_block}
+Return a single JSON object with: category (one of the listed names or null), confidence (number), reasoning (string), zoho_account (copy the exact label of the single best-matching GL account from the account list above, or null if no account list was given or none clearly fits).
 """
 
 
@@ -214,8 +214,9 @@ _LINE_ITEMS_SCHEMA = {
                     "category": {"type": ["string", "null"]},
                     "confidence": {"type": "number"},
                     "reasoning": {"type": "string"},
+                    "zoho_account": {"type": ["string", "null"]},
                 },
-                "required": ["index", "category", "confidence", "reasoning"],
+                "required": ["index", "category", "confidence", "reasoning", "zoho_account"],
                 "additionalProperties": False,
             },
         }
@@ -230,8 +231,9 @@ _VENDOR_SCHEMA = {
         "category": {"type": ["string", "null"]},
         "confidence": {"type": "number"},
         "reasoning": {"type": "string"},
+        "zoho_account": {"type": ["string", "null"]},
     },
-    "required": ["category", "confidence", "reasoning"],
+    "required": ["category", "confidence", "reasoning", "zoho_account"],
     "additionalProperties": False,
 }
 
@@ -318,6 +320,20 @@ _AMBIGUOUS_SCHEMA = {
 }
 
 
+def _accounts_block(chart_of_accounts: list[str] | None) -> str:
+    """Render the in-scope GL account list for the prompt, or '' when no
+    chart of accounts was supplied (the model then returns zoho_account
+    null). Slice 4.2."""
+    if not chart_of_accounts:
+        return ""
+    listed = "\n".join(f"  - {label}" for label in chart_of_accounts)
+    return (
+        "\nGL accounts (pick the single best match; copy the label "
+        "EXACTLY, or null if none clearly fits):\n"
+        f"{listed}\n"
+    )
+
+
 class OpenAIClient:
     """OpenAI-backed implementation. Provider swap = subclass with the
     same method signatures and instantiate that instead.
@@ -366,6 +382,7 @@ class OpenAIClient:
         )
         prompt = _LINE_ITEMS_PROMPT_TEMPLATE.format(
             categories_block="\n".join(f"  - {c}" for c in categories),
+            accounts_block=_accounts_block(chart_of_accounts),
             items_block=items_block,
             n_items=len(items),
         )
@@ -401,7 +418,7 @@ class OpenAIClient:
             out.append(
                 ClassificationResult(
                     category=r.get("category"),
-                    zoho_account=None,
+                    zoho_account=r.get("zoho_account"),
                     confidence=float(r.get("confidence", 0.0)),
                     reasoning=str(r.get("reasoning", "")),
                 )
@@ -419,6 +436,7 @@ class OpenAIClient:
             categories_block="\n".join(f"  - {c}" for c in categories),
             vendor=vendor,
             total=total,
+            accounts_block=_accounts_block(chart_of_accounts),
         )
         response = self._client.chat.completions.create(
             model=self.model,
@@ -438,7 +456,7 @@ class OpenAIClient:
         payload = json.loads(response.choices[0].message.content or "{}")
         return ClassificationResult(
             category=payload.get("category"),
-            zoho_account=None,
+            zoho_account=payload.get("zoho_account"),
             confidence=float(payload.get("confidence", 0.0)),
             reasoning=str(payload.get("reasoning", "")),
         )
@@ -599,6 +617,9 @@ class MockLLMClient:
         self._fx_queue = list(fx_responses or [])
         self._ambiguous_queue = list(ambiguous_responses or [])
         self.calls: list[tuple[str, object]] = []
+        # Last chart-of-accounts labels seen by a classify_* call, so tests
+        # can assert the categorizer forwarded the in-scope account list.
+        self.last_chart_of_accounts: list[str] | None = None
         self.cost_tracker = cost_tracker or CostTracker()
         # Record a fixed nominal cost per call so tests can verify
         # cost-tracking behavior without coupling to provider pricing.
@@ -613,6 +634,7 @@ class MockLLMClient:
         chart_of_accounts: list[str] | None = None,
     ) -> list[ClassificationResult]:
         self.calls.append(("classify_line_items", items))
+        self.last_chart_of_accounts = chart_of_accounts
         self.cost_tracker.record(self._per_call_cost)
 
         if self._queue:
@@ -630,6 +652,7 @@ class MockLLMClient:
         chart_of_accounts: list[str] | None = None,
     ) -> ClassificationResult:
         self.calls.append(("classify_by_vendor", (vendor, total)))
+        self.last_chart_of_accounts = chart_of_accounts
         self.cost_tracker.record(self._per_call_cost)
 
         if self._queue:

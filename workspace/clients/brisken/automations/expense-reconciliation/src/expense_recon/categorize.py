@@ -170,6 +170,7 @@ def categorize_receipts(
     receipts: list[Receipt],
     *,
     client: LLMClient | None = None,
+    chart_of_accounts: list[str] | None = None,
 ) -> list[Receipt]:
     """Return a new list of receipts with line_items carrying
     Categorization results per LD-2.
@@ -178,17 +179,29 @@ def categorize_receipts(
     falls back to the keyword stub — preserves slice-1 behaviour for
     callers that haven't wired an LLM yet.
 
+    `chart_of_accounts` is the in-scope Zoho account labels (slice 4.1
+    `ChartOfAccounts.llm_account_labels()`). When supplied, the LLM is
+    asked to also pick the specific `zoho_account` leaf per LD-2; the
+    keyword stub ignores it (no account mapping). Ignored entirely
+    without an LLM client.
+
     Pure function; does not mutate inputs.
     """
-    return [_categorize_one(r, client) for r in receipts]
+    return [_categorize_one(r, client, chart_of_accounts) for r in receipts]
 
 
-def _categorize_one(receipt: Receipt, client: LLMClient | None) -> Receipt:
+def _categorize_one(
+    receipt: Receipt,
+    client: LLMClient | None,
+    chart_of_accounts: list[str] | None,
+) -> Receipt:
     """Apply the LD-2 tier rules to a single receipt."""
 
     if receipt.line_items and not _all_vague(receipt.line_items):
         if client is not None:
-            categorized = _classify_lines_via_llm(receipt.line_items, client)
+            categorized = _classify_lines_via_llm(
+                receipt.line_items, client, chart_of_accounts
+            )
         else:
             categorized = tuple(_classify_line_keyword(li) for li in receipt.line_items)
         return replace(receipt, line_items=categorized)
@@ -197,7 +210,8 @@ def _categorize_one(receipt: Receipt, client: LLMClient | None) -> Receipt:
     synthesized = _synthesize_total_line(receipt)
     if client is not None:
         classified = _classify_vendor_via_llm(
-            synthesized, receipt.detected_vendor, receipt.detected_total, client
+            synthesized, receipt.detected_vendor, receipt.detected_total,
+            client, chart_of_accounts,
         )
     else:
         classified = _classify_vendor_keyword(synthesized, receipt.detected_vendor)
@@ -208,7 +222,9 @@ def _categorize_one(receipt: Receipt, client: LLMClient | None) -> Receipt:
 
 
 def _classify_lines_via_llm(
-    items: tuple[LineItem, ...], client: LLMClient
+    items: tuple[LineItem, ...],
+    client: LLMClient,
+    chart_of_accounts: list[str] | None = None,
 ) -> tuple[LineItem, ...]:
     """Tier 1 via LLM. One batched call per receipt regardless of
     line-item count (cost discipline)."""
@@ -221,7 +237,8 @@ def _classify_lines_via_llm(
         for it in items
     ]
     results = client.classify_line_items(
-        inputs, categories=list(EXPENSE_CATEGORIES)
+        inputs, categories=list(EXPENSE_CATEGORIES),
+        chart_of_accounts=chart_of_accounts,
     )
 
     out: list[LineItem] = []
@@ -242,6 +259,7 @@ def _classify_vendor_via_llm(
     vendor: str | None,
     total: Decimal | None,
     client: LLMClient,
+    chart_of_accounts: list[str] | None = None,
 ) -> LineItem:
     """Tier 2 via LLM. Single call with vendor name + total."""
     if not vendor:
@@ -257,6 +275,7 @@ def _classify_vendor_via_llm(
         vendor=vendor,
         total=total or Decimal("0"),
         categories=list(EXPENSE_CATEGORIES),
+        chart_of_accounts=chart_of_accounts,
     )
     return replace(
         item,
