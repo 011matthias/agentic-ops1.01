@@ -46,10 +46,35 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SETTINGS_LOCAL = REPO_ROOT / ".claude" / "settings.local.json"
 
-# Single source of truth for the enforcement wiring. Portable relative paths
-# (`uv run python .claude/hooks/X.py`, cwd = repo root) -- never machine-
-# specific absolutes, never bare `python`. This is exactly the shape F1 wired
-# by hand; embedding it here is what makes the fix travel across devices.
+# Absolute, forward-slash repo root baked into every wired hook command. WHY:
+# the per-tool-call hooks fire MID-session, when a stray `cd` may have drifted
+# the shell cwd. A cwd-relative command (`uv run python .claude/hooks/X.py`)
+# then resolves the script against the wrong directory and the hook silently
+# fails to load -- which silently unloaded the ENTIRE enforcement layer 8+
+# times (friction register 2026-05-18..2026-06-03: #14/#16/#24/#108/#115/
+# #124/#162/#168/#170). `uv run --directory <REPO> python .claude/hooks/X.py`
+# makes BOTH uv AND the hook subprocess run with cwd = repo root regardless of
+# the caller's shell cwd, so drift can no longer brick the layer; it also fixes
+# the hooks' own cwd-relative reads (e.g. hook-log.txt). The absolute path is
+# safe here ONLY because it lands in the gitignored, per-device-regenerated
+# settings.local.json -- it is computed fresh from this device's REPO_ROOT on
+# every `--ensure`, so it never travels to another device (that was the
+# 2026-05-19 root-cause sin, and it lived in a TRACKED settings.json).
+_RD = REPO_ROOT.as_posix()
+
+
+def _cmd(rel_script: str, extra: str = "") -> str:
+    """Build a cwd-independent wired hook command for `rel_script` (a path
+    relative to the repo root). `uv run --directory <REPO>` pins the working
+    directory so shell-cwd drift can never unload the enforcement layer."""
+    suffix = f" {extra}" if extra else ""
+    return f'uv run --directory "{_RD}" python {rel_script}{suffix}'
+
+
+# Single source of truth for the enforcement wiring. Built from `_cmd` so the
+# cwd-pinning is uniform and a new hook can't accidentally be wired with a
+# bare relative path. This is the shape F1 wired by hand, hardened against
+# cwd drift; embedding it here is what makes the fix travel across devices.
 CANONICAL_HOOKS = {
     "UserPromptSubmit": [
         {
@@ -57,7 +82,7 @@ CANONICAL_HOOKS = {
             "hooks": [
                 {
                     "type": "command",
-                    "command": "uv run python .claude/hooks/input-classifier.py",
+                    "command": _cmd(".claude/hooks/input-classifier.py"),
                     "timeout": 10000,
                 }
             ],
@@ -69,12 +94,12 @@ CANONICAL_HOOKS = {
             "hooks": [
                 {
                     "type": "command",
-                    "command": "uv run python .claude/hooks/auto-approve-protected.py",
+                    "command": _cmd(".claude/hooks/auto-approve-protected.py"),
                     "timeout": 10000,
                 },
                 {
                     "type": "command",
-                    "command": "uv run python .claude/hooks/reference-anchor-gate.py",
+                    "command": _cmd(".claude/hooks/reference-anchor-gate.py"),
                     "timeout": 10000,
                 },
             ],
@@ -84,17 +109,17 @@ CANONICAL_HOOKS = {
             "hooks": [
                 {
                     "type": "command",
-                    "command": "uv run python .claude/hooks/instantly-invasive-gate.py",
+                    "command": _cmd(".claude/hooks/instantly-invasive-gate.py"),
                     "timeout": 10000,
                 },
                 {
                     "type": "command",
-                    "command": "uv run python .claude/hooks/no-auto-commit-gate.py",
+                    "command": _cmd(".claude/hooks/no-auto-commit-gate.py"),
                     "timeout": 10000,
                 },
                 {
                     "type": "command",
-                    "command": "uv run python .claude/hooks/cd-guard.py",
+                    "command": _cmd(".claude/hooks/cd-guard.py"),
                     "timeout": 10000,
                 },
             ],
@@ -106,12 +131,12 @@ CANONICAL_HOOKS = {
             "hooks": [
                 {
                     "type": "command",
-                    "command": "uv run python .claude/hooks/em-dash-strip-gate.py",
+                    "command": _cmd(".claude/hooks/em-dash-strip-gate.py"),
                     "timeout": 10000,
                 },
                 {
                     "type": "command",
-                    "command": "uv run python .claude/hooks/post-write-gate.py",
+                    "command": _cmd(".claude/hooks/post-write-gate.py"),
                     "timeout": 10000,
                 },
             ],
@@ -121,12 +146,12 @@ CANONICAL_HOOKS = {
             "hooks": [
                 {
                     "type": "command",
-                    "command": "uv run python .claude/hooks/post-action-gate.py",
+                    "command": _cmd(".claude/hooks/post-action-gate.py"),
                     "timeout": 10000,
                 },
                 {
                     "type": "command",
-                    "command": "uv run python .claude/hooks/gate-skip-detector.py",
+                    "command": _cmd(".claude/hooks/gate-skip-detector.py"),
                     "timeout": 10000,
                 },
             ],
@@ -140,7 +165,7 @@ CANONICAL_HOOKS = {
             "hooks": [
                 {
                     "type": "command",
-                    "command": "uv run python .claude/hooks/session-pressure-meter.py",
+                    "command": _cmd(".claude/hooks/session-pressure-meter.py"),
                     "timeout": 10000,
                 }
             ],
@@ -152,7 +177,7 @@ CANONICAL_HOOKS = {
             "hooks": [
                 {
                     "type": "command",
-                    "command": "uv run python .claude/hooks/stop-b1-gate.py",
+                    "command": _cmd(".claude/hooks/stop-b1-gate.py"),
                     "timeout": 10000,
                 }
             ],
@@ -164,7 +189,7 @@ CANONICAL_HOOKS = {
             "hooks": [
                 {
                     "type": "command",
-                    "command": "uv run python tools/friction-watch.py --once-per-day --quiet",
+                    "command": _cmd("tools/friction-watch.py", "--once-per-day --quiet"),
                     "timeout": 10000,
                 }
             ],

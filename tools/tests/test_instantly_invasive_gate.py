@@ -39,3 +39,95 @@ def test_mutating_post_asks(tmp_path):
 def test_mutating_delete_asks(tmp_path):
     p = _run("curl -X DELETE https://api.instantly.ai/api/v2/leads/123", tmp_path)
     assert permission_decision(p.stdout) == "ask"
+
+
+# --- 2026-06-09 hardening: script-wrapper bypass (register #11 + #177) ---
+
+# Layer B: known invasive loader script classified by --stage.
+def test_loader_activate_asks(tmp_path):
+    p = _run("python meji_p1_instantly_load.py --stage activate", tmp_path)
+    assert permission_decision(p.stdout) == "ask"
+
+
+def test_loader_create_via_uv_asks(tmp_path):
+    p = _run("uv run meji_p1_instantly_load.py --stage create", tmp_path)
+    assert permission_decision(p.stdout) == "ask"
+
+
+def test_loader_archive_asks(tmp_path):
+    p = _run("python meji_p2_instantly_load.py --stage archive", tmp_path)
+    assert permission_decision(p.stdout) == "ask"
+
+
+def test_loader_stage_equals_form_asks(tmp_path):
+    p = _run("python meji_p1_instantly_load.py --stage=load", tmp_path)
+    assert permission_decision(p.stdout) == "ask"
+
+
+def test_loader_preview_passes(tmp_path):
+    p = _run("python meji_p1_instantly_load.py --stage preview", tmp_path)
+    assert p.returncode == 0 and p.stdout.strip() == ""
+
+
+def test_loader_audit_passes(tmp_path):
+    p = _run("python meji_p1_instantly_load.py --stage audit", tmp_path)
+    assert p.returncode == 0 and p.stdout.strip() == ""
+
+
+# Layer C: non-loader .py whose contents touch the API with a mutating method.
+def test_file_scan_mutating_asks(tmp_path):
+    script = tmp_path / "runner.py"
+    script.write_text(
+        "import urllib.request as u\n"
+        'u.urlopen(u.Request("https://api.instantly.ai/api/v2/campaigns", method="POST"))\n',
+        encoding="utf-8",
+    )
+    p = _run(f"python {script}", tmp_path)
+    assert permission_decision(p.stdout) == "ask"
+
+
+def test_file_scan_readonly_passes(tmp_path):
+    # api.instantly.ai present but only GET + a POST to a read path -> allow.
+    script = tmp_path / "census.py"
+    script.write_text(
+        "import urllib.request as u\n"
+        'u.urlopen("https://api.instantly.ai/api/v2/accounts")\n'
+        'def api(method, path): pass\n'
+        'api("POST", "/leads/list")\n',
+        encoding="utf-8",
+    )
+    p = _run(f"python {script}", tmp_path)
+    assert p.returncode == 0 and p.stdout.strip() == ""
+
+
+# Layer A: inline urllib mutating method (not curl -X).
+def test_inline_urllib_put_asks(tmp_path):
+    p = _run(
+        "python -c \"import urllib.request as u; "
+        "u.urlopen(u.Request('https://api.instantly.ai/api/v2/leads', method='PUT'))\"",
+        tmp_path,
+    )
+    assert permission_decision(p.stdout) == "ask"
+
+
+# Layer D: fail-toward-ask only with an uninspectable Instantly signal.
+def test_unresolvable_loader_activate_asks(tmp_path):
+    p = _run("uv run /tmp/does-not-exist-instantly-load.py --stage activate", tmp_path)
+    assert permission_decision(p.stdout) == "ask"
+
+
+def test_unrelated_python_passes(tmp_path):
+    p = _run("python /tmp/nonexistent_build.py", tmp_path)
+    assert p.returncode == 0 and p.stdout.strip() == ""
+
+
+def test_build_py_passes(tmp_path):
+    p = _run("python build.py", tmp_path)
+    assert p.returncode == 0 and p.stdout.strip() == ""
+
+
+# False-positive guard: running THIS test file (which contains api.instantly.ai
+# + -X POST as test data) must not trip the gate.
+def test_running_instantly_test_file_does_not_ask(tmp_path):
+    p = _run("uv run python -m pytest tools/tests/test_instantly_invasive_gate.py", tmp_path)
+    assert p.returncode == 0 and p.stdout.strip() == ""
