@@ -74,8 +74,6 @@ A proposal for a German-language AI support bot that answers "Where is my shipme
 
 The core idea: the bot's tracking facts come from the ERP, never from the language model. A small LLM call handles the judgment parts (which order is this about, what is the customer asking, phrase the reply in natural German). The tracking number, link, carrier, and status are injected verbatim from a deterministic ERP lookup. If the ERP returns nothing, the bot does not guess, it hands off to a person.
 
-Full architecture on the [Solution page](/clients/ai-shipment-support-bot/solution). Visual pipeline on the [Workflow page](/clients/ai-shipment-support-bot/workflow). Runnable n8n skeleton downloadable from the site.
-
 ## Track
 
 Track 2. Full HTML site so the grounding architecture, the Amazon Message Center policy handling, and the phased pricing are concrete and reviewable before any code is written. Cover letter and video script in `workspace/proposals/ai-shipment-support-bot/`.

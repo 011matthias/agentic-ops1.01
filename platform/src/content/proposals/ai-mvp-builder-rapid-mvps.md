@@ -69,7 +69,7 @@ A proposal for the contract-to-hire role focused on shipping useful MVPs, automa
 
 ## Centerpiece
 
-The application requirement is a detailed answer to one scenario: 2,000 products from multiple suppliers, messy data, build an AI-powered product matching and search tool. The full answer lives in [solution.html](/clients/ai-mvp-builder-rapid-mvps/solution) on the proposal site. Short version:
+The application requirement is a detailed answer to one scenario: 2,000 products from multiple suppliers, messy data, build an AI-powered product matching and search tool. Short version:
 
 1. **Day 1**: Normalize the inputs. Load all supplier CSVs, dedupe on a fuzzy SKU + brand match, flag missing-spec rows, output a single clean parquet/SQLite file.
 2. **Day 2-3**: Embed every product (title + specs + brand) with OpenAI `text-embedding-3-small`. Store vectors locally (FAISS or sqlite-vec). Build a CLI search: "give me alternatives to product X" returns top-K by cosine similarity.

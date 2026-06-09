@@ -82,4 +82,4 @@ A 5-stage pipeline built entirely in n8n with a Playwright automation layer:
 
 ## About UnpauseAI
 
-I build n8n workflows professionally, including AI-powered email parsing, browser automation, and API integrations. The proposal site at unpauseai.com/clients/field-nation-n8n-playwright/ walks through the full architecture, edge cases, and a live demo of the email parsing engine.
+I build n8n workflows professionally, including AI-powered email parsing, browser automation, and API integrations.
