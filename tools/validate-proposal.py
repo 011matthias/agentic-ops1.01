@@ -49,6 +49,16 @@ COVER_LETTER_BOUNDS = {
     "template_3": (12, 35),     # Track 2: up to 30 lines + point-by-point
 }
 
+# Short-hook cover letter (pipeline change 2026-06-09, owner directive).
+# The cover letter is now a <=225-character hook that does three jobs:
+# (1) shows we understood the problem, (2) proves comparable past work,
+# (3) names a short implementation. The Loom link + site URL + access code
+# ride on a separate links block below a '---' divider and are NOT counted
+# toward the 225. The new format is DETECTED by the presence of that '---'
+# divider, so legacy long-form letters keep their old (line-count) rules and
+# do not break `--all`.
+COVER_LETTER_CHAR_CAP = 225
+
 VIDEO_DURATION_CAPS = {
     "A": (2, 4),    # min target, hard cap
     "B": (2, 3),
@@ -234,6 +244,39 @@ def parse_frontmatter(text: str) -> dict | None:
         return None
 
 
+def parse_cover_letter(content: str) -> tuple[str, str, bool]:
+    """Split a cover letter into (hook_text, links_text, is_short_format).
+
+    The short-hook format separates the <=225-char hook from the links block
+    with a standalone '---' divider:
+
+        # Cover Letter -- Prospect (p026)
+
+        <hook paragraph, <=225 chars, covers understand/proof/implementation>
+
+        ---
+        Walkthrough: https://loom.com/...
+        Full plan: https://unpauseai.com/clients/slug/  (access code: slug-2026)
+
+    hook_text  = everything before the first standalone '---', minus markdown
+                 header lines ('# ...'), joined to a single string.
+    links_text = everything after the divider.
+    is_short_format = True when a divider is present (the new pipeline format).
+                 Legacy long letters have no divider -> keep their old rules.
+    """
+    body = content.strip()
+    parts = re.split(r'(?m)^[ \t]*---[ \t]*$', body, maxsplit=1)
+    hook_raw = parts[0]
+    links_raw = parts[1] if len(parts) > 1 else ""
+    hook_lines = [
+        l.strip() for l in hook_raw.split("\n")
+        if l.strip() and not l.strip().startswith("#")
+    ]
+    hook_text = " ".join(hook_lines).strip()
+    is_short_format = len(parts) > 1
+    return hook_text, links_raw.strip(), is_short_format
+
+
 # ── Check Functions ─────────────────────────────────────────────────────
 
 def check_frontmatter(report: ValidationReport, fm: dict | None, slug: str):
@@ -304,7 +347,15 @@ def check_deliverables_match(report: ValidationReport, fm: dict, client_dir: Pat
 
 
 def check_cover_letter(report: ValidationReport, client_dir: Path, fm: dict, working_dir: Path | None = None):
-    """Validate cover letter against template rules."""
+    """Validate cover letter.
+
+    Two formats are recognised:
+      * short-hook (current pipeline, owner directive 2026-06-09): a <=225-char
+        hook + a '---' divider + a links block. Detected by the divider; the
+        hook char cap is a hard FAIL.
+      * legacy long-form: the old line-count template rules. Kept intact so
+        already-sent proposals stay green under `--all`.
+    """
     letter_files = list((working_dir or client_dir).glob("cover-letter*.md"))
     if not letter_files:
         # Fallback to client_dir for legacy proposals
@@ -313,108 +364,151 @@ def check_cover_letter(report: ValidationReport, client_dir: Path, fm: dict, wor
         report.add("Cover letter exists", "SKIP", "No cover letter found")
         return
 
+    track = fm.get("track", 1) if fm else 1
+    access_code = fm.get("access_code") if fm else None
+
     for letter_path in letter_files:
         suffix = f" ({letter_path.name})" if len(letter_files) > 1 else ""
         content = letter_path.read_text(encoding="utf-8")
 
-        # Strip markdown header if present (e.g., "# Cover Letter -- ...")
-        lines = content.strip().split("\n")
-        # Find the actual letter content (after headers and section markers)
-        body_lines = []
-        in_body = False
-        for line in lines:
-            stripped = line.strip()
-            if not in_body:
-                # Skip until we find the actual letter content
-                if stripped.startswith("## Upwork") or stripped.startswith("## Plain"):
-                    in_body = True
-                    continue
-                # If no section header, treat non-header lines as body
-                if not stripped.startswith("#") and stripped:
-                    in_body = True
-                    body_lines.append(line)
-            else:
-                if stripped:
-                    body_lines.append(line)
-
-        if not body_lines:
-            body_lines = [l for l in lines if l.strip() and not l.strip().startswith("#")]
-
-        # Track
-        track = fm.get("track", 1) if fm else 1
-        access_code = fm.get("access_code") if fm else None
-
-        # Template 3: access code in first 3 lines
-        if track == 2 and access_code:
-            first_3 = "\n".join(body_lines[:3]).lower()
-            if access_code.lower() not in first_3:
-                report.add(f"Template 3: access code in first 3 lines{suffix}", "FAIL",
-                           f"Access code '{access_code}' not found in first 3 lines of letter body")
-            else:
-                report.add(f"Template 3: access code in first 3 lines{suffix}", "PASS")
-
-        # Video/Loom link in first 3 lines
-        first_3_text = "\n".join(body_lines[:3])
-        has_video_link = bool(re.search(r'(loom\.com|youtube\.com|youtu\.be|vimeo\.com)', first_3_text, re.I))
-        has_video_placeholder = bool(re.search(r'(loom link|video link|walkthrough)', first_3_text, re.I))
-        if has_video_link or has_video_placeholder:
-            report.add(f"Video link in first 3 lines{suffix}", "PASS")
-        else:
-            report.add(f"Video link in first 3 lines{suffix}", "WARN",
-                       "No video link or placeholder found in first 3 lines")
-
-        # No markdown formatting (plain text for Upwork)
-        markdown_patterns = [
-            (r'\*\*[^*]+\*\*', "bold (**text**)"),
-            (r'\*[^*]+\*', "italic (*text*)"),
-            (r'\[([^\]]+)\]\([^)]+\)', "markdown links"),
-        ]
-        md_issues = []
-        for pattern, desc in markdown_patterns:
-            # Check body lines only (not headers)
-            for i, line in enumerate(body_lines):
-                if re.search(pattern, line):
-                    md_issues.append(f"line {i+1}: {desc}")
-                    break
-        if md_issues:
-            report.add(f"Plain text format (no markdown){suffix}", "WARN",
-                       f"Found: {'; '.join(md_issues[:3])}")
-        else:
-            report.add(f"Plain text format (no markdown){suffix}", "PASS")
-
-        # Length check
-        non_empty = [l for l in body_lines if l.strip()]
-        bounds = COVER_LETTER_BOUNDS["template_3"] if track == 2 else COVER_LETTER_BOUNDS["template_1_2"]
-        if len(non_empty) < bounds[0]:
-            report.add(f"Cover letter length{suffix}", "WARN",
-                       f"{len(non_empty)} lines (minimum {bounds[0]})")
-        elif len(non_empty) > bounds[1]:
-            report.add(f"Cover letter length{suffix}", "WARN",
-                       f"{len(non_empty)} lines (maximum {bounds[1]})")
-        else:
-            report.add(f"Cover letter length{suffix}", "PASS",
-                       f"{len(non_empty)} lines")
-
-        # "If we move forward" block
-        full_text = content.lower()
-        has_forward = any(p in full_text for p in [
-            "if we move forward", "if we work together",
-            "if you'd like to move forward", "if this direction",
-            "if this aligns", "if useful",
-        ])
-        if has_forward:
-            report.add(f"Forward/optionality block{suffix}", "PASS")
-        else:
-            report.add(f"Forward/optionality block{suffix}", "WARN",
-                       "No 'if we move forward' or optionality statement found")
-
-        # No em dashes
+        # No em dashes (both formats)
         if "\u2014" in content:
-            em_count = content.count("\u2014")
             report.add(f"No em dashes{suffix}", "FAIL",
-                       f"Found {em_count} em dash(es) -- use double hyphens instead")
+                       f"Found {content.count(chr(0x2014))} em dash(es) -- use commas/semicolons")
         else:
             report.add(f"No em dashes{suffix}", "PASS")
+
+        hook_text, links_text, is_short = parse_cover_letter(content)
+        if is_short:
+            _check_short_hook_letter(report, suffix, hook_text, links_text, track, access_code)
+        else:
+            _check_legacy_letter(report, suffix, content, track, access_code)
+
+
+def _check_short_hook_letter(report, suffix, hook_text, links_text, track, access_code):
+    """Checks for the <=225-char short-hook format (the current pipeline)."""
+    n = len(hook_text)
+    if n == 0:
+        report.add(f"Cover letter hook <=225 chars{suffix}", "FAIL",
+                   "No hook text found before the '---' links divider.")
+    elif n > COVER_LETTER_CHAR_CAP:
+        report.add(f"Cover letter hook <=225 chars{suffix}", "FAIL",
+                   f"Hook is {n} chars (max {COVER_LETTER_CHAR_CAP}). Trim to the three "
+                   f"jobs: understanding, comparable past work, short implementation.")
+    else:
+        report.add(f"Cover letter hook <=225 chars{suffix}", "PASS", f"{n} chars")
+
+    # Plain text (no markdown) in the hook -- it gets pasted into Upwork
+    md_hit = any(re.search(p, hook_text) for p in (r'\*\*[^*]+\*\*', r'\[[^\]]+\]\([^)]+\)'))
+    if md_hit:
+        report.add(f"Hook plain text (no markdown){suffix}", "WARN",
+                   "Markdown formatting found in the hook")
+    else:
+        report.add(f"Hook plain text (no markdown){suffix}", "PASS")
+
+    # Walkthrough pointer lives in the links block
+    has_video = bool(re.search(
+        r'(loom\.com|youtube\.com|youtu\.be|vimeo\.com|loom link|video link|walkthrough)',
+        links_text, re.I))
+    if has_video:
+        report.add(f"Walkthrough link in links block{suffix}", "PASS")
+    else:
+        report.add(f"Walkthrough link in links block{suffix}", "WARN",
+                   "No Loom/video link or 'walkthrough' pointer in the links block")
+
+    # Track 2: site URL + access code live in the links block
+    if track == 2:
+        if re.search(r'https?://\S+', links_text):
+            report.add(f"Site URL in links block{suffix}", "PASS")
+        else:
+            report.add(f"Site URL in links block{suffix}", "WARN",
+                       "No site URL in the links block")
+        if access_code:
+            if access_code.lower() in links_text.lower():
+                report.add(f"Access code in links block{suffix}", "PASS")
+            else:
+                report.add(f"Access code in links block{suffix}", "FAIL",
+                           f"Access code '{access_code}' not found in the links block")
+
+
+def _check_legacy_letter(report, suffix, content, track, access_code):
+    """Legacy long-form template rules (pre-2026-06-09 proposals)."""
+    lines = content.strip().split("\n")
+    body_lines = []
+    in_body = False
+    for line in lines:
+        stripped = line.strip()
+        if not in_body:
+            if stripped.startswith("## Upwork") or stripped.startswith("## Plain"):
+                in_body = True
+                continue
+            if not stripped.startswith("#") and stripped:
+                in_body = True
+                body_lines.append(line)
+        else:
+            if stripped:
+                body_lines.append(line)
+
+    if not body_lines:
+        body_lines = [l for l in lines if l.strip() and not l.strip().startswith("#")]
+
+    if track == 2 and access_code:
+        first_3 = "\n".join(body_lines[:3]).lower()
+        if access_code.lower() not in first_3:
+            report.add(f"Template 3: access code in first 3 lines{suffix}", "FAIL",
+                       f"Access code '{access_code}' not found in first 3 lines of letter body")
+        else:
+            report.add(f"Template 3: access code in first 3 lines{suffix}", "PASS")
+
+    first_3_text = "\n".join(body_lines[:3])
+    has_video_link = bool(re.search(r'(loom\.com|youtube\.com|youtu\.be|vimeo\.com)', first_3_text, re.I))
+    has_video_placeholder = bool(re.search(r'(loom link|video link|walkthrough)', first_3_text, re.I))
+    if has_video_link or has_video_placeholder:
+        report.add(f"Video link in first 3 lines{suffix}", "PASS")
+    else:
+        report.add(f"Video link in first 3 lines{suffix}", "WARN",
+                   "No video link or placeholder found in first 3 lines")
+
+    markdown_patterns = [
+        (r'\*\*[^*]+\*\*', "bold (**text**)"),
+        (r'\*[^*]+\*', "italic (*text*)"),
+        (r'\[([^\]]+)\]\([^)]+\)', "markdown links"),
+    ]
+    md_issues = []
+    for pattern, desc in markdown_patterns:
+        for i, line in enumerate(body_lines):
+            if re.search(pattern, line):
+                md_issues.append(f"line {i+1}: {desc}")
+                break
+    if md_issues:
+        report.add(f"Plain text format (no markdown){suffix}", "WARN",
+                   f"Found: {'; '.join(md_issues[:3])}")
+    else:
+        report.add(f"Plain text format (no markdown){suffix}", "PASS")
+
+    non_empty = [l for l in body_lines if l.strip()]
+    bounds = COVER_LETTER_BOUNDS["template_3"] if track == 2 else COVER_LETTER_BOUNDS["template_1_2"]
+    if len(non_empty) < bounds[0]:
+        report.add(f"Cover letter length{suffix}", "WARN",
+                   f"{len(non_empty)} lines (minimum {bounds[0]})")
+    elif len(non_empty) > bounds[1]:
+        report.add(f"Cover letter length{suffix}", "WARN",
+                   f"{len(non_empty)} lines (maximum {bounds[1]})")
+    else:
+        report.add(f"Cover letter length{suffix}", "PASS",
+                   f"{len(non_empty)} lines")
+
+    full_text = content.lower()
+    has_forward = any(p in full_text for p in [
+        "if we move forward", "if we work together",
+        "if you'd like to move forward", "if this direction",
+        "if this aligns", "if useful",
+    ])
+    if has_forward:
+        report.add(f"Forward/optionality block{suffix}", "PASS")
+    else:
+        report.add(f"Forward/optionality block{suffix}", "WARN",
+                   "No 'if we move forward' or optionality statement found")
 
 
 def check_video_script(report: ValidationReport, client_dir: Path, site_headings: dict[str, list[str]], working_dir: Path | None = None):
@@ -850,7 +944,17 @@ def check_pricing_bridge(report: ValidationReport, client_dir: Path, fm: dict, w
     if not letter.exists():
         return
 
-    content = letter.read_text(encoding="utf-8").lower()
+    raw = letter.read_text(encoding="utf-8")
+
+    # A <=225-char hook has no room for a pricing-bridge sentence; the budget
+    # acknowledgment lives on the investment page instead. Skip for short format.
+    _, _, is_short = parse_cover_letter(raw)
+    if is_short:
+        report.add("Pricing bridge language", "SKIP",
+                   "short-hook format (pricing bridge lives on investment.html)")
+        return
+
+    content = raw.lower()
 
     # Look for pricing bridge language
     bridge_patterns = [
@@ -944,6 +1048,17 @@ def check_template3_structure(report: ValidationReport, client_dir: Path, fm: di
     for letter_path in letter_files:
         suffix = f" ({letter_path.name})" if len(letter_files) > 1 else ""
         content = letter_path.read_text(encoding="utf-8")
+
+        # The <=225-char short-hook format does not carry the Template-3
+        # long-form structure (URL in first 5 lines, "The site includes:"
+        # bullet list, optionality close). Those moved to the site + links
+        # block. Skip the legacy structure check for short letters.
+        _, _, is_short = parse_cover_letter(content)
+        if is_short:
+            report.add(f"Template 3 structure{suffix}", "SKIP",
+                       "short-hook format (Template-3 long-form structure not applicable)")
+            continue
+
         lower = content.lower()
 
         issues = []
