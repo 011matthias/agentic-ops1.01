@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Timeline | VolaByg Lead Flow &amp; Deliverability | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .access-gate, .cta-section { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+    h2 { page-break-before: always; }
+    h2:first-of-type { page-break-before: avoid; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero h1 { font-size: 30px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 580px; margin: 0 auto; line-height: 1.6; }
+.stats-row {
+    display: flex; justify-content: center; gap: 32px; margin-top: 24px; flex-wrap: wrap;
+}
+.stat { text-align: center; }
+.stat-num { font-size: 22px; font-weight: 800; color: var(--blue); }
+.stat-label { font-size: 12px; color: var(--text2); margin-top: 2px; }
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+.callout.purple { border-color: var(--purple); background: var(--purple-bg); }
+.callout.purple .callout-title, .callout.purple p { color: var(--purple-dark); }
+.zone-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 24px 0;
+}
+.zone {
+    border: 1px solid var(--border); border-radius: 12px; padding: 24px;
+    background: var(--surface); transition: box-shadow .15s;
+}
+.zone:hover { box-shadow: var(--card-shadow); }
+.zone-icon { font-size: 24px; margin-bottom: 8px; }
+.zone-title { font-size: 15px; font-weight: 700; color: var(--text-strong); margin-bottom: 6px; }
+.zone-desc { font-size: 14px; color: var(--text2); line-height: 1.5; margin: 0; }
+.zone.blue { border-left: 4px solid var(--blue); }
+.zone.green { border-left: 4px solid var(--green); }
+.zone.purple { border-left: 4px solid var(--purple); }
+.zone.orange { border-left: 4px solid var(--orange); }
+.compare-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px; }
+.compare-table th {
+    background: var(--th-bg); color: #fff; text-align: left;
+    padding: 10px 14px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+}
+.compare-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.compare-table tr:last-child td { border-bottom: none; }
+.compare-table tr:hover td { background: var(--surface2); }
+.compare-table .today { color: var(--orange); font-weight: 600; }
+.compare-table .after { color: var(--green); font-weight: 600; }
+.recbox {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 16px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px; color: var(--text); overflow-x: auto; margin: 16px 0; line-height: 1.7;
+    position: relative;
+}
+.recbox .k { color: var(--blue); font-weight: 700; }
+.recbox .bad { color: var(--orange); font-weight: 700; }
+.recbox .ok { color: var(--green); font-weight: 700; }
+.price-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin: 24px 0; }
+.price-card { border: 1px solid var(--border); border-radius: 12px; padding: 24px; background: var(--surface); }
+.price-card.feature { border-color: var(--blue); border-width: 2px; }
+.price-phase { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text2); }
+.price-amount { font-size: 26px; font-weight: 800; color: var(--text-strong); margin: 8px 0 4px; }
+.price-card ul { padding-left: 18px; font-size: 13px; margin-top: 10px; }
+.price-card li { margin-bottom: 5px; color: var(--text2); }
+.form-field { margin-bottom: 18px; }
+.form-field label { display: block; font-size: 13px; font-weight: 600; color: var(--text-strong); margin-bottom: 6px; }
+.form-field input[type=text], .form-field input[type=email], .form-field textarea, .form-field select {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--surface); color: var(--text); font-size: 14px; font-family: inherit;
+}
+.form-field textarea { min-height: 90px; resize: vertical; }
+.check-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; font-size: 14px; }
+.dl-btn {
+    display: inline-flex; align-items: center; gap: 8px; background: var(--surface);
+    border: 1px solid var(--blue); color: var(--blue); padding: 10px 18px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none; transition: all .15s; margin: 8px 0;
+}
+.dl-btn:hover { background: var(--blue-light); text-decoration: none; }
+.nav-cards {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 24px 0;
+}
+.nav-card {
+    display: block; border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 20px; text-decoration: none; transition: all .15s;
+    background: var(--surface);
+}
+.nav-card:hover { box-shadow: var(--card-shadow); border-color: var(--blue); text-decoration: none; }
+.nav-card-title { font-size: 14px; font-weight: 700; color: var(--blue); margin-bottom: 4px; }
+.nav-card-desc { font-size: 13px; color: var(--text2); line-height: 1.4; }
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); margin-top: 24px; }
+.footer p { margin-bottom: 4px; color: var(--text2); }
+.copy-btn { position: absolute; top: 8px; right: 8px; background: var(--surface); border: 1px solid var(--border); color: var(--text2); border-radius: 6px; font-size: 11px; padding: 3px 8px; cursor: pointer; opacity: 0; transition: opacity .15s; }
+.recbox:hover .copy-btn { opacity: 1; }
+.cmdk { position: fixed; inset: 0; z-index: 9998; background: rgba(0,0,0,.45); display: none; align-items: flex-start; justify-content: center; padding-top: 12vh; }
+.cmdk.open { display: flex; }
+.cmdk-box { width: 90%; max-width: 480px; background: var(--nav-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,.3); }
+.cmdk-box input { width: 100%; border: none; border-bottom: 1px solid var(--border); padding: 14px 16px; font-size: 15px; background: var(--nav-bg); color: var(--text); outline: none; }
+.cmdk-results { max-height: 320px; overflow-y: auto; }
+.cmdk-item { display: block; padding: 10px 16px; font-size: 14px; color: var(--text); text-decoration: none; cursor: pointer; }
+.cmdk-item:hover, .cmdk-item.sel { background: var(--blue-light); color: var(--blue); text-decoration: none; }
+.cmdk-hint { font-size: 11px; color: var(--text2); padding: 8px 16px; border-top: 1px solid var(--border); }
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .hero h1 { font-size: 24px; }
+    .zone-grid, .nav-cards, .price-grid { grid-template-columns: 1fr; }
+    .stats-row { gap: 20px; }
+}
+</style>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
+</head>
+<body>
+
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared for VolaByg. Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+        </button>
+        <a href="/clients/volabyg-lead-automation/" class="nav-logo">
+            <span class="logo-bold">Unpause</span><span class="logo-accent">AI</span>
+        </a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Lead Flow &amp; Deliverability</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/volabyg-lead-automation/">Overview</a>
+        <a href="/clients/volabyg-lead-automation/solution">Solution</a>
+        <a href="/clients/volabyg-lead-automation/workflow">Workflow</a>
+        <a href="/clients/volabyg-lead-automation/timeline" class="active">Timeline</a>
+        <a href="/clients/volabyg-lead-automation/investment">Investment</a>
+        <a href="/clients/volabyg-lead-automation/faq">FAQ</a>
+        <a href="/clients/volabyg-lead-automation/onboarding">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="openCmdk()" title="Search (Ctrl/Cmd+K)" aria-label="Search">Search</button>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<div class="cmdk" id="cmdk" onclick="if(event.target===this)closeCmdk()">
+    <div class="cmdk-box">
+        <input type="text" id="cmdkInput" placeholder="Jump to a page or section..." onkeydown="cmdkKey(event)">
+        <div class="cmdk-results" id="cmdkResults"></div>
+        <div class="cmdk-hint">Open anywhere with Ctrl/Cmd + K. Arrows to move, Enter to open, Esc to close.</div>
+    </div>
+</div>
+
+<aside class="sidebar">
+    <div class="sidebar-label">On this page</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#phase1" class="step-link active"><span class="step-num">1</span> Phase 1: Audit</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#phase2" class="step-link"><span class="step-num">2</span> Phase 2: Rebuild</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#phase3" class="step-link"><span class="step-num">3</span> Phase 3: Ongoing</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#milestones" class="step-link"><span class="step-num">4</span> What You Get When</a>
+        </li>
+    </ul>
+</aside>
+
+<div class="main-content">
+<div class="content-inner">
+
+<section class="hero">
+    <h1>From Audit to Verified, in 2 to 3 Weeks</h1>
+    <p class="hero-sub">A low-commitment audit first, then the rebuild, then ongoing management. You decide to continue at each step, with findings in hand.</p>
+    <div class="stats-row">
+        <div class="stat"><div class="stat-num">Week 1</div><div class="stat-label">audit and findings</div></div>
+        <div class="stat"><div class="stat-num">Weeks 2-3</div><div class="stat-label">rebuild and verify</div></div>
+        <div class="stat"><div class="stat-num">Ongoing</div><div class="stat-label">monthly management</div></div>
+    </div>
+</section>
+
+<h2 id="phase1">Phase 1: Audit (Week 1)</h2>
+
+<p>Everything in the audit dimensions from the Solution page, run against your live setup. Authentication, sending infrastructure and reputation, the automation flow, and a real transfer reconciliation.</p>
+
+<p>You receive a written findings list: what is wrong, how much of the lost engagement is deliverability versus transfer, and a concrete recommendation for the rebuild. If you decided to stop here, you would still own a clear picture of your setup.</p>
+
+<h2 id="phase2">Phase 2: Rebuild and Verify (Weeks 2 to 3)</h2>
+
+<ul>
+    <li>Stand up the authenticated sending path, with SPF, DKIM, and DMARC passing and aligned.</li>
+    <li>Rebuild the Lead Ads to record to sequence flow with validation, dedupe, logging, and reply detection.</li>
+    <li>Migrate your three emails onto the new path, keeping the day 0, day 2, day 4-5 cadence.</li>
+    <li>Verify with real leads: send through the new path, confirm inbox placement, and reconcile the counts end to end.</li>
+</ul>
+
+<div class="callout green">
+    <div class="callout-title">Verified, not just built</div>
+    <p>The phase is done when a real lead flows from a Facebook ad to an inbox-placed email, and the Facebook count, the record, and the sequence agree. Built is not the bar. Working with your real data is.</p>
+</div>
+
+<h2 id="phase3">Phase 3: Ongoing Management</h2>
+
+<p>Monthly. Deliverability monitoring so a problem is caught before replies dry up, sequence and copy iteration, handling Facebook or tooling changes, and a single view of lead counts. You own the system; this keeps it healthy and improving.</p>
+
+<h2 id="milestones">What You Have at Each Milestone</h2>
+
+<table class="compare-table">
+    <thead>
+        <tr><th>By the end of</th><th>You have</th></tr>
+    </thead>
+    <tbody>
+        <tr><td class="after">Week 1</td><td>A written audit: why mail lands in spam, where leads drop, and the recommended fix.</td></tr>
+        <tr><td class="after">Week 2</td><td>The authenticated sending path live and the rebuilt flow running on test leads.</td></tr>
+        <tr><td class="after">Week 3</td><td>The full flow verified with real leads, counts reconciled, and handover documentation.</td></tr>
+        <tr><td class="after">Each month after</td><td>Monitored deliverability, iterated sequences, and one place to see the numbers.</td></tr>
+    </tbody>
+</table>
+
+<section class="cta-section">
+    <h2>See the Pricing</h2>
+    <p>The Investment page breaks down the audit-first structure and what each phase buys.</p>
+    <a href="/clients/volabyg-lead-automation/investment" class="cta-btn">View Investment &rarr;</a>
+</section>
+
+</div>
+</div>
+
+<script>
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('theme',t);
+}
+
+var links = document.querySelectorAll('.step-link');
+var sections = [];
+links.forEach(function(a) {
+    var id = a.getAttribute('href').replace('#','');
+    var el = document.getElementById(id);
+    if (el) sections.push({ el: el, link: a });
+});
+function updateActive() {
+    var scrollY = window.scrollY + 120;
+    var active = sections[0];
+    for (var i = 0; i < sections.length; i++) {
+        if (sections[i].el.offsetTop <= scrollY) active = sections[i];
+    }
+    links.forEach(function(l) { l.classList.remove('active'); });
+    if (active) active.link.classList.add('active');
+}
+window.addEventListener('scroll', updateActive);
+updateActive();
+links.forEach(function(a) {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        var id = this.getAttribute('href').replace('#','');
+        var el = document.getElementById(id);
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+        document.querySelector('.sidebar').classList.remove('open');
+    });
+});
+
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='volabyg-2026'){
+        localStorage.setItem('volabyg-lead-automation-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.';
+    }
+}
+(function(){if(localStorage.getItem('volabyg-lead-automation-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+
+var CMDK_ITEMS=[
+    {l:'Overview',h:'/clients/volabyg-lead-automation/'},
+    {l:'Solution',h:'/clients/volabyg-lead-automation/solution'},
+    {l:'Workflow',h:'/clients/volabyg-lead-automation/workflow'},
+    {l:'Timeline',h:'/clients/volabyg-lead-automation/timeline'},
+    {l:'Investment',h:'/clients/volabyg-lead-automation/investment'},
+    {l:'FAQ',h:'/clients/volabyg-lead-automation/faq'},
+    {l:'Onboarding',h:'/clients/volabyg-lead-automation/onboarding'}
+];
+document.querySelectorAll('h2[id]').forEach(function(h){ CMDK_ITEMS.push({l:h.textContent.trim()+' (this page)',h:'#'+h.id}); });
+var cmdkSel=0, cmdkFiltered=CMDK_ITEMS.slice();
+function renderCmdk(){
+    var q=document.getElementById('cmdkInput').value.toLowerCase();
+    cmdkFiltered=CMDK_ITEMS.filter(function(i){return i.l.toLowerCase().indexOf(q)>-1;});
+    if(cmdkSel>=cmdkFiltered.length)cmdkSel=Math.max(0,cmdkFiltered.length-1);
+    var r=document.getElementById('cmdkResults'); r.innerHTML='';
+    cmdkFiltered.forEach(function(i,idx){
+        var a=document.createElement('a'); a.className='cmdk-item'+(idx===cmdkSel?' sel':''); a.textContent=i.l; a.href=i.h;
+        a.addEventListener('mouseover',function(){cmdkSel=idx;updateCmdkSel();});
+        r.appendChild(a);
+    });
+}
+function updateCmdkSel(){var items=document.querySelectorAll('.cmdk-item');items.forEach(function(el,idx){el.classList.toggle('sel',idx===cmdkSel);});}
+function openCmdk(){document.getElementById('cmdk').classList.add('open');var inp=document.getElementById('cmdkInput');inp.value='';cmdkSel=0;renderCmdk();inp.focus();}
+function closeCmdk(){document.getElementById('cmdk').classList.remove('open');}
+function cmdkGo(){var i=cmdkFiltered[cmdkSel];if(!i)return;if(i.h.charAt(0)==='#'){closeCmdk();var el=document.getElementById(i.h.slice(1));if(el)el.scrollIntoView({behavior:'smooth'});}else{window.location.href=i.h;}}
+function cmdkKey(e){
+    if(e.key==='ArrowDown'){e.preventDefault();cmdkSel=Math.min(cmdkSel+1,cmdkFiltered.length-1);updateCmdkSel();}
+    else if(e.key==='ArrowUp'){e.preventDefault();cmdkSel=Math.max(cmdkSel-1,0);updateCmdkSel();}
+    else if(e.key==='Enter'){e.preventDefault();cmdkGo();}
+    else if(e.key==='Escape'){closeCmdk();}
+    else {setTimeout(renderCmdk,0);}
+}
+document.addEventListener('keydown',function(e){
+    if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openCmdk();}
+});
+document.querySelectorAll('.recbox').forEach(function(box){
+    var btn=document.createElement('button'); btn.className='copy-btn'; btn.type='button'; btn.textContent='Copy';
+    btn.addEventListener('click',function(){navigator.clipboard.writeText(box.innerText.trim()).then(function(){btn.textContent='Copied';setTimeout(function(){btn.textContent='Copy';},1200);});});
+    box.appendChild(btn);
+});
+</script>
+</body>
+</html>

@@ -1,6 +1,47 @@
 # Proposal Templates
 
-## Template 1 — Short (Video-Led)
+## Template 0 — Short Hook (current default, <=225 chars)
+
+Owner directive 2026-06-09: the cover letter is now a single hook of at most
+225 characters on BOTH tracks. It does three jobs in order, then points to the
+walkthrough. The Loom link + site URL + access code sit below a `---` divider
+and are not counted in the 225. The validator enforces the cap
+(`Cover letter hook <=225 chars`).
+
+The three jobs, in one tight block:
+
+1. **Understanding** — name their specific problem, echo a phrase from the post.
+2. **Proof** — one concrete piece of comparable past work (not a credential dump).
+3. **Implementation** — the fix in a clause, plus a pointer to the walkthrough.
+
+```text
+# Cover Letter -- {Prospect} ({id})
+
+{Hook: <=225 chars. Understanding + proof + short implementation + walkthrough pointer.}
+
+---
+Walkthrough: {VIDEO_LINK}
+Full plan: https://unpauseai.com/clients/{slug}/  (access code: {access_code})
+```
+
+Worked example (211 chars):
+
+```text
+Your Meta leads dying in spam is almost always auth + sending the wrong way. I run this exact stack daily (Instantly, SPF/DKIM/DMARC) for a lead-gen client. Fix: authenticate the domain, split warm from cold, verify every lead lands. 2-min walkthrough:
+```
+
+Drafting discipline:
+- Write the full thought first, then cut to 225. The cut IS the craft.
+- Lead with their problem, not "Hi, I can help."
+- One proof, the most relevant. A second proof is noise at this length.
+- The implementation is a clause, not a plan. The plan lives in the video/site.
+- Count characters, not lines or words. Use the validator to confirm.
+
+The long-form bodies below (Templates 1 and 2) are RETIRED as cover letters.
+Keep them only as a thinking aid: they show the reasoning that the hook now
+compresses. Do not ship a multi-paragraph cover letter.
+
+## Template 1 — Short (Video-Led) [RETIRED as a letter; thinking aid only]
 
 Best for: jobs where a video walkthrough is the primary proof.
 

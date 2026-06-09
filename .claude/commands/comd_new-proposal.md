@@ -69,10 +69,12 @@ Determine the track based on job complexity:
 
 | Track | When to use | Deliverables |
 |-------|-------------|-------------|
-| **Track 1** (Video-Led) | Simple jobs, < $200, clear scope, single-system | Cover letter (8-15 lines) + video script |
-| **Track 2** (Full Site) | Complex jobs, > $200, multi-system, high competition | Cover letter (12-35 lines) + video script + HTML site + downloadable artifact |
+| **Track 1** (Video-Led) | Simple jobs, < $200, clear scope, single-system | Short-hook cover letter (<=225 chars) + video script |
+| **Track 2** (Full Site) | Complex jobs, > $200, multi-system, high competition | Short-hook cover letter (<=225 chars) + video script + HTML site + downloadable artifact |
 
 Default to Track 2 for jobs > $200 or involving multiple integrations. State the track determination and reasoning.
+
+**Cover letter is the same shape on both tracks (owner directive 2026-06-09):** a single hook of at most 225 characters that does three jobs (shows understanding, proves comparable past work, names a short implementation) and points to the walkthrough. The Loom link + site URL + access code ride on a separate links block below a `---` divider and are NOT counted in the 225. The track decides the DEPTH that sits behind the hook (video only vs. video + full site), not the letter length. Enforced by `tools/validate-proposal.py` (`Cover letter hook <=225 chars`).
 
 ---
 
@@ -238,17 +240,30 @@ research:
 ---
 ```
 
-### 4b: Cover Letter
-Create `workspace/proposals/{slug}/cover-letter.md`:
-- Track 1: Template 1 or 2 (8-15 lines, video link in first 3 lines)
-- Track 2: Template 3 (12-35 lines, access code + URL in first 3 lines)
-- Format: `.md` file, plain text only (no markdown formatting in body)
-- Opening: "Hi there," -- never credentials, never "I hope this finds you well"
-- Must include: video link (even placeholder `{VIDEO_LINK}` if not recorded yet)
-- Must include: at least one `job_language_echo` from research
-- Must include: budget gap acknowledgment if `research.budget_gap` is non-empty
-- Sign-off: "Cheers, / Nico / UnpauseAI"
-- See canonical format in `feedback_cover_letter_format.md`
+### 4b: Cover Letter (short-hook, <=225 chars)
+Create `workspace/proposals/{slug}/cover-letter.md` in this exact shape:
+
+```text
+# Cover Letter -- {Prospect} ({id})
+
+{HOOK: one tight block, <=225 characters total, that does three jobs in order:
+ (1) shows we understood the specific problem (echo a job phrase),
+ (2) proves comparable past work (one concrete proof, no credential dump),
+ (3) names a short implementation (the fix in a clause), and points to the walkthrough.}
+
+---
+Walkthrough: {VIDEO_LINK}
+Full plan: https://unpauseai.com/clients/{slug}/  (access code: {access_code})
+```
+
+Rules:
+- The hook (everything above the `---`) is hard-capped at 225 characters by the validator (`Cover letter hook <=225 chars`, FAIL if over). Count the whole hook, not per-line.
+- The `---` divider is required: it separates the counted hook from the uncounted links block.
+- The links block carries the Loom link (placeholder `{VIDEO_LINK}` until recorded), and on Track 2 the site URL + access code. These are NOT counted in the 225.
+- Plain text only in the hook (no `**bold**`, no markdown links). It gets pasted into Upwork.
+- Zero em dashes anywhere in the file.
+- The hook should still echo at least one `job_language_echo` from research; the budget-gap acknowledgment moves to `investment.html`, not the hook.
+- No long sign-off. The hook is the message; the links block is the proof trail.
 
 ### 4c: Video Script
 Create `workspace/proposals/{slug}/video-script.md`:
