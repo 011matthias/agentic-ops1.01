@@ -26,14 +26,14 @@ INDEX = TOOLS / "INDEX.md"
 EXEMPT: set[str] = set()
 
 
-def main() -> int:
-    if not INDEX.is_file():
-        print(f"[check-index] MISSING: {INDEX}", file=sys.stderr)
+def main(tools_dir: Path = TOOLS, index_path: Path = INDEX) -> int:
+    if not index_path.is_file():
+        print(f"[check-index] MISSING: {index_path}", file=sys.stderr)
         return 1
-    index_text = INDEX.read_text(encoding="utf-8")
+    index_text = index_path.read_text(encoding="utf-8")
     tools = sorted(
         p.name
-        for p in TOOLS.iterdir()
+        for p in tools_dir.iterdir()
         if p.is_file() and p.suffix in (".py", ".sh") and p.name not in EXEMPT
     )
     missing = [t for t in tools if f"`{t}" not in index_text]
