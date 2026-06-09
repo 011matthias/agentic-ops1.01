@@ -82,11 +82,31 @@ def log_fire(msg: str) -> None:
         pass
 
 
+def _mask_len(m: "re.Match") -> str:
+    return "X" * len(m.group(0))
+
+
+def _space_len(m: "re.Match") -> str:
+    return " " * len(m.group(0))
+
+
 def residue(cmd: str) -> str:
-    """Return the part of cmd outside quotes/heredocs/comments."""
-    r = _HEREDOC.sub(" ", cmd)
-    r = _QUOTED.sub(" ", r)
-    r = _COMMENT.sub(" ", r)
+    """Length-preserving residue for cd-detection.
+
+    Heredoc and comment spans become spaces; QUOTED spans become 'X' filler
+    (masked, NOT deleted). Length-preserving and masking are both load-bearing:
+      1. Offsets map 1:1 back to `cmd`, so `already_subshelled` and the block
+         reason index the original text correctly.
+      2. A quoted path token still EXISTS after masking. The old code deleted
+         quoted spans, turning `cd "$WT" && ...` into `cd   && ...` (no path
+         token left to match), so EVERY quoted-path cd slipped through -- the
+         exact mechanism of register #16 (`cd "$WT"` on its own line bricked
+         the whole hook layer). Masking keeps the token so CD_RX still fires,
+         while `echo "cd foo && bar"` stays exempt (the `cd` is inside the
+         masked span, so no `cd ` boundary survives in the residue)."""
+    r = _HEREDOC.sub(_space_len, cmd)
+    r = _QUOTED.sub(_mask_len, r)
+    r = _COMMENT.sub(_space_len, r)
     return r
 
 
@@ -139,33 +159,31 @@ def main() -> int:
         return 0
 
     scan = residue(cmd)
-    # Map residue offsets back -- since we replace with space (same length),
-    # the offsets match the original `cmd`.
+    # residue is length-preserving, so match offsets index straight into `cmd`.
     for m in CD_RX.finditer(scan):
-        path = m.group("path")
-        # Exempt: cd into absolute path equal to current cwd-equivalent, OR
-        # cd inside a subshell already. Path-equality is hard so we only
-        # exempt the subshell case.
+        # Use the ORIGINAL text for the exemption test + reason -- the matched
+        # `path` group may be the masked 'X' filler of a quoted span.
+        path = cmd[m.start("path"):m.end("path")]
+        bare = path.strip("\"'")
+        # Home / previous-dir navigation is a stable absolute target, not
+        # relative drift -- exempt it (covers quoted forms like `cd "$HOME"`,
+        # `cd ~/Repo`). This is the authoritative exemption; the inline CD_RX
+        # lookaheads only cover the bare unquoted forms.
+        if bare in ("~", "-", "$HOME") or bare.startswith(("~/", "$HOME/")):
+            continue
         if already_subshelled(scan, m.start()):
             continue
-        # Exempt: a `cd` that's the WHOLE command (no `&&` or `;` after).
-        # Still costs us cwd persistence, but a bare cd is rarely autonomous
-        # agent behaviour -- let it through with a log-only signal.
-        rest = scan[m.end():].strip()
-        if not rest:
-            log_fire(f"WARN:bare-cd path={path[:40]}")
-            return 0
+        # A bare `cd <path>` (whole command, nothing chained after) is blocked
+        # too: it persists the cwd into the NEXT Bash call and every hook
+        # resolved against it, which is the same drift. The safe escapes
+        # (`cd -`, `cd ~`, `cd $HOME`, absolute paths, `( cd .. && .. )`
+        # subshells) are all exempted above or by CD_RX.
         log_fire(f"BLOCK path={path[:40]} cmd={cmd[:80]!r}")
-        print(json.dumps({
-            "decision": "block",
-            "reason": REASON_TEMPLATE.format(path=path),
-        }), file=sys.stderr)
+        decision = {"decision": "block", "reason": REASON_TEMPLATE.format(path=path)}
         # Claude Code reads JSON decisions from stdout for newer hook APIs
         # and from stderr for older; emit on both to be safe.
-        print(json.dumps({
-            "decision": "block",
-            "reason": REASON_TEMPLATE.format(path=path),
-        }))
+        print(json.dumps(decision), file=sys.stderr)
+        print(json.dumps(decision))
         return 2  # non-zero -> Claude Code treats as block
 
     log_fire("ALLOW")
