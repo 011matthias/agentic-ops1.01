@@ -265,18 +265,24 @@ Rules:
 - The hook should still echo at least one `job_language_echo` from research; the budget-gap acknowledgment moves to `investment.html`, not the hook.
 - No long sign-off. The hook is the message; the links block is the proof trail.
 
-### 4c: Video Script
-Create `workspace/proposals/{slug}/video-script.md`:
-- Format: `.md` file with `###` headers and `---` dividers
-- Opening: "Hi there, Nico here."
-- Structure: Beat 1 (Reframe) -> Authority -> Beat 2 (Structure/Demo) -> Beat 3+ -> Close
-- Authority section: between Beat 1 and Beat 2, cherry-picked from profile-copy.md, max 20s/3 sentences
-- SAY:/>> interleaving: max 2 consecutive SAY, max 3 consecutive >>
-- Every `>> Nav:` / `>> Sidebar:` must match actual HTML headings (grep to verify after site build)
-- Prospect name in Beat 1 and Close minimum
-- Duration is dynamic: content determines length, don't pad or cut substance
-- Must end with LOOM NOTES VERSION section (condensed bullet-point teleprompter version)
-- If site has a live demo: walk through it in the video script
+### 4c: Video Content Guide (owner directive 2026-06-09)
+Create `workspace/proposals/{slug}/video-script.md` as a CONTENT GUIDE, not a
+verbatim teleprompter script. A word-for-word `SAY:`/`>>` script makes the
+proposer sound like they are reading; a guide they speak from in their own
+words sounds like a person.
+- Format: `.md` with `##` sections, one per beat of the walkthrough. No
+  `SAY:` lines, no `>>` stage directions, no LOOM NOTES block.
+- Each section is bullet points of what that part needs to LAND (the idea,
+  the proof, the move), plus a rough time budget. The proposer phrases it
+  live.
+- Cover, in order: open (who + the promise), the reframe of the problem,
+  what we already found / the demo, the fix + plan + price walk-through,
+  and the close (next step + offer a call). Name the prospect.
+- Keep a short "terms to gloss if you say them" list at the end so any
+  abbreviation gets a plain-language gloss on camera (SPF/DKIM/DMARC etc.).
+- The validator detects the guide format by the ABSENCE of `SAY:`/`>>`
+  markers and checks zero em dashes + a sectioned structure. Legacy
+  verbatim scripts still validate under the old rules.
 
 ### 4d: HTML Site (Track 2 only)
 Create `platform/public/clients/{slug}/` with all selected pages.

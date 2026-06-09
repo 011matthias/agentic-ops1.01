@@ -511,8 +511,39 @@ def _check_legacy_letter(report, suffix, content, track, access_code):
                    "No 'if we move forward' or optionality statement found")
 
 
+def _check_video_guide(report, suffix, content):
+    """Checks for the content-guide video format (owner directive 2026-06-09).
+
+    The video deliverable is now a guide to what each part needs to land,
+    spoken in the proposer's own words, not a verbatim SAY:/>> teleprompter
+    script. So the script-specific checks (opening formula, BEAT markers,
+    SAY/>> interleaving, LOOM NOTES) do not apply. A guide is checked for
+    zero em dashes and a sectioned structure instead.
+    """
+    if "—" in content:
+        report.add(f"No em dashes in video guide{suffix}", "FAIL",
+                   f"Found {content.count(chr(0x2014))} em dash(es)")
+    else:
+        report.add(f"No em dashes in video guide{suffix}", "PASS")
+
+    sections = re.findall(r'(?m)^##\s+\S', content)
+    if len(sections) >= 3:
+        report.add(f"Video guide structure{suffix}", "PASS", f"{len(sections)} sections")
+    else:
+        report.add(f"Video guide structure{suffix}", "WARN",
+                   f"only {len(sections)} '##' sections (expected 3+ beats to cover)")
+
+    report.add(f"Video format{suffix}", "PASS", "content guide (not verbatim script)")
+
+
 def check_video_script(report: ValidationReport, client_dir: Path, site_headings: dict[str, list[str]], working_dir: Path | None = None):
-    """Validate video script against established patterns."""
+    """Validate video deliverable. Two formats:
+
+    * content guide (current, owner directive 2026-06-09): points to land in
+      the proposer's own words. Detected by the ABSENCE of SAY:/>> markers.
+    * legacy verbatim script: SAY:/>> teleprompter lines, BEAT markers, LOOM
+      NOTES. Kept so already-shipped proposals stay green.
+    """
     script_files = list((working_dir or client_dir).glob("*video-script*.md"))
     if not script_files:
         # Fallback to client_dir for legacy proposals
@@ -524,6 +555,13 @@ def check_video_script(report: ValidationReport, client_dir: Path, site_headings
     for script_path in script_files:
         suffix = f" ({script_path.name})" if len(script_files) > 1 else ""
         content = script_path.read_text(encoding="utf-8")
+
+        # Format detection: a content guide has no SAY:/>> markers. Route it
+        # to the lighter guide checks and skip the verbatim-script checks.
+        is_script = bool(re.search(r'(?m)^\s*SAY:', content)) or bool(re.search(r'(?m)^\s*>>', content))
+        if not is_script:
+            _check_video_guide(report, suffix, content)
+            continue
 
         # Opening formula (accept any registered proposer)
         if any(formula in content for formula in OPENING_FORMULAS):

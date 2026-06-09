@@ -1,6 +1,6 @@
 # Cover Letter: VolaByg (p026)
 
-Meta leads hitting spam, counts off: warm leads on a cold tool, so auth fails. I run this exact stack daily (Instantly, SPF/DKIM/DMARC). Fix: authenticate, move warm leads off cold send, verify transfer. Walkthrough:
+Hi Ibrahim, Matthias here. The spam and the lead-count gap are both fixable, and I can already see the likely cause. I run this exact setup for a live client. Short walkthrough of what's wrong and how I'd fix it:
 
 ---
 Walkthrough (Loom): added to this Upwork message once recorded
