@@ -85,6 +85,24 @@ def in_output_scope(file_path: str) -> bool:
     return in_deliverable_scope(file_path) or in_comms_scope(file_path)
 
 
+def in_cell_scope(file_path: str) -> bool:
+    """Structured-data cell content (xlsx/csv/tsv) in a deliverable/draft tree,
+    or the billing-visible hours tracker. The voice-pass applies to cell text
+    too (register #160: AI-tells in hours-tracker.xlsx cells). xlsx is rarely
+    Write/Edit-authored, so sync-hours.py is the primary xlsx catch; this
+    covers the .csv deliverable case cheaply."""
+    if not file_path:
+        return False
+    p = normalize_for_match(file_path)
+    if not p.endswith((".csv", ".tsv", ".xlsx")):
+        return False
+    return (
+        "/deliverables/" in p
+        or "/context/drafts/" in p
+        or p.endswith("/hours-tracker.xlsx")
+    )
+
+
 def in_pilot_routing_scope(file_path: str) -> bool:
     """Pilot-routing cross-wire validator scope: comms drafts in client trees.
 
@@ -201,6 +219,8 @@ def main() -> None:
                         [file_path, "--skip-em-dash"], 30))
     if in_output_scope(file_path):
         planned.append(("OUTPUT GATE", "validate-output.py", [file_path], 15))
+    if in_cell_scope(file_path):
+        planned.append(("CELL VOICE GATE", "validate-output.py", [file_path], 20))
     if in_spec_scope(file_path):
         planned.append(("SPEC GATE", "validate-spec.py", [file_path], 10))
     if in_pilot_routing_scope(file_path):

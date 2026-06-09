@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.11"
+# dependencies = ["openpyxl>=3.1"]
 # ///
 """Universal output validator for client-facing artifacts and comms.
 
@@ -308,6 +309,105 @@ def check_cost_anchor(path: Path, lines: list[str]) -> list[dict]:
     return hits
 
 
+# === Cell-scoped voice scan (register #160, 2026-06-01) ===
+# AI-tells (em-dashes, parenthetical laundry-lists, slash-joined runs,
+# fake-precision counts, formal class-name runs) landed in billing-visible
+# hours-tracker.xlsx cells, because every voice-pass gate was extension-gated
+# to .html/.md and skipped .xlsx/.csv. These detectors apply the same voice
+# standard to structured-data cell content. Kept narrow (terse fragments, not
+# prose) to hold false-positives down: slash-runs need 3+ segments (so CI/CD,
+# TCP/IP pass), the two case-sensitive detectors are LOW severity. yaml is
+# excluded entirely (all repo yaml is config -> guaranteed FP storm).
+_EM_DASH = "—"
+CELL_RULES: list[tuple[str, str, str, str]] = [
+    (_EM_DASH + r"|&mdash;| -- ",
+     "em-dash", "MEDIUM",
+     "Em-dash / double-hyphen in a cell reads as an AI tell. Use a comma or semicolon, or split."),
+    (r"\([^\n]*(?:,\s|\s\+\s)[^\n]*(?:,\s|\s\+\s)[^\n]*\)",
+     "parenthetical-laundry-list", "MEDIUM",
+     "Parenthetical list of 3+ items is an AI tell. Fold into the sentence or cut."),
+    (r"(?i)\b(?:tests?|files?|checks?|cases?|commits?|rows?|cols?|items?)\s*\(\d+\)",
+     "fake-precision-count", "LOW",
+     "Fake-precision count like 'tests (14)'. Drop the parenthetical number."),
+    (r"\b[A-Z][A-Za-z0-9]+(?:/[A-Z][A-Za-z0-9]+){2,}\b",
+     "slash-joined-run", "LOW",
+     "Slash-joined run like 'BLUEPRINT/README/ANNEALING' reads as an AI tell. List in prose."),
+    (r"\b[A-Z][A-Za-z0-9]+ \+ [A-Z][A-Za-z0-9]+(?: \+ [A-Z][A-Za-z0-9]+)*",
+     "formal-classname-run", "LOW",
+     "Formal class-name run mid-cell ('Protocol + OpenAIClient + Mock') reads as machine output. Rephrase."),
+]
+
+
+def is_cell_file(path: Path) -> bool:
+    """Structured-data files whose CELLS carry human text (xlsx/csv/tsv).
+    yaml is deliberately excluded: all repo yaml is config, not prose."""
+    return path.suffix.lower() in (".xlsx", ".csv", ".tsv")
+
+
+def read_cells(path: Path) -> list[tuple[str, str]]:
+    """Yield (location_label, text) for human-text cells. Skips formulas (`=`),
+    `[auto]` machine notes, hidden sheets, and non-string values. Returns []
+    on any error or missing dependency (graceful: never crash the hook)."""
+    suffix = path.suffix.lower()
+    out: list[tuple[str, str]] = []
+    if suffix in (".csv", ".tsv"):
+        import csv
+        delim = "\t" if suffix == ".tsv" else ","
+        try:
+            with path.open(encoding="utf-8", errors="replace", newline="") as f:
+                for r, row in enumerate(csv.reader(f, delimiter=delim), 1):
+                    for c, val in enumerate(row, 1):
+                        if isinstance(val, str) and val.strip() and not val.lstrip().startswith("="):
+                            out.append((f"row{r}col{c}", val))
+        except OSError:
+            return []
+        return out
+    if suffix == ".xlsx":
+        try:
+            import openpyxl
+        except Exception:
+            return []  # dep absent -> degrade to no cell scan, never crash
+        try:
+            wb = openpyxl.load_workbook(path, read_only=True, data_only=False)
+        except Exception:
+            return []
+        try:
+            for ws in wb.worksheets:
+                if getattr(ws, "sheet_state", "visible") != "visible":
+                    continue
+                for row in ws.iter_rows():
+                    for cell in row:
+                        v = cell.value
+                        if not isinstance(v, str):
+                            continue
+                        s = v.strip()
+                        if not s or s.startswith("=") or s.startswith("[auto]"):
+                            continue
+                        out.append((f"{ws.title}!{cell.coordinate}", v))
+        finally:
+            wb.close()
+        return out
+    return []
+
+
+def check_cells(path: Path) -> list[dict]:
+    """Run CELL_RULES over each human-text cell. line=0 + a `cell` label
+    (additive to the JSON contract; consumers read category/severity/message)."""
+    hits: list[dict] = []
+    for label, text in read_cells(path):
+        for regex, category, severity, message in CELL_RULES:
+            if re.search(regex, text):
+                hits.append({
+                    "line": 0,
+                    "cell": label,
+                    "category": category,
+                    "severity": severity,
+                    "message": message,
+                    "snippet": text.strip()[:160],
+                })
+    return hits
+
+
 def check_text(text: str, path: Path | None = None) -> list[dict]:
     """Return list of hit dicts."""
     lines = text.splitlines()
@@ -371,7 +471,8 @@ def emit_text(path: Path, payload: dict) -> None:
     print(f"  Total: {payload['total']}  ({', '.join(f'{k}={v}' for k,v in payload['by_severity'].items())})")
     for h in payload["hits"]:
         sev = h.get("severity", "?")
-        print(f"  L{h['line']:4d}  [{sev}] [{h['category']}] {h['message']}")
+        loc = f"cell {h['cell']}" if h.get("cell") else f"L{h['line']:4d}"
+        print(f"  {loc}  [{sev}] [{h['category']}] {h['message']}")
         print(f"        -> {h['snippet']}")
 
 
@@ -404,12 +505,16 @@ def main() -> int:
 
     if args.format == "json" and len(targets) == 1:
         # Hook contract: one file in, one JSON payload out.
+        t = targets[0]
+        if is_cell_file(t):
+            print(json.dumps(aggregate(check_cells(t))))
+            return 0
         try:
-            text = targets[0].read_text(encoding="utf-8", errors="replace")
+            text = t.read_text(encoding="utf-8", errors="replace")
         except OSError:
             print(json.dumps({"total": 0, "hits": [], "by_category": {}, "by_severity": {}}))
             return 0
-        payload = aggregate(check_text(text, targets[0]))
+        payload = aggregate(check_text(text, t))
         print(json.dumps(payload))
         return 0
 
@@ -418,11 +523,14 @@ def main() -> int:
     grand_cat: dict[str, int] = {}
     grand_sev: dict[str, int] = {}
     for path in sorted(set(targets)):
-        try:
-            text = path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
-        payload = aggregate(check_text(text, path))
+        if is_cell_file(path):
+            payload = aggregate(check_cells(path))
+        else:
+            try:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            payload = aggregate(check_text(text, path))
         emit_text(path, payload)
         grand_total += payload["total"]
         for k, v in payload["by_category"].items():

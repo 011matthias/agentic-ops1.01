@@ -232,6 +232,26 @@ def main():
         write_meta(meta, meta_map)
         wb.save(XLSX)
         print(f"Appended {appended} rows to {XLSX}")
+        # Voice-pass the freshly-written cells. The hours tracker is
+        # billing-visible; AI-tells in its cells (em-dashes, parenthetical
+        # laundry-lists, fake-precision counts) are inappropriate (register
+        # #160). post-write-gate.py never fires on this file (it is written by
+        # this Bash-run script, not the Write/Edit tool), so check inline.
+        # Advisory only; never blocks the sync.
+        try:
+            import json as _json
+            import subprocess as _sp
+            r = _sp.run(
+                ["uv", "run", "tools/validate-output.py", str(XLSX), "--format", "json"],
+                capture_output=True, text=True, timeout=60,
+            )
+            payload = _json.loads(r.stdout or "{}")
+            if payload.get("total", 0):
+                cats = ", ".join(f"{k}={v}" for k, v in payload.get("by_category", {}).items())
+                print(f"[voice] {payload['total']} cell voice hit(s) in {XLSX}: {cats}")
+                print("        Review for AI-tells; see feedback_human_voice_in_deliverables.")
+        except Exception:
+            pass
     else:
         print("(dry-run; no write)")
 
