@@ -44,5 +44,76 @@
       }
     ]
   },
-  "probe": []
+  "probe": [
+    {
+      "engine": "claude-search",
+      "query": "Pizza bestellen Karlsruhe Lieferservice",
+      "cited": false,
+      "sources": [],
+      "note": "error: Client error '429 Too Many Requests' for url 'https://api.anthropic.com/v1/messages'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "engine": "claude-search",
+      "query": "bester Pizza Lieferdienst Karlsruhe",
+      "cited": false,
+      "sources": [],
+      "note": "error: Client error '429 Too Many Requests' for url 'https://api.anthropic.com/v1/messages'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "engine": "claude-search",
+      "query": "Pizzeria Karlsruhe Weststadt Lieferung",
+      "cited": false,
+      "sources": [],
+      "note": "error: Client error '429 Too Many Requests' for url 'https://api.anthropic.com/v1/messages'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "engine": "claude-search",
+      "query": "Essen bestellen Karlsruhe online",
+      "cited": false,
+      "sources": [],
+      "note": "error: Client error '429 Too Many Requests' for url 'https://api.anthropic.com/v1/messages'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "engine": "claude-search",
+      "query": "italienisches Essen nach Hause bestellen Karlsruhe",
+      "cited": false,
+      "sources": [],
+      "note": "error: Client error '429 Too Many Requests' for url 'https://api.anthropic.com/v1/messages'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "engine": "claude-search",
+      "query": "Pizza Lieferservice Ettlingen",
+      "cited": false,
+      "sources": [],
+      "note": "error: Client error '429 Too Many Requests' for url 'https://api.anthropic.com/v1/messages'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "engine": "claude-search",
+      "query": "Pizza bestellen Stutensee",
+      "cited": false,
+      "sources": [],
+      "note": "error: Client error '429 Too Many Requests' for url 'https://api.anthropic.com/v1/messages'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "engine": "claude-search",
+      "query": "Pasta bestellen Karlsruhe Lieferdienst",
+      "cited": false,
+      "sources": [],
+      "note": "error: Client error '429 Too Many Requests' for url 'https://api.anthropic.com/v1/messages'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "engine": "claude-search",
+      "query": "Pronto Pronto Karlsruhe Speisekarte",
+      "cited": false,
+      "sources": [],
+      "note": "error: Client error '429 Too Many Requests' for url 'https://api.anthropic.com/v1/messages'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "engine": "claude-search",
+      "query": "Pronto Pronto Heimservice Karlsruhe",
+      "cited": false,
+      "sources": [],
+      "note": "error: Client error '429 Too Many Requests' for url 'https://api.anthropic.com/v1/messages'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    }
+  ]
 }

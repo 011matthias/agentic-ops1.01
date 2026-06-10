@@ -15,4 +15,15 @@ On-site AEO score: 0/5 graded checks passed
 
 ## Citation probe
 
-No live engine key set. Citation probe skipped; activate by setting `PERPLEXITY_API_KEY` (cleanest, returns source URLs) or `AI_VISIBILITY_OPENAI_KEY`.
+| Engine | Query | Cited? | Domain sources |
+|---|---|---|---|
+| claude-search | Hausarzt Karlsruhe Mühlburg nimmt neue Patienten auf | no | - |
+| claude-search | Hausarztpraxis Karlsruhe Empfehlung | no | - |
+| claude-search | Allgemeinmediziner Karlsruhe West | no | - |
+| claude-search | Hausarzt Karlsruhe Akupunktur | no | - |
+| claude-search | Arzt für Naturheilverfahren Karlsruhe | no | - |
+| claude-search | Hautkrebsscreening Karlsruhe Hausarzt | no | - |
+| claude-search | Ultraschalluntersuchung Hausarzt Karlsruhe | no | - |
+| claude-search | psychosomatische Grundversorgung Hausarzt Karlsruhe | no | - |
+| claude-search | Praxis Dr. Sema Uslu Karlsruhe | no | - |
+| claude-search | Dr. med. Sema Uslu Mühlburg Öffnungszeiten | no | - |
