@@ -48,6 +48,12 @@ jobs:
           # alternative ("optional if using GitHub App"). Without one of the two,
           # the action fails with "Claude Code is not installed on this repository".
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Surface every tool result (incl. send_email.py's RESEND_OK + msg id)
+          # in the Actions log so a scheduled run self-verifies delivery without
+          # inbox access. Safe here: GitHub auto-masks the registered secrets
+          # (ANTHROPIC_API_KEY / RESEND_API_KEY / GITHUB_TOKEN) in logs, and
+          # send_email.py prints only "RESEND_OK <json id>", never the key.
+          show_full_output: true
           prompt: |
             Execute the workflow defined in .claude/commands/comd_weekly-review.md
             for the current ISO week, end to end, unattended. Never ask
@@ -60,12 +66,7 @@ jobs:
             git add -A && git commit -m "weekly: $(date +%G-W%V) review" && git push origin HEAD:main
             If nothing changed, skip the commit. Email delivery uses
             RESEND_API_KEY + BRIEFING_TO from the environment.
-          # haiku, not sonnet: the auto-loaded repo context (CLAUDE.md + the
-          # .claude/rules set) exceeds the org's tier-1 sonnet limit of 30k
-          # input-tokens/min, so a sonnet run is rejected (429) on the first
-          # request. Haiku's higher per-minute ceiling clears it (proven by the
-          # eod-capture run, which uses haiku on the same loaded context).
           claude_args: |
-            --model haiku
+            --model sonnet
             --max-turns 40
             --allowedTools "Bash,Read,Write,Edit,Glob,Grep"

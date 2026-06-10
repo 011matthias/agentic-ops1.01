@@ -1,0 +1,54 @@
+# AI-visibility citation probe, run where the ANTHROPIC_API_KEY secret lives.
+# The key is a repo Actions secret (set 2026-06-06), not available locally, so
+# citation probes run here on demand; audits run anywhere (no key needed).
+# Results come back as a run artifact; download with `gh run download`.
+name: ai-visibility-probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: "Space-separated target slugs from workspace/projects/ai-visibility/targets/ (or 'all')"
+        required: false
+        default: "all"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Run probe per target
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          DATE="$(date -u +%F)"
+          DIR=workspace/projects/ai-visibility
+          if [ "${{ inputs.targets }}" = "all" ]; then
+            TARGETS=$(ls "$DIR"/targets/*.yaml | xargs -n1 basename | sed 's/\.yaml$//')
+          else
+            TARGETS="${{ inputs.targets }}"
+          fi
+          echo "targets: $TARGETS"
+          for t in $TARGETS; do
+            echo "::group::$t"
+            uv run "$DIR/ai_visibility_probe.py" \
+              --target "$DIR/targets/$t.yaml" \
+              --out "$DIR/reports/" --date "$DATE"
+            echo "::endgroup::"
+          done
+
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-visibility-reports
+          path: workspace/projects/ai-visibility/reports/
+          retention-days: 30

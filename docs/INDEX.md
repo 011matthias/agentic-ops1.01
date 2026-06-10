@@ -2,9 +2,21 @@
 
 _Auto-updated by /comd_checkpoint. Most recent first within each section._
 
+## brisken
+| Date | Topic | Type | Link |
+|------|-------|------|------|
+| 2026-06-09 | Brisken Zoho Integration Slice 4 (4.6+4.9+live verify) | client-dev | [Checkpoint](docs/2026-06-09%20-%20Brisken%20Zoho%20Integration%20Slice%204/Checkpoint.md) |
+
+## volabyg
+| Date | Topic | Type | Link |
+|------|-------|------|------|
+| 2026-06-10 | VolaByg p026 Proposal Sent | comms | [Checkpoint](docs/2026-06-10%20-%20VolaByg%20p026%20Proposal%20Sent/Checkpoint.md) |
+
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-06-09 | n8n Ops Proposal + Video Blueprint | system-infra | [Checkpoint](docs/2026-06-09%20-%20n8n%20Ops%20Proposal%20+%20Video%20Blueprint/Checkpoint.md) |
+| 2026-06-06 | Self-Prompting Capability - exec-assistant + Integrations | system-infra | [Checkpoint](docs/2026-06-06%20-%20Self-Prompting%20Capability%20-%20exec-assistant%20%2B%20Integrations/Checkpoint.md) |
 | 2026-06-03 | Web-Build Skill Restructure + Nav-Bar Standard | system-infra | [Mini-Checkpoint-1](docs/2026-06-03%20-%20Local-Web%20Prototypes%20And%20Aesthetic%20Standard/Mini-Checkpoint-1.md) |
 | 2026-06-01 | Skills.sh Vendor Install and Remotion | system-infra | [Checkpoint](docs/2026-06-01%20-%20Skills.sh%20Vendor%20Install%20and%20Remotion/Checkpoint.md) |
 | 2026-06-01 | Platform Style Standards Trio | system-infra | [Checkpoint](docs/2026-06-01%20-%20Platform%20Style%20Standards%20Trio/Checkpoint.md) |
@@ -31,6 +43,9 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## meji-media
 | Date | Topic | Link |
 |------|-------|------|
+| 2026-06-09 | Meji Double-Send Fix + Inbound Email Scope | [Checkpoint](docs/2026-06-09%20-%20Meji%20Double-Send%20Fix%20+%20Inbound%20Email%20Scope/Checkpoint.md) |
+| 2026-06-08 | Meji Piece 1 Christmas Warm Live | [Checkpoint](docs/2026-06-08%20-%20Meji%20Piece%201%20Christmas%20Warm%20Live/Checkpoint.md) |
+| 2026-06-07 | Meji Piece 2 Corporate Cold Live | [Checkpoint](docs/2026-06-07%20-%20Meji%20Piece%202%20Corporate%20Cold%20Live/Checkpoint.md) |
 | 2026-06-01 | Meji Piece 2 Sample Ship Anti Slop Rule | [Checkpoint](docs/2026-06-01%20-%20Meji%20Piece%202%20Sample%20Ship%20Anti%20Slop%20Rule/Checkpoint.md) |
 | 2026-06-01 | Meji Piece 3 mejixmas Domain Setup | [Checkpoint](docs/2026-06-01%20-%20Meji%20Piece%203%20mejixmas%20Domain%20Setup/Checkpoint.md) |
 | 2026-05-26 | Meji 3-Piece Pilot Restructure | [Checkpoint](docs/2026-05-26%20-%20Meji%203-Piece%20Pilot%20Restructure/Checkpoint.md) |
@@ -75,6 +90,9 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## platform
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-06-10 | n8n Multi-Client Ops Proposal Teardown | misc | [Checkpoint](docs/2026-06-10%20-%20n8n%20Multi-Client%20Ops%20Proposal%20Teardown/Checkpoint.md) |
+| 2026-06-10 | VolaByg Proposal Reframe and Deploy | comms | [Checkpoint](docs/2026-06-10%20-%20VolaByg%20Proposal%20Reframe%20and%20Deploy/Checkpoint.md) |
+| 2026-06-09 | VolaByg Proposal + Short-Hook Pipeline | system-infra | [Checkpoint](docs/2026-06-09%20-%20VolaByg%20Proposal%20+%20Short-Hook%20Pipeline/Checkpoint.md) |
 | 2026-05-20 | German Logistics AI Implementation Engineer Proposal | client-dev | [Checkpoint](docs/2026-05-20%20-%20German%20Logistics%20AI%20Implementation%20Engineer%20Proposal/Checkpoint.md) |
 | 2026-05-19 | Shipment Bot Proposal, Repo Hygiene, Meji Prod Fix | system-infra | [Checkpoint](docs/2026-05-19%20-%20Shipment%20Bot%20Proposal%20Repo%20Hygiene%20Meji%20Prod%20Fix/Checkpoint.md) |
 | 2026-05-19 | Server-Side Gate Standard | system-infra | [Checkpoint](docs/2026-05-19%20-%20Server-Side%20Gate%20Standard/Checkpoint.md) |
@@ -173,6 +191,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-06-08 | Brisken Expense-Recon Hardening And Ship | client-dev | [Checkpoint](docs/2026-06-08%20-%20Brisken%20Expense-Recon%20Hardening%20And%20Ship/Checkpoint.md) |
 | 2026-06-01 | Brisken Expense Recon Slice 2 LLM Categorizer | client-dev | [Checkpoint](docs/2026-06-01%20-%20Brisken%20Expense%20Recon%20Slice%202%20LLM%20Categorizer/Checkpoint.md) |
 | 2026-05-26 | Brisken Expense Recon Excel Parser | client-dev | [Checkpoint](docs/2026-05-26%20-%20Brisken%20Expense%20Recon%20Excel%20Parser/Checkpoint.md) |
 | 2026-05-25 | Brisken Functional Spec v2 and Build Start | client-dev | [Checkpoint](docs/2026-05-25%20-%20Brisken%20Functional%20Spec%20v2%20and%20Build%20Start/Checkpoint.md) |

@@ -1,0 +1,23 @@
+# AI-visibility target: Pronto-Pronto (local-web prospect, pitch kit Phase 1)
+# Buyer-intent queries a hungry Karlsruher would type into ChatGPT / Perplexity.
+domain: prontopronto-ka.de
+brand: pronto-pronto
+
+engines:
+  - anthropic    # Claude + web_search tool; ANTHROPIC_API_KEY (repo Actions secret)
+
+queries:
+  # category / local intent
+  - "Pizza bestellen Karlsruhe Lieferservice"
+  - "bester Pizza Lieferdienst Karlsruhe"
+  - "Pizzeria Karlsruhe Weststadt Lieferung"
+  - "Essen bestellen Karlsruhe online"
+  - "italienisches Essen nach Hause bestellen Karlsruhe"
+  # delivery-zone intent (zones from prospects/pronto-pronto/data.md)
+  - "Pizza Lieferservice Ettlingen"
+  - "Pizza bestellen Stutensee"
+  # cuisine-specific intent
+  - "Pasta bestellen Karlsruhe Lieferdienst"
+  # branded (entity recognition)
+  - "Pronto Pronto Karlsruhe Speisekarte"
+  - "Pronto Pronto Heimservice Karlsruhe"
