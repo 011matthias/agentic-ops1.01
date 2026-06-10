@@ -20,7 +20,7 @@ deliverables:
   site: true
 research:
   prospect_company: "Anonymous early-stage startup (insurance policy analysis SaaS for agents)"
-  prospect_industry: "InsurTech / B2B SaaS selling to insurance agents"
+  prospect_industry: "Insurance technology, B2B SaaS selling to insurance agents"
   prospect_location: "Worldwide (posting); product sells to insurance agents, likely US"
   prospect_contact: "TBD (solo founder, not named in posting)"
   prospect_systems: []
@@ -94,4 +94,4 @@ We build and run automation infrastructure for businesses that cannot afford to 
 
 ## Research Notes
 
-Anonymous solo-founder posting, no budget, pre-first-customer. The winning angle is managed service ("handle that for me"), not a build-a-tool pitch like most bidders will send. Insurance-agent sourcing via public state licensing registries is a differentiator few competitors will name. US cold email is viable here (no DACH restriction); CAN-SPAM compliance is handled, not legal advice.
+Anonymous solo-founder posting, no budget, pre-first-customer. The winning angle is managed service ("handle that for me"), not a build-a-tool pitch like most bidders will send. Insurance-agent sourcing via public state licensing registries is a differentiator few competitors will name. US cold email is viable here (no German-market restriction); CAN-SPAM compliance is handled, not legal advice.
