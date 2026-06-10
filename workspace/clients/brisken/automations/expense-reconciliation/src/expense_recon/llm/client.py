@@ -1,9 +1,9 @@
 """LLMClient protocol + OpenAI + Mock implementations.
 
-The protocol is intentionally narrow — only the categorization shape
-slice-2-part-1 needs today. Vision OCR (receipt extraction) and FX
-judgment are sketched as future protocol additions but not implemented
-in this slice. The provider swap is one line in `OpenAIClient.model`.
+The protocol carries the categorization shape (slice 2 part 1), the
+FX/ambiguous judgment calls (D1b / 2.4), and receipt extraction
+(slice 2.2: vision for images, text for PDFs with a text layer). The
+provider swap is one class with the same method signatures.
 
 LD-2 invariants the LLM call must honour:
 
@@ -77,6 +77,44 @@ class FxJudgmentResult:
     implied_rate: float | None
     converted_amount: Decimal | None
     reasoning: str
+
+
+@dataclass(frozen=True)
+class ExtractedLineItem:
+    """One line item as read off a receipt by the vision/text extractor.
+
+    Amounts arrive as strings (the model returns them as strings to
+    avoid IEEE-754 noise); the ingest layer casts to Decimal. A
+    line_total of None means the model could not read the amount —
+    ingest keeps the item with total 0 and the vague-description
+    check routes it to REVIEW.
+    """
+
+    description: str
+    line_total: str | None
+    quantity: str | None = None
+    unit_price: str | None = None
+
+
+@dataclass(frozen=True)
+class ExtractedReceipt:
+    """Header fields + line items extracted from one receipt file
+    (BLUEPRINT 2.2). All fields are the model's raw reading; the
+    ingest layer parses dates/amounts and applies defaults.
+
+    `line_items` is empty when the receipt shows only a final total
+    with no itemization — the extractor must NEVER invent items
+    (LD-2; the vendor-fallback path triggers downstream instead).
+    """
+
+    date: str | None            # ISO YYYY-MM-DD or None
+    total: str | None
+    currency: str | None        # ISO 4217 code or None
+    vendor: str | None
+    reference: str | None
+    line_items: tuple[ExtractedLineItem, ...]
+    confidence: float
+    notes: str = ""
 
 
 @dataclass(frozen=True)
@@ -161,6 +199,18 @@ class LLMClient(Protocol):
         """Pick the best of several tied candidate receipts for one
         transaction (v2 spec §15.2). Returns `chosen_index=0` when no
         candidate is a confident pick."""
+        ...
+
+    def extract_receipt(
+        self,
+        *,
+        file_name: str,
+        images: list[tuple[bytes, str]] | None = None,
+        text: str | None = None,
+    ) -> ExtractedReceipt:
+        """Receipt OCR (BLUEPRINT 2.2). Exactly one of `images` (list
+        of (bytes, mime_type) pages) or `text` (a PDF's text layer)
+        is supplied per call."""
         ...
 
 
@@ -320,6 +370,62 @@ _AMBIGUOUS_SCHEMA = {
 }
 
 
+_EXTRACT_INSTRUCTIONS = """You extract structured data from a business expense receipt.
+
+Extract:
+- date: the purchase/transaction date as YYYY-MM-DD, or null if not visible. Beware day-first formats (15.01.2026 means January 15).
+- total: the final amount charged, as a plain number string like "24.50", or null. Prefer the grand total including tax/tip over any subtotal.
+- currency: the ISO 4217 code (USD, EUR, GBP...), or null if not determinable. Infer from symbols ($, €, £) only when unambiguous.
+- vendor: the merchant/issuer name as printed, or null.
+- reference: an invoice/ticket/booking/order number if one is printed, else null.
+- line_items: every purchased line item with description, quantity, unit_price, line_total (all amounts as plain number strings, quantity/unit_price null when not shown). If the receipt shows only a final total with NO itemization (taxi slips, card slips, simple tickets), return an empty array. NEVER invent line items. If a line item is illegible, include it with description "(illegible)" and line_total null.
+- confidence: your honest 0.0-1.0 confidence that the header fields (date, total, vendor) are read correctly.
+- notes: one short sentence on anything unusual (illegible areas, multiple currencies, handwriting), or "".
+
+Source file name (may hint at the vendor or date, but trust the document over the name): {file_name}
+"""
+
+_EXTRACT_TEXT_SUFFIX = """
+The receipt content below is the text layer extracted from a PDF; layout may be flattened.
+
+--- RECEIPT TEXT START ---
+{text}
+--- RECEIPT TEXT END ---
+"""
+
+_EXTRACT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "date": {"type": ["string", "null"]},
+        "total": {"type": ["string", "null"]},
+        "currency": {"type": ["string", "null"]},
+        "vendor": {"type": ["string", "null"]},
+        "reference": {"type": ["string", "null"]},
+        "line_items": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "description": {"type": "string"},
+                    "quantity": {"type": ["string", "null"]},
+                    "unit_price": {"type": ["string", "null"]},
+                    "line_total": {"type": ["string", "null"]},
+                },
+                "required": ["description", "quantity", "unit_price", "line_total"],
+                "additionalProperties": False,
+            },
+        },
+        "confidence": {"type": "number"},
+        "notes": {"type": "string"},
+    },
+    "required": [
+        "date", "total", "currency", "vendor", "reference",
+        "line_items", "confidence", "notes",
+    ],
+    "additionalProperties": False,
+}
+
+
 def _accounts_block(chart_of_accounts: list[str] | None) -> str:
     """Render the in-scope GL account list for the prompt, or '' when no
     chart of accounts was supplied (the model then returns zoho_account
@@ -347,6 +453,7 @@ class OpenAIClient:
         self,
         *,
         model: str = "gpt-4o-mini",
+        vision_model: str | None = None,
         api_key: str | None = None,
         cost_tracker: CostTracker | None = None,
     ):
@@ -365,6 +472,9 @@ class OpenAIClient:
             )
         self._client = OpenAI(api_key=key)
         self.model = model
+        # Vision OCR may want a stronger model than text categorization;
+        # defaults to the text model when not set (BLUEPRINT 2.2).
+        self.vision_model = vision_model or model
         self.cost_tracker = cost_tracker or CostTracker()
 
     def classify_line_items(
@@ -541,7 +651,53 @@ class OpenAIClient:
         payload = json.loads(response.choices[0].message.content or "{}")
         return _ambiguous_result_from_payload(payload)
 
-    def _record_usage(self, response) -> None:
+    def extract_receipt(
+        self,
+        *,
+        file_name: str,
+        images: list[tuple[bytes, str]] | None = None,
+        text: str | None = None,
+    ) -> ExtractedReceipt:
+        if (images is None) == (text is None):
+            raise ValueError("extract_receipt needs exactly one of images= or text=")
+
+        instructions = _EXTRACT_INSTRUCTIONS.format(file_name=file_name)
+        if text is not None:
+            model = self.model
+            content: object = instructions + _EXTRACT_TEXT_SUFFIX.format(text=text)
+        else:
+            import base64
+
+            model = self.vision_model
+            parts: list[dict] = [{"type": "text", "text": instructions}]
+            for raw, mime in images or []:
+                b64 = base64.b64encode(raw).decode("ascii")
+                parts.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{mime};base64,{b64}", "detail": "high"},
+                    }
+                )
+            content = parts
+
+        response = self._client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": content}],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "receipt_extraction",
+                    "schema": _EXTRACT_SCHEMA,
+                    "strict": True,
+                },
+            },
+            temperature=0,
+        )
+        self._record_usage(response, model=model)
+        payload = json.loads(response.choices[0].message.content or "{}")
+        return _extraction_from_payload(payload)
+
+    def _record_usage(self, response, model: str | None = None) -> None:
         try:
             usage = response.usage
             input_tokens = getattr(usage, "prompt_tokens", 0) or 0
@@ -550,7 +706,7 @@ class OpenAIClient:
             input_tokens = 0
             output_tokens = 0
         self.cost_tracker.record(
-            TokenUsage.from_counts(self.model, input_tokens, output_tokens)
+            TokenUsage.from_counts(model or self.model, input_tokens, output_tokens)
         )
 
 
@@ -577,6 +733,43 @@ def _fx_result_from_payload(payload: dict) -> FxJudgmentResult:
         converted_amount=converted,
         reasoning=str(payload.get("reasoning", "")),
     )
+
+
+def _extraction_from_payload(payload: dict) -> ExtractedReceipt:
+    """Parse a raw receipt-extraction JSON payload. Field values stay
+    strings (or None); Decimal/date casting is the ingest layer's job."""
+    items = []
+    for raw in payload.get("line_items") or []:
+        if not isinstance(raw, dict):
+            continue
+        desc = str(raw.get("description") or "").strip()
+        if not desc:
+            continue
+        items.append(
+            ExtractedLineItem(
+                description=desc,
+                line_total=_opt_str(raw.get("line_total")),
+                quantity=_opt_str(raw.get("quantity")),
+                unit_price=_opt_str(raw.get("unit_price")),
+            )
+        )
+    return ExtractedReceipt(
+        date=_opt_str(payload.get("date")),
+        total=_opt_str(payload.get("total")),
+        currency=_opt_str(payload.get("currency")),
+        vendor=_opt_str(payload.get("vendor")),
+        reference=_opt_str(payload.get("reference")),
+        line_items=tuple(items),
+        confidence=float(payload.get("confidence", 0.0) or 0.0),
+        notes=str(payload.get("notes", "") or ""),
+    )
+
+
+def _opt_str(value: object) -> str | None:
+    if value is None:
+        return None
+    s = str(value).strip()
+    return s or None
 
 
 def _ambiguous_result_from_payload(payload: dict) -> AmbiguousJudgmentResult:
@@ -611,11 +804,13 @@ class MockLLMClient:
         *,
         fx_responses: list[FxJudgmentResult] | None = None,
         ambiguous_responses: list[AmbiguousJudgmentResult] | None = None,
+        extraction_responses: list[ExtractedReceipt] | None = None,
         cost_tracker: CostTracker | None = None,
     ):
         self._queue = list(responses or [])
         self._fx_queue = list(fx_responses or [])
         self._ambiguous_queue = list(ambiguous_responses or [])
+        self._extraction_queue = list(extraction_responses or [])
         self.calls: list[tuple[str, object]] = []
         # Last chart-of-accounts labels seen by a classify_* call, so tests
         # can assert the categorizer forwarded the in-scope account list.
@@ -699,6 +894,28 @@ class MockLLMClient:
         if self._ambiguous_queue:
             return self._ambiguous_queue.pop(0)
         return _default_ambiguous_judgment(tx_vendor, candidates)
+
+    def extract_receipt(
+        self,
+        *,
+        file_name: str,
+        images: list[tuple[bytes, str]] | None = None,
+        text: str | None = None,
+    ) -> ExtractedReceipt:
+        if (images is None) == (text is None):
+            raise ValueError("extract_receipt needs exactly one of images= or text=")
+        self.calls.append(
+            ("extract_receipt", (file_name, "vision" if images is not None else "text"))
+        )
+        self.cost_tracker.record(self._per_call_cost)
+
+        if self._extraction_queue:
+            return self._extraction_queue.pop(0)
+        return ExtractedReceipt(
+            date=None, total=None, currency=None, vendor=None,
+            reference=None, line_items=(), confidence=0.0,
+            notes="mock: no extraction queued",
+        )
 
 
 def _default_for_description(

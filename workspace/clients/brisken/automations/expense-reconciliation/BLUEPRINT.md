@@ -217,13 +217,13 @@ get real Claude judgment instead of `[STUB]`.
 | # | Item | Path |
 |---|---|---|
 | 2.1 | Anthropic client abstraction (`LLMClient` protocol) | `src/expense_recon/llm/client.py` |
-| 2.2 | Receipt vision pipeline — extracts header fields **AND `line_items: list[LineItem]`** per LD-2 | `src/expense_recon/ingest/receipts_vision.py` |
+| 2.2 | Receipt vision pipeline — **Done (2026-06-10, OpenAI):** `extract_receipt` on `LLMClient`; vision for images, text-layer path for digital PDFs (pypdf) with pypdfium2 render fallback for scans; extracts header fields AND line items per LD-2, never invents items | `src/expense_recon/ingest/receipts_folder.py` |
 | 2.3 | Real `judge_fx_match` body (LLM judgment call) — **Done (D1b, OpenAI):** `LLMClient.judge_fx_match` + impls, FX-convert + same-purchase verdict, 8 tests, always review | `src/expense_recon/matching/judgment.py` |
 | 2.4 | Real `judge_ambiguous` body — **Done (2026-06-07):** LLM tie-break, pick annotated + promoted, all candidates kept (guarantee), 5 tests | same |
 | 2.5 | Cost / token tracking per run (covers OCR + judgment + categorization calls) | `src/expense_recon/llm/cost.py` |
 | 2.6 | Config schema extension (`llm:` block) | `cli.py` + JSON schema |
-| 2.7 | CLI receipt-source switch (CSV vs folder) | `cli.py` |
-| 2.8 | Vision-cell unit tests with mocked Anthropic client | `tests/test_receipts_vision.py` |
+| 2.7 | CLI receipt-source switch (CSV vs folder) — **Done (2026-06-10):** `receipts.source` "csv"/"folder", inferred from path when absent; folder mode requires `llm:` block; `vision_model` config knob added | `cli.py` |
+| 2.8 | Vision-cell unit tests with mocked client — **Done (2026-06-10):** 14 tests, CI-safe | `tests/test_receipts_folder.py` |
 | 2.9 | End-to-end test with real Claude (gated behind env var) | `tests/test_llm_integration.py` |
 | 2.10 | Update Summary sheet with LLM call count + estimated cost | `report_xlsx.py` |
 

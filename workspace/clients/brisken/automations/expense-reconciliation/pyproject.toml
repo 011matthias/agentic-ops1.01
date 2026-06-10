@@ -4,8 +4,11 @@ version = "0.1.0"
 description = "Brisken expense reconciliation platform (p1)"
 requires-python = ">=3.12"
 dependencies = [
-    "openpyxl>=3.1",  # Excel statement parser (v2 spec §7.1) + report writer
-    "openai>=1.50",   # LLM categorizer + (future slice 2b) receipt vision
+    "openpyxl>=3.1",   # Excel statement parser (v2 spec §7.1) + report writer
+    "openai>=1.50",    # LLM categorizer + receipt vision (slice 2.2)
+    "pypdf>=5.0",      # PDF text-layer extraction (digital receipts, 2.2)
+    "pypdfium2>=4.30", # scanned-PDF rasterization for vision fallback (2.2)
+    "pillow>=10.0",    # PNG encoding of rendered PDF pages (2.2)
 ]
 
 [project.optional-dependencies]
