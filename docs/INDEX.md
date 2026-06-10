@@ -43,6 +43,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## meji-media
 | Date | Topic | Link |
 |------|-------|------|
+| 2026-06-10 | Meji Health Check + BCC Clear | [Checkpoint](docs/2026-06-10%20-%20Meji%20Health%20Check%20+%20BCC%20Clear/Checkpoint.md) |
 | 2026-06-09 | Meji Double-Send Fix + Inbound Email Scope | [Checkpoint](docs/2026-06-09%20-%20Meji%20Double-Send%20Fix%20+%20Inbound%20Email%20Scope/Checkpoint.md) |
 | 2026-06-08 | Meji Piece 1 Christmas Warm Live | [Checkpoint](docs/2026-06-08%20-%20Meji%20Piece%201%20Christmas%20Warm%20Live/Checkpoint.md) |
 | 2026-06-07 | Meji Piece 2 Corporate Cold Live | [Checkpoint](docs/2026-06-07%20-%20Meji%20Piece%202%20Corporate%20Cold%20Live/Checkpoint.md) |
