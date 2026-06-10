@@ -28,6 +28,10 @@ The config is a JSON file (stdlib only — no YAML dep) of the shape:
       },
       "output": {
         "path": "report-may.xlsx"
+      },
+      "run_log": {                             # optional (slice 5b)
+        "path": "history.sqlite",              # opt-in run history; omit
+        "operator": "chris"                    #   the block to disable
       }
     }
 
@@ -51,6 +55,8 @@ import argparse
 import json
 import logging
 import sys
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 import os
@@ -69,6 +75,7 @@ from .matching.deterministic import match_month
 from .matching.judgment import judge_ambiguous, judge_fx_match
 from .matching.types import Match, MatchOutcome, Receipt, Transaction
 from .output.report_xlsx import write_report
+from .runlog import RunLog, decisions_from_outcome
 from .output.zoho_export import write_zoho_export
 from .zoho.client import ZohoClient, ZohoConfig
 
@@ -347,7 +354,72 @@ def run(
         logger.info("wrote Zoho journal export: %s", export_path)
         print(f"Wrote Zoho export: {export_path}")
 
+    # BLUEPRINT 5.7-5.10: append this run to the SQLite run-log when a
+    # `run_log:` block is configured (opt-in; no block = no file, no
+    # behaviour change). Records audit metadata + one row per tx decision
+    # so `expense-recon history` / `diff` can answer "what did we do".
+    _record_run_log(
+        cfg, config_path, config_dir, outcome, transactions, receipts,
+        parse_errors, cost_tracker, report_path,
+    )
+
     return report_path
+
+
+def _record_run_log(
+    cfg: dict,
+    config_path: Path,
+    config_dir: Path,
+    outcome: MatchOutcome,
+    transactions: list[Transaction],
+    receipts: list[Receipt],
+    parse_errors: list[tuple[str, int, str]],
+    cost_tracker: CostTracker | None,
+    report_path: Path,
+) -> None:
+    rl_cfg = cfg.get("run_log")
+    if not isinstance(rl_cfg, dict) or not rl_cfg.get("path"):
+        return
+
+    db_path = (config_dir / rl_cfg["path"]).resolve()
+    run_id = uuid.uuid4().hex[:12]
+    created_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    operator = (
+        rl_cfg.get("operator")
+        or os.environ.get("EXPENSE_RECON_OPERATOR")
+        or os.environ.get("USERNAME")
+        or os.environ.get("USER")
+    )
+
+    n_review = len(outcome.judgment_required) + len(
+        {m.transaction_id for m in outcome.ambiguous}
+    )
+    stmt = cfg.get("statement") or {}
+    summary = {
+        "config_path": str(config_path),
+        "statement_path": stmt.get("path"),
+        "account_id": stmt.get("account_id"),
+        "legal_entity_id": stmt.get("legal_entity_id"),
+        "report_path": str(report_path),
+        "n_transactions": len(transactions),
+        "n_receipts": len(receipts),
+        "n_matched": len(outcome.matches),
+        "n_review": n_review,
+        "n_unmatched": len(outcome.unmatched_transactions),
+        "n_parse_errors": len(parse_errors),
+        "llm_calls": cost_tracker.call_count if cost_tracker else 0,
+        "llm_cost_usd": cost_tracker.total_cost_usd if cost_tracker else Decimal("0"),
+    }
+    with RunLog(db_path) as rl:
+        rl.record_run(
+            run_id=run_id,
+            created_at=created_at,
+            summary=summary,
+            decisions=decisions_from_outcome(outcome),
+            operator=operator,
+        )
+    logger.info("recorded run %s to run-log %s", run_id, db_path)
+    print(f"Run logged: {run_id}")
 
 
 def _build_llm_client(cfg: dict) -> tuple[LLMClient | None, CostTracker | None]:
@@ -508,6 +580,12 @@ def main(argv: list[str] | None = None) -> int:
         from .doctor import main as doctor_main
 
         return doctor_main(argv[1:])
+
+    # `expense-recon history` / `diff` — read-only run-log views (5.8/5.9).
+    if argv and argv[0] in ("history", "diff"):
+        from .runlog_cli import main as runlog_main
+
+        return runlog_main(argv[1:], command=argv[0])
 
     parser = argparse.ArgumentParser(
         prog="expense-recon",
