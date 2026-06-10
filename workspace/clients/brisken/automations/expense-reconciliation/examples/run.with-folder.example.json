@@ -1,0 +1,34 @@
+{
+  "_comment_": "Slice 2.2: receipts come from a FOLDER of images/PDFs instead of a pre-extracted CSV. The tool OCRs each file (OpenAI vision for images, PDF text layer for digital receipts). Requires OPENAI_API_KEY. Run `expense-recon doctor --config run.with-folder.example.json` first to validate paths + env.",
+
+  "statement": {
+    "path": "statement.example.csv",
+    "account_id": "amex-9001",
+    "legal_entity_id": "brisken-llc",
+    "account_card_currency": "USD",
+    "column_map": {
+      "transaction_date": "Date",
+      "amount": "Amount",
+      "vendor": "Description"
+    }
+  },
+
+  "receipts": {
+    "_help": "source 'folder' points at a directory of .jpg/.png/.webp/.pdf receipts. Omit `source` and the tool infers 'folder' from a directory path. default_currency fills in when a receipt does not state one.",
+    "path": "receipts-folder",
+    "source": "folder",
+    "default_currency": "USD"
+  },
+
+  "output": {
+    "path": "report-folder.xlsx"
+  },
+
+  "llm": {
+    "provider": "openai",
+    "model": "gpt-4o-mini",
+    "_vision_model_help": "OCR can use a stronger model than text categorization; defaults to `model` when omitted.",
+    "vision_model": "gpt-4o-mini",
+    "api_key_env": "OPENAI_API_KEY"
+  }
+}
