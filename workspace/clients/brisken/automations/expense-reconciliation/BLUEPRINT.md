@@ -466,10 +466,12 @@ Configuration is Brisken-shaped. Run history persists so she can ask
 
 | # | Item | ANNEALING ref |
 |---|---|---|
-| 5.7 | SQLite run-log: one row per run + one row per tx-decision | C1 |
-| 5.8 | `expense-recon history` subcommand: list runs, open old reports | new |
-| 5.9 | `expense-recon diff <run-id> <run-id>` subcommand for month comparisons | new |
-| 5.10 | Run-log audit columns: when, who, source files, output paths, LLM cost | C1 |
+| 5.7 | SQLite run-log: one row per run + one row per tx-decision — **Done (2026-06-11):** `runlog.py`, opt-in via `run_log:` config block (no block = no file, no behaviour change); every transaction recorded incl. unmatched (guarantee carried into the log) | C1 |
+| 5.8 | `expense-recon history` subcommand — **Done (2026-06-11):** list runs (newest first) or `--run <id\|prefix>` for one run's per-tx decisions; resolves db from `--config` or `--db` | new |
+| 5.9 | `expense-recon diff <id> <id>` subcommand — **Done (2026-06-11):** count deltas + which transactions changed bucket (matched/review/unmatched) between two runs | new |
+| 5.10 | Run-log audit columns — **Done (2026-06-11):** when (created_at UTC), who (operator), source statement path, report path, counts, LLM cost. Stores tx IDs + match types only, never account/vendor/amount data | C1 |
+
+Slice 5b shipped with 11 tests (`tests/test_runlog.py`). NOT yet built: 4.8 line-item idempotency (guards Zoho *posting*, which stays gated; no surface until 4b lands).
 
 ### 5c. Deployment
 
