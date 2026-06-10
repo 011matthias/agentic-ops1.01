@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Workflow | Insurance Outbound | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+
+/* Access Gate */
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+
+/* Navigation */
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+
+/* Sidebar */
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+
+/* Main Content */
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+
+/* Hero */
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 580px; margin: 0 auto 32px; line-height: 1.6; }
+.stats-row { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
+.stat-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 24px; text-align: center; min-width: 140px;
+    transition: transform .15s, box-shadow .15s;
+}
+.stat-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.stat-value { font-size: 24px; font-weight: 800; color: var(--blue); }
+.stat-label { font-size: 12px; color: var(--text2); font-weight: 500; margin-top: 2px; }
+
+/* Sections */
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+
+/* Callout */
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+
+/* Download box */
+.download-box {
+    background: var(--green-bg); border: 1px solid color-mix(in srgb, var(--green) 25%, var(--border));
+    border-radius: 12px; padding: 28px; margin: 28px 0; text-align: center;
+}
+.download-box h3 { color: var(--green-dark); margin-top: 0; font-size: 18px; }
+.download-box p { color: var(--green-dark); font-size: 14px; margin-bottom: 20px; }
+.download-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--green); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s;
+    box-shadow: 0 2px 8px rgba(5,150,105,.3);
+}
+.download-btn:hover { background: var(--green-dark); transform: translateY(-1px); text-decoration: none; }
+
+/* 4-Zone Grid */
+.zones-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 14px; margin: 32px 0; }
+.zones { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin: 32px 0; }
+.zone {
+    border-radius: 12px; padding: 20px; border: 1px solid var(--border);
+    transition: transform .15s, box-shadow .15s;
+}
+.zone:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.zone-blue { background: var(--blue-bg); border-color: color-mix(in srgb, var(--blue) 20%, var(--border)); }
+.zone-purple { background: var(--purple-bg); border-color: color-mix(in srgb, var(--purple) 20%, var(--border)); }
+.zone-green { background: var(--green-bg); border-color: color-mix(in srgb, var(--green) 20%, var(--border)); }
+.zone-orange { background: var(--orange-bg); border-color: color-mix(in srgb, var(--orange) 20%, var(--border)); }
+.zone-icon { font-size: 24px; margin-bottom: 8px; }
+.zone-title { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+.zone-blue .zone-title { color: var(--blue-dark); }
+.zone-purple .zone-title { color: var(--purple-dark); }
+.zone-green .zone-title { color: var(--green-dark); }
+.zone-orange .zone-title { color: var(--orange-dark); }
+.zone-sub { font-size: 11px; color: var(--text2); margin-bottom: 10px; }
+.zone-items { list-style: none; padding: 0; }
+.zone-items li {
+    font-size: 12px; padding: 4px 0; color: var(--text);
+    display: flex; align-items: center; gap: 8px;
+}
+.zone-items li::before { content: ''; width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+.zone-blue .zone-items li::before { background: var(--blue); }
+.zone-purple .zone-items li::before { background: var(--purple); }
+.zone-green .zone-items li::before { background: var(--green); }
+.zone-orange .zone-items li::before { background: var(--orange); }
+
+/* Checklist */
+.checklist { list-style: none; padding: 0; margin: 24px 0; }
+.checklist li {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; color: var(--text);
+}
+.checklist li:last-child { border-bottom: none; }
+.check-icon {
+    width: 20px; height: 20px; border-radius: 50%; background: var(--green-bg);
+    border: 2px solid var(--green); display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-top: 1px;
+}
+.check-icon::after {
+    content: ''; width: 6px; height: 10px; border: 2px solid var(--green);
+    border-top: none; border-left: none; transform: rotate(45deg) translateY(-1px);
+}
+
+/* Table */
+table { width: 100%; border-collapse: collapse; margin: 24px 0; font-size: 14px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+th { background: var(--th-bg); color: #fff; font-weight: 600; font-size: 13px; }
+tbody tr:hover { background: var(--surface2); }
+
+/* CTA */
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+
+/* Footer */
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); }
+.footer p { margin-bottom: 4px; }
+
+/* Tablet */
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+
+/* Mobile */
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .zones-4 { grid-template-columns: 1fr 1fr; }
+    .zones { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 24px; }
+    .stats-row { gap: 8px; }
+    .stat-card { min-width: 100px; padding: 12px 16px; }
+    .stat-value { font-size: 20px; }
+}
+@media (max-width: 480px) {
+    .zones-4 { grid-template-columns: 1fr; }
+}
+</style>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
+</head>
+<body>
+
+<!-- Access Gate -->
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared for you. Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/insurance-agent-cold-email/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Insurance Outbound</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/insurance-agent-cold-email/">Overview</a>
+        <a href="/clients/insurance-agent-cold-email/solution">Solution</a>
+        <a href="/clients/insurance-agent-cold-email/workflow" class="active">Workflow</a>
+        <a href="/clients/insurance-agent-cold-email/timeline">Timeline</a>
+        <a href="/clients/insurance-agent-cold-email/investment">Investment</a>
+        <a href="/clients/insurance-agent-cold-email/faq">FAQ</a>
+        <a href="/clients/insurance-agent-cold-email/onboarding">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">On this page</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#setup" class="step-link active"><span class="step-num">1</span> One-Time Setup</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#loop" class="step-link"><span class="step-num">2</span> The Monthly Loop</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#yourside" class="step-link"><span class="step-num">3</span> Your Only Job</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<!-- Hero -->
+<section class="hero" id="overview">
+    <div class="hero-badge">THE WORKFLOW</div>
+    <h1>What running it for you looks like</h1>
+    <p class="hero-sub">You don't log into a tool or learn a platform. Here's the whole loop, from the one-time setup through the recurring monthly cycle, all of it run on our side.</p>
+    <div class="stats-row">
+        <div class="stat-card"><div class="stat-value">4</div><div class="stat-label">Stages</div></div>
+        <div class="stat-card"><div class="stat-value">Weekly</div><div class="stat-label">Optimization</div></div>
+        <div class="stat-card"><div class="stat-value">0</div><div class="stat-label">Tools you run</div></div>
+        <div class="stat-card"><div class="stat-value">2 wk</div><div class="stat-label">To first send</div></div>
+    </div>
+</section>
+
+<!-- One-Time Setup -->
+<h2 id="setup">The one-time setup (weeks 1 to 2)</h2>
+<p>Before a single cold email goes out, the foundation gets built. This happens once, at the start, and it's what makes everything after it land.</p>
+
+<ol>
+    <li><strong>Build and verify the list.</strong> We source insurance agents from public license registries, Apollo, Sales Navigator, and directories, then verify every address so the bounce rate stays under 2 percent.</li>
+    <li><strong>Buy the sending domains.</strong> Dedicated domains for cold sending, kept separate from your primary so your main reputation is never touched.</li>
+    <li><strong>Create and authenticate the mailboxes.</strong> Mailboxes on those domains, each set up with SPF, DKIM, and DMARC so providers can confirm the mail is genuinely from us.</li>
+    <li><strong>Start the warm-up.</strong> The mailboxes begin a 2 to 3 week warm-up on day one, building a normal sending history before cold volume starts.</li>
+    <li><strong>Write the first sequence.</strong> A short cold sequence written for insurance agents and your product, ready to launch the moment the inboxes are warm.</li>
+</ol>
+
+<!-- The Monthly Loop -->
+<h2 id="loop">The monthly loop</h2>
+<p>Once the inboxes are warm, the work settles into a recurring cycle. Every month runs these four stages, and the list gets topped up as we go so volume never runs dry.</p>
+
+<div class="zones-4">
+    <div class="zone zone-blue">
+        <div class="zone-title">Send</div>
+        <div class="zone-sub">Run the sequence</div>
+        <ul class="zone-items">
+            <li>Daily sending at safe volume</li>
+            <li>Volume ramps as inboxes mature</li>
+            <li>Scale by adding inboxes</li>
+            <li>Lists replenished monthly</li>
+        </ul>
+    </div>
+    <div class="zone zone-purple">
+        <div class="zone-title">Reply handling</div>
+        <div class="zone-sub">Catch real interest</div>
+        <ul class="zone-items">
+            <li>Replies detected fast</li>
+            <li>Sequence stops on reply</li>
+            <li>Interested agents flagged</li>
+            <li>Noise filtered out</li>
+        </ul>
+    </div>
+    <div class="zone zone-green">
+        <div class="zone-title">Book</div>
+        <div class="zone-sub">Demos on your calendar</div>
+        <ul class="zone-items">
+            <li>Booked to your calendar link</li>
+            <li>You only see real interest</li>
+            <li>Hand-off ready for the demo</li>
+        </ul>
+    </div>
+    <div class="zone zone-orange">
+        <div class="zone-title">Report and tune</div>
+        <div class="zone-sub">Improve every week</div>
+        <ul class="zone-items">
+            <li>Weekly report on the numbers</li>
+            <li>Copy and targeting adjusted</li>
+            <li>Volume tuned to deliverability</li>
+            <li>What's working doubled down</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Your Only Job -->
+<h2 id="yourside">The only thing on your side</h2>
+<p>Everything above is ours to run. Your part is small and it's the part only you can do.</p>
+
+<div class="callout">
+    <div class="callout-title">Your job</div>
+    <p>You show up to the demos we book and you sell your product. We handle the sourcing, the sending, the deliverability, the replies, and the reporting. The conversations land on your calendar; the rest is on us.</p>
+</div>
+
+<div class="cta-section">
+    <h2 id="cta-next">See the two-week setup laid out</h2>
+    <p>The Timeline page shows exactly what happens in each phase before the first send.</p>
+    <a href="/clients/insurance-agent-cold-email/timeline" class="cta-btn">See the timeline &#8594;</a>
+</div>
+
+<footer class="footer">
+    <p>Prepared by UnpauseAI &middot; <a href="mailto:admin@unpauseai.com">admin@unpauseai.com</a> &middot; 2026</p>
+    <p>Last updated: 2026-06-10</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+// Access gate
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='insurance-2026'){
+        localStorage.setItem('insurance-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.';
+    }
+}
+(function(){if(localStorage.getItem('insurance-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+
+// Theme toggle
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('theme',t);
+}
+
+// Sidebar active state
+(function(){
+    var links=document.querySelectorAll('.step-link');
+    var sections=[];
+    links.forEach(function(l){
+        var id=l.getAttribute('href');
+        if(id&&id.startsWith('#')){
+            var el=document.querySelector(id);
+            if(el)sections.push({el:el,link:l});
+        }
+    });
+    if(!sections.length)return;
+    var observer=new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+            if(e.isIntersecting){
+                links.forEach(function(l){l.classList.remove('active')});
+                sections.forEach(function(s){
+                    if(s.el===e.target)s.link.classList.add('active');
+                });
+            }
+        });
+    },{rootMargin:'-80px 0px -60% 0px'});
+    sections.forEach(function(s){observer.observe(s.el)});
+})();
+</script>
+</body>
+</html>
