@@ -97,7 +97,7 @@ instances:
         trigger: webhook
         ship: true
         status: active
-        note: "2026-06-10: Health check -- all executions status 1 (green) since at least 06-04; the status-2 BCC warnings no longer occur even though `developer_bcc` in DS 153173 still holds the deactivated address (see DS note). Previously 2026-04-23: Reactivated after 2026-04-21 halt. Drained 24 queued webhooks (14 from halt window + 10 fresh AM enquiries A0 forwarded while in pre-meeting sitrep). All runs were status 2 (WARNING) -- onerror:Resume firing on email-send modules because `developer_bcc` pointed at deactivated `client.meji-media@unpauseai.com`. Customer emails unaffected. Leicester mapping includes 149/150 (forward-fix live since 2026-04-20: L=132,138-140,149,150). Previously 2026-03-31: verified venue_key mapping from events table; all 19 IDs mapped via contains(): B=130,141-148 W=131,133-137 L=132,138-140; fixed name/leader swap + guest grammar; Jess Leicester test (id 14294, event_id 138) processed successfully."
+        note: "2026-06-10: Health check -- all executions status 1 (green) since at least 06-04; `developer_bcc` in DS 153173 cleared same day (see DS note). Previously 2026-04-23: Reactivated after 2026-04-21 halt. Drained 24 queued webhooks (14 from halt window + 10 fresh AM enquiries A0 forwarded while in pre-meeting sitrep). All runs were status 2 (WARNING) -- onerror:Resume firing on email-send modules because `developer_bcc` pointed at deactivated `client.meji-media@unpauseai.com`. Customer emails unaffected. Leicester mapping includes 149/150 (forward-fix live since 2026-04-20: L=132,138-140,149,150). Previously 2026-03-31: verified venue_key mapping from events table; all 19 IDs mapped via contains(): B=130,141-148 W=131,133-137 L=132,138-140; fixed name/leader swap + guest grammar; Jess Leicester test (id 14294, event_id 138) processed successfully."
       - id: 8804012
         name: "A2 - Reply Detection & Stop"
         trigger: scheduled (600s)
@@ -123,7 +123,7 @@ instances:
         records: 1
         fields: 35
         ship: true
-        note: "2026-06-10: `developer_bcc` still holds deactivated `client.meji-media@unpauseai.com` (verified via data-store-records_list), but A1 executions are status 1 (green) -- the status-2 warnings stopped. Cleanup (clear the field OR repoint to `neumanic2@gmail.com`) is blocked agent-side: the eu2 MCP server has no data-store record write tool and no MAKE_API_TOKEN exists in any .env -- needs the owner's Make API token or a 30-second Make UI edit. Customer-facing sends unaffected."
+        note: "2026-06-10: `developer_bcc` CLEARED (was deactivated `client.meji-media@unpauseai.com`) -- user-authorized, via REST PATCH with the new datastores-scope MAKE_API_TOKEN (now in context/.env); record re-read and verified intact field-by-field, handoff_email unchanged. A1 executions were already status 1 before the clear."
       - id: 153175
         name: "Email Templates"
         records: 10  # 5 template pairs x 2 A/B variants
