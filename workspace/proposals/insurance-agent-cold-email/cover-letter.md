@@ -1,6 +1,6 @@
 # Cover Letter: Insurance SaaS Startup (p027)
 
-Hi there, Matthias here. You need insurance agents at volume and cold email that hits the inbox, not spam. I run done-for-you outbound for a live client: verified lists, warmed domains, demos on your calendar. Walkthrough:
+Insurance agents at volume, email that hits the inbox. Licensed agents are public record; deliverability is auth + warm-up, and I run both daily for a live client. How many demos a month makes it worth it? Walkthrough:
 
 ---
 Walkthrough: short Loom (link in this message)
