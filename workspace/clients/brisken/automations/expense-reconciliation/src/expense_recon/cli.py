@@ -498,6 +498,17 @@ def _print_dry_run_summary(
 
 
 def main(argv: list[str] | None = None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
+
+    # `expense-recon doctor --config X` routes to the pre-flight checker
+    # (BLUEPRINT 5.14). The bare `expense-recon --config X` run interface
+    # below is unchanged, so existing configs / docs keep working.
+    if argv and argv[0] == "doctor":
+        from .doctor import main as doctor_main
+
+        return doctor_main(argv[1:])
+
     parser = argparse.ArgumentParser(
         prog="expense-recon",
         description="Brisken expense reconciliation tool (slice 1).",

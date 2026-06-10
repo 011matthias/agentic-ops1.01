@@ -224,7 +224,7 @@ get real Claude judgment instead of `[STUB]`.
 | 2.6 | Config schema extension (`llm:` block) | `cli.py` + JSON schema |
 | 2.7 | CLI receipt-source switch (CSV vs folder) — **Done (2026-06-10):** `receipts.source` "csv"/"folder", inferred from path when absent; folder mode requires `llm:` block; `vision_model` config knob added | `cli.py` |
 | 2.8 | Vision-cell unit tests with mocked client — **Done (2026-06-10):** 14 tests, CI-safe | `tests/test_receipts_folder.py` |
-| 2.9 | End-to-end test with real Claude (gated behind env var) | `tests/test_llm_integration.py` |
+| 2.9 | End-to-end test with the real API (gated behind env var) — **Done (2026-06-10):** `tests/test_llm_integration.py`, skipped unless `EXPENSE_RECON_LIVE_OPENAI=1` + key; covers vision image extraction + PDF text-layer path | `tests/test_llm_integration.py` |
 | 2.10 | Update Summary sheet with LLM call count + estimated cost | `report_xlsx.py` |
 
 **Config additions:**
@@ -478,14 +478,14 @@ Configuration is Brisken-shaped. Run history persists so she can ask
 | 5.11 | Local install instructions (Chris's machine, Python via uv) | onboarding doc |
 | 5.12 | Optional: tiny VM deployment (Fly.io single-tenant) | deferred until Chris asks |
 | 5.13 | CI workflow on the public agentic-ops repo | `.github/workflows/expense-recon.yml` |
-| 5.14 | Pre-flight check command: `expense-recon doctor` (validates config, env vars, paths) | `cli.py` |
+| 5.14 | Pre-flight check command — **Done (2026-06-10):** `expense-recon doctor --config X`; read-only, no network; banded OK/WARN/FAIL over config JSON, statement file + column_map vs header, receipt source (csv/folder), `llm:`/`zoho:` env creds, output path; exit 1 on any FAIL. 14 tests | `doctor.py` |
 
 **Onboarding flow once 5a–5c land:**
 
 1. Chris (or her IT person) installs uv on her machine: `winget install astral-sh.uv` (Windows) or equivalent.
 2. Clone the public tool repo + the private `brisken-config` repo.
-3. Set `ANTHROPIC_API_KEY` from the `.env.brisken` distributed by Matthias.
-4. Run `expense-recon doctor` — confirms her setup.
+3. Set `OPENAI_API_KEY` from the `.env.brisken` distributed by Matthias (provider pivoted Anthropic to OpenAI on 2026-06-01).
+4. Run `expense-recon doctor --config runs/<this-month>.json`; confirms her setup.
 5. Monthly: copy `template.json`, fill in the month's statement + receipts folder, run `expense-recon --config runs/2026-05-amex.json`.
 6. Open the report.xlsx, review the Needs Review sheet, accept/edit categories on the Matches sheet, run the Zoho export.
 7. Upload Zoho CSV in Zoho Books import interface (or `expense-recon zoho-post` if 4b shipped).
