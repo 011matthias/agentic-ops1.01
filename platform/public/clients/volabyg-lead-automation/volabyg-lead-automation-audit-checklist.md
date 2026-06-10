@@ -4,11 +4,11 @@ Prepared by UnpauseAI. This is the actual set of checks we run in Phase 1,
 against your live setup, before any rebuild. Each item is read-only; nothing
 that is sending today gets changed during the audit.
 
-Last updated: 2026-06-09
+Last updated: 2026-06-10
 
 ---
 
-## 1. Authentication (why mail lands in spam)
+## 1. Authentication (rejected vs filtered)
 
 - [ ] SPF record on the sending domain: present, valid, single record, correct includes
 - [ ] SPF policy: does `-all` (hard fail) match the actual sending sources
@@ -21,9 +21,14 @@ Last updated: 2026-06-09
 - [ ] BIMI and MTA-STS: present or not (not required, noted for completeness)
 
 Known finding for volabyg.dk (public DNS, 2026-06-09): SPF `include:spf.simply.com -all`,
-DMARC `p=reject`, MX `mx.simply.com`, no common DKIM selector resolving. Mail sent
-as `@volabyg.dk` through anything other than Simply.com fails authentication and is
-rejected by the reject policy.
+DMARC `p=reject`, MX `mx.simply.com`. Public lookups did not resolve a DKIM key on the
+common selectors, which does not prove one is absent. This is a strict, correctly
+configured policy: only Simply.com is approved to send as `@volabyg.dk`. If a tool other
+than Simply.com sends as `@volabyg.dk` without aligned authentication, that mail is
+rejected; if it sends through the Simply.com mailbox, or from its own separate domains,
+the reject policy does not apply. The reported symptom is spam, not bounced mail, so the
+likelier driver is warm leads filtered through cold-outreach infrastructure rather than
+outright rejection. The audit confirms which.
 
 ## 2. Sending infrastructure and reputation
 

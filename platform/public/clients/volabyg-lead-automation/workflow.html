@@ -366,13 +366,13 @@ li { margin-bottom: 6px; }
         <tr><td class="today">Lead Ad to Sheet</td><td>A sync that retries silently, times out, or skips a row when Facebook delivers leads in a burst. No error is surfaced, so no one knows.</td></tr>
         <tr><td class="today">Inside the Sheet</td><td>A shifted column or a manual edit breaks the mapping Instantly reads from. New rows still arrive, but the sequence reads the wrong field.</td></tr>
         <tr><td class="today">Sheet to Instantly</td><td>Dedupe that matches too aggressively drops legitimate separate leads, or an import that only runs on a schedule misses leads between runs.</td></tr>
-        <tr><td class="today">Instantly send</td><td>The email is created and sent, but fails authentication and lands in spam. It counts as sent, never as delivered. This is the gap between your Facebook count and your reply count.</td></tr>
+        <tr><td class="today">Instantly send</td><td>The email is created and sent, but lands in spam instead of the inbox, or, depending on how the sending domain is authenticated, is rejected before delivery. Either way it counts as sent, never as a reply. The audit determines which is happening.</td></tr>
     </tbody>
 </table>
 
 <div class="callout orange">
     <div class="callout-title">Why the counts disagree</div>
-    <p>Some leads never reach the sequence (a transfer drop). Others reach it but their mail never reaches the inbox (the spam problem). Both reduce replies without reducing the Facebook number. The audit measures each one separately, so you know how much is transfer and how much is deliverability.</p>
+    <p>Some leads never reach the sequence (a transfer drop). Others reach it but their mail lands in spam instead of the inbox. And some are not missing at all: if your own new-lead alerts also land in spam, leads that did arrive were never surfaced to you. All three lower replies without lowering the Facebook number, and the audit measures each one separately.</p>
 </div>
 
 <h2 id="rebuilt">The Rebuilt Flow</h2>

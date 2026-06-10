@@ -361,7 +361,7 @@ li { margin-bottom: 6px; }
 <div class="recbox">
 <span class="k">SPF</span>   &nbsp;v=spf1 include:spf.simply.com <span class="bad">-all</span>  &nbsp;<span style="color:var(--text2)"># only Simply.com may send; everything else hard-fails</span><br>
 <span class="k">DMARC</span> &nbsp;p=<span class="bad">reject</span>  &nbsp;<span style="color:var(--text2)"># tell receivers to reject mail that fails auth</span><br>
-<span class="k">DKIM</span>  &nbsp;<span class="bad">no public selector found</span>  &nbsp;<span style="color:var(--text2)"># likely no aligned signature on the sending path</span>
+<span class="k">DKIM</span>  &nbsp;<span class="bad">none on common selectors</span>  &nbsp;<span style="color:var(--text2)"># public lookups only see common selectors; the audit checks the real one</span>
 </div>
 
 <p>The fix sets up a sending identity that actually passes these checks: a dedicated domain or subdomain for lead mail, with its own SPF include, a published DKIM key, and DMARC alignment. Done right, your security posture stays strong and your lead mail authenticates cleanly, which is what mailbox providers reward with inbox placement.</p>
@@ -401,7 +401,7 @@ li { margin-bottom: 6px; }
     <div class="zone blue">
         <div class="zone-icon">&#9679;</div>
         <div class="zone-title">Authentication</div>
-        <p class="zone-desc">SPF, DKIM, DMARC, and from-domain alignment on the actual sending path. Where mail fails auth and why.</p>
+        <p class="zone-desc">SPF, DKIM, DMARC, and from-domain alignment on the actual sending path. Whether mail is rejected, filtered, or passing, and why.</p>
     </div>
     <div class="zone green">
         <div class="zone-icon">&#9679;</div>
@@ -436,7 +436,7 @@ li { margin-bottom: 6px; }
 
 <div class="footer">
     <p>Prepared by UnpauseAI for VolaByg. Contact: admin@unpauseai.com</p>
-    <p>2026 &middot; Last updated: 2026-06-09</p>
+    <p>2026 &middot; Last updated: 2026-06-10</p>
 </div>
 
 </div>

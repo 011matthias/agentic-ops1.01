@@ -333,7 +333,7 @@ li { margin-bottom: 6px; }
 
 <section class="hero">
     <h1>VolaByg's Meta Leads, Fixed From Ad to Inbox</h1>
-    <p class="hero-sub">Facebook Lead Ads to a Google Sheet to an Instantly sequence. Two things are wrong: a lot of mail lands in spam, and the Facebook lead count does not match the replies you see. Both are fixable, and the cause is already visible from the outside.</p>
+    <p class="hero-sub">Facebook Lead Ads to a Google Sheet to an Instantly sequence. Two separate things are wrong: a lot of mail lands in spam, and the Facebook lead count does not match the replies you see. Different causes, one pipeline, one owner. Both are fixable, and the first clue is already public in your DNS.</p>
     <div class="stats-row">
         <div class="stat"><div class="stat-num">p=reject</div><div class="stat-label">your live DMARC policy</div></div>
         <div class="stat"><div class="stat-num">3-step</div><div class="stat-label">sequence preserved</div></div>
@@ -347,13 +347,13 @@ li { margin-bottom: 6px; }
     <p>Audit, fix, rebuild, and ongoing management of the whole flow, with one owner. This is the exact pattern we run in production for a live client: form to sheet to authenticated sequenced send, with reply detection that stops the sequence. The four questions in your message (can we handle it, what we recommend, pricing, timeline) are each answered on a page of this site.</p>
 </div>
 
-<h2 id="two-problems">Two Problems, One Root Cause</h2>
+<h2 id="two-problems">Two Problems, One Pipeline, One Owner</h2>
 
-<p>The spam problem and the count mismatch look like two separate issues. They usually share a root cause: warm leads are being sent through cold-outreach infrastructure, and the handoff between Facebook and the sequence was never tested end to end with real volume.</p>
+<p>The spam problem and the count mismatch look related, but they have different causes and need different fixes. What they share is the pipeline they run on and, ideally, a single owner. The spam is a sending-infrastructure problem; the count gap is a data-transfer problem. Treating them as one root cause is how each ends up half-fixed.</p>
 
 <p><strong>Instantly is a cold-outreach tool.</strong> It is built around rotating mailboxes, warmup, and aggressive sending to people who never asked to hear from you. Your leads are the opposite: they opted in through a form seconds earlier. Warm leads sent through cold infrastructure is one of the most common reasons legitimate mail lands in spam. The sender does not match what the receiving mail server expects, so it gets filtered.</p>
 
-<p><strong>The count mismatch is a transfer problem, not just a spam problem.</strong> If Facebook says 100 leads and your sequence only shows engagement consistent with 70, the missing 30 may never have reached Instantly at all. Lead Ads to Sheet to Instantly is three handoffs, and any one of them can silently drop rows: a webhook that times out, a sheet column that shifts, a sync that skips duplicates too aggressively. Spam hides some of the gap; lost leads hide the rest.</p>
+<p><strong>The count mismatch is mostly a transfer problem.</strong> If Facebook says 100 leads and your sequence only shows engagement consistent with 70, some of the missing 30 may never have reached Instantly at all. Lead Ads to Sheet to Instantly is three handoffs, and any one of them can silently drop rows: an expired Meta Leads connection, a sheet column that shifts, a sync that skips duplicates too aggressively. And some of the gap is not lost mail at all: if your own new-lead alerts land in the same spam folder, leads that did arrive were simply never surfaced to you. The audit separates real transfer loss from leads you just never saw.</p>
 
 <h2 id="what-we-found">What a Public Lookup Already Shows</h2>
 
@@ -365,14 +365,15 @@ li { margin-bottom: 6px; }
 <span class="k">MX</span>    &nbsp;mx.simply.com
 </div>
 
-<p>Your domain is locked down to Simply.com only, with a hard fail (<strong>-all</strong>) on any other sender and a DMARC policy of <strong>reject</strong>, the strictest setting. On your main mailbox, that is good security. For sending, it has a sharp consequence:</p>
+<p>Your domain is locked down to Simply.com only, with a hard fail (<strong>-all</strong>) on any other sender and a DMARC policy of <strong>reject</strong>, the strictest setting. On your main mailbox, that is good security. For your lead sending it raises the one question the audit answers: is your mail being rejected, or just filtered?</p>
 
 <ul>
-    <li>If Instantly sends as <strong>@volabyg.dk</strong>, every message fails SPF and DMARC tells the receiver to reject it. That mail does not reach the inbox at all.</li>
-    <li>If Instantly sends from a <strong>separate cold domain</strong>, your warm leads get email from a sender they do not recognize, which lowers trust and raises the spam rate.</li>
+    <li>If Instantly sends as <strong>@volabyg.dk</strong> through its own servers, this policy tells the receiver to reject the mail, and it never reaches the inbox.</li>
+    <li>If Instantly sends through your <strong>Simply.com</strong> mailbox, it authenticates cleanly and this policy is not the problem.</li>
+    <li>If Instantly sends from its own <strong>separate cold domains</strong>, your policy does not apply, but warm leads get mail from a sender they do not recognize, which raises the spam rate.</li>
 </ul>
 
-<p>Either way, the architecture is the cause, not bad luck. The audit confirms which path you are on and fixes it. We did not log into anything to learn this; it is the first two minutes of the audit, shown here so you can see how we work.</p>
+<p>One detail points the way before we log in: the symptom is spam, not bounced mail. Mail that truly fails a reject policy bounces; mail that lands in spam was accepted and then filtered. That leans toward the cold-infrastructure cause above more than outright rejection. The audit confirms which path you are on and fixes it; this is the first few minutes of it, shown here so you can see how we work.</p>
 
 <h2 id="what-we-own">What We Take Ownership Of</h2>
 
@@ -438,7 +439,7 @@ li { margin-bottom: 6px; }
 
 <div class="footer">
     <p>Prepared by UnpauseAI for VolaByg. Contact: admin@unpauseai.com</p>
-    <p>2026 &middot; Last updated: 2026-06-09</p>
+    <p>2026 &middot; Last updated: 2026-06-10</p>
 </div>
 
 </div>
