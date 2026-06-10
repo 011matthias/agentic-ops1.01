@@ -11,6 +11,7 @@ This is a guide to what each part needs to land, not a word-for-word script. Say
 ## 1. Open (about 15 seconds)
 - Say who you are, briefly.
 - Set the promise: before talking price, you will show that the most likely cause is already visible from the outside, in their public DNS.
+- Suggested opener, say it your way: "Hi Ibrahim, Matthias here. Before we talk money at all, I want to show you something: the most likely reason your emails land in spam is already visible from the outside, in your public DNS, with no login to anything of yours needed."
 
 ## 2. The reframe: two problems, not one (about 40 seconds)
 - It is not random spam. Two things are stacked:
@@ -32,6 +33,7 @@ This is a guide to what each part needs to land, not a word-for-word script. Say
 - Confirm you can take it A to Z, with one owner for the whole flow.
 - The access code for the full site is in your message.
 - Suggest starting with the Phase 1 audit, and offer a quick call if that is easier.
+- Suggested close, say it your way: "So that's the whole picture, Ibrahim: two separate problems, one pipeline, and one person to own it end to end. The low-risk way in is the Phase 1 audit, and if it's easier to just talk it through, I'm glad to hop on a quick call whenever works for you."
 
 ## Terms to gloss if you say them on camera
 - SPF, DKIM, DMARC: "the records that prove an email really came from your domain."
