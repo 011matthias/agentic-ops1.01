@@ -86,6 +86,29 @@ common set) need no gloss. See `rule_human_communication.md` section 7.
   the DNS block, or the workflow.
 - Speak linearly; each beat builds on the last.
 - Close on the question, never "hire me".
+- The opening is about THEIR problem. Never say why the job interests you
+  ("I thought it was a great opportunity") in the first beat; your interest
+  is implied by the video existing.
+- Pause silently instead of saying "uhm". Loom transcribes every filler word
+  and prospects read the transcript panel as much as they watch.
+- Narrate demos at the principle level (intake, parallel provisioning, gate,
+  notify), never node-by-node field lists. Per-node narration is the spoken
+  form of slop and is what pushes a video past 3:30.
+- Claim only what the screen shows. If the demo is one workflow, do not
+  assert it proves a system-level property (isolation, scale); show the
+  property or scope the claim down.
+- Record the close as ONE take, one ending. No stitched closes, no "maybe we
+  can get together". (Source: 2026-06-10 review of three recorded Looms;
+  video 2 ended with three endings glued together.)
+
+## Pre-send checklist (per video)
+
+1. Generate the Loom transcript and chapters; a video without a transcript
+   cannot be skimmed by the prospect's team.
+2. Skim the transcript for filler runs, retake seams ("Would you?",
+   orphaned half-sentences), and word slips; re-record the broken beat.
+3. Confirm the Loom account display name matches the name you say on camera.
+4. Title the Loom after their problem, not ours.
 
 ## Format and validation
 
