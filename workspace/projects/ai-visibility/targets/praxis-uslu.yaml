@@ -1,0 +1,23 @@
+# AI-visibility target: Praxis Dr. med. Sema Uslu (local-web prospect, pitch kit Phase 1)
+# NOTE: site serves plain HTTP only (no working HTTPS as of 2026-06-10); the
+# audit fetches https:// and will fail across the board -- that IS the finding.
+domain: www.praxis-uslu.de
+brand: praxis-uslu
+
+engines:
+  - anthropic    # Claude + web_search tool; ANTHROPIC_API_KEY (repo Actions secret)
+
+queries:
+  # category / local intent
+  - "Hausarzt Karlsruhe Mühlburg nimmt neue Patienten auf"
+  - "Hausarztpraxis Karlsruhe Empfehlung"
+  - "Allgemeinmediziner Karlsruhe West"
+  # service-specific intent (services from prospects/praxis-uslu/data.md)
+  - "Hausarzt Karlsruhe Akupunktur"
+  - "Arzt für Naturheilverfahren Karlsruhe"
+  - "Hautkrebsscreening Karlsruhe Hausarzt"
+  - "Ultraschalluntersuchung Hausarzt Karlsruhe"
+  - "psychosomatische Grundversorgung Hausarzt Karlsruhe"
+  # branded (entity recognition)
+  - "Praxis Dr. Sema Uslu Karlsruhe"
+  - "Dr. med. Sema Uslu Mühlburg Öffnungszeiten"

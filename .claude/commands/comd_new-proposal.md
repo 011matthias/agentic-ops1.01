@@ -273,16 +273,27 @@ words sounds like a person.
 - Format: `.md` with `##` sections, one per beat of the walkthrough. No
   `SAY:` lines, no `>>` stage directions, no LOOM NOTES block.
 - Each section is bullet points of what that part needs to LAND (the idea,
-  the proof, the move), plus a rough time budget. The proposer phrases it
-  live.
-- Cover, in order: open (who + the promise), the reframe of the problem,
-  what we already found / the demo, the fix + plan + price walk-through,
-  and the close (next step + offer a call). Name the prospect.
-- Keep a short "terms to gloss if you say them" list at the end so any
-  abbreviation gets a plain-language gloss on camera (SPF/DKIM/DMARC etc.).
+  the proof, the move), plus a rough time budget. Timestamp the beats
+  (`## 0:35 ...`). The proposer phrases it live.
+- Follow the blueprint in `skil_upwork-proposals/modules/VIDEO-SCRIPT.md`.
+  The arc is one movement: collapse their several symptoms into ONE root
+  cause, make it concrete on screen, build the evidence beat by beat, and
+  close on an easy one-line QUESTION (not a pitch, not "offer a call").
+- Beat spine (Variant A, diagnosis): open + reframe to one cause; walk the
+  pipeline on screen and point at where it leaks; the cause points named and
+  glossed inline; why they connect + how you would confirm (the first thing
+  you would pull); close with the fix in one line + the easy question that
+  quantifies their pain. Variant B (a new build) retargets the same spine to
+  the proposed solution and closes on an easy scoping question. Name the
+  prospect.
+- Frame findings as the LIKELY cause whenever you have not logged into their
+  system; say what you reasoned from (public DNS, the job post, the stack).
+- End with a `## Terms to gloss if you say them on camera` list: each spoken
+  abbreviation paired with a 3 to 8 word plain gloss (SPF/DKIM/DMARC etc.).
 - The validator detects the guide format by the ABSENCE of `SAY:`/`>>`
-  markers and checks zero em dashes + a sectioned structure. Legacy
-  verbatim scripts still validate under the old rules.
+  markers and checks zero em dashes, a sectioned structure, and the
+  terms-to-gloss block. Legacy verbatim scripts still validate under the old
+  rules.
 
 ### 4d: HTML Site (Track 2 only)
 Create `platform/public/clients/{slug}/` with all selected pages.

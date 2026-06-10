@@ -1,0 +1,22 @@
+# AI-visibility target: Helmle & Helmle (local-web prospect, pitch kit Phase 1)
+# Buyer-intent queries a Karlsruhe patient would type into ChatGPT / Perplexity.
+domain: helmle-physio.de
+brand: helmle-physio
+
+engines:
+  - anthropic    # Claude + web_search tool; ANTHROPIC_API_KEY (repo Actions secret)
+
+queries:
+  # category / local intent
+  - "Physiotherapie Karlsruhe Südweststadt Empfehlung"
+  - "gute Krankengymnastik Praxis in Karlsruhe"
+  - "Physiotherapeut Karlsruhe manuelle Therapie Termin"
+  - "Massagepraxis Karlsruhe Innenstadt"
+  # service-specific intent (verbatim services from prospects/helmle-physio/data.md)
+  - "Lymphdrainage Karlsruhe Praxis"
+  - "Physiotherapie mit Hausbesuch Karlsruhe"
+  - "Behandlung Kiefergelenkstörung CMD Karlsruhe"
+  - "Krankengymnastik nach Bobath Karlsruhe"
+  # branded (entity recognition)
+  - "Helmle und Helmle Physiotherapie Karlsruhe"
+  - "Physiotherapie Karlstraße Karlsruhe"

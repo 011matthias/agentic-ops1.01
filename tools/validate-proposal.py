@@ -533,6 +533,15 @@ def _check_video_guide(report, suffix, content):
         report.add(f"Video guide structure{suffix}", "WARN",
                    f"only {len(sections)} '##' sections (expected 3+ beats to cover)")
 
+    # Blueprint marker: the guide ends with a "Terms to gloss" section so any
+    # spoken jargon gets a plain-language gloss on camera. See VIDEO-SCRIPT.md.
+    if re.search(r'(?im)^##\s+.*terms?\s+to\s+gloss', content):
+        report.add(f"Video guide terms-to-gloss block{suffix}", "PASS")
+    else:
+        report.add(f"Video guide terms-to-gloss block{suffix}", "WARN",
+                   "No '## Terms to gloss' section. The blueprint ends with a short "
+                   "list glossing any spoken jargon (see VIDEO-SCRIPT.md).")
+
     report.add(f"Video format{suffix}", "PASS", "content guide (not verbatim script)")
 
 

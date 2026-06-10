@@ -39,7 +39,24 @@ Before doing work, confirm the run can deliver:
 ## 2. Scan today's activity (read-only)
 
 Time-bound to today only. Do not re-read history.
-- `git log --since=midnight --stat` and `git diff --stat` — what changed.
+
+Commits landed today. Anchor the window in UTC explicitly; do NOT rely on
+git's fuzzy `midnight`, and do NOT eyeball a `--stat` blob. The 2026-06-06 run
+read several merges as "No git commits since midnight", a model misread of raw
+output. Run this and use the printed number verbatim:
+
+```bash
+SINCE="$(date -u +%F)T00:00:00Z"
+git log --since="$SINCE" --pretty=format:'%h %s'        # the list
+echo "COMMIT_COUNT=$(git log --since="$SINCE" --oneline | wc -l)"
+echo "FILES_CHANGED=$(git log --since="$SINCE" --name-only --pretty=format: | sort -u | grep -c .)"
+```
+
+Report `COMMIT_COUNT` in the digest. A non-zero `COMMIT_COUNT` with an empty
+list means the branch or window is wrong, NOT "no activity"; never write "no
+commits" unless `COMMIT_COUNT` is literally `0`. Also run `git diff --stat` for
+any uncommitted working-tree changes. Then continue the scan:
+
 - `docs/sessions/{TODAY}.md` — today's session log (may be empty).
 - Each active client `workspace/clients/*/context/comms-log.md` — tail for
   items going stale (>3 days since last contact).

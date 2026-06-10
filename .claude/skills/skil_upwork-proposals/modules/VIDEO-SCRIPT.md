@@ -1,82 +1,107 @@
-# Video Script Patterns
+# Video Walkthrough Blueprint
 
-## Why Video Dominates
+The proposal video is a Loom **content guide**, not a verbatim script. You
+speak from bullet points in your own words. A word-for-word `SAY:` script
+makes you sound like you are reading; an outline you talk from sounds like a
+person. (Owner directive 2026-06-09; this blueprint replaces the older
+verbatim 5-beat script.)
 
-Text = claims. Video = evidence.
+## Why video dominates
 
-A video proves three things simultaneously:
-1. Clarity of thought
-2. Communication ability
-3. Real understanding of the problem
+Text is claims. Video is evidence. A 2 to 3 minute walkthrough proves clarity
+of thought, communication, and real understanding of THEIR problem in a way no
+written proposal matches.
 
-No amount of written proposals matches a 3-minute walkthrough that reframes the client's problem and shows a solution structure.
+## The arc: build a diagnosis that lands on an easy question
 
-## What a Good Video Does
+The whole video is one movement: collapse their several symptoms into ONE root
+cause or insight, make it concrete on screen, build the evidence beat by beat,
+and close on an easy question they can answer in a single line.
 
-1. **Reframes** the problem (shows you understand it better than they described it)
-2. **Shows** the system (visual flow, not just words)
-3. **Makes decisions visible** (why this approach, what tradeoffs)
+Three principles carry the arc:
 
-## What a Bad Video Does
+1. **Reframe to one cause.** Open by collapsing the noise to a single root.
+   "Two symptoms, but they are usually one cause, not two separate problems."
+   This is the move that proves you understand it better than they described it.
+2. **Likely-cause honesty.** Whenever you have not logged into their system,
+   frame findings as the *likely* cause and say what you reasoned from (public
+   DNS, the job post, the visible stack). Reasoning from the outside, named as
+   such, builds trust; overclaiming certainty you do not have breaks it.
+3. **Close on a question, not a pitch.** End on a one-line question they can
+   answer off the top of their head. It lowers the barrier to reply and hands
+   you the number or detail you need to scope. "Roughly how many leads a month
+   are you seeing versus expecting?" beats "let's hop on a call."
 
-- Introduces yourself
-- Talks about your experience
-- Presents vague ideas without structure
-- Rambles without a clear arc
+## The beat skeleton (timestamp it, target ~2 minutes)
 
-## Script Structure (5-Beat Pattern)
+Write the guide as `##` sections, one per beat, each a few bullets of what that
+beat must LAND plus a rough time budget (`## 0:35 ...`). Two variants share the
+same spine; pick by whether you are diagnosing a broken thing or scoping a new
+build.
 
-### Beat 1 -- Reframe
-State the real problem, not just what the job post says.
+### Variant A: Diagnosis (something is broken or underperforming)
 
-> "From your description, the core problem isn't just automation -- it's making sure data flows reliably from your intake into your CRM without breaking or duplicating."
+1. **0:00 Open: name it, reframe to one cause.** State the symptoms, collapse
+   them to a single root cause, reassure it is fixable, and say you can already
+   see the likely culprit.
+2. **0:15 Walk the pipeline.** Trace their actual flow out loud on screen
+   (source, the handoff, the destination). Point at where a lead, record, or
+   dollar can leak.
+3. **0:35 The cause points, named and glossed.** Name each likely cause. Gloss
+   any spoken abbreviation once, inline ("SPF, DKIM and DMARC, the three DNS
+   records that prove a domain is allowed to send mail"). Tie each cause back
+   to the symptom they actually feel.
+4. **1:20 Why they connect, and how you would confirm.** Show the causes share
+   a fix, then state the concrete first thing you would check (pull the DNS,
+   the run history, the logs) and that it yields the real number.
+5. **1:40 Close: the fix in one line, then the easy question.** Compress the
+   fix to one sentence, name one comparable thing you have shipped, and end on
+   a one-line question that quantifies their pain.
 
-### Beat 2 -- Structure
-Show the pipeline you'd build.
+### Variant B: Build (they want something new built)
 
-> "The way I'd structure this is as a simple pipeline: form submission comes in, gets validated immediately, then enriched if needed, and only then pushed into the CRM."
+Same spine, retargeted:
 
-### Beat 3 -- Edge Cases
-Name the main failure points and how you'd handle them.
+1. Open: reframe the request to the real underlying need.
+2. Walk the proposed pipeline or a concrete artifact / demo on screen.
+3. Name the hard parts and how you handle each (the edge cases, the unreliable
+   bits), glossed.
+4. How you would confirm scope before building.
+5. Close on an easy scoping question ("what is the one workflow eating the most
+   time right now?").
 
-> "The main failure point here is invalid or duplicate data, so I'd add a validation layer before anything is written, and a deduplication check against existing records."
+## Terms-to-gloss block (required)
 
-### Beat 4 -- Extension
-Show what comes next after the core is solid.
+End every guide with a short `## Terms to gloss if you say them on camera`
+list: each spoken abbreviation or jargon term paired with a 3 to 8 word plain
+gloss. It is a silent teleprompter aid so any term lands in the ear the first
+time you say it. Universal terms (AI, API, URL, CRM, and the rest of the
+common set) need no gloss. See `rule_human_communication.md` section 7.
 
-> "From there, I'd trigger notifications or follow-ups depending on the lead quality."
+## Recording rules
 
-### Beat 5 -- Close
-Short, open-ended, no pressure.
+- Screen plus camera bubble. Start on the work; no "hey, my name is" intro
+  beyond one line.
+- 2 to 3 minutes. Talk to the screen while pointing at the form, the inbox,
+  the DNS block, or the workflow.
+- Speak linearly; each beat builds on the last.
+- Close on the question, never "hire me".
 
-> "If useful, I can extend this into a full build or adapt it to your current stack."
+## Format and validation
 
-## Recording Rules
+- File: `workspace/proposals/{slug}/video-script.md`, `##` sections, no `SAY:`
+  lines, no `>>` stage directions, no LOOM NOTES block.
+- Zero em dashes.
+- `tools/validate-proposal.py` detects the guide by the ABSENCE of `SAY:`/`>>`
+  markers and checks zero em dashes, a sectioned structure, and the
+  terms-to-gloss block. Legacy verbatim scripts still validate under the old
+  rules.
 
-- **Screen + camera bubble** (Loom default) -- shows both the system and you
-- **Start immediately** -- no "hey, my name is..." intro
-- **3-4 minutes max** -- respect their time
-- **Show something visual** -- a diagram, a partial build, a flow chart, a whiteboard sketch
-- **Speak linearly** -- each point builds on the last, no jumping around
-- **End with optionality** -- "I can extend this" not "hire me"
+## Reference exemplars
 
-## Visual Aids
+- `workspace/proposals/volabyg-lead-automation/video-script.md` is the
+  canonical Variant A likely-cause walkthrough.
+- `workspace/proposals/n8n-multi-client-ops/video-script.md` adapts the spine
+  to an operator application (no single "broken thing" to diagnose).
 
-What to show on screen while recording:
-- A flow diagram (even hand-drawn or quick whiteboard)
-- A partial build in the actual tool (Make.com scenario, n8n workflow)
-- The job post itself with annotations
-- A structured breakdown (bullet points in a doc)
-
-The visual is the anchor. Your voice explains the reasoning behind it.
-
-## Upgrades for Repeat Efficiency
-
-- Keep Loom ready with a clean desktop
-- Have a template flow diagram you can quickly adapt
-- Build reusable starter scenarios for common patterns (lead routing, CRM sync, outreach)
-- Save successful scripts as references for future proposals
-
-## Live Reference
-
-See `workspace/proposals/menovia/proposal-video-script.md` for a full production example -- includes screen directions, demo triggers, and GDPR compliance handling. Adapt the pattern, not the specifics.
+Adapt the spine, not the specifics.

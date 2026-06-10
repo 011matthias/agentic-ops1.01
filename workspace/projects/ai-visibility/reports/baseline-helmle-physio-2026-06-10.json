@@ -1,0 +1,43 @@
+{
+  "audit": {
+    "domain": "helmle-physio.de",
+    "checks": [
+      {
+        "name": "robots.txt",
+        "status": "WARN",
+        "detail": "no robots.txt (all crawlers allowed by default)"
+      },
+      {
+        "name": "sitemap.xml",
+        "status": "FAIL",
+        "detail": "absent -- engines have no crawl map"
+      },
+      {
+        "name": "llms.txt",
+        "status": "WARN",
+        "detail": "absent -- no AI-context file (helps non-Google engines)"
+      },
+      {
+        "name": "machine-readable-pricing",
+        "status": "WARN",
+        "detail": "no /pricing.md|txt -- buying agents can't parse pricing"
+      },
+      {
+        "name": "structured-data",
+        "status": "FAIL",
+        "detail": "no JSON-LD -- no Organization/FAQ/Article schema for entity recognition"
+      },
+      {
+        "name": "meta-description",
+        "status": "PASS",
+        "detail": "present"
+      },
+      {
+        "name": "freshness-signal",
+        "status": "WARN",
+        "detail": "no visible last-updated date (engines weight recency)"
+      }
+    ]
+  },
+  "probe": []
+}
