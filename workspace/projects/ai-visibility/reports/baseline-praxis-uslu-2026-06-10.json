@@ -29,5 +29,76 @@
       }
     ]
   },
-  "probe": []
+  "probe": [
+    {
+      "engine": "claude-search",
+      "query": "Hausarzt Karlsruhe M\u00fchlburg nimmt neue Patienten auf",
+      "cited": false,
+      "sources": [],
+      "note": "cited 9 sources, none ours"
+    },
+    {
+      "engine": "claude-search",
+      "query": "Hausarztpraxis Karlsruhe Empfehlung",
+      "cited": false,
+      "sources": [],
+      "note": "error: Client error '429 Too Many Requests' for url 'https://api.anthropic.com/v1/messages'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "engine": "claude-search",
+      "query": "Allgemeinmediziner Karlsruhe West",
+      "cited": false,
+      "sources": [],
+      "note": "error: Client error '429 Too Many Requests' for url 'https://api.anthropic.com/v1/messages'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "engine": "claude-search",
+      "query": "Hausarzt Karlsruhe Akupunktur",
+      "cited": false,
+      "sources": [],
+      "note": "error: Client error '429 Too Many Requests' for url 'https://api.anthropic.com/v1/messages'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "engine": "claude-search",
+      "query": "Arzt f\u00fcr Naturheilverfahren Karlsruhe",
+      "cited": false,
+      "sources": [],
+      "note": "error: Client error '429 Too Many Requests' for url 'https://api.anthropic.com/v1/messages'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "engine": "claude-search",
+      "query": "Hautkrebsscreening Karlsruhe Hausarzt",
+      "cited": false,
+      "sources": [],
+      "note": "error: Client error '429 Too Many Requests' for url 'https://api.anthropic.com/v1/messages'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "engine": "claude-search",
+      "query": "Ultraschalluntersuchung Hausarzt Karlsruhe",
+      "cited": false,
+      "sources": [],
+      "note": "error: Client error '429 Too Many Requests' for url 'https://api.anthropic.com/v1/messages'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "engine": "claude-search",
+      "query": "psychosomatische Grundversorgung Hausarzt Karlsruhe",
+      "cited": false,
+      "sources": [],
+      "note": "error: Client error '429 Too Many Requests' for url 'https://api.anthropic.com/v1/messages'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "engine": "claude-search",
+      "query": "Praxis Dr. Sema Uslu Karlsruhe",
+      "cited": false,
+      "sources": [],
+      "note": "error: Client error '429 Too Many Requests' for url 'https://api.anthropic.com/v1/messages'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "engine": "claude-search",
+      "query": "Dr. med. Sema Uslu M\u00fchlburg \u00d6ffnungszeiten",
+      "cited": false,
+      "sources": [],
+      "note": "error: Client error '429 Too Many Requests' for url 'https://api.anthropic.com/v1/messages'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    }
+  ]
 }

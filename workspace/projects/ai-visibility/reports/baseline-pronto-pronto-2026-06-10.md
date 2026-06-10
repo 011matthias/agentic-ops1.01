@@ -18,4 +18,15 @@ On-site AEO score: 4/8 graded checks passed
 
 ## Citation probe
 
-No live engine key set. Citation probe skipped; activate by setting `PERPLEXITY_API_KEY` (cleanest, returns source URLs) or `AI_VISIBILITY_OPENAI_KEY`.
+| Engine | Query | Cited? | Domain sources |
+|---|---|---|---|
+| claude-search | Pizza bestellen Karlsruhe Lieferservice | no | - |
+| claude-search | bester Pizza Lieferdienst Karlsruhe | no | - |
+| claude-search | Pizzeria Karlsruhe Weststadt Lieferung | no | - |
+| claude-search | Essen bestellen Karlsruhe online | no | - |
+| claude-search | italienisches Essen nach Hause bestellen Karlsruhe | no | - |
+| claude-search | Pizza Lieferservice Ettlingen | no | - |
+| claude-search | Pizza bestellen Stutensee | no | - |
+| claude-search | Pasta bestellen Karlsruhe Lieferdienst | no | - |
+| claude-search | Pronto Pronto Karlsruhe Speisekarte | no | - |
+| claude-search | Pronto Pronto Heimservice Karlsruhe | no | - |

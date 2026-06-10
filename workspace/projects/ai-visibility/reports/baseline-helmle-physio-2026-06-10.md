@@ -17,4 +17,15 @@ On-site AEO score: 1/7 graded checks passed
 
 ## Citation probe
 
-No live engine key set. Citation probe skipped; activate by setting `PERPLEXITY_API_KEY` (cleanest, returns source URLs) or `AI_VISIBILITY_OPENAI_KEY`.
+| Engine | Query | Cited? | Domain sources |
+|---|---|---|---|
+| claude-search | Physiotherapie Karlsruhe Südweststadt Empfehlung | no | - |
+| claude-search | gute Krankengymnastik Praxis in Karlsruhe | no | - |
+| claude-search | Physiotherapeut Karlsruhe manuelle Therapie Termin | no | - |
+| claude-search | Massagepraxis Karlsruhe Innenstadt | no | - |
+| claude-search | Lymphdrainage Karlsruhe Praxis | YES | https://www.helmle-physio.de/Lymphdrainagen.html |
+| claude-search | Physiotherapie mit Hausbesuch Karlsruhe | no | - |
+| claude-search | Behandlung Kiefergelenkstörung CMD Karlsruhe | no | - |
+| claude-search | Krankengymnastik nach Bobath Karlsruhe | no | - |
+| claude-search | Helmle und Helmle Physiotherapie Karlsruhe | no | - |
+| claude-search | Physiotherapie Karlstraße Karlsruhe | no | - |

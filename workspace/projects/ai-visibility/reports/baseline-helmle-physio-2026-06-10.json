@@ -39,5 +39,78 @@
       }
     ]
   },
-  "probe": []
+  "probe": [
+    {
+      "engine": "claude-search",
+      "query": "Physiotherapie Karlsruhe S\u00fcdweststadt Empfehlung",
+      "cited": false,
+      "sources": [],
+      "note": "cited 10 sources, none ours"
+    },
+    {
+      "engine": "claude-search",
+      "query": "gute Krankengymnastik Praxis in Karlsruhe",
+      "cited": false,
+      "sources": [],
+      "note": "cited 0 sources, none ours"
+    },
+    {
+      "engine": "claude-search",
+      "query": "Physiotherapeut Karlsruhe manuelle Therapie Termin",
+      "cited": false,
+      "sources": [],
+      "note": "cited 0 sources, none ours"
+    },
+    {
+      "engine": "claude-search",
+      "query": "Massagepraxis Karlsruhe Innenstadt",
+      "cited": false,
+      "sources": [],
+      "note": "cited 10 sources, none ours"
+    },
+    {
+      "engine": "claude-search",
+      "query": "Lymphdrainage Karlsruhe Praxis",
+      "cited": true,
+      "sources": [
+        "https://www.helmle-physio.de/Lymphdrainagen.html"
+      ],
+      "note": ""
+    },
+    {
+      "engine": "claude-search",
+      "query": "Physiotherapie mit Hausbesuch Karlsruhe",
+      "cited": false,
+      "sources": [],
+      "note": "cited 10 sources, none ours"
+    },
+    {
+      "engine": "claude-search",
+      "query": "Behandlung Kiefergelenkst\u00f6rung CMD Karlsruhe",
+      "cited": false,
+      "sources": [],
+      "note": "cited 16 sources, none ours"
+    },
+    {
+      "engine": "claude-search",
+      "query": "Krankengymnastik nach Bobath Karlsruhe",
+      "cited": false,
+      "sources": [],
+      "note": "error: Client error '429 Too Many Requests' for url 'https://api.anthropic.com/v1/messages'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "engine": "claude-search",
+      "query": "Helmle und Helmle Physiotherapie Karlsruhe",
+      "cited": false,
+      "sources": [],
+      "note": "error: Client error '429 Too Many Requests' for url 'https://api.anthropic.com/v1/messages'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    },
+    {
+      "engine": "claude-search",
+      "query": "Physiotherapie Karlstra\u00dfe Karlsruhe",
+      "cited": false,
+      "sources": [],
+      "note": "error: Client error '429 Too Many Requests' for url 'https://api.anthropic.com/v1/messages'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429"
+    }
+  ]
 }
