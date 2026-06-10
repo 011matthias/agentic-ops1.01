@@ -1,7 +1,7 @@
 # Cover Letter: VolaByg (p026)
 
-Hi Ibrahim, Matthias here. The spam and the lead-count gap are both fixable, and I can already see the likely cause. I run this exact setup for a live client. Short walkthrough of what's wrong and how I'd fix it:
+Hi Ibrahim, Matthias here. The spam and the lead-count gap are two separate problems, both fixable, and I can see the likely cause of each. I run this exact setup for a live UK client. Short walkthrough of the fixes:
 
 ---
-Walkthrough (Loom): added to this Upwork message once recorded
+Walkthrough: short Loom (link in this message)
 Full audit + plan: https://unpauseai.com/clients/volabyg-lead-automation/  (access code: volabyg-2026)

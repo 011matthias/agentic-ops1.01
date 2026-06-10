@@ -55,9 +55,9 @@ research:
 
 ## What We Understood
 
-Facebook Lead Ads bring leads in, a Google Sheet holds them, and Instantly fires a three-step sequence (day 0, day 2, day 4-5). Two things are wrong: a large share of those emails land in spam, and the number of leads in Facebook does not match the replies you actually see. So the worry is reasonable: somewhere between the ad and the inbox, mail is failing authentication and leads are quietly being lost.
+Facebook Lead Ads bring leads in, a Google Sheet holds them, and Instantly fires a three-step sequence (day 0, day 2, day 4-5). Two separate things are wrong: a large share of those emails land in spam, and the number of leads in Facebook does not match the replies you actually see. They have different causes and need different fixes; what they share is the pipeline and, ideally, one owner. Some mail is being filtered on the way to the inbox, and separately some leads never make it through the handoff.
 
-The deeper issue is a tool fit. Instantly is built for cold outreach: rotating mailboxes, warmup, aggressive sending. Your leads are warm, they opted in through a form. Warm leads sent through cold infrastructure is one of the most common reasons good mail lands in spam.
+The spam side is mostly a tool fit. Instantly is built for cold outreach: rotating mailboxes, warmup, aggressive sending. Your leads are warm, they opted in through a form. Warm leads sent through cold infrastructure is one of the most common reasons good mail lands in spam, even when authentication passes.
 
 ## Our Proposed Solution
 

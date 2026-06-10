@@ -5,12 +5,12 @@ This is a guide to what each part needs to land, not a word-for-word script. Say
 
 ## Before you hit record
 - Open the site at the overview page. Know that the DNS records block sits mid-page.
-- The job of the video: make Ibrahim feel the spam cause is already understood and fixable, before any talk of price.
+- The job of the video: make Ibrahim feel the most likely cause is already understood and fixable, before any talk of price.
 - Keep jargon light on camera. The site carries the detail.
 
 ## 1. Open (about 15 seconds)
 - Say who you are, briefly.
-- Set the promise: before talking price, you will show that the cause of the spam is visible from the outside.
+- Set the promise: before talking price, you will show that the most likely cause is already visible from the outside, in their public DNS.
 
 ## 2. The reframe: two problems, not one (about 40 seconds)
 - It is not random spam. Two things are stacked:
@@ -20,9 +20,9 @@ This is a guide to what each part needs to land, not a word-for-word script. Say
 
 ## 3. What you already found (about 45 seconds, on screen)
 - Scroll to the DNS block. Stress that this is public; you did not log into anything of theirs.
-- Their domain only allows one sender and is set to reject anything else.
-- So if Instantly sends as their domain, every email fails and gets rejected, straight to spam. If it sends from a separate domain, warm leads get mail from a sender they do not recognise.
-- The point either way: wrong tool for warm leads.
+- Their domain only allows one sender (Simply.com) and is set to reject anything else. Good security, but it leaves no room for a tool that is not authenticated exactly right.
+- Frame the consequence as the question the audit answers, not a verdict: is their mail being rejected, or just filtered into spam? If Instantly sends as their domain it can be rejected outright; if it sends from its own separate domains, warm leads get mail from a sender they do not recognise.
+- Give the tell that points the way: the symptom is spam, not bounced mail, and mail that truly fails a reject policy bounces. So the likeliest driver is warm leads going through a cold-outreach tool and being filtered. Either way, wrong tool for warm leads.
 
 ## 4. The fix, the plan, the price (about 45 seconds)
 - Recommendation in one line: send warm leads from their own authenticated domain, keep the three-step cadence (day 0, day 2, day 4 to 5).
