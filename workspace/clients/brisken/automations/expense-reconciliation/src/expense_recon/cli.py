@@ -22,8 +22,9 @@ The config is a JSON file (stdlib only — no YAML dep) of the shape:
         "sheet_name": null                     # optional, xlsx only
       },
       "receipts": {
-        "path": "receipts-may.csv",
-        "default_currency": "USD"              # optional
+        "path": "receipts-may.csv",            # CSV file OR a folder of
+        "source": "csv",                       #   images/PDFs ("csv"|"folder";
+        "default_currency": "USD"              #   inferred from path if absent)
       },
       "output": {
         "path": "report-may.xlsx"
@@ -59,6 +60,7 @@ from .categorize import categorize_receipts
 from .ingest._common import ParseIssue
 from .ingest.chart_of_accounts import ChartOfAccounts
 from .ingest.receipts_csv import parse_receipts_csv_tolerant
+from .ingest.receipts_folder import parse_receipts_folder
 from .ingest.statement_csv import parse_statement_csv_tolerant
 from .ingest.statement_xlsx import parse_statement_xlsx_tolerant
 from .llm.client import LLMClient, OpenAIClient
@@ -115,8 +117,18 @@ def _load_statement(
 
 
 def _load_receipts(
-    cfg: dict, config_dir: Path, legal_entity_id: str
+    cfg: dict,
+    config_dir: Path,
+    legal_entity_id: str,
+    llm_client: LLMClient | None = None,
 ) -> tuple[list[Receipt], list[ParseIssue]]:
+    """Load receipts from a CSV (slice 1 bridge) or a folder of
+    images/PDFs (slice 2.2 OCR).
+
+    `receipts.source` is "csv" | "folder"; when absent it is inferred
+    from the path (directory → folder). Folder mode needs an `llm:`
+    block — OCR has no keyword-stub fallback.
+    """
     r = cfg.get("receipts")
     if not isinstance(r, dict):
         raise ConfigError("config.receipts is missing or not an object")
@@ -125,12 +137,33 @@ def _load_receipts(
 
     path = (config_dir / r["path"]).resolve()
     if not path.exists():
-        raise ConfigError(f"receipts file not found: {path}")
+        raise ConfigError(f"receipts path not found: {path}")
 
-    return parse_receipts_csv_tolerant(
-        path=path,
-        legal_entity_id=legal_entity_id,
-        default_currency=r.get("default_currency"),
+    source = r.get("source") or ("folder" if path.is_dir() else "csv")
+    if source == "folder":
+        if not path.is_dir():
+            raise ConfigError(f"receipts.source is 'folder' but {path} is not a directory")
+        if llm_client is None:
+            raise ConfigError(
+                "receipts.source 'folder' needs an `llm:` block in the config — "
+                "receipt OCR runs through the LLM and has no stub fallback."
+            )
+        return parse_receipts_folder(
+            path=path,
+            legal_entity_id=legal_entity_id,
+            client=llm_client,
+            default_currency=r.get("default_currency"),
+        )
+    if source == "csv":
+        if path.is_dir():
+            raise ConfigError(f"receipts.source is 'csv' but {path} is a directory")
+        return parse_receipts_csv_tolerant(
+            path=path,
+            legal_entity_id=legal_entity_id,
+            default_currency=r.get("default_currency"),
+        )
+    raise ConfigError(
+        f"config.receipts.source {source!r} not supported (use 'csv' or 'folder')"
     )
 
 
@@ -211,9 +244,17 @@ def run(
     config_dir = config_path.parent
     logger.info("run started: config=%s", config_path)
 
+    # LLM client first: folder-mode receipt ingest (slice 2.2 OCR)
+    # needs it before any receipt is read.
+    llm_client, cost_tracker = _build_llm_client(cfg)
+    logger.info("LLM client: %s", "enabled" if llm_client else "none (keyword stub)")
+
     transactions, stmt_issues = _load_statement(cfg, config_dir)
     receipts, receipt_issues = _load_receipts(
-        cfg, config_dir, legal_entity_id=cfg["statement"]["legal_entity_id"]
+        cfg,
+        config_dir,
+        legal_entity_id=cfg["statement"]["legal_entity_id"],
+        llm_client=llm_client,
     )
     logger.info(
         "ingested %d transactions, %d receipts", len(transactions), len(receipts)
@@ -227,9 +268,6 @@ def run(
         logger.warning("%d parse error(s) — see Errors sheet", len(parse_errors))
         for file_name, line_no, msg in parse_errors:
             logger.debug("parse error %s:%s %s", file_name, line_no, msg)
-
-    llm_client, cost_tracker = _build_llm_client(cfg)
-    logger.info("LLM client: %s", "enabled" if llm_client else "none (keyword stub)")
 
     # BLUEPRINT 4.9: load Brisken's chart of accounts (live API pull or
     # cached CSV) and narrow it to the owner-approved operating-expense
@@ -323,6 +361,8 @@ def _build_llm_client(cfg: dict) -> tuple[LLMClient | None, CostTracker | None]:
           "llm": {
             "provider": "openai",            # required if block present
             "model": "gpt-4o-mini",          # optional, defaults shown
+            "vision_model": "gpt-4o-mini",   # optional; OCR calls (2.2);
+                                             #   defaults to `model`
             "api_key_env": "OPENAI_API_KEY"  # optional, defaults shown
           }
         }
@@ -349,7 +389,12 @@ def _build_llm_client(cfg: dict) -> tuple[LLMClient | None, CostTracker | None]:
         )
 
     tracker = CostTracker()
-    client = OpenAIClient(model=model, api_key=api_key, cost_tracker=tracker)
+    client = OpenAIClient(
+        model=model,
+        vision_model=llm_cfg.get("vision_model"),
+        api_key=api_key,
+        cost_tracker=tracker,
+    )
     return client, tracker
 
 
