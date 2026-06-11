@@ -280,13 +280,16 @@ class of "why is this ambiguous" question.
 ### B6. CSV / JSON alternative outputs
 
 **Where:** [`src/expense_recon/output/report_xlsx.py`](src/expense_recon/output/report_xlsx.py) — single writer
-**Symptom:** Only xlsx today. Zoho import wants CSV. A future
-review UI wants JSON.
-**Fix direction:** `--format {xlsx,csv,json}` flag. Writer
-interface shared across formats (write a `MatchOutcome` →
-file).
-**Effort:** S (CSV) / M (with structured JSON schema)
-**Trigger:** When the Zoho posting slice starts.
+**Symptom:** Only xlsx today. A future review UI wants JSON.
+**Half resolved 2026-06-07 by PR #80:** the "Zoho import wants CSV"
+half shipped as a dedicated artifact (`output/zoho_export.py`,
+journal-entry CSV per LD-2), not a `--format` flag — better shape,
+since the Zoho CSV is a different document from the review report,
+not an alternative rendering of it.
+**Remaining:** JSON output of the review report itself.
+**Effort:** M (structured JSON schema)
+**Trigger:** Slice 6 review UI — it would be the JSON consumer.
+Don't build before then.
 
 ### ~~B7. No example `run.json` committed~~
 
@@ -326,24 +329,20 @@ NOT built: it guards 4b live Zoho posting, which stays gated — tracked
 as BLUEPRINT 4.8, no surface until 4b lands. Review-edit write-back
 (the C5 dependency) remains slice-6 territory.
 
-### C2. No vendor / category enrichment from chart-of-accounts
+### ~~C2. No vendor / category enrichment from chart-of-accounts~~
 
-**Where:** Pipeline ends at the match — no Zoho category assigned
-**Symptom:** Chris still has to look up the right Zoho expense
-category for each matched row. The chart-of-accounts is a known
-input (per spec) but not yet fed in.
-**Fix direction:** Optional `chart_of_accounts` in `run.json`
-(CSV of category names + match patterns). Output report gets a
-"Suggested category" column populated from vendor → category
-mapping, with confidence. LLM judgment (slice 2) handles the
-uncertain ones.
-**Effort:** M
-**Trigger:** When the Zoho posting slice starts, or sooner if
-Chris asks "what category" repeatedly during review.
+**Resolved 2026-06-09 by PR #87** (chart-of-accounts ingest,
+`ingest/chart_of_accounts.py`, wired in `cli.py`
+`_build_chart_of_accounts`) on top of the per-line LLM categorizer
+from PR #68 (`categorize.py`). Shipped better than the original fix
+direction: per-LINE-item categorization (LD-2, not vendor→category
+mapping), suggested Zoho account in the report's "Zoho A/C" column,
+confidence-gated REVIEW tier. Live-verified 2026-06-09 against
+Brisken's real sandbox chart (BLUEPRINT 4.6).
 
 ### ~~C3. No structured logging~~
 
-**Resolved 2026-06-09 by PR #80** (slice 3a hardening; strike
+**Resolved 2026-06-07 by PR #80** (slice 3a hardening; strike
 missed in that PR, recorded 2026-06-11). Python `logging` wired in
 `cli.py` (`--verbose`/`-v` → DEBUG, default WARNING) and used by the
 ingest pipeline (`receipts_folder.py` logs per-file extraction).
@@ -416,7 +415,10 @@ preserved). CLI helper `_apply_judgment_stub` renamed
 against a live FX receipt — vision OCR (D2) is gated on Chris's data,
 so no real foreign-currency receipt has reached the matcher; the live
 prompt should be re-checked against the first real FX case.
-`judge_ambiguous` remains a stub (BLUEPRINT 2.4).
+`judge_ambiguous` shipped in the same PR (#80) — LLM tie-break with
+pick annotated + promoted, all candidates kept; BLUEPRINT 2.4 done
+2026-06-07. (This sentence originally said "remains a stub" — stale
+at write time; corrected 2026-06-11.)
 
 ### ~~D2. Receipt OCR pipeline replaces receipts_csv~~
 
@@ -452,42 +454,28 @@ real LLM smoke (live $0.00029 cost displayed on Summary).
 
 ## E. Code health / tests / project meta
 
-### E1. Unit-test coverage for report writer
+### ~~E1. Unit-test coverage for report writer~~
 
-**Where:** [`src/expense_recon/output/report_xlsx.py`](src/expense_recon/output/report_xlsx.py)
-**Symptom:** `_autosize`, `_fill_last_row`, empty-`MatchOutcome`
-edge case aren't exercised directly. Integration test covers
-the happy path only.
-**Fix direction:** Add `tests/test_report_xlsx.py` with: empty
-outcome → 4 sheets exist with only headers; mixed-outcome →
-fills applied per match type; receipt-without-tx in unmatched
-section.
-**Effort:** S
-**Trigger:** Anytime — defensive, fast to add.
+**Resolved 2026-06-07 by PR #80** (strike missed in that PR,
+recorded 2026-06-11). `tests/test_report_xlsx.py` covers the
+canonical 5+N sheet set, matched-line row expansion, parse errors
+landing in the Errors sheet, and the `--explain` sheet's
+presence/absence.
 
-### E2. Subprocess-based CLI test
+### ~~E2. Subprocess-based CLI test~~
 
-**Where:** Tests call `run()` directly; no end-to-end script test
-**Symptom:** `expense-recon` entry point regression (wrong
-module path, bad `__main__`) would not be caught.
-**Fix direction:** One pytest case: `subprocess.run(["uv",
-"run", "expense-recon", "--config", str(cfg)], check=True)`.
-Slow (cold venv) but catches packaging regressions.
-**Effort:** S
-**Trigger:** Any change to `pyproject.toml` or `cli.py:main`.
+**Resolved 2026-06-07 by PR #80** (strike missed in that PR,
+recorded 2026-06-11). `tests/test_cli_subprocess.py` exercises the
+installed `expense-recon` entry point end-to-end, catching packaging
+/ `__main__` regressions the in-process tests can't see.
 
-### E3. README ordering implies slice 1 is older than Phase 2/4
+### ~~E3. README ordering implies slice 1 is older than Phase 2/4~~
 
-**Where:** [README.md](README.md)
-**Symptom:** Slice 1 section appears before the existing Phase 2 /
-Phase 4 sections. A reader sees "Slice 1" first, then "Phase 4
-matching engine", which inverts the actual layering.
-**Fix direction:** Restructure README around what the tool DOES
-(top-level flow) rather than build chronology. Slice 1 / Phase 2
-/ Phase 4 become implementation notes under collapsible headings,
-not the primary navigation.
-**Effort:** S
-**Trigger:** Next README touch.
+**Resolved 2026-06-07 by PR #80** (strike missed in that PR,
+recorded 2026-06-11). README restructured around what the tool does:
+"What this is" → "Where the build is right now" → "Run the tool" →
+"Run the tests" → data-needs / rationale / layout. The slice-vs-phase
+chronology inversion is gone.
 
 ### E4. Spec divorced from build state
 
@@ -505,22 +493,17 @@ Dirk where build sequencing comes up.
 
 ### ~~E5. No CI~~
 
-**Resolved 2026-06-09 by PR #80** (strike missed in that PR,
+**Resolved 2026-06-07 by PR #80** (strike missed in that PR,
 recorded 2026-06-11). `.github/workflows/expense-recon-tests.yml`
 runs the suite on every PR; it is the "test" check that gates
 auto-merge (Band 2) — e.g. it ran green on PRs #107/#108/#109/#110.
 
-### E6. `MatchOutcome` mutability subtlety
+### ~~E6. `MatchOutcome` mutability subtlety~~
 
-**Where:** [`src/expense_recon/cli.py`](src/expense_recon/cli.py) `_apply_judgment` — replaces `outcome.judgment_required`
-**Symptom:** Works today because the LIST is replaced (not
-mutated in place) and `Match` is frozen. Next reader might try
-to mutate matches in place and break the invariant.
-**Fix direction:** Add a one-line comment OR make `MatchOutcome`
-also frozen (which forces consumers to construct new outcomes
-rather than mutate). Defensive only.
-**Effort:** S
-**Trigger:** Anytime — pure code-health.
+**Resolved 2026-06-07 by PR #80** (strike missed in that PR,
+recorded 2026-06-11). `MatchOutcome` is now `frozen=True`
+(`matching/types.py`) — the stronger of the two proposed fixes;
+consumers must construct new outcomes rather than mutate.
 
 ### E7. Per-account currency confusion
 
