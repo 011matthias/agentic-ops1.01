@@ -16,10 +16,25 @@ not deploy. Fix at SOURCE, never rely on the minifier. (See incidents.md → 202
 
 ## 2. Deploy via the one canonical path
 
-**Ship via `uv run tools/local-web-deploy.py`** — it builds, runs `flyctl deploy`,
-then fetches each `fly.dev` URL (cache-busted) and asserts the live origin serves
-*this exact build* by matching content-hashed `/_astro/` asset refs. It cannot return
-green without the production URL serving the bytes you just built.
+**Ship via `uv run tools/local-web-deploy.py`** — the full gauntlet in one command:
+
+1. `npm run build` (the deliverable-rule postbuild gate fires here)
+2. `audit-local-web-aesthetics.py --strict` — hard-fail classes block the deploy
+3. `flyctl deploy`
+4. live-origin parity: fetch each `fly.dev` URL (cache-busted), assert the live
+   HTML carries *this exact build's* content-hashed `/_astro/` asset refs
+5. `axe-check.cjs` on each live URL — zero WCAG 2 A/AA violations (DoD 11)
+6. `verify-rendered.cjs` on each live URL — hero actually paints (pixel variance),
+   brand fonts loaded, motion markers live (DoD 14's behavior half)
+7. advisory second opinion: `npx impeccable@2.3.2 detect dist/ --fast --json`
+   (their 41 deterministic detectors; network/availability failures WARN loudly
+   but do not block — OUR gates 1-6 are the authoritative ones)
+
+It cannot return green without the production URL serving the bytes you just built
+AND behaving correctly. **A skipped or unrunnable gate is a FAILED gate** — if
+Chrome, node modules, or flyctl are missing, the tool exits 1 with the install
+command; it never warns-and-continues past a hard gate (no graceful degradation;
+source: CLI-Anything HARNESS.md doctrine, adopted 2026-06-11).
 
 A localhost `astro preview` proves the build OUTPUT, never the deployed ORIGIN;
 "live" is a fact about `fly.dev`, full stop. (See incidents.md → 2026-06-01.) Raw
@@ -47,6 +62,27 @@ explanation and the ERR_CONNECTION_RESET regression are in
 - WCAG AA contrast, keyboard nav, semantic HTML.
 
 Only after these pass is the site "done".
+
+## 3b. TEST.md — plan-then-evidence (DoD item 23)
+
+<!-- rule:web-ship-test-md -->
+One markdown file per site, `app/src/sites/{slug}/TEST.md`, written in two passes:
+
+- **At build start (plan pass):** list the gates this site will be verified
+  against — the deliverable-rule scan, aesthetics audit, Lighthouse budgets, axe,
+  live-origin parity, rendered-behavior probes — each with one line stating WHAT
+  output property will be checked ("Verified: live HTML carries this build's
+  hashed asset refs"). Writing the inventory before any check runs is the point:
+  it records intent independent of what later happens to pass.
+- **At ship (evidence pass):** append the verbatim tool output (the
+  `local-web-deploy.py` gate summary, the axe PASS lines, Lighthouse scores)
+  under a `## Results — YYYY-MM-DD` heading. One artifact then records both
+  intent and evidence; B2's "name the specific test performed" gets a durable
+  home instead of a claim in chat.
+
+A gate listed in the plan with no evidence block under Results is an OPEN gate —
+the site is not shipped. (Source: CLI-Anything HARNESS.md Phases 4+6, adopted
+2026-06-11.)
 
 ## 4. Handoff readiness
 

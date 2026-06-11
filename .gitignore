@@ -133,3 +133,6 @@ platform/public/docs/*/.build-report.txt
 
 # Serena MCP project cache (index/memories) - regenerated per project, machine-local
 .serena/
+
+# Aesthetics-audit score snapshots (derived; trend is per-machine state)
+workspace/projects/local-web/.critique/

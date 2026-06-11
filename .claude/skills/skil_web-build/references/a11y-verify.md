@@ -23,6 +23,8 @@ SEO `is-crawlable` failing is expected if a page is intentionally `noindex`; gat
 as "all non-noindex SEO audits pass", do not strip `noindex` to chase the number
 unless the owner directs it.
 
-Candidate hardening (flagged 2026-05-18): promote this to a reusable
-`tools/axe-check.cjs` so it is not re-authored per session. Logged
-`infrastructure-deferred` if it recurs.
+Promoted (2026-06-11): the method is committed as `tools/axe-check.cjs`
+(`node tools/axe-check.cjs <url> [...]`, exit 0 = zero violations) and runs
+automatically inside `tools/local-web-deploy.py` after the live-origin check.
+Re-authoring it per session, or skipping it because Chrome/node_modules are
+missing, is a failed gate — the deploy tool exits 1 with the fix instruction.
