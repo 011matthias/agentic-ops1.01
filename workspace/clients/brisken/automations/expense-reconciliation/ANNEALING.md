@@ -128,6 +128,14 @@ strip vendor names to gibberish).
 **Effort:** M (with rapidfuzz dep) / S (with stdlib `difflib`)
 **Trigger:** First real month — same-amount-same-day collisions will
 otherwise produce ambiguous-bucket noise.
+**Real-data evidence (2026-06-11 OCR calibration):** two design
+inputs for the fuzzy scorer confirmed on the 13 real receipts.
+(1) OCR vendor strings carry single-character misreads on
+low-quality photos, so the vendor score must be fuzzy, never exact.
+(2) 12/13 receipts carried an extracted reference (ride-share UUIDs,
+rail booking numbers), so the reference-number exact-match bonus has
+real signal to bind on, likely stronger than vendor for ticket-type
+receipts.
 
 ### A4. Probable-match window may double-bind even with bipartite assignment
 
@@ -305,19 +313,18 @@ tool works without `just` too.
 
 ## C. Output completeness
 
-### C1. No idempotency / run-log
+### ~~C1. No idempotency / run-log~~
 
-**Where:** Whole pipeline — re-runs overwrite the report
-**Symptom:** Chris re-runs with new month → no record of what
-the previous run decided. No way to ask "show me everything
-auto-approved in February."
-**Fix direction:** Light SQLite (`runs.db`) next to the output:
-one row per run, one row per tx-decision. Index on (account_id,
-transaction_id, run_timestamp). The matcher pipeline writes;
-Chris's review-edits write back (slice 3+).
-**Effort:** M
-**Trigger:** Month 3 — by then Chris has wanted "show me last
-month's matches" at least once.
+**Resolved (run-log half) 2026-06-11 by PR #109** — `runlog.py`
+opt-in SQLite run-log (`run_log:` config block; no block = no file,
+no behaviour change). One row per run + one row per tx-decision incl.
+unmatched (guarantee carried into the log); audit columns only, never
+account/vendor/amount data. `expense-recon history` +
+`expense-recon diff` subcommands. 11 tests (`tests/test_runlog.py`).
+The IDEMPOTENCY half (don't double-post a line item) is deliberately
+NOT built: it guards 4b live Zoho posting, which stays gated — tracked
+as BLUEPRINT 4.8, no surface until 4b lands. Review-edit write-back
+(the C5 dependency) remains slice-6 territory.
 
 ### C2. No vendor / category enrichment from chart-of-accounts
 
@@ -334,16 +341,14 @@ uncertain ones.
 **Trigger:** When the Zoho posting slice starts, or sooner if
 Chris asks "what category" repeatedly during review.
 
-### C3. No structured logging
+### ~~C3. No structured logging~~
 
-**Where:** Whole pipeline — silent (just final stdout line)
-**Symptom:** Debugging "why didn't this match?" needs adding
-prints or running pytest. No persistent log per run.
-**Fix direction:** Python `logging` module, default WARNING,
-`--verbose` flag for INFO, `--debug` for DEBUG. Optional
-`--log-file run.log` for structured JSON output.
-**Effort:** S
-**Trigger:** First production debugging session.
+**Resolved 2026-06-09 by PR #80** (slice 3a hardening; strike
+missed in that PR, recorded 2026-06-11). Python `logging` wired in
+`cli.py` (`--verbose`/`-v` → DEBUG, default WARNING) and used by the
+ingest pipeline (`receipts_folder.py` logs per-file extraction).
+The optional `--log-file` JSON output was not built — no demand
+signal yet; re-raise only if a real debugging session wants it.
 
 ### C4. Excel report uses float for amounts at display boundary
 
@@ -413,24 +418,22 @@ so no real foreign-currency receipt has reached the matcher; the live
 prompt should be re-checked against the first real FX case.
 `judge_ambiguous` remains a stub (BLUEPRINT 2.4).
 
-### D2. Receipt OCR pipeline replaces receipts_csv
+### ~~D2. Receipt OCR pipeline replaces receipts_csv~~
 
-**Where:** [`src/expense_recon/ingest/receipts_csv.py`](src/expense_recon/ingest/receipts_csv.py)
-**Plan:** Slice 2 part 2 swaps `parse_receipts_csv` for a vision
-pipeline (OpenAI gpt-4o vision on receipt images / PDFs →
-structured `Receipt` objects with `line_items` populated). The
-matcher contract stays identical; nothing else changes.
-**Fix direction:** `ingest/receipts_vision.py` with the same
-return shape. CLI takes a receipts folder instead of a CSV
-(`receipts.dir = "./receipts-may/"`). Vision call uses OpenAI's
-structured-output JSON schema → `Receipt` validator → list.
-Batch parallelism via `max_concurrent` config field (BLUEPRINT
-2.6).
-**Effort:** M
-**Trigger:** D1 done ✓ — next session. Defer until Chris's first
-receipt folder lands so the vision prompt can be tuned against
-real receipt shapes (some OCR-noisy, some PDF, some email
-attachments).
+**Resolved 2026-06-10 by PR #107** (slice 2.2) — landed as
+`ingest/receipts_folder.py` (not `receipts_vision.py`): vision OCR
+for images, PDF text-layer via pypdf for digital receipts, pypdfium2
+render fallback for scans. Same `(receipts, issues)` return shape as
+the CSV path; matcher contract untouched. CSV path NOT removed —
+`receipts.source: "csv" | "folder"` (inferred from path), so both
+coexist. Per-file tolerant; unsupported files land in the Errors
+sheet. Never invents line items (LD-2). 14 mocked tests + env-gated
+live test (2.9). **Live-calibrated 2026-06-11** against the 13 real
+Brisken receipts: 13/13 extracted, 100% header coverage, three
+currencies detected, $0.0204 total — see BLUEPRINT slice-2
+calibration block. `max_concurrent` batch parallelism was not built
+(13 sequential calls were fast enough); re-raise only if a real
+month's wall-clock hurts.
 
 ### ~~D3. Cost / token tracking per run~~
 
@@ -500,18 +503,12 @@ slices are the path through them.
 **Trigger:** Next spec update OR before any new joint-call with
 Dirk where build sequencing comes up.
 
-### E5. No CI
+### ~~E5. No CI~~
 
-**Where:** No `.github/workflows/` for this automation
-**Symptom:** Tests pass locally; nothing prevents a regression
-on push. The 40-test suite is fast enough that CI cost is near
-zero.
-**Fix direction:** `.github/workflows/expense-recon-tests.yml`
-that runs `uv sync && uv run pytest` on PRs touching
-`workspace/clients/brisken/automations/expense-reconciliation/`.
-**Effort:** S
-**Trigger:** Anytime — defensive, especially before slice 2
-adds LLM-touching code.
+**Resolved 2026-06-09 by PR #80** (strike missed in that PR,
+recorded 2026-06-11). `.github/workflows/expense-recon-tests.yml`
+runs the suite on every PR; it is the "test" check that gates
+auto-merge (Band 2) — e.g. it ran green on PRs #107/#108/#109/#110.
 
 ### E6. `MatchOutcome` mutability subtlety
 
@@ -539,6 +536,29 @@ Add a test for the 3-layer case (Wise card in USD, transaction
 posted in EUR, receipt in EUR).
 **Effort:** S
 **Trigger:** First multi-currency card.
+**Note (2026-06-11):** no longer hypothetical — the real receipt set
+spans three currencies (USD/EUR/BRL), so the first full real-month
+run WILL exercise this. Re-check before slice 3b tuning.
+
+### E8. OCR calibration script lives in %TEMP%, breaks between sessions
+
+**Where:** `%TEMP%\brisken_ocr_calibration.py` (uncommitted, staged
+2026-06-10, re-staged 2026-06-11)
+**Symptom:** The script hard-codes a `SRC` path; it already broke
+once when the worktree it pointed at was removed, and needed a
+session spent re-verifying the API surface before it could re-run.
+%TEMP% is also subject to OS cleanup. Calibration WILL re-run (new
+receipt batches, slice 3b tuning, post-prompt-change regression), so
+this is repeat-use tooling kept in a throwaway location —
+`infrastructure-deferred` territory if it recurs unbuilt.
+**Fix direction:** Promote to an `expense-recon calibrate <folder>`
+subcommand (or `tools/`-committed script): folder-mode ingest +
+per-file field table + coverage summary + cost, key from
+`OPENAI_API_KEY` or the local vault. The temp script IS the spec;
+~1 hour to port. Real receipt data stays git-ignored either way.
+**Effort:** S
+**Trigger:** Next calibration ask, or 2 more checkpoints staging the
+temp script (whichever first).
 
 ---
 
@@ -547,19 +567,18 @@ posted in EUR, receipt in EUR).
 Not strict — depends on which item Chris's data hits hardest. But a
 reasonable default ordering for the first session after this lands:
 
-1. **B1 (error-output sheet)** — instant value, defensive.
-   First real CSV has a malformed row. ~1 hour.
+1. ~~**B1 (error-output sheet)**~~ done 2026-06-01.
 2. **A1 (FX cross-product noise)** — first real month with EU
-   receipts floods Needs Review. ~1 day.
+   receipts floods Needs Review. ~1 day. (2026-06-11: real set spans
+   USD/EUR/BRL, so this fires on month one.)
 3. **A2 + A3 together (bipartite + vendor signal)** — fix the
    double-binding properly with vendor as the tie-breaker. ~1 day.
 4. **A5 (refund handling)** — explicit refund bucket, document
    the design choice. ~few hours.
-5. **D1 (Anthropic client abstraction)** — preps slice 2 the day
-   API access lands. Independent of Chris-data work.
+5. ~~**D1 (client abstraction)**~~ done 2026-06-01 (OpenAI pivot).
 6. **B3 (multi-statement input)** — when Chris adds her second card.
-7. **C1 (run-log)** — first time we need "show me what was matched
-   last month."
+7. ~~**C1 (run-log)**~~ done 2026-06-11 (PR #109; idempotency half
+   deferred to 4b).
 8. The rest as need surfaces — most are S-effort and can land
    opportunistically.
 
