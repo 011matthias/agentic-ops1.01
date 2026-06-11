@@ -10,7 +10,7 @@ status: draft
 track: 1
 created: "2026-06-11"
 sent: null
-value_estimate: "$36/hr hourly; typical list-to-launch cycle 2-4h"
+value_estimate: "$33.85/hr on site, $36/hr in letter (owner-set split); typical list-to-launch cycle 2-4h"
 timeline: "ongoing; first cycle within 2-3 days of access"
 tags: [cold-outreach, lead-generation, apollo, instantly, smartlead, clay, sales-navigator, lead-lists, icp, campaign-ops]
 access_code: ""
@@ -50,7 +50,7 @@ research:
     - "Found and fixed a sequence-timing bug across 3 live campaigns by reading the Instantly API spec instead of trusting the UI; the flag-before-launch behavior the posting screens for"
     - "Email verification pipeline (deliverable / catch-all / invalid tiering) so every address is verified before it is saved"
     - "LinkedIn Sales Navigator saved-search setup and export workflow"
-  budget_gap: "Client's historical average is $10.38/hr across 27 hires, VA-tier. Quoting $36/hr, a 3.5x rate gap. Mitigation: per-cycle framing. A specialist finishes a filter-and-verify-and-launch pass in 2-4 hours that takes a generalist far longer with more errors, so cost per clean launched campaign stays in a normal range. The posting names no budget, and its repeated double-check language suggests the client has paid for cheap work that shipped wrong."
+  budget_gap: "Client's historical average is $10.38/hr across 27 hires, VA-tier. Quoting $33.85/hr, a 3.3x rate gap. Mitigation: per-cycle framing. A specialist finishes a filter-and-verify-and-launch pass in 2-4 hours that takes a generalist far longer with more errors, so cost per clean launched campaign stays in a normal range. The posting names no budget, and its repeated double-check language suggests the client has paid for cheap work that shipped wrong."
   profile_cherry_picks:
     - "Live multi-domain Instantly operation + Apollo ICP sourcing answers the experience ask with a running system on the posting's own primary toolchain, not credentials; VAs at the client's historical rate do not run multi-domain Instantly operations"
     - "Production discipline (test with real data, edge cases found before customers do) maps directly onto the two most-repeated anxieties in the posting: mapping checked before go-live and issues flagged"
@@ -87,7 +87,7 @@ Anything off, a filter pulling the wrong titles, list quality below normal, a ma
 
 ## Investment
 
-$36 per hour. A typical list-to-launch cycle runs 2 to 4 hours depending on list size and filter complexity, and every completion note includes the time spent, so you always see cost per task. An experienced operator spends fewer hours per cycle than a generalist, which keeps the per-task total in a normal range while the launch gets double-checked.
+$33.85 per hour. A typical list-to-launch cycle runs 2 to 4 hours depending on list size and filter complexity, and every completion note includes the time spent, so you always see cost per task. An experienced operator spends fewer hours per cycle than a generalist, which keeps the per-task total in a normal range while the launch gets double-checked.
 
 ## About UnpauseAI
 
@@ -95,4 +95,4 @@ I work within UnpauseAI, an EU-based automation consultancy. Cold outbound ops i
 
 ## Research Notes
 
-Anonymous Minneapolis posting, pure execution role; the posting explicitly excludes strategy and copywriting. Client's $10.38/hr historical average is VA-tier, so the letter and site frame price per launched cycle rather than per hour. The posting's repeated double-check language is the screening signal: lead with the concrete bug-catch proof, not a detail-oriented claim. No Clay or Smartlead proof case exists, so those ride on the posting's own comfortable-learning line.
+Anonymous Minneapolis posting, pure execution role; the posting explicitly excludes strategy and copywriting. Client's $10.38/hr historical average is VA-tier, so the letter and site frame price per launched cycle rather than per hour. The posting's repeated double-check language is the screening signal: lead with the concrete bug-catch proof, not a detail-oriented claim. No Clay or Smartlead proof case exists, so those ride on the posting's own comfortable-learning line. Owner set the public site price to $33.85/hr (2026-06-11); the cover letter quotes $36/hr.

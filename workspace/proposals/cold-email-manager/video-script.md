@@ -51,8 +51,9 @@ bullets in your own words; the prospect is anonymous, so address them as
 
 ## 1:40 Close: price in one line, then the easy question
 
-- Price, stated plainly: $36 an hour, and a typical list-to-launch cycle
-  runs 2 to 4 hours, so they see cost per task, not an open meter.
+- Price, stated plainly: $33.85 an hour (the site figure), and a typical
+  list-to-launch cycle runs 2 to 4 hours, so they see cost per task, not an
+  open meter.
 - End on the one-line question, not a pitch: which tool is the campaign
   side running on today, Instantly or Smartlead? The answer scopes
   onboarding to a day.
