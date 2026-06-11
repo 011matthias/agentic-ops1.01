@@ -241,17 +241,19 @@ tolerance, or (b) accept that refunds always go through human review
 "refunds" outcome bucket).
 **Trigger:** First month with any return / refund. Likely month 1.
 
-### A6. Default tip tolerance assumes US
+### A6. Default tip tolerance assumes US — CLOSED 2026-06-12 (premise invalidated)
+
+**Closed (2026-06-12):** the premise is wrong on both halves. (1) There
+is no UK/EU card — every Brisken card settles in USD (owner-confirmed),
+so there is no per-region card to attach a profile to. (2) Tips are NOT
+0-12.5% in the EU for this account: the same US cardholder tips
+US-style everywhere, observed up to 16.7% on real EU receipts
+(Hostaria Pantheon EUR 60 -> 70, Menina Moca EUR 35 -> 40). So the 20%
+global probable tolerance is correct as-is and a per-region profile
+would be actively harmful. No code change; comment updated in
+`MatchingConfig`. See BLUEPRINT LD-5.
 
 **Where:** `MatchingConfig.amount_probable_tolerance_pct = Decimal("0.20")`
-**Symptom:** 20% tolerance is US-restaurant-tip shaped. Brisken
-has UK / EU presence where tips are typically 0–12.5%. A 20% pad
-there is over-loose and lets unrelated charges into probable.
-**Fix direction:** Per-card or per-region tolerance profile passed
-via the run config. Default stays 20% (US); per-card override sets
-0.12 (UK) or 0.00 (strict).
-**Effort:** S
-**Trigger:** First reconciliation of a UK / EU card.
 
 ### A7. Per-bank tolerance profiles
 

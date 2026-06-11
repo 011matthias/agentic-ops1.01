@@ -161,6 +161,73 @@ Excel `PatternFill` on the whole row:
 
 Header rows → blue-grey (`FFD9E1F2`).
 
+### LD-5. Monthly reconciliation pairing parameters (calibrated 2026-06-12)
+
+The parameters that pair one statement charge to one receipt for a
+month. Source of truth is `MatchingConfig` in
+[`matching/deterministic.py`](src/expense_recon/matching/deterministic.py);
+this is the human-readable rationale. Calibrated against four real
+travel months (Oct-24 Copenhagen DKK, Nov-24 Lisbon EUR, Jun-25 Rome
+EUR) plus the Mar-May-26 admin BRL set.
+
+**Currency model — all cards are USD.** Confirmed 2026-06-12: Brisken
+has no EU/UK card. Every card's settlement currency (layer 2) is USD;
+the book currency is USD. So a receipt in the card's own currency is
+USD and pairs same-currency; any other currency (BRL/EUR/DKK/...) is an
+FX pair. There is no per-region card profile and never will be (closes
+ANNEALING A6).
+
+**Dirk's FX rule (call directive, upstream of the band).** Three parts,
+in order:
+
+1. **Prefer the receipt's printed USD.** When a receipt was Dynamic
+   Currency Conversion (DCC)'d, it prints the exact USD the card was
+   charged (e.g. casualfood EUR 65 -> `USD 78.32`, L'Angoletto EUR 55
+   -> `USD 67.22`). The OCR captures that USD figure; the pair is then
+   same-currency USD and matches EXACT. DCC charges never reach the FX
+   band.
+2. **Else convert at the transaction-date rate**, not Zoho's internal
+   per-line rate (measured wrong by up to 12.8%). A daily-rate source
+   is the future refinement; until then the implied-rate band below is
+   the deterministic stand-in.
+3. **Widening-rounds matching.** Tightest tier locks and consumes its
+   receipt first, looser tiers run on the residual. The single greedy
+   bipartite pass (3.8), sorted deterministic-first then by confidence
+   then by the 3.9 vendor/reference signal, realizes this: EXACT before
+   PROBABLE before FX, each receipt consumed at most once.
+
+**The pairing signal stack (every pair).** Date proximity gate ->
+amount plausibility (same-currency tolerance OR FX implied-rate band)
+-> vendor/reference tie-break (3.9) -> bipartite one-receipt-per-tx
+(3.8). FX pairs that survive go to the LLM judgment layer for the final
+confirm; the band is plausibility, not proof.
+
+| Parameter | Value | Why (real-data grounding) |
+|---|---|---|
+| Date — exact window | ±1 day | purchase vs posting day |
+| Date — probable window | ±5 days | weekend / bank batch delay |
+| Date — FX window | ±5 days | foreign charges post slower; receipt date vs (tx OR post) |
+| Amount — exact tolerance | $0.00 | DCC-USD receipt == the charge to the cent |
+| Amount — probable tolerance | 20% | tip added on card, observed to 16.7% (Hostaria Pantheon); one global value (one US cardholder, all-USD cards) |
+| FX band BRL->USD | [0.15, 0.26] | interbank ~0.18-0.20; top absorbs +12.8% DCC |
+| FX band EUR->USD | [1.00, 1.45] | interbank ~1.05-1.18; top absorbs +5% DCC compounded with up to +17% tip (~1.42) |
+| FX band DKK->USD | [0.13, 0.18] | interbank ~0.145-0.148; top absorbs +5% DCC (Cabinn/Nets) + tip |
+| Unprofiled currency | date-gated only, still emitted | never silently drop a currency we have not measured |
+
+**Band shape: tight low, generous high.** DCC markup and tips only ever
+push the charge ABOVE a clean conversion, and they compound, so the
+high side is padded and the low side is not. A wide band costs review
+breadth, not correctness: bipartite caps each receipt at one tx and the
+vendor signal picks which, so widening the EUR top from 1.30 to 1.45
+left FX multiplicity unchanged at ~0.95-0.98x on the three measured
+months (43/44, 35/36, 18/19).
+
+**Refunds / negatives (ANNEALING A5).** Returns and reversals (the
+Chase export carries ~37) are not pair-matched to purchase receipts;
+they land in their own review bucket. No purchase receipt should ever
+match a credit. Revisit only if a refund-confirmation-document flow
+appears.
+
 ---
 
 ## Current state (2026-05-31)

@@ -203,10 +203,43 @@ def test_fx_implausible_rate_is_dropped_not_judged():
 def test_fx_plausible_rate_emits_judgment():
     """A BRL receipt converting at a plausible rate (implied ~0.19)
     on the same date stays an FX_JUDGMENT candidate for the LLM."""
-    # 19 USD / 100 BRL = implied 0.19 — inside [0.15, 0.24].
+    # 19 USD / 100 BRL = implied 0.19 — inside [0.15, 0.26].
     txs = [tx("t1", "19.00", date(2026, 4, 15))]
     rs = [receipt("r1", "100.00", date(2026, 4, 15), currency="BRL")]
     out = match_month(txs, rs)
+    assert len(out.judgment_required) == 1
+    assert out.judgment_required[0].match_type == MatchType.FX_JUDGMENT
+
+
+def test_fx_dkk_band_profiled():
+    """DKK->USD is a profiled pair (2026-06-12, all-USD-card model). A
+    Danish receipt at a plausible rate (implied ~0.155, DCC-inclusive)
+    is an FX candidate; one wildly off is dropped."""
+    # 15.50 USD / 100 DKK = 0.155 — inside [0.13, 0.18].
+    plausible = match_month(
+        [tx("t1", "15.50", date(2024, 10, 2))],
+        [receipt("r1", "100.00", date(2024, 10, 2), currency="DKK")],
+    )
+    assert len(plausible.judgment_required) == 1
+    # 30 USD / 100 DKK = 0.30 — far outside the band, dropped.
+    implausible = match_month(
+        [tx("t2", "30.00", date(2024, 10, 2))],
+        [receipt("r2", "100.00", date(2024, 10, 2), currency="DKK")],
+    )
+    assert not implausible.judgment_required
+    assert implausible.unmatched_receipts == ["r2"]
+
+
+def test_fx_eur_tip_plus_dcc_stays_in_band():
+    """A real-shaped EUR match where a tip (local) then DCC conversion
+    pushes the implied rate to ~1.42 must still be admitted, not
+    rejected — the high side of the band exists for exactly this."""
+    # 85.40 USD / 60 EUR = 1.423 (EUR 60 receipt, EUR 70 w/ tip, DCC'd).
+    out = match_month(
+        [tx("t1", "85.40", date(2025, 7, 1), vendor="HOSTARIA PANTHEON")],
+        [receipt("r1", "60.00", date(2025, 7, 1), currency="EUR",
+                 vendor="Hostaria Pantheon")],
+    )
     assert len(out.judgment_required) == 1
     assert out.judgment_required[0].match_type == MatchType.FX_JUDGMENT
 

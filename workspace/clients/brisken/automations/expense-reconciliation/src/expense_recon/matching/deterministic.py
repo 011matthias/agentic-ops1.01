@@ -92,20 +92,41 @@ def _signal(tx: Transaction, receipt: Receipt) -> tuple[float, float]:
 
 
 # Plausible implied-rate bands per (receipt_ccy, tx_ccy), where the
-# implied rate is `tx.amount / receipt.detected_total`. These are NOT
-# FX prices; they are wide plausibility windows whose only job is to
-# stop a USD transaction from pairing with a foreign receipt it could
-# not possibly be (the O(N×M) cross-product, ANNEALING A1). A band is
-# wide on purpose: it must absorb DCC markup (observed up to 12.8% on
-# real Brisken receipts) plus intra-month rate drift, while still
-# rejecting a coincidental amount collision at a wrong rate.
+# implied rate is `tx.amount / receipt.detected_total`. EVERY Brisken
+# card settles in USD (confirmed 2026-06-12: there is no EU/UK card),
+# so to_ccy is always USD and every non-USD receipt is an FX pair.
 #
-# Calibrated 2026-06-11 against 98 real BRL/EUR->USD pairs (3b run):
-# observed BRL->USD implied rates ran ~0.17-0.215 (DCC pushed the top
-# end), EUR->USD ~1.16-1.25. Bands below pad generously beyond both.
+# These are NOT FX prices; they are deliberately wide plausibility
+# windows whose only job is to stop a USD charge from pairing with a
+# foreign receipt it could not possibly be (the O(N×M) cross-product,
+# ANNEALING A1). The band is tight on the LOW side (a charge well below
+# the receipt total is implausible) and generous on the HIGH side,
+# because two effects only ever push the charge UP relative to a clean
+# interbank conversion, and they compound:
+#   * DCC markup — measured on real receipt scans at +3.5% (Worldline
+#     Italy), +5.0% (SIBS/Nets Portugal & Denmark), up to +12.8%
+#     (Brazil Mega Center).
+#   * Tip added on the card in local currency BEFORE conversion —
+#     measured up to +16.7% (Hostaria Pantheon EUR 60 -> 70), +14.3%
+#     (Menina Moca EUR 35 -> 40); Denmark/Brazil smaller.
+# A true EUR match can therefore land near interbank_high x 1.05 (DCC)
+# x 1.17 (tip) ~= 1.45. The upper bound admits it; the LLM judgment
+# layer + vendor/reference tie-break (3.9) + bipartite one-per-receipt
+# (3.8) resolve precision, so a wide band costs review breadth, not
+# correctness.
+#
+# Calibrated 2026-06-12 against four real travel months (Oct-24
+# Copenhagen DKK, Nov-24 Lisbon EUR, Jun-25 Rome EUR, plus the
+# Mar-May-26 admin BRL set). Dirk's call rule is upstream of this band:
+# the OCR prefers the receipt's PRINTED USD amount when the receipt was
+# DCC'd (then the pair is same-currency USD and matches exact, never
+# reaching this band); the band only governs receipts that print local
+# currency only. Brisken's reconciliation never trusts Zoho's internal
+# per-line rate (observed off by up to 12.8%).
 _DEFAULT_FX_RATE_BANDS: dict[tuple[str, str], tuple[Decimal, Decimal]] = {
-    ("BRL", "USD"): (Decimal("0.15"), Decimal("0.24")),
-    ("EUR", "USD"): (Decimal("1.00"), Decimal("1.30")),
+    ("BRL", "USD"): (Decimal("0.15"), Decimal("0.26")),
+    ("EUR", "USD"): (Decimal("1.00"), Decimal("1.45")),
+    ("DKK", "USD"): (Decimal("0.13"), Decimal("0.18")),
 }
 
 
@@ -116,11 +137,15 @@ class MatchingConfig:
     real Brisken data."""
 
     amount_exact_tolerance: Decimal = Decimal("0.00")
-    # Probable-tolerance default covers restaurant tips (typically 15-20% in US)
-    # and small service fees. Probable matches require review anyway, so being
-    # slightly loose here just means Chris glances at a few extras; being too
-    # tight means valid tip-cases fall into `unmatched` and she hunts manually.
-    # Final value to tune with Chris against real Brisken data (v2 spec §15.5).
+    # Probable-tolerance covers a tip added on the card after the receipt
+    # prints. One global value, not a per-region profile: every Brisken
+    # card is USD (no EU/UK card — ANNEALING A6 closed 2026-06-12) and
+    # the same US cardholder tips everywhere, so tip size tracks the
+    # person, not the country. Real travel receipts show tips up to 16.7%
+    # (Hostaria Pantheon) even in the EU, so 20% is the floor that keeps
+    # those as probable rather than dropping them to unmatched. Probable
+    # matches are review-flagged anyway. For FX pairs the tip is absorbed
+    # by the implied-rate band's high side instead.
     amount_probable_tolerance_pct: Decimal = Decimal("0.20")
     date_exact_window_days: int = 1                            # purchase vs posting day
     date_probable_window_days: int = 5                         # weekend / bank delay
