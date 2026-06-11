@@ -93,6 +93,16 @@ spend, less Chris review.
 **Effort:** M
 **Trigger:** First real Brisken month with ≥1 non-USD receipt
 (near-certain on month 1 — UK / EU presence).
+**Real-data evidence (2026-06-11 3b calibration):** measured at
+5,064 / 3,312 / 1,639 FX pair-rows on the three real months
+(119/92/91 transactions) — ~50× the BLUEPRINT ≤2×-receipts target,
+a 10,124-row Needs-Review sheet for one month. ~97% of the expense
+lines are foreign-currency, so this branch carries nearly all
+volume: the fix must be a deterministic FX band (daily-rate
+conversion + band match: ≤3% high-confidence, 3–13% DCC-suspect
+review, >13% reject — bands measured from 98 aligned real pairs,
+max observed DCC gap 12.8%), not just a plausibility gate in front
+of the LLM. See the BLUEPRINT slice 3b calibration block.
 
 ### A2. Receipt double-binding *(README annealing #2)*
 
@@ -113,6 +123,12 @@ next outcome tier instead.
 **Effort:** M
 **Trigger:** First real month — guaranteed to hit this on any month
 with 20+ transactions of similar amounts (Uber, coffee, lunch).
+**Real-data evidence (2026-06-11 3b calibration):** confirmed on
+month 1, worse than the fixture predicted. Each month's single
+same-currency receipt was claimed by 4–5 different transactions
+inside the 20%/5-day window (March: one receipt → 4 MATCHED rows;
+May: one receipt → 5 MATCHED rows, only its exact pair true). 7–8
+of the quarter's 9 deterministic matches are false double-bindings.
 
 ### A3. No vendor / reference signal in matching *(README annealing #3)*
 
@@ -150,6 +166,12 @@ also help.
 **Effort:** S (window tuning) — but tune AGAINST Chris's real data,
 never against synthetic.
 **Trigger:** After A2 + A3 land; tune empirically on month-2 data.
+**Real-data evidence (2026-06-11 3b calibration):** the false
+double-bindings under A2 all entered through this window (amount
+diffs of 16–21% accepted at up to 5 days' distance). On the
+same-currency aligned pairs, true matches sit ≤3% (non-DCC) —
+the 20% default is an order of magnitude looser than the data
+needs once A3's vendor/reference signal exists to break ties.
 
 ### A5. Negative-amount (refund) matching gap
 
@@ -205,6 +227,26 @@ decision log as a 5th sheet (or a separate JSON). Off by default.
 **Effort:** S
 **Trigger:** First time we need to debug a "why did this match"
 question from Chris.
+
+### A9. Summary sheet counts pair-rows, not transactions (2026-06-11)
+
+**Where:** [`src/expense_recon/output/report_xlsx.py`](src/expense_recon/output/report_xlsx.py) — `by_card_total` / needs-review counting and the invariant line
+**Symptom:** Found by the 3b calibration: a month whose statement
+sums to $8.8K displays "Spend $1,258,996" because every
+judgment/review PAIR contributes the transaction amount again
+(5,064 pair-rows in that month). The Summary "Reconciliation
+invariant" line also false-alarms BROKEN while the engine-level
+invariant actually holds (per-transaction outcomes sum exactly,
+e.g. 115 FX + 4 matched = 119).
+**Why it happens:** the report flattens outcome buckets to one row
+per pair; Summary aggregates over rows where it means transactions.
+**Fix direction:** aggregate Spend and the invariant over unique
+`transaction_id`s; keep pair-rows for the review sheets only. A1's
+fix shrinks the blast radius but the unit confusion is wrong
+independently.
+**Effort:** S
+**Trigger:** With A1, before Chris sees any report (a $1.2M Spend
+line on an $8.8K month is an instant-credibility kill).
 
 ---
 
