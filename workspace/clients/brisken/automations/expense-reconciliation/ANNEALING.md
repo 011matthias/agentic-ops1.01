@@ -75,9 +75,29 @@ Brief deliberate list so annealing changes don't break what's clean.
 
 ## A. Matcher quality (the noise that bites real data first)
 
-### A1. FX cross-product noise *(README annealing #1)*
+### A1. FX cross-product noise *(README annealing #1)* — PARTIALLY RESOLVED 2026-06-11
 
-**Where:** [`src/expense_recon/matching/deterministic.py`](src/expense_recon/matching/deterministic.py) `match_one`, lines 60-75
+**Resolution (2026-06-11):** the candidate-emission gate shipped
+(BLUEPRINT 3.7). `match_one`'s currency-mismatch branch now requires
+(a) a receipt amount + date, (b) date within `fx_date_window_days`
+(default 5), and (c) for a profiled currency pair, an implied rate
+(`tx.amount / receipt.detected_total`) inside the pair's band
+(`MatchingConfig.fx_rate_bands`; BRL→USD [0.15, 0.24], EUR→USD
+[1.00, 1.30], calibrated from 98 real pairs). Unprofiled pairs are
+date-gated only and still emitted (guarantee preserved for unmeasured
+currencies). Measured effect on the three real months: Needs-Review
+pair-rows 10,124→545 / 6,624→337 / 3,273→153 (19–21× cut); per-tx
+reconciliation invariant still exact (119/92/91). 5 unit tests added
+(`test_fx_*` in test_deterministic_matching.py). **Still open:** this
+is the emission gate, not the deterministic-resolution band. Residual
+multiplicity (~6× foreign-receipt count vs the ≤2× target) is
+per-receipt candidate collision — closed by 3.8 (bipartite) + 3.9
+(vendor/reference), not by tightening this gate further. The
+"resolve high-confidence FX deterministically" idea was deliberately
+NOT built here: it would regress double-binding (A2) onto the FX path
+before bipartite assignment exists.
+
+**Where:** [`src/expense_recon/matching/deterministic.py`](src/expense_recon/matching/deterministic.py) `match_one`, FX branch + `MatchingConfig.fx_rate_bands` / `fx_band`
 **Symptom:** Every USD transaction generates an `FX_JUDGMENT`
 candidate against every non-USD receipt in the pool, regardless of
 amount or date proximity. One EUR receipt in a 30-row month produces
