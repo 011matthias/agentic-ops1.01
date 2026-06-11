@@ -1258,18 +1258,29 @@ def validate_proposal(slug: str, verbose: bool = False) -> ValidationReport:
     client_dir = CLIENTS_DIR / slug
     working_dir = WORKING_DOCS_DIR / slug
 
-    if not client_dir.exists():
-        report.add("Client directory exists", "FAIL",
-                    f"Not found: {client_dir}")
-        return report
-
-    report.add("Client directory exists", "PASS")
-
-    # Load frontmatter
+    # Load frontmatter before the directory check: Track 1 (video-led)
+    # proposals ship letter + video only, so the site directory is only
+    # required when the deliverables actually include a site.
     md_path = find_proposal_markdown(slug)
     fm = None
     if md_path:
         fm = parse_frontmatter(md_path.read_text(encoding="utf-8"))
+
+    track = (fm or {}).get("track", 2)
+    deliverables_fm = (fm or {}).get("deliverables") or {}
+    site_expected = bool(deliverables_fm.get("site", track == 2))
+
+    if not client_dir.exists():
+        if site_expected:
+            report.add("Client directory exists", "FAIL",
+                        f"Not found: {client_dir}")
+            return report
+        report.add("Client directory exists", "SKIP",
+                    "Track 1 video-led proposal: no site directory expected")
+    else:
+        report.add("Client directory exists", "PASS")
+
+    if fm:
         check_frontmatter(report, fm, slug)
     else:
         report.add("Proposal markdown exists", "WARN",
