@@ -82,7 +82,8 @@ platform:
     - "Exact Zoho Expenses field mapping for personal / business / reimbursement cases (v2 spec §31)"
     - "Exact confidence-score thresholds for high / medium / low (v2 spec §15.5)"
     - "MVP Zoho path: file export (fast) vs API replication direct (aligned with long-term direction) — v2 spec §21.2"
-  platform_decision: "RE-OPENED"   # 2026-05-20 call reversed the v1 stack; pending research items in v2 spec §38
+  platform_decision: "STANDALONE"  # 2026-06-12 Dirk confirmed Path A (standalone pipeline), per context/2026-06-11-path-recommendation.md. Tool ingests Zoho Expense CSV + bank CSV, matches/classifies in its own tables, pushes journal-entry export to Books carrying receipt URLs (the Zoho switch-off path). Validates the current standalone Python CLI. Books API is the one write boundary only. Was RE-OPENED 2026-05-20.
+  currency_model: "ALL-USD"        # 2026-06-12 owner-confirmed: every Brisken card settles in USD; no EU/UK card. Book currency USD. Layer-2 account-card currency always USD; every non-USD receipt (BRL/EUR/DKK) is an FX pair. Closes ANNEALING A6 (no per-region tip profile). See BLUEPRINT LD-5.
   upwork_routing: false            # not currently in play; engagement is direct with Dirk per the 2026-05-20 call posture
   ai_account: "Brisken's existing Anthropic Claude Pro subscription (do NOT create a new account; Matthias needs API access, possibly via a group within it)"
   key_people:
