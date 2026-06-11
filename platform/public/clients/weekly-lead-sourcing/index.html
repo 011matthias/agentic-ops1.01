@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<!-- deliverable-allow: copy-clipboard, keyboard-search | reason: no code/command blocks on this page, and a Ctrl+K search UI on a one-page three-section proposal adds chrome against the owner's 2026-06-11 minimal-site directive; native Ctrl+F suffices -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Weekly Lead Sourcing: Process, Quality, Proof</title>
+<script>(function(){var t=localStorage.getItem('weekly-lead-sourcing-theme');
+var d=document.documentElement;
+d.setAttribute('data-theme',
+t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');
+})();</script>
+<style>
+:root{--bg:#fff;--surface:#f8fafc;--text:#0f172a;--muted:#475569;--border:#e2e8f0;--accent:#2563eb;--accent-bg:#eff6ff}
+[data-theme=dark]{--bg:#0b1220;--surface:#111a2e;--text:#e2e8f0;--muted:#94a3b8;--border:#1e293b;--accent:#60a5fa;--accent-bg:#172554}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;padding-top:56px}
+.site-nav{position:fixed;top:0;left:0;right:0;height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:var(--bg);border-bottom:1px solid var(--border);z-index:10}
+.nav-left{display:flex;align-items:center;gap:8px;font-weight:600}
+.nav-client{color:var(--muted);font-weight:400}
+.nav-links{display:flex;gap:16px;font-size:14px}
+.nav-links a{color:var(--muted);text-decoration:none}
+.nav-links a.active,.nav-links a:hover{color:var(--accent)}
+.nav-right{display:flex;align-items:center;gap:12px}
+.nav-status{font-size:12px;padding:2px 10px;border:1px solid var(--border);border-radius:999px;color:var(--muted)}
+.nav-theme{background:none;border:1px solid var(--border);border-radius:999px;padding:4px 10px;cursor:pointer;color:var(--text);font-size:13px}
+.sidebar{position:fixed;top:56px;left:0;bottom:0;width:200px;padding:24px 16px;border-right:1px solid var(--border);background:var(--bg)}
+.sidebar-label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:12px}
+.step-list{list-style:none}
+.step-item{margin-bottom:4px}
+.step-link{display:flex;gap:10px;align-items:baseline;padding:6px 8px;border-radius:8px;color:var(--muted);text-decoration:none;font-size:14px}
+.step-link:hover{background:var(--surface);color:var(--text)}
+.step-num{font-size:12px;color:var(--accent);font-variant-numeric:tabular-nums}
+.main-content{margin-left:200px;padding:40px 24px}
+.content-inner{max-width:720px;margin:0 auto}
+.hero{margin-bottom:40px}
+.hero-badge{display:inline-block;font-size:12px;padding:3px 12px;border-radius:999px;background:var(--accent-bg);color:var(--accent);margin-bottom:12px}
+h1{font-size:30px;line-height:1.25;margin-bottom:8px}
+.hero-sub{color:var(--muted)}
+.stats-row{display:flex;gap:12px;margin-top:20px;flex-wrap:wrap}
+.stat-card{flex:1;min-width:140px;border:1px solid var(--border);border-radius:12px;padding:14px;background:var(--surface)}
+.stat-value{font-size:20px;font-weight:600}
+.stat-label{font-size:13px;color:var(--muted)}
+section{margin-bottom:44px}
+h2{font-size:21px;margin-bottom:12px;padding-top:8px}
+p{margin-bottom:12px}
+ul{margin:0 0 12px 20px}
+ol{margin:0 0 12px 20px}
+li{margin-bottom:6px}
+.callout{border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:14px 16px;background:var(--surface);margin:16px 0}
+.callout-title{font-weight:600;margin-bottom:6px}
+.footer{margin-left:200px;padding:20px 24px;border-top:1px solid var(--border);color:var(--muted);font-size:13px;text-align:center}
+@media(max-width:768px){
+.sidebar{display:none}
+.main-content,.footer{margin-left:0}
+.nav-links{display:none}
+}
+@media print{
+.site-nav,.sidebar,.mobile-nav-toggle,.cta-section{display:none!important}
+.main-content{margin-left:0!important}
+body{padding-top:0!important}
+h2{page-break-before:always}
+h2:first-of-type{page-break-before:avoid}
+}
+</style>
+</head>
+<body data-updated="2026-06-11">
+
+<nav class="site-nav">
+  <div class="nav-left">UnpauseAI <span class="nav-client">&middot; Weekly Lead Sourcing</span></div>
+  <div class="nav-links">
+    <a href="#process" class="active">Process</a>
+    <a href="#quality">Quality</a>
+    <a href="#proof">Proof</a>
+  </div>
+  <div class="nav-right">
+    <span class="nav-status">Proposal</span>
+    <button class="nav-theme" onclick="toggleTheme()" aria-label="Toggle theme">&#9788;/&#9790;</button>
+    <script>function toggleTheme(){
+      var d=document.documentElement;
+      var c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+      d.setAttribute('data-theme',c);
+      localStorage.setItem('weekly-lead-sourcing-theme',c);
+    }</script>
+  </div>
+</nav>
+
+<aside class="sidebar">
+  <div class="sidebar-label">Sections</div>
+  <ul class="step-list">
+    <li class="step-item"><a class="step-link" href="#process"><span class="step-num">1</span> Process</a></li>
+    <li class="step-item"><a class="step-link" href="#quality"><span class="step-num">2</span> Quality</a></li>
+    <li class="step-item"><a class="step-link" href="#proof"><span class="step-num">3</span> Proof</a></li>
+  </ul>
+</aside>
+
+<main class="main-content">
+<div class="content-inner">
+
+<div class="hero">
+  <span class="hero-badge">Proposal</span>
+  <h1>Three sources in, one clean list out, every week</h1>
+  <p class="hero-sub">Your template is the spec. This page answers how the weekly cycle runs, what clean means, and the work it's based on.</p>
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-value">1 / week</div><div class="stat-label">delivery on your set day</div></div>
+    <div class="stat-card"><div class="stat-value">3 sources</div><div class="stat-label">tracked per lead in the sheet</div></div>
+    <div class="stat-card"><div class="stat-value">$20</div><div class="stat-label">first list, at your posted budget</div></div>
+  </div>
+</div>
+
+<section id="process">
+  <h2>1. The weekly cycle</h2>
+  <p>Every delivery runs the same repeatable process:</p>
+  <ol>
+    <li>Source from your three designated sources; each lead is tagged with where it came from</li>
+    <li>Research and verify contact information for each lead before it enters the sheet</li>
+    <li>Enter into your template exactly as provided, no improvised columns or formats</li>
+    <li>Sample-check the batch against the template before handoff</li>
+    <li>Deliver on your set day with a short completion note</li>
+  </ol>
+  <div class="callout">
+    <div class="callout-title">Starting is low-risk</div>
+    The first weekly list runs at the posted $20, so you can check accuracy, consistency, and data entry against your template before any ongoing commitment. The recurring weekly rate gets agreed after that, based on actual list size and research depth per cycle.
+  </div>
+  <p>Availability: EU-based, overlapping your morning through early afternoon, roughly 9am to 2pm Pacific, every weekday.</p>
+</section>
+
+<section id="quality">
+  <h2>2. What clean means</h2>
+  <p>Clean data entry means the sheet needs no cleanup on your side:</p>
+  <ul>
+    <li>Every contact field verified before it enters the template; unverifiable entries are flagged, never silently included</li>
+    <li>Duplicates checked against prior weekly deliveries, not just within the batch</li>
+    <li>Each delivery note lists lead count per source and anything off: duplicates removed, dead contacts, a source running dry</li>
+    <li>Questions and blockers get raised when they appear, not bundled into the deadline</li>
+  </ul>
+</section>
+
+<section id="proof">
+  <h2>3. Proof</h2>
+  <p>The same cycle runs today inside a live cold-email operation for a UK client:</p>
+  <ul>
+    <li>A 452-contact list filtered by role, company size, and geography, with a roughly 1,200-domain exclusion list from their CRM</li>
+    <li>A 945-contact list with per-contact personalization fields</li>
+    <li>Every address verified (deliverable / catch-all / invalid) before delivery</li>
+    <li>Sample validation on 200 contacts before the full pull, so filter errors get caught early</li>
+  </ul>
+  <p>The campaigns running on those lists are live right now. Reference available privately on request.</p>
+</section>
+
+</div>
+</main>
+
+<div class="footer">
+  Prepared by UnpauseAI &middot; admin@unpauseai.com &middot; 2026 &middot; Last updated: 2026-06-11
+</div>
+
+</body>
+</html>
