@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<!-- deliverable-allow: copy-clipboard, keyboard-search | reason: no code/command blocks on this page, and a Ctrl+K search UI on a one-page three-section proposal adds chrome against the owner's 2026-06-11 minimal-site directive; native Ctrl+F suffices -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>B2B Cold Outreach Setup: Price, Workflow, Proof</title>
+<script>(function(){var t=localStorage.getItem('b2b-cold-outreach-setup-theme');
+var d=document.documentElement;
+d.setAttribute('data-theme',
+t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');
+})();</script>
+<style>
+:root{--bg:#fff;--surface:#f8fafc;--text:#0f172a;--muted:#475569;--border:#e2e8f0;--accent:#2563eb;--accent-bg:#eff6ff}
+[data-theme=dark]{--bg:#0b1220;--surface:#111a2e;--text:#e2e8f0;--muted:#94a3b8;--border:#1e293b;--accent:#60a5fa;--accent-bg:#172554}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;padding-top:56px}
+.site-nav{position:fixed;top:0;left:0;right:0;height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:var(--bg);border-bottom:1px solid var(--border);z-index:10}
+.nav-left{display:flex;align-items:center;gap:8px;font-weight:600}
+.nav-client{color:var(--muted);font-weight:400}
+.nav-links{display:flex;gap:16px;font-size:14px}
+.nav-links a{color:var(--muted);text-decoration:none}
+.nav-links a.active,.nav-links a:hover{color:var(--accent)}
+.nav-right{display:flex;align-items:center;gap:12px}
+.nav-status{font-size:12px;padding:2px 10px;border:1px solid var(--border);border-radius:999px;color:var(--muted)}
+.nav-theme{background:none;border:1px solid var(--border);border-radius:999px;padding:4px 10px;cursor:pointer;color:var(--text);font-size:13px}
+.sidebar{position:fixed;top:56px;left:0;bottom:0;width:200px;padding:24px 16px;border-right:1px solid var(--border);background:var(--bg)}
+.sidebar-label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:12px}
+.step-list{list-style:none}
+.step-item{margin-bottom:4px}
+.step-link{display:flex;gap:10px;align-items:baseline;padding:6px 8px;border-radius:8px;color:var(--muted);text-decoration:none;font-size:14px}
+.step-link:hover{background:var(--surface);color:var(--text)}
+.step-num{font-size:12px;color:var(--accent);font-variant-numeric:tabular-nums}
+.main-content{margin-left:200px;padding:40px 24px}
+.content-inner{max-width:720px;margin:0 auto}
+.hero{margin-bottom:40px}
+.hero-badge{display:inline-block;font-size:12px;padding:3px 12px;border-radius:999px;background:var(--accent-bg);color:var(--accent);margin-bottom:12px}
+h1{font-size:30px;line-height:1.25;margin-bottom:8px}
+.hero-sub{color:var(--muted)}
+.stats-row{display:flex;gap:12px;margin-top:20px;flex-wrap:wrap}
+.stat-card{flex:1;min-width:140px;border:1px solid var(--border);border-radius:12px;padding:14px;background:var(--surface)}
+.stat-value{font-size:20px;font-weight:600}
+.stat-label{font-size:13px;color:var(--muted)}
+section{margin-bottom:44px}
+h2{font-size:21px;margin-bottom:12px;padding-top:8px}
+p{margin-bottom:12px}
+ul{margin:0 0 12px 20px}
+li{margin-bottom:6px}
+.tool-row{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.tool-row:last-child{border-bottom:none}
+.tool-name{flex:0 0 150px;font-weight:600}
+.tool-role{color:var(--muted)}
+.callout{border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:14px 16px;background:var(--surface);margin:16px 0}
+.callout-title{font-weight:600;margin-bottom:6px}
+.footer{margin-left:200px;padding:20px 24px;border-top:1px solid var(--border);color:var(--muted);font-size:13px;text-align:center}
+@media(max-width:768px){
+.sidebar{display:none}
+.main-content,.footer{margin-left:0}
+.nav-links{display:none}
+.tool-row{flex-direction:column;gap:2px}
+}
+@media print{
+.site-nav,.sidebar,.mobile-nav-toggle,.cta-section{display:none!important}
+.main-content{margin-left:0!important}
+body{padding-top:0!important}
+h2{page-break-before:always}
+h2:first-of-type{page-break-before:avoid}
+}
+</style>
+</head>
+<body data-updated="2026-06-11">
+
+<nav class="site-nav">
+  <div class="nav-left">UnpauseAI <span class="nav-client">&middot; B2B Cold Outreach Setup</span></div>
+  <div class="nav-links">
+    <a href="#price" class="active">Price</a>
+    <a href="#workflow">Workflow</a>
+    <a href="#proof">Proof</a>
+  </div>
+  <div class="nav-right">
+    <span class="nav-status">Proposal</span>
+    <button class="nav-theme" onclick="toggleTheme()" aria-label="Toggle theme">&#9788;/&#9790;</button>
+    <script>function toggleTheme(){
+      var d=document.documentElement;
+      var c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+      d.setAttribute('data-theme',c);
+      localStorage.setItem('b2b-cold-outreach-setup-theme',c);
+    }</script>
+  </div>
+</nav>
+
+<aside class="sidebar">
+  <div class="sidebar-label">Sections</div>
+  <ul class="step-list">
+    <li class="step-item"><a class="step-link" href="#price"><span class="step-num">1</span> Price</a></li>
+    <li class="step-item"><a class="step-link" href="#workflow"><span class="step-num">2</span> Workflow</a></li>
+    <li class="step-item"><a class="step-link" href="#proof"><span class="step-num">3</span> Proof</a></li>
+  </ul>
+</aside>
+
+<main class="main-content">
+<div class="content-inner">
+
+<div class="hero">
+  <span class="hero-badge">Proposal</span>
+  <h1>Your three questions, answered</h1>
+  <p class="hero-sub">Price, how the tools fit together, and proof from a live setup.</p>
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-value">$600&ndash;1,000</div><div class="stat-label">total for the setup</div></div>
+    <div class="stat-card"><div class="stat-value">15&ndash;25 hrs</div><div class="stat-label">at $40/hour</div></div>
+    <div class="stat-card"><div class="stat-value">5 tools</div><div class="stat-label">configured, on your accounts</div></div>
+  </div>
+</div>
+
+<section id="price">
+  <h2>1. The price</h2>
+  <p>$40 an hour, estimated 15 to 25 hours: <strong>$600 to $1,000 total</strong>. The estimate is a cap I work against, not a floor.</p>
+  <p>That covers the full setup: ICP locked as Sales Navigator saved searches, PhantomBuster configured at safe rate limits, the Apollo list pulled, enriched and verified, the LinkedIn campaign launched, and Instantly running with warmed, authenticated domains.</p>
+  <p>Tool subscriptions run on your own accounts. When we're done, you own the whole system.</p>
+</section>
+
+<section id="workflow">
+  <h2>2. How the tools fit together</h2>
+  <p>One pipeline, in this order. Each tool has exactly one job:</p>
+  <div class="tool-row"><div class="tool-name">Sales Navigator</div><div class="tool-role">Defines the ICP as saved searches, so the target list is reproducible, not a one-off export.</div></div>
+  <div class="tool-row"><div class="tool-name">PhantomBuster</div><div class="tool-role">Exports those results and sends connection requests and DMs on a schedule that stays inside LinkedIn's limits.</div></div>
+  <div class="tool-row"><div class="tool-name">Apollo</div><div class="tool-role">Enriches the same people with verified work emails and company data.</div></div>
+  <div class="tool-row"><div class="tool-name">Email verification</div><div class="tool-role">Tiers every address (deliverable / catch-all / invalid) before it's saved. This is what makes the list clean.</div></div>
+  <div class="tool-row"><div class="tool-name">Instantly</div><div class="tool-role">Separate sending domains, SPF/DKIM/DMARC, warm-up from day one, so the email channel is ready when you want it.</div></div>
+  <div class="callout">
+    <div class="callout-title">About 500 DMs in two weeks</div>
+    A healthy LinkedIn account sustains roughly 100 connection requests and 50 to 80 automated DMs per week. If your 500 targets are already first-degree connections, two weeks works (about 35 a day). If they're cold, connections ramp first and the 500 completes over three to four weeks. Pushing past those limits gets accounts restricted, which costs more than the extra time.
+  </div>
+</section>
+
+<section id="proof">
+  <h2>3. Proof</h2>
+  <p>All of this is from one live client operation I run today:</p>
+  <ul>
+    <li>3 Instantly campaigns active right now, sending across multiple warmed domains</li>
+    <li>Apollo ICP filters built as tiered sets, sample-validated on 200 contacts before the full pull</li>
+    <li>Sending domains and mailboxes stood up from zero: registration, SPF/DKIM/DMARC, warm-up</li>
+    <li>A sequence-timing bug in live campaigns found and fixed by reading the Instantly API spec</li>
+  </ul>
+  <p>Reference available privately on request.</p>
+</section>
+
+</div>
+</main>
+
+<div class="footer">
+  Prepared by UnpauseAI &middot; admin@unpauseai.com &middot; 2026 &middot; Last updated: 2026-06-11
+</div>
+
+</body>
+</html>

@@ -4,3 +4,4 @@ Your cold outreach setup from scratch is what I run today: live Instantly campai
 
 ---
 Walkthrough: short Loom (link in this message)
+Full plan: https://unpauseai.com/clients/b2b-cold-outreach-setup/

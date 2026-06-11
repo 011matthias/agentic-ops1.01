@@ -778,7 +778,9 @@ def check_html_site(report: ValidationReport, client_dir: Path, fm: dict) -> dic
 
     report.add("HTML site exists", "PASS")
 
-    # Required pages
+    # Required pages: the full roster is the Track 2 contract. A site on a
+    # Track 1 (video-led) proposal is a supplementary pager; roster pruning
+    # is a per-client editorial decision (rule_client_page_structure §8).
     present = []
     missing = []
     for page in REQUIRED_PAGES:
@@ -787,7 +789,12 @@ def check_html_site(report: ValidationReport, client_dir: Path, fm: dict) -> dic
         else:
             missing.append(page)
 
-    if missing:
+    track = (fm or {}).get("track", 2)
+    if track != 2:
+        report.add("Required pages present", "SKIP",
+                    f"Track {track} site: roster not enforced "
+                    f"({len(present)}/{len(REQUIRED_PAGES)} roster pages present)")
+    elif missing:
         report.add("Required pages present", "FAIL",
                     f"Missing: {', '.join(missing)}")
     else:
