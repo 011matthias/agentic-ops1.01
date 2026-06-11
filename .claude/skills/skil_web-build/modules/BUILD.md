@@ -8,6 +8,12 @@ Companion references (load when the specific need arises):
 - `references/depth-hero.md` — the budgeted WebGL depth hero (at most one per site)
 - `components/{element}.md` — per-element standards (e.g. `components/nav-bar.md`)
 
+## 0. Open the TEST.md plan
+
+Before writing page code, create `app/src/sites/{slug}/TEST.md` with the planned
+gate inventory (plan pass) — see `modules/SHIP.md` §3b. The evidence pass appends
+at ship time. Two minutes now; it is what makes DoD item 23 checkable later.
+
 ## 1. Build the page to the praxis-uslu bar
 
 Bespoke per BRIEF, reusing shared primitives (`.wrap`, `.btn`, `.card`, `.eyebrow`) +

@@ -46,9 +46,12 @@ glance"), in leverage order:**
    bans). On a split/panel hero "big" is relative to the column: size to fill it,
    hyphenate German compounds, push weight/tracking rather than raw px.
 2. **Whitespace.** Generous padding; crowding looks cheap.
-3. **ONE disciplined accent on warm neutrals.** Warm off-white (not `#fff`),
-   near-black (not `#000`), accent used sparingly. No rainbow, no multi-accent, no
-   pure-black-on-pure-white.
+3. **ONE disciplined accent on a justified base palette.** <!-- rule:web-color-one-accent -->
+   The base (warm off-white, cool neutral, dark, editorial white) is a per-site
+   BRIEF-justified choice, never an unexamined default — the warm-cream body
+   background is itself the most saturated AI default of 2026 (see §6 saturation
+   lists). Pure `#fff` / pure `#000` stay banned regardless of base. Accent used
+   sparingly: no rainbow, no multi-accent, no pure-black-on-pure-white.
 4. **ONE strong, well-graded photograph.** ONE consistent warm grade across the page;
    one great photo beats a grid of stock tiles (the grade + real-work rule lives in
    `modules/BUILD.md` §3).
@@ -94,13 +97,54 @@ every taste decision has a logical reason; document it or you're guessing
 name 1-2 references it is intentionally NOT borrowing from (the anti-pattern
 direction); naming the rejection sharpens what the chosen references actually carry.
 
-## 3. Typography hard bans
+**Second-order slop test (BRIEF acceptance check).** <!-- rule:web-brief-second-order-test -->
+Run both altitudes before locking the BRIEF:
 
+- *First order:* could someone guess the theme + palette from the business
+  category alone ("Physio → calm sage + rounded sans")? That is the first
+  training-data reflex; rework.
+- *Second order:* could someone guess the aesthetic family from category PLUS the
+  named anti-reference ("trade site that's not the clichéd template → editorial
+  serif restraint")? Then the first reflex was avoided but the second wasn't.
+  Rework until BOTH answers are non-obvious. This is how a set of N sites passes
+  per-hero diversity yet still clusters in one "not-the-default" lane.
+- *Inverse test:* describe the planned site the way a competitor would describe
+  theirs. If the sentence fits the modal landing page of the vertical, restart.
+
+If the chosen anti-reference plus the vertical still predicts the design lane, the
+BRIEF fails DoD item 1 and the anchors get re-picked. (Source: impeccable
+`skill-slop-second-order-check`, adopted 2026-06-11.)
+
+## 3. Typography: hard bans + the selection procedure
+
+**Hard bans.** <!-- rule:web-type-banned-defaults -->
 Inter, Roboto, Arial, default system stacks, and Space Grotesk are banned as primary
 type unless the BRIEF explicitly justifies one on a non-default basis. Reach for
 distinctive display + body pairings via `@fontsource-variable`. Reason: these are the
 AI-default fonts; using them is the signature of generic AI-generated UI (source:
-`frontend-design` plugin skill).
+`frontend-design` plugin skill). The wider *saturation tier* (Fraunces, Playfair,
+DM Sans and friends) is in §6 — those are escape-the-ban-into-the-next-monoculture
+picks and need the same BRIEF justification.
+
+**Selection procedure (the required content of the BRIEF's font justification).**
+<!-- rule:web-type-selection-procedure -->
+Banning defaults without a positive method just moves the reflex one tier up. Run
+these four steps per site; the written trace goes in the BRIEF:
+
+1. Write three concrete brand-voice words — physical-object words ("warm and
+   mechanical and opinionated"), never "modern" / "elegant" / "clean".
+2. List the three fonts you'd reach for by reflex. Reject any that sit on the §6
+   saturation list or the hard-ban list above.
+3. Browse a real catalog (Google Fonts, Fontsource, Pangram Pangram, Klim) hunting
+   the font as a physical object — "a 1970s terminal manual, a fabric label, a
+   receipt from a mid-century diner". Reject the first pick that merely "looks
+   designy".
+4. Cross-check: if the final pick equals the step-2 reflex, start over.
+
+(Source: impeccable `brand.md` font-selection procedure, adopted 2026-06-11.)
+
+Quantified type/colour floors and ceilings (tracking floor, hero clamp ceiling,
+line-length band, muted-text contrast) live in `references/design-thresholds.md`.
 
 ## 4. Background depth rule
 
@@ -133,3 +177,44 @@ the reference."
 
 Per-element bars (the nav bar in `components/nav-bar.md`) carry their own isolated
 comparative-judgment gate that fires in addition to this hero-level one.
+
+## 6. Saturation lists (dated, rotating)
+
+<!-- rule:web-saturation-list-mechanics -->
+Anti-pattern entries below are *saturation lists*, not eternal bans. Four mechanics
+govern them (adopted from impeccable 2026-06-11):
+
+1. **Measured justification.** An entry earns its place by appearing across a large
+   share of AI generations regardless of brief — saturation is the definition of a
+   tell. When adding an entry, state why it's saturated, not just that it's "bad".
+2. **Detectable bands where possible.** A ban that can be stated as numbers gets
+   numbers (the cream band below) so `tools/audit-local-web-aesthetics.py` can flag
+   it; name-tells (token names, font names) are listed explicitly.
+3. **Rotation policy.** The list is dated. New tells land here as they saturate;
+   entries leave when they fall back below saturation. Review at the same cadence
+   the BRIEF anchors get refreshed; an entry nobody has hit in months is a
+   candidate for removal.
+4. **Identity preservation.** Lists apply to *greenfield* decisions only. A real
+   business's committed brand font, colour, or lane is never second-guessed by a
+   list entry — reconcile with the brand (the logo/palette-harmony gate), don't
+   "fix" it.
+
+**Current entries (as of 2026-06-11):**
+
+- **Cream/sand body background** <!-- rule:web-color-cream-band --> — OKLCH
+  L 0.84–0.97, C ≥ 0.02, hue 40–100°, or paper tokens *named* `--cream`, `--sand`,
+  `--bone`, `--linen`, `--parchment`. The 2026 saturated default. A warm base is
+  still a legitimate per-site choice (List B3) — but it must be a justified BRIEF
+  call, and legitimately *tinted* neutrals sit at C 0.005–0.015 toward the brand's
+  own hue, not in the cream band.
+- **Saturated font tier** <!-- rule:web-type-saturation-fonts --> — Fraunces,
+  Playfair Display, Cormorant, Lora, Crimson, Newsreader, Syne, IBM Plex (all),
+  Space Mono, DM Sans, DM Serif, Outfit, Plus Jakarta Sans, Instrument Sans,
+  Instrument Serif. The "I avoided Inter" monoculture one tier up. WARN-level:
+  usable only with the §3 procedure trace showing the pick survived step 4.
+- **Eyebrow kicker on every section** <!-- rule:web-type-eyebrow-everywhere --> —
+  the `.eyebrow` primitive is part of this design system (List B5), but a tracked
+  uppercase kicker above *every* section heading is the saturated form. Vary the
+  rhythm; some sections open with the H2 itself.
+- The §0 cheap-tells line (glassmorphism, three-icon-card row, everything centred,
+  gradient-on-everything) remains in force and predates this list.

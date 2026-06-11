@@ -40,7 +40,8 @@ on the deployed `fly.dev` URL.
 Each rule's detail lives in one place — follow the pointer.
 
 - **One CTA per nav bar.** Four-zone structure, brand-traceable CTA colour. → `components/nav-bar.md`
-- **Banned default fonts.** No Inter / Roboto / Arial / Space Grotesk / system stacks as primary type without a written non-default justification. → `modules/CONCEIVE.md`
+- **Banned default fonts + selection procedure.** No Inter / Roboto / Arial / Space Grotesk / system stacks as primary type without a written non-default justification; the justification IS the 4-step selection procedure, and the saturated tier (Fraunces, Playfair, DM Sans, …) needs the same trace. → `modules/CONCEIVE.md` §3 + §6
+- **Quantified design thresholds.** Tracking floor, hero clamp ceiling, line-length band, muted-text contrast, reveal-safety. → `references/design-thresholds.md`
 - **No flat solid-colour primary sections** (background-depth rule). → `modules/CONCEIVE.md`
 - **B4 data integrity.** Every field traces to `prospects/{slug}/data.md`; unverified → the data-layer `CHECK` sentinel, rendered quietly ("auf Anfrage" / omitted row), never the raw bracketed string on a pitchable page; never invent. → `modules/DATA.md`
 - **Zero em-dash** (U+2014, `&mdash;`, `&#8212;`, typographic `--`). Fix at source; `validate-dist.py` enforces. → `modules/SHIP.md`
@@ -61,7 +62,14 @@ Load ONE module per phase; do not preload all four.
 
 ## Session entry (cold-load reading order)
 
-On a fresh session with a web-build task, read in this order BEFORE touching code
+On a fresh session with a web-build task, FIRST run
+`uv run tools/web-build-signals.py` (deterministic state probe: dirty site dirs,
+dev-server, per-site BRIEF/TEST/dist presence, latest critique scores) and lead
+with 2-3 pointed next-step picks derived from it — name the slugs and the phase
+module, with the reason attached — instead of opening with scope questions.
+Never auto-run the recommendation; propose, owner confirms.
+
+Then read in this order BEFORE touching code
 (skip files already loaded by `/comd_resume local-web`):
 
 1. `workspace/projects/local-web/REBUILD-SPEC.md` — the contract
@@ -84,7 +92,7 @@ ship order); (c) for a new prospect — vertical, city, public sources, taste an
 This checklist IS the contract — re-read it before declaring done. Each item is one
 line; the *how* lives in the linked module/reference. There is no competing checklist.
 
-1. **BRIEF complete** — 2-3 named anchors, design DNA, anti-patterns, articulated-WHY per call, 1-2 references intentionally NOT borrowed from. → `modules/CONCEIVE.md`
+1. **BRIEF complete** — 2-3 named anchors, design DNA, anti-patterns, articulated-WHY per call, 1-2 references intentionally NOT borrowed from, AND the second-order slop test passed (category + anti-reference must not predict the design lane). → `modules/CONCEIVE.md` §2
 2. **B4 data integrity** — every fact traces to `data.md` or carries `[BITTE PRÜFEN]`; no invented prices/menus/emails/phones/teams/hours/addresses. → `modules/DATA.md`
 3. **Deliverable-rule gate** — zero em-dash forms in source; `npm run build` → `validate-dist.py ./dist` passes; fix at source. → `modules/SHIP.md`
 4. **Real imagery, real-work, one grade** — every photo slot filled (no gradient placeholders); favour real-work/real-place over headset-smiler stock; ONE consistent warm grade across the page; `src/assets/{slug}/` committed (hermetic); `imagery.json` attribution; "Bilder: Pexels" credit. → `modules/BUILD.md`
@@ -94,20 +102,21 @@ line; the *how* lives in the linked module/reference. There is no competing chec
 8. **Depth hero (if used)** — at most ONE; poster fallback verified on no-JS / reduced-motion / ≤768px / no-WebGL / Save-Data; `depth-live.cjs` confirms live parallax. → `references/depth-hero.md`
 9. **nginx config locked** — `absolute_redirect off; port_in_redirect off; server_name_in_redirect off;` + the `try_files … =404` chain; no 301s ever. → `references/deploy-internals.md`
 10. **Performance gate** — Lighthouse mobile ≥95 P/BP/SEO on the DEPLOYED Fly URL; SEO `is-crawlable` waived only for intentional `noindex`. → `modules/SHIP.md`
-11. **Accessibility gate** — axe-core via CDP returns zero WCAG 2 A/AA violations on the deployed URL; Lighthouse CLI a11y is NOT authoritative here. → `references/a11y-verify.md`
+11. **Accessibility gate** — `tools/axe-check.cjs` returns zero WCAG 2 A/AA violations on the deployed URL (runs inside `local-web-deploy.py`); Lighthouse CLI a11y is NOT authoritative here. → `references/a11y-verify.md`
 12. **Comparative-judgment paragraph** — written match-then-exceed articulation vs ONE named anchor. "Looks fine to me" is not the gate. → `modules/CONCEIVE.md`
 13. **Owner ship order** — explicit go-ahead in the current conversation; no auto-deploy/PR/merge. → `rule_no_auto_commit`
-14. **Live-origin parity** — `uv run tools/local-web-deploy.py` reports `VERIFIED LIVE: … serves the current build`; a localhost render never satisfies this. → `modules/SHIP.md`
+14. **Live-origin parity + rendered behavior** — `uv run tools/local-web-deploy.py` reports `VERIFIED LIVE: … serves the current build` AND its post-deploy probes pass (hero actually paints, brand fonts loaded, no dead chrome); a localhost render never satisfies this. → `modules/SHIP.md`
 15. **Nav bar passes its component standard** — the 10-item acceptance checklist (one CTA, non-default type, brand-traceable CTA colour, full-screen mobile overlay, zero bar contrast violations, comparative-judgment paragraph). → `components/nav-bar.md`
 16. **Confident-big hero type** — the display face set BIG (scale + weight + tight tracking), sized to fill its column; reads confident, not "nice". → `modules/CONCEIVE.md` §0 (List B1)
-17. **One accent on warm neutrals** — single disciplined accent, warm-neutral base, no multi-accent, no pure-black-on-white. → `modules/CONCEIVE.md` §0 (List B3)
+17. **One accent on a justified base** — single disciplined accent; the base palette (warm / cool / dark / editorial white) is a per-site BRIEF-justified choice, never the unexamined cream default; no multi-accent, no pure-black-on-white. → `modules/CONCEIVE.md` §0 (List B3) + §6
 18. **Per-SET hero diversity** — a new or reworked site does not clone an existing site's hero *structure*; the set reads as N singular businesses, not one template. → `modules/CONCEIVE.md` §0 (List A1)
 19. **Logo / palette harmony** — the site accent echoes (or deliberately reconciles) a real brand mark's hue. → `modules/CONCEIVE.md` §0 (Logo / palette harmony gate)
 20. **No raw sentinel on a pitchable page** — every `CHECK` field renders as a quiet "auf Anfrage" / "wird ergänzt" or an omitted row, never the bracketed `[BITTE PRÜFEN]` string; `data.ts` keeps `CHECK` as the source of truth. → `modules/DATA.md`
 21. **Quiet-depth detail polish** — hairline borders, one shadow tier, no flat slab. → `modules/CONCEIVE.md` §0 (List B5)
 22. **German-sober tone** — no exclamation-marketing, no hype; calibrated craft over spectacle. → `modules/CONCEIVE.md` §0 (List A8)
+23. **TEST.md plan-then-evidence** — the site's `TEST.md` lists the planned gates BEFORE the verify run and carries the appended verbatim tool output after; a gate with no evidence block is an open gate. → `modules/SHIP.md`
 
-Items 16-22 are mechanically pre-screened (advisory) by `tools/audit-local-web-aesthetics.py`; that script never replaces the visual call — it just frees the eyeball pass to focus on grade, register, and "would the owner pay".
+Items 16-23 are mechanically pre-screened (advisory) by `tools/audit-local-web-aesthetics.py`, which also covers the `references/design-thresholds.md` floors/ceilings, the motion envelope, and the §6 saturation bands; `tools/local-web-deploy.py` runs the hard gates (aesthetics strict, axe, rendered-behavior probes) as part of the ship chain. Neither replaces the visual call — they free the eyeball pass to focus on grade, register, and "would the owner pay". A skipped or unrunnable check is a FAILED gate, never a waived one.
 
 If any item is open, the site is not shipped. Surface what is open and wait.
 
@@ -122,6 +131,7 @@ Load the smallest unit that answers the current need.
 | Step 3 — build, motion, imagery | `modules/BUILD.md` | module |
 | Step 4 — deliverable gate, deploy, a11y, live-origin | `modules/SHIP.md` | module |
 | The quantified motion table | `references/motion-craft.md` | reference |
+| Type/colour floors + ceilings, reveal-safety | `references/design-thresholds.md` | reference |
 | The axe-core-via-CDP a11y method | `references/a11y-verify.md` | reference |
 | Fly + nginx deploy internals, cached-301 trap | `references/deploy-internals.md` | reference |
 | The budgeted WebGL depth hero | `references/depth-hero.md` | reference |
@@ -142,7 +152,10 @@ Load the smallest unit that answers the current need.
 | Deploy + live-origin verify (canonical) | `uv run tools/local-web-deploy.py` |
 | Deploy internals | `app/Dockerfile`, `app/fly.toml`, `app/nginx.conf` |
 | Depth-hero live verify | `tools/depth-live.cjs` |
-| Advisory List-B pre-ship checklist (per site) | `tools/audit-local-web-aesthetics.py` |
+| a11y gate (axe-core via CDP, committed) | `tools/axe-check.cjs` |
+| Rendered-behavior probes (hero paint, fonts, motion) | `tools/verify-rendered.cjs`, `tools/local-web-shot.cjs` |
+| Advisory List-B pre-ship checklist (per site) | `tools/audit-local-web-aesthetics.py` (`--persist` snapshots, `--trend` score history) |
+| Session-entry state probe | `tools/web-build-signals.py` |
 
 ## Maintaining this skill (keep it from rotting back into a monolith)
 

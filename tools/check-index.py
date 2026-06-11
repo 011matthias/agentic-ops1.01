@@ -2,7 +2,7 @@
 # requires-python = ">=3.9"
 # dependencies = []
 # ///
-"""Assert every tools/*.py and tools/*.sh has a row in tools/INDEX.md.
+"""Assert every tools/*.py, *.sh, *.cjs, *.mjs has a row in tools/INDEX.md.
 
 Closes the recurring "tool added without an INDEX entry" friction (register
 #74, #133): tools/INDEX.md is auto-loaded at session start to reduce missed-tool
@@ -34,7 +34,7 @@ def main(tools_dir: Path = TOOLS, index_path: Path = INDEX) -> int:
     tools = sorted(
         p.name
         for p in tools_dir.iterdir()
-        if p.is_file() and p.suffix in (".py", ".sh") and p.name not in EXEMPT
+        if p.is_file() and p.suffix in (".py", ".sh", ".cjs", ".mjs") and p.name not in EXEMPT
     )
     missing = [t for t in tools if f"`{t}" not in index_text]
     if missing:
