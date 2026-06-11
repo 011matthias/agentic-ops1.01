@@ -179,3 +179,64 @@ def test_reconciliation_guarantee_invariant_holds():
     accounted.update(m.transaction_id for m in out.ambiguous)
     accounted.update(out.unmatched_transactions)
     assert accounted == {"t-exact", "t-fx", "t-unmatched"}
+
+
+# ── FX candidate gating (3.7 / ANNEALING A1) ────────────────────────
+# The 2026-06-11 calibration measured ~50x cross-product overshoot:
+# every USD transaction paired with every foreign receipt. These tests
+# pin the gate that keeps the plausible FX pairs and drops the rest.
+
+
+def test_fx_implausible_rate_is_dropped_not_judged():
+    """A BRL receipt whose implied rate is nowhere near the BRL->USD
+    band is not the same purchase: no FX_JUDGMENT candidate. The
+    receipt still surfaces (guarantee), it just isn't paired here."""
+    # 50 USD / 100 BRL = implied 0.5 — far outside the [0.15, 0.24] band.
+    txs = [tx("t1", "50.00", date(2026, 4, 15))]
+    rs = [receipt("r1", "100.00", date(2026, 4, 15), currency="BRL")]
+    out = match_month(txs, rs)
+    assert not out.judgment_required
+    assert out.unmatched_transactions == ["t1"]
+    assert out.unmatched_receipts == ["r1"]
+
+
+def test_fx_plausible_rate_emits_judgment():
+    """A BRL receipt converting at a plausible rate (implied ~0.19)
+    on the same date stays an FX_JUDGMENT candidate for the LLM."""
+    # 19 USD / 100 BRL = implied 0.19 — inside [0.15, 0.24].
+    txs = [tx("t1", "19.00", date(2026, 4, 15))]
+    rs = [receipt("r1", "100.00", date(2026, 4, 15), currency="BRL")]
+    out = match_month(txs, rs)
+    assert len(out.judgment_required) == 1
+    assert out.judgment_required[0].match_type == MatchType.FX_JUDGMENT
+
+
+def test_fx_date_too_far_is_dropped():
+    """In-band amount but the receipt date is outside the FX window:
+    not a candidate (a foreign charge does not post 10 days early)."""
+    txs = [tx("t1", "117.00", date(2026, 4, 15))]
+    rs = [receipt("r1", "100.00", date(2026, 4, 1), currency="EUR")]  # 14d off
+    out = match_month(txs, rs)
+    assert not out.judgment_required
+    assert out.unmatched_receipts == ["r1"]
+
+
+def test_fx_unprofiled_pair_is_date_gated_but_still_emitted():
+    """A currency pair with no band entry must NOT be silently dropped
+    (reconciliation guarantee for unmeasured currencies). It is gated
+    on date only and still handed to the LLM."""
+    txs = [tx("t1", "130.00", date(2026, 4, 15))]
+    rs = [receipt("r1", "100.00", date(2026, 4, 15), currency="GBP")]
+    out = match_month(txs, rs)
+    assert len(out.judgment_required) == 1
+    assert "unprofiled" in out.judgment_required[0].reason
+
+
+def test_fx_dateless_receipt_is_not_a_candidate():
+    """No receipt date => cannot judge FX plausibility => no candidate.
+    The receipt lands in unmatched_receipts, never silently dropped."""
+    txs = [tx("t1", "117.00", date(2026, 4, 15))]
+    rs = [receipt("r1", "100.00", None, currency="EUR")]
+    out = match_month(txs, rs)
+    assert not out.judgment_required
+    assert out.unmatched_receipts == ["r1"]

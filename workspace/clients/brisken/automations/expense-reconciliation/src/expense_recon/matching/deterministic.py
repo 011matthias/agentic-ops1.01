@@ -18,10 +18,29 @@ silent drops.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from collections.abc import Mapping
 from decimal import Decimal
 
 from .types import Match, MatchOutcome, MatchType, Receipt, Transaction
+
+
+# Plausible implied-rate bands per (receipt_ccy, tx_ccy), where the
+# implied rate is `tx.amount / receipt.detected_total`. These are NOT
+# FX prices; they are wide plausibility windows whose only job is to
+# stop a USD transaction from pairing with a foreign receipt it could
+# not possibly be (the O(N×M) cross-product, ANNEALING A1). A band is
+# wide on purpose: it must absorb DCC markup (observed up to 12.8% on
+# real Brisken receipts) plus intra-month rate drift, while still
+# rejecting a coincidental amount collision at a wrong rate.
+#
+# Calibrated 2026-06-11 against 98 real BRL/EUR->USD pairs (3b run):
+# observed BRL->USD implied rates ran ~0.17-0.215 (DCC pushed the top
+# end), EUR->USD ~1.16-1.25. Bands below pad generously beyond both.
+_DEFAULT_FX_RATE_BANDS: dict[tuple[str, str], tuple[Decimal, Decimal]] = {
+    ("BRL", "USD"): (Decimal("0.15"), Decimal("0.24")),
+    ("EUR", "USD"): (Decimal("1.00"), Decimal("1.30")),
+}
 
 
 @dataclass(frozen=True)
@@ -43,6 +62,27 @@ class MatchingConfig:
     probable_confidence: float = 0.85
     possible_confidence: float = 0.60
 
+    # ── FX candidate gating (3.7 / ANNEALING A1) ───────────────────
+    # A currency-mismatch pair is only emitted as FX_JUDGMENT when it
+    # is plausible: within `fx_date_window_days` AND (for a profiled
+    # currency pair) inside the implied-rate band. Foreign charges can
+    # post with more delay than same-currency ones, so this window is
+    # independent of date_probable_window_days. An UNPROFILED pair
+    # (no band entry) is gated on date only and still emitted — never
+    # silently dropped, preserving the reconciliation guarantee for
+    # currencies we have not yet measured.
+    fx_date_window_days: int = 5
+    fx_rate_bands: Mapping[tuple[str, str], tuple[Decimal, Decimal]] = field(
+        default_factory=lambda: dict(_DEFAULT_FX_RATE_BANDS)
+    )
+
+    def fx_band(
+        self, from_ccy: str, to_ccy: str
+    ) -> tuple[Decimal, Decimal] | None:
+        """Plausible implied-rate band for receipt->transaction currency,
+        or None if the pair is unprofiled."""
+        return self.fx_rate_bands.get((from_ccy, to_ccy))
+
 
 def match_one(
     tx: Transaction, receipt: Receipt, cfg: MatchingConfig
@@ -52,15 +92,62 @@ def match_one(
     Returns None when the candidate does not pass the minimum bar
     (no plausible amount or date relationship).
     """
-    # Currency mismatch -> short-circuit to FX judgment layer.
-    # This is the EUR-on-USD-card case Dirk specified on the call
-    # (call-outcomes "Matching approach"). The amount won't match
-    # 1:1; vendor / reference / mock-FX is the LLM's job, not this
-    # layer's.
+    # Currency mismatch -> FX judgment layer, but ONLY for plausible
+    # pairs. This is the EUR-on-USD-card case Dirk specified on the
+    # call (call-outcomes "Matching approach"); the amount won't match
+    # 1:1, so vendor / reference / FX reasoning is the LLM's job.
+    #
+    # 3.7 / ANNEALING A1: gate emission on date proximity AND (for a
+    # profiled currency pair) implied-rate plausibility. Without this
+    # gate every USD transaction pairs with every foreign receipt; the
+    # 2026-06-11 calibration measured 5,064 such junk pairs in one
+    # 119-transaction month (~50x the real FX-receipt count). The gate
+    # keeps the real pairs and drops the cross-product. FX still goes
+    # to the LLM (FX_JUDGMENT); we are filtering candidates, not
+    # auto-resolving them here.
     if (
         receipt.detected_currency
         and receipt.detected_currency != tx.transaction_currency
     ):
+        # Need a receipt amount + date to judge plausibility. Missing
+        # either => no deterministic FX candidate; the receipt still
+        # surfaces in `unmatched_receipts` for review (guarantee held).
+        if receipt.detected_total is None or receipt.detected_date is None:
+            return None
+        if tx.amount <= 0 or receipt.detected_total <= 0:
+            return None
+
+        candidate_dates = [tx.transaction_date]
+        if tx.posting_date and tx.posting_date != tx.transaction_date:
+            candidate_dates.append(tx.posting_date)
+        date_diff = min(
+            abs((receipt.detected_date - d).days) for d in candidate_dates
+        )
+        if date_diff > cfg.fx_date_window_days:
+            return None
+
+        implied_rate = tx.amount / receipt.detected_total
+        band = cfg.fx_band(receipt.detected_currency, tx.transaction_currency)
+        if band is not None:
+            lo, hi = band
+            if not (lo <= implied_rate <= hi):
+                # Implausible rate for this currency pair -> not the
+                # same purchase. Drop the candidate.
+                return None
+            rate_note = (
+                f"implied rate {implied_rate:.4f} within "
+                f"{receipt.detected_currency}->{tx.transaction_currency} "
+                f"band [{lo}, {hi}]"
+            )
+        else:
+            # Unprofiled currency pair: keep the candidate (date-gated
+            # only) so we never lose a real match for a currency we
+            # have not measured. Add a band entry to tighten later.
+            rate_note = (
+                f"unprofiled {receipt.detected_currency}->"
+                f"{tx.transaction_currency} pair; date-gated only"
+            )
+
         return Match(
             transaction_id=tx.transaction_id,
             document_id=receipt.document_id,
@@ -68,8 +155,8 @@ def match_one(
             confidence=0.5,  # placeholder; LLM layer revises
             reason=(
                 f"Currency mismatch: receipt {receipt.detected_currency} "
-                f"vs transaction {tx.transaction_currency}. "
-                f"Requires FX judgment."
+                f"vs transaction {tx.transaction_currency}, "
+                f"date diff {date_diff}d, {rate_note}. Requires FX judgment."
             ),
             requires_review=True,
         )
