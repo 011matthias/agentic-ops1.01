@@ -18,11 +18,77 @@ silent drops.
 """
 from __future__ import annotations
 
+import difflib
+import re
 from dataclasses import dataclass, field
 from collections.abc import Mapping
 from decimal import Decimal
 
 from .types import Match, MatchOutcome, MatchType, Receipt, Transaction
+
+
+_NON_ALNUM = re.compile(r"[^a-z0-9]+")
+
+
+def _normalize(s: str) -> str:
+    return _NON_ALNUM.sub(" ", s.lower()).strip()
+
+
+def vendor_similarity(stmt_vendor: str | None, receipt_vendor: str | None) -> float:
+    """Fuzzy similarity in [0,1] between a statement vendor string and a
+    receipt's detected vendor (ANNEALING A3 / 3.9).
+
+    Robust to the truncation banks apply: the Chase export prints
+    "MEGA CENTE CONSTR" for a receipt whose vendor is "Mega Center
+    Comercio De Materiais De Construcao Ltda". For each statement token
+    we take the best ratio against any receipt token and average over
+    statement tokens, so a truncated token ("cente") still scores high
+    against its full form ("center"). stdlib `difflib` only — no new
+    dependency until month-2 data proves it insufficient. Returns 0.0
+    when either side is missing.
+    """
+    if not stmt_vendor or not receipt_vendor:
+        return 0.0
+    s_tokens = [t for t in _normalize(stmt_vendor).split() if len(t) >= 3]
+    r_tokens = [t for t in _normalize(receipt_vendor).split() if len(t) >= 3]
+    if not s_tokens or not r_tokens:
+        return difflib.SequenceMatcher(
+            None, _normalize(stmt_vendor), _normalize(receipt_vendor)
+        ).ratio()
+    total = 0.0
+    for st in s_tokens:
+        total += max(
+            difflib.SequenceMatcher(None, st, rt).ratio() for rt in r_tokens
+        )
+    return total / len(s_tokens)
+
+
+def reference_match(tx: Transaction, receipt: Receipt) -> bool:
+    """True when the receipt's reference number appears in the statement
+    text (ANNEALING A3 / 3.9). Chase exports rarely carry a reference,
+    so this fires for banks that do (and for future statement formats);
+    it is a tie-break bonus, never a gate. 12/13 real receipts carried a
+    reference, so the signal exists on the receipt side already."""
+    ref = receipt.detected_reference
+    if not ref:
+        return False
+    ref_norm = _NON_ALNUM.sub("", ref.lower())
+    if len(ref_norm) < 4:  # too short to be a confident signal
+        return False
+    haystack = _NON_ALNUM.sub(
+        "", f"{tx.vendor_from_statement} {tx.raw_text}".lower()
+    )
+    return ref_norm in haystack
+
+
+def _signal(tx: Transaction, receipt: Receipt) -> tuple[float, float]:
+    """(reference-match, vendor-similarity) tie-break signal for one
+    candidate pair. Reference first because an exact reference hit is a
+    stronger identity signal than fuzzy vendor text."""
+    return (
+        1.0 if reference_match(tx, receipt) else 0.0,
+        vendor_similarity(tx.vendor_from_statement, receipt.detected_vendor),
+    )
 
 
 # Plausible implied-rate bands per (receipt_ccy, tx_ccy), where the
@@ -226,6 +292,40 @@ def match_one(
     return None
 
 
+@dataclass(frozen=True)
+class _Candidate:
+    """A scored (tx, receipt) pair plus the 3.9 tie-break signal, used
+    by the 3.8 bipartite assignment."""
+
+    match: Match
+    is_determ: bool
+    ref_signal: float
+    vendor_signal: float
+
+    @property
+    def sort_key(self) -> tuple[int, float, float, float]:
+        # Deterministic matches outrank FX for the same receipt; then
+        # confidence; then reference hit; then vendor similarity.
+        return (
+            1 if self.is_determ else 0,
+            self.match.confidence,
+            self.ref_signal,
+            self.vendor_signal,
+        )
+
+
+def _ties(a: _Candidate, b: _Candidate) -> bool:
+    """Two candidates are a genuine tie only when confidence AND both
+    3.9 signals match — i.e. the vendor / reference tie-break could not
+    separate them. Such a tx is ambiguous; a human picks."""
+    return (
+        a.is_determ == b.is_determ
+        and abs(a.match.confidence - b.match.confidence) < 0.001
+        and abs(a.ref_signal - b.ref_signal) < 0.001
+        and abs(a.vendor_signal - b.vendor_signal) < 0.01
+    )
+
+
 def match_month(
     transactions: list[Transaction],
     receipts: list[Receipt],
@@ -233,58 +333,100 @@ def match_month(
 ) -> MatchOutcome:
     """Match a month of transactions against a folder of receipts.
 
-    Implements v2 spec §15.1. Downstream LLM layer (§15.2) handles
-    entries returned in `judgment_required`. Tenant / legal-entity
-    scope is enforced at the candidate-pair level.
+    Implements v2 spec §15.1 with the 3.8 bipartite assignment: each
+    receipt is assigned to AT MOST ONE transaction (ANNEALING A2 — no
+    double-binding). Assignment is greedy by (deterministic-first,
+    confidence, reference-hit, vendor-similarity); the 3.9 signal
+    (ANNEALING A3) breaks ties and decides which transaction wins a
+    contested receipt. Genuine ties (confidence + both signals equal)
+    surface as ambiguous for human pick rather than an arbitrary
+    assignment.
+
+    Downstream LLM layer (§15.2) handles entries returned in
+    `judgment_required`. Tenant / legal-entity scope is enforced at the
+    candidate-pair level. The reconciliation guarantee (v2 spec §25.5)
+    holds: every transaction lands in exactly one of matches /
+    judgment_required / ambiguous / unmatched_transactions.
     """
     cfg = cfg or MatchingConfig()
     outcome = MatchOutcome()
 
-    by_tx: dict[str, list[Match]] = {}
+    cands_by_tx: dict[str, list[_Candidate]] = {}
     for tx in transactions:
         for receipt in receipts:
             if receipt.legal_entity_id != tx.legal_entity_id:
                 continue  # entity scope per v2 spec §4.2
             scored = match_one(tx, receipt, cfg)
-            if scored is not None:
-                by_tx.setdefault(tx.transaction_id, []).append(scored)
-
-    matched_receipts: set[str] = set()
-
-    for tx in transactions:
-        candidates = by_tx.get(tx.transaction_id, [])
-        if not candidates:
-            outcome.unmatched_transactions.append(tx.transaction_id)
-            continue
-
-        fx_only = [c for c in candidates if c.match_type == MatchType.FX_JUDGMENT]
-        determ = [c for c in candidates if c.match_type != MatchType.FX_JUDGMENT]
-
-        if determ:
-            determ.sort(key=lambda c: c.confidence, reverse=True)
-            best = determ[0]
-            tied = [
-                c for c in determ
-                if abs(c.confidence - best.confidence) < 0.001
-            ]
-            if len(tied) > 1:
-                outcome.ambiguous.extend(tied)
+            if scored is None:
                 continue
-            outcome.matches.append(best)
-            matched_receipts.add(best.document_id)
-        elif fx_only:
-            outcome.judgment_required.extend(fx_only)
+            ref_sig, vendor_sig = _signal(tx, receipt)
+            cands_by_tx.setdefault(tx.transaction_id, []).append(
+                _Candidate(
+                    match=scored,
+                    is_determ=scored.match_type != MatchType.FX_JUDGMENT,
+                    ref_signal=ref_sig,
+                    vendor_signal=vendor_sig,
+                )
+            )
 
-    for r in receipts:
-        if r.document_id in matched_receipts:
+    # Pass 1: detect genuinely ambiguous transactions (top deterministic
+    # candidates tie even after the 3.9 signal). These are excluded from
+    # assignment so an arbitrary pick is never made; the receipts they
+    # tie over are left free for other transactions.
+    ambiguous_tx_ids: set[str] = set()
+    for tx_id, cands in cands_by_tx.items():
+        determ = [c for c in cands if c.is_determ]
+        if not determ:
             continue
-        in_judgment = any(
-            j.document_id == r.document_id for j in outcome.judgment_required
-        )
-        in_ambiguous = any(
-            a.document_id == r.document_id for a in outcome.ambiguous
-        )
-        if not (in_judgment or in_ambiguous):
-            outcome.unmatched_receipts.append(r.document_id)
+        determ.sort(key=lambda c: c.sort_key, reverse=True)
+        tied = [c for c in determ if _ties(c, determ[0])]
+        if len(tied) > 1:
+            ambiguous_tx_ids.add(tx_id)
+            outcome.ambiguous.extend(c.match for c in tied)
+
+    # Pass 2: greedy bipartite assignment over all candidates from
+    # non-ambiguous transactions, highest sort_key first. A transaction
+    # and a receipt are each consumed at most once.
+    assignable: list[_Candidate] = [
+        c
+        for tx_id, cands in cands_by_tx.items()
+        if tx_id not in ambiguous_tx_ids
+        for c in cands
+    ]
+    assignable.sort(key=lambda c: c.sort_key, reverse=True)
+
+    assigned_tx: set[str] = set()
+    assigned_rec: set[str] = set()
+    for c in assignable:
+        if c.match.transaction_id in assigned_tx:
+            continue
+        if c.match.document_id in assigned_rec:
+            continue
+        if c.is_determ:
+            outcome.matches.append(c.match)
+        else:
+            outcome.judgment_required.append(c.match)
+        assigned_tx.add(c.match.transaction_id)
+        assigned_rec.add(c.match.document_id)
+
+    # Every transaction not assigned and not ambiguous is unmatched —
+    # either it had no candidate, or every candidate receipt was claimed
+    # by a higher-ranked transaction.
+    for tx in transactions:
+        if (
+            tx.transaction_id not in assigned_tx
+            and tx.transaction_id not in ambiguous_tx_ids
+        ):
+            outcome.unmatched_transactions.append(tx.transaction_id)
+
+    # Receipts not consumed by an assignment surface as unmatched, unless
+    # they are still referenced by an ambiguous tie awaiting a human pick.
+    ambiguous_docs = {a.document_id for a in outcome.ambiguous}
+    for r in receipts:
+        if r.document_id in assigned_rec:
+            continue
+        if r.document_id in ambiguous_docs:
+            continue
+        outcome.unmatched_receipts.append(r.document_id)
 
     return outcome

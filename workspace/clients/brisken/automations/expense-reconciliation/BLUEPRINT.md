@@ -344,8 +344,8 @@ without it.
 | # | Item | ANNEALING ref | Why |
 |---|---|---|---|
 | 3.7 | FX cross-product noise: require date + amount-band before emitting FX_JUDGMENT **[shipped 2026-06-11]** | A1 | Most cited noise source |
-| 3.8 | Bipartite receipt assignment (each receipt used at most once) | A2 | Real data will hit this |
-| 3.9 | Vendor fuzzy-match + reference number scoring | A3 | Tie-breaker for A2 |
+| 3.8 | Bipartite receipt assignment (each receipt used at most once) **[shipped 2026-06-11]** | A2 | Real data will hit this |
+| 3.9 | Vendor fuzzy-match + reference number scoring **[shipped 2026-06-11]** | A3 | Tie-breaker for A2 |
 | 3.10 | Refund handling (explicit bucket; pair negative-to-negative) | A5 | Likely month-1 hit |
 | 3.11 | Per-bank tolerance profiles (`account_id` keyed `MatchingConfig`) | A7 | Once Chris has 2+ cards |
 | 3.12 | Tip-tolerance per region (US 20%, UK 12%, EU 0%) | A6 | When EU/UK card lands |
@@ -358,15 +358,20 @@ without it.
       errors land in the "Parse errors" sheet.
 - [ ] Match rate on Chris's real month ≥ 90% (deterministic only,
       before LLM). v2 spec §15.5 baseline target.
-- [~] FX cases produce ≤ 2x the actual cross-currency-receipt count
-      (instead of the current O(N×M) cross-product). **3.7 shipped
-      2026-06-11: date + implied-rate-band gate cut Needs-Review
-      pair-rows 19-21x on the three real months (10,124→545 / 6,624→337
-      / 3,273→153). Now ~6x the foreign-receipt count, down from ~50x;
-      the residual is per-receipt candidate collision (40 lines with
-      >1 in-band candidate in March), which 3.8 + 3.9 collapse. Not
-      fully at ≤2x until those land.**
-- [ ] No receipt appears in two different Matches rows.
+- [x] FX cases produce ≤ 2x the actual cross-currency-receipt count
+      (instead of the original O(N×M) cross-product). **MET 2026-06-11.**
+      3.7 (date + implied-rate-band emission gate) cut Needs-Review
+      pair-rows 19-21x (10,124→545 / 6,624→337 / 3,273→153). 3.8
+      (bipartite assignment) then collapsed each foreign receipt to its
+      single best transaction: 43 / 35 / 18 FX pairs for the three
+      months — ~1x the foreign-receipt count (44 / 35 / 19), inside the
+      ≤2x target. 3.9's vendor signal chooses WHICH transaction wins
+      each receipt (verified on real data: "Mega Center"→"MEGA CENTE
+      CONSTR" sim 0.86, "Barreiros"→"BARREIROS TECIDO" 0.70).
+- [x] No receipt appears in two different Matches rows. **MET
+      2026-06-11** (3.8 bipartite; verified zero double-bound receipts
+      across all three real months; same-currency false matches dropped
+      4→1 / 0 / 5→1).
 - [ ] Refunds either pair to negative-receipt counterparts or land
       cleanly in a "Refunds" outcome bucket — never get matched to
       unrelated purchases.
