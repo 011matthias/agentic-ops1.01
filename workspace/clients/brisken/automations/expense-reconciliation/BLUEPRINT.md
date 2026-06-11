@@ -411,12 +411,14 @@ baselines against the remaining criteria:
   same-currency receipt was claimed by 4–5 different transactions
   inside the 20%/5-day probable window; only one claim can be true.
   "No receipt in two Matches rows" fails on month 1 as predicted.
-- **Report-writer defect exposed:** Summary "By card Spend" and the
-  invariant check count pair-ROWS, not unique transactions, so a
-  $8.8K month displays as $1.26M spend and the invariant line
-  false-alarms "BROKEN" while the engine-level invariant actually
-  holds (per-transaction outcomes sum exactly: 115+4=119 etc.). Fix
-  alongside 3.7 (new ANNEALING B-item).
+- **Report-writer defect exposed (ANNEALING A9, fixed 2026-06-11):**
+  Summary "By card Spend" and the invariant check counted pair-ROWS,
+  not unique transactions, so a $8.8K month displayed as $1.26M spend
+  and the invariant line false-alarmed "BROKEN" while the engine-level
+  invariant actually held (per-transaction outcomes sum exactly:
+  115+4=119 etc.). Fixed: Summary is now transaction-centric; By-card
+  Spend equals the statement charge sum to the cent and the invariant
+  reads OK on all three real months.
 - **Data-quality reality checks for ingest:** one ER line is dated a
   year earlier than its report month (manual-entry year typo); 3/101
   lines have no counterpart anywhere in the 6-card export (large

@@ -112,3 +112,67 @@ def test_explain_sheet_present_only_when_requested(tmp_path):
     by_tx = {r[2]: r[5] for r in rows}  # vendor -> Outcome
     assert by_tx["AMAZON"] == "MATCHED"
     assert by_tx["MYSTERY LLC"] == "UNMATCHED"
+
+
+def _summary_labels(wb):
+    ws = wb["Summary"]
+    return {
+        row[0]: row[1]
+        for row in ws.iter_rows(values_only=True)
+        if row and isinstance(row[0], str) and len(row) > 1
+    }
+
+
+def _card_spend(wb) -> float:
+    """Sum the 'By card' Spend column."""
+    ws = wb["Summary"]
+    total = 0.0
+    in_card = False
+    for row in ws.iter_rows(values_only=True):
+        if row[0] == "Card" and row[1] == "Spend":
+            in_card = True
+            continue
+        if in_card:
+            if row[0] is None:
+                break
+            if isinstance(row[1], (int, float)):
+                total += row[1]
+    return total
+
+
+def test_summary_counts_transactions_not_pair_rows(tmp_path):
+    """A9: a transaction with multiple FX candidate receipts must count
+    as ONE in every Summary figure. Before the fix, judgment_required's
+    per-candidate entries inflated the invariant, the review count, and
+    Spend (a real $8.8K month rendered as $1.26M)."""
+    tx_fx = Transaction(
+        transaction_id="t-fx", legal_entity_id="le1", account_id="chase-2838",
+        transaction_date=date(2026, 4, 15), posting_date=None,
+        amount=Decimal("100"), transaction_currency="USD",
+        account_card_currency="USD", vendor_from_statement="MEGA CENTER",
+    )
+    # Two candidate receipts for the SAME transaction -> two
+    # judgment_required entries (the pre-bipartite reality).
+    rec_a = Receipt(
+        document_id="ra", legal_entity_id="le1", detected_date=date(2026, 4, 15),
+        detected_total=Decimal("525"), detected_currency="BRL", detected_vendor="A",
+    )
+    rec_b = Receipt(
+        document_id="rb", legal_entity_id="le1", detected_date=date(2026, 4, 15),
+        detected_total=Decimal("530"), detected_currency="BRL", detected_vendor="B",
+    )
+    outcome = MatchOutcome(
+        judgment_required=[
+            Match("t-fx", "ra", MatchType.FX_JUDGMENT, 0.5, "fx a", True),
+            Match("t-fx", "rb", MatchType.FX_JUDGMENT, 0.5, "fx b", True),
+        ],
+    )
+    out = write_report(outcome, [tx_fx], [rec_a, rec_b], tmp_path / "r.xlsx")
+    wb = load_workbook(out)
+    labels = _summary_labels(wb)
+
+    assert labels["Transactions"] == 1
+    assert labels["Needs Review (FX / ambiguous)"] == 1  # not 2
+    assert labels["Reconciliation invariant"] == "OK"    # not BROKEN
+    # Spend = the single card charge, once — not the summed BRL receipts.
+    assert _card_spend(wb) == 100.0
