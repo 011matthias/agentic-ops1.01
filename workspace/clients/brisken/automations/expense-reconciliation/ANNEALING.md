@@ -630,7 +630,24 @@ posted in EUR, receipt in EUR).
 spans three currencies (USD/EUR/BRL), so the first full real-month
 run WILL exercise this. Re-check before slice 3b tuning.
 
-### E8. OCR calibration script lives in %TEMP%, breaks between sessions
+### E8. Calibration scripts live in %TEMP%, break between sessions — PARTIALLY RESOLVED 2026-06-11
+
+**Resolution (2026-06-11, matching half):** the MATCHING calibration
+is now a first-class subcommand, `expense-recon calibrate --config X`
+(`src/expense_recon/calibrate.py`). It runs the matcher and reports the
+distinct-tx outcome split, the reconciliation invariant, the receipt
+double-binding check, the FX-pair-vs-foreign-receipt multiplicity (the
+≤2x slice-3 target), and per-card spend; it exits non-zero on a broken
+invariant or a double-bound receipt, so it doubles as a regression gate
+on a known-good month. This retires the matching half of the throwaway
+`%TEMP%\brisken_3b_calibration.py` driver (its bespoke ER-PDF parsing +
+Chase-xlsx slicing stay as input-prep, tied to the pending Zoho-entry
+architecture). 6 tests in `test_calibrate.py`.
+
+**Still open (OCR half):** the OCR-coverage calibration
+(`brisken_ocr_calibration.py` — folder OCR ingest, per-file field table,
+header coverage, cost) is still a temp script. Natural home is an
+`expense-recon calibrate --ocr <folder>` mode on the same subcommand.
 
 **Where:** `%TEMP%\brisken_ocr_calibration.py` (uncommitted, staged
 2026-06-10, re-staged 2026-06-11)
