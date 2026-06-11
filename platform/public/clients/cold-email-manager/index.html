@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<!-- deliverable-allow: copy-clipboard, keyboard-search | reason: no code/command blocks on this page, and a Ctrl+K search UI on a one-page three-section proposal adds chrome against the owner's 2026-06-11 minimal-site directive; native Ctrl+F suffices -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Cold Email Manager: Price, Process, Proof</title>
+<script>(function(){var t=localStorage.getItem('cold-email-manager-theme');
+var d=document.documentElement;
+d.setAttribute('data-theme',
+t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');
+})();</script>
+<style>
+:root{--bg:#fff;--surface:#f8fafc;--text:#0f172a;--muted:#475569;--border:#e2e8f0;--accent:#2563eb;--accent-bg:#eff6ff}
+[data-theme=dark]{--bg:#0b1220;--surface:#111a2e;--text:#e2e8f0;--muted:#94a3b8;--border:#1e293b;--accent:#60a5fa;--accent-bg:#172554}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;padding-top:56px}
+.site-nav{position:fixed;top:0;left:0;right:0;height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:var(--bg);border-bottom:1px solid var(--border);z-index:10}
+.nav-left{display:flex;align-items:center;gap:8px;font-weight:600}
+.nav-client{color:var(--muted);font-weight:400}
+.nav-links{display:flex;gap:16px;font-size:14px}
+.nav-links a{color:var(--muted);text-decoration:none}
+.nav-links a.active,.nav-links a:hover{color:var(--accent)}
+.nav-right{display:flex;align-items:center;gap:12px}
+.nav-status{font-size:12px;padding:2px 10px;border:1px solid var(--border);border-radius:999px;color:var(--muted)}
+.nav-theme{background:none;border:1px solid var(--border);border-radius:999px;padding:4px 10px;cursor:pointer;color:var(--text);font-size:13px}
+.sidebar{position:fixed;top:56px;left:0;bottom:0;width:200px;padding:24px 16px;border-right:1px solid var(--border);background:var(--bg)}
+.sidebar-label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:12px}
+.step-list{list-style:none}
+.step-item{margin-bottom:4px}
+.step-link{display:flex;gap:10px;align-items:baseline;padding:6px 8px;border-radius:8px;color:var(--muted);text-decoration:none;font-size:14px}
+.step-link:hover{background:var(--surface);color:var(--text)}
+.step-num{font-size:12px;color:var(--accent);font-variant-numeric:tabular-nums}
+.main-content{margin-left:200px;padding:40px 24px}
+.content-inner{max-width:720px;margin:0 auto}
+.hero{margin-bottom:40px}
+.hero-badge{display:inline-block;font-size:12px;padding:3px 12px;border-radius:999px;background:var(--accent-bg);color:var(--accent);margin-bottom:12px}
+h1{font-size:30px;line-height:1.25;margin-bottom:8px}
+.hero-sub{color:var(--muted)}
+.stats-row{display:flex;gap:12px;margin-top:20px;flex-wrap:wrap}
+.stat-card{flex:1;min-width:140px;border:1px solid var(--border);border-radius:12px;padding:14px;background:var(--surface)}
+.stat-value{font-size:20px;font-weight:600}
+.stat-label{font-size:13px;color:var(--muted)}
+section{margin-bottom:44px}
+h2{font-size:21px;margin-bottom:12px;padding-top:8px}
+p{margin-bottom:12px}
+ul{margin:0 0 12px 20px}
+ol{margin:0 0 12px 20px}
+li{margin-bottom:6px}
+.callout{border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:14px 16px;background:var(--surface);margin:16px 0}
+.callout-title{font-weight:600;margin-bottom:6px}
+.footer{margin-left:200px;padding:20px 24px;border-top:1px solid var(--border);color:var(--muted);font-size:13px;text-align:center}
+@media(max-width:768px){
+.sidebar{display:none}
+.main-content,.footer{margin-left:0}
+.nav-links{display:none}
+}
+@media print{
+.site-nav,.sidebar,.mobile-nav-toggle,.cta-section{display:none!important}
+.main-content{margin-left:0!important}
+body{padding-top:0!important}
+h2{page-break-before:always}
+h2:first-of-type{page-break-before:avoid}
+}
+</style>
+</head>
+<body data-updated="2026-06-11">
+
+<nav class="site-nav">
+  <div class="nav-left">UnpauseAI <span class="nav-client">&middot; Cold Email Manager</span></div>
+  <div class="nav-links">
+    <a href="#price" class="active">Price</a>
+    <a href="#process">Process</a>
+    <a href="#proof">Proof</a>
+  </div>
+  <div class="nav-right">
+    <span class="nav-status">Proposal</span>
+    <button class="nav-theme" onclick="toggleTheme()" aria-label="Toggle theme">&#9788;/&#9790;</button>
+    <script>function toggleTheme(){
+      var d=document.documentElement;
+      var c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+      d.setAttribute('data-theme',c);
+      localStorage.setItem('cold-email-manager-theme',c);
+    }</script>
+  </div>
+</nav>
+
+<aside class="sidebar">
+  <div class="sidebar-label">Sections</div>
+  <ul class="step-list">
+    <li class="step-item"><a class="step-link" href="#price"><span class="step-num">1</span> Price</a></li>
+    <li class="step-item"><a class="step-link" href="#process"><span class="step-num">2</span> Process</a></li>
+    <li class="step-item"><a class="step-link" href="#proof"><span class="step-num">3</span> Proof</a></li>
+  </ul>
+</aside>
+
+<main class="main-content">
+<div class="content-inner">
+
+<div class="hero">
+  <span class="hero-badge">Proposal</span>
+  <h1>Lists built clean, campaigns launched accurately</h1>
+  <p class="hero-sub">Your strategy stays yours. This page answers the three questions that matter: price, process, and proof.</p>
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-value">$36/hr</div><div class="stat-label">time shown per task</div></div>
+    <div class="stat-card"><div class="stat-value">2&ndash;4 hrs</div><div class="stat-label">typical list-to-launch cycle</div></div>
+    <div class="stat-card"><div class="stat-value">3 campaigns</div><div class="stat-label">live today in a client operation</div></div>
+  </div>
+</div>
+
+<section id="price">
+  <h2>1. The price</h2>
+  <p>$36 an hour. A typical cycle, from your ICP filters to a launched campaign, runs <strong>2 to 4 hours</strong>: saved list built, bad fits removed, emails verified, leads synced, mapping checked, campaign live.</p>
+  <p>Every completion note includes the time spent, so you see cost per task, not an open meter. An experienced operator spends fewer hours per cycle than a generalist, which keeps the per-task total in a normal range while the launch gets double-checked.</p>
+</section>
+
+<section id="process">
+  <h2>2. The process, per task</h2>
+  <p>Your instructions run through the same cycle every time:</p>
+  <ol>
+    <li>Your instruction becomes a written checklist before any tool gets opened</li>
+    <li>The saved list is built to your filters (industry, title, company size, geography, keywords) and saved under your naming convention, so it's reproducible</li>
+    <li>A sample is reviewed against the ICP before the full export; bad-fit prospects come out and the removal logic is noted</li>
+    <li>Every email is verified (deliverable / catch-all / invalid) before leads sync to the campaign tool</li>
+    <li>Campaign mapping is checked field by field against your instructions before go-live</li>
+    <li>You get a short completion note: what was built, where it's saved, what was flagged, time spent</li>
+  </ol>
+  <div class="callout">
+    <div class="callout-title">Flags come before launch, not after</div>
+    A filter pulling the wrong titles, list quality below normal, a mapping mismatch: these get raised to you before the campaign goes live. Catching them after costs sender reputation and burned leads.
+  </div>
+  <p>Apollo, Instantly, and LinkedIn Sales Navigator are daily drivers. Clay and Smartlead follow the same patterns; new lead databases are quick to pick up.</p>
+</section>
+
+<section id="proof">
+  <h2>3. Proof</h2>
+  <p>All of this is from one live client operation running today:</p>
+  <ul>
+    <li>3 Instantly campaigns active right now, sending across multiple warmed domains</li>
+    <li>Apollo ICP filters built as tiered sets, sample-validated on 200 contacts before the full pull</li>
+    <li>Every address verified (deliverable / catch-all / invalid) before it enters a campaign</li>
+    <li>A sequence-timing bug across the 3 live campaigns caught and fixed by reading the Instantly API spec instead of trusting the UI</li>
+  </ul>
+  <p>That last one is what "double-check work before marking it complete" looks like in practice. Reference available privately on request.</p>
+</section>
+
+</div>
+</main>
+
+<div class="footer">
+  Prepared by UnpauseAI &middot; admin@unpauseai.com &middot; 2026 &middot; Last updated: 2026-06-11
+</div>
+
+</body>
+</html>
