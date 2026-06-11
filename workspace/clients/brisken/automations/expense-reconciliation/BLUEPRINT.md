@@ -366,6 +366,61 @@ without it.
       unrelated purchases.
 - [ ] All 6 defensive items (3.1–3.6) land before any real-data run.
 
+**Slice 3b calibration result (2026-06-11) — first run on three real
+months.** Bank side: Chase multi-card activity export (6 cards in one
+file, 2023-11 → 2026-06) + 4 statement PDFs, landed in git-ignored
+`context/` the same day. Expense side: the ER-00214/215/216 lines
+(Mar/Apr/May 2026; 45+36+20 = 101 lines), extracted from the Zoho PDFs
+and verified to the cent against each report's per-currency totals.
+Engine ran all three months end-to-end with zero stack traces and zero
+parse errors (first acceptance criterion holds on real data). Measured
+baselines against the remaining criteria:
+
+- **Match ceiling is high; deterministic floor is near zero.** A
+  calibration-side alignment (date ±5d, amount within ±16% of Zoho's
+  stamped USD estimate) finds a statement counterpart for **98/101**
+  lines. The engine's deterministic layer matched 9 transactions
+  total across the quarter, of which **at most 2 are true** (1
+  certain: the month's only exact same-currency pair). Cause: ~97% of
+  the expense lines are foreign-currency (BRL/EUR) on USD cards, so
+  the currency-mismatch branch short-circuits nearly everything to
+  FX_JUDGMENT. On this client's data profile the "FX = LLM judgment
+  only" split makes the LLM load-bearing for ~95% of volume —
+  inverting the "no AI where deterministic works" directive. 3.7 must
+  therefore become a deterministic FX band (convert at a daily rate,
+  then band-match), not merely a gate in front of the LLM.
+- **FX band, empirically calibrated:** of 98 aligned pairs, 72 sit
+  within 1% of the stamped-rate estimate, 84 within 3%, and the tail
+  runs to 12.8% (DCC markups; receipts confirm 6–12% printed DCC
+  fees). Design: ≤3% high-confidence, 3–13% DCC-suspect (review),
+  >13% reject. 87/98 lines had >1 candidate inside the band, so 3.9
+  (vendor fuzzy + reference) is required for uniqueness, with 3.8 on
+  top.
+- **Cross-product measured:** 5,064 / 3,312 / 1,639 FX pair-rows for
+  months of 119 / 92 / 91 transactions — vs the ≤2×-receipts target
+  (~90 pairs/month), a ~50× overshoot. A month's Needs-Review sheet
+  is 10,124 rows. Confirms A1 as the top item by an order of
+  magnitude.
+- **Double-binding live (A2/A4/A6):** each month's single
+  same-currency receipt was claimed by 4–5 different transactions
+  inside the 20%/5-day probable window; only one claim can be true.
+  "No receipt in two Matches rows" fails on month 1 as predicted.
+- **Report-writer defect exposed:** Summary "By card Spend" and the
+  invariant check count pair-ROWS, not unique transactions, so a
+  $8.8K month displays as $1.26M spend and the invariant line
+  false-alarms "BROKEN" while the engine-level invariant actually
+  holds (per-transaction outcomes sum exactly: 115+4=119 etc.). Fix
+  alongside 3.7 (new ANNEALING B-item).
+- **Data-quality reality checks for ingest:** one ER line is dated a
+  year earlier than its report month (manual-entry year typo); 3/101
+  lines have no counterpart anywhere in the 6-card export (large
+  installment-able purchase, a fuel charge) — either another
+  card/account exists outside this export or payment mode is wrong on
+  those lines. Mode→card mapping resolved empirically for the three
+  active modes; one mode names a card last-4 with zero transactions
+  in the export (likely reissued). Details in git-ignored
+  `context/2026-06-11-expense-report-samples.md`.
+
 **Effort:** 3a = ~2 days. 3b = ~4–6 days depending on what real data
 surfaces.
 
