@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- deliverable-allow: copy-clipboard | reason: presentation deck with no code/command blocks; requirement applies to code blocks only -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Brisken Lead Generation Strategy</title>
+<script>(function(){var t=localStorage.getItem('theme');
+  var d=document.documentElement;
+  d.setAttribute('data-theme',
+    t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');
+})();</script>
+<style>
+  :root, [data-theme="light"] {
+    --bg: #f8fafc; --surface: #ffffff; --border: #e2e8f0;
+    --text: #0f172a; --muted: #64748b;
+    --blue: #2563eb; --blue-bg: #eff6ff;
+    --green: #059669; --green-bg: #ecfdf5;
+    --orange: #d97706; --orange-bg: #fffbeb;
+    --purple: #7c3aed; --purple-bg: #f5f3ff;
+  }
+  [data-theme="dark"] {
+    --bg: #0b1220; --surface: #111a2e; --border: #233149;
+    --text: #e6edf7; --muted: #8fa3bf;
+    --blue: #60a5fa; --blue-bg: #14213a;
+    --green: #34d399; --green-bg: #0d2a22;
+    --orange: #fbbf24; --orange-bg: #2d2208;
+    --purple: #a78bfa; --purple-bg: #221a3a;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.55;
+  }
+  .site-nav {
+    position: sticky; top: 0; z-index: 50; display: flex; align-items: center;
+    justify-content: space-between; padding: 12px 28px;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+  }
+  .nav-left { font-weight: 700; font-size: 15px; }
+  .nav-client { color: var(--muted); font-weight: 400; }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .nav-status {
+    font-size: 12px; padding: 3px 10px; border-radius: 999px;
+    background: var(--blue-bg); color: var(--blue); font-weight: 600;
+  }
+  .nav-hint { font-size: 12px; color: var(--muted); }
+  .nav-theme {
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    border-radius: 999px; padding: 4px 12px; cursor: pointer; font-size: 13px;
+  }
+  .main-content { max-width: 980px; margin: 0 auto; padding: 36px 28px 64px; }
+
+  .hero { margin-bottom: 36px; }
+  .hero-badge {
+    display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--blue); background: var(--blue-bg);
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px;
+  }
+  h1 { font-size: 32px; line-height: 1.2; margin-bottom: 10px; }
+  .hero-sub { color: var(--muted); font-size: 16px; max-width: 700px; }
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 24px; }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .stat-value { font-size: 22px; font-weight: 700; color: var(--blue); }
+  .stat-label { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  h2 {
+    font-size: 21px; margin: 44px 0 6px; padding-top: 18px;
+    border-top: 1px solid var(--border);
+  }
+  .h2-sub { color: var(--muted); font-size: 14px; margin-bottom: 16px; }
+  h3 { font-size: 15px; margin: 18px 0 8px; }
+  p { margin-bottom: 10px; }
+  .src { font-size: 12px; color: var(--muted); }
+
+  .zones { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 16px 0; }
+  .zone { border-radius: 12px; padding: 16px 18px; border: 1px solid var(--border); background: var(--surface); }
+  .zone h3 { margin-top: 0; }
+  .zone-blue { border-left: 4px solid var(--blue); }
+  .zone-green { border-left: 4px solid var(--green); }
+  .zone-purple { border-left: 4px solid var(--purple); }
+  .zone-orange { border-left: 4px solid var(--orange); }
+  .zone .big { font-size: 26px; font-weight: 700; }
+  .zone ul { margin: 8px 0 0 18px; font-size: 14px; }
+  .zone li { margin-bottom: 4px; }
+
+  .flow { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 18px 0; }
+  .flow-step {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 10px; position: relative; font-size: 13px;
+  }
+  .flow-step .num {
+    display: inline-flex; width: 22px; height: 22px; border-radius: 50%;
+    background: var(--blue); color: #fff; font-size: 12px; font-weight: 700;
+    align-items: center; justify-content: center; margin-bottom: 6px;
+  }
+  .flow-step b { display: block; font-size: 13px; margin-bottom: 3px; }
+  .flow-step span { color: var(--muted); font-size: 12px; }
+  .flow-step:not(:last-child)::after {
+    content: "\2192"; position: absolute; right: -10px; top: 14px;
+    color: var(--muted); font-size: 13px; z-index: 1;
+  }
+
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  th { text-align: left; padding: 8px 10px; border-bottom: 2px solid var(--border); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .tag {
+    display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .tag-job { background: var(--green-bg); color: var(--green); }
+  .tag-cs { background: var(--blue-bg); color: var(--blue); }
+
+  .timeline-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0; }
+  .tl-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px; font-size: 13px;
+  }
+  .tl-card .wk { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--purple); }
+  .tl-card b { display: block; margin: 4px 0 3px; font-size: 13.5px; }
+  .tl-card span { color: var(--muted); font-size: 12.5px; }
+
+  .gantt { margin: 18px 0; font-size: 12.5px; }
+  .gantt-row { display: grid; grid-template-columns: 150px repeat(8, 1fr); gap: 3px; align-items: center; margin-bottom: 6px; }
+  .gantt-label { font-weight: 600; font-size: 12.5px; padding-right: 8px; }
+  .gantt-cell { height: 22px; border-radius: 4px; background: var(--border); opacity: .35; }
+  .gantt-cell.on { opacity: 1; }
+  .g-blue.on { background: var(--blue); }
+  .g-green.on { background: var(--green); }
+  .g-orange.on { background: var(--orange); }
+  .g-purple.on { background: var(--purple); }
+  .gantt-head { display: grid; grid-template-columns: 150px repeat(8, 1fr); gap: 3px; margin-bottom: 6px; color: var(--muted); font-size: 11px; text-align: center; }
+  .gantt-head div:first-child { text-align: left; }
+
+  .bant { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0; }
+  .bant-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px; font-size: 13px;
+  }
+  .bant-card .letter {
+    font-size: 24px; font-weight: 800; color: var(--purple); display: block; margin-bottom: 4px;
+  }
+  .bant-card b { display: block; margin-bottom: 4px; }
+  .bant-card span { color: var(--muted); font-size: 12.5px; }
+
+  .callout {
+    border-radius: 12px; padding: 14px 18px; margin: 16px 0;
+    background: var(--orange-bg); border: 1px solid var(--border);
+    border-left: 4px solid var(--orange); font-size: 14px;
+  }
+  .callout.green { background: var(--green-bg); border-left-color: var(--green); }
+  .callout-title { font-weight: 700; display: block; margin-bottom: 3px; }
+
+  .footer {
+    margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 13px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+
+  #searchOverlay {
+    display: none; position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 100;
+    padding-top: 12vh;
+  }
+  #searchOverlay.open { display: block; }
+  .search-box {
+    max-width: 520px; margin: 0 auto; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; box-shadow: 0 18px 50px rgba(0,0,0,.3);
+  }
+  .search-box input {
+    width: 100%; border: none; outline: none; padding: 14px 16px; font-size: 15px;
+    background: var(--surface); color: var(--text);
+  }
+  .search-results { max-height: 320px; overflow-y: auto; border-top: 1px solid var(--border); }
+  .search-results a {
+    display: block; padding: 10px 16px; color: var(--text); text-decoration: none; font-size: 14px;
+  }
+  .search-results a:hover, .search-results a.sel { background: var(--blue-bg); }
+
+  @media (max-width: 760px) {
+    .stats-row, .bant { grid-template-columns: repeat(2, 1fr); }
+    .flow { grid-template-columns: repeat(2, 1fr); }
+    .flow-step:not(:last-child)::after { content: ""; }
+    .zones, .timeline-strip { grid-template-columns: 1fr; }
+    .gantt-row, .gantt-head { grid-template-columns: 90px repeat(8, 1fr); }
+  }
+  @media print {
+    .site-nav, #searchOverlay { display: none !important; }
+    body { background: #fff; }
+    .main-content { padding-top: 0; max-width: 100%; }
+    h2 { page-break-before: always; }
+    h2:first-of-type, .hero + h2 { page-break-before: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="site-nav">
+  <div class="nav-left">UnpauseAI <span class="nav-client">&middot; Brisken Lead Generation</span></div>
+  <div class="nav-right">
+    <span class="nav-hint">Ctrl/Cmd+K to jump</span>
+    <span class="nav-status">Strategy Proposal</span>
+    <button class="nav-theme" onclick="(function(){
+      var d=document.documentElement;
+      var c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+      d.setAttribute('data-theme',c);
+      localStorage.setItem('theme',c);
+    })()" aria-label="Toggle theme">&#9788;/&#9790;</button>
+  </div>
+</nav>
+
+<main class="main-content">
+
+<section class="hero">
+  <span class="hero-badge">Strategy &middot; SAP Treasury Lead Generation</span>
+  <h1>A standing pipeline of qualified treasury meetings for Brisken</h1>
+  <p class="hero-sub">An outbound engine that finds US enterprises investing in SAP treasury, reaches the people who own that decision, and delivers BANT-qualified discovery meetings to your calendar. Built and run by UnpauseAI; you take the meetings.</p>
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-value">~27,000</div><div class="stat-label">S/4HANA customers (SAP, end-2024); each migration re-opens treasury</div></div>
+    <div class="stat-card"><div class="stat-value">24</div><div class="stat-label">US accounts already verified with direct SAP treasury signals</div></div>
+    <div class="stat-card"><div class="stat-value">7</div><div class="stat-label">of them with live SAP Treasury job postings right now</div></div>
+    <div class="stat-card"><div class="stat-value">2</div><div class="stat-label">channels: LinkedIn from day one, email at domain warm-up</div></div>
+  </div>
+</section>
+
+<h2 id="why-now">Why now</h2>
+<p class="h2-sub">The market has a built-in deadline working in Brisken's favor.</p>
+<p>SAP ends mainstream maintenance for ECC in 2027 (2030 with extended maintenance). Every company moving to S/4HANA re-evaluates its treasury setup, because S/4HANA replaces classic Cash Management outright. Independent 2025 research (Precisely) puts 59% of SAP shops fully or partially live on S/4HANA, up 13 points in one year; the remainder are in or approaching the window where Brisken's "12x faster implementation" pitch lands hardest.</p>
+
+<h2 id="market">Who we go after</h2>
+<p class="h2-sub">Two rings, worked in priority order. Both already sized from public data.</p>
+<div class="zones">
+  <div class="zone zone-blue">
+    <h3>Ring 1: companies already on SAP Treasury</h3>
+    <div class="big">~182 US accounts</div>
+    <p class="src">Enlyft technographics: 628 worldwide, 29% US share (indicative). Skews large: most common profile is 10,000+ employees, $1B+ revenue.</p>
+    <ul>
+      <li>Angle: OnePilot applications, optimization, Bank Fee Portal</li>
+      <li>They already believe in SAP treasury; the sale is depth</li>
+    </ul>
+  </div>
+  <div class="zone zone-green">
+    <h3>Ring 2: the S/4HANA migration cohort</h3>
+    <div class="big">~27,000 and growing</div>
+    <p class="src">SAP 2024 Integrated Report. The slice with treasury hiring or migration announcements is the live-intent segment we sweep weekly.</p>
+    <ul>
+      <li>Angle: treasury workstream of the migration, RAPSODY 4-week packages</li>
+      <li>Deadline pressure does the urgency work for us</li>
+    </ul>
+  </div>
+</div>
+
+<h3>Proof this works before a dollar is spent: accounts already found</h3>
+<p>From public signals alone (job postings, case studies, conference talks), 24 US accounts are verified. The seven below are hiring for SAP Treasury roles right now; a job posting is a company stating, in its own words, that it is investing in this exact system.</p>
+<table>
+  <thead><tr><th>Company</th><th>Signal</th><th>What it says</th></tr></thead>
+  <tbody>
+    <tr><td>Corteva Agriscience</td><td><span class="tag tag-job">Hiring</span></td><td>SAP Business Process Expert, Treasury (TRM) + SAP Treasury Solution Engineer on S/4HANA</td></tr>
+    <tr><td>Toyota Motor Sales USA</td><td><span class="tag tag-job">Hiring</span></td><td>S/4HANA Treasury &amp; Risk Management subject-matter expert</td></tr>
+    <tr><td>Johnson &amp; Johnson</td><td><span class="tag tag-job">Hiring</span></td><td>Director, SAP Financial Systems Treasury: in-house cash, payment factory, SWIFT, FX</td></tr>
+    <tr><td>Ford</td><td><span class="tag tag-job">Hiring</span></td><td>Sr. Software Engineer, SAP Treasury and Risk Management</td></tr>
+    <tr><td>Colgate-Palmolive</td><td><span class="tag tag-job">Hiring</span></td><td>Sr. Manager, IT SAP Treasury: Cash Management, Bank Account Management, TRM</td></tr>
+    <tr><td>Amtrak</td><td><span class="tag tag-job">Hiring</span></td><td>S/4HANA FICO analyst with Treasury and Cash Management scope; migration in progress</td></tr>
+    <tr><td>Pennsylvania Turnpike Commission</td><td><span class="tag tag-job">Hiring</span></td><td>SAP Treasury SME, ECC + S/4HANA configuration</td></tr>
+  </tbody>
+</table>
+<p class="src">Remaining 17 verified accounts include Microsoft, Google, Estee Lauder, Intuitive Surgical, Freeport LNG, Owens Corning, Northrop Grumman, Adobe (case studies, conference talks, technographic listings). Full source list available.</p>
+
+<h2 id="personas">Who we talk to</h2>
+<p class="h2-sub">3 to 5 people per account; treasury decisions are multi-stakeholder, so we thread the account, not one inbox.</p>
+<div class="bant" style="grid-template-columns: repeat(3, 1fr);">
+  <div class="bant-card"><b>Treasury leadership</b><span>Treasurer, VP / Director of Treasury: owns the pain and the budget case</span></div>
+  <div class="bant-card"><b>Treasury operations</b><span>Cash Manager, Head of Treasury Operations: lives the manual work daily</span></div>
+  <div class="bant-card"><b>Program / IT side</b><span>Director of Finance Transformation, SAP program leads: own the migration scope</span></div>
+</div>
+
+<h2 id="machine">The engine, end to end</h2>
+<p class="h2-sub">Six stages. Stages 1 and 2 are list intelligence; 3 and 4 are outreach; 5 is where a lead becomes a meeting on your calendar.</p>
+<div class="flow">
+  <div class="flow-step"><span class="num">1</span><b>Universe</b><span>300-500 tiered US accounts from both rings</span></div>
+  <div class="flow-step"><span class="num">2</span><b>Contacts</b><span>3-5 personas per account, every address verified</span></div>
+  <div class="flow-step"><span class="num">3</span><b>Infrastructure</b><span>Dedicated domains + mailboxes, warm-up; LinkedIn ready day one</span></div>
+  <div class="flow-step"><span class="num">4</span><b>Outreach</b><span>Signal-anchored messages; CTA is a Treasury Assessment conversation</span></div>
+  <div class="flow-step"><span class="num">5</span><b>Qualify + book</b><span>BANT-checked exchange, meeting lands in your calendar</span></div>
+  <div class="flow-step"><span class="num">6</span><b>Iterate</b><span>Weekly trigger sweep refills the pipeline; your accept/reject feedback tunes targeting</span></div>
+</div>
+<div class="callout green">
+  <span class="callout-title">Every first line is earned</span>
+  Outreach anchors on the account's own signal: "you are hiring an SAP TRM analyst" or "your S/4HANA migration was announced in Q1." No generic blasts; the universe is too valuable to burn.
+</div>
+
+<h2 id="channels">Two channels, two clocks</h2>
+<p class="h2-sub">LinkedIn produces conversations while the email domains warm. Email then carries the volume.</p>
+<div class="gantt">
+  <div class="gantt-head">
+    <div></div><div>W1</div><div>W2</div><div>W3</div><div>W4</div><div>W5</div><div>W6</div><div>W7</div><div>W8</div>
+  </div>
+  <div class="gantt-row"><div class="gantt-label">Universe + contacts</div>
+    <div class="gantt-cell g-purple on"></div><div class="gantt-cell g-purple on"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div>
+  </div>
+  <div class="gantt-row"><div class="gantt-label">Domain warm-up</div>
+    <div class="gantt-cell g-orange on"></div><div class="gantt-cell g-orange on"></div><div class="gantt-cell g-orange on"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div>
+  </div>
+  <div class="gantt-row"><div class="gantt-label">LinkedIn outreach</div>
+    <div class="gantt-cell g-blue on"></div><div class="gantt-cell g-blue on"></div><div class="gantt-cell g-blue on"></div><div class="gantt-cell g-blue on"></div><div class="gantt-cell g-blue on"></div><div class="gantt-cell g-blue on"></div><div class="gantt-cell g-blue on"></div><div class="gantt-cell g-blue on"></div>
+  </div>
+  <div class="gantt-row"><div class="gantt-label">Email sequences</div>
+    <div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell g-green on"></div><div class="gantt-cell g-green on"></div><div class="gantt-cell g-green on"></div><div class="gantt-cell g-green on"></div><div class="gantt-cell g-green on"></div>
+  </div>
+  <div class="gantt-row"><div class="gantt-label">First meetings</div>
+    <div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell g-purple on"></div><div class="gantt-cell g-purple on"></div><div class="gantt-cell g-purple on"></div><div class="gantt-cell g-purple on"></div><div class="gantt-cell g-purple on"></div>
+  </div>
+</div>
+<div class="zones">
+  <div class="zone zone-blue">
+    <h3>LinkedIn (live within days)</h3>
+    <ul>
+      <li>Real-profile outreach, persona-targeted, 20-25 connections/day</li>
+      <li>Starts with the warm hiring-signal cohort</li>
+      <li>No warm-up period; first conversations in week 1-2</li>
+    </ul>
+  </div>
+  <div class="zone zone-green">
+    <h3>Cold email (live week 3-4)</h3>
+    <ul>
+      <li>2-3 dedicated lookalike domains; brisken.com itself is never used for sending</li>
+      <li>4-6 mailboxes, authenticated (SPF/DKIM/DMARC), every address verified before send</li>
+      <li>Planned capacity at steady state: 400-900 sends/week</li>
+      <li>3-4 touches over 2-3 weeks; messages signed by a real Brisken identity (your call on whom)</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="qualification">What counts as a lead</h2>
+<p class="h2-sub">You pay for held meetings with documented BANT evidence, nothing softer. Proposed mechanics below; final definition is yours to confirm.</p>
+<div class="bant">
+  <div class="bant-card"><span class="letter">B</span><b>Budget</b><span>A budget signal exists: live project, treasury hiring, or a migration deadline forcing spend</span></div>
+  <div class="bant-card"><span class="letter">A</span><b>Authority</b><span>Contact's title is on the agreed persona list (treasury leadership, ops, or program side)</span></div>
+  <div class="bant-card"><span class="letter">N</span><b>Need</b><span>Stated treasury pain or an active S/4HANA treasury workstream</span></div>
+  <div class="bant-card"><span class="letter">T</span><b>Timeline</b><span>Stated timeframe, or one implied by the ECC 2027/2030 deadline</span></div>
+</div>
+<div class="flow" style="grid-template-columns: repeat(4, 1fr);">
+  <div class="flow-step"><b>Reply comes in</b><span>We run a short qualifying exchange against the four checks</span></div>
+  <div class="flow-step"><b>Meeting booked</b><span>Directly into your calendar with the BANT evidence attached</span></div>
+  <div class="flow-step"><b>Meeting held</b><span>You take the discovery call; a missed meeting only counts if rescheduled and held within 2 weeks</span></div>
+  <div class="flow-step"><b>You decide</b><span>Accept or reject within 48h with a one-line reason; rejections tune the targeting</span></div>
+</div>
+
+<h2 id="commercial">Commercial shape</h2>
+<p class="h2-sub">Per your offer: a fixed fee per accepted BANT lead plus a commission on closed deals.</p>
+<p>The shape is agreed; the mechanics we still settle together: the commission percentage and its basis (first contract value is the usual convention), the payment trigger, and who carries the modest running infrastructure (domains, mailboxes, sending and data tooling; estimated $250-500 per month). None of this blocks the build; we can start while the mechanics are settled.</p>
+
+<h2 id="needs">What we need from Brisken</h2>
+<table>
+  <thead><tr><th>Item</th><th>Why</th><th>When</th></tr></thead>
+  <tbody>
+    <tr><td>A calendar/booking link</td><td>Qualified replies book straight into your diary</td><td>Before week 2</td></tr>
+    <tr><td>Sender identity sign-off</td><td>Cold email goes out under a Brisken-branded identity from dedicated domains; you should see and approve the exact name and domain once</td><td>Before email goes live (week 3)</td></tr>
+    <tr><td>Infrastructure cost decision</td><td>$250-500/month running cost; settle whose side carries it</td><td>With the commercial mechanics</td></tr>
+  </tbody>
+</table>
+<div class="callout">
+  <span class="callout-title">Everything else is on us</span>
+  Account research, contact sourcing and verification, infrastructure setup, copywriting, sending, reply handling, qualification, booking, and a weekly delivery note with meetings booked, pipeline state, and what we learned.
+</div>
+
+<h2 id="expectations">Honest expectations</h2>
+<p>This is a precision market, not a volume market: the named SAP treasury install base is small and senior. Realistic early output is a small number of held, qualified meetings per month in the first one to two months, growing as the email channel matures and the weekly trigger sweep compounds. Conversion rates are unknowable until live; what we control is list quality, message quality, and qualification discipline. First meetings land in weeks 4-8, possibly earlier via LinkedIn.</p>
+
+<div class="footer">
+  <div>Brisken &middot; UnpauseAI &middot; admin@unpauseai.com</div>
+  <div>Last updated: 2026-06-12</div>
+</div>
+
+</main>
+
+<div id="searchOverlay">
+  <div class="search-box">
+    <input id="searchInput" type="text" placeholder="Jump to section..." autocomplete="off">
+    <div class="search-results" id="searchResults"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var overlay = document.getElementById('searchOverlay');
+  var input = document.getElementById('searchInput');
+  var results = document.getElementById('searchResults');
+  var sections = Array.prototype.slice.call(document.querySelectorAll('h2[id]')).map(function(h){
+    return { id: h.id, label: h.textContent };
+  });
+  var sel = 0;
+  function render(q){
+    var f = sections.filter(function(s){ return s.label.toLowerCase().indexOf(q.toLowerCase()) !== -1; });
+    if (sel >= f.length) sel = Math.max(0, f.length - 1);
+    results.innerHTML = f.map(function(s, i){
+      return '<a href="#'+s.id+'" class="'+(i===sel?'sel':'')+'">'+s.label+'</a>';
+    }).join('');
+    return f;
+  }
+  var current = render('');
+  function close(){ overlay.classList.remove('open'); }
+  function open(){
+    overlay.classList.add('open'); sel = 0;
+    input.value = localStorage.getItem('lastSearch') || '';
+    current = render(input.value); input.focus(); input.select();
+  }
+  document.addEventListener('keydown', function(e){
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); open(); }
+    if (!overlay.classList.contains('open')) return;
+    if (e.key === 'Escape') close();
+    if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(sel+1, current.length-1); current = render(input.value); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(sel-1, 0); current = render(input.value); }
+    if (e.key === 'Enter' && current[sel]) {
+      location.hash = current[sel].id; close();
+    }
+  });
+  input.addEventListener('input', function(){
+    sel = 0; current = render(input.value);
+    localStorage.setItem('lastSearch', input.value);
+  });
+  overlay.addEventListener('click', function(e){ if (e.target === overlay) close(); });
+  results.addEventListener('click', function(){ close(); });
+})();
+</script>
+
+</body>
+</html>
