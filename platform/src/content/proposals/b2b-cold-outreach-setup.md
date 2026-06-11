@@ -17,7 +17,7 @@ access_code: ""
 deliverables:
   letter: true
   video: true
-  site: false
+  site: true
 research:
   prospect_company: "Anonymous (posting discloses no company name; MDA is the ISO code for Moldova)"
   prospect_industry: "B2B, sector undisclosed; likely founder/operator stage given $2.4K total Upwork spend across 17 hires"
