@@ -544,8 +544,11 @@ def _print_dry_run_summary(
     n_tx = len(transactions)
     n_rec = len(receipts)
     n_matched = len(outcome.matches)
-    n_review = len(outcome.judgment_required) + len(
-        {m.transaction_id for m in outcome.ambiguous}
+    # Count distinct transactions needing review, never pair-rows (A9):
+    # judgment_required holds one entry per candidate receipt.
+    n_review = len(
+        {m.transaction_id for m in outcome.judgment_required}
+        | {m.transaction_id for m in outcome.ambiguous}
     )
     n_unmatched = len(outcome.unmatched_transactions)
     match_rate = (n_matched / n_tx * 100) if n_tx else 0.0
@@ -586,6 +589,13 @@ def main(argv: list[str] | None = None) -> int:
         from .runlog_cli import main as runlog_main
 
         return runlog_main(argv[1:], command=argv[0])
+
+    # `expense-recon calibrate --config X` — calibration metrics view
+    # (slice 3b / E8). Runs the matcher, prints metrics, writes no report.
+    if argv and argv[0] == "calibrate":
+        from .calibrate import main as calibrate_main
+
+        return calibrate_main(argv[1:])
 
     parser = argparse.ArgumentParser(
         prog="expense-recon",

@@ -200,7 +200,17 @@ cd workspace/clients/brisken/automations/expense-reconciliation
 uv sync                                       # installs the CLI entry point
 uv run expense-recon --config /path/to/run.json
 uv run expense-recon --config run.json --out alt-report.xlsx   # output override
+uv run expense-recon --config run.json --dry-run               # counts only, no xlsx
+uv run expense-recon doctor --config run.json                  # pre-flight config check
+uv run expense-recon calibrate --config run.json               # matcher metrics, no xlsx
 ```
+
+`calibrate` runs the matcher and prints calibration metrics — the
+distinct-transaction outcome split, the reconciliation invariant, the
+receipt double-binding check, the FX-pair-vs-foreign-receipt
+multiplicity (the `<= 2x` slice-3 target), and per-card spend. It exits
+non-zero if the invariant breaks or a receipt is double-bound, so it
+doubles as a regression gate on a known-good month.
 
 Config shape (JSON, stdlib only — no YAML dep). Paths resolve relative
 to the config file's directory:
@@ -298,7 +308,8 @@ expense-reconciliation/
 ├── src/
 │   └── expense_recon/
 │       ├── __init__.py
-│       ├── cli.py                   # entry point (expense-recon script)
+│       ├── cli.py                   # entry point (expense-recon script; routes doctor/history/diff/calibrate)
+│       ├── calibrate.py             # `calibrate` subcommand — matcher metrics + regression gate (E8/3b)
 │       ├── categorize.py            # BLUEPRINT LD-1/LD-2 — LLM + keyword-stub classifier
 │       ├── matching/
 │       │   ├── __init__.py
