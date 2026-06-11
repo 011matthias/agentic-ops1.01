@@ -124,7 +124,18 @@ review, >13% reject — bands measured from 98 aligned real pairs,
 max observed DCC gap 12.8%), not just a plausibility gate in front
 of the LLM. See the BLUEPRINT slice 3b calibration block.
 
-### A2. Receipt double-binding *(README annealing #2)*
+### A2. Receipt double-binding *(README annealing #2)* — RESOLVED 2026-06-11
+
+**Resolution (2026-06-11):** `match_month` rewritten as a greedy
+bipartite assignment (BLUEPRINT 3.8). Candidates sort by
+(deterministic-first, confidence, reference-hit, vendor-similarity);
+each transaction AND each receipt is consumed at most once. A receipt
+can no longer land in two matches. Verified on all three real months:
+zero double-bound receipts; same-currency false matches dropped 4→1
+(March) / 0 (April) / 5→1 (May). The losing transaction drops to
+unmatched (or its next free candidate) instead of sharing the receipt.
+Tests: `test_bipartite_receipt_not_double_bound`,
+`test_fx_receipt_assigned_to_single_best_transaction`.
 
 **Where:** [`src/expense_recon/matching/deterministic.py`](src/expense_recon/matching/deterministic.py) `match_month`, the `by_tx` loop
 **Symptom:** The same receipt can be the "best" match for two
@@ -150,7 +161,22 @@ inside the 20%/5-day window (March: one receipt → 4 MATCHED rows;
 May: one receipt → 5 MATCHED rows, only its exact pair true). 7–8
 of the quarter's 9 deterministic matches are false double-bindings.
 
-### A3. No vendor / reference signal in matching *(README annealing #3)*
+### A3. No vendor / reference signal in matching *(README annealing #3)* — RESOLVED 2026-06-11
+
+**Resolution (2026-06-11):** `vendor_similarity` (stdlib `difflib`,
+token-best-ratio averaged over statement tokens — robust to bank
+truncation) and `reference_match` shipped (BLUEPRINT 3.9). They feed
+the bipartite sort key as the tie-break (`_signal`: reference first,
+then vendor), so the right transaction wins a contested receipt and
+genuine ties (`_ties`) stay ambiguous instead of being picked
+arbitrarily. Verified on real data: "Mega Center"→"MEGA CENTE CONSTR"
+sim 0.86, "Barreiros"→"BARREIROS TECIDO" 0.70. Stuck with stdlib
+`difflib` over a rapidfuzz dep for now (lean posture; revisit on
+month-2 data if token-best-ratio proves too weak). Reference matching
+is implemented but rarely fires on Chase (the statement carries no
+reference column); it will earn its keep on banks/exports that do.
+Tests: `test_vendor_signal_breaks_tie_instead_of_ambiguous`,
+`test_truly_identical_receipts_still_ambiguous`.
 
 **Where:** [`src/expense_recon/matching/deterministic.py`](src/expense_recon/matching/deterministic.py) `match_one`
 **Symptom:** A $100 Amazon receipt and a $100 Uber receipt on the
@@ -192,6 +218,12 @@ diffs of 16–21% accepted at up to 5 days' distance). On the
 same-currency aligned pairs, true matches sit ≤3% (non-DCC) —
 the 20% default is an order of magnitude looser than the data
 needs once A3's vendor/reference signal exists to break ties.
+**Status (2026-06-11):** mostly neutralised by A2 + A3 — bipartite
+consumption stops a loose-window candidate from co-claiming a
+receipt, and the vendor signal de-prioritises the wrong one. The
+remaining work is the window-tightening number itself, deliberately
+held for month-2 data per the trigger (tune the actual percentile
+against a reconciled month, do not guess from one quarter).
 
 ### A5. Negative-amount (refund) matching gap
 

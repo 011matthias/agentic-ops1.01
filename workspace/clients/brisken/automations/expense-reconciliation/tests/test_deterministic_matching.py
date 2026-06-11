@@ -240,3 +240,76 @@ def test_fx_dateless_receipt_is_not_a_candidate():
     out = match_month(txs, rs)
     assert not out.judgment_required
     assert out.unmatched_receipts == ["r1"]
+
+
+# ── Bipartite assignment (3.8 / A2) + vendor signal (3.9 / A3) ───────
+
+
+def test_bipartite_receipt_not_double_bound():
+    """A2: one receipt cannot match two transactions. A $100 EXACT and a
+    $98 PROBABLE both want the single $100 receipt; the receipt goes to
+    the EXACT tx, the other transaction is left unmatched (not a second
+    Matches row on the same receipt)."""
+    txs = [
+        tx("t-exact", "100.00", date(2026, 4, 10), vendor="AMAZON"),
+        tx("t-probable", "98.00", date(2026, 4, 10), vendor="AMAZON"),
+    ]
+    rs = [receipt("r1", "100.00", date(2026, 4, 10), vendor="AMAZON")]
+    out = match_month(txs, rs)
+    assert [m.document_id for m in out.matches] == ["r1"]
+    assert out.matches[0].transaction_id == "t-exact"
+    assert out.unmatched_transactions == ["t-probable"]
+    # The receipt is used exactly once across the whole outcome.
+    used = [m.document_id for m in out.matches]
+    assert used.count("r1") == 1
+
+
+def test_vendor_signal_breaks_tie_instead_of_ambiguous():
+    """3.9: two same-amount same-date receipts that would otherwise tie
+    are separated by vendor similarity, so each transaction takes its
+    own vendor's receipt — no ambiguous bucket, no double-binding."""
+    txs = [
+        tx("t-amzn", "100.00", date(2026, 4, 12), vendor="AMAZON MKTP"),
+        tx("t-uber", "100.00", date(2026, 4, 12), vendor="UBER TRIP"),
+    ]
+    rs = [
+        receipt("r-amzn", "100.00", date(2026, 4, 12), vendor="Amazon"),
+        receipt("r-uber", "100.00", date(2026, 4, 12), vendor="Uber"),
+    ]
+    out = match_month(txs, rs)
+    assert not out.ambiguous
+    pairs = {m.transaction_id: m.document_id for m in out.matches}
+    assert pairs == {"t-amzn": "r-amzn", "t-uber": "r-uber"}
+
+
+def test_truly_identical_receipts_still_ambiguous():
+    """When the 3.9 signal cannot separate two candidates (same amount,
+    date, AND vendor), the tx stays ambiguous — bipartite must not pick
+    arbitrarily."""
+    txs = [tx("t1", "20.00", date(2026, 4, 25), vendor="KIOSK")]
+    rs = [
+        receipt("r1", "20.00", date(2026, 4, 25), vendor="Kiosk"),
+        receipt("r2", "20.00", date(2026, 4, 25), vendor="Kiosk"),
+    ]
+    out = match_month(txs, rs)
+    assert not out.matches
+    assert {a.document_id for a in out.ambiguous} == {"r1", "r2"}
+
+
+def test_fx_receipt_assigned_to_single_best_transaction():
+    """3.8 over FX: a foreign receipt that is in-band for several USD
+    transactions is handed to the LLM for ONE best transaction (the
+    vendor-closest), not as a pair against every candidate. This is the
+    ~50x -> ~1x collapse the calibration targeted."""
+    txs = [
+        tx("t-near", "19.00", date(2026, 4, 15), vendor="MEGA CENTER"),
+        tx("t-far", "19.00", date(2026, 4, 15), vendor="SOME OTHER SHOP"),
+    ]
+    rs = [receipt("r-brl", "100.00", date(2026, 4, 15), currency="BRL",
+                  vendor="Mega Center Comercio")]
+    out = match_month(txs, rs)
+    assert len(out.judgment_required) == 1
+    assert out.judgment_required[0].transaction_id == "t-near"
+    assert out.judgment_required[0].document_id == "r-brl"
+    # The other transaction has no other candidate -> unmatched.
+    assert out.unmatched_transactions == ["t-far"]
