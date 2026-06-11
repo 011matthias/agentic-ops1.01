@@ -1,7 +1,7 @@
 # Brisken Project Boundaries
 
-**As of:** 2026-05-24 (functional-spec revision v2 landed in repo per Dirk's 2026-05-20 directive; original v1 preserved in `reference/`. Active project unchanged: expense reconciliation. Lead nurturing remains paused. See swap history at the bottom; this scope has reversed multiple times, the history ledger is the authority on what is current.)
-**Status:** Two separate projects. One active. One paused. No shared infrastructure between them.
+**As of:** 2026-06-11 (third project registered: `p2` BANT lead generation, per owner directive; Dirk's offer of $300 per accepted BANT lead + commission on closed deals. Expense reconciliation remains active and untouched. Lead nurturing remains paused. See swap history at the bottom; this scope has reversed multiple times, the history ledger is the authority on what is current.)
+**Status:** Three separate projects. Two active (`p1` expense reconciliation, `p2` lead generation). One paused (lead nurturing). No shared infrastructure between any of them.
 
 This document is binding. Any future session working in this client folder must read it before touching any spec, code, or infrastructure. Because the active/paused assignment has changed several times, the **Swap history** section at the bottom is the single source of truth for which project is live right now. Do not infer it from file presence; read the ledger.
 
@@ -14,12 +14,12 @@ This document is binding. Any future session working in this client folder must 
 - Status: active. Confirmed by the user 2026-05-17 as the project Brisken is doing. The earlier read that the Upwork offer meant lead nurturing was corrected: the offer was a separate matter; the expense reconciliation product is the engagement.
 - Source functional document v1: provided by the user 2026-05-14; landed in repo 2026-05-24 at `reference/2026-05-14-functional-spec-original.md` (verbatim, preserved as primary source).
 - Live artifacts (verified present 2026-05-25):
-  - `reference/2026-05-14-functional-spec-original.md` -- Dirk's v1 functional document, primary source, do not edit
-  - `reference/2026-05-20-call-transcript.md` -- full verbatim transcript, Part 1 + Part 2 (primary source)
-  - `context/2026-05-20-call-outcomes.md` -- structured decision extraction with transcript timestamps
-  - `specs/1-spec/p1-expense-reconciliation-functional-spec.md` -- v2 functional specification (binding for build decisions; supersedes v1)
-  - `reference/expense-reconciliation-open-decisions.md` -- 18-decision sheet, partially superseded by the call outcomes, cross-reference only
-  - `automations/expense-reconciliation/` -- Phase 4 deterministic matching engine + tests (v2 spec §15.1). Pure Python, stack-independent. 9 tests green (2026-05-25). See `automations/expense-reconciliation/README.md`.
+  - `reference/2026-05-14-functional-spec-original.md`; Dirk's v1 functional document, primary source, do not edit
+  - `reference/2026-05-20-call-transcript.md`; full verbatim transcript, Part 1 + Part 2 (primary source)
+  - `context/2026-05-20-call-outcomes.md`; structured decision extraction with transcript timestamps
+  - `specs/1-spec/p1-expense-reconciliation-functional-spec.md`; v2 functional specification (binding for build decisions; supersedes v1)
+  - `reference/expense-reconciliation-open-decisions.md`; 18-decision sheet, partially superseded by the call outcomes, cross-reference only
+  - `automations/expense-reconciliation/`; Phase 4 deterministic matching engine + tests (v2 spec §15.1). Pure Python, stack-independent. 9 tests green (2026-05-25). See `automations/expense-reconciliation/README.md`.
 - Specs (extended as work progresses): `specs/1-spec/p1-*.md`
 - Code (when implementation starts): `automations/expense-reconciliation/`
 - Context (when written): `context/expense-reconciliation/`
@@ -27,7 +27,22 @@ This document is binding. Any future session working in this client folder must 
 - Stack: v1's proposed stack (FastAPI + React + PostgreSQL + Azure Blob + Azure Document Intelligence + Anthropic Claude) was reversed in part on the 2026-05-20 call: Azure Document Intelligence and Azure Blob rejected, AWS Bedrock declined as provider; Firebase / GCP is candidate for the whole platform pending the research items in v2 spec §38; Anthropic Claude confirmed via Brisken's existing Pro subscription with built-in consent + no-training conditions. The stack is genuinely re-opened.
 - Open with client (current): the v2 functional spec for Dirk's review; the joint call with Chris (Brisken finance manager) once Dirk briefs her; API access to Brisken's existing Claude Pro subscription.
 
-This is the only active project in this client folder. Sessions that name Brisken default to this project unless they explicitly state otherwise.
+Sessions that name Brisken default to this project unless they explicitly state otherwise.
+
+---
+
+## Active project #2 (registered 2026-06-11)
+
+**BANT Lead Generation for Brisken's SAP Treasury business (`p2`)**
+
+- Status: active, pre-terms. Registered per owner directive 2026-06-11: Dirk offered $300 per BANT-qualified lead + a commission on closed deals (offer relayed by owner; verbatim terms not yet captured; see spec Phase 0). No spend and no outbound contact until terms are settled with Dirk.
+- What Brisken sells (verified from brisken.com 2026-06-11): SAP Cash Management & Treasury consulting + the OnePilot application suite; HQ The Woodlands, TX, USA.
+- Spec: `specs/1-spec/p2-bant-lead-generation.md` (plan + ICP; binding for this project).
+- Code (when implementation starts): `automations/lead-generation/`
+- Context: `context/lead-generation/` (terms, ICP data, evidence pack)
+- ID namespace owned: `p2`, `p2.*`.
+- Relationship to the PAUSED lead-nurturing project: distinct. Lead nurturing (a0-a6) processes INBOUND leads from Brisken's existing SAP channels; p2 GENERATES outbound leads. p2 does not unpause a0-a6 and shares nothing with them. If reply-handling later wants the a3/a4 designs, that is a separate, explicit resumption decision recorded in the swap history.
+- Hard constraint: no sourcing or sending infrastructure shared with any other client. Meji's Apollo seat / Sales Navigator / Instantly workspace are off-limits for this project (verified 2026-06-11: all current Apollo access is Gurmej's login-shared seat).
 
 ---
 
@@ -72,9 +87,10 @@ Nothing in the list below is shared between the two projects. Any future session
 
 ## ID namespace rules
 
-- Expense reconciliation owns `p1` and all `p1.*` sub-identifiers. This is the active project; new specs here use the `p1` prefix.
+- Expense reconciliation owns `p1` and all `p1.*` sub-identifiers; new specs there use the `p1` prefix.
+- BANT lead generation owns `p2` and all `p2.*` sub-identifiers (registered 2026-06-11).
 - Lead nurturing owns `a0` through `a6`, plus `app1`. No new IDs in this range while paused.
-- A future third project picks a fresh container ID (`p2`, `p3`, ...).
+- A future fourth project picks a fresh container ID (`p3`, `p4`, ...).
 
 If a session writes a spec whose ID falls in another project's namespace, it has crossed the boundary; rewrite with the correct prefix.
 
@@ -85,6 +101,8 @@ If a session writes a spec whose ID falls in another project's namespace, it has
 | Path | Belongs to | Notes |
 |---|---|---|
 | `specs/1-spec/p1-*.md` | Expense reconciliation (active) | New specs for the active project go here. v2 functional spec lives at `specs/1-spec/p1-expense-reconciliation-functional-spec.md`. |
+| `specs/1-spec/p2-*.md` | BANT lead generation (active) | Registered 2026-06-11; plan + ICP spec |
+| `context/lead-generation/` | BANT lead generation | Terms, ICP data, evidence pack |
 | `specs/1-spec/a*.md`, `app*.md` | Lead nurturing (paused) | Frozen; no edits while paused |
 | `automations/expense-reconciliation/` | Expense reconciliation | Created when implementation starts |
 | `automations/lead-nurturing/` | Lead nurturing | Only if that project resumes |
@@ -119,6 +137,7 @@ A boundary violation (cross-project edit, shared infrastructure, ID-namespace co
 
 The authority on which project is live. Read top entry for current state.
 
+- 2026-06-11: **Third project registered: `p2` BANT lead generation (active, pre-terms).** Owner directive: Dirk offered $300 per BANT-qualified lead + commission on closed deals for Brisken's B2-enterprise SAP Treasury business. Plan approved by owner (evidence pack before terms call; book-meetings-only qualification; LinkedIn-first channel mix while email warms). Expense reconciliation unchanged; lead nurturing stays paused; p2 is outbound generation, not a resumption of a0-a6.
 - 2026-05-25: **Build began.** Per Dirk's directive (north star: Chris's reconciliation grind days -> minutes; begin building now), Phase 4 deterministic matching engine shipped at `automations/expense-reconciliation/`. 9 tests green. Phase 4 was promoted ahead of Phase 0 because it is the value-prop core, is stack-independent, and de-risks the LLM judgment layer sizing before §38 lands. Active project unchanged.
 - 2026-05-24: **Functional spec revision landed.** Dirk's 2026-05-14 v1 functional document preserved verbatim at `reference/2026-05-14-functional-spec-original.md`. Revised v2 spec written to `specs/1-spec/p1-expense-reconciliation-functional-spec.md` against the 2026-05-20 call outcomes. v2 is binding for build decisions; v1 stays read-only as primary source. Active project unchanged.
 - 2026-05-17: **Expense reconciliation set ACTIVE, lead nurturing set PAUSED.** User corrected the earlier read: the Upwork offer was a separate matter, not the engagement. a0-a4 `paused: true` re-applied. Deletion of lead-nurturing context considered and rejected (primary-source transcript, repeated reversals, boundary already provides isolation). This is the current state.
