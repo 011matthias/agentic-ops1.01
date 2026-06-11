@@ -79,6 +79,11 @@ class _Row:
     source: ClassificationSource
     zoho_account: str | None
     note: str
+    # A9: the originating transaction. A single transaction can expand
+    # to many rows (one per receipt line item, and — pre-bipartite —
+    # one set per FX candidate receipt). The Summary must aggregate by
+    # transaction, never by row, so it carries the id here.
+    transaction_id: str = ""
 
     @property
     def fill(self) -> PatternFill:
@@ -242,6 +247,7 @@ def _rows_from_match(
                 source=ClassificationSource.REVIEW,
                 zoho_account=None,
                 note=note,
+                transaction_id=tx.transaction_id,
             )
         ]
 
@@ -261,6 +267,7 @@ def _rows_from_match(
                 source=source,
                 zoho_account=cat.zoho_account if source is not ClassificationSource.REVIEW else None,
                 note=note,
+                transaction_id=tx.transaction_id,
             )
         )
     return out
@@ -278,6 +285,7 @@ def _unmatched_tx_row(tx: Transaction) -> _Row:
         source=ClassificationSource.REVIEW,
         zoho_account=None,
         note="Unmatched transaction",
+        transaction_id=tx.transaction_id,
     )
 
 
@@ -315,56 +323,83 @@ def _write_summary(
 
     n_tx = len(transactions)
     n_rec = len(receipts)
-    n_matched = len(outcome.matches)
-    n_review = (
-        len(outcome.judgment_required)
-        + len({m.transaction_id for m in outcome.ambiguous})
+
+    # A9: every Summary count is per DISTINCT transaction, never per
+    # row. judgment_required / ambiguous hold one entry PER candidate
+    # receipt, so a multi-candidate FX transaction would otherwise
+    # inflate every count and money figure (a $8.8K month rendered as
+    # $1.26M Spend with a false "invariant BROKEN" before this fix).
+    matched_tx_ids = {m.transaction_id for m in outcome.matches}
+    review_tx_ids = (
+        {m.transaction_id for m in outcome.judgment_required}
+        | {m.transaction_id for m in outcome.ambiguous}
     )
-    n_unmatched_tx = len(outcome.unmatched_transactions)
+    unmatched_tx_ids = set(outcome.unmatched_transactions)
+    n_matched = len(matched_tx_ids)
+    n_review = len(review_tx_ids)
+    n_unmatched_tx = len(unmatched_tx_ids)
     n_unmatched_rec = len(outcome.unmatched_receipts)
 
-    # Reconciliation invariant — every tx accounted for.
+    # Reconciliation invariant: every tx in exactly one bucket. The set
+    # union catches BOTH silent drops and double-classification; the
+    # count equality catches the same with a cheap arithmetic check.
+    all_tx_ids = {tx.transaction_id for tx in transactions}
     invariant_ok = (
-        n_matched
-        + len(outcome.judgment_required)
-        + len({m.transaction_id for m in outcome.ambiguous})
-        + n_unmatched_tx
-    ) == n_tx
+        (matched_tx_ids | review_tx_ids | unmatched_tx_ids) == all_tx_ids
+        and n_matched + n_review + n_unmatched_tx == n_tx
+    )
 
-    # Per-tier counts across all rows (not transactions).
+    # Categorization tiers: count the postable journal rows only (rows
+    # from matched transactions). FX / ambiguous / unmatched rows are
+    # all REVIEW and not yet postable; counting them buries the real
+    # categorization quality at "REVIEW 100%".
+    matched_rows = [r for r in rows if r.transaction_id in matched_tx_ids]
     tier_counts: dict[ClassificationSource, int] = defaultdict(int)
-    for r in rows:
+    for r in matched_rows:
         tier_counts[r.source] += 1
     total_rows = sum(tier_counts.values()) or 1  # avoid div/0
 
-    # By card.
-    by_card_total: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
-    by_card_needs_review: dict[str, int] = defaultdict(int)
-    for r in rows:
-        by_card_total[r.card] += r.amount
-        if r.source is not ClassificationSource.LINE:
-            by_card_needs_review[r.card] += 1
+    # Spend per card = sum of the actual card charges (one per
+    # transaction, in the card currency), taken from the statement —
+    # NOT from expanded rows.
+    by_card_spend: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+    for tx in transactions:
+        by_card_spend[tx.account_id] += tx.amount
 
-    # By category × by card.
+    # "Needs attention" per card = distinct transactions on that card
+    # that did not land a clean match (review + unmatched).
+    needs_attention_tx_ids = review_tx_ids | unmatched_tx_ids
+    by_card_attention: dict[str, int] = defaultdict(int)
+    for tx in transactions:
+        if tx.transaction_id in needs_attention_tx_ids:
+            by_card_attention[tx.account_id] += 1
+
+    # Category × card money: categorized journal money from matched
+    # rows, plus one "(needs review)" bucket per card valued at the
+    # transaction amount of each non-matched tx, so the cross-tab
+    # totals reconcile back to Spend.
     cross_tab: dict[str, dict[str, Decimal]] = defaultdict(
         lambda: defaultdict(lambda: Decimal("0"))
     )
-    for r in rows:
+    for r in matched_rows:
         cat = r.category or "(unclassified)"
         cross_tab[cat][r.card] += r.amount
+    for tx in transactions:
+        if tx.transaction_id in needs_attention_tx_ids:
+            cross_tab["(needs review)"][tx.account_id] += tx.amount
 
     _append_section(ws, "RECONCILIATION SUMMARY")
     ws.append([])
     ws.append(["Transactions", n_tx])
     ws.append(["Receipts", n_rec])
     ws.append(["Matched", n_matched])
-    ws.append(["Needs Review (FX / ambiguous / vendor-fallback / review)", n_review + tier_counts[ClassificationSource.VENDOR] + tier_counts[ClassificationSource.REVIEW]])
+    ws.append(["Needs Review (FX / ambiguous)", n_review])
     ws.append(["Unmatched transactions", n_unmatched_tx])
     ws.append(["Unmatched receipts", n_unmatched_rec])
     ws.append(["Reconciliation invariant", "OK" if invariant_ok else "BROKEN — investigate"])
     ws.append([])
 
-    _append_section(ws, "Categorization source breakdown")
+    _append_section(ws, "Categorization source breakdown (postable journal rows)")
     ws.append([])
     for src in (ClassificationSource.LINE, ClassificationSource.VENDOR, ClassificationSource.REVIEW):
         count = tier_counts.get(src, 0)
@@ -374,18 +409,18 @@ def _write_summary(
 
     _append_section(ws, "By card")
     ws.append([])
-    ws.append(["Card", "Spend", "Needs Review rows"])
-    for card in sorted(by_card_total):
+    ws.append(["Card", "Spend", "Needs attention (tx)"])
+    for card in sorted(by_card_spend):
         ws.append([
             card,
-            float(by_card_total[card]),
-            by_card_needs_review.get(card, 0),
+            float(by_card_spend[card]),
+            by_card_attention.get(card, 0),
         ])
     ws.append([])
 
     _append_section(ws, "By category × by card")
     ws.append([])
-    cards_sorted = sorted({r.card for r in rows})
+    cards_sorted = sorted(by_card_spend)
     ws.append(["Category", *cards_sorted, "Total"])
     for cat in sorted(cross_tab):
         row = [cat]

@@ -248,7 +248,20 @@ decision log as a 5th sheet (or a separate JSON). Off by default.
 **Trigger:** First time we need to debug a "why did this match"
 question from Chris.
 
-### A9. Summary sheet counts pair-rows, not transactions (2026-06-11)
+### A9. Summary sheet counts pair-rows, not transactions (2026-06-11) — RESOLVED 2026-06-11
+
+**Resolution (2026-06-11):** `_write_summary` is now transaction-centric.
+`_Row` carries `transaction_id`; the invariant, Matched / Needs-Review
+counts, By-card Spend, and the category×card cross-tab all aggregate
+over distinct transactions. Spend is taken straight from the statement
+(Σ tx.amount per card), not from expanded rows; the tier breakdown
+counts postable journal rows (matched txs) only; the cross-tab carries
+a "(needs review)" bucket valued at tx.amount so it reconciles to
+Spend. Verified on the three real months: By-card Spend totals equal
+the statement charge sums to the cent ($8,834.85 / $6,857.00 /
+$14,095.00) and the invariant reads OK. Regression test
+`test_summary_counts_transactions_not_pair_rows` pins a 2-candidate FX
+transaction to one count + a single-charge Spend. Full suite 177 green.
 
 **Where:** [`src/expense_recon/output/report_xlsx.py`](src/expense_recon/output/report_xlsx.py) — `by_card_total` / needs-review counting and the invariant line
 **Symptom:** Found by the 3b calibration: a month whose statement
