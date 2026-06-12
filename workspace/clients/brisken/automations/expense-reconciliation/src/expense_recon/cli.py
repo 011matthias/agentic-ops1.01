@@ -22,9 +22,14 @@ The config is a JSON file (stdlib only — no YAML dep) of the shape:
         "sheet_name": null                     # optional, xlsx only
       },
       "receipts": {
-        "path": "receipts-may.csv",            # CSV file OR a folder of
-        "source": "csv",                       #   images/PDFs ("csv"|"folder";
-        "default_currency": "USD"              #   inferred from path if absent)
+        "path": "expense-may.csv",             # Zoho Expense CSV, an
+        "source": "expense_csv",               #   extracted-fields CSV, or a
+        "column_map": {                        #   folder of images/PDFs
+          "expense_date": "Expense Date",      #   ("expense_csv"|"csv"|"folder";
+          "amount": "Amount",                  #   inferred from path if absent).
+          "vendor": "Merchant"                 # column_map is required for
+        },                                     #   source "expense_csv" only.
+        "default_currency": "USD"
       },
       "output": {
         "path": "report-may.xlsx"
@@ -65,6 +70,7 @@ from decimal import Decimal
 from .categorize import categorize_receipts
 from .ingest._common import ParseIssue
 from .ingest.chart_of_accounts import ChartOfAccounts
+from .ingest.expense_csv import parse_expense_csv_tolerant
 from .ingest.receipts_csv import parse_receipts_csv_tolerant
 from .ingest.receipts_folder import parse_receipts_folder
 from .ingest.statement_csv import parse_statement_csv_tolerant
@@ -129,12 +135,15 @@ def _load_receipts(
     legal_entity_id: str,
     llm_client: LLMClient | None = None,
 ) -> tuple[list[Receipt], list[ParseIssue]]:
-    """Load receipts from a CSV (slice 1 bridge) or a folder of
-    images/PDFs (slice 2.2 OCR).
+    """Load receipts from a Zoho Expense CSV (Path A, BLUEPRINT 8.1), a
+    slice-1 extracted-fields CSV, or a folder of images/PDFs (slice 2.2
+    OCR).
 
-    `receipts.source` is "csv" | "folder"; when absent it is inferred
-    from the path (directory → folder). Folder mode needs an `llm:`
-    block — OCR has no keyword-stub fallback.
+    `receipts.source` is "expense_csv" | "csv" | "folder"; when absent
+    it is inferred from the path (directory → folder, else "csv").
+    Folder mode needs an `llm:` block — OCR has no keyword-stub
+    fallback. The "expense_csv" source is config-driven and requires a
+    `receipts.column_map` (logical field → Zoho export column header).
     """
     r = cfg.get("receipts")
     if not isinstance(r, dict):
@@ -147,6 +156,23 @@ def _load_receipts(
         raise ConfigError(f"receipts path not found: {path}")
 
     source = r.get("source") or ("folder" if path.is_dir() else "csv")
+    if source == "expense_csv":
+        if path.is_dir():
+            raise ConfigError(
+                f"receipts.source is 'expense_csv' but {path} is a directory"
+            )
+        column_map = r.get("column_map")
+        if not isinstance(column_map, dict) or not column_map:
+            raise ConfigError(
+                "receipts.source 'expense_csv' needs a `column_map` "
+                "(logical field → Zoho export column header) in the config."
+            )
+        return parse_expense_csv_tolerant(
+            path=path,
+            legal_entity_id=legal_entity_id,
+            column_map=column_map,
+            default_currency=r.get("default_currency"),
+        )
     if source == "folder":
         if not path.is_dir():
             raise ConfigError(f"receipts.source is 'folder' but {path} is not a directory")
@@ -170,7 +196,8 @@ def _load_receipts(
             default_currency=r.get("default_currency"),
         )
     raise ConfigError(
-        f"config.receipts.source {source!r} not supported (use 'csv' or 'folder')"
+        f"config.receipts.source {source!r} not supported "
+        f"(use 'expense_csv', 'csv', or 'folder')"
     )
 
 

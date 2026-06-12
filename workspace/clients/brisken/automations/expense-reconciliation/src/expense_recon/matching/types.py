@@ -145,6 +145,20 @@ class Receipt:
     `line_items` may carry categorization results; see `LineItem`.
     Sum of `line_total` across items should reconcile to
     `detected_total` (modulo tax/tip lines that may not be itemized).
+
+    Path-A provenance fields (BLUEPRINT 8.1, populated by the Zoho
+    Expense CSV adapter; None for the slice-1 receipts CSV and the
+    slice-2 OCR folder):
+
+    * `report_number` — the Zoho Expense report this line belongs to
+      (ER-NNNNN). Carried into the 8.3 reports cross-reference and the
+      8.5 Books journal export.
+    * `receipt_url` — a stable URL to the receipt image when the export
+      carries one directly. The receipt-URL design fork (8.1): use this
+      when present.
+    * `receipt_name` — the receipt attachment filename when no URL is
+      exported. The other side of the fork: 8.4 receipt-URL hosting
+      resolves it to a URL by matching the file in the receipts folder.
     """
 
     document_id: str
@@ -154,6 +168,9 @@ class Receipt:
     detected_currency: str | None   # compared against tx.transaction_currency (layer 1, §20); mismatch → FX judgment
     detected_vendor: str | None
     detected_reference: str | None = None
+    report_number: str | None = None
+    receipt_url: str | None = None
+    receipt_name: str | None = None
     ocr_text: str = ""
     line_items: tuple[LineItem, ...] = ()
 

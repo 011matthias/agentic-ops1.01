@@ -1,0 +1,6 @@
+Expense Date,Amount,Merchant,Currency,Report Number,Reference,Expense ID,Receipt URL,Receipt Name
+2026-04-01,5.75,Coffee Shop NYC,USD,ER-00220,,EXP-1001,https://expense.zoho.example/r/1001,
+2026-04-03,57.50,Delancey Tavern,USD,ER-00220,table-12,EXP-1002,,delancey-1002.jpg
+2026-04-05,22.30,Uber,USD,ER-00220,,EXP-1003,,uber-1003.pdf
+2026-04-07,200.00,Amazon,USD,ER-00220,RT3-9923,EXP-1004,https://expense.zoho.example/r/1004,
+2026-04-26,16.12,Versailles Lisbon,EUR,ER-00221,,EXP-1005,,versailles-1005.jpg
