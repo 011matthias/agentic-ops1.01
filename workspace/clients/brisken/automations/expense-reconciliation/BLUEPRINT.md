@@ -293,7 +293,7 @@ doctor pre-flight. Path A is an edge redirect, not a matcher rewrite.
 
 | # | Item | Path | Status / gate |
 |---|---|---|---|
-| 8.1 | Zoho Expense CSV ingest adapter — a column-map over the existing receipts-CSV path, adding the report-number and receipt-URL fields | `src/expense_recon/ingest/expense_csv.py` | BUILDABLE. No further client data is coming (owner 2026-06-12), so build against the documented Zoho export format + the ER PDF sample shapes. Adapter is config-driven (column map in `run.json`); the receipt-URL field is a design fork — carry it if present, else filename-match via `receipt_name`. No live export header will arrive to settle it, so support both. |
+| 8.1 | Zoho Expense CSV ingest adapter — a column-map over the existing receipts-CSV path, adding the report-number and receipt-URL fields | `src/expense_recon/ingest/expense_csv.py` | **BUILT 2026-06-12.** `parse_expense_csv` / `_tolerant`: config-driven column map (required `expense_date`/`amount`/`vendor`; optional `currency`/`document_id`/`reference`/`report_number`/`receipt_url`/`receipt_name`) → `Receipt` objects, mirroring `statement_csv.py`. `Receipt` extended with `report_number`/`receipt_url`/`receipt_name` (8.3/8.5 carriers). Receipt-URL design fork supported both ways (URL column if present, else `receipt_name` filename for 8.4 to resolve). `document_id` synthesized `<report>:<row>` when unmapped. Wired into the CLI as `receipts.source: "expense_csv"`. Header errors raise, row errors → tolerant issues. 14 tests (`tests/test_expense_csv.py`), incl. an end-to-end `match_month` pairing. Built against the documented Zoho export format + ER PDF sample shapes; exact headers stay in `run.json` (no live export header shared, owner 2026-06-12). Examples: `run.with-expense-csv.example.json` + `expense.example.csv`. |
 | 8.2 | Bank-statement table + dedup + statement-number validation; one table for all banks/cards | `src/expense_recon/store/statements.py` | **BUILT 2026-06-12.** `StatementStore`: content-fingerprint dedup (global, order-independent), statement-number validation (same id + changed content raises `StatementConflictError` unless `replace=True`), `transactions()` reconstruction with a stable fingerprint-derived id, multi-account batch support (the 6-card file). 12 tests (`tests/test_statement_store.py`). Standalone value: persists + dedups the statements already in hand, independent of the Zoho gate. CLI `store:` opt-in wiring is the follow-up. |
 | 8.3 | Reports table (4–5 fields) + per-expense report cross-reference, carried into the Books export | `src/expense_recon/store/reports.py` | SCHEMA buildable now (ER-00214/215/216 fix the field set: report no., period, submitter, currency totals, status); VALUE gated on 8.1 — nothing references a report until expenses are ingested, so building the table now would be rows nothing populates. Design-locked; build when 8.1 lands. |
 | 8.4 | Receipt-URL hosting — receipt pictures live in the tool, addressable by a stable URL the Books export carries | `src/expense_recon/hosting/` | DESIGN + minimal local scheme now (content-addressed file store + URL template); the run-target decision (Chris-local vs small host) is the same open question as 5c deployment. |
@@ -306,8 +306,10 @@ own-scanner and for receipts that bypass Expense. The tool's own tables
 (8.2/8.3) become the source of truth that survives the Zoho switch-off;
 the run-log (5b) already persists decisions, these persist the inputs.
 
-**Build order under Path A:** 8.2 → 8.3 → 8.4 → 8.1 → 8.5 column-add,
-all follow the run-log pattern.
+**Build order under Path A:** 8.2 (done) → 8.1 (done) → 8.3 → 8.4 →
+8.5 column-add, all follow the run-log pattern. 8.1 was promoted ahead
+of 8.3/8.4 once the data ask was retired: 8.3/8.4 only carry value once
+expenses are ingested, so the ingest adapter is their precondition.
 
 **No further client data is coming (owner-clarified 2026-06-12).** The
 ER PDFs + Chase export already in hand are illustrative SAMPLES, the

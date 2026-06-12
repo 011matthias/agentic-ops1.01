@@ -1,0 +1,43 @@
+{
+  "_comment_": "Path-A run config: receipts come from a Zoho Expense CSV export (BLUEPRINT 8.1) instead of the generic extracted-fields CSV. Copy to runs/<month>.json and edit. Paths resolve relative to THIS file's directory.",
+
+  "statement": {
+    "path": "statement.example.csv",
+    "account_id": "chase-2838",
+    "legal_entity_id": "brisken-us",
+    "account_card_currency": "USD",
+    "column_map": {
+      "transaction_date": "Date",
+      "amount": "Amount",
+      "vendor": "Description"
+    }
+  },
+
+  "receipts": {
+    "_": "Path-A receipt source. The Zoho Expense export is column-map driven, so the tool hardcodes no Zoho header names.",
+    "source": "expense_csv",
+    "path": "expense.example.csv",
+
+    "_column_map_help": "Logical field -> Zoho Expense export column header. Required keys: expense_date, amount, vendor. Optional: currency, document_id, reference, report_number, receipt_url, receipt_name. CONFIRM these header names against a real Zoho Expense export before a production run; the names below are a documented-format template, not a verified header.",
+    "column_map": {
+      "expense_date": "Expense Date",
+      "amount": "Amount",
+      "vendor": "Merchant",
+      "currency": "Currency",
+      "report_number": "Report Number",
+      "reference": "Reference",
+      "document_id": "Expense ID",
+      "receipt_url": "Receipt URL",
+      "receipt_name": "Receipt Name"
+    },
+
+    "_receipt_fork_help": "The receipt-URL design fork (8.1): map receipt_url when the export carries a stable URL; map receipt_name when it only carries the attachment filename (8.4 receipt-URL hosting resolves the filename to a URL by matching the receipts folder). Mapping both is fine; each row uses whichever it has.",
+
+    "default_currency": "USD",
+    "_default_currency_help": "Applied to expense rows whose mapped currency column is blank."
+  },
+
+  "output": {
+    "path": "report.xlsx"
+  }
+}

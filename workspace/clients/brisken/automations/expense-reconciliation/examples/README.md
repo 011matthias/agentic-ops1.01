@@ -64,6 +64,36 @@ Edit `run.example.json`:
 | `detected_reference` | no | reservation number, order id, etc.; surfaces in the report |
 | `line_items` | no | JSON array string. Each item: `{"description": "...", "line_total": "...", "quantity"?: ..., "unit_price"?: ...}`. Empty/missing triggers the BLUEPRINT LD-2 Tier 2 vendor-fallback categorization |
 
+## Path A: Zoho Expense CSV receipts (BLUEPRINT 8.1)
+
+Under Path A the receipt source is Chris's Zoho Expense export, not a
+hand-built receipts CSV. `run.with-expense-csv.example.json` shows it:
+
+```bash
+uv run expense-recon --config examples/run.with-expense-csv.example.json
+```
+
+Set `receipts.source` to `"expense_csv"` and add a `receipts.column_map`
+mapping each logical field to the export's column header (the tool
+hardcodes no Zoho header names):
+
+| Logical key | Required | Maps to |
+|---|---|---|
+| `expense_date` | yes | receipt date |
+| `amount` | yes | receipt total (accepts `$`, `,`, `(50.00)`) |
+| `vendor` | yes | merchant, matched against the statement |
+| `currency` | no | falls back to `receipts.default_currency` |
+| `document_id` | no | unique id; synthesized `<report>:<row>` if unmapped |
+| `reference` | no | order / reservation number |
+| `report_number` | no | the ER-NNNNN report (carried to the Books export) |
+| `receipt_url` | no | stable receipt URL when the export has one |
+| `receipt_name` | no | receipt filename when it doesn't (8.4 resolves it) |
+
+`receipt_url` / `receipt_name` are the two sides of the receipt-URL
+design fork: map whichever the real export carries. Confirm the header
+names against an actual export before a production run; the names in the
+example are a documented-format template, not a verified header.
+
 ## Errors sheet behavior (BLUEPRINT B1)
 
 A single malformed row no longer aborts the run. The bad row lands in
