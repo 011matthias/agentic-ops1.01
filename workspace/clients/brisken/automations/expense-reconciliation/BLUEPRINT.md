@@ -271,6 +271,50 @@ Slices 2 → 3 → 4 → 5 is the critical path to MVP-for-Brisken. Slices
 
 ---
 
+## Standalone realignment (Path A — confirmed 2026-06-12)
+
+Dirk confirmed Path A on 2026-06-12: a standalone pipeline where the
+tool owns its own tables and Zoho Books is the single write boundary.
+The slice map above was drawn for the original contract ("Chris drops a
+bank statement file + a receipts file, the tool recomputes from those
+files each run"). Path A keeps every shipped component and changes the
+EDGES of the pipeline: where expenses enter, how receipts are
+addressed, and that the tool persists its inputs in its own tables
+instead of recomputing from loose files. Rationale of record:
+[`2026-06-11-path-recommendation.md`](../../context/expense-reports/2026-06-11-path-recommendation.md).
+
+**Unchanged (built, green, untouched by Path A):** the deterministic
+matcher + LD-5 params, the FX bands, the reconciliation guarantee, the
+FX/ambiguous LLM judgment, the per-line categorizer, the xlsx review
+report, the journal-entry CSV export, the SQLite run-log (5b), the
+doctor pre-flight. Path A is an edge redirect, not a matcher rewrite.
+
+**Added by Path A — five build items (IDs 8.1–8.5):**
+
+| # | Item | Path | Status / gate |
+|---|---|---|---|
+| 8.1 | Zoho Expense CSV ingest adapter — a column-map over the existing receipts-CSV path, adding the report-number and receipt-URL fields | `src/expense_recon/ingest/expense_csv.py` | GATED. The adapter is config-driven (column map in `run.json`); the exact Zoho column names AND whether a receipt-URL field exists are settled by one real export header (open question). Build without hardcoding a guessed Zoho schema. |
+| 8.2 | Bank-statement table + dedup + statement-number validation; one table for all banks/cards | `src/expense_recon/store/statements.py` | **BUILT 2026-06-12.** `StatementStore`: content-fingerprint dedup (global, order-independent), statement-number validation (same id + changed content raises `StatementConflictError` unless `replace=True`), `transactions()` reconstruction with a stable fingerprint-derived id, multi-account batch support (the 6-card file). 12 tests (`tests/test_statement_store.py`). Standalone value: persists + dedups the statements already in hand, independent of the Zoho gate. CLI `store:` opt-in wiring is the follow-up. |
+| 8.3 | Reports table (4–5 fields) + per-expense report cross-reference, carried into the Books export | `src/expense_recon/store/reports.py` | SCHEMA buildable now (ER-00214/215/216 fix the field set: report no., period, submitter, currency totals, status); VALUE gated on 8.1 — nothing references a report until expenses are ingested, so building the table now would be rows nothing populates. Design-locked; build when 8.1 lands. |
+| 8.4 | Receipt-URL hosting — receipt pictures live in the tool, addressable by a stable URL the Books export carries | `src/expense_recon/hosting/` | DESIGN + minimal local scheme now (content-addressed file store + URL template); the run-target decision (Chris-local vs small host) is the same open question as 5c deployment. |
+| 8.5 | Journal-entry export to Books = the one write boundary, carrying the receipt URL + report reference | `src/expense_recon/output/zoho_export.py` | EXISTS (4a file export). 4b API + 4.8 line-item idempotency stay gated on Zoho access. Path A adds the receipt-URL + report-reference columns to the existing export. |
+
+**Slice-map effect.** Zoho's role shrinks to one import surface (8.5).
+The Expense CSV (8.1) becomes the primary receipt source in place of
+the generic receipts file; receipt OCR (2.2) remains for the future
+own-scanner and for receipts that bypass Expense. The tool's own tables
+(8.2/8.3) become the source of truth that survives the Zoho switch-off;
+the run-log (5b) already persists decisions, these persist the inputs.
+
+**Build order under Path A:** 8.2 → 8.3 (both unblocked, additive,
+follow the run-log pattern) → 8.4 (design + minimal scheme) → 8.1 → 8.5
+column-add (the last two gated on one real Zoho Expense CSV header).
+The parked data ask (reconciled month + chart-of-accounts + one real
+Expense CSV) unblocks 8.1/8.5 and the coverage→accuracy tuning; 8.2,
+8.3, and 8.4's design do not wait on it.
+
+---
+
 ## Slice 2 — LLM Layer (Receipt OCR + Real Judgment)
 
 **Goal.** Chris drops a folder of receipt images / PDFs instead of
@@ -719,6 +763,12 @@ working tool       OCR + judgment      real-data ready          posting loop    
 
 **Total remaining effort:** ~16–21 dev days IF gates land in
 sequence. Calendar time = effort + gate-wait time.
+
+This ASCII shows the ORIGINAL pre-Path-A gates. Under the standalone
+realignment (Path A, confirmed 2026-06-12) the live remaining work is
+items 8.1–8.5; see "Standalone realignment" above the slice sections.
+8.2/8.3 are unblocked and additive; 8.1/8.5 are gated on one real Zoho
+Expense CSV header.
 
 **Parallelisable while waiting:**
 
