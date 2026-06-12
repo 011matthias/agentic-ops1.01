@@ -39,6 +39,18 @@ Posting policy: only MATCHED transactions are exported. FX / ambiguous
 (call-outcomes D2 — review everything for the first months). Journal
 POSTING to Zoho (slice 4b) is irreversible and stays gated behind
 explicit confirmation; this module only writes the import file.
+
+Path-A reference columns (BLUEPRINT 8.5): two trailing columns carry the
+receipt link and the Zoho Expense report each entry traces to, so Chris
+can click through to the receipt image and see its ER report straight
+from the journal. ``Receipt URL`` comes from the 8.4
+``resolve_receipt_urls`` mapping when wired, else the receipt's own
+passthrough ``receipt_url``; ``Report Reference`` comes from the 8.3
+``ReportStore.report_for`` lookup when wired, else the receipt's own
+``report_number`` (the 8.1 adapter populates both). They repeat per row
+of an entry, the same way ``Date`` and ``Reference#`` already do, and are
+blank when unknown (never fabricated, B4). Appended after ``Credit`` so
+the existing seven-column shape and its column positions are unchanged.
 """
 from __future__ import annotations
 
@@ -56,7 +68,7 @@ from ..matching.types import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
     from ..ingest.chart_of_accounts import ChartOfAccounts
 
@@ -68,6 +80,8 @@ ZOHO_COLUMNS = (
     "Notes",
     "Debit",
     "Credit",
+    "Receipt URL",
+    "Report Reference",
 )
 
 _CARD_ACCOUNT = "Card: {account_id}"
@@ -80,6 +94,11 @@ def _amount(value: Decimal | None) -> str:
     if value is None:
         return ""
     return f"{value:.2f}"
+
+
+def _str(value: str | None) -> str:
+    """A reference cell: the value, or blank when unknown (never guessed)."""
+    return value or ""
 
 
 def _resolve_account(ref: str | None, coa: "ChartOfAccounts") -> str | None:
@@ -158,6 +177,8 @@ def build_journal_rows(
     *,
     chart_of_accounts: "ChartOfAccounts | None" = None,
     card_accounts: "Mapping[str, str] | None" = None,
+    receipt_urls: "Mapping[str, str | None] | None" = None,
+    report_for: "Callable[[str], str | None] | None" = None,
 ) -> list[list[str]]:
     """Build the Zoho journal rows for the matched transactions.
 
@@ -169,6 +190,13 @@ def build_journal_rows(
     `card_accounts` references (credit) to real Zoho accounts. Both
     optional: without them the legacy category-name / placeholder
     behaviour applies.
+
+    `receipt_urls` (8.4 `resolve_receipt_urls` output, document_id → URL)
+    and `report_for` (8.3 `ReportStore.report_for`, document_id →
+    report_number) fill the two trailing reference columns. Both
+    optional: without them each receipt's own `receipt_url` /
+    `report_number` (8.1) is used, so the existing CLI path carries the
+    references with no extra wiring. Unknown → blank, never fabricated.
     """
     rows: list[list[str]] = []
 
@@ -182,13 +210,28 @@ def build_journal_rows(
         ref = tx.transaction_id
         line_total_sum = Decimal("0")
 
+        # Entry-level reference columns: the wired 8.4 / 8.3 lookups take
+        # precedence; the receipt's own 8.1 fields are the fallback. These
+        # repeat on every row of the entry, like Date and Reference#.
+        receipt_url = (
+            receipt_urls.get(rec.document_id)
+            if receipt_urls is not None
+            else rec.receipt_url
+        )
+        report_ref = (
+            report_for(rec.document_id)
+            if report_for is not None
+            else rec.report_number
+        )
+        provenance = [_str(receipt_url), _str(report_ref)]
+
         items = rec.line_items or ()
         if not items:
             # Defensive: categorizer normally synthesizes one line item.
             rows.append([
                 date_str, _UNCATEGORIZED, tx.vendor_from_statement, ref,
                 "no line items", _amount(tx.amount), "",
-            ])
+            ] + provenance)
             line_total_sum += tx.amount
         else:
             for item in items:
@@ -198,7 +241,7 @@ def build_journal_rows(
                 rows.append([
                     date_str, account, item.description, ref,
                     notes, _amount(item.line_total), "",
-                ])
+                ] + provenance)
                 line_total_sum += item.line_total
 
         # Balancing credit to the card / bank account.
@@ -213,7 +256,7 @@ def build_journal_rows(
             credit_note,
             "",
             _amount(line_total_sum),
-        ])
+        ] + provenance)
 
     return rows
 
@@ -226,6 +269,8 @@ def write_zoho_export(
     *,
     chart_of_accounts: "ChartOfAccounts | None" = None,
     card_accounts: "Mapping[str, str] | None" = None,
+    receipt_urls: "Mapping[str, str | None] | None" = None,
+    report_for: "Callable[[str], str | None] | None" = None,
 ) -> Path:
     """Write the Zoho Books journal-entry CSV. Returns the path."""
     out_path = Path(out_path)
@@ -237,6 +282,8 @@ def write_zoho_export(
         outcome, tx_by_id, rec_by_id,
         chart_of_accounts=chart_of_accounts,
         card_accounts=card_accounts,
+        receipt_urls=receipt_urls,
+        report_for=report_for,
     )
 
     with out_path.open("w", encoding="utf-8", newline="") as fh:
