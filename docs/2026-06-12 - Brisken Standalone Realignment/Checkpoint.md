@@ -1,7 +1,9 @@
 # Checkpoint: Brisken Standalone Realignment
 
 **Date:** 2026-06-12
-**Status:** Phase A (standalone realignment + 8.2 bank-statement table) shipped; Phase B (travel-month calibration cross-check) run and shipped. No new client data; remaining Path A build (8.1/8.5) still gated on one real Zoho Expense CSV.
+**Status:** Phase A (standalone realignment + 8.2 bank-statement table) shipped; Phase B (travel-month calibration) run and shipped. No new client data; remaining Path A build (8.1/8.5) still gated on one real Zoho Expense CSV.
+
+> **Addendum (post-checkpoint, PR #137).** The Rome-only cross-check below was extended to the FULL 3-month run after the travel ER PDFs (ER-00181/183/194) were found on `Desktop\Downloads` and copied in. Net result: extraction exact to the cent, FX gate scales (multiplicity 1.0x/0.81x/0.96x), guarantee holds — BUT the **2024 EU-trip charges (Copenhagen/Lisbon) are not in the Chase 2838 export** (Nov-24 in the export is a Luxembourg trip + SaaS, not Lisbon), so the bands are truly validated only on Jun-25 Rome. Load-bearing: the export is incomplete for EU travel; the data ask must include the EU travel card/account. The "Oct/Nov need the ER PDFs (never copied)" framing below is superseded — they were found and run. See BLUEPRINT slice-3b block + the 2026-06-11-expense-report-samples.md evidence file for the corrected detail.
 
 ---
 
