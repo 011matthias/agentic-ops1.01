@@ -82,6 +82,8 @@ Total: N targets
 
 **Deploy verification gate:** After any deploy to production (Vercel, Railway, etc.): (1) WebFetch the deployed URL, (2) check page loads (200), key content present, (3) for HTML deliverables: run `uv run tools/validate-html.py` on the source files, (4) for multi-page sets: validate ALL pages not just the changed one, (5) state: "Verified: {URL} — {checks passed}." Skipping = friction event (`verification-theater`).
 
+**Platform-merge-is-not-live sub-clause:** a merge to `main` does NOT reliably auto-deploy the platform — the Vercel git integration lags (23h-stale prod caught 2026-06-09, volabyg). A platform page is live ONLY after `tools/vercel-force-deploy.sh` has run AND a `curl -sL` / WebFetch of the no-slash URL returns the new build. (a) After any platform merge, run `vercel-force-deploy.sh` from a clean `origin/main` worktree (never a dirty feature branch — it deploys `$CWD/platform`; see [[reference_vercel_force_deploy_uses_cwd_tree]]) before declaring anything live. (b) B3 attribution: a 404 or stale content on a just-merged platform page is "I have not force-deployed yet" until proven otherwise — run the force-deploy and re-fetch FIRST; never reach for "CDN cache" or re-ship a PR hoping a fresh build clears it (doing exactly that cost an extra diagnosis cycle on 2026-06-09). Structural candidate (not yet built): a post-merge hook that marks platform-path PR merges not-live until the force-deploy runs.
+
 **Start building gate:** Pre-flight: (1) read `infrastructure.yaml` for canonical names/IDs, (2) resolve target instance, (3) define expected outcomes before executing.
 
 **Shell pipe gate:** Use `printf '%s'` not `echo`. Use tool-specific flags when available (e.g., `--value`).
