@@ -39,5 +39,17 @@
 
   "output": {
     "path": "report.xlsx"
+  },
+
+  "_store_help": "Optional (BLUEPRINT 8.2/8.3). Persist the tool's own tables so a run's statement + reports survive the Zoho switch-off. Omit the block to skip; each path is independently optional. statement_id defaults to '{account_id}:{first_date}..{last_date}' so a re-run of the same month matches and a revised charge surfaces as a conflict.",
+  "store": {
+    "statements_path": "statements.sqlite",
+    "reports_path": "reports.sqlite"
+  },
+
+  "_hosting_help": "Optional (BLUEPRINT 8.4). Content-address filename-only receipts and resolve each to a stable URL the Books export carries (8.5). root is the store directory; receipts_dir is the folder the receipt_name files live in; url_template defaults to the host-agnostic '/receipts/{relpath}' (the Chris-local-vs-host run-target is the deferred 5c decision).",
+  "hosting": {
+    "root": "receipt-store",
+    "receipts_dir": "receipts"
   }
 }
