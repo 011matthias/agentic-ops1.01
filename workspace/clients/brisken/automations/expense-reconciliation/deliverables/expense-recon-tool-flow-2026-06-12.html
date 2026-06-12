@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Brisken Expense Reconciliation: How the tool works</title>
+<script>(function(){var t=localStorage.getItem('theme');
+  var d=document.documentElement;
+  d.setAttribute('data-theme',
+    t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');
+})();</script>
+<style>
+  :root, [data-theme="light"] {
+    --bg: #f8fafc; --surface: #ffffff; --border: #e2e8f0;
+    --text: #0f172a; --muted: #64748b;
+    --blue: #2563eb; --blue-bg: #eff6ff;
+    --green: #059669; --green-bg: #ecfdf5;
+    --orange: #d97706; --orange-bg: #fffbeb;
+    --purple: #7c3aed; --purple-bg: #f5f3ff;
+    --red: #dc2626; --red-bg: #fef2f2;
+  }
+  [data-theme="dark"] {
+    --bg: #0b1220; --surface: #111a2e; --border: #233149;
+    --text: #e6edf7; --muted: #8fa3bf;
+    --blue: #60a5fa; --blue-bg: #14213a;
+    --green: #34d399; --green-bg: #0d2a22;
+    --orange: #fbbf24; --orange-bg: #2d2208;
+    --purple: #a78bfa; --purple-bg: #221a3a;
+    --red: #f87171; --red-bg: #2a1414;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.55;
+  }
+  .site-nav {
+    position: sticky; top: 0; z-index: 50; display: flex; align-items: center;
+    justify-content: space-between; padding: 12px 28px;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+  }
+  .nav-left { font-weight: 700; font-size: 15px; }
+  .nav-client { color: var(--muted); font-weight: 400; }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .nav-status {
+    font-size: 12px; padding: 3px 10px; border-radius: 999px;
+    background: var(--blue-bg); color: var(--blue); font-weight: 600;
+  }
+  .nav-hint { font-size: 12px; color: var(--muted); }
+  .nav-theme {
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    border-radius: 999px; padding: 4px 12px; cursor: pointer; font-size: 13px;
+  }
+  .main-content { max-width: 980px; margin: 0 auto; padding: 36px 28px 64px; }
+
+  .hero { margin-bottom: 32px; }
+  .hero-badge {
+    display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--blue); background: var(--blue-bg);
+    padding: 4px 12px; border-radius: 999px; margin-bottom: 14px;
+  }
+  h1 { font-size: 31px; line-height: 1.2; margin-bottom: 10px; }
+  .hero-sub { color: var(--muted); font-size: 16px; max-width: 740px; }
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 24px; }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .stat-value { font-size: 22px; font-weight: 700; color: var(--blue); }
+  .stat-label { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  h2 {
+    font-size: 21px; margin: 46px 0 6px; padding-top: 18px;
+    border-top: 1px solid var(--border);
+  }
+  .h2-sub { color: var(--muted); font-size: 14px; margin-bottom: 16px; }
+  h3 { font-size: 15px; margin: 20px 0 8px; }
+  p { margin-bottom: 11px; }
+  p.lead { font-size: 15.5px; }
+  ul.plain { margin: 8px 0 12px 20px; font-size: 14.5px; }
+  ul.plain li { margin-bottom: 5px; }
+  .src { font-size: 12px; color: var(--muted); }
+  strong.k { color: var(--text); }
+
+  /* pipeline flow */
+  .flow { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 20px 0 8px; }
+  .flow-step {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 10px; position: relative; font-size: 13px;
+  }
+  .flow-step .num {
+    display: inline-flex; width: 22px; height: 22px; border-radius: 50%;
+    background: var(--blue); color: #fff; font-size: 12px; font-weight: 700;
+    align-items: center; justify-content: center; margin-bottom: 6px;
+  }
+  .flow-step b { display: block; font-size: 13px; margin-bottom: 3px; }
+  .flow-step span { color: var(--muted); font-size: 12px; }
+  .flow-step:not(:last-child)::after {
+    content: "\2192"; position: absolute; right: -10px; top: 14px;
+    color: var(--muted); font-size: 13px; z-index: 1;
+  }
+
+  /* zones (cards) */
+  .zones { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin: 16px 0; }
+  .zones.two { grid-template-columns: 1fr 1fr; }
+  .zone { border-radius: 12px; padding: 16px 18px; border: 1px solid var(--border); background: var(--surface); }
+  .zone h3 { margin-top: 0; }
+  .zone-blue { border-left: 4px solid var(--blue); }
+  .zone-green { border-left: 4px solid var(--green); }
+  .zone-purple { border-left: 4px solid var(--purple); }
+  .zone-orange { border-left: 4px solid var(--orange); }
+  .zone ul { margin: 8px 0 0 18px; font-size: 13.5px; }
+  .zone li { margin-bottom: 4px; }
+  .zone .tagline { color: var(--muted); font-size: 13px; margin-top: 6px; }
+
+  /* svg architecture */
+  .diagram { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin: 18px 0; overflow-x: auto; }
+  .diagram svg { display: block; width: 100%; height: auto; min-width: 640px; }
+  .diagram text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+  /* fx band bar (graph) */
+  .fxbar { display: flex; height: 40px; border-radius: 8px; overflow: hidden; margin: 14px 0 6px; border: 1px solid var(--border); }
+  .fxseg { display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12.5px; font-weight: 600; }
+  .fxseg.s1 { background: var(--green); flex: 3; }
+  .fxseg.s2 { background: var(--orange); flex: 2.5; }
+  .fxseg.s3 { background: var(--red); flex: 1.6; }
+  .fxkey { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .fxkey b { color: var(--text); }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: baseline; }
+  .dot.g { background: var(--green); } .dot.o { background: var(--orange); } .dot.r { background: var(--red); }
+
+  /* buckets */
+  .buckets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 14px 0; }
+  .bucket { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; background: var(--surface); }
+  .bucket .big { font-size: 15px; font-weight: 700; }
+  .bucket.green { border-left: 4px solid var(--green); }
+  .bucket.orange { border-left: 4px solid var(--orange); }
+  .bucket.red { border-left: 4px solid var(--red); }
+  .bucket span { color: var(--muted); font-size: 13px; display: block; margin-top: 4px; }
+
+  /* tiers */
+  .tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 14px 0; }
+  .tier { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; background: var(--surface); }
+  .tier .lvl { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--purple); }
+  .tier b { display: block; margin: 4px 0 3px; }
+  .tier span { color: var(--muted); font-size: 13px; }
+
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
+  th { text-align: left; padding: 8px 10px; border-bottom: 2px solid var(--border); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  td code, p code, li code { background: var(--blue-bg); color: var(--blue); padding: 1px 6px; border-radius: 5px; font-size: 12.5px; }
+
+  .callout {
+    border-radius: 12px; padding: 14px 18px; margin: 18px 0;
+    background: var(--green-bg); border: 1px solid var(--border);
+    border-left: 4px solid var(--green); font-size: 14px;
+  }
+  .callout.blue { background: var(--blue-bg); border-left-color: var(--blue); }
+  .callout-title { font-weight: 700; display: block; margin-bottom: 3px; }
+
+  /* code blocks with copy */
+  .codeblock { position: relative; margin: 14px 0; }
+  .codeblock pre {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; overflow-x: auto; font-size: 13px; line-height: 1.5;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; color: var(--text);
+  }
+  .codeblock .copy {
+    position: absolute; top: 8px; right: 8px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--muted); border-radius: 7px; padding: 3px 10px;
+    font-size: 12px; cursor: pointer; opacity: 0; transition: opacity .15s;
+  }
+  .codeblock:hover .copy { opacity: 1; }
+  .codeblock .copy.done { color: var(--green); border-color: var(--green); }
+
+  .footer {
+    margin-top: 50px; padding-top: 18px; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 13px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+
+  #searchOverlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 100; padding-top: 12vh; }
+  #searchOverlay.open { display: block; }
+  .search-box { max-width: 520px; margin: 0 auto; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: 0 18px 50px rgba(0,0,0,.3); }
+  .search-box input { width: 100%; border: none; outline: none; padding: 14px 16px; font-size: 15px; background: var(--surface); color: var(--text); }
+  .search-results { max-height: 320px; overflow-y: auto; border-top: 1px solid var(--border); }
+  .search-results a { display: block; padding: 10px 16px; color: var(--text); text-decoration: none; font-size: 14px; }
+  .search-results a:hover, .search-results a.sel { background: var(--blue-bg); }
+
+  @media (max-width: 760px) {
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+    .flow { grid-template-columns: repeat(2, 1fr); }
+    .flow-step:not(:last-child)::after { content: ""; }
+    .zones, .zones.two, .buckets, .tiers { grid-template-columns: 1fr; }
+  }
+  @media print {
+    .site-nav, #searchOverlay, .codeblock .copy { display: none !important; }
+    body { background: #fff; }
+    .main-content { padding-top: 0; max-width: 100%; }
+    h2 { page-break-before: always; }
+    h2:first-of-type, .hero + h2 { page-break-before: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="site-nav">
+  <div class="nav-left">UnpauseAI <span class="nav-client">&middot; Brisken Expense Reconciliation</span></div>
+  <div class="nav-right">
+    <span class="nav-hint">Ctrl/Cmd+K to jump</span>
+    <span class="nav-status">Tool walkthrough</span>
+    <button class="nav-theme" onclick="(function(){
+      var d=document.documentElement;
+      var c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+      d.setAttribute('data-theme',c);
+      localStorage.setItem('theme',c);
+    })()" aria-label="Toggle theme">&#9788;/&#9790;</button>
+  </div>
+</nav>
+
+<main class="main-content">
+
+<section class="hero">
+  <span class="hero-badge">Tool walkthrough &middot; Path A standalone pipeline</span>
+  <h1>How the expense reconciliation tool works</h1>
+  <p class="hero-sub">A plain walk through what happens when the tool is handed a month of card activity and a set of receipts: how it reads them, matches every charge to its receipt, sorts each line into the right account, and hands back a review sheet plus a Books-ready journal. Nothing posts to Zoho on its own; the last step stays yours.</p>
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-value">3</div><div class="stat-label">receipt sources it can read</div></div>
+    <div class="stat-card"><div class="stat-value">8</div><div class="stat-label">expense categories it sorts into</div></div>
+    <div class="stat-card"><div class="stat-value">255</div><div class="stat-label">automated tests behind it</div></div>
+    <div class="stat-card"><div class="stat-value">0</div><div class="stat-label">charges quietly dropped</div></div>
+  </div>
+</section>
+
+<h2 id="overview">The shape of one run</h2>
+<p class="h2-sub">Six passes, left to right. Each one hands its result to the next.</p>
+<div class="flow">
+  <div class="flow-step"><span class="num">1</span><b>Read</b><span>Load the statement and the receipts into one common shape.</span></div>
+  <div class="flow-step"><span class="num">2</span><b>Remember</b><span>File the statement and receipts in the tool's own tables.</span></div>
+  <div class="flow-step"><span class="num">3</span><b>Sort</b><span>Put every receipt line into one of eight categories.</span></div>
+  <div class="flow-step"><span class="num">4</span><b>Match</b><span>Pair each charge with its receipt.</span></div>
+  <div class="flow-step"><span class="num">5</span><b>Judge</b><span>Send only the hard cases to a model for a second look.</span></div>
+  <div class="flow-step"><span class="num">6</span><b>Hand back</b><span>A review sheet plus a Books-ready journal.</span></div>
+</div>
+<p>The tool is run once per month with a small settings file that points at the two inputs and says where to write the outputs. One command does the whole pass. There is also a preview mode that runs everything and prints a summary without writing a single file, so a run can be checked before it is kept.</p>
+
+<div class="diagram" role="img" aria-label="Architecture: two inputs feed the engine, which writes to three tables and two output files.">
+<svg viewBox="0 0 980 320" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+      <path d="M0,0 L9,4.5 L0,9 z" fill="var(--muted)"/>
+    </marker>
+  </defs>
+  <!-- inputs -->
+  <rect x="14" y="40" width="170" height="52" rx="9" fill="var(--blue-bg)" stroke="var(--blue)"/>
+  <text x="99" y="63" text-anchor="middle" font-size="13" font-weight="700" fill="var(--text)">Card statement</text>
+  <text x="99" y="80" text-anchor="middle" font-size="11.5" fill="var(--muted)">the charges</text>
+  <rect x="14" y="120" width="170" height="52" rx="9" fill="var(--blue-bg)" stroke="var(--blue)"/>
+  <text x="99" y="143" text-anchor="middle" font-size="13" font-weight="700" fill="var(--text)">Receipts</text>
+  <text x="99" y="160" text-anchor="middle" font-size="11.5" fill="var(--muted)">the proof</text>
+  <line x1="184" y1="66" x2="296" y2="120" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="184" y1="146" x2="296" y2="140" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- engine -->
+  <rect x="300" y="86" width="200" height="120" rx="11" fill="var(--purple-bg)" stroke="var(--purple)"/>
+  <text x="400" y="112" text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)">The engine</text>
+  <text x="400" y="134" text-anchor="middle" font-size="11.5" fill="var(--muted)">sort, match,</text>
+  <text x="400" y="150" text-anchor="middle" font-size="11.5" fill="var(--muted)">judge the hard cases</text>
+  <text x="400" y="178" text-anchor="middle" font-size="11" fill="var(--muted)">nothing dropped:</text>
+  <text x="400" y="193" text-anchor="middle" font-size="11" fill="var(--muted)">every charge accounted for</text>
+  <!-- tables -->
+  <rect x="616" y="14" width="200" height="44" rx="9" fill="var(--green-bg)" stroke="var(--green)"/>
+  <text x="716" y="33" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--text)">Statement table</text>
+  <text x="716" y="48" text-anchor="middle" font-size="11" fill="var(--muted)">dedupes re-downloads</text>
+  <rect x="616" y="68" width="200" height="44" rx="9" fill="var(--green-bg)" stroke="var(--green)"/>
+  <text x="716" y="87" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--text)">Report table</text>
+  <text x="716" y="102" text-anchor="middle" font-size="11" fill="var(--muted)">groups expenses by report</text>
+  <rect x="616" y="122" width="200" height="44" rx="9" fill="var(--green-bg)" stroke="var(--green)"/>
+  <text x="716" y="141" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--text)">Receipt store</text>
+  <text x="716" y="156" text-anchor="middle" font-size="11" fill="var(--muted)">keeps each image at a link</text>
+  <!-- outputs -->
+  <rect x="616" y="200" width="200" height="44" rx="9" fill="var(--orange-bg)" stroke="var(--orange)"/>
+  <text x="716" y="219" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--text)">Excel review sheet</text>
+  <text x="716" y="234" text-anchor="middle" font-size="11" fill="var(--muted)">you check and fix</text>
+  <rect x="616" y="254" width="200" height="50" rx="9" fill="var(--orange-bg)" stroke="var(--orange)"/>
+  <text x="716" y="275" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--text)">Zoho Books journal</text>
+  <text x="716" y="291" text-anchor="middle" font-size="11" fill="var(--muted)">with receipt link + report ref</text>
+  <line x1="500" y1="120" x2="612" y2="60" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="500" y1="135" x2="612" y2="120" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="500" y1="160" x2="612" y2="210" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="500" y1="172" x2="612" y2="268" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+</svg>
+</div>
+
+<h2 id="inputs">What goes in</h2>
+<p class="h2-sub">Two things: the charges, and the proof for each charge.</p>
+<p>The <strong class="k">statement</strong> is the card or bank activity for the month, as a spreadsheet file. A small column map tells the tool which column holds the date, the amount, and the merchant, so the tool never hardcodes one bank's layout. A statement file can hold several cards at once; the Chase export does.</p>
+<p>The <strong class="k">receipts</strong> are the proof for each charge. The tool reads them from any of three sources, and the rest of the pipeline does not care which one was used:</p>
+<div class="zones">
+  <div class="zone zone-blue">
+    <h3>Zoho Expense export</h3>
+    <p class="tagline">The main source today.</p>
+    <ul>
+      <li>The expense lines already typed into Zoho Expense, exported as a file.</li>
+      <li>Each line carries its report number and a link to the attached receipt.</li>
+      <li>Read through the same column map idea, so no Zoho header name is baked in.</li>
+    </ul>
+  </div>
+  <div class="zone zone-green">
+    <h3>A typed-out file</h3>
+    <p class="tagline">The simple fallback.</p>
+    <ul>
+      <li>A plain file with the receipt fields already filled in.</li>
+      <li>Useful for a quick one-off or a hand-built set.</li>
+    </ul>
+  </div>
+  <div class="zone zone-purple">
+    <h3>A folder of images</h3>
+    <p class="tagline">For receipts that never went through Zoho.</p>
+    <ul>
+      <li>Drop in photos and PDFs of receipts.</li>
+      <li>The tool reads the text off each one with OCR, which means reading text from a picture.</li>
+      <li>Digital PDFs are read from their text layer first, which is cheaper and more exact than reading the image.</li>
+    </ul>
+  </div>
+</div>
+<p class="src">The tool also pulls Brisken's chart of accounts (the list of real Books accounts) when a run is set up to write the journal, so it can name real accounts instead of placeholders.</p>
+
+<h2 id="matching">Matching each charge to its receipt</h2>
+<p class="h2-sub">A plain match first. A model only when a plain match cannot settle it.</p>
+<p class="lead">The rule here is Dirk's: no model where a straightforward match already works. When a card charge and a receipt share the same card, the same day, and the same amount, the tool pairs them on the spot with full confidence and moves on. The model is never consulted for the easy majority.</p>
+
+<h3>When the currencies differ</h3>
+<p>Travel makes this the interesting part. A receipt in euros or reais sits against a charge that posted in dollars, so the amounts will not line up to the cent. The tool checks how far apart they are once converted, and sorts the pair into one of three bands. The width of each band came from real Brisken receipts, not a guess.</p>
+<div class="fxkey">
+  <span><span class="dot g"></span><b>Within ~3%</b> confident match</span>
+  <span><span class="dot o"></span><b>3% to ~13%</b> conversion-fee suspect, send for a second look</span>
+  <span><span class="dot r"></span><b>Over ~13%</b> too far apart, hold it back</span>
+</div>
+<div class="fxbar" role="img" aria-label="Three matching bands: within 3 percent confident, 3 to 13 percent suspect, over 13 percent held back.">
+  <div class="fxseg s1">confident</div>
+  <div class="fxseg s2">second look</div>
+  <div class="fxseg s3">hold back</div>
+</div>
+<p>The wider band exists because of DCC, dynamic currency conversion, where the card does its own conversion at the till and adds a markup. On the Brisken receipts that markup ran from about 3.5% up to nearly 13%, so a charge can sit well above the network rate and still be the right receipt. The tool reads the dollar figure printed on the receipt when there is one, because Dirk's rule is to trust the printed dollar amount over an estimate.</p>
+
+<h3>When the merchant name is mangled</h3>
+<p>Banks truncate. The Chase export prints <code>MEGA CENTE CONSTR</code> for a shop whose full name runs to a dozen words. The tool compares the two names token by token and scores how close they are, so a chopped word still matches its full form. The name is a tie-breaker, never the only thing a match rests on.</p>
+
+<h3>Nothing is dropped</h3>
+<p>This is the promise the whole engine is built around. After the pass, every single charge has landed in exactly one of three places, and you can see the split at a glance:</p>
+<div class="buckets">
+  <div class="bucket green"><div class="big">Matched</div><span>Paired with its receipt and ready for the journal.</span></div>
+  <div class="bucket orange"><div class="big">Needs your judgment</div><span>A currency case or a tie between two close receipts. Surfaced for review, with the model's read attached.</span></div>
+  <div class="bucket red"><div class="big">Unmatched</div><span>No receipt found, or no charge found. Flagged so the gap is visible, never hidden.</span></div>
+</div>
+<p>A charge can never vanish between the input and the output. If the tool cannot resolve something, it says so on the review sheet rather than guessing.</p>
+
+<h2 id="categories">Sorting each line into an account</h2>
+<p class="h2-sub">Eight categories, and a confidence floor under every call.</p>
+<p>Before matching, the tool reads each receipt's line items and sorts them into one of eight categories: travel and transport, meals and entertainment, software and subscriptions, office supplies, equipment and hardware, marketing, professional services, and premises. It works from the line item itself, not from the merchant name, so a hardware charge at a general store still lands as hardware. Every call carries a confidence score, and anything under the floor is set aside for you rather than forced.</p>
+<div class="tiers">
+  <div class="tier"><span class="lvl">Tier 1</span><b>From the line</b><span>Read straight from the receipt's line item. Trusted; goes through.</span></div>
+  <div class="tier"><span class="lvl">Tier 2</span><b>From the merchant</b><span>Used only when a receipt has no line detail. Marked so you give it a quick check.</span></div>
+  <div class="tier"><span class="lvl">Tier 3</span><b>Left for you</b><span>Confidence too low, or nothing to go on. The account cell is left blank to assign.</span></div>
+</div>
+<p>The tool never writes an account it cannot back up. When the picked account does not exist in Brisken's chart of accounts, it flags the line as needing an account rather than inventing a plausible one.</p>
+
+<h2 id="tables">The tool keeps its own records</h2>
+<p class="h2-sub">So the work stands on its own, even if Zoho is ever switched off.</p>
+<p>Rather than recompute from loose files every month, the tool files its inputs in three of its own stores. This is what lets the history live in the tool itself instead of only inside Zoho.</p>
+<div class="zones">
+  <div class="zone zone-green">
+    <h3>Statement table</h3>
+    <ul>
+      <li>One running record of every card transaction across all cards.</li>
+      <li>Each charge is filed under a fingerprint of its own contents, so re-downloading an overlapping period counts each charge once.</li>
+      <li>If a re-download has a changed amount, the tool flags the difference instead of double-storing it.</li>
+    </ul>
+  </div>
+  <div class="zone zone-green">
+    <h3>Report table</h3>
+    <ul>
+      <li>The Zoho Expense reports and which expense belongs to which report.</li>
+      <li>Carries the report's period and its per-currency totals.</li>
+      <li>This is what puts the report reference on every journal line.</li>
+    </ul>
+  </div>
+  <div class="zone zone-green">
+    <h3>Receipt store</h3>
+    <ul>
+      <li>A kept copy of each receipt image, filed under a fingerprint of the image.</li>
+      <li>Each one gets a stable link the journal can carry.</li>
+      <li>The same image is only ever stored once.</li>
+    </ul>
+  </div>
+</div>
+<div class="callout blue">
+  <span class="callout-title">All three are optional and off by default</span>
+  A run only keeps these records when the settings file asks for them. A plain run writes nothing extra, and a preview run keeps nothing at all.
+</div>
+
+<h2 id="outputs">What you get back</h2>
+<p class="h2-sub">A sheet to review, and a journal to import when you are ready.</p>
+<div class="zones two">
+  <div class="zone zone-orange">
+    <h3>The Excel review sheet</h3>
+    <ul>
+      <li>Every charge, its receipt, and the matched outcome side by side.</li>
+      <li>Rows colored by how the category was decided, so the ones that want a check stand out.</li>
+      <li>A separate tab lists anything the tool could not read, so nothing is silently skipped.</li>
+    </ul>
+  </div>
+  <div class="zone zone-orange">
+    <h3>The Zoho Books journal</h3>
+    <ul>
+      <li>One balanced entry per charge: the expense on one side, the card on the other.</li>
+      <li>Only charges that actually matched are written; the rest wait for your review.</li>
+      <li>Two extra columns carry the receipt link and the report reference, on every line, so you can click straight to the proof.</li>
+    </ul>
+  </div>
+</div>
+<p>The journal is a file to import. Posting it into Zoho stays a separate step that a person triggers, because a posted journal is hard to take back. The tool writes the file; it never posts on its own.</p>
+<table>
+  <thead><tr><th>Column</th><th>What it holds</th></tr></thead>
+  <tbody>
+    <tr><td><code>Date</code>, <code>Account</code>, <code>Debit</code>, <code>Credit</code></td><td>The standard double-entry journal fields.</td></tr>
+    <tr><td><code>Reference#</code></td><td>Ties the lines of one entry together.</td></tr>
+    <tr><td><code>Receipt URL</code></td><td>A link to the receipt image: the Zoho link when the export carried one, otherwise the tool's own kept copy.</td></tr>
+    <tr><td><code>Report Reference</code></td><td>The Zoho Expense report the charge traces back to.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="running">Running it</h2>
+<p class="h2-sub">One command, one settings file.</p>
+<p>A run is one command pointed at a settings file. The settings file names the two inputs, their column maps, and which outputs to write. Here is the command, with the preview option underneath:</p>
+<div class="codeblock">
+  <button class="copy" type="button">Copy</button>
+  <pre>expense-recon --config april.json
+
+# preview only: run everything, print a summary, write nothing
+expense-recon --config april.json --dry-run</pre>
+</div>
+<p>The settings file reads like this. The <code>store</code> and <code>hosting</code> sections are the optional records from earlier; leave them out and the run still produces the review sheet and the journal.</p>
+<div class="codeblock">
+  <button class="copy" type="button">Copy</button>
+  <pre>{
+  "statement": { "path": "chase-april.csv", "account_id": "chase-2838",
+                 "column_map": { "transaction_date": "Date", "amount": "Amount", "vendor": "Description" } },
+  "receipts":  { "path": "expense-april.csv", "source": "expense_csv",
+                 "column_map": { "expense_date": "Expense Date", "amount": "Amount", "vendor": "Merchant" } },
+  "store":     { "statements_path": "statements.sqlite", "reports_path": "reports.sqlite" },
+  "hosting":   { "root": "receipt-store", "receipts_dir": "receipts" },
+  "zoho":      { "export_path": "zoho-journal.csv" }
+}</pre>
+</div>
+
+<h2 id="safety">Safety and audit</h2>
+<p class="h2-sub">Check before you keep it, and know what every past run did.</p>
+<ul class="plain">
+  <li><strong class="k">Preview first.</strong> The dry run does the whole pass and prints the counts without writing a file, so a month can be checked before it is kept.</li>
+  <li><strong class="k">A pre-flight check.</strong> A <code>doctor</code> command looks over the settings and the input files before a real run, and points at anything missing or misnamed.</li>
+  <li><strong class="k">A record of every run.</strong> When asked to, the tool logs each run and what it decided, so you can later ask what was done in a given month and compare two runs.</li>
+  <li><strong class="k">Nothing posts on its own.</strong> The journal is written as a file. Posting it into Zoho is always a deliberate, human step.</li>
+</ul>
+<div class="callout">
+  <span class="callout-title">Built to stand on real months</span>
+  The whole pipeline is checked by 255 automated tests and has been run end to end on real Brisken travel months across three currencies, with every charge accounted for and the currency matching holding without over-pairing.
+</div>
+
+<div class="footer">
+  <div>Brisken &middot; UnpauseAI &middot; admin@unpauseai.com</div>
+  <div>Last updated: 2026-06-12</div>
+</div>
+
+</main>
+
+<div id="searchOverlay">
+  <div class="search-box">
+    <input id="searchInput" type="text" placeholder="Jump to section..." autocomplete="off">
+    <div class="search-results" id="searchResults"></div>
+  </div>
+</div>
+
+<script>
+// copy-to-clipboard on code blocks
+Array.prototype.forEach.call(document.querySelectorAll('.codeblock'), function(block){
+  var btn = block.querySelector('.copy');
+  var pre = block.querySelector('pre');
+  if (!btn || !pre) return;
+  btn.addEventListener('click', function(){
+    var text = pre.innerText;
+    navigator.clipboard.writeText(text).then(function(){
+      btn.textContent = 'Copied'; btn.classList.add('done');
+      setTimeout(function(){ btn.textContent = 'Copy'; btn.classList.remove('done'); }, 1400);
+    });
+  });
+});
+
+// Ctrl/Cmd+K section search, with the last query remembered
+(function(){
+  var overlay = document.getElementById('searchOverlay');
+  var input = document.getElementById('searchInput');
+  var results = document.getElementById('searchResults');
+  var sections = Array.prototype.slice.call(document.querySelectorAll('h2[id]')).map(function(h){
+    return { id: h.id, label: h.textContent };
+  });
+  var sel = 0;
+  function render(q){
+    var f = sections.filter(function(s){ return s.label.toLowerCase().indexOf(q.toLowerCase()) !== -1; });
+    if (sel >= f.length) sel = Math.max(0, f.length - 1);
+    results.innerHTML = f.map(function(s, i){
+      return '<a href="#'+s.id+'" class="'+(i===sel?'sel':'')+'">'+s.label+'</a>';
+    }).join('');
+    return f;
+  }
+  var current = render('');
+  function close(){ overlay.classList.remove('open'); }
+  function open(){
+    overlay.classList.add('open'); sel = 0;
+    input.value = localStorage.getItem('lastSearch') || '';
+    current = render(input.value); input.focus(); input.select();
+  }
+  document.addEventListener('keydown', function(e){
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); open(); }
+    if (!overlay.classList.contains('open')) return;
+    if (e.key === 'Escape') close();
+    if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(sel+1, current.length-1); current = render(input.value); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(sel-1, 0); current = render(input.value); }
+    if (e.key === 'Enter' && current[sel]) { location.hash = current[sel].id; close(); }
+  });
+  input.addEventListener('input', function(){
+    sel = 0; current = render(input.value);
+    localStorage.setItem('lastSearch', input.value);
+  });
+  overlay.addEventListener('click', function(e){ if (e.target === overlay) close(); });
+  results.addEventListener('click', function(){ close(); });
+})();
+</script>
+
+</body>
+</html>
