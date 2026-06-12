@@ -360,3 +360,94 @@ def test_cli_disabled_zoho_block_writes_no_export(tmp_path):
     result = run(config_path)
     assert result is not None
     assert not (tmp_path / "zoho-journal.csv").exists()
+
+
+# ── slice 8.5: receipt-URL + report-reference columns ───────────────
+#
+# Two trailing columns (index 7 = Receipt URL, 8 = Report Reference)
+# carry the receipt link + the Zoho Expense report each entry traces to.
+
+_RECEIPT_URL_COL = 7
+_REPORT_REF_COL = 8
+
+
+def _receipt_prov(items, *, report_number=None, receipt_url=None, receipt_name=None) -> Receipt:
+    return Receipt(
+        document_id="r1", legal_entity_id="le1",
+        detected_date=date(2026, 4, 7), detected_total=Decimal("180"),
+        detected_currency="USD", detected_vendor="Amazon",
+        report_number=report_number, receipt_url=receipt_url, receipt_name=receipt_name,
+        line_items=tuple(items),
+    )
+
+
+def test_header_carries_the_two_reference_columns(tmp_path):
+    assert ZOHO_COLUMNS[_RECEIPT_URL_COL] == "Receipt URL"
+    assert ZOHO_COLUMNS[_REPORT_REF_COL] == "Report Reference"
+    tx = _tx()
+    rec = _receipt_prov([_line("chair", "180", "Equipment & Hardware")],
+                        report_number="ER-00220", receipt_url="https://z/r/1")
+    out = write_zoho_export(_matched_outcome(), [tx], [rec], tmp_path / "z.csv")
+    with out.open(encoding="utf-8") as fh:
+        rows = list(csv.reader(fh))
+    assert tuple(rows[0]) == ZOHO_COLUMNS
+    assert all(len(r) == len(ZOHO_COLUMNS) for r in rows)
+
+
+def test_reference_columns_fall_back_to_receipt_fields():
+    """With no wired lookups, the receipt's own 8.1 fields populate the
+    columns — so the existing CLI path carries the references for free."""
+    tx = _tx()
+    rec = _receipt_prov(
+        [_line("chair", "150", "Equipment & Hardware"),
+         _line("beans", "30", "Office Supplies & Consumables")],
+        report_number="ER-00220", receipt_url="https://expense.zoho.example/r/1001",
+    )
+    rows = build_journal_rows(_matched_outcome(), {"t1": tx}, {"r1": rec})
+    # 2 debits + 1 credit; the reference columns repeat on every row.
+    assert len(rows) == 3
+    for r in rows:
+        assert r[_RECEIPT_URL_COL] == "https://expense.zoho.example/r/1001"
+        assert r[_REPORT_REF_COL] == "ER-00220"
+
+
+def test_wired_lookups_override_receipt_fields():
+    """receipt_urls (8.4) + report_for (8.3) take precedence over the
+    receipt's own fields (e.g. a filename-only receipt hosted by 8.4)."""
+    tx = _tx()
+    rec = _receipt_prov([_line("chair", "180", "Equipment & Hardware")],
+                        report_number="ER-OLD", receipt_url=None, receipt_name="chair.jpg")
+    rows = build_journal_rows(
+        _matched_outcome(), {"t1": tx}, {"r1": rec},
+        receipt_urls={"r1": "/receipts/ab/abcd.jpg"},
+        report_for={"r1": "ER-00220"}.get,
+    )
+    debit = next(r for r in rows if r[5])
+    assert debit[_RECEIPT_URL_COL] == "/receipts/ab/abcd.jpg"
+    assert debit[_REPORT_REF_COL] == "ER-00220"
+
+
+def test_reference_columns_blank_when_unknown():
+    """No receipt fields and no wired lookups → blank, never fabricated."""
+    tx = _tx()
+    rec = _receipt([_line("chair", "180", "Equipment & Hardware")])  # no prov fields
+    rows = build_journal_rows(_matched_outcome(), {"t1": tx}, {"r1": rec})
+    for r in rows:
+        assert r[_RECEIPT_URL_COL] == ""
+        assert r[_REPORT_REF_COL] == ""
+
+
+def test_wired_lookup_miss_is_blank_not_error():
+    """A document_id absent from the wired mapping resolves to blank, and
+    a report_for returning None is blank — surfaced, not fabricated."""
+    tx = _tx()
+    rec = _receipt_prov([_line("chair", "180", "Equipment & Hardware")],
+                        report_number="ER-FALLBACK", receipt_url="https://fallback")
+    rows = build_journal_rows(
+        _matched_outcome(), {"t1": tx}, {"r1": rec},
+        receipt_urls={},                 # r1 not present
+        report_for=lambda doc: None,     # always unknown
+    )
+    debit = next(r for r in rows if r[5])
+    assert debit[_RECEIPT_URL_COL] == ""   # wired mapping wins, miss → blank
+    assert debit[_REPORT_REF_COL] == ""
