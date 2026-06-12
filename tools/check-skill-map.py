@@ -47,7 +47,8 @@ SKILL_DIRS = ("modules", "references", "components")
 # clients/{client}/context/... etc.) or against a user's home — conventions,
 # not repo paths. Validating them would be all false positives.
 SKIP_PREFIXES = ("context/", "handover/", "docs/client/", "app/", "src/",
-                 ".agents/", "~", "prospects/", "node_modules/")
+                 ".agents/", "~", "prospects/", "node_modules/",
+                 ".claude/queue/")  # gitignored runtime state, auto-created on first use
 # Default scan scope is first-party skills only: vendored third-party skills
 # (marketing pack etc.) follow their own internal conventions.
 FIRST_PARTY_PREFIX = "skil_"
