@@ -10,6 +10,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-06-12 | Brisken Expense Recon Path A Complete | client-dev | [Checkpoint](docs/2026-06-12%20-%20Brisken%20Expense%20Recon%20Path%20A%20Complete/Checkpoint.md) |
 | 2026-06-12 | Brisken Lead-Gen OnePilot Pivot | client-dev | [Checkpoint](docs/2026-06-12%20-%20Brisken%20Lead-Gen%20OnePilot%20Pivot/Checkpoint.md) |
 | 2026-06-12 | Brisken Expense Recon 8.1 | client-dev | [Checkpoint](docs/2026-06-12%20-%20Brisken%20Expense%20Recon%208.1/Checkpoint.md) |
 | 2026-06-12 | Brisken Standalone Realignment | client-dev | [Checkpoint](docs/2026-06-12%20-%20Brisken%20Standalone%20Realignment/Checkpoint.md) |
