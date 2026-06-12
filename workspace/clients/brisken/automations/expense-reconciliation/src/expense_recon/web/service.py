@@ -144,14 +144,16 @@ def create_run(
 
     column_map = _resolve_statement_map(stmt_path, form)
 
-    cfg = _build_config(stmt_name, rcpt_name, column_map, form)
+    # A requested-but-unavailable AI key must NOT block the run. The
+    # keyword classifier always produces a complete reconciliation, so we
+    # drop the `llm:` block, run the deterministic path, and record an
+    # informational notice the workbench surfaces. Never a hard error.
+    ai_unavailable = form.use_llm and not os.environ.get("OPENAI_API_KEY")
+    use_llm_effective = form.use_llm and not ai_unavailable
 
-    if form.use_llm and not os.environ.get("OPENAI_API_KEY"):
-        raise RunInputError(
-            "AI categorization was requested but OPENAI_API_KEY is not set "
-            "in the server environment. Start the server with the key set, "
-            "or leave AI off to use the keyword fallback."
-        )
+    cfg = _build_config(
+        stmt_name, rcpt_name, column_map, form, use_llm=use_llm_effective
+    )
 
     try:
         result = reconcile(cfg, work_dir)
@@ -176,6 +178,7 @@ def create_run(
         "llm_cost_usd": (
             str(result.cost_tracker.total_cost_usd) if result.cost_tracker else "0"
         ),
+        "ai_unavailable": ai_unavailable,
     }
     snapshot = snapshot_to_dict(
         result.transactions, result.receipts, outcome, result.parse_errors
@@ -191,7 +194,7 @@ def create_run(
         snapshot=snapshot,
         config=cfg,
         work_dir=str(work_dir),
-        llm_enabled=form.use_llm,
+        llm_enabled=use_llm_effective,
         has_coa=result.chart_of_accounts is not None,
     )
     return run_id
@@ -226,7 +229,12 @@ def _resolve_statement_map(stmt_path: Path, form: RunForm) -> dict[str, str]:
 
 
 def _build_config(
-    stmt_name: str, rcpt_name: str, column_map: dict[str, str], form: RunForm
+    stmt_name: str,
+    rcpt_name: str,
+    column_map: dict[str, str],
+    form: RunForm,
+    *,
+    use_llm: bool,
 ) -> dict:
     statement = {
         "path": stmt_name,
@@ -251,7 +259,7 @@ def _build_config(
         "receipts": receipts,
         "output": {"path": "report.xlsx"},
     }
-    if form.use_llm:
+    if use_llm:
         cfg["llm"] = {"provider": "openai", "model": "gpt-4o-mini"}
     return cfg
 
@@ -533,6 +541,7 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
         "invariant_ok": (n_reconciled + n_review + n_unmatched_tx) == n_tx,
         "n_parse_errors": len(parse_errors),
         "llm_cost_usd": run.summary.get("llm_cost_usd", "0"),
+        "ai_unavailable": run.summary.get("ai_unavailable", False),
     }
 
     return {
