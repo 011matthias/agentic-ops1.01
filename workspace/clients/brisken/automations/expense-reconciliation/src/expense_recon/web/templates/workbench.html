@@ -2,6 +2,12 @@
 {% block title %}{{ view.label }} - Reconciliation{% endblock %}
 {% block content %}
 {% set s = view.summary %}
+{% if s.ai_unavailable %}
+<div style="background:var(--orange-bg); color:var(--orange); border:1px solid var(--orange); border-radius:8px; padding:12px 14px; margin-bottom:16px;">
+  <strong>AI categorization was requested, but no API key is set on the server.</strong>
+  This run used the keyword classifier instead, so the reconciliation is complete. To turn on AI categorization, restart the server with OPENAI_API_KEY set in its environment.
+</div>
+{% endif %}
 <div class="card">
   <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
     <div>

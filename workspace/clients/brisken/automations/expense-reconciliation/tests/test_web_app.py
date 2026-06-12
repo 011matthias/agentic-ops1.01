@@ -155,3 +155,33 @@ def test_unmappable_statement_returns_error(client):
     )
     assert resp.status_code == 400
     assert "auto-detect" in resp.text.lower()
+
+
+def test_ai_requested_without_key_falls_back(client, monkeypatch):
+    # Requesting AI categorization with no server key must NOT block the
+    # run. It falls back to the keyword classifier, produces a complete
+    # reconciliation, and surfaces an informational notice (cross-cutting
+    # requirement: AI-unavailable is a notice, not a hard error).
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    resp = client.post(
+        "/runs",
+        files=_statement_files(),
+        data={
+            "account_id": "amex-9001",
+            "legal_entity_id": "brisken-llc",
+            "account_card_currency": "USD",
+            "receipts_source": "csv",
+            "use_llm": "1",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303, resp.text
+    run_id = resp.headers["location"].rstrip("/").rsplit("/", 1)[-1]
+
+    wb = client.get(f"/runs/{run_id}")
+    assert wb.status_code == 200
+    # The informational notice rendered, and the reconciliation still ran.
+    assert "no API key is set" in wb.text
+    assert "Transactions" in wb.text
+    # Effective AI state is off (fell back), not the requested "on".
+    assert "AI categorization off" in wb.text
