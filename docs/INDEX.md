@@ -2,9 +2,17 @@
 
 _Auto-updated by /comd_checkpoint. Most recent first within each section._
 
+## b2b-cold-outreach (p028 prospect)
+| Date | Topic | Type | Link |
+|------|-------|------|------|
+| 2026-06-11 | P028 B2B Cold Outreach Proposal | comms | [Mini-Checkpoint-1](docs/2026-06-11%20-%20P028%20B2B%20Cold%20Outreach%20Proposal/Mini-Checkpoint-1.md) |
+
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-06-12 | Brisken Reconciliation Parameters | client-dev | [Checkpoint](docs/2026-06-12%20-%20Brisken%20Reconciliation%20Parameters/Checkpoint.md) |
+| 2026-06-11 | Brisken Calibration + Architecture Redirect | client-dev | [Checkpoint](docs/2026-06-11%20-%20Brisken%20Calibration%20+%20Architecture%20Redirect/Checkpoint.md) |
+| 2026-06-11 | Brisken Expense Recon OCR Doctor Runlog | client-dev | [Checkpoint](docs/2026-06-11%20-%20Brisken%20Expense%20Recon%20OCR%20Doctor%20Runlog/Mini-Checkpoint-1.md) |
 | 2026-06-09 | Brisken Zoho Integration Slice 4 (4.6+4.9+live verify) | client-dev | [Checkpoint](docs/2026-06-09%20-%20Brisken%20Zoho%20Integration%20Slice%204/Checkpoint.md) |
 
 ## volabyg
@@ -15,6 +23,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-06-12 | CI Flaky Smoke Test + Spell Fixer | system-infra | [Checkpoint](docs/2026-06-12%20-%20CI%20Flaky%20Smoke%20Test%20+%20Spell%20Fixer/Checkpoint.md) |
+| 2026-06-11 | Web Build Quality Gates | system-infra | [Mini-Checkpoint-1](docs/2026-06-11%20-%20Web%20Build%20Quality%20Gates/Mini-Checkpoint-1.md) |
 | 2026-06-09 | n8n Ops Proposal + Video Blueprint | system-infra | [Checkpoint](docs/2026-06-09%20-%20n8n%20Ops%20Proposal%20+%20Video%20Blueprint/Checkpoint.md) |
 | 2026-06-06 | Self-Prompting Capability - exec-assistant + Integrations | system-infra | [Checkpoint](docs/2026-06-06%20-%20Self-Prompting%20Capability%20-%20exec-assistant%20%2B%20Integrations/Checkpoint.md) |
 | 2026-06-03 | Web-Build Skill Restructure + Nav-Bar Standard | system-infra | [Mini-Checkpoint-1](docs/2026-06-03%20-%20Local-Web%20Prototypes%20And%20Aesthetic%20Standard/Mini-Checkpoint-1.md) |
