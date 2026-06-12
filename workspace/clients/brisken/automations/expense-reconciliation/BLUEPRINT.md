@@ -295,7 +295,7 @@ doctor pre-flight. Path A is an edge redirect, not a matcher rewrite.
 |---|---|---|---|
 | 8.1 | Zoho Expense CSV ingest adapter — a column-map over the existing receipts-CSV path, adding the report-number and receipt-URL fields | `src/expense_recon/ingest/expense_csv.py` | **BUILT 2026-06-12.** `parse_expense_csv` / `_tolerant`: config-driven column map (required `expense_date`/`amount`/`vendor`; optional `currency`/`document_id`/`reference`/`report_number`/`receipt_url`/`receipt_name`) → `Receipt` objects, mirroring `statement_csv.py`. `Receipt` extended with `report_number`/`receipt_url`/`receipt_name` (8.3/8.5 carriers). Receipt-URL design fork supported both ways (URL column if present, else `receipt_name` filename for 8.4 to resolve). `document_id` synthesized `<report>:<row>` when unmapped. Wired into the CLI as `receipts.source: "expense_csv"`. Header errors raise, row errors → tolerant issues. 14 tests (`tests/test_expense_csv.py`), incl. an end-to-end `match_month` pairing. Built against the documented Zoho export format + ER PDF sample shapes; exact headers stay in `run.json` (no live export header shared, owner 2026-06-12). Examples: `run.with-expense-csv.example.json` + `expense.example.csv`. |
 | 8.2 | Bank-statement table + dedup + statement-number validation; one table for all banks/cards | `src/expense_recon/store/statements.py` | **BUILT 2026-06-12.** `StatementStore`: content-fingerprint dedup (global, order-independent), statement-number validation (same id + changed content raises `StatementConflictError` unless `replace=True`), `transactions()` reconstruction with a stable fingerprint-derived id, multi-account batch support (the 6-card file). 12 tests (`tests/test_statement_store.py`). Standalone value: persists + dedups the statements already in hand, independent of the Zoho gate. CLI `store:` opt-in wiring is the follow-up. |
-| 8.3 | Reports table (4–5 fields) + per-expense report cross-reference, carried into the Books export | `src/expense_recon/store/reports.py` | SCHEMA buildable now (ER-00214/215/216 fix the field set: report no., period, submitter, currency totals, status); VALUE gated on 8.1 — nothing references a report until expenses are ingested, so building the table now would be rows nothing populates. Design-locked; build when 8.1 lands. |
+| 8.3 | Reports table (4–5 fields) + per-expense report cross-reference, carried into the Books export | `src/expense_recon/store/reports.py` | **BUILT 2026-06-12.** `ReportStore`: a `reports` table (header fields fixed by the ER-00214/215/216 samples — report no., name, description, submitter, period, status, ic_allocation, per-currency totals, optional header-stated base total) + a `report_expenses` cross-reference keyed by `document_id` (one expense → one report, DB-enforced). `ingest_report(expenses, *, report_number, …)` derives period / currency-totals / count from the expense set, takes the header-only fields from the caller (None over fabricated, B4), and validates: same report_number + changed content raises `ReportConflictError` unless `replace=True`; an expense naming another report is always rejected (mis-link); an expense already linked elsewhere needs `replace=True` to move. Read API: `report_for(document_id)` (the lookup 8.5 carries), `expenses_for(report_number)`, `reports`/`get_report`, `count`/`expense_count`; module-level `group_by_report` splits a flat receipt list per report. 15 tests (`tests/test_report_store.py`). Live-verified on the 8.1 example export (ER-00220 ×4 USD + ER-00221 ×1 EUR). |
 | 8.4 | Receipt-URL hosting — receipt pictures live in the tool, addressable by a stable URL the Books export carries | `src/expense_recon/hosting/` | DESIGN + minimal local scheme now (content-addressed file store + URL template); the run-target decision (Chris-local vs small host) is the same open question as 5c deployment. |
 | 8.5 | Journal-entry export to Books = the one write boundary, carrying the receipt URL + report reference | `src/expense_recon/output/zoho_export.py` | EXISTS (4a file export). 4b API + 4.8 line-item idempotency stay gated on Zoho access. Path A adds the receipt-URL + report-reference columns to the existing export. |
 
@@ -306,10 +306,13 @@ own-scanner and for receipts that bypass Expense. The tool's own tables
 (8.2/8.3) become the source of truth that survives the Zoho switch-off;
 the run-log (5b) already persists decisions, these persist the inputs.
 
-**Build order under Path A:** 8.2 (done) → 8.1 (done) → 8.3 → 8.4 →
-8.5 column-add, all follow the run-log pattern. 8.1 was promoted ahead
-of 8.3/8.4 once the data ask was retired: 8.3/8.4 only carry value once
-expenses are ingested, so the ingest adapter is their precondition.
+**Build order under Path A:** 8.2 (done) → 8.1 (done) → 8.3 (done) →
+8.4 → 8.5 column-add, all follow the run-log pattern. 8.1 was promoted
+ahead of 8.3/8.4 once the data ask was retired: 8.3/8.4 only carry value
+once expenses are ingested, so the ingest adapter is their precondition.
+Remaining: 8.4 receipt-URL hosting, 8.5 export column-add (receipt URL +
+report reference, wiring `report_for`), and the CLI `store:` opt-in that
+persists statements (8.2) and reports (8.3) on a real run.
 
 **No further client data is coming (owner-clarified 2026-06-12).** The
 ER PDFs + Chase export already in hand are illustrative SAMPLES, the

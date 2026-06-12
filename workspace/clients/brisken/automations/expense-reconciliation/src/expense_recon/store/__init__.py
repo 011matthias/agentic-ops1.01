@@ -12,7 +12,8 @@ Modules:
   so overlapping re-exports (the Chase historic-activity file overlaps
   every monthly download) are counted once.
 * ``reports`` (8.3) — Zoho Expense report metadata + per-expense
-  cross-reference, carried into the Books journal export. (pending)
+  cross-reference (``report_for`` / ``expenses_for``), carried into the
+  Books journal export.
 
 Both follow the run-log pattern (``runlog.py``): a thin SQLite wrapper,
 schema-on-open, opt-in (no table is created unless a caller opens the
@@ -21,6 +22,13 @@ under test.
 """
 from __future__ import annotations
 
+from .reports import (
+    Report,
+    ReportConflictError,
+    ReportIngestResult,
+    ReportStore,
+    group_by_report,
+)
 from .statements import (
     IngestResult,
     StatementConflictError,
@@ -30,7 +38,12 @@ from .statements import (
 
 __all__ = [
     "IngestResult",
+    "Report",
+    "ReportConflictError",
+    "ReportIngestResult",
+    "ReportStore",
     "StatementConflictError",
     "StatementStore",
     "fingerprint",
+    "group_by_report",
 ]
