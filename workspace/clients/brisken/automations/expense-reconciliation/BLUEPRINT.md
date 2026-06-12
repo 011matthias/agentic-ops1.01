@@ -545,6 +545,29 @@ baselines against the remaining criteria:
   in the export (likely reissued). Details in git-ignored
   `context/2026-06-11-expense-report-samples.md`.
 
+**Extended-calibration cross-check (2026-06-12) — Jun-25 Rome, first
+end-to-end engine run on a travel month.** The LD-5 bands were derived
+from the travel receipts by arithmetic; this is the first time a travel
+month ran through the matcher. Full Jun-25 Chase slice (156 charges) +
+the three Rome receipts that map cleanly to visible charges.
+`expense-recon calibrate` exit 0: the DCC-USD receipt (L'Angoletto
+$67.22) matched EXACT; the two EUR receipts (Hostaria Pantheon implied
+1.3715, Hostaria Al 31 implied 1.2394) emitted as FX inside the EUR band
+and the vendor signal paired each to its TRUE charge among 156; zero
+unmatched receipts, no double-binding, FX multiplicity 1.0x. The whole
+pairing stack holds on a fresh month. Oct-24 / Nov-24 need the
+ER-00181/183 line sets for a full cross-check (the dozen documented
+receipts do not map cleanly there); folds into the parked data ask.
+
+**Card-1672 correction (bank ground truth).** Card 1672 has ZERO rows
+in the entire Chase export, including the three travel months, yet the
+Rome receipts matched real charges on cards 0340/2838. So the receipt
+slip / payment-mode last-4 (1672) is NOT the settlement card; travel
+charges settle on 2838/0340/3645. Supersedes the earlier "1672 is the
+primary travel card" note. Open-question (c) sharpened: settlement-side
+mode→card is bank-confirmed (2838/0340/3645); confirm the mode-number
+labels with Chris.
+
 **Effort:** 3a = ~2 days. 3b = ~4–6 days depending on what real data
 surfaces.
 
