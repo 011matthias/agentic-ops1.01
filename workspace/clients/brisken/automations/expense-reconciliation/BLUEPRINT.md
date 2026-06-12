@@ -307,15 +307,26 @@ own-scanner and for receipts that bypass Expense. The tool's own tables
 the run-log (5b) already persists decisions, these persist the inputs.
 
 **Build order under Path A:** 8.2 (done) → 8.1 (done) → 8.3 (done) →
-8.4 (done) → 8.5 (done), all follow the run-log pattern. 8.1 was
-promoted ahead of 8.3/8.4 once the data ask was retired: 8.3/8.4 only
-carry value once expenses are ingested, so the ingest adapter is their
-precondition. Remaining: the CLI `store:` / `hosting:` opt-in that, on a
-real run, persists statements (8.2) + reports (8.3 via `group_by_report`
-+ `ingest_report`), hosts filename-only receipts (8.4
-`resolve_receipt_urls`), and passes the URL map + `report_for` into the
-export (8.5) — the one wiring step that turns the standalone pieces into
-a single persisted run. All five build items (8.1–8.5) are now BUILT.
+8.4 (done) → 8.5 (done) → CLI wiring (done), all follow the run-log
+pattern. 8.1 was promoted ahead of 8.3/8.4 once the data ask was retired:
+8.3/8.4 only carry value once expenses are ingested, so the ingest
+adapter is their precondition.
+
+**CLI `store:` / `hosting:` opt-in (BUILT 2026-06-12).** `cli.py` `run()`
+now, on a real (non-dry-run) run: persists the statement (8.2,
+`statement_id` defaulting to `{account_id}:{period}`) and the reports
+(8.3, `group_by_report` + `ingest_report`, derived totals/period + None
+headers per B4) when a `store:` block is present; content-addresses
+filename-only receipts (8.4, `resolve_receipt_urls`) when a `hosting:`
+block is present; and passes the URL map + `report_for` into the export
+(8.5). Both blocks are opt-in like `run_log:` — absent = no file, no
+behaviour change; the export then falls back to each receipt's own 8.1
+fields. Re-ingest conflicts (a revised statement / report under the same
+id) are surfaced as warnings, never silently replaced. 6 tests
+(`tests/test_cli_store_wiring.py`); `examples/run.with-expense-csv.example.json`
+carries the two blocks. **All five Path-A build items (8.1–8.5) plus the
+CLI wiring are now BUILT; the standalone pipeline is end-to-end on a
+single run config.**
 
 **No further client data is coming (owner-clarified 2026-06-12).** The
 ER PDFs + Chase export already in hand are illustrative SAMPLES, the

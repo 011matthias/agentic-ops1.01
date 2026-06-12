@@ -37,6 +37,14 @@ The config is a JSON file (stdlib only — no YAML dep) of the shape:
       "run_log": {                             # optional (slice 5b)
         "path": "history.sqlite",              # opt-in run history; omit
         "operator": "chris"                    #   the block to disable
+      },
+      "store": {                               # optional (8.2/8.3) — persist
+        "statements_path": "statements.sqlite",#   the tool's own tables so the
+        "reports_path": "reports.sqlite"       #   run survives the Zoho exit
+      },
+      "hosting": {                             # optional (8.4) — content-address
+        "root": "receipt-store",               #   filename-only receipts and
+        "receipts_dir": "receipts"             #   carry a stable URL into 8.5
       }
     }
 
@@ -83,6 +91,14 @@ from .matching.types import Match, MatchOutcome, Receipt, Transaction
 from .output.report_xlsx import write_report
 from .runlog import RunLog, decisions_from_outcome
 from .output.zoho_export import write_zoho_export
+from .store import (
+    ReportConflictError,
+    ReportStore,
+    StatementConflictError,
+    StatementStore,
+    group_by_report,
+)
+from .hosting import DEFAULT_URL_TEMPLATE, ReceiptStore, resolve_receipt_urls
 from .zoho.client import ZohoClient, ZohoConfig
 
 
@@ -364,10 +380,20 @@ def run(
         explain=explain,
     )
 
-    # BLUEPRINT 4.6 + 4.9: write the Zoho journal-entry import CSV when a
-    # chart of accounts is loaded and an export path is configured. The
-    # CoA resolves the debit accounts; `card_accounts` resolves the
-    # balancing credit. Journal POSTING to Zoho (4b) stays gated.
+    # BLUEPRINT 8.2/8.3: persist the tool's own tables (opt-in `store:`
+    # block) so the run's statement + reports survive the Zoho switch-off.
+    # Returns a document_id -> report_number lookup for the export.
+    report_lookup = _persist_store(cfg, config_dir, transactions, receipts)
+
+    # BLUEPRINT 8.4: content-address filename-only receipts (opt-in
+    # `hosting:` block) and resolve every receipt to a stable URL.
+    receipt_urls = _host_receipts(cfg, config_dir, receipts)
+
+    # BLUEPRINT 4.6 + 4.9 + 8.5: write the Zoho journal-entry import CSV
+    # when a chart of accounts is loaded and an export path is configured.
+    # The CoA resolves the debit accounts; `card_accounts` resolves the
+    # balancing credit; the 8.5 reference columns carry the receipt URL
+    # (8.4) + report reference (8.3). Journal POSTING to Zoho (4b) stays gated.
     if chart_of_accounts is not None and zoho_cfg.get("export_path"):
         export_path = (config_dir / zoho_cfg["export_path"]).resolve()
         write_zoho_export(
@@ -377,6 +403,8 @@ def run(
             export_path,
             chart_of_accounts=chart_of_accounts,
             card_accounts=zoho_cfg.get("card_accounts"),
+            receipt_urls=receipt_urls,
+            report_for=report_lookup,
         )
         logger.info("wrote Zoho journal export: %s", export_path)
         print(f"Wrote Zoho export: {export_path}")
@@ -391,6 +419,134 @@ def run(
     )
 
     return report_path
+
+
+def _persist_store(
+    cfg: dict,
+    config_dir: Path,
+    transactions: list[Transaction],
+    receipts: list[Receipt],
+) -> "Callable[[str], str | None] | None":
+    """Persist the tool's own tables when a `store:` block is configured
+    (opt-in; no block = no file, no behaviour change — the `run_log:`
+    precedent). Returns a `document_id -> report_number` lookup (8.3 cross-
+    reference) for the export's report-reference column, or None when
+    reports are not persisted.
+
+    Shape:
+        {
+          "store": {
+            "statements_path": "statements.sqlite",  # 8.2; omit to skip
+            "reports_path": "reports.sqlite",         # 8.3; omit to skip
+            "statement_id": "chase-2838-2026-04"      # optional; default
+          }                                           #   "{account_id}:{period}"
+        }
+    """
+    s = cfg.get("store")
+    if not isinstance(s, dict):
+        return None
+
+    stmt = cfg.get("statement") or {}
+
+    # 8.2 — bank-statement table. Dedup is global by content fingerprint;
+    # statement_id is the batch identity for statement-number validation,
+    # defaulting to account + the statement's date span so a re-run of the
+    # same month matches (and a revised charge surfaces as a conflict).
+    sp = s.get("statements_path")
+    if sp:
+        db_path = (config_dir / sp).resolve()
+        account_id = stmt.get("account_id", "")
+        statement_id = s.get("statement_id") or f"{account_id}:{_period_label(transactions)}"
+        source_path = str((config_dir / stmt["path"]).resolve()) if stmt.get("path") else None
+        try:
+            with StatementStore(db_path) as store:
+                res = store.ingest_transactions(
+                    transactions, statement_id=statement_id, source_path=source_path
+                )
+            logger.info(
+                "persisted statement %s: +%d new, %d duplicate(s)",
+                statement_id, res.inserted, res.duplicates,
+            )
+            print(
+                f"Statement persisted: {statement_id} "
+                f"(+{res.inserted} new, {res.duplicates} dup)"
+            )
+        except StatementConflictError as exc:
+            # A re-download with a revised charge under the same id. Surface
+            # it rather than silently replacing the stored batch.
+            logger.warning("statement not persisted (content changed): %s", exc)
+            print(
+                f"WARNING: statement {statement_id} changed since last run; "
+                f"not persisted ({exc})"
+            )
+
+    # 8.3 — report table + per-expense cross-reference. Header fields the
+    # expense lines don't carry (submitter, status) stay None (B4); period,
+    # currency totals, and the count are derived from the expense group.
+    report_lookup: "Callable[[str], str | None] | None" = None
+    rp = s.get("reports_path")
+    if rp:
+        db_path = (config_dir / rp).resolve()
+        with ReportStore(db_path) as store:
+            for report_number, group in group_by_report(receipts).items():
+                if report_number is None:
+                    continue
+                try:
+                    store.ingest_report(group, report_number=report_number)
+                except ReportConflictError as exc:
+                    logger.warning("report %s not persisted: %s", report_number, exc)
+                    print(
+                        f"WARNING: report {report_number} changed since last run; "
+                        f"not persisted ({exc})"
+                    )
+            # Materialize the lookup so it outlives the store handle.
+            report_map = {r.document_id: store.report_for(r.document_id) for r in receipts}
+        n_linked = sum(1 for v in report_map.values() if v)
+        n_reports = len({v for v in report_map.values() if v})
+        logger.info("persisted %d report(s), %d expense(s) cross-referenced", n_reports, n_linked)
+        print(f"Reports persisted: {n_reports} report(s), {n_linked} expense(s) linked")
+        report_lookup = report_map.get
+
+    return report_lookup
+
+
+def _host_receipts(
+    cfg: dict, config_dir: Path, receipts: list[Receipt]
+) -> "dict[str, str | None] | None":
+    """Host filename-only receipts content-addressed when a `hosting:`
+    block is configured (opt-in). Returns a `document_id -> URL` map for
+    the export's receipt-URL column, or None when not configured.
+
+    Shape:
+        {
+          "hosting": {
+            "root": "receipt-store",               # content-addressed store dir
+            "url_template": "/receipts/{relpath}", # optional; host-agnostic default
+            "receipts_dir": "receipts"             # folder to resolve receipt_name
+          }
+        }
+    """
+    h = cfg.get("hosting")
+    if not isinstance(h, dict):
+        return None
+    root = (config_dir / h.get("root", "receipt-store")).resolve()
+    store = ReceiptStore(root, url_template=h.get("url_template", DEFAULT_URL_TEMPLATE))
+    receipts_dir = h.get("receipts_dir")
+    search_dir = (config_dir / receipts_dir).resolve() if receipts_dir else None
+    urls = resolve_receipt_urls(receipts, store=store, search_dir=search_dir)
+    n_hosted = sum(1 for v in urls.values() if v)
+    logger.info("hosted/linked %d of %d receipt URL(s)", n_hosted, len(urls))
+    print(f"Receipts hosted: {n_hosted} of {len(urls)} addressed")
+    return urls
+
+
+def _period_label(transactions: list[Transaction]) -> str:
+    """A stable batch label from the statement's date span, the default
+    `statement_id` when the config supplies none."""
+    dates = [t.transaction_date for t in transactions if t.transaction_date]
+    if not dates:
+        return "all"
+    return f"{min(dates).isoformat()}..{max(dates).isoformat()}"
 
 
 def _record_run_log(
