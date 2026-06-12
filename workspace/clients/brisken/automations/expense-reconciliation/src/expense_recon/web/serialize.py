@@ -164,6 +164,7 @@ def match_to_dict(m: Match) -> dict:
         "confidence": m.confidence,
         "reason": m.reason,
         "requires_review": m.requires_review,
+        "score": m.score,
     }
 
 
@@ -175,6 +176,7 @@ def match_from_dict(d: dict) -> Match:
         confidence=d["confidence"],
         reason=d["reason"],
         requires_review=d.get("requires_review", False),
+        score=d.get("score", 0),
     )
 
 
