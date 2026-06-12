@@ -69,6 +69,7 @@ import json
 import logging
 import sys
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -273,27 +274,36 @@ def _apply_ambiguous_judgment(
     outcome.ambiguous[:] = rebuilt
 
 
-def run(
-    config_path: Path,
-    out_override: Path | None = None,
-    *,
-    dry_run: bool = False,
-    explain: bool = False,
-) -> Path | None:
-    """Execute the reconciliation pipeline.
+@dataclass
+class ReconcileResult:
+    """The in-memory result of the reconciliation pipeline, before any
+    file is written.
 
-    Returns the report path on a normal run. Returns None on
-    `dry_run=True` (Summary is printed to stdout, no xlsx written —
-    ANNEALING B4).
+    Produced by `reconcile()` and consumed by both the CLI `run()` (which
+    writes the xlsx / Zoho export / run-log) and the web app (which
+    persists a snapshot and renders the review workbench). Keeping the
+    pipeline output as data, separate from the writers, is what lets the
+    browser UI reuse the exact same matching/judgment path as the CLI.
     """
-    config_path = config_path.resolve()
-    if not config_path.exists():
-        raise ConfigError(f"config file not found: {config_path}")
 
-    cfg = json.loads(config_path.read_text(encoding="utf-8"))
-    config_dir = config_path.parent
-    logger.info("run started: config=%s", config_path)
+    outcome: MatchOutcome
+    transactions: list[Transaction]
+    receipts: list[Receipt]
+    parse_errors: list[tuple[str, int, str]]
+    cost_tracker: CostTracker | None
+    chart_of_accounts: ChartOfAccounts | None
+    zoho_cfg: dict
 
+
+def reconcile(cfg: dict, config_dir: Path) -> ReconcileResult:
+    """Run ingest -> categorize -> match -> judgment and return the
+    in-memory result, writing nothing to disk.
+
+    `cfg` is the parsed run config (same shape `run()` loads from a JSON
+    file); `config_dir` is the base for resolving the config's relative
+    paths. This is the side-effect-free core shared by the CLI and the
+    web UI.
+    """
     # LLM client first: folder-mode receipt ingest (slice 2.2 OCR)
     # needs it before any receipt is read.
     llm_client, cost_tracker = _build_llm_client(cfg)
@@ -360,6 +370,47 @@ def run(
             cost_tracker.call_count,
             cost_tracker.total_cost_usd,
         )
+
+    return ReconcileResult(
+        outcome=outcome,
+        transactions=transactions,
+        receipts=receipts,
+        parse_errors=parse_errors,
+        cost_tracker=cost_tracker,
+        chart_of_accounts=chart_of_accounts,
+        zoho_cfg=zoho_cfg,
+    )
+
+
+def run(
+    config_path: Path,
+    out_override: Path | None = None,
+    *,
+    dry_run: bool = False,
+    explain: bool = False,
+) -> Path | None:
+    """Execute the reconciliation pipeline.
+
+    Returns the report path on a normal run. Returns None on
+    `dry_run=True` (Summary is printed to stdout, no xlsx written —
+    ANNEALING B4).
+    """
+    config_path = config_path.resolve()
+    if not config_path.exists():
+        raise ConfigError(f"config file not found: {config_path}")
+
+    cfg = json.loads(config_path.read_text(encoding="utf-8"))
+    config_dir = config_path.parent
+    logger.info("run started: config=%s", config_path)
+
+    result = reconcile(cfg, config_dir)
+    outcome = result.outcome
+    transactions = result.transactions
+    receipts = result.receipts
+    parse_errors = result.parse_errors
+    cost_tracker = result.cost_tracker
+    chart_of_accounts = result.chart_of_accounts
+    zoho_cfg = result.zoho_cfg
 
     if dry_run:
         _print_dry_run_summary(

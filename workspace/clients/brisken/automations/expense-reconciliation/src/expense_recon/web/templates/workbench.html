@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block title %}{{ view.label }} - Reconciliation{% endblock %}
+{% block content %}
+{% set s = view.summary %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
+    <div>
+      <h1>{{ view.label }}</h1>
+      <p class="muted">Run {{ view.run_id }} &middot; {{ view.created_at }}
+        &middot; AI categorization {{ "on" if view.llm_enabled else "off" }}
+        {% if s.llm_cost_usd and s.llm_cost_usd not in ("0", "0.0") %}&middot; est. ${{ s.llm_cost_usd }}{% endif %}
+      </p>
+    </div>
+    <div>
+      <a class="btn" href="/runs/{{ view.run_id }}/report.xlsx">Download report (.xlsx)</a>
+      <a class="btn btn-secondary" href="/">New run</a>
+    </div>
+  </div>
+
+  <div class="stats" style="margin-top:16px;">
+    <div class="stat"><div class="stat-value">{{ s.n_transactions }}</div><div class="stat-label">Transactions</div></div>
+    <div class="stat"><div class="stat-value" id="stat-reconciled">{{ s.n_reconciled }}</div><div class="stat-label">Reconciled</div></div>
+    <div class="stat"><div class="stat-value" id="stat-review">{{ s.n_review }}</div><div class="stat-label">Needs review</div></div>
+    <div class="stat"><div class="stat-value" id="stat-unmatched">{{ s.n_unmatched_tx }}</div><div class="stat-label">Unmatched</div></div>
+    <div class="stat"><div class="stat-value" id="stat-rate">{{ s.match_rate }}%</div><div class="stat-label">Match rate</div></div>
+    <div class="stat"><div class="stat-value">{{ "yes" if s.invariant_ok else "NO" }}</div><div class="stat-label">All accounted for</div></div>
+  </div>
+  {% if s.n_parse_errors %}
+  <p class="muted" style="margin-top:10px;">{{ s.n_parse_errors }} row(s) could not be parsed (see foot of page).</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Transactions</h2>
+  <input type="text" id="filter" placeholder="Filter by vendor..." style="margin-bottom:14px;" oninput="filterRows()">
+
+  {% for row in view.rows %}
+  <div class="txn" data-vendor="{{ row.vendor | lower }}" style="border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:12px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+      <div>
+        <span class="badge {{ row.effective_bucket }}" id="status-{{ row.transaction_id }}">{{ row.effective_bucket }}</span>
+        <strong style="margin-left:8px;">{{ row.vendor }}</strong>
+        <span class="muted">&middot; {{ row.date }} &middot; {{ row.account_id }}</span>
+      </div>
+      <div class="mono">{{ row.amount }} {{ row.currency }}</div>
+    </div>
+
+    {% if row.candidates %}
+    <div style="margin-top:10px;">
+      {% for c in row.candidates %}
+      <div style="border-top:1px solid var(--border); padding-top:10px; margin-top:10px;">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          {% if row.candidates | length > 1 %}
+          <input type="radio" name="pick-{{ row.transaction_id }}" value="{{ c.document_id }}"
+                 {% if c.is_chosen %}checked{% endif %} style="width:auto;">
+          {% endif %}
+          <span class="badge {{ 'review' if c.requires_review else 'matched' }}">{{ c.match_type }}</span>
+          {% if c.receipt %}
+          <strong>{{ c.receipt.vendor }}</strong>
+          <span class="muted">&middot; {{ c.receipt.date }} &middot; {{ c.receipt.total }} {{ c.receipt.currency }}</span>
+          {% if c.receipt.report_number %}<span class="muted mono">&middot; {{ c.receipt.report_number }}</span>{% endif %}
+          {% endif %}
+          <span class="muted" style="font-size:12px;">conf {{ "%.2f"|format(c.confidence) }} &middot; {{ c.reason }}</span>
+        </div>
+
+        {% if c.receipt and c.receipt.line_items %}
+        <table style="margin-top:8px;">
+          <thead><tr><th>Line item</th><th class="right">Amount</th><th>Category</th><th>Source</th></tr></thead>
+          <tbody>
+            {% for li in c.receipt.line_items %}
+            <tr>
+              <td>{{ li.description }}</td>
+              <td class="right mono">{{ li.line_total }}</td>
+              <td>
+                <select data-doc="{{ c.receipt.document_id }}" data-line="{{ li.index }}" onchange="setCategory(this)">
+                  <option value="">(unset)</option>
+                  {% for opt in view.category_options %}
+                  <option value="{{ opt }}" {% if li.category == opt %}selected{% endif %}>{{ opt }}</option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td class="muted">{{ li.source }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="muted" style="margin-top:8px;">No candidate receipt.</div>
+    {% endif %}
+
+    <div style="margin-top:12px; display:flex; gap:8px;">
+      <button class="btn btn-small" onclick="confirmRow('{{ row.transaction_id }}')">Confirm</button>
+      <button class="btn btn-secondary btn-small" onclick="setDecision('{{ row.transaction_id }}','rejected',null)">Reject</button>
+      <button class="btn btn-secondary btn-small" onclick="setDecision('{{ row.transaction_id }}','pending',null)">Reset</button>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if view.unmatched_receipts %}
+<div class="card">
+  <h2>Receipts with no matching transaction ({{ view.unmatched_receipts | length }})</h2>
+  <table>
+    <thead><tr><th>Receipt</th><th>Date</th><th class="right">Total</th><th>Reference</th></tr></thead>
+    <tbody>
+      {% for r in view.unmatched_receipts %}
+      <tr>
+        <td>{{ r.vendor }} <span class="muted mono">{{ r.document_id }}</span></td>
+        <td>{{ r.date }}</td>
+        <td class="right mono">{{ r.total }} {{ r.currency }}</td>
+        <td class="muted">{{ r.reference }}{% if r.report_number %} &middot; {{ r.report_number }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if view.parse_errors %}
+<div class="card">
+  <h2>Parse errors ({{ view.parse_errors | length }})</h2>
+  <table>
+    <thead><tr><th>File</th><th>Row</th><th>Message</th></tr></thead>
+    <tbody>
+      {% for e in view.parse_errors %}
+      <tr><td class="mono">{{ e[0] }}</td><td class="mono">{{ e[1] }}</td><td>{{ e[2] }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const RUN_ID = "{{ view.run_id }}";
+
+  function badgeFor(bucket) { return bucket; }
+
+  async function setDecision(txId, status, chosenDocId) {
+    const res = await fetch(`/runs/${RUN_ID}/decisions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transaction_id: txId, status: status, chosen_document_id: chosenDocId })
+    });
+    if (!res.ok) { alert("Could not save that decision."); return; }
+    const data = await res.json();
+    const effective = status === "confirmed" ? "reconciled" : (status === "rejected" ? "unmatched" : null);
+    const badge = document.getElementById("status-" + txId);
+    if (badge && effective) { badge.className = "badge " + effective; badge.textContent = effective; }
+    if (status === "pending") {
+      // Reload to recompute the original bucket for this row.
+      window.location.reload(); return;
+    }
+    if (data.summary) {
+      document.getElementById("stat-reconciled").textContent = data.summary.n_reconciled;
+      document.getElementById("stat-review").textContent = data.summary.n_review;
+      document.getElementById("stat-unmatched").textContent = data.summary.n_unmatched_tx;
+      document.getElementById("stat-rate").textContent = data.summary.match_rate + "%";
+    }
+  }
+
+  function confirmRow(txId) {
+    const picked = document.querySelector(`input[name="pick-${txId}"]:checked`);
+    setDecision(txId, "confirmed", picked ? picked.value : null);
+  }
+
+  async function setCategory(sel) {
+    const res = await fetch(`/runs/${RUN_ID}/categories`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        document_id: sel.getAttribute("data-doc"),
+        line_index: parseInt(sel.getAttribute("data-line"), 10),
+        category: sel.value || null
+      })
+    });
+    if (!res.ok) { alert("Could not save that category."); return; }
+    sel.style.borderColor = "var(--green)";
+  }
+
+  function filterRows() {
+    const q = document.getElementById("filter").value.toLowerCase();
+    document.querySelectorAll(".txn").forEach(function (el) {
+      el.style.display = el.getAttribute("data-vendor").includes(q) ? "" : "none";
+    });
+  }
+
+  document.addEventListener("keydown", function (e) {
+    if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); document.getElementById("filter").focus(); }
+  });
+</script>
+{% endblock %}
