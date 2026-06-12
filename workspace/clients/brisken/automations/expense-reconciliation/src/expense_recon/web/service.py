@@ -27,6 +27,7 @@ from pathlib import Path
 
 from .. import inspect as stmt_inspect
 from ..cli import ConfigError, reconcile
+from ..duplicates import find_duplicate_charges, find_duplicate_receipts
 from ..matching.types import (
     Categorization,
     ClassificationSource,
@@ -500,6 +501,7 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
                     "document_id": m.document_id,
                     "match_type": m.match_type.value,
                     "confidence": m.confidence,
+                    "score": m.score,
                     "reason": m.reason,
                     "requires_review": m.requires_review,
                     "is_chosen": (m.document_id == chosen_doc)
@@ -521,12 +523,65 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
                 "status": status,
                 "chosen_document_id": chosen_doc,
                 "candidates": cands,
+                "triage_score": max(
+                    (c["score"] for c in cands if c["score"]), default=None
+                ),
             }
         )
 
     consumed = {c["document_id"] for row in rows for c in row["candidates"]}
     unmatched_receipts = [
         _receipt_view(r, overrides) for r in receipts if r.document_id not in consumed
+    ]
+
+    # Tier-1 #1: surface the weakest items first. Unmatched transactions
+    # (need a receipt) rank above review items, which rank above
+    # reconciled; within a rank, low triage score first.
+    _rank = {"unmatched": 0, "review": 1, "reconciled": 2}
+    rows.sort(
+        key=lambda r: (
+            _rank[r["effective_bucket"]],
+            r["triage_score"] if r["triage_score"] is not None else 0,
+        )
+    )
+
+    # Tier-1 #3: unmatched transactions as a first-class list (the mirror
+    # of unmatched_receipts), from the post-decision effective bucket.
+    unmatched_transactions = [
+        {
+            "transaction_id": r["transaction_id"],
+            "vendor": r["vendor"],
+            "date": r["date"],
+            "amount": r["amount"],
+            "currency": r["currency"],
+            "account_id": r["account_id"],
+        }
+        for r in rows
+        if r["effective_bucket"] == "unmatched"
+    ]
+
+    # Tier-1 #4: advisory duplicate / double-charge groups (flag only).
+    tx_by_id = {t.transaction_id: t for t in transactions}
+    duplicate_charges = [
+        [
+            {
+                "transaction_id": tid,
+                "vendor": tx_by_id[tid].vendor_from_statement,
+                "date": tx_by_id[tid].transaction_date.isoformat()
+                if tx_by_id[tid].transaction_date
+                else "",
+                "amount": _fmt_amount(tx_by_id[tid].amount),
+                "currency": tx_by_id[tid].transaction_currency,
+                "account_id": tx_by_id[tid].account_id,
+            }
+            for tid in grp
+            if tid in tx_by_id
+        ]
+        for grp in find_duplicate_charges(transactions)
+    ]
+    duplicate_receipts = [
+        [_receipt_view(rec_by_id[d], overrides) for d in grp if d in rec_by_id]
+        for grp in find_duplicate_receipts(receipts)
     ]
 
     n_tx = len(transactions)
@@ -542,6 +597,7 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
         "n_parse_errors": len(parse_errors),
         "llm_cost_usd": run.summary.get("llm_cost_usd", "0"),
         "ai_unavailable": run.summary.get("ai_unavailable", False),
+        "n_duplicate_groups": len(duplicate_charges) + len(duplicate_receipts),
     }
 
     return {
@@ -553,6 +609,9 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
         "summary": summary,
         "rows": rows,
         "unmatched_receipts": unmatched_receipts,
+        "unmatched_transactions": unmatched_transactions,
+        "duplicate_charges": duplicate_charges,
+        "duplicate_receipts": duplicate_receipts,
         "category_options": list(EXPENSE_CATEGORIES),
         "parse_errors": parse_errors,
     }

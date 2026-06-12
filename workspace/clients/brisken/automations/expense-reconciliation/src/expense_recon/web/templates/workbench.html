@@ -30,6 +30,7 @@
     <div class="stat"><div class="stat-value" id="stat-unmatched">{{ s.n_unmatched_tx }}</div><div class="stat-label">Unmatched</div></div>
     <div class="stat"><div class="stat-value" id="stat-rate">{{ s.match_rate }}%</div><div class="stat-label">Match rate</div></div>
     <div class="stat"><div class="stat-value">{{ "yes" if s.invariant_ok else "NO" }}</div><div class="stat-label">All accounted for</div></div>
+    <div class="stat"><div class="stat-value">{{ s.n_duplicate_groups }}</div><div class="stat-label">Dup groups</div></div>
   </div>
   {% if s.n_parse_errors %}
   <p class="muted" style="margin-top:10px;">{{ s.n_parse_errors }} row(s) could not be parsed (see foot of page).</p>
@@ -45,6 +46,7 @@
     <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
       <div>
         <span class="badge {{ row.effective_bucket }}" id="status-{{ row.transaction_id }}">{{ row.effective_bucket }}</span>
+        {% if row.triage_score is not none %}<span class="muted mono" style="font-size:12px;">{{ row.triage_score }}/100</span>{% endif %}
         <strong style="margin-left:8px;">{{ row.vendor }}</strong>
         <span class="muted">&middot; {{ row.date }} &middot; {{ row.account_id }}</span>
       </div>
@@ -66,6 +68,7 @@
           <span class="muted">&middot; {{ c.receipt.date }} &middot; {{ c.receipt.total }} {{ c.receipt.currency }}</span>
           {% if c.receipt.report_number %}<span class="muted mono">&middot; {{ c.receipt.report_number }}</span>{% endif %}
           {% endif %}
+          {% if c.score %}<span class="badge" style="background:var(--bg); border:1px solid var(--border); color:var(--text);">score {{ c.score }}/100</span>{% endif %}
           <span class="muted" style="font-size:12px;">conf {{ "%.2f"|format(c.confidence) }} &middot; {{ c.reason }}</span>
         </div>
 
@@ -106,6 +109,68 @@
   </div>
   {% endfor %}
 </div>
+
+{% if view.unmatched_transactions %}
+<div class="card">
+  <h2>Transactions with no matching receipt ({{ view.unmatched_transactions | length }})</h2>
+  <table>
+    <thead><tr><th>Vendor</th><th>Date</th><th>Account</th><th class="right">Amount</th></tr></thead>
+    <tbody>
+      {% for t in view.unmatched_transactions %}
+      <tr>
+        <td>{{ t.vendor }} <span class="muted mono">{{ t.transaction_id }}</span></td>
+        <td>{{ t.date }}</td>
+        <td class="muted">{{ t.account_id }}</td>
+        <td class="right mono">{{ t.amount }} {{ t.currency }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if view.duplicate_charges or view.duplicate_receipts %}
+<div class="card">
+  <h2>Possible duplicates ({{ (view.duplicate_charges | length) + (view.duplicate_receipts | length) }})</h2>
+  <p class="muted" style="margin-top:0;">Flagged for review only; nothing is removed. Confirm whether each group is a genuine double-charge or a re-uploaded receipt.</p>
+  {% if view.duplicate_charges %}
+  <h3 style="font-size:14px; margin:14px 0 6px;">Charges billed more than once</h3>
+  {% for grp in view.duplicate_charges %}
+  <table style="margin-bottom:10px;">
+    <thead><tr><th>Vendor</th><th>Date</th><th>Account</th><th class="right">Amount</th></tr></thead>
+    <tbody>
+      {% for t in grp %}
+      <tr>
+        <td>{{ t.vendor }} <span class="muted mono">{{ t.transaction_id }}</span></td>
+        <td>{{ t.date }}</td>
+        <td class="muted">{{ t.account_id }}</td>
+        <td class="right mono">{{ t.amount }} {{ t.currency }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endfor %}
+  {% endif %}
+  {% if view.duplicate_receipts %}
+  <h3 style="font-size:14px; margin:14px 0 6px;">Receipts uploaded more than once</h3>
+  {% for grp in view.duplicate_receipts %}
+  <table style="margin-bottom:10px;">
+    <thead><tr><th>Receipt</th><th>Date</th><th class="right">Total</th><th>Reference</th></tr></thead>
+    <tbody>
+      {% for r in grp %}
+      <tr>
+        <td>{{ r.vendor }} <span class="muted mono">{{ r.document_id }}</span></td>
+        <td>{{ r.date }}</td>
+        <td class="right mono">{{ r.total }} {{ r.currency }}</td>
+        <td class="muted">{{ r.reference }}{% if r.report_number %} &middot; {{ r.report_number }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endfor %}
+  {% endif %}
+</div>
+{% endif %}
 
 {% if view.unmatched_receipts %}
 <div class="card">

@@ -175,6 +175,21 @@ class MatchingConfig:
         return self.fx_rate_bands.get((from_ccy, to_ccy))
 
 
+def _blend_score(
+    amount_score: float, date_score: float, vendor_score: float
+) -> int:
+    """Blend the three matching signals into a 0-100 triage score.
+
+    Amount agreement is the strongest signal, then date proximity, then
+    fuzzy vendor agreement (a corroborator, not a gate; bank exports
+    truncate vendor names). Sorts the review workbench so the weakest
+    matches surface first; it does NOT change which bucket a pair lands
+    in (that stays deterministic via match_type / confidence).
+    """
+    s = 0.55 * amount_score + 0.30 * date_score + 0.15 * vendor_score
+    return max(0, min(100, round(s * 100.0)))
+
+
 def match_one(
     tx: Transaction, receipt: Receipt, cfg: MatchingConfig
 ) -> Match | None:
@@ -183,6 +198,12 @@ def match_one(
     Returns None when the candidate does not pass the minimum bar
     (no plausible amount or date relationship).
     """
+    # Vendor similarity feeds the graded 0-100 triage score in every
+    # branch (3.9 signal reused); vendor_similarity tolerates None.
+    vendor_score = vendor_similarity(
+        tx.vendor_from_statement, receipt.detected_vendor
+    )
+
     # Currency mismatch -> FX judgment layer, but ONLY for plausible
     # pairs. This is the EUR-on-USD-card case Dirk specified on the
     # call (call-outcomes "Matching approach"); the amount won't match
@@ -230,6 +251,10 @@ def match_one(
                 f"{receipt.detected_currency}->{tx.transaction_currency} "
                 f"band [{lo}, {hi}]"
             )
+            # amount sub-score: how centered the implied rate sits in the band.
+            center = (float(lo) + float(hi)) / 2.0
+            half = ((float(hi) - float(lo)) / 2.0) or 1.0
+            amount_score = max(0.0, 1.0 - abs(float(implied_rate) - center) / half)
         else:
             # Unprofiled currency pair: keep the candidate (date-gated
             # only) so we never lose a real match for a currency we
@@ -238,7 +263,9 @@ def match_one(
                 f"unprofiled {receipt.detected_currency}->"
                 f"{tx.transaction_currency} pair; date-gated only"
             )
+            amount_score = 0.5
 
+        date_score = max(0.0, 1.0 - date_diff / max(1, cfg.fx_date_window_days))
         return Match(
             transaction_id=tx.transaction_id,
             document_id=receipt.document_id,
@@ -250,6 +277,7 @@ def match_one(
                 f"date diff {date_diff}d, {rate_note}. Requires FX judgment."
             ),
             requires_review=True,
+            score=_blend_score(amount_score, date_score, vendor_score),
         )
 
     # No amount on the receipt -> can't deterministically match.
@@ -266,6 +294,14 @@ def match_one(
     if not (amount_exact or amount_probable):
         return None
 
+    # amount sub-score: 1.0 at an exact hit, decaying to 0 at the edge
+    # of the probable tolerance band.
+    if amount_exact:
+        amount_score = 1.0
+    else:
+        span = float(tx.amount) * float(cfg.amount_probable_tolerance_pct)
+        amount_score = max(0.0, 1.0 - float(diff) / span) if span else 0.0
+
     if receipt.detected_date is None:
         # Without a receipt date we lean on amount alone — downgrade.
         return Match(
@@ -275,6 +311,7 @@ def match_one(
             confidence=cfg.possible_confidence,
             reason="Amount match without receipt date; review required.",
             requires_review=True,
+            score=_blend_score(amount_score, 0.5, vendor_score),
         )
 
     candidate_dates = [tx.transaction_date]
@@ -287,6 +324,7 @@ def match_one(
     date_probable = (
         not date_exact and date_diff <= cfg.date_probable_window_days
     )
+    date_score = max(0.0, 1.0 - date_diff / max(1, cfg.date_probable_window_days))
 
     if amount_exact and date_exact:
         return Match(
@@ -298,6 +336,7 @@ def match_one(
                 f"Exact amount, date within {cfg.date_exact_window_days} "
                 f"day(s), same currency."
             ),
+            score=_blend_score(amount_score, date_score, vendor_score),
         )
 
     if (amount_exact or amount_probable) and (date_exact or date_probable):
@@ -312,6 +351,7 @@ def match_one(
                 f"date diff {date_diff} day(s)."
             ),
             requires_review=True,
+            score=_blend_score(amount_score, date_score, vendor_score),
         )
 
     return None

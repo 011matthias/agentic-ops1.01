@@ -177,7 +177,15 @@ class Receipt:
 
 @dataclass(frozen=True)
 class Match:
-    """A scored candidate pairing of a transaction and a receipt."""
+    """A scored candidate pairing of a transaction and a receipt.
+
+    `confidence` is the bucket/judgment confidence that drives assignment
+    and back-compat. `score` is a graded 0-100 triage number blending
+    amount, date, and fuzzy-vendor agreement (Tier-1 #1); it orders the
+    review workbench so the weakest matches surface first and never
+    changes which bucket a pair lands in. 0 means "not scored" (e.g. a
+    reviewer-confirmed match built outside the matcher).
+    """
 
     transaction_id: str
     document_id: str
@@ -185,6 +193,7 @@ class Match:
     confidence: float
     reason: str
     requires_review: bool = False
+    score: int = 0
 
 
 @dataclass(frozen=True)

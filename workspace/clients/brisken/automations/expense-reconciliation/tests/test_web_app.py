@@ -185,3 +185,11 @@ def test_ai_requested_without_key_falls_back(client, monkeypatch):
     assert "Transactions" in wb.text
     # Effective AI state is off (fell back), not the requested "on".
     assert "AI categorization off" in wb.text
+
+
+def test_workbench_renders_triage_and_duplicate_sections(client):
+    run_id = _create_run(client)
+    resp = client.get(f"/runs/{run_id}")
+    assert resp.status_code == 200
+    # Tier-1 triage stat + duplicate scan always render in the workbench.
+    assert "Dup groups" in resp.text
