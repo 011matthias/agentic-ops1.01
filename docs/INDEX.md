@@ -26,6 +26,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-06-12 | Friction Rule Gaps | system-infra | [Checkpoint](docs/2026-06-12%20-%20Friction%20Rule%20Gaps/Checkpoint.md) |
 | 2026-06-12 | CI Flaky Smoke Test + Spell Fixer | system-infra | [Checkpoint](docs/2026-06-12%20-%20CI%20Flaky%20Smoke%20Test%20+%20Spell%20Fixer/Checkpoint.md) |
 | 2026-06-11 | Web Build Quality Gates | system-infra | [Mini-Checkpoint-1](docs/2026-06-11%20-%20Web%20Build%20Quality%20Gates/Mini-Checkpoint-1.md) |
 | 2026-06-09 | n8n Ops Proposal + Video Blueprint | system-infra | [Checkpoint](docs/2026-06-09%20-%20n8n%20Ops%20Proposal%20+%20Video%20Blueprint/Checkpoint.md) |
