@@ -38,12 +38,29 @@ third queued prompt
 To add one: append your text as a new segment (put a `---` line before it if the file
 already ends with prompt text). To bulk-add: paste several prompts separated by `---` lines.
 
+## Mini interface (optional)
+
+`uv run tools/prompt-queue-ui.py` serves a miniature queue UI on `http://127.0.0.1:7077`
+(auto-opens the browser; `--no-open` to suppress, `--port N` to change). It lists pending
+prompts and supports add, edit, reorder, delete, and clear, plus a read-only tail of
+`done.md`. The file stays the source of truth: the page polls every 2 seconds, so agent
+drains and hand-edits show up live, and every mutation is hash-guarded so the UI never
+clobbers a drain that happened underneath it.
+
+To embed in VS Code: start the server (terminal, or wire a local VS Code background
+task running `uv run tools/prompt-queue-ui.py --no-open`), then
+Ctrl+Shift+P > "Simple Browser: Show" > paste the URL. Same page, in an editor tab.
+
+The UI canonicalizes `pending.md` on write: the leading header comment is kept,
+everything else is regenerated from the parsed prompts. Hand-written comments below
+the header do not survive a UI mutation; annotate as plain text inside a block instead.
+
 ## Modes (dispatch on the argument)
 
 - no argument, or `run` / `drain` / `go` → **Drain** (default)
 - `add <text>` → append `<text>` to `pending.md` as a new block, confirm it was queued, STOP. Do not drain.
 - `list` / `status` → print the pending prompts in order with their position. Do not run them.
-- `clear` → show what will be discarded, move all pending blocks to `done.md` marked `[cleared]`, leave `pending.md` empty.
+- `clear` → show what will be discarded, move all pending blocks to `done.md` marked `cleared`, leave `pending.md` empty.
 
 ## Drain procedure (the core)
 
@@ -60,6 +77,9 @@ Run this only after the current in-flight task is finished. Then:
    <the prompt>
    > <one-line outcome>
    ```
+
+   The tag after the timestamp is `done` for drained prompts; the mini UI writes
+   `deleted` and `cleared` for prompts removed without running. Same entry shape.
 
 6. Re-read `pending.md` (this picks up anything appended while step 4 ran) and return to step 2.
 7. When `pending.md` has no prompt blocks left, print a one-line summary (`Drained N prompts.`) and STOP. Do not schedule a wakeup; do not poll.
