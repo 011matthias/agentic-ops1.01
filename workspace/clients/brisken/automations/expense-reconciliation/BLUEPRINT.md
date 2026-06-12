@@ -293,7 +293,7 @@ doctor pre-flight. Path A is an edge redirect, not a matcher rewrite.
 
 | # | Item | Path | Status / gate |
 |---|---|---|---|
-| 8.1 | Zoho Expense CSV ingest adapter — a column-map over the existing receipts-CSV path, adding the report-number and receipt-URL fields | `src/expense_recon/ingest/expense_csv.py` | GATED. The adapter is config-driven (column map in `run.json`); the exact Zoho column names AND whether a receipt-URL field exists are settled by one real export header (open question). Build without hardcoding a guessed Zoho schema. |
+| 8.1 | Zoho Expense CSV ingest adapter — a column-map over the existing receipts-CSV path, adding the report-number and receipt-URL fields | `src/expense_recon/ingest/expense_csv.py` | BUILDABLE. No further client data is coming (owner 2026-06-12), so build against the documented Zoho export format + the ER PDF sample shapes. Adapter is config-driven (column map in `run.json`); the receipt-URL field is a design fork — carry it if present, else filename-match via `receipt_name`. No live export header will arrive to settle it, so support both. |
 | 8.2 | Bank-statement table + dedup + statement-number validation; one table for all banks/cards | `src/expense_recon/store/statements.py` | **BUILT 2026-06-12.** `StatementStore`: content-fingerprint dedup (global, order-independent), statement-number validation (same id + changed content raises `StatementConflictError` unless `replace=True`), `transactions()` reconstruction with a stable fingerprint-derived id, multi-account batch support (the 6-card file). 12 tests (`tests/test_statement_store.py`). Standalone value: persists + dedups the statements already in hand, independent of the Zoho gate. CLI `store:` opt-in wiring is the follow-up. |
 | 8.3 | Reports table (4–5 fields) + per-expense report cross-reference, carried into the Books export | `src/expense_recon/store/reports.py` | SCHEMA buildable now (ER-00214/215/216 fix the field set: report no., period, submitter, currency totals, status); VALUE gated on 8.1 — nothing references a report until expenses are ingested, so building the table now would be rows nothing populates. Design-locked; build when 8.1 lands. |
 | 8.4 | Receipt-URL hosting — receipt pictures live in the tool, addressable by a stable URL the Books export carries | `src/expense_recon/hosting/` | DESIGN + minimal local scheme now (content-addressed file store + URL template); the run-target decision (Chris-local vs small host) is the same open question as 5c deployment. |
@@ -306,12 +306,20 @@ own-scanner and for receipts that bypass Expense. The tool's own tables
 (8.2/8.3) become the source of truth that survives the Zoho switch-off;
 the run-log (5b) already persists decisions, these persist the inputs.
 
-**Build order under Path A:** 8.2 → 8.3 (both unblocked, additive,
-follow the run-log pattern) → 8.4 (design + minimal scheme) → 8.1 → 8.5
-column-add (the last two gated on one real Zoho Expense CSV header).
-The parked data ask (reconciled month + chart-of-accounts + one real
-Expense CSV) unblocks 8.1/8.5 and the coverage→accuracy tuning; 8.2,
-8.3, and 8.4's design do not wait on it.
+**Build order under Path A:** 8.2 → 8.3 → 8.4 → 8.1 → 8.5 column-add,
+all follow the run-log pattern.
+
+**No further client data is coming (owner-clarified 2026-06-12).** The
+ER PDFs + Chase export already in hand are illustrative SAMPLES, the
+full extent of what Brisken provides; there is no promised reconciled
+month, chart-of-accounts export, or live Zoho Expense CSV to wait on.
+So 8.1/8.5 are NOT gated on a future export: build the Expense-CSV
+adapter against the documented Zoho export format + the ER sample
+shapes, treating the receipt-URL field as a design fork (carry it if
+the column exists, else filename-match via `receipt_name`). The earlier
+"parked data ask" and "coverage→accuracy tuning once Chris's reconciled
+month lands" framing is retired. Accuracy gets validated in production
+by Chris's monthly runs, not by a pre-shared ground-truth month.
 
 ---
 
@@ -560,35 +568,31 @@ against its Chase slice via `expense-recon calibrate`, all exit 0:
 | Nov-24 Lisbon (EUR) | 102 | 38 | 30/37 = 0.81x | 7 | OK |
 | Jun-25 Rome (EUR) | 203 | 50 | 46/48 = 0.96x | 2 | OK |
 
-What this confirms: the **FX gate (3.7) scales to real full-month data**
+What this legitimately confirms — about the TOOL, run on illustrative
+data: the **FX gate (3.7) scales to real full-month volume**
 (multiplicity ≤1x on all three, no cross-product), the **reconciliation
 guarantee holds** (invariant OK, no double-binding, unmatched receipts
-surfaced not dropped), and the **travel-report extraction is exact**.
+surfaced not dropped), and the **travel-report extraction is exact**
+(DKK and EU-format EUR parse correctly).
 
-What it does NOT confirm, and why (claim-vs-evidence): for **Oct-24 and
-Nov-24 the EU-trip charges are NOT in the Chase 2838 export.** Those two
-months in the export are US-card + SaaS charges on 2838 (Texas
-restaurants, MSFT/LinkedIn/Namecheap; Nov-24 is actually a *Luxembourg*
-trip — Ibis Esch Belval, Parking Belval Plaza — not Lisbon). So the
-DKK/Lisbon receipts paired SPURIOUSLY to non-travel USD charges (or went
-unmatched: 7 Lisbon receipts had no band-plausible counterpart at all).
-The gate/guarantee results above are valid; the band is NOT truly
-validated for DKK/Lisbon because the true counterparts are absent. Only
-**Jun-25 Rome** has its travel charges in the export (card 0340/2838),
-where the true pairs verified earlier (L'Angoletto $67.22 EXACT; Hostaria
-Pantheon / Al 31 in-band to their named charges).
-
-**Card / export-coverage correction (refines the earlier 1672 note).**
-Card 1672 has ZERO rows in the entire Chase export. For Jun-25 Rome the
-travel charges settle on 0340/2838 (1672 is a slip/mode label, not the
-settling card). BUT the 2024 EU trips' charges are absent from the 2838
-export entirely, so the settlement card for those is unknown from this
-data, not "2838". The load-bearing finding: **this Chase export is
-incomplete for EU travel — at least the 2024-trip card/account is
-outside it.** A concrete whole-trip example (Lisbon WebSummit) of the
-"another account exists outside this export" gap. Sharpens the data ask:
-the reconciled-month / statement pull must include the EU travel
-card/account, or the travel side cannot be reconciled.
+**These ER reports and the Chase export are illustrative SAMPLES, not a
+matched reconciliation set (owner-clarified 2026-06-12).** They show the
+data SHAPES the tool will handle; they were never a curated month where
+each receipt has a counterpart in this particular export. So the fact
+that the Copenhagen / Lisbon receipts find no true counterpart in the
+Chase 2838 export is an artifact of mixing unrelated samples, NOT
+evidence of a gap. A prior version of this note over-read it as "the
+EU-trip charges are missing / there is a missing EU travel card /
+the data ask must include the EU travel card" — that is RETRACTED.
+**There is no EU travel card** (every card settles USD, LD-5); and
+**Brisken is not providing further data** — these samples are the full
+extent. Likewise the "1672 / settlement-card" mapping was an attempt to
+reconcile unrelated samples; treat card-mapping as owner-stated (all-USD)
+rather than reverse-engineered from these files. The unmatched / spurious
+FX pairings in the table are expected when receipts and charges come from
+different sample sets, and are not a tool defect (the guarantee still
+holds). Build proceeds against these shapes and the live monthly pipeline,
+not against any promised reconciled month.
 
 **Effort:** 3a = ~2 days. 3b = ~4–6 days depending on what real data
 surfaces.
@@ -812,8 +816,9 @@ sequence. Calendar time = effort + gate-wait time.
 This ASCII shows the ORIGINAL pre-Path-A gates. Under the standalone
 realignment (Path A, confirmed 2026-06-12) the live remaining work is
 items 8.1–8.5; see "Standalone realignment" above the slice sections.
-8.2/8.3 are unblocked and additive; 8.1/8.5 are gated on one real Zoho
-Expense CSV header.
+No further client data is coming (owner-clarified 2026-06-12), so 8.1–8.5
+build against the sample shapes + documented Zoho format, not against a
+promised export.
 
 **Parallelisable while waiting:**
 
