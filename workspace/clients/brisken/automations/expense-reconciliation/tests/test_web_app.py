@@ -193,3 +193,71 @@ def test_workbench_renders_triage_and_duplicate_sections(client):
     assert resp.status_code == 200
     # Tier-1 triage stat + duplicate scan always render in the workbench.
     assert "Dup groups" in resp.text
+
+
+# ── PR A — review speed (confirm-all-matched + ready-to-post bar) ──────
+
+
+def test_ready_bar_renders_and_gates_download(client):
+    # A fresh run has matched rows the reviewer has not ratified yet, so the
+    # ready bar reads "Not ready" and the report download link is disabled.
+    run_id = _create_run(client)
+    resp = client.get(f"/runs/{run_id}")
+    assert resp.status_code == 200
+    assert "Confirm all matched" in resp.text
+    assert "Not ready to post" in resp.text
+    assert "undecided" in resp.text
+    # The gated download carries the `disabled` class until review is clean.
+    assert 'id="download-report"' in resp.text
+    assert "disabled" in resp.text.split('id="download-report"', 1)[1][:120]
+
+
+def test_confirm_all_matched_reconciles_and_opens_post_gate(client):
+    run_id = _create_run(client)
+    db = RunStore(client._data_root / "recon-web.sqlite")
+    run = db.get_run(run_id)
+    n_matched = run.summary["n_matched"]
+    db.close()
+    assert n_matched > 0  # the example month has matched rows to confirm
+
+    resp = client.post(f"/runs/{run_id}/decisions/confirm-matched")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["ok"] is True
+    assert data["confirmed"] == n_matched
+    # Every matched row is now reviewer-confirmed -> nothing undecided ->
+    # the post gate opens.
+    assert data["summary"]["n_undecided"] == 0
+    assert data["summary"]["ready_to_post"] is True
+    assert data["summary"]["n_reconciled"] >= n_matched
+
+    # The decisions persisted as confirmed.
+    db = RunStore(client._data_root / "recon-web.sqlite")
+    decisions = db.get_decisions(run_id)
+    db.close()
+    assert sum(1 for d in decisions.values() if d.status == "confirmed") == n_matched
+
+    # Re-running confirms nothing new (idempotent; pending-only).
+    again = client.post(f"/runs/{run_id}/decisions/confirm-matched").json()
+    assert again["confirmed"] == 0
+
+
+def test_confirm_all_matched_does_not_stomp_an_explicit_reject(client):
+    run_id = _create_run(client)
+    db = RunStore(client._data_root / "recon-web.sqlite")
+    run = db.get_run(run_id)
+    # Pick a transaction that was auto-matched, then reject it by hand.
+    matched_tx = run.snapshot["outcome"]["matches"][0]["transaction_id"]
+    db.close()
+
+    client.post(
+        f"/runs/{run_id}/decisions",
+        json={"transaction_id": matched_tx, "status": "rejected"},
+    )
+    client.post(f"/runs/{run_id}/decisions/confirm-matched")
+
+    db = RunStore(client._data_root / "recon-web.sqlite")
+    decisions = db.get_decisions(run_id)
+    db.close()
+    # The explicit reject survived the batch confirm.
+    assert decisions[matched_tx].status == "rejected"

@@ -418,6 +418,34 @@ def apply_decisions(
 
 
 # --------------------------------------------------------------------------
+# Batch confirm (PR A — "Confirm all matched")
+# --------------------------------------------------------------------------
+
+
+def matched_autopick_decisions(
+    run: RunRow, decisions: dict[str, Decision]
+) -> list[tuple[str, str]]:
+    """The (transaction_id, auto-picked document_id) pairs to confirm for a
+    one-click "confirm all matched".
+
+    Returns every transaction whose initial bucket is `matched` (it sits in
+    `outcome.matches`) AND that the reviewer has not already acted on
+    (status still pending). An explicit prior confirm/reject is never
+    stomped. The picked document is the matcher's own assignment, so the
+    batch reproduces what confirming each matched row by hand would do.
+    """
+    _, _, outcome, _ = snapshot_from_dict(run.snapshot)
+    matched_doc_by_tx = {m.transaction_id: m.document_id for m in outcome.matches}
+    out: list[tuple[str, str]] = []
+    for tx_id, doc_id in matched_doc_by_tx.items():
+        decision = decisions.get(tx_id)
+        if decision is not None and decision.status != STATUS_PENDING:
+            continue
+        out.append((tx_id, doc_id))
+    return out
+
+
+# --------------------------------------------------------------------------
 # View model for the workbench template
 # --------------------------------------------------------------------------
 
@@ -494,6 +522,14 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
 
     rows = []
     n_reconciled = n_review = n_unmatched_tx = 0
+    # PR A — "Ready to post?" inputs. `n_undecided` counts rows the tool
+    # proposed a match for that the reviewer has not yet ratified or
+    # rejected (pending + has a candidate); it drives the post gate.
+    # `unreconciled` sums charge magnitude per currency for everything not
+    # yet reconciled; `n_unmapped` counts reconciled line items that would
+    # still export as "(uncategorized - assign)".
+    n_undecided = n_unmapped = 0
+    unreconciled: dict[str, Decimal] = {}
     for tx in transactions:
         tx_id = tx.transaction_id
         decision = decisions.get(tx_id)
@@ -531,6 +567,22 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
                     "receipt": _receipt_view(r, overrides) if r else None,
                 }
             )
+
+        # PR A — readiness accounting (uses the post-decision effective
+        # bucket + the chosen candidate's receipt lines).
+        if status == STATUS_PENDING and cands:
+            n_undecided += 1
+        if effective != "reconciled":
+            unreconciled[tx.transaction_currency] = (
+                unreconciled.get(tx.transaction_currency, Decimal("0"))
+                + abs(tx.amount)
+            )
+        else:
+            chosen_cand = next((c for c in cands if c["is_chosen"]), None)
+            if chosen_cand and chosen_cand["receipt"]:
+                for li in chosen_cand["receipt"]["line_items"]:
+                    if not li["category"]:
+                        n_unmapped += 1
 
         rows.append(
             {
@@ -620,6 +672,13 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
         "llm_cost_usd": run.summary.get("llm_cost_usd", "0"),
         "ai_unavailable": run.summary.get("ai_unavailable", False),
         "n_duplicate_groups": len(duplicate_charges) + len(duplicate_receipts),
+        # PR A — "Ready to post?" bar.
+        "n_undecided": n_undecided,
+        "ready_to_post": n_undecided == 0,
+        "n_unmapped_accounts": n_unmapped,
+        "unreconciled_by_ccy": {
+            ccy: f"{amt:,.2f}" for ccy, amt in sorted(unreconciled.items())
+        },
     }
 
     return {
