@@ -18,24 +18,28 @@ from __future__ import annotations
 
 import json
 import os
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, Form, Request, UploadFile
+from fastapi import BackgroundTasks, FastAPI, Form, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from .service import (
     DEFAULT_EXPENSE_COLUMN_MAP,
     STATEMENT_MAP_FIELDS,
+    PreparedRun,
     RunForm,
     RunInputError,
     build_memory_view,
     build_view,
     commit_to_memory,
     create_run,
+    execute_run,
     forget_memory_vendor,
     matched_autopick_decisions,
+    prepare_run,
     regenerate_report,
     regenerate_zoho,
     reset_memory,
@@ -58,6 +62,24 @@ def _operator() -> str | None:
     )
 
 
+def _run_job(
+    db_path: Path, jobs: dict, job_id: str, prepared: PreparedRun
+) -> None:
+    """Run a prepared reconciliation off the request (PR F).
+
+    Starlette runs this sync function in a worker thread, so the event loop
+    stays free to serve the polling page. It opens its own RunStore (a
+    SQLite connection is per-thread) and records the outcome in the
+    in-memory job map the poller reads.
+    """
+    try:
+        with RunStore(db_path) as store:
+            run_id = execute_run(store, prepared)
+        jobs[job_id] = {"status": "done", "run_id": run_id, "error": None}
+    except Exception as exc:  # noqa: BLE001 - surface any failure to the poller
+        jobs[job_id] = {"status": "error", "run_id": None, "error": str(exc)}
+
+
 def create_app(data_root: str | Path | None = None) -> FastAPI:
     data_root_path = Path(
         data_root or os.environ.get("EXPENSE_RECON_WEB_DATA", "recon-web-data")
@@ -71,6 +93,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     # Durable cross-run memory (Phase 2). Separate db from the per-run web
     # state: runs come and go, learned facts persist across months.
     app.state.learning_db_path = data_root_path / "learning.sqlite"
+    # In-memory background-job map (PR F). A single-user local tool runs one
+    # process, so an in-memory map is enough; a job lost to a server restart
+    # just means re-uploading the file.
+    app.state.jobs = {}
     templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
     def open_store() -> RunStore:
@@ -102,6 +128,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     @app.post("/runs")
     async def post_run(
         request: Request,
+        background: BackgroundTasks,
         statement: UploadFile,
         receipts: UploadFile,
         account_id: str = Form(""),
@@ -155,26 +182,71 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if not receipts_bytes:
             return _render_form_error(templates, request, "No receipts file uploaded.")
 
-        try:
-            with open_store() as store:
-                run_id = create_run(
-                    store,
-                    app.state.data_root,
-                    statement_bytes=statement_bytes,
-                    statement_filename=statement.filename or "statement.csv",
-                    receipts_bytes=receipts_bytes,
-                    receipts_filename=receipts.filename or "receipts.csv",
-                    form=form,
-                    now_iso=_now_iso(),
-                    operator=_operator(),
-                    learning_db_path=app.state.learning_db_path,
+        statement_name = statement.filename or "statement.csv"
+        receipts_name = receipts.filename or "receipts.csv"
+
+        # Sync seam (tests): run inline and 303 to the workbench, the
+        # original contract. Default (production): background the slow
+        # pipeline and hand back a polling page so an LLM run never blocks.
+        if os.environ.get("EXPENSE_RECON_WEB_SYNC") == "1":
+            try:
+                with open_store() as store:
+                    run_id = create_run(
+                        store,
+                        app.state.data_root,
+                        statement_bytes=statement_bytes,
+                        statement_filename=statement_name,
+                        receipts_bytes=receipts_bytes,
+                        receipts_filename=receipts_name,
+                        form=form,
+                        now_iso=_now_iso(),
+                        operator=_operator(),
+                        learning_db_path=app.state.learning_db_path,
+                    )
+            except RunInputError as exc:
+                return _render_form_error(
+                    templates, request, exc.message, headers=exc.headers
                 )
+            return RedirectResponse(url=f"/runs/{run_id}", status_code=303)
+
+        # Async: validate synchronously (a bad column map is still a form
+        # error), then run the pipeline in the background.
+        try:
+            prepared = prepare_run(
+                app.state.data_root,
+                statement_bytes=statement_bytes,
+                statement_filename=statement_name,
+                receipts_bytes=receipts_bytes,
+                receipts_filename=receipts_name,
+                form=form,
+                now_iso=_now_iso(),
+                operator=_operator(),
+                learning_db_path=app.state.learning_db_path,
+            )
         except RunInputError as exc:
             return _render_form_error(
                 templates, request, exc.message, headers=exc.headers
             )
 
-        return RedirectResponse(url=f"/runs/{run_id}", status_code=303)
+        job_id = uuid.uuid4().hex[:12]
+        app.state.jobs[job_id] = {"status": "running", "run_id": None, "error": None}
+        background.add_task(
+            _run_job, app.state.db_path, app.state.jobs, job_id, prepared
+        )
+        return templates.TemplateResponse(
+            request,
+            "running.html",
+            {"job_id": job_id, "label": form.account_id or "this month"},
+        )
+
+    @app.get("/jobs/{job_id}")
+    def job_status(job_id: str):
+        # PR F — the running page polls this until status flips to done (then
+        # it navigates to the workbench) or error.
+        job = app.state.jobs.get(job_id)
+        if job is None:
+            return JSONResponse({"error": "unknown job"}, status_code=404)
+        return JSONResponse(job)
 
     @app.get("/runs/{run_id}", response_class=HTMLResponse)
     def workbench(request: Request, run_id: str):
