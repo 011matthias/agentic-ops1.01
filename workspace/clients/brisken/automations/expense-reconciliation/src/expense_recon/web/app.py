@@ -161,6 +161,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     form=form,
                     now_iso=_now_iso(),
                     operator=_operator(),
+                    learning_db_path=app.state.learning_db_path,
                 )
         except RunInputError as exc:
             return _render_form_error(

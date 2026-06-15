@@ -9,6 +9,7 @@ next, the escape hatch deliberately before any auto-consult.
 from __future__ import annotations
 
 from .capture import LearnSummary, learn_from_run
+from .consult import MerchantCategoryLookup
 from .store import (
     LearningStore,
     MerchantCategory,
@@ -25,4 +26,5 @@ __all__ = [
     "normalize_vendor",
     "LearnSummary",
     "learn_from_run",
+    "MerchantCategoryLookup",
 ]

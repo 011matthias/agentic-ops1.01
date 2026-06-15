@@ -38,7 +38,7 @@ from ..matching.types import (
     Receipt,
     Transaction,
 )
-from ..learning import LearningStore, learn_from_run
+from ..learning import LearningStore, MerchantCategoryLookup, learn_from_run
 from ..output.report_xlsx import write_report
 from .serialize import snapshot_from_dict, snapshot_to_dict
 from .store import (
@@ -130,9 +130,14 @@ def create_run(
     form: RunForm,
     now_iso: str,
     operator: str | None,
+    learning_db_path: Path | None = None,
 ) -> str:
     """Save the uploads, run the pipeline, persist a snapshot. Returns the
-    new run id. Raises `RunInputError` for user-fixable problems."""
+    new run id. Raises `RunInputError` for user-fixable problems.
+
+    `learning_db_path` (Phase 2): when given, confirmed merchant->category
+    decisions from prior runs are consulted on the vendor-fallback path so
+    a known merchant auto-promotes to Tier-1 LEARNED."""
     run_id = uuid.uuid4().hex[:12]
     work_dir = data_root / "runs" / run_id
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -157,8 +162,13 @@ def create_run(
         stmt_name, rcpt_name, column_map, form, use_llm=use_llm_effective
     )
 
+    learned = (
+        MerchantCategoryLookup.from_db_path(learning_db_path)
+        if learning_db_path is not None
+        else None
+    )
     try:
-        result = reconcile(cfg, work_dir)
+        result = reconcile(cfg, work_dir, learned=learned)
     except ConfigError as exc:
         raise RunInputError(str(exc)) from exc
 
@@ -416,6 +426,7 @@ def _receipt_view(r: Receipt, overrides: dict[tuple[str, int], dict]) -> dict:
     for i, li in enumerate(r.line_items):
         ov = overrides.get((r.document_id, i))
         cat = li.categorization
+        provenance = ""
         if ov and ov.get("category"):
             category = ov["category"]
             source = "EDITED"
@@ -424,6 +435,10 @@ def _receipt_view(r: Receipt, overrides: dict[tuple[str, int], dict]) -> dict:
             category = cat.category
             source = cat.source.value
             confidence = cat.confidence
+            # Phase 2: a LEARNED row carries its provenance ("learned from
+            # your 2026-05 decision") so the reviewer sees why it auto-filled.
+            if cat.source is ClassificationSource.LEARNED:
+                provenance = cat.reasoning
         else:
             category = None
             source = "UNCLASSIFIED"
@@ -436,6 +451,7 @@ def _receipt_view(r: Receipt, overrides: dict[tuple[str, int], dict]) -> dict:
                 "category": category,
                 "source": source,
                 "confidence": confidence,
+                "provenance": provenance,
             }
         )
     return {

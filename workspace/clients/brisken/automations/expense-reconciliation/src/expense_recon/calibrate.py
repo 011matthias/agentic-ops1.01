@@ -166,13 +166,26 @@ def main(argv: list[str] | None = None) -> int:
     outcome = match_month(transactions, receipts)
     m = _metrics(outcome, transactions, receipts, card_currency)
 
+    # Categorization-accuracy gate (PR 2b): a labeled-fixture regression
+    # check on the Sort pass, segmented so a drop in the memory-auto-applied
+    # population trips on its own. Independent of --config (bundled fixture).
+    from .categorization_gate import print_report as print_cat_report, run_gate
+
+    cat = run_gate()
+
     if args.json:
-        print(json.dumps(m, indent=2))
+        print(json.dumps({**m, "categorization": cat}, indent=2))
     else:
         _print_report(m)
+        print()
+        print_cat_report(cat)
 
-    # Gate on the two hard guarantees only.
-    return 0 if (m["invariant_ok"] and not m["double_bound_receipts"]) else 1
+    # Gate on the reconciliation guarantees AND categorization accuracy.
+    return (
+        0
+        if (m["invariant_ok"] and not m["double_bound_receipts"] and cat["ok"])
+        else 1
+    )
 
 
 if __name__ == "__main__":
