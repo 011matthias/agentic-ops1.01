@@ -376,17 +376,21 @@ before learned data can influence output.
   Capture-only — nothing reads the store yet. 15 tests
   (`test_learning_store.py`, `test_learning_capture.py`,
   `test_web_commit.py`); suite 288 green; `calibrate` exit 0.
-- **2d — `expense-recon memory` CLI (next):** list / forget / reset,
-  mirroring `runlog_cli`.
-- **2b — consult in Sort:** auto-apply to Tier-1 with a visible
-  provenance label + the override-retrains loop (owner decision #1, both
-  non-negotiable companions). **First commit of 2b adds a
-  categorization-accuracy metric to `calibrate`** (labeled fixture, %
-  correct, fails on regression) BEFORE the consult path — `calibrate`
-  today scores the reconciliation invariant + match scoring but NOT
-  categorization, so a subtly-wrong learned mapping would otherwise be
-  learning-blind (owner redline 2026-06-15).
-- **2c — consult in Match:** `MatchingConfig` gains optional
+- **2d — `expense-recon memory` CLI (SHIPPED PR #161):** list / forget /
+  reset (reset is preview-unless-`--yes`), mirroring `runlog_cli`. Landed
+  before consult, by design.
+- **2b — consult in Sort (BUILT, this PR; two commits, gate first).**
+  Commit 1: a segmented categorization-accuracy gate in `calibrate`
+  (labeled fixture; overall floor at baseline + a changed-subset floor that
+  ratchets to 1.0 once consult lands, so a regression in the auto-applied
+  population trips on its own) — landed BEFORE the consult, per the redline.
+  Commit 2: a learned merchant->category auto-applies as Tier-1 `LEARNED`
+  with a provenance label, but ONLY on the vendor-fallback path — a
+  confident line read always wins (fallback, not override). The
+  override-retrains loop bumps `decision_count`/`last_confirmed`. Cross-run
+  round-trip proven end-to-end; suite 310 green; `calibrate` overall 7/7,
+  subset 4/4, exit 0.
+- **2c — consult in Match (next):** `MatchingConfig` gains optional
   `vendor_aliases` + `merchant_fx`, populated from the store in
   `reconcile()`; defaults empty so existing matcher tests + `calibrate`
   are unchanged.
