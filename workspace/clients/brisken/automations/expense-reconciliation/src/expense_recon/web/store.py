@@ -50,6 +50,7 @@ class RunRow:
 class Decision:
     status: str
     chosen_document_id: str | None
+    updated_at: str | None = None
 
 
 class RunStore:
@@ -171,12 +172,14 @@ class RunStore:
 
     def get_decisions(self, run_id: str) -> dict[str, Decision]:
         rows = self.conn.execute(
-            "SELECT transaction_id, status, chosen_document_id "
+            "SELECT transaction_id, status, chosen_document_id, updated_at "
             "FROM decisions WHERE run_id = ?",
             (run_id,),
         ).fetchall()
         return {
-            r["transaction_id"]: Decision(r["status"], r["chosen_document_id"])
+            r["transaction_id"]: Decision(
+                r["status"], r["chosen_document_id"], r["updated_at"]
+            )
             for r in rows
         }
 

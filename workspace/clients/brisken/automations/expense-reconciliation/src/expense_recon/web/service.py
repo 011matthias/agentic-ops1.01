@@ -338,74 +338,119 @@ def apply_decisions(
 ) -> MatchOutcome:
     """Rebuild a MatchOutcome reflecting the reviewer's verdicts.
 
-    confirmed -> the (picked) match moves to `matches`; rejected -> the
-    transaction moves to `unmatched_transactions`; pending -> the original
-    bucket stands. The reconciliation guarantee is preserved: every
-    transaction lands in exactly one bucket, and every receipt is either
-    consumed by a kept match/candidate or listed in `unmatched_receipts`.
+    Resolved in three passes so the one-receipt-one-transaction guarantee
+    holds even when the reviewer manually re-assigns (steals) a receipt:
+
+    1. confirmed decisions claim their picked receipt first; among several
+       confirms contesting the same receipt the most recent one wins (by
+       `updated_at`), so a fresh manual match beats a stale confirm.
+    2. pending transactions keep their original bucket, but only claim a
+       receipt that is still free; if the auto-picked receipt was taken in
+       pass 1 the transaction falls to unmatched (this is how stealing an
+       auto-matched receipt frees its former charge, with no explicit
+       release step).
+    3. rejected transactions go to unmatched.
+
+    A confirmed `chosen_document_id` that was never an auto-candidate (a
+    hand-made manual match) synthesizes a POSSIBLE match, so the picked
+    receipt is consumed and lands in the export. Every transaction ends in
+    exactly one bucket; every receipt is consumed once or listed in
+    `unmatched_receipts`.
     """
     by_tx = _candidates_by_tx(outcome)
     matched_ids = {m.transaction_id for m in outcome.matches}
     judgment_ids = {m.transaction_id for m in outcome.judgment_required}
     ambiguous_ids = {m.transaction_id for m in outcome.ambiguous}
 
+    def status_for(tx_id: str) -> str:
+        d = decisions.get(tx_id)
+        return d.status if d else STATUS_PENDING
+
+    consumed: set[str] = set()
+    match_by_tx: dict[str, Match] = {}
+    judgment_by_tx: dict[str, list[Match]] = {}
+    ambiguous_by_tx: dict[str, list[Match]] = {}
+
+    # Pass 1: confirmed (explicit) claims, most-recent confirm first.
+    confirmed_txs = [
+        tx for tx in transactions if status_for(tx.transaction_id) == STATUS_CONFIRMED
+    ]
+    confirmed_txs.sort(
+        key=lambda tx: (decisions[tx.transaction_id].updated_at or ""), reverse=True
+    )
+    for tx in confirmed_txs:
+        tx_id = tx.transaction_id
+        cands = by_tx.get(tx_id, [])
+        chosen = decisions[tx_id].chosen_document_id
+        if chosen is None:
+            chosen = next(
+                (m.document_id for m in outcome.matches if m.transaction_id == tx_id),
+                cands[0].document_id if cands else None,
+            )
+        if chosen is None or chosen in consumed:
+            continue  # nothing to claim / receipt already taken -> unmatched
+        orig = next((m for m in cands if m.document_id == chosen), None)
+        match_by_tx[tx_id] = (
+            replace(orig, requires_review=False, reason="confirmed by reviewer")
+            if orig
+            else Match(
+                transaction_id=tx_id,
+                document_id=chosen,
+                match_type=MatchType.POSSIBLE,
+                confidence=1.0,
+                reason="manually matched by reviewer",
+                requires_review=False,
+            )
+        )
+        consumed.add(chosen)
+
+    # Pass 2: pending transactions keep their bucket, claiming only free
+    # receipts.
+    for tx in transactions:
+        tx_id = tx.transaction_id
+        if status_for(tx_id) != STATUS_PENDING:
+            continue
+        if tx_id in matched_ids:
+            m = next(m for m in outcome.matches if m.transaction_id == tx_id)
+            if m.document_id not in consumed:
+                match_by_tx[tx_id] = m
+                consumed.add(m.document_id)
+        elif tx_id in judgment_ids:
+            kept = [
+                m
+                for m in outcome.judgment_required
+                if m.transaction_id == tx_id and m.document_id not in consumed
+            ]
+            if kept:
+                judgment_by_tx[tx_id] = kept
+                consumed.update(m.document_id for m in kept)
+        elif tx_id in ambiguous_ids:
+            kept = [
+                m
+                for m in outcome.ambiguous
+                if m.transaction_id == tx_id and m.document_id not in consumed
+            ]
+            if kept:
+                ambiguous_by_tx[tx_id] = kept
+                consumed.update(m.document_id for m in kept)
+
+    # Assemble in transaction order for stable output. Any transaction not
+    # placed above (rejected, a pending claim that lost its receipt, or one
+    # with no candidate) is unmatched.
     new_matches: list[Match] = []
     new_judgment: list[Match] = []
     new_ambiguous: list[Match] = []
     new_unmatched_tx: list[str] = []
-    consumed: set[str] = set()
-
     for tx in transactions:
         tx_id = tx.transaction_id
-        cands = by_tx.get(tx_id, [])
-        decision = decisions.get(tx_id)
-        status = decision.status if decision else STATUS_PENDING
-
-        if status == STATUS_CONFIRMED:
-            chosen = decision.chosen_document_id if decision else None
-            if chosen is None:
-                chosen = next(
-                    (m.document_id for m in outcome.matches if m.transaction_id == tx_id),
-                    cands[0].document_id if cands else None,
-                )
-            if chosen is None:
-                new_unmatched_tx.append(tx_id)
-                continue
-            orig = next((m for m in cands if m.document_id == chosen), None)
-            confirmed = (
-                replace(orig, requires_review=False, reason="confirmed by reviewer")
-                if orig
-                else Match(
-                    transaction_id=tx_id,
-                    document_id=chosen,
-                    match_type=MatchType.POSSIBLE,
-                    confidence=1.0,
-                    reason="confirmed by reviewer",
-                    requires_review=False,
-                )
-            )
-            new_matches.append(confirmed)
-            consumed.add(chosen)
-        elif status == STATUS_REJECTED:
+        if tx_id in match_by_tx:
+            new_matches.append(match_by_tx[tx_id])
+        elif tx_id in judgment_by_tx:
+            new_judgment.extend(judgment_by_tx[tx_id])
+        elif tx_id in ambiguous_by_tx:
+            new_ambiguous.extend(ambiguous_by_tx[tx_id])
+        else:
             new_unmatched_tx.append(tx_id)
-        else:  # pending: keep the original bucket
-            if tx_id in matched_ids:
-                for m in outcome.matches:
-                    if m.transaction_id == tx_id:
-                        new_matches.append(m)
-                        consumed.add(m.document_id)
-            elif tx_id in judgment_ids:
-                for m in outcome.judgment_required:
-                    if m.transaction_id == tx_id:
-                        new_judgment.append(m)
-                        consumed.add(m.document_id)
-            elif tx_id in ambiguous_ids:
-                for m in outcome.ambiguous:
-                    if m.transaction_id == tx_id:
-                        new_ambiguous.append(m)
-                        consumed.add(m.document_id)
-            else:
-                new_unmatched_tx.append(tx_id)
 
     new_unmatched_rec = [r.document_id for r in receipts if r.document_id not in consumed]
     return MatchOutcome(
@@ -443,6 +488,30 @@ def matched_autopick_decisions(
             continue
         out.append((tx_id, doc_id))
     return out
+
+
+def validate_manual_match(
+    run: RunRow, transaction_id: str, document_id: str
+) -> str | None:
+    """Check a hand-made (charge, receipt) pairing against the run snapshot.
+
+    Returns an error string for the caller to surface, or None when the
+    pairing is allowed. Both must exist and share a legal entity (entity
+    scope per v2 spec §4.2; the matcher never pairs across entities, so a
+    manual pairing must not either). The receipt may currently be matched
+    to another charge: confirming this pairing steals it, and the two-pass
+    resolution in `apply_decisions` frees the former charge.
+    """
+    transactions, receipts, _, _ = snapshot_from_dict(run.snapshot)
+    tx = next((t for t in transactions if t.transaction_id == transaction_id), None)
+    if tx is None:
+        return "Unknown transaction for this run."
+    rec = next((r for r in receipts if r.document_id == document_id), None)
+    if rec is None:
+        return "Unknown receipt for this run."
+    if rec.legal_entity_id != tx.legal_entity_id:
+        return "Receipt and charge belong to different legal entities."
+    return None
 
 
 # --------------------------------------------------------------------------
@@ -509,11 +578,23 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
     rec_by_id = {r.document_id: r for r in receipts}
     by_tx = _candidates_by_tx(outcome)
 
+    # Resolve the reviewer's decisions once. The screen renders from the
+    # SAME effective outcome the export regenerates from, so the buckets,
+    # the consumed receipts, and the unmatched list can never disagree
+    # between what Chris sees and what lands in the report (PR B).
+    effective = apply_decisions(outcome, transactions, receipts, decisions)
+    eff_match_by_tx = {m.transaction_id: m for m in effective.matches}
+    eff_review_tx = {m.transaction_id for m in effective.judgment_required} | {
+        m.transaction_id for m in effective.ambiguous
+    }
+
     matched_ids = {m.transaction_id for m in outcome.matches}
     judgment_ids = {m.transaction_id for m in outcome.judgment_required}
     ambiguous_ids = {m.transaction_id for m in outcome.ambiguous}
 
     def initial_bucket(tx_id: str) -> str:
+        # The matcher's pre-decision view, shown as a hint next to the
+        # reviewer's effective verdict.
         if tx_id in matched_ids:
             return "matched"
         if tx_id in judgment_ids or tx_id in ambiguous_ids:
@@ -522,38 +603,42 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
 
     rows = []
     n_reconciled = n_review = n_unmatched_tx = 0
-    # PR A — "Ready to post?" inputs. `n_undecided` counts rows the tool
-    # proposed a match for that the reviewer has not yet ratified or
-    # rejected (pending + has a candidate); it drives the post gate.
-    # `unreconciled` sums charge magnitude per currency for everything not
-    # yet reconciled; `n_unmapped` counts reconciled line items that would
-    # still export as "(uncategorized - assign)".
+    # PR A — "Ready to post?" inputs. `n_undecided` counts rows the tool is
+    # holding a receipt for (effective reconciled/review) that the reviewer
+    # has not yet ratified or rejected (still pending); it drives the post
+    # gate. `unreconciled` sums charge magnitude per currency for everything
+    # not yet reconciled; `n_unmapped` counts reconciled line items that
+    # would still export as "(uncategorized - assign)".
     n_undecided = n_unmapped = 0
     unreconciled: dict[str, Decimal] = {}
     for tx in transactions:
         tx_id = tx.transaction_id
         decision = decisions.get(tx_id)
         status = decision.status if decision else STATUS_PENDING
-        chosen_doc = decision.chosen_document_id if decision else None
         init = initial_bucket(tx_id)
 
-        if status == STATUS_CONFIRMED:
-            effective = "reconciled"
-        elif status == STATUS_REJECTED:
-            effective = "unmatched"
+        if tx_id in eff_match_by_tx:
+            effective_bucket = "reconciled"
+            held_doc = eff_match_by_tx[tx_id].document_id
+        elif tx_id in eff_review_tx:
+            effective_bucket = "review"
+            held_doc = decision.chosen_document_id if decision else None
         else:
-            effective = {"matched": "reconciled", "review": "review", "unmatched": "unmatched"}[init]
+            effective_bucket = "unmatched"
+            held_doc = None
 
-        if effective == "reconciled":
+        if effective_bucket == "reconciled":
             n_reconciled += 1
-        elif effective == "review":
+        elif effective_bucket == "review":
             n_review += 1
         else:
             n_unmatched_tx += 1
 
         cands = []
+        seen_docs = set()
         for m in by_tx.get(tx_id, []):
             r = rec_by_id.get(m.document_id)
+            seen_docs.add(m.document_id)
             cands.append(
                 {
                     "document_id": m.document_id,
@@ -562,17 +647,31 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
                     "score": m.score,
                     "reason": m.reason,
                     "requires_review": m.requires_review,
-                    "is_chosen": (m.document_id == chosen_doc)
-                    or (chosen_doc is None and init == "matched"),
+                    "is_chosen": m.document_id == held_doc,
                     "receipt": _receipt_view(r, overrides) if r else None,
                 }
             )
+        # PR B — a hand-made manual match: the held receipt was never an
+        # auto-candidate, so synthesize a candidate row to render it.
+        if held_doc and held_doc not in seen_docs and held_doc in rec_by_id:
+            cands.append(
+                {
+                    "document_id": held_doc,
+                    "match_type": "manual",
+                    "confidence": 1.0,
+                    "score": None,
+                    "reason": "manually matched by reviewer",
+                    "requires_review": False,
+                    "is_chosen": True,
+                    "receipt": _receipt_view(rec_by_id[held_doc], overrides),
+                }
+            )
 
-        # PR A — readiness accounting (uses the post-decision effective
-        # bucket + the chosen candidate's receipt lines).
-        if status == STATUS_PENDING and cands:
+        # PR A — readiness accounting (uses the effective bucket + the
+        # held receipt's lines).
+        if status == STATUS_PENDING and effective_bucket in ("reconciled", "review"):
             n_undecided += 1
-        if effective != "reconciled":
+        if effective_bucket != "reconciled":
             unreconciled[tx.transaction_currency] = (
                 unreconciled.get(tx.transaction_currency, Decimal("0"))
                 + abs(tx.amount)
@@ -592,10 +691,11 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
                 "amount": _fmt_amount(tx.amount),
                 "currency": tx.transaction_currency,
                 "account_id": tx.account_id,
+                "legal_entity_id": tx.legal_entity_id,
                 "initial_bucket": init,
-                "effective_bucket": effective,
+                "effective_bucket": effective_bucket,
                 "status": status,
-                "chosen_document_id": chosen_doc,
+                "chosen_document_id": held_doc,
                 "candidates": cands,
                 "triage_score": max(
                     (c["score"] for c in cands if c["score"]), default=None
@@ -603,10 +703,38 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
             }
         )
 
-    consumed = {c["document_id"] for row in rows for c in row["candidates"]}
+    # Unmatched receipts come straight from the resolved outcome, so a
+    # receipt freed by a reject (or stolen by a manual match) reappears
+    # here and can be re-assigned.
     unmatched_receipts = [
-        _receipt_view(r, overrides) for r in receipts if r.document_id not in consumed
+        _receipt_view(rec_by_id[d], overrides)
+        for d in effective.unmatched_receipts
+        if d in rec_by_id
     ]
+
+    # PR B — receipts the reviewer can pick from when hand-matching a
+    # charge. Free receipts first, then any held one (picking a held one
+    # steals it, freeing its current charge). `held_by` labels each so the
+    # picker shows what a steal would cost.
+    holder_by_doc: dict[str, str] = {}
+    for m in effective.matches:
+        holder_by_doc[m.document_id] = m.transaction_id
+    for m in (*effective.judgment_required, *effective.ambiguous):
+        holder_by_doc.setdefault(m.document_id, m.transaction_id)
+    assignable_receipts = sorted(
+        (
+            {
+                "document_id": r.document_id,
+                "vendor": r.detected_vendor or "(no vendor)",
+                "total": _fmt_amount(r.detected_total),
+                "currency": r.detected_currency or "",
+                "legal_entity_id": r.legal_entity_id,
+                "held_by": holder_by_doc.get(r.document_id),
+            }
+            for r in receipts
+        ),
+        key=lambda a: (a["held_by"] is not None, a["vendor"].lower()),
+    )
 
     # Tier-1 #1: surface the weakest items first. Unmatched transactions
     # (need a receipt) rank above review items, which rank above
@@ -691,6 +819,7 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
         "rows": rows,
         "unmatched_receipts": unmatched_receipts,
         "unmatched_transactions": unmatched_transactions,
+        "assignable_receipts": assignable_receipts,
         "duplicate_charges": duplicate_charges,
         "duplicate_receipts": duplicate_receipts,
         "category_options": list(EXPENSE_CATEGORIES),

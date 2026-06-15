@@ -121,6 +121,19 @@
       <button class="btn btn-secondary btn-small" onclick="setDecision('{{ row.transaction_id }}','rejected',null)">Reject</button>
       <button class="btn btn-secondary btn-small" onclick="setDecision('{{ row.transaction_id }}','pending',null)">Reset</button>
     </div>
+
+    {% if row.effective_bucket == "unmatched" %}
+    <div style="margin-top:10px; padding-top:10px; border-top:1px dashed var(--border); display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <span class="muted" style="font-size:12px;">Match a receipt by hand:</span>
+      <select id="mm-{{ row.transaction_id }}" style="max-width:420px; width:auto;">
+        <option value="">Pick a receipt...</option>
+        {% for ar in view.assignable_receipts %}{% if ar.legal_entity_id == row.legal_entity_id %}
+        <option value="{{ ar.document_id }}">{{ ar.vendor }} &middot; {{ ar.total }} {{ ar.currency }}{% if ar.held_by %} &middot; (steal from {{ ar.held_by }}){% else %} &middot; free{% endif %}</option>
+        {% endif %}{% endfor %}
+      </select>
+      <button class="btn btn-small" onclick="manualMatch('{{ row.transaction_id }}')">Assign</button>
+    </div>
+    {% endif %}
   </div>
   {% endfor %}
 </div>
@@ -306,6 +319,24 @@
       btn.disabled = false; btn.textContent = original; return;
     }
     // Many rows change bucket at once; reload to re-render them all.
+    window.location.reload();
+  }
+
+  async function manualMatch(txId) {
+    const sel = document.getElementById("mm-" + txId);
+    const doc = sel ? sel.value : "";
+    if (!doc) { alert("Pick a receipt first."); return; }
+    const res = await fetch(`/runs/${RUN_ID}/manual-match`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transaction_id: txId, document_id: doc })
+    });
+    if (!res.ok) {
+      let msg = "Could not assign that receipt.";
+      try { const e = await res.json(); if (e.error) msg = e.error; } catch (_) {}
+      alert(msg); return;
+    }
+    // The assignment can also free a stolen-from charge; reload to re-render.
     window.location.reload();
   }
 
