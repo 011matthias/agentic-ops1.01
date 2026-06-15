@@ -38,6 +38,7 @@ from .service import (
     matched_autopick_decisions,
     regenerate_report,
     reset_memory,
+    validate_manual_match,
 )
 from .store import STATUS_CONFIRMED, VALID_STATUSES, RunStore
 
@@ -242,6 +243,32 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 run_id, document_id, line_index, category, zoho_account, _now_iso()
             )
         return JSONResponse({"ok": True})
+
+    @app.post("/runs/{run_id}/manual-match")
+    async def post_manual_match(run_id: str, request: Request):
+        # PR B — assign a receipt to a charge by hand. Recorded as a
+        # confirmed decision with the chosen document; the chosen receipt
+        # may currently be auto-matched elsewhere (stealing it frees that
+        # charge via apply_decisions' two-pass resolution).
+        body = await request.json()
+        tx_id = body.get("transaction_id")
+        document_id = body.get("document_id")
+        if not tx_id or not document_id:
+            return JSONResponse({"error": "bad request"}, status_code=400)
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found"}, status_code=404)
+            err = validate_manual_match(run, tx_id, document_id)
+            if err:
+                return JSONResponse({"error": err}, status_code=400)
+            store.set_decision(
+                run_id, tx_id, STATUS_CONFIRMED, document_id, _now_iso()
+            )
+            decisions = store.get_decisions(run_id)
+            overrides = store.get_category_overrides(run_id)
+        view = build_view(run, decisions, overrides)
+        return JSONResponse({"ok": True, "summary": view["summary"]})
 
     @app.post("/runs/{run_id}/commit-memory")
     def post_commit_memory(run_id: str):
