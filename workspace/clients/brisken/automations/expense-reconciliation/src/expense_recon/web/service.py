@@ -43,6 +43,7 @@ from ..learning import (
     MatchMemory,
     MerchantCategoryLookup,
     learn_from_run,
+    normalize_vendor,
 )
 from ..output.report_xlsx import write_report
 from .serialize import snapshot_from_dict, snapshot_to_dict
@@ -680,3 +681,81 @@ def commit_to_memory(
             now_iso=now_iso,
         )
     return summary.as_dict()
+
+
+# --------------------------------------------------------------------------
+# Memory view (PR 2e — the escape hatch in the browser, not just the CLI)
+# --------------------------------------------------------------------------
+
+
+def build_memory_view(learning_db_path: Path | None) -> dict:
+    """Render model for the /memory page: everything the tool has learned,
+    grouped by table. Read-only; an absent store yields an empty view."""
+    empty = {
+        "categories": [], "aliases": [], "fx": [],
+        "counts": {"merchant_category": 0, "vendor_alias": 0, "merchant_fx": 0},
+        "total": 0,
+    }
+    if learning_db_path is None or not Path(learning_db_path).exists():
+        return empty
+
+    with LearningStore(learning_db_path) as s:
+        cats = s.all_merchant_categories()
+        aliases = s.get_vendor_aliases()
+        fx = s.all_merchant_fx()
+        counts = s.count_rows()
+
+    categories = [
+        {
+            "entity": c.legal_entity_id, "vendor": c.vendor_norm,
+            "category": c.category or "", "zoho_account": c.zoho_account or "",
+            "count": c.decision_count, "last": (c.last_confirmed_at or "")[:10],
+        }
+        for c in cats
+    ]
+    alias_rows = [
+        {
+            "entity": a.legal_entity_id, "stmt": a.stmt_vendor_norm,
+            "receipt": a.receipt_vendor_norm, "count": a.confirmed_count,
+        }
+        for a in aliases
+    ]
+    fx_rows = [
+        {
+            "entity": f.legal_entity_id, "vendor": f.vendor_norm,
+            "pair": f"{f.from_ccy} -> {f.to_ccy}",
+            "mean": f"{f.mean:.4f}" if f.mean is not None else "",
+            "range": (f"{f.min:.4f} - {f.max:.4f}" if f.min is not None else ""),
+            "n": f.count,
+        }
+        for f in fx
+    ]
+    return {
+        "categories": categories, "aliases": alias_rows, "fx": fx_rows,
+        "counts": counts, "total": sum(counts.values()),
+    }
+
+
+def forget_memory_vendor(
+    learning_db_path: Path | None, legal_entity_id: str, vendor: str
+) -> dict:
+    """Drop everything learned for one merchant in one entity. Returns the
+    per-table delete counts (zero everywhere when nothing matched)."""
+    zero = {"merchant_category": 0, "vendor_alias": 0, "merchant_fx": 0}
+    vnorm = normalize_vendor(vendor)
+    if learning_db_path is None or not Path(learning_db_path).exists() or not vnorm:
+        return zero
+    with LearningStore(learning_db_path) as s:
+        return s.forget_vendor(legal_entity_id, vnorm)
+
+
+def reset_memory(
+    learning_db_path: Path | None,
+    table: str | None = None,
+    legal_entity_id: str | None = None,
+) -> dict:
+    """Delete learned rows (optionally scoped to one table / entity)."""
+    if learning_db_path is None or not Path(learning_db_path).exists():
+        return {}
+    with LearningStore(learning_db_path) as s:
+        return s.reset(table or None, legal_entity_id or None)
