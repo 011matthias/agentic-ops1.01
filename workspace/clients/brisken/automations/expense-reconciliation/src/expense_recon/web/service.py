@@ -1017,6 +1017,68 @@ def regenerate_zoho(
     return out_path
 
 
+# --------------------------------------------------------------------------
+# Compare two runs (PR G — the browser mirror of the CLI `diff`)
+# --------------------------------------------------------------------------
+
+_COMPARE_DELTA_KEYS = (
+    ("n_transactions", "Transactions"),
+    ("n_matched", "Matched"),
+    ("n_review", "Needs review"),
+    ("n_unmatched_tx", "Unmatched charges"),
+    ("n_unmatched_rec", "Unmatched receipts"),
+)
+
+
+def _run_buckets(snapshot: dict) -> dict[str, str]:
+    """Each transaction's bucket (matched / review / unmatched) from a run's
+    stored matcher outcome, mirroring the CLI diff's `_bucket`."""
+    transactions, _, outcome, _ = snapshot_from_dict(snapshot)
+    matched = {m.transaction_id for m in outcome.matches}
+    review = {m.transaction_id for m in outcome.judgment_required} | {
+        m.transaction_id for m in outcome.ambiguous
+    }
+    out: dict[str, str] = {}
+    for t in transactions:
+        tid = t.transaction_id
+        out[tid] = (
+            "matched" if tid in matched else "review" if tid in review else "unmatched"
+        )
+    return out
+
+
+def compare_runs(run_a: RunRow, run_b: RunRow) -> dict:
+    """The browser mirror of `expense-recon diff`: summary count deltas plus
+    which transactions changed bucket (matched / review / unmatched) between
+    two runs. The id sets are unioned, so a charge present in only one run
+    shows `(absent)` on the other side, the same way the CLI does. Useful
+    after fixing a receipt and re-running the same month, and harmless
+    across different months (no shared ids just means every row is absent
+    on one side)."""
+    sa, sb = run_a.summary, run_b.summary
+    deltas = []
+    for key, label in _COMPARE_DELTA_KEYS:
+        a = int(sa.get(key, 0) or 0)
+        b = int(sb.get(key, 0) or 0)
+        deltas.append({"label": label, "a": a, "b": b, "delta": b - a})
+    ra = float(sa.get("match_rate", 0.0) or 0.0)
+    rb = float(sb.get("match_rate", 0.0) or 0.0)
+    rate = {"a": ra, "b": rb, "delta": round(rb - ra, 1)}
+
+    ba = _run_buckets(run_a.snapshot)
+    bb = _run_buckets(run_b.snapshot)
+    changes = [
+        {
+            "transaction_id": tid,
+            "from": ba.get(tid, "(absent)"),
+            "to": bb.get(tid, "(absent)"),
+        }
+        for tid in sorted(set(ba) | set(bb))
+        if ba.get(tid) != bb.get(tid)
+    ]
+    return {"deltas": deltas, "rate": rate, "n_changed": len(changes), "changes": changes}
+
+
 def commit_to_memory(
     run: RunRow,
     decisions: dict[str, Decision],
