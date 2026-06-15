@@ -342,7 +342,7 @@ by Chris's monthly runs, not by a pre-shared ground-truth month.
 
 ---
 
-## Slice 9 — Cross-run learning (Phase 2, in progress)
+## Slice 9 — Cross-run learning (Phase 2, COMPLETE)
 
 **Goal.** Next month's pile is smaller because the tool remembers the
 reviewer's confirmed decisions instead of re-deriving them. Built on the
@@ -390,10 +390,22 @@ before learned data can influence output.
   override-retrains loop bumps `decision_count`/`last_confirmed`. Cross-run
   round-trip proven end-to-end; suite 310 green; `calibrate` overall 7/7,
   subset 4/4, exit 0.
-- **2c — consult in Match (next):** `MatchingConfig` gains optional
-  `vendor_aliases` + `merchant_fx`, populated from the store in
-  `reconcile()`; defaults empty so existing matcher tests + `calibrate`
-  are unchanged.
+- **2c — consult in Match (BUILT, last consult piece).** `MatchingConfig`
+  gains optional `vendor_aliases` (a confirmed alias pins `_vendor_score`
+  to 1.0, so a truncated bank string wins the tie-break over a fuzzy decoy)
+  + `merchant_fx` (a per-merchant FX mean re-centers the FX amount
+  sub-score WITHIN the LD-5 band, never widening it). Both feed
+  scoring/tie-break only, never band membership or buckets, so the
+  reconciliation guarantee is untouched; defaults empty => matcher is
+  byte-for-byte its old self. Populated in `reconcile()` from a `MatchMemory`
+  (web passes it; CLI via the `learning:` block). 5 tests; suite 315 green;
+  `calibrate` exit 0.
+
+**Phase 2 is complete:** capture (2a) + escape hatch (2d) + Sort consult
+with the categorization gate (2b) + Match consult (2c). Memory now flows
+end-to-end: a confirmed decision in one month upgrades categorization and
+sharpens matching the next, always with visible provenance and a correction
+path, and never at the cost of the reconciliation guarantee.
 
 ---
 

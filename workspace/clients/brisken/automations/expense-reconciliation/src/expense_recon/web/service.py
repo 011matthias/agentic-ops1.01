@@ -38,7 +38,12 @@ from ..matching.types import (
     Receipt,
     Transaction,
 )
-from ..learning import LearningStore, MerchantCategoryLookup, learn_from_run
+from ..learning import (
+    LearningStore,
+    MatchMemory,
+    MerchantCategoryLookup,
+    learn_from_run,
+)
 from ..output.report_xlsx import write_report
 from .serialize import snapshot_from_dict, snapshot_to_dict
 from .store import (
@@ -162,13 +167,12 @@ def create_run(
         stmt_name, rcpt_name, column_map, form, use_llm=use_llm_effective
     )
 
-    learned = (
-        MerchantCategoryLookup.from_db_path(learning_db_path)
-        if learning_db_path is not None
-        else None
-    )
+    learned = match_memory = None
+    if learning_db_path is not None:
+        learned = MerchantCategoryLookup.from_db_path(learning_db_path)
+        match_memory = MatchMemory.from_db_path(learning_db_path)
     try:
-        result = reconcile(cfg, work_dir, learned=learned)
+        result = reconcile(cfg, work_dir, learned=learned, match_memory=match_memory)
     except ConfigError as exc:
         raise RunInputError(str(exc)) from exc
 

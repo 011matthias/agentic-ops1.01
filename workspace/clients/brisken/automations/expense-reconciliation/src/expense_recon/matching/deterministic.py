@@ -81,13 +81,24 @@ def reference_match(tx: Transaction, receipt: Receipt) -> bool:
     return ref_norm in haystack
 
 
-def _signal(tx: Transaction, receipt: Receipt) -> tuple[float, float]:
-    """(reference-match, vendor-similarity) tie-break signal for one
-    candidate pair. Reference first because an exact reference hit is a
-    stronger identity signal than fuzzy vendor text."""
+def _vendor_score(tx: Transaction, receipt: Receipt, cfg: "MatchingConfig") -> float:
+    """Vendor agreement in [0,1]. A confirmed alias (PR 2c memory) pins it
+    to 1.0 — the bank's truncated string and the receipt's full name were
+    confirmed the same merchant in a prior month, so the fuzzy ratio should
+    not second-guess it. Otherwise the stdlib `difflib` similarity stands."""
+    if cfg.is_alias(tx.legal_entity_id, tx.vendor_from_statement, receipt.detected_vendor):
+        return 1.0
+    return vendor_similarity(tx.vendor_from_statement, receipt.detected_vendor)
+
+
+def _signal(tx: Transaction, receipt: Receipt, cfg: "MatchingConfig") -> tuple[float, float]:
+    """(reference-match, vendor-score) tie-break signal for one candidate
+    pair. Reference first because an exact reference hit is a stronger
+    identity signal than fuzzy vendor text; vendor-score includes the
+    learned-alias boost."""
     return (
         1.0 if reference_match(tx, receipt) else 0.0,
-        vendor_similarity(tx.vendor_from_statement, receipt.detected_vendor),
+        _vendor_score(tx, receipt, cfg),
     )
 
 
@@ -167,12 +178,45 @@ class MatchingConfig:
         default_factory=lambda: dict(_DEFAULT_FX_RATE_BANDS)
     )
 
+    # ── Learned memory (PR 2c) ─────────────────────────────────────
+    # Both default empty => the matcher is byte-for-byte its old self.
+    # They feed SCORING/TIE-BREAK only, never the band membership test or
+    # which bucket a pair lands in, so the reconciliation guarantee holds.
+    #   vendor_aliases: confirmed (legal_entity, stmt-norm, receipt-norm).
+    #   merchant_fx: (legal_entity, vendor-norm, from_ccy, to_ccy) -> mean
+    #     observed implied rate; re-centers the FX amount sub-score within
+    #     the band toward this merchant's DCC pattern (never widens it).
+    vendor_aliases: frozenset[tuple[str, str, str]] = frozenset()
+    merchant_fx: Mapping[tuple[str, str, str, str], Decimal] = field(
+        default_factory=dict
+    )
+
     def fx_band(
         self, from_ccy: str, to_ccy: str
     ) -> tuple[Decimal, Decimal] | None:
         """Plausible implied-rate band for receipt->transaction currency,
         or None if the pair is unprofiled."""
         return self.fx_rate_bands.get((from_ccy, to_ccy))
+
+    def is_alias(
+        self, legal_entity_id: str, stmt_vendor: str | None, receipt_vendor: str | None
+    ) -> bool:
+        if not self.vendor_aliases:
+            return False
+        return (
+            legal_entity_id,
+            _normalize(stmt_vendor or ""),
+            _normalize(receipt_vendor or ""),
+        ) in self.vendor_aliases
+
+    def merchant_fx_mean(
+        self, legal_entity_id: str, vendor: str | None, from_ccy: str, to_ccy: str
+    ) -> Decimal | None:
+        if not self.merchant_fx:
+            return None
+        return self.merchant_fx.get(
+            (legal_entity_id, _normalize(vendor or ""), from_ccy, to_ccy)
+        )
 
 
 def _blend_score(
@@ -199,10 +243,8 @@ def match_one(
     (no plausible amount or date relationship).
     """
     # Vendor similarity feeds the graded 0-100 triage score in every
-    # branch (3.9 signal reused); vendor_similarity tolerates None.
-    vendor_score = vendor_similarity(
-        tx.vendor_from_statement, receipt.detected_vendor
-    )
+    # branch (3.9 signal reused); a confirmed alias (PR 2c) pins it to 1.0.
+    vendor_score = _vendor_score(tx, receipt, cfg)
 
     # Currency mismatch -> FX judgment layer, but ONLY for plausible
     # pairs. This is the EUR-on-USD-card case Dirk specified on the
@@ -246,13 +288,31 @@ def match_one(
                 # Implausible rate for this currency pair -> not the
                 # same purchase. Drop the candidate.
                 return None
-            rate_note = (
-                f"implied rate {implied_rate:.4f} within "
-                f"{receipt.detected_currency}->{tx.transaction_currency} "
-                f"band [{lo}, {hi}]"
+            # amount sub-score: how close the implied rate sits to the
+            # expected center. The center is the band midpoint by default,
+            # but a learned per-merchant FX mean (PR 2c) re-centers it on
+            # THIS merchant's known DCC pattern when one exists and sits in
+            # band — so a charge matching that merchant's history scores
+            # higher. Memory refines the score WITHIN the band; it never
+            # moves the lo/hi membership test above, so buckets are unchanged.
+            learned_mean = cfg.merchant_fx_mean(
+                tx.legal_entity_id, receipt.detected_vendor,
+                receipt.detected_currency, tx.transaction_currency,
             )
-            # amount sub-score: how centered the implied rate sits in the band.
-            center = (float(lo) + float(hi)) / 2.0
+            if learned_mean is not None and lo <= learned_mean <= hi:
+                center = float(learned_mean)
+                rate_note = (
+                    f"implied rate {implied_rate:.4f} vs learned "
+                    f"{receipt.detected_currency}->{tx.transaction_currency} "
+                    f"mean {float(learned_mean):.4f} (band [{lo}, {hi}])"
+                )
+            else:
+                center = (float(lo) + float(hi)) / 2.0
+                rate_note = (
+                    f"implied rate {implied_rate:.4f} within "
+                    f"{receipt.detected_currency}->{tx.transaction_currency} "
+                    f"band [{lo}, {hi}]"
+                )
             half = ((float(hi) - float(lo)) / 2.0) or 1.0
             amount_score = max(0.0, 1.0 - abs(float(implied_rate) - center) / half)
         else:
@@ -424,7 +484,7 @@ def match_month(
             scored = match_one(tx, receipt, cfg)
             if scored is None:
                 continue
-            ref_sig, vendor_sig = _signal(tx, receipt)
+            ref_sig, vendor_sig = _signal(tx, receipt, cfg)
             cands_by_tx.setdefault(tx.transaction_id, []).append(
                 _Candidate(
                     match=scored,
