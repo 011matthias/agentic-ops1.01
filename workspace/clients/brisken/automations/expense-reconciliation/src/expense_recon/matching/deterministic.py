@@ -338,6 +338,9 @@ def match_one(
             ),
             requires_review=True,
             score=_blend_score(amount_score, date_score, vendor_score),
+            amount_score=amount_score,
+            date_score=date_score,
+            vendor_score=vendor_score,
         )
 
     # No amount on the receipt -> can't deterministically match.
@@ -372,6 +375,9 @@ def match_one(
             reason="Amount match without receipt date; review required.",
             requires_review=True,
             score=_blend_score(amount_score, 0.5, vendor_score),
+            amount_score=amount_score,
+            date_score=0.5,
+            vendor_score=vendor_score,
         )
 
     candidate_dates = [tx.transaction_date]
@@ -397,6 +403,9 @@ def match_one(
                 f"day(s), same currency."
             ),
             score=_blend_score(amount_score, date_score, vendor_score),
+            amount_score=amount_score,
+            date_score=date_score,
+            vendor_score=vendor_score,
         )
 
     if (amount_exact or amount_probable) and (date_exact or date_probable):
@@ -412,6 +421,9 @@ def match_one(
             ),
             requires_review=True,
             score=_blend_score(amount_score, date_score, vendor_score),
+            amount_score=amount_score,
+            date_score=date_score,
+            vendor_score=vendor_score,
         )
 
     return None

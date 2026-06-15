@@ -666,6 +666,11 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
                     "reason": m.reason,
                     "requires_review": m.requires_review,
                     "is_chosen": m.document_id == held_doc,
+                    # PR D — the sub-scores behind `score`, as 0-100 ints for
+                    # display, so a candidate can expand to show why it scored.
+                    "amount_pct": round(m.amount_score * 100),
+                    "date_pct": round(m.date_score * 100),
+                    "vendor_pct": round(m.vendor_score * 100),
                     "receipt": _receipt_view(r, overrides) if r else None,
                 }
             )
@@ -681,6 +686,9 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
                     "reason": "manually matched by reviewer",
                     "requires_review": False,
                     "is_chosen": True,
+                    "amount_pct": None,
+                    "date_pct": None,
+                    "vendor_pct": None,
                     "receipt": _receipt_view(rec_by_id[held_doc], overrides),
                 }
             )
@@ -738,6 +746,47 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
         for d in effective.unmatched_receipts
         if d in rec_by_id
     ]
+
+    # PR D — for each unmatched charge, the closest free receipt by amount
+    # ("closest was $58.40, 4 days off"), so Chris sees the near-miss the
+    # matcher just barely rejected and can hand-match it if it's right.
+    tx_by_id = {t.transaction_id: t for t in transactions}
+    free_recs = [
+        rec_by_id[d]
+        for d in effective.unmatched_receipts
+        if d in rec_by_id and rec_by_id[d].detected_total is not None
+    ]
+
+    def _near_miss(tx: Transaction) -> dict | None:
+        if not free_recs or tx.amount is None:
+            return None
+        # closest by absolute amount difference; same currency preferred.
+        best = min(
+            free_recs,
+            key=lambda r: (
+                0 if r.detected_currency == tx.transaction_currency else 1,
+                abs(tx.amount - r.detected_total),
+            ),
+        )
+        date_diff = (
+            abs((best.detected_date - tx.transaction_date).days)
+            if best.detected_date and tx.transaction_date
+            else None
+        )
+        return {
+            "vendor": best.detected_vendor or "",
+            "total": _fmt_amount(best.detected_total),
+            "currency": best.detected_currency or "",
+            "amount_diff": _fmt_amount(abs(tx.amount - best.detected_total)),
+            "date_diff_days": date_diff,
+        }
+
+    for r in rows:
+        r["near_miss"] = (
+            _near_miss(tx_by_id[r["transaction_id"]])
+            if r["effective_bucket"] == "unmatched"
+            else None
+        )
 
     # PR B — receipts the reviewer can pick from when hand-matching a
     # charge. Free receipts first, then any held one (picking a held one

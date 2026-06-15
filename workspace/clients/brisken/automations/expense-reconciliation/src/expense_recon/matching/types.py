@@ -195,6 +195,12 @@ class Match:
     reason: str
     requires_review: bool = False
     score: int = 0
+    # The three sub-scores blended into `score` (each 0.0-1.0), kept so the
+    # workbench can show WHY a candidate scored as it did (PR D match
+    # transparency). 0.0 when not scored (a reviewer-built match).
+    amount_score: float = 0.0
+    date_score: float = 0.0
+    vendor_score: float = 0.0
 
 
 @dataclass(frozen=True)
