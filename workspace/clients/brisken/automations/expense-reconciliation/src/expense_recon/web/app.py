@@ -35,10 +35,11 @@ from .service import (
     commit_to_memory,
     create_run,
     forget_memory_vendor,
+    matched_autopick_decisions,
     regenerate_report,
     reset_memory,
 )
-from .store import VALID_STATUSES, RunStore
+from .store import STATUS_CONFIRMED, VALID_STATUSES, RunStore
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 
@@ -201,6 +202,29 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             overrides = store.get_category_overrides(run_id)
         view = build_view(run, decisions, overrides)
         return JSONResponse({"ok": True, "summary": view["summary"]})
+
+    @app.post("/runs/{run_id}/decisions/confirm-matched")
+    def post_confirm_matched(run_id: str):
+        # PR A — one click confirms every matched-bucket transaction with
+        # its auto-picked receipt, so only review + unmatched need hand
+        # work. Reuses the per-row decision write; never stomps an
+        # explicit confirm/reject.
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found"}, status_code=404)
+            decisions = store.get_decisions(run_id)
+            pairs = matched_autopick_decisions(run, decisions)
+            for tx_id, doc_id in pairs:
+                store.set_decision(
+                    run_id, tx_id, STATUS_CONFIRMED, doc_id, _now_iso()
+                )
+            decisions = store.get_decisions(run_id)
+            overrides = store.get_category_overrides(run_id)
+        view = build_view(run, decisions, overrides)
+        return JSONResponse(
+            {"ok": True, "confirmed": len(pairs), "summary": view["summary"]}
+        )
 
     @app.post("/runs/{run_id}/categories")
     async def post_category(run_id: str, request: Request):
