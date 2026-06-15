@@ -35,6 +35,7 @@ from .service import (
     build_memory_view,
     build_view,
     commit_to_memory,
+    compare_runs,
     create_run,
     execute_run,
     forget_memory_vendor,
@@ -237,6 +238,31 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             request,
             "running.html",
             {"job_id": job_id, "label": form.account_id or "this month"},
+        )
+
+    @app.get("/compare", response_class=HTMLResponse)
+    def compare(request: Request, a: str = "", b: str = ""):
+        # PR G — pick two runs, show the bucket deltas in the browser
+        # (mirror of the CLI `diff`). The index already re-opens a run; this
+        # adds the across-runs view.
+        with open_store() as store:
+            runs = store.list_runs()
+            run_a = store.get_run(a.strip()) if a.strip() else None
+            run_b = store.get_run(b.strip()) if b.strip() else None
+        comparison = (
+            compare_runs(run_a, run_b) if run_a is not None and run_b is not None else None
+        )
+        return templates.TemplateResponse(
+            request,
+            "compare.html",
+            {
+                "runs": runs,
+                "a": a.strip(),
+                "b": b.strip(),
+                "run_a": run_a,
+                "run_b": run_b,
+                "comparison": comparison,
+            },
         )
 
     @app.get("/jobs/{job_id}")
