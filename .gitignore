@@ -99,10 +99,6 @@ docs/sessions/*-context.yaml
 # Claude Code local settings (machine-specific permissions)
 .claude/settings.local.json
 
-# Prompt queue (skil_prompt-queue) — per-machine runtime state, auto-created
-# by the skill / tools/prompt-queue-ui.py on first use. Never shared.
-.claude/queue/
-
 # Hook diagnostic log — runtime artifact, grows by ~1000 lines/session.
 # Read live by hooks for cross-call state; never used for historical analysis
 # by tracked code. Cross-device debugging works without committed history
