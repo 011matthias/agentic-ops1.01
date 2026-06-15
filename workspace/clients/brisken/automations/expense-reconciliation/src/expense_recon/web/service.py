@@ -46,6 +46,7 @@ from ..learning import (
     normalize_vendor,
 )
 from ..output.report_xlsx import write_report
+from ..output.zoho_export import write_zoho_export
 from .serialize import snapshot_from_dict, snapshot_to_dict
 from .store import (
     STATUS_CONFIRMED,
@@ -837,6 +838,27 @@ def regenerate_report(
     effective = apply_decisions(outcome, transactions, receipts, decisions)
     out_path = Path(run.work_dir) / "report.xlsx"
     write_report(effective, transactions, receipts, out_path, parse_errors=parse_errors)
+    return out_path
+
+
+def regenerate_zoho(
+    run: RunRow, decisions: dict[str, Decision], overrides: dict
+) -> Path:
+    """Write the Zoho Books journal-entry import CSV for a run with the
+    reviewer's decisions + category overrides applied. Returns the path.
+
+    Mirrors `regenerate_report` but emits the Zoho import file. Only the
+    effective MATCHED transactions are exported (the writer's posting
+    policy); FX / review / unmatched are withheld until confirmed. Web runs
+    carry no chart of accounts, so the writer's legacy path applies:
+    category label on the debit side, `Card: {account_id}` on the credit
+    side, both flagged for the reviewer to map in Zoho.
+    """
+    transactions, receipts, outcome, _ = snapshot_from_dict(run.snapshot)
+    receipts = apply_overrides(receipts, overrides)
+    effective = apply_decisions(outcome, transactions, receipts, decisions)
+    out_path = Path(run.work_dir) / "zoho_journal.csv"
+    write_zoho_export(effective, transactions, receipts, out_path)
     return out_path
 
 
