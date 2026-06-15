@@ -295,7 +295,19 @@ class ReconcileResult:
     zoho_cfg: dict
 
 
-def reconcile(cfg: dict, config_dir: Path) -> ReconcileResult:
+def _load_learned(cfg: dict, config_dir: Path):
+    """Build the Phase-2 learned-category lookup from a `learning:` config
+    block (`{"path": "learning.sqlite"}`), opt-in like `store:`/`run_log:`.
+    Absent block, or absent file, => None (no consult, no behaviour change)."""
+    block = cfg.get("learning")
+    if not isinstance(block, dict) or not block.get("path"):
+        return None
+    from .learning import MerchantCategoryLookup
+
+    return MerchantCategoryLookup.from_db_path((config_dir / block["path"]).resolve())
+
+
+def reconcile(cfg: dict, config_dir: Path, *, learned=None) -> ReconcileResult:
     """Run ingest -> categorize -> match -> judgment and return the
     in-memory result, writing nothing to disk.
 
@@ -303,6 +315,11 @@ def reconcile(cfg: dict, config_dir: Path) -> ReconcileResult:
     file); `config_dir` is the base for resolving the config's relative
     paths. This is the side-effect-free core shared by the CLI and the
     web UI.
+
+    `learned` (Phase 2) is a `MerchantCategoryLookup` consulted on the
+    weak vendor-fallback path of categorization. The web UI passes it
+    directly; the CLI falls back to a `learning:` config block. None =>
+    no memory consult.
     """
     # LLM client first: folder-mode receipt ingest (slice 2.2 OCR)
     # needs it before any receipt is read.
@@ -346,8 +363,12 @@ def reconcile(cfg: dict, config_dir: Path) -> ReconcileResult:
 
     # BLUEPRINT LD-2: categorize per line item BEFORE matching so the
     # report writer sees Tier 1/2/3 sources on every receipt's items.
+    # Phase 2: a learned merchant->category (memory) upgrades the weak
+    # vendor-fallback path to Tier-1 LEARNED; a good line read still wins.
+    if learned is None:
+        learned = _load_learned(cfg, config_dir)
     receipts = categorize_receipts(
-        receipts, client=llm_client, chart_of_accounts=account_labels
+        receipts, client=llm_client, chart_of_accounts=account_labels, learned=learned
     )
 
     outcome = match_month(transactions, receipts)

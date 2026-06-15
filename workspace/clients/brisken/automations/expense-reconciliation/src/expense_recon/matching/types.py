@@ -42,6 +42,7 @@ class ClassificationSource(str, Enum):
     LINE = "LINE"          # Tier 1: line-item LLM classifier; trusted
     VENDOR = "VENDOR"      # Tier 2: vendor-name fallback; mark with ⚠
     REVIEW = "REVIEW"      # Tier 3: confidence too low or no signal at all
+    LEARNED = "LEARNED"    # Tier 1: confirmed merchant->category recalled from memory (Phase 2)
     UNCLASSIFIED = "UNCLASSIFIED"  # pre-categorization default
 
 

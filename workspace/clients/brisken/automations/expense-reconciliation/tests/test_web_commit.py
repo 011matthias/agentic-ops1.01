@@ -95,3 +95,35 @@ def test_commit_memory_writes_learning_store(client):
 def test_commit_memory_unknown_run_404(client):
     resp = client.post("/runs/nope/commit-memory")
     assert resp.status_code == 404
+
+
+def test_learned_category_consulted_on_next_run(client):
+    # The whole premise: reclassify a thin-line receipt in run 1, commit it
+    # to memory, then a fresh run auto-applies it as LEARNED. Delancey Tavern
+    # (rcpt-002) has no line items -> vendor-fallback path, the one memory
+    # upgrades.
+    run1 = _create_run(client)
+    assert client.post(
+        f"/runs/{run1}/categories",
+        json={"document_id": "rcpt-002", "line_index": 0,
+              "category": "Meals & Entertainment", "zoho_account": None},
+    ).status_code == 200
+    learned = client.post(f"/runs/{run1}/commit-memory").json()["learned"]
+    assert learned["merchant_categories"] >= 1
+
+    # A brand-new run over the same data now recalls the category.
+    run2 = _create_run(client)
+    page = client.get(f"/runs/{run2}").text
+    assert "LEARNED" in page
+    assert "learned from your" in page  # provenance label is visible
+
+    # And it actually lands on the Delancey receipt, not somewhere else.
+    db = RunStore(client._data_root / "recon-web.sqlite")
+    run = db.get_run(run2)
+    db.close()
+    delancey = next(
+        r for r in run.snapshot["receipts"] if r["document_id"] == "rcpt-002"
+    )
+    cat = delancey["line_items"][0]["categorization"]
+    assert cat["source"] == "LEARNED"
+    assert cat["category"] == "Meals & Entertainment"

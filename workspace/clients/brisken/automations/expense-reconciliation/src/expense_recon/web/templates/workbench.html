@@ -90,7 +90,7 @@
                   {% endfor %}
                 </select>
               </td>
-              <td class="muted">{{ li.source }}</td>
+              <td class="muted">{{ li.source }}{% if li.provenance %}<br><span style="font-size:11px;">{{ li.provenance }}</span>{% endif %}</td>
             </tr>
             {% endfor %}
           </tbody>

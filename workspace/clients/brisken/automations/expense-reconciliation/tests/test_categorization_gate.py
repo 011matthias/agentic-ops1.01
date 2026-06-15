@@ -1,14 +1,14 @@
-"""Categorization-accuracy gate (PR 2b, gate commit). Locks the empty-store
-baseline so the consult commit's improvement on the changed subset is
-visible, and proves the gate is green at baseline."""
+"""Categorization-accuracy gate (PR 2b). Documents the empty-store baseline,
+the with-memory lift on the changed subset, and that the gate's segmented
+subset floor protects the auto-applied population."""
 from __future__ import annotations
 
 from expense_recon import categorization_gate as g
 from expense_recon.learning import normalize_vendor
 
 
-def test_baseline_measure_matches_floors():
-    m = g.measure()
+def test_baseline_measure_no_memory():
+    m = g.measure(None)
     assert m["n"] == 7
     # Three thin-line learned merchants miss at baseline; 4 right.
     assert m["n_ok"] == 4
@@ -18,24 +18,36 @@ def test_baseline_measure_matches_floors():
     assert m["n_subset_ok"] == 1
 
 
-def test_gate_green_at_baseline():
+def test_memory_lifts_changed_subset_to_full():
+    m = g.measure(g.memory_lookup())
+    # The three thin learned merchants now categorize via memory; the guard
+    # stays right via its line read -> whole fixture correct.
+    assert m["n_ok"] == 7
+    assert m["n_subset_ok"] == 4
+    assert m["subset"] == 1.0
+
+
+def test_gate_green_with_memory():
     assert g.run_gate()["ok"] is True
 
 
-def test_floors_are_the_baseline():
-    # The floors ARE today's numbers — the gate is exact at baseline, so any
-    # regression (or, in the consult commit, the raised subset floor) bites.
+def test_floors():
     assert abs(g.OVERALL_FLOOR - 4 / 7) < 1e-9
-    assert abs(g.SUBSET_FLOOR - 1 / 4) < 1e-9
+    assert g.SUBSET_FLOOR == 1.0  # ratcheted up once consult is live
 
 
-def test_guard_receipt_has_conflicting_learned_mapping():
-    # The good-line guard receipt's merchant must carry a learned mapping
-    # that DISAGREES with its correct line-based category, or it cannot
-    # guard "fallback, not override".
+def test_guard_line_wins_over_conflicting_memory():
+    # The guard receipt's merchant has a learned Office-Supplies mapping, but
+    # the receipt has a good line ("Office chair" -> Equipment). With memory
+    # applied, the LINE read must still win — fallback, not override.
+    receipts = [r for r, _ in g.LABELED]
+    out = g.categorize_receipts(receipts, client=None, learned=g.memory_lookup())
+    guard = next(r for r in out if r.document_id == "guard")
+    assert guard.line_items[0].categorization.category == "Equipment & Hardware"
+    assert guard.line_items[0].categorization.source.value == "LINE"
+
+
+def test_guard_fixture_mapping_actually_conflicts():
     guard = next(r for r, _ in g.LABELED if r.document_id == "guard")
-    assert guard.line_items  # has a real line read
     learned = {normalize_vendor(v): c for _le, v, c in g.MEMORY_FIXTURE}
-    vn = normalize_vendor(guard.detected_vendor)
-    assert vn in learned
-    assert learned[vn] != "Equipment & Hardware"  # conflicts with the line read
+    assert learned[normalize_vendor(guard.detected_vendor)] != "Equipment & Hardware"

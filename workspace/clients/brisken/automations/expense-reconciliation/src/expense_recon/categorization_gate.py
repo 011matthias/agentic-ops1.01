@@ -36,7 +36,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from .categorize import categorize_receipts
-from .learning import normalize_vendor
+from .learning import MerchantCategory, MerchantCategoryLookup, normalize_vendor
 from .matching.types import LineItem, Receipt
 
 LE = "brisken-llc"
@@ -87,12 +87,14 @@ MEMORY_FIXTURE: tuple[tuple[str, str, str], ...] = (
 
 _MEMORY_VENDORS = {normalize_vendor(v) for (_le, v, _c) in MEMORY_FIXTURE}
 
-# Floors. Baseline = empty-store accuracy (keyword stub, no consult).
-# overall: 4/7 correct (the three thin learned merchants miss). subset:
-# 1/4 (only the Contoso guard is right at baseline). SUBSET_FLOOR ratchets
-# to 1.0 in the consult commit.
+# Floors. OVERALL is the coarse net, held at the empty-store baseline (4/7
+# = the three thin learned merchants miss without memory). SUBSET is the
+# protective one: with consult live, memory makes the changed population
+# fully correct (4/4), so the floor is 1.0 — a wrong learned mapping, or
+# memory preempting the guard receipt's line read, drops it below 1.0 and
+# trips the gate on its own even while OVERALL holds.
 OVERALL_FLOOR = 4 / 7
-SUBSET_FLOOR = 1 / 4
+SUBSET_FLOOR = 1.0
 
 
 def _predicted_category(receipt: Receipt) -> str | None:
@@ -100,12 +102,27 @@ def _predicted_category(receipt: Receipt) -> str | None:
     return cat.category if cat else None
 
 
-def measure() -> dict:
+def memory_lookup() -> MerchantCategoryLookup:
+    """The seeded learned mappings (MEMORY_FIXTURE) as a consult lookup."""
+    rows = [
+        MerchantCategory(
+            legal_entity_id=le, vendor_norm=normalize_vendor(vendor),
+            category=category, zoho_account=None, decision_count=1,
+            last_confirmed_at="2026-05-01T00:00:00", source_run="fixture",
+        )
+        for (le, vendor, category) in MEMORY_FIXTURE
+    ]
+    return MerchantCategoryLookup(rows)
+
+
+def measure(learned: MerchantCategoryLookup | None = None) -> dict:
     """Run the keyword categorizer over the labeled fixture and report
-    overall + changed-subset accuracy. Deterministic; no LLM, no store."""
+    overall + changed-subset accuracy. Deterministic; no LLM, no store.
+    `learned` applies the Phase-2 memory consult; None = empty-store
+    baseline."""
     receipts = [r for r, _label in LABELED]
     labels = [label for _r, label in LABELED]
-    out = categorize_receipts(receipts, client=None)
+    out = categorize_receipts(receipts, client=None, learned=learned)
 
     n = n_ok = 0
     n_sub = n_sub_ok = 0
@@ -127,7 +144,9 @@ def measure() -> dict:
 
 
 def run_gate() -> dict:
-    m = measure()
+    # Gate WITH memory applied — the live behaviour once consult ships. The
+    # segmented subset floor (1.0) protects the auto-applied population.
+    m = measure(memory_lookup())
     m["ok"] = (
         m["overall"] >= OVERALL_FLOOR - _EPS
         and m["subset"] >= SUBSET_FLOOR - _EPS
