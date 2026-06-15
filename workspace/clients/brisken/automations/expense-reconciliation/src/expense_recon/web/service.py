@@ -555,10 +555,12 @@ def _receipt_view(r: Receipt, overrides: dict[tuple[str, int], dict]) -> dict:
                 "source": source,
                 "confidence": confidence,
                 "provenance": provenance,
+                "is_learned": source == "LEARNED",
             }
         )
     return {
         "document_id": r.document_id,
+        "legal_entity_id": r.legal_entity_id,
         "vendor": r.detected_vendor or "",
         "date": r.detected_date.isoformat() if r.detected_date else "",
         "total": _fmt_amount(r.detected_total),
@@ -578,6 +580,21 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
     transactions, receipts, outcome, parse_errors = snapshot_from_dict(run.snapshot)
     rec_by_id = {r.document_id: r for r in receipts}
     by_tx = _candidates_by_tx(outcome)
+
+    # PR C — line items the cross-run memory auto-filled (Tier-1 LEARNED),
+    # excluding any the reviewer has since reclassified. Surfaced as a stat
+    # and a "show only memory-filled" filter so Chris can spot-check them.
+    n_learned_lines = 0
+    for r in receipts:
+        for i, li in enumerate(r.line_items):
+            ov = overrides.get((r.document_id, i))
+            if ov and ov.get("category"):
+                continue
+            if (
+                li.categorization
+                and li.categorization.source is ClassificationSource.LEARNED
+            ):
+                n_learned_lines += 1
 
     # Resolve the reviewer's decisions once. The screen renders from the
     # SAME effective outcome the export regenerates from, so the buckets,
@@ -684,6 +701,14 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
                     if not li["category"]:
                         n_unmapped += 1
 
+        # PR C — does any candidate receipt carry a memory-filled line?
+        has_learned = any(
+            li["is_learned"]
+            for c in cands
+            if c["receipt"]
+            for li in c["receipt"]["line_items"]
+        )
+
         rows.append(
             {
                 "transaction_id": tx_id,
@@ -698,6 +723,7 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
                 "status": status,
                 "chosen_document_id": held_doc,
                 "candidates": cands,
+                "has_learned": has_learned,
                 "triage_score": max(
                     (c["score"] for c in cands if c["score"]), default=None
                 ),
@@ -808,6 +834,8 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
         "unreconciled_by_ccy": {
             ccy: f"{amt:,.2f}" for ccy, amt in sorted(unreconciled.items())
         },
+        # PR C — memory legibility.
+        "n_learned_lines": n_learned_lines,
     }
 
     return {
