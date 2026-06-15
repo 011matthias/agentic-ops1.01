@@ -126,8 +126,28 @@ def _safe_name(name: str, fallback: str) -> str:
     return base or fallback
 
 
-def create_run(
-    store: RunStore,
+@dataclass
+class PreparedRun:
+    """The fast, fail-fast result of `prepare_run` (uploads saved, column
+    map resolved, config built, cross-run memory loaded). `execute_run`
+    consumes it to run the pipeline and persist the snapshot. The split
+    lets the web layer validate synchronously (a bad column map is a form
+    error) and run the slow pipeline in the background (PR F)."""
+
+    run_id: str
+    work_dir: Path
+    stmt_name: str
+    cfg: dict
+    form: RunForm
+    learned: object | None
+    match_memory: object | None
+    ai_unavailable: bool
+    use_llm_effective: bool
+    now_iso: str
+    operator: str | None
+
+
+def prepare_run(
     data_root: Path,
     *,
     statement_bytes: bytes,
@@ -138,9 +158,10 @@ def create_run(
     now_iso: str,
     operator: str | None,
     learning_db_path: Path | None = None,
-) -> str:
-    """Save the uploads, run the pipeline, persist a snapshot. Returns the
-    new run id. Raises `RunInputError` for user-fixable problems.
+) -> PreparedRun:
+    """Save the uploads and resolve everything the pipeline needs, fast and
+    fail-fast. Raises `RunInputError` for a user-fixable problem (an
+    unmappable statement). No pipeline run and no DB row yet.
 
     `learning_db_path` (Phase 2): when given, confirmed merchant->category
     decisions from prior runs are consulted on the vendor-fallback path so
@@ -173,8 +194,33 @@ def create_run(
     if learning_db_path is not None:
         learned = MerchantCategoryLookup.from_db_path(learning_db_path)
         match_memory = MatchMemory.from_db_path(learning_db_path)
+
+    return PreparedRun(
+        run_id=run_id,
+        work_dir=work_dir,
+        stmt_name=stmt_name,
+        cfg=cfg,
+        form=form,
+        learned=learned,
+        match_memory=match_memory,
+        ai_unavailable=ai_unavailable,
+        use_llm_effective=use_llm_effective,
+        now_iso=now_iso,
+        operator=operator,
+    )
+
+
+def execute_run(store: RunStore, prepared: PreparedRun) -> str:
+    """Run the pipeline for a prepared run and persist the snapshot. Returns
+    the run id. This is the slow part (LLM OCR / categorization / judgment);
+    the web layer runs it in the background and polls for completion."""
     try:
-        result = reconcile(cfg, work_dir, learned=learned, match_memory=match_memory)
+        result = reconcile(
+            prepared.cfg,
+            prepared.work_dir,
+            learned=prepared.learned,
+            match_memory=prepared.match_memory,
+        )
     except ConfigError as exc:
         raise RunInputError(str(exc)) from exc
 
@@ -196,26 +242,58 @@ def create_run(
         "llm_cost_usd": (
             str(result.cost_tracker.total_cost_usd) if result.cost_tracker else "0"
         ),
-        "ai_unavailable": ai_unavailable,
+        "ai_unavailable": prepared.ai_unavailable,
     }
     snapshot = snapshot_to_dict(
         result.transactions, result.receipts, outcome, result.parse_errors
     )
-    label = f"{form.account_id or stmt_name} {now_iso[:10]}".strip()
+    label = (
+        f"{prepared.form.account_id or prepared.stmt_name} "
+        f"{prepared.now_iso[:10]}"
+    ).strip()
 
     store.create_run(
-        run_id=run_id,
-        created_at=now_iso,
+        run_id=prepared.run_id,
+        created_at=prepared.now_iso,
         label=label,
-        operator=operator,
+        operator=prepared.operator,
         summary=summary,
         snapshot=snapshot,
-        config=cfg,
-        work_dir=str(work_dir),
-        llm_enabled=use_llm_effective,
+        config=prepared.cfg,
+        work_dir=str(prepared.work_dir),
+        llm_enabled=prepared.use_llm_effective,
         has_coa=result.chart_of_accounts is not None,
     )
-    return run_id
+    return prepared.run_id
+
+
+def create_run(
+    store: RunStore,
+    data_root: Path,
+    *,
+    statement_bytes: bytes,
+    statement_filename: str,
+    receipts_bytes: bytes,
+    receipts_filename: str,
+    form: RunForm,
+    now_iso: str,
+    operator: str | None,
+    learning_db_path: Path | None = None,
+) -> str:
+    """Synchronous one-call path: prepare then execute. Preserves the
+    original API for the sync request path and the tests."""
+    prepared = prepare_run(
+        data_root,
+        statement_bytes=statement_bytes,
+        statement_filename=statement_filename,
+        receipts_bytes=receipts_bytes,
+        receipts_filename=receipts_filename,
+        form=form,
+        now_iso=now_iso,
+        operator=operator,
+        learning_db_path=learning_db_path,
+    )
+    return execute_run(store, prepared)
 
 
 def _resolve_statement_map(stmt_path: Path, form: RunForm) -> dict[str, str]:

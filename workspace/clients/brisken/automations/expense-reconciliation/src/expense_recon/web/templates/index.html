@@ -12,7 +12,8 @@
   {% endif %}
   {% endif %}
 
-  <form method="post" action="/runs" enctype="multipart/form-data">
+  <form method="post" action="/runs" enctype="multipart/form-data"
+        onsubmit="var b=this.querySelector('button[type=submit]'); b.disabled=true; b.textContent='Starting reconciliation...';">
     <div class="grid">
       <div>
         <label for="statement">Card statement (.csv / .xlsx)</label>
