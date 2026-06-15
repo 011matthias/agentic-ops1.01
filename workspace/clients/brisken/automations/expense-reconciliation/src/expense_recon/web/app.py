@@ -37,6 +37,7 @@ from .service import (
     forget_memory_vendor,
     matched_autopick_decisions,
     regenerate_report,
+    regenerate_zoho,
     reset_memory,
     validate_manual_match,
 )
@@ -300,6 +301,24 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             media_type=(
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             ),
+        )
+
+    @app.get("/runs/{run_id}/zoho.csv")
+    def download_zoho(run_id: str):
+        # PR E — the Zoho Books journal-entry import CSV, with the reviewer's
+        # decisions + category overrides applied. Only effective matched
+        # transactions are exported (the writer's posting policy).
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return HTMLResponse("Run not found", status_code=404)
+            decisions = store.get_decisions(run_id)
+            overrides = store.get_category_overrides(run_id)
+        path = regenerate_zoho(run, decisions, overrides)
+        return FileResponse(
+            path,
+            filename=f"zoho-journal-{run_id}.csv",
+            media_type="text/csv",
         )
 
     # ── Memory (PR 2e): see and correct what the tool has learned ──────
