@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- deliverable-allow: copy-clipboard, keyboard-search | reason: single-screen forwardable one-pager; no code blocks and no multi-section nav to search. Dark/light toggle + print stylesheet retained per deliverable rules. -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Market Data Hub: Bloomberg into SAP, mapped</title>
+<script>(function(){var t=localStorage.getItem('theme');
+  var d=document.documentElement;
+  d.setAttribute('data-theme',
+    t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');
+})();</script>
+<style>
+  :root, [data-theme="light"] {
+    --bg: #f8fafc; --surface: #ffffff; --border: #e2e8f0;
+    --text: #0f172a; --muted: #64748b;
+    --blue: #2563eb; --blue-bg: #eff6ff;
+    --green: #059669; --green-bg: #ecfdf5;
+    --orange: #d97706; --orange-bg: #fffbeb;
+    --purple: #7c3aed; --purple-bg: #f5f3ff;
+  }
+  [data-theme="dark"] {
+    --bg: #0b1220; --surface: #111a2e; --border: #233149;
+    --text: #e6edf7; --muted: #8fa3bf;
+    --blue: #60a5fa; --blue-bg: #14213a;
+    --green: #34d399; --green-bg: #0d2a22;
+    --orange: #fbbf24; --orange-bg: #2d2208;
+    --purple: #a78bfa; --purple-bg: #221a3a;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.5;
+  }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 24px; background: var(--surface); border-bottom: 1px solid var(--border);
+  }
+  .topbar .brand { font-weight: 700; font-size: 14px; }
+  .topbar .brand span { color: var(--muted); font-weight: 400; }
+  .nav-theme {
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    border-radius: 999px; padding: 4px 12px; cursor: pointer; font-size: 13px;
+  }
+  .sheet { max-width: 760px; margin: 0 auto; padding: 28px 26px 40px; }
+
+  .doc-badge {
+    display: inline-block; font-size: 11.5px; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--blue); background: var(--blue-bg);
+    padding: 4px 11px; border-radius: 999px; margin-bottom: 12px;
+  }
+  h1 { font-size: 25px; line-height: 1.22; margin-bottom: 6px; }
+  .sub { color: var(--muted); font-size: 14.5px; margin-bottom: 20px; }
+
+  .block {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 15px 17px; margin-bottom: 13px; border-left: 4px solid var(--border);
+  }
+  .block.b1 { border-left-color: var(--purple); }
+  .block.b2 { border-left-color: var(--orange); }
+  .block.b3 { border-left-color: var(--green); }
+  .block.b4 { border-left-color: var(--blue); }
+  .block .lbl {
+    font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+    color: var(--muted); display: block; margin-bottom: 6px;
+  }
+  .block p { font-size: 14.5px; margin: 0; }
+  .quote {
+    font-size: 14.5px; font-style: italic; color: var(--text);
+    border-left: 2px solid var(--border); padding-left: 12px; margin: 0;
+  }
+  .quote .attr { display: block; font-style: normal; font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+  .cta { font-weight: 600; }
+
+  .trust {
+    margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border);
+    font-size: 12.5px; color: var(--muted); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+  }
+  .trust b { color: var(--text); font-weight: 600; }
+
+  @media (max-width: 620px) {
+    .trust { flex-direction: column; }
+  }
+  @media print {
+    .topbar { display: none !important; }
+    body { background: #fff; }
+    .sheet { padding-top: 8px; max-width: 100%; }
+    .block { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">Brisken <span>&middot; Market Data Hub</span></div>
+  <button class="nav-theme" onclick="(function(){
+    var d=document.documentElement;
+    var c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+    d.setAttribute('data-theme',c);
+    localStorage.setItem('theme',c);
+  })()" aria-label="Toggle theme">&#9788;/&#9790;</button>
+</div>
+
+<main class="sheet">
+  <span class="doc-badge">Your Bloomberg data into SAP, mapped</span>
+  <h1>Colgate-Palmolive: Bloomberg market data into your SAP S/4HANA treasury, no code</h1>
+  <p class="sub">A 30-second read on the manual step your new SAP Treasury build will run into, and the SAP-listed way to remove it.</p>
+
+  <div class="block b1">
+    <span class="lbl">What we see, in your own postings</span>
+    <p class="quote">"proficiency with Google Workspace, Bloomberg and one or more Treasury Management Systems (such as SAP, Kyriba, or Quantum)," alongside a live "Sr. Manager, IT SAP Treasury" role configuring SAP Cash Management, Bank Account Management, and TRM on S/4HANA.
+    <span class="attr">Colgate-Palmolive treasury job postings, 2024.</span></p>
+  </div>
+
+  <div class="block b2">
+    <span class="lbl">The step that is probably manual</span>
+    <p>You run SAP treasury and Bloomberg, with a multi-currency book across many entities. Getting Bloomberg rates and curves into SAP Cash Management and TRM is usually one of two things: someone keys them in by hand, or a custom script does it and breaks when Bloomberg changes a field. Either way it is a control risk, and your live S/4HANA TRM build is exactly when that interface gets specified or re-plumbed.</p>
+  </div>
+
+  <div class="block b3">
+    <span class="lbl">What Market Data Hub does</span>
+    <p>Market Data Hub governs that feed end to end, no code: ingest from Bloomberg, validate and normalize, distribute into SAP TRM and Cash Management, with a full audit trail and manage-by-exception alerts. One governed point of control instead of a per-security interface or a script to babysit. It is listed on the SAP Store and built by an SAP Co-Innovation Partner.</p>
+  </div>
+
+  <div class="block b4">
+    <span class="lbl">The look</span>
+    <p class="cta">A short demo maps Bloomberg-into-SAP onto your actual S/4HANA TRM build. Worth 15 minutes?</p>
+  </div>
+
+  <div class="trust">
+    <div><b>SAP Co-Innovation Partner</b> &middot; listed on the SAP Store &middot; ISO 27001 / SOC 1 Type II</div>
+    <div>Brisken &middot; Houston, TX</div>
+  </div>
+</main>
+
+</body>
+</html>

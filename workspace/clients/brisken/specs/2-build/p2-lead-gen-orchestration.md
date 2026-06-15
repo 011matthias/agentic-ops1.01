@@ -4,17 +4,17 @@ name: Lead-Gen Orchestration (operating model)
 type: operations-runbook
 stage: build
 orchestrator: none            # manual-first; n8n automation candidates in §7
-version: 0.1.0
+version: 0.1.1
 created: 2026-06-12
-updated: 2026-06-12
+updated: 2026-06-15
 trigger: manual
 systems:
-  - linkedin-sales-navigator   # own seat, to provision at go-live
-  - apollo                     # own seat, to provision at go-live
-  - instantly                  # dedicated Brisken workspace, to provision at go-live
-  - neverbounce
+  - linkedin-sales-navigator   # own seat, to provision at go-live (the ONLY direct-outreach channel)
+  - apollo                     # own seat; sourcing / enrichment only (no email send)
   - google-sheets              # lead tracker (single source of truth)
-last_changes: "2026-06-12: added section 9 (force multipliers) with CONFIRMED warm channels (OnePilot is live on SAP Store - Trade Automation + MDH variants + Remittance + Bank Fee; AFP marketplace; data-vendor partner channels) and section 10 go-forward (owner greenlit both data-vendor plays; campaign 1 = Market Data Hub) with draft message variants. Pre-terms still: no spend, no outbound until Dirk's 3 operational gates clear."
+  # RETIRED 2026-06-12 - cold-email stack (instantly, neverbounce, lookalike domains, mailboxes, warm-up):
+  # Brisken's own ~150-mailbox / ~2M-email campaign returned 0 leads. Channel dropped, not deferred.
+last_changes: "2026-06-12 (later, hardening): COLD EMAIL RETIRED (Brisken's own ~150-mailbox/~2M-email campaign = 0 leads). Engine respine: spine is now the trigger-detection radar (context/lead-generation/targeting-radar.md) with a 3-axis ICP (SAP fit x data-vendor-USER disposition x live trigger); the only direct-outreach channel is precision LinkedIn; SAP co-sell + active vendor referral moved off the critical path. See section 0. Earlier 2026-06-12: added section 9 (force multipliers) + section 10 (go-forward, campaign 1 = MDH). Sections 2-3 and 7 below predate the respine; section 0 supersedes their cold-email parts."
 next_steps:
   - "Dirk gate 1: which of the 6 data-vendor relationships are active (co-marketing/referral vs technical only). Unlocks Way 2."
   - "Dirk gate 2: sending identity (whose name and domain front the outreach)."
@@ -29,6 +29,41 @@ The plan + ICP live in `specs/1-spec/p2-bant-lead-generation.md`; the
 per-product campaign library + sourceability verdicts live in
 `context/lead-generation/brisken-product-catalog.md`. This doc locks
 HOW the engine runs and what it takes to reach the first BANT lead.
+
+## 0. Strategy hardening (owner, 2026-06-12) — supersedes the cold-email parts below
+
+Diagnosis: Brisken has a discovery problem, not a closing problem. They
+close >90% of the leads they actually get; the binding constraint is
+qualified-lead VOLUME. So the metric is **warm, triggered at-bats per
+month into the >90%-close motion**, and the job is to manufacture
+warmth, not volume.
+
+- **Cold email is retired.** Brisken's own ~150-mailbox, ~2M-email
+  campaign returned 0 leads. A system that touches the SAP money core
+  does not earn a meeting cold. Track B (section 2/3/timeline below),
+  Instantly, lookalike domains, and warm-up are dropped, not deferred.
+- **Spine = the trigger-detection radar** (`context/lead-generation/targeting-radar.md`).
+  A 3-axis ICP: SAP fit x **data-vendor-user disposition** (proven pain,
+  the sharpener) x live trigger. The radar ranks the universe and feeds
+  every other move.
+- **Three lanes, concurrent.** Lane 1 autonomous now (radar + forwardable
+  assets + AEO substrate + Dirk enabler pack, zero spend, no contact).
+  Lane 2 go-live on one compressed Dirk decision (precision LinkedIn via
+  the reachable persona; one Sales Nav seat). Lane 3 Brisken-driven and
+  off the critical path (SAP co-sell business case, vendor co-marketing).
+- **Reweighting.** SAP co-sell and active vendor referral are the prize
+  but slow and Brisken-owned; the dependable near-term levers are
+  Store-listing AEO, the SAP-partner trust badge reused everywhere, and
+  the reverse-sourced vendor signal (needs no vendor permission).
+- **Concentration.** Point all lanes at the SAME triggered cohort so each
+  account meets Brisken on two-plus trusted surfaces before the 1:1.
+- **Products narrow 8->3:** Market Data Hub + Trade Automation + OnePilot
+  platform; the other apps are subfunctions/proof (Remittance/Calvin =
+  the best forwardable asset, not a standalone campaign).
+
+Sections 1 and 9-11 hold as written. Sections 2-3 (the engine table's
+email rows) and 7 (Instantly automation) are superseded by this section
+where they assume a cold-email channel.
 
 ## 1. Reframe (owner, 2026-06-12): delivery before compensation
 
@@ -117,6 +152,26 @@ then parallelize. Do not open three cold campaigns at once.
 
 ESG parked; AI Digital Workforce runs as a cross-sell layer on the
 above lists (catalog sourceability test).
+
+### 5.1 Go/no-go gates (the motion has a defined stop)
+
+Numbered checkpoints so an unproductive campaign gets re-cut or stopped,
+not ground indefinitely. They also protect the Brisken relationship: a
+defined exit is what lets us say "we'll know by week 8" instead of
+open-ended spend. Measured from first send on the live campaign.
+
+- **G1 (week 4) — signal check.** If the targeting + trust groundwork
+  has produced zero qualified replies, re-cut the list and the message
+  before going wider. Do not add volume to a list that is not replying.
+- **G2 (week 8) — booking check.** If nothing has booked a held demo,
+  pause new outreach and diagnose which of {list, message, product-fit}
+  is the miss; decide with Dirk whether to continue, re-cut, or stop.
+- **G3 (week 12) — pipeline check.** If held demos are not converting
+  toward real pipeline, stop and reassess the motion rather than keep
+  spending Dirk's demo time and ours. No sunk-cost grind.
+
+These gates are internal discipline first; the client-facing deck states
+them as the built-in checkpoints so Dirk knows the spend is bounded.
 
 ## 6. Tracker schema (Google Sheet, single source of truth)
 

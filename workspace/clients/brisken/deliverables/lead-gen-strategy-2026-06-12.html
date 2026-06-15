@@ -30,7 +30,7 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: var(--bg); color: var(--text); line-height: 1.55;
+    background: var(--bg); color: var(--text); line-height: 1.5;
   }
   .site-nav {
     position: sticky; top: 0; z-index: 50; display: flex; align-items: center;
@@ -49,17 +49,17 @@
     border: 1px solid var(--border); background: var(--surface); color: var(--text);
     border-radius: 999px; padding: 4px 12px; cursor: pointer; font-size: 13px;
   }
-  .main-content { max-width: 980px; margin: 0 auto; padding: 36px 28px 64px; }
+  .main-content { max-width: 980px; margin: 0 auto; padding: 32px 28px 56px; }
 
-  .hero { margin-bottom: 36px; }
+  .hero { margin-bottom: 28px; }
   .hero-badge {
     display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .06em;
     text-transform: uppercase; color: var(--blue); background: var(--blue-bg);
     padding: 4px 12px; border-radius: 999px; margin-bottom: 14px;
   }
-  h1 { font-size: 32px; line-height: 1.2; margin-bottom: 10px; }
-  .hero-sub { color: var(--muted); font-size: 16px; max-width: 700px; }
-  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 24px; }
+  h1 { font-size: 30px; line-height: 1.2; margin-bottom: 10px; }
+  .hero-sub { color: var(--muted); font-size: 15.5px; max-width: 720px; }
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 22px; }
   .stat-card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
     padding: 14px 16px;
@@ -68,29 +68,33 @@
   .stat-label { font-size: 12px; color: var(--muted); margin-top: 2px; }
 
   h2 {
-    font-size: 21px; margin: 44px 0 6px; padding-top: 18px;
+    font-size: 20px; margin: 32px 0 4px; padding-top: 16px;
     border-top: 1px solid var(--border);
   }
-  .h2-sub { color: var(--muted); font-size: 14px; margin-bottom: 16px; }
-  h3 { font-size: 15px; margin: 18px 0 8px; }
-  p { margin-bottom: 10px; }
+  .h2-sub { color: var(--muted); font-size: 13.5px; margin-bottom: 12px; }
+  h3 { font-size: 15px; margin: 14px 0 6px; }
+  p { margin-bottom: 9px; }
   .src { font-size: 12px; color: var(--muted); }
 
-  .zones { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 16px 0; }
-  .zone { border-radius: 12px; padding: 16px 18px; border: 1px solid var(--border); background: var(--surface); }
+  ul.kpts { margin: 8px 0 10px 18px; }
+  ul.kpts li { margin-bottom: 5px; font-size: 14px; }
+  ul.kpts.tight li { margin-bottom: 3px; }
+
+  .zones { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+  .zone { border-radius: 12px; padding: 14px 16px; border: 1px solid var(--border); background: var(--surface); }
   .zone h3 { margin-top: 0; }
   .zone-blue { border-left: 4px solid var(--blue); }
   .zone-green { border-left: 4px solid var(--green); }
   .zone-purple { border-left: 4px solid var(--purple); }
   .zone-orange { border-left: 4px solid var(--orange); }
-  .zone .big { font-size: 26px; font-weight: 700; }
-  .zone ul { margin: 8px 0 0 18px; font-size: 14px; }
+  .zone ul { margin: 6px 0 0 16px; font-size: 13.5px; }
   .zone li { margin-bottom: 4px; }
+  .ztag { display:inline-block; font-size:11px; font-weight:700; color:var(--green); margin-bottom:4px; }
 
-  .flow { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 18px 0; }
+  .flow { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 16px 0; }
   .flow-step {
     background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-    padding: 12px 10px; position: relative; font-size: 13px;
+    padding: 11px 10px; position: relative; font-size: 13px;
   }
   .flow-step .num {
     display: inline-flex; width: 22px; height: 22px; border-radius: 50%;
@@ -104,58 +108,64 @@
     color: var(--muted); font-size: 13px; z-index: 1;
   }
 
-  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
-  th { text-align: left; padding: 8px 10px; border-bottom: 2px solid var(--border); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
-  td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+  th { text-align: left; padding: 7px 9px; border-bottom: 2px solid var(--border); font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  td { padding: 7px 9px; border-bottom: 1px solid var(--border); vertical-align: top; }
   .tag {
     display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px;
     border-radius: 999px;
   }
   .tag-job { background: var(--green-bg); color: var(--green); }
   .tag-cs { background: var(--blue-bg); color: var(--blue); }
+  .tag-pend { background: var(--orange-bg); color: var(--orange); }
 
-  .timeline-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0; }
-  .tl-card {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-    padding: 12px 14px; font-size: 13px;
-  }
-  .tl-card .wk { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--purple); }
-  .tl-card b { display: block; margin: 4px 0 3px; font-size: 13.5px; }
-  .tl-card span { color: var(--muted); font-size: 12.5px; }
-
-  .gantt { margin: 18px 0; font-size: 12.5px; }
-  .gantt-row { display: grid; grid-template-columns: 150px repeat(8, 1fr); gap: 3px; align-items: center; margin-bottom: 6px; }
+  .gantt { margin: 14px 0; font-size: 12.5px; }
+  .gantt-row { display: grid; grid-template-columns: 180px repeat(8, 1fr); gap: 3px; align-items: center; margin-bottom: 5px; }
   .gantt-label { font-weight: 600; font-size: 12.5px; padding-right: 8px; }
-  .gantt-cell { height: 22px; border-radius: 4px; background: var(--border); opacity: .35; }
+  .gantt-cell { height: 20px; border-radius: 4px; background: var(--border); opacity: .35; }
   .gantt-cell.on { opacity: 1; }
   .g-blue.on { background: var(--blue); }
   .g-green.on { background: var(--green); }
   .g-orange.on { background: var(--orange); }
   .g-purple.on { background: var(--purple); }
-  .gantt-head { display: grid; grid-template-columns: 150px repeat(8, 1fr); gap: 3px; margin-bottom: 6px; color: var(--muted); font-size: 11px; text-align: center; }
+  .gantt-head { display: grid; grid-template-columns: 180px repeat(8, 1fr); gap: 3px; margin-bottom: 5px; color: var(--muted); font-size: 11px; text-align: center; }
   .gantt-head div:first-child { text-align: left; }
 
-  .bant { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0; }
+  .bant { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 14px 0; }
   .bant-card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-    padding: 14px; font-size: 13px;
+    padding: 13px; font-size: 13px;
   }
   .bant-card .letter {
-    font-size: 24px; font-weight: 800; color: var(--purple); display: block; margin-bottom: 4px;
+    font-size: 22px; font-weight: 800; color: var(--purple); display: block; margin-bottom: 3px;
   }
-  .bant-card b { display: block; margin-bottom: 4px; }
+  .bant-card b { display: block; margin-bottom: 3px; }
   .bant-card span { color: var(--muted); font-size: 12.5px; }
 
   .callout {
-    border-radius: 12px; padding: 14px 18px; margin: 16px 0;
+    border-radius: 12px; padding: 12px 16px; margin: 14px 0;
     background: var(--orange-bg); border: 1px solid var(--border);
-    border-left: 4px solid var(--orange); font-size: 14px;
+    border-left: 4px solid var(--orange); font-size: 13.5px;
   }
   .callout.green { background: var(--green-bg); border-left-color: var(--green); }
   .callout-title { font-weight: 700; display: block; margin-bottom: 3px; }
 
+  .diagram { width: 100%; margin: 8px 0 6px; }
+  .diagram svg { width: 100%; height: auto; display: block; }
+  .fn-band { stroke-width: 1.5; }
+  .fn-a { fill: var(--blue-bg); stroke: var(--blue); }
+  .fn-b { fill: var(--green-bg); stroke: var(--green); }
+  .fn-c { fill: var(--orange-bg); stroke: var(--orange); }
+  .fn-act { fill: var(--purple-bg); stroke: var(--purple); }
+  .fn-res { fill: var(--surface); stroke: var(--green); stroke-width: 2; }
+  .fn-label { fill: var(--text); font-size: 13.5px; font-weight: 600; }
+  .fn-label-sm { fill: var(--text); font-size: 12px; }
+  .fn-res-label { fill: var(--green); font-size: 14px; font-weight: 700; }
+  .fn-side { fill: var(--muted); font-size: 11.5px; }
+  .fn-arrow { fill: var(--muted); }
+
   .footer {
-    margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--border);
+    margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border);
     color: var(--muted); font-size: 13px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
   }
 
@@ -182,15 +192,14 @@
     .stats-row, .bant { grid-template-columns: repeat(2, 1fr); }
     .flow { grid-template-columns: repeat(2, 1fr); }
     .flow-step:not(:last-child)::after { content: ""; }
-    .zones, .timeline-strip { grid-template-columns: 1fr; }
+    .zones { grid-template-columns: 1fr; }
     .gantt-row, .gantt-head { grid-template-columns: 90px repeat(8, 1fr); }
   }
   @media print {
     .site-nav, #searchOverlay { display: none !important; }
     body { background: #fff; }
     .main-content { padding-top: 0; max-width: 100%; }
-    h2 { page-break-before: always; }
-    h2:first-of-type, .hero + h2 { page-break-before: avoid; }
+    h2, .zones, .flow, table, .bant, .gantt, .diagram, .callout { page-break-inside: avoid; }
   }
 </style>
 </head>
@@ -213,297 +222,235 @@
 <main class="main-content">
 
 <section class="hero">
-  <span class="hero-badge">Strategy &middot; OnePilot Outbound Campaigns</span>
-  <h1>A separate outbound campaign engineered for each OnePilot product, all run by one engine</h1>
-  <p class="hero-sub">Each OnePilot product solves a different problem for a different buyer, so each gets its own campaign: its own target list, its own buying signal, its own message, and a demo of that product as the CTA. One shared engine sources, sends, qualifies, books, and reports across all of them. We sell the products, not consulting hours. Built and run by UnpauseAI; you take the meetings.</p>
+  <span class="hero-badge">Strategy &middot; OnePilot pipeline</span>
+  <h1>Find the SAP companies that already feel the problem, make Brisken the trusted answer, then book the demo</h1>
+  <p class="hero-sub">Brisken closes more than nine in ten warm leads. The gap is getting in front of the right companies at the right moment, not closing. This plan produces warm, well-timed meetings for three products and hands them to you to demo.</p>
   <div class="stats-row">
-    <div class="stat-card"><div class="stat-value">8</div><div class="stat-label">product campaigns: the 7 OnePilot apps + the AI Digital Workforce</div></div>
-    <div class="stat-card"><div class="stat-value">1</div><div class="stat-label">shared engine: source, send, qualify, book, report, reused by every campaign</div></div>
-    <div class="stat-card"><div class="stat-value">24</div><div class="stat-label">US SAP companies already verified for the treasury-data campaigns</div></div>
-    <div class="stat-card"><div class="stat-value">2</div><div class="stat-label">channels: LinkedIn from day one, email at domain warm-up</div></div>
+    <div class="stat-card"><div class="stat-value">&gt;90%</div><div class="stat-label">your close rate on warm inbound (your figure)</div></div>
+    <div class="stat-card"><div class="stat-value">3</div><div class="stat-label">products: Market Data Hub, Trade Automation, OnePilot</div></div>
+    <div class="stat-card"><div class="stat-value">24</div><div class="stat-label">US SAP companies verified; top 7 vendor-checked</div></div>
+    <div class="stat-card"><div class="stat-value">0</div><div class="stat-label">leads from the prior ~2M cold emails</div></div>
   </div>
 </section>
 
+<h2 id="how-it-works">How the campaign works</h2>
+<p class="h2-sub">Volume in, precision out. Many SAP companies narrow to a few hot ones, who get surrounded with trust and one personal message, then a demo, then your close.</p>
+<div class="diagram">
+<svg viewBox="0 0 880 430" role="img" aria-label="Funnel: SAP companies narrow by three signals to a few hot companies, then trust plus personal outreach, then a booked demo that Brisken closes nine in ten">
+  <polygon class="fn-band fn-a" points="60,20 820,20 732,104 148,104"></polygon>
+  <text class="fn-label" x="440" y="68" text-anchor="middle">Hundreds of US SAP treasury companies</text>
+
+  <polygon class="fn-band fn-b" points="148,104 732,104 648,184 232,184"></polygon>
+  <text class="fn-label-sm" x="440" y="148" text-anchor="middle">Filter: stack 3 signals  &#183;  runs SAP  +  uses a data vendor  +  live trigger</text>
+
+  <polygon class="fn-band fn-c" points="232,184 648,184 560,264 320,264"></polygon>
+  <text class="fn-label" x="440" y="230" text-anchor="middle">The few genuinely hot companies</text>
+
+  <polygon class="fn-arrow" points="430,272 450,272 440,286"></polygon>
+
+  <rect class="fn-act" x="70" y="294" width="740" height="40" rx="9"></rect>
+  <text class="fn-label-sm" x="440" y="319" text-anchor="middle">Surround with trust (SAP Store &#183; data vendor &#183; AI search)  +  one personal LinkedIn message</text>
+
+  <polygon class="fn-arrow" points="430,342 450,342 440,356"></polygon>
+
+  <rect class="fn-res" x="250" y="362" width="380" height="46" rx="23"></rect>
+  <text class="fn-res-label" x="440" y="390" text-anchor="middle">Booked BANT demo, fed into your close motion</text>
+</svg>
+</div>
+
+<h2 id="why-precision">Why precision, not volume</h2>
+<ul class="kpts">
+  <li>The high-volume route was already tried here: ~150 mailboxes, roughly 2M cold emails, <b>zero qualified leads</b>.</li>
+  <li>A system that touches the SAP money core is too high-risk to earn a meeting from a stranger in an inbox.</li>
+  <li>These buyers move on trust, timing, and seeing peers already use it.</li>
+  <li>So the metric is warm, well-timed meetings, not emails sent. The outreach this ends in is personal, not a blast.</li>
+</ul>
+
 <h2 id="why-now">Why now</h2>
-<p class="h2-sub">The market has a built-in deadline working in OnePilot's favor.</p>
-<p>SAP ends mainstream maintenance for ECC in 2027 (2030 with extended maintenance), and independent 2025 research (Precisely) puts 59% of SAP shops fully or partially live on S/4HANA, up 13 points in one year. Migration is exactly the moment the financial-data plumbing comes up for a decision: the custom interfaces feeding exchange rates, curves, bank statements and counterparty data into the old system are legacy code the migration team must rebuild, or replace with a product. A governed, provider-agnostic OnePilot subscription that drops Bloomberg, Refinitiv, OANDA, 360T and central-bank data straight into S/4HANA with no custom code is the buy-instead-of-rebuild answer. Brisken's SAP co-innovation partnership and its place in SAP Industry Cloud for Financial Services make it the credible one.</p>
+<ul class="kpts">
+  <li>SAP ends ECC mainstream maintenance in 2027 (2030 extended); 59% of SAP shops are already on S/4HANA, up 13 points in a year (Precisely, 2025).</li>
+  <li>Migration is when the market-data plumbing into SAP gets rebuilt or replaced. That is the buying window.</li>
+  <li>OnePilot is the buy-instead-of-rebuild answer: governed, provider-agnostic, no custom code.</li>
+  <li>Brisken's SAP co-innovation partnership makes it the credible one.</li>
+</ul>
 
-<h2 id="model">One engine, a campaign per product</h2>
-<p class="h2-sub">The expensive part, the sourcing-to-booking machine, is built once. Each product plugs into it as a campaign with four swappable parts.</p>
+<h2 id="products">Three products lead the motion</h2>
+<p class="h2-sub">Lead with the three whose buyer and pain are sharpest; carry the rest as proof of range.</p>
 <div class="zones">
   <div class="zone zone-blue">
-    <h3>Shared engine (built once)</h3>
+    <h3>Market Data Hub (flagship)</h3>
     <ul>
-      <li>Sending infrastructure: domains, mailboxes, warm-up</li>
-      <li>Contact sourcing and verification</li>
-      <li>Reply handling, BANT qualification, calendar booking</li>
-      <li>Weekly delivery note and accept/reject feedback loop</li>
-    </ul>
-  </div>
-  <div class="zone zone-green">
-    <h3>Per-product campaign (swappable)</h3>
-    <ul>
-      <li>Target list: the ICP that buys this product</li>
-      <li>Buying signal: the public trigger we hunt for it</li>
-      <li>Message angle: the one pain it removes</li>
-      <li>CTA: a demo of that product</li>
-    </ul>
-  </div>
-</div>
-
-<h2 id="targeting">Who we target, and why</h2>
-<p class="h2-sub">We never blast "all SAP shops." Each campaign begins from a public buying signal that proves a company is already building or budgeting the exact thing one product replaces. We rank by signal strength (a live job posting beats a case study beats a technographic listing), then thread the few people who own the decision.</p>
-<p>On every target company we work three roles, because a subscription is a multi-stakeholder buy:</p>
-<div class="bant" style="grid-template-columns: repeat(3, 1fr);">
-  <div class="bant-card"><b>The pain owner</b><span>Feels the manual work daily; who it is shifts by product (Treasurer, AR lead, sustainability lead, trading desk)</span></div>
-  <div class="bant-card"><b>The budget owner</b><span>VP / Director of Treasury or Finance: signs off the subscription</span></div>
-  <div class="bant-card"><b>SAP systems and IT</b><span>Finance-transformation and SAP integration leads: own the build-vs-buy call</span></div>
-</div>
-
-<h3>The eight campaigns: who, how we find them, why they buy</h3>
-<p class="src">Signals are our starting design; each list is validated before that campaign sends. The three treasury-data campaigns share the verified company list below; the rest source their own.</p>
-<div class="zones">
-  <div class="zone zone-blue">
-    <h3>Market Data Hub</h3>
-    <ul>
-      <li><b>Who:</b> US SAP TRM / treasury teams, multi-currency, running hedge accounting. Contacts: Treasurer, VP/Director Treasury, Cash Manager, SAP TRM lead.</li>
-      <li><b>How we find them:</b> hiring for SAP Treasury / TRM or S/4HANA finance roles; multi-currency footprint; case studies naming SAP treasury.</li>
-      <li><b>Why:</b> they already pipe Bloomberg, Refinitiv and 360T rates into TRM by custom code or by hand; hedge accounting makes bad data costly, and the S/4HANA migration forces a rebuild-or-buy on that interface now.</li>
+      <li><b>Who:</b> SAP treasury teams, multi-currency, hedge accounting.</li>
+      <li><b>Signal:</b> pipe Bloomberg / Refinitiv / 360T rates into TRM by hand or custom code.</li>
+      <li><b>Pain:</b> bad or late data is costly; the migration forces a rebuild-or-buy now.</li>
     </ul>
   </div>
   <div class="zone zone-green">
     <h3>Trade Automation</h3>
     <ul>
-      <li><b>Who:</b> companies with an in-house FX, derivatives or commodity trading desk on SAP. Contacts: Head of Trading / Front Office, Treasurer, Treasury Operations, SAP TRM lead.</li>
-      <li><b>How we find them:</b> treasury front-office / dealer hiring; use of 360T, FXall or Bloomberg FX GO; active hedging programs.</li>
-      <li><b>Why:</b> trades get re-keyed from the trading platform into SAP TRM by hand; they want straight-through deal creation, and the more they trade the more that step costs them.</li>
-    </ul>
-  </div>
-  <div class="zone zone-purple">
-    <h3>Cash Flow &amp; Exposure Hub</h3>
-    <ul>
-      <li><b>Who:</b> multi-entity groups with subsidiaries off SAP (acquired or regional units on other ERPs and spreadsheets). Contacts: Group Treasurer, Cash Manager, FP&amp;A / forecasting lead.</li>
-      <li><b>How we find them:</b> cash-forecasting / FP&amp;A hiring; a multi-ERP estate or recent M&amp;A; decentralized finance.</li>
-      <li><b>Why:</b> cash and FX-exposure data arrives as xls, csv and pdf from units off SAP and gets re-keyed into S/4HANA; forecasting and hedging suffer, and centralization or migration is the moment they fix it.</li>
-    </ul>
-  </div>
-  <div class="zone zone-orange">
-    <h3>Bank Fee Portal</h3>
-    <ul>
-      <li><b>Who:</b> large corporates with many banking relationships and hundreds of bank accounts. Contacts: Treasury Operations, Bank Relationship Manager, Cash Manager.</li>
-      <li><b>How we find them:</b> large bank-account footprint; bank-relationship / treasury-ops roles; global cash structures.</li>
-      <li><b>Why:</b> across many banks, fee statements come in many formats and overcharges go unchecked; this is a hard-dollar cost-recovery sell that needs no migration to justify, so it converts fast.</li>
-    </ul>
-  </div>
-  <div class="zone zone-blue">
-    <h3>Credit Data Hub</h3>
-    <ul>
-      <li><b>Who:</b> firms with large receivables and credit exposure on SAP Credit Management. Contacts: Credit Manager, Head of AR, Treasury, SAP Credit Management lead.</li>
-      <li><b>How we find them:</b> credit-risk / AR analyst hiring; SAP Credit Management in use; large B2B customer books.</li>
-      <li><b>Why:</b> credit data comes from many agencies, some by API and some only as PDF, and must be normalized and scored before it reaches SAP; manual collection slows credit decisions.</li>
-    </ul>
-  </div>
-  <div class="zone zone-green">
-    <h3>ESG Data Hub</h3>
-    <ul>
-      <li><b>Who:</b> large EU or EU-exposed groups consolidating ESG data into SAP Sustainability Control Tower. Contacts: Head of Sustainability / ESG, Sustainability Controller, SAP finance lead.</li>
-      <li><b>How we find them:</b> sustainability-reporting hiring; SAP Sustainability Control Tower adoption; CSRD-in-scope size (1,000+ employees with EU turnover over the threshold).</li>
-      <li><b>Why:</b> large groups still consolidate ESG data from many providers and internal reports into one governed source. The Feb-2026 CSRD Omnibus softened the deadline and cut scope, so this is a steady-need campaign reached mainly on LinkedIn, since we do not cold-email the EU. We run it last.</li>
-    </ul>
-  </div>
-  <div class="zone zone-purple">
-    <h3>Remittance Advice Gate</h3>
-    <ul>
-      <li><b>Who:</b> high-volume AR / AP teams and shared-service centers buried in remittance emails. Contacts: Head of Shared Services, AR / Cash Application Manager, AP Manager.</li>
-      <li><b>How we find them:</b> cash-application / AR roles; shared-service-center footprint; high invoice volume.</li>
-      <li><b>Why:</b> staff read unstructured remittance emails and attachments and re-key them into SAP; it is the clearest "let AI remove the boring loop" story, and Brisken already runs it live for a customer on ChatGPT.</li>
-    </ul>
-  </div>
-  <div class="zone zone-orange">
-    <h3>AI Digital Workforce</h3>
-    <ul>
-      <li><b>Who:</b> SAP finance orgs with a stated AI or automation mandate and innovation budget. Contacts: CFO office / Finance Transformation, Head of Finance Automation, IT-finance.</li>
-      <li><b>How we find them:</b> "AI in finance" initiatives, digital-transformation and automation roles, named innovation programs.</li>
-      <li><b>Why:</b> they have budget and a mandate for AI but no concrete finance use case; OnePilot's chat-driven co-workers hand them a deployable one on SAP, like creating a bank transfer straight from an email request.</li>
+      <li><b>Who:</b> in-house FX / derivatives / commodity desk on SAP.</li>
+      <li><b>Signal:</b> 360T, FXall or Bloomberg FX GO; active hedging; front-office hiring.</li>
+      <li><b>Pain:</b> trades re-keyed from the platform into SAP TRM by hand.</li>
     </ul>
   </div>
 </div>
-<div class="callout">
-  <span class="callout-title">Beyond the suite: OnePilot for FSI</span>
-  Brisken's 2026 banking play (orchestration across SAP and non-SAP cores, ISO20022, SWIFT) targets banks, a different buyer than the corporate SAP base above. It earns its own campaign and its own target list and research; we treat it as a parallel track, not one of the eight.
+<div class="zone zone-purple">
+  <h3>OnePilot platform (the range)</h3>
+  <ul>
+    <li>The no-code orchestration layer on SAP BTP; the other apps (Cash Flow &amp; Exposure, Bank Fee, Credit, Remittance, ESG) ride as proof one layer covers the whole estate, not eight campaigns.</li>
+    <li>Best forwardable: the Calvin AI co-worker clip (reads an email funding request, creates the SAP bank transfer end to end). Brisken already runs Remittance live on ChatGPT.</li>
+  </ul>
 </div>
+<div class="callout"><span class="callout-title">Beyond the suite: OnePilot for FSI</span>Brisken's 2026 banking play targets banks, a different buyer. Its own track and research, not part of this plan.</div>
 
-<h2 id="proof">Proof of method: companies already found</h2>
-<p>Before a dollar is spent, the treasury-data campaigns (Market Data Hub, Trade Automation, Cash Flow &amp; Exposure Hub) already share 24 verified US companies from public signals alone. The seven below are hiring for SAP Treasury or S/4HANA roles right now; a company investing in SAP treasury is a company building exactly the data plumbing these products replace. Every other campaign runs the same sourcing method against its own signal.</p>
+<h2 id="targeting">How we choose who to contact: three signals that stack</h2>
+<div class="bant" style="grid-template-columns: repeat(3, 1fr);">
+  <div class="bant-card"><span class="letter" style="color:var(--blue);">1</span><b>Right system</b><span>Runs SAP treasury or finance (ECC or S/4HANA)</span></div>
+  <div class="bant-card"><span class="letter" style="color:var(--green);">2</span><b>Proof of the pain</b><span>Uses a data vendor (Bloomberg, Refinitiv, 360T, FXall, OANDA, CME): the pain is real, and it picks the product</span></div>
+  <div class="bant-card"><span class="letter" style="color:var(--orange);">3</span><b>Right moment</b><span>A live trigger: SAP-treasury hire, S/4HANA migration, new treasurer, FX/hedging in the annual report</span></div>
+</div>
+<ul class="kpts tight">
+  <li><b>The sharpener:</b> SAP + a data vendor means someone is getting that feed into SAP by hand or a fragile script, exactly what we replace. Proven pain beats a guess.</li>
+  <li><b>Ranking:</b> all three signals first, then SAP + confirmed vendor, then SAP + live trigger with vendor still to confirm.</li>
+</ul>
+
+<h2 id="proof">Proof: companies already found and pain-checked</h2>
 <table>
-  <thead><tr><th>Company</th><th>Signal</th><th>What it says</th></tr></thead>
+  <thead><tr><th>Company</th><th>SAP / timing signal</th><th>Data-vendor signal</th><th>Read</th></tr></thead>
   <tbody>
-    <tr><td>Corteva Agriscience</td><td><span class="tag tag-job">Hiring</span></td><td>SAP Business Process Expert, Treasury (TRM) + SAP Treasury Solution Engineer on S/4HANA</td></tr>
-    <tr><td>Toyota Motor Sales USA</td><td><span class="tag tag-job">Hiring</span></td><td>S/4HANA Treasury &amp; Risk Management subject-matter expert</td></tr>
-    <tr><td>Johnson &amp; Johnson</td><td><span class="tag tag-job">Hiring</span></td><td>Director, SAP Financial Systems Treasury: in-house cash, payment factory, SWIFT, FX</td></tr>
-    <tr><td>Ford</td><td><span class="tag tag-job">Hiring</span></td><td>Sr. Software Engineer, SAP Treasury and Risk Management</td></tr>
-    <tr><td>Colgate-Palmolive</td><td><span class="tag tag-job">Hiring</span></td><td>Sr. Manager, IT SAP Treasury: Cash Management, Bank Account Management, TRM</td></tr>
-    <tr><td>Amtrak</td><td><span class="tag tag-job">Hiring</span></td><td>S/4HANA FICO analyst with Treasury and Cash Management scope; migration in progress</td></tr>
-    <tr><td>Pennsylvania Turnpike Commission</td><td><span class="tag tag-job">Hiring</span></td><td>SAP Treasury SME, ECC + S/4HANA configuration</td></tr>
+    <tr><td>Colgate-Palmolive</td><td>Live SAP Treasury build (TRM, Cash Mgmt, BAM, SWIFT)</td><td><span class="tag tag-job">Confirmed</span> Bloomberg (3 own postings)</td><td>Hottest. "Bloomberg into SAP"</td></tr>
+    <tr><td>Corteva</td><td>Active S/4HANA TRM build, hedging; ~$953M FX book</td><td><span class="tag tag-job">Confirmed</span> 360T + Bloomberg (own job post)</td><td>Lead MDH, tee Trade</td></tr>
+    <tr><td>Johnson &amp; Johnson</td><td>5+ open SAP S/4HANA treasury roles at once</td><td><span class="tag tag-pend">To confirm</span> FX/derivatives + SWIFT</td><td>Strongest timing</td></tr>
+    <tr><td>Ford</td><td>Two live SAP-TRM modernization roles</td><td><span class="tag tag-pend">To confirm</span> heavy FX/commodity hedging</td><td>Confirm promotes to top</td></tr>
+    <tr><td>Toyota (TFS)</td><td>Live S/4HANA TRM build, mid-migration</td><td><span class="tag tag-cs">Context</span> own treasury system since 2006</td><td>Time it to the migration</td></tr>
+    <tr><td>Penn Turnpike</td><td>Live ECC&#8594;S/4HANA Treasury migration</td><td><span class="tag tag-cs">Greenfield</span> no current feed</td><td>MDH only (no FX desk)</td></tr>
+    <tr><td>Amtrak</td><td>S/4HANA migration in progress</td><td><span class="tag tag-pend">Weak fit</span> small portfolio, no trading</td><td>Light-touch only</td></tr>
   </tbody>
 </table>
-<p class="src">Remaining 17 verified companies include Microsoft, Google, Estee Lauder, Intuitive Surgical, Freeport LNG, Owens Corning, Northrop Grumman, Adobe (case studies, conference talks, technographic listings). Full source list available.</p>
+<p class="src">The vendor signal lives in the job-post wording. Two name their tools outright. 17 more verified companies (Microsoft, Google, Estee Lauder, Adobe and others) checked next; full source list with the exact quote per company on hand.</p>
 
-<h2 id="machine">The engine, end to end</h2>
-<p class="h2-sub">Six stages, identical for every campaign. Stages 1 and 2 are list intelligence; 3 and 4 are outreach; 5 is where a lead becomes a meeting on your calendar.</p>
+<h2 id="engine">The engine, end to end</h2>
 <div class="flow">
-  <div class="flow-step"><span class="num">1</span><b>Universe</b><span>Per campaign: tiered US companies matching that product's ICP</span></div>
-  <div class="flow-step"><span class="num">2</span><b>Contacts</b><span>3-5 personas per company, every address verified</span></div>
-  <div class="flow-step"><span class="num">3</span><b>Infrastructure</b><span>Dedicated domains + mailboxes, warm-up; LinkedIn ready day one</span></div>
-  <div class="flow-step"><span class="num">4</span><b>Outreach</b><span>Signal-anchored messages; CTA is a demo of that campaign's product</span></div>
-  <div class="flow-step"><span class="num">5</span><b>Qualify + book</b><span>BANT-checked exchange, meeting lands in your calendar</span></div>
-  <div class="flow-step"><span class="num">6</span><b>Iterate</b><span>Weekly trigger sweep refills the pipeline; your accept/reject feedback tunes targeting</span></div>
-</div>
-<div class="callout green">
-  <span class="callout-title">Every first line is earned</span>
-  Outreach anchors on the company's own signal: "you are hiring an SAP TRM analyst," "your team still keys remittances by hand." No generic blasts; these universes are too valuable to burn.
+  <div class="flow-step"><span class="num">1</span><b>Sweep</b><span>Weekly scan for the 3 signals; rank by warmth</span></div>
+  <div class="flow-step"><span class="num">2</span><b>People</b><span>3-5 decision-makers per company</span></div>
+  <div class="flow-step"><span class="num">3</span><b>Trust</b><span>Seen on SAP Store, AI search, vendor angle first</span></div>
+  <div class="flow-step"><span class="num">4</span><b>Outreach</b><span>One personal, signal-anchored LinkedIn note</span></div>
+  <div class="flow-step"><span class="num">5</span><b>Book</b><span>BANT-checked; meeting in your calendar</span></div>
+  <div class="flow-step"><span class="num">6</span><b>Repeat</b><span>Sweep refills; your feedback sharpens it</span></div>
 </div>
 
-<h2 id="sample">What the outreach looks like</h2>
-<p class="h2-sub">Two campaigns, two completely different first lines, each anchored on the company's own signal. Short, specific, easy to say no to.</p>
+<h2 id="trust">Surrounding the company with trust</h2>
+<p class="h2-sub">Cold volume carried no trust. These borrow it from places the buyer already trusts, aimed at the same companies.</p>
 <div class="zones">
   <div class="zone zone-blue">
-    <h3>Market Data Hub email</h3>
-    <p><b>Subject:</b> the SAP TRM rates feed</p>
-    <p>Hi {First}, I saw {Company} is hiring an SAP TRM analyst, which usually means someone is wrestling rate and curve feeds into Treasury.</p>
-    <p>Most SAP teams still load Bloomberg or Refinitiv data into TRM by hand or custom code, and it breaks at month-end and again whenever a provider changes a format.</p>
-    <p>Brisken's Market Data Hub drops that data into S/4HANA governed and provider-agnostic, with no custom code; Brisken is an SAP co-innovation partner, so it is built for exactly this.</p>
-    <p>Worth a 20-minute look at how it maps to your setup? I can send a short demo recording first if that is easier. {Sender}</p>
-  </div>
-  <div class="zone zone-purple">
-    <h3>Remittance Advice Gate email</h3>
-    <p><b>Subject:</b> remittances by hand</p>
-    <p>Hi {First}, I saw {Company} is hiring cash application specialists, which usually means the AR team is keying remittance details out of emails by hand.</p>
-    <p>Brisken's Remittance Advice Gate reads those emails and their attachments with AI and posts the data straight into SAP, so the team stops retyping.</p>
-    <p>One of Brisken's customers already runs this live on ChatGPT.</p>
-    <p>Worth a short look at how it would handle your inbox? {Sender}</p>
-  </div>
-</div>
-<p class="src">Illustrative copy in our voice; final messages are signed by the Brisken identity you approve and tuned per campaign. LinkedIn opens shorter, for example: "noticed {Company} is investing in SAP Treasury; we help SAP teams get market data into TRM without the manual uploads. Open to connecting?"</p>
-
-<h2 id="channels">Two channels, two clocks</h2>
-<p class="h2-sub">LinkedIn produces conversations while the email domains warm. Email then carries the volume.</p>
-<div class="gantt">
-  <div class="gantt-head">
-    <div></div><div>W1</div><div>W2</div><div>W3</div><div>W4</div><div>W5</div><div>W6</div><div>W7</div><div>W8</div>
-  </div>
-  <div class="gantt-row"><div class="gantt-label">Universe + contacts</div>
-    <div class="gantt-cell g-purple on"></div><div class="gantt-cell g-purple on"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div>
-  </div>
-  <div class="gantt-row"><div class="gantt-label">Domain warm-up</div>
-    <div class="gantt-cell g-orange on"></div><div class="gantt-cell g-orange on"></div><div class="gantt-cell g-orange on"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div>
-  </div>
-  <div class="gantt-row"><div class="gantt-label">LinkedIn outreach</div>
-    <div class="gantt-cell g-blue on"></div><div class="gantt-cell g-blue on"></div><div class="gantt-cell g-blue on"></div><div class="gantt-cell g-blue on"></div><div class="gantt-cell g-blue on"></div><div class="gantt-cell g-blue on"></div><div class="gantt-cell g-blue on"></div><div class="gantt-cell g-blue on"></div>
-  </div>
-  <div class="gantt-row"><div class="gantt-label">Email sequences</div>
-    <div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell g-green on"></div><div class="gantt-cell g-green on"></div><div class="gantt-cell g-green on"></div><div class="gantt-cell g-green on"></div><div class="gantt-cell g-green on"></div>
-  </div>
-  <div class="gantt-row"><div class="gantt-label">First meetings</div>
-    <div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell g-purple on"></div><div class="gantt-cell g-purple on"></div><div class="gantt-cell g-purple on"></div><div class="gantt-cell g-purple on"></div><div class="gantt-cell g-purple on"></div>
-  </div>
-</div>
-<div class="zones">
-  <div class="zone zone-blue">
-    <h3>LinkedIn (live within days)</h3>
+    <h3>SAP channel</h3>
+    <span class="ztag">LIVE: OnePilot on the SAP Store, assistant surfaces it</span>
     <ul>
-      <li>Real-profile outreach, persona-targeted, 20-25 connections/day</li>
-      <li>Starts with the warm hiring-signal cohort</li>
-      <li>No warm-up period; first conversations in week 1-2</li>
-    </ul>
-  </div>
-  <div class="zone zone-green">
-    <h3>Cold email (live week 3-4)</h3>
-    <ul>
-      <li>2-3 dedicated lookalike domains; brisken.com itself is never used for sending</li>
-      <li>4-6 mailboxes, authenticated (SPF/DKIM/DMARC), every address verified before send</li>
-      <li>Planned capacity at steady state: 400-900 sends/week</li>
-      <li>3-4 touches over 2-3 weeks; messages signed by a real Brisken identity (your call on whom)</li>
-    </ul>
-  </div>
-</div>
-
-<h2 id="warm-channels">A second track: your SAP and data-vendor ecosystem</h2>
-<p class="h2-sub">The engine above finds buyers and contacts them. In parallel, Brisken already sits inside two ecosystems that can bring buyers to you. We point the campaigns at what is already live and add the few moves that turn those positions into a second source of leads. We keep this to the cloud-platform partners, SAP and the market-data vendors, and we treat anything already running as an asset to use, not work to redo.</p>
-<div class="zones">
-  <div class="zone zone-blue">
-    <h3>SAP partner channel</h3>
-    <p style="font-size:13.5px;"><b>Already working for you:</b> OnePilot is live on the SAP Store (Market Data Hub variants, Trade Automation, Remittance Advice Gate, Bank Fee Portal), and the SAP Store assistant already surfaces it. Every visitor there is an SAP customer, the exact buyer.</p>
-    <ul>
-      <li><b>SAP co-sell:</b> with your go-ahead, confirm and switch on co-sell so SAP account teams can refer OnePilot; it fits SAP's cloud and embedded-AI partner direction.</li>
-      <li><b>Found inside the SAP Store:</b> tune the listings so the SAP Store assistant surfaces them on problem searches like "market data into SAP," not only the Brisken name.</li>
-      <li><b>ASUG:</b> a presence in the Americas SAP user community, through content and a speaking slot.</li>
+      <li><b>Co-sell:</b> the big prize; your sign-up, our business case. Slower.</li>
+      <li><b>Store search:</b> tune listings to surface on "market data into SAP". Now.</li>
+      <li><b>ASUG:</b> content + a speaking slot.</li>
     </ul>
   </div>
   <div class="zone zone-green">
     <h3>Data-vendor channel</h3>
-    <p style="font-size:13.5px;"><b>Already working for you:</b> OnePilot already governs Bloomberg, Refinitiv, 360T, CME and OANDA feeds into SAP, and the per-vendor SAP listings exist. Those vendors' customers are precisely the Market Data Hub and Trade Automation buyers.</p>
+    <span class="ztag">LIVE: OnePilot governs Bloomberg/Refinitiv/360T/CME/OANDA</span>
     <ul>
-      <li><b>Vendor app portals:</b> place OnePilot in the Bloomberg and LSEG (Refinitiv) partner app portals, in front of their own customer bases.</li>
-      <li><b>Vendor referrals:</b> OnePilot makes their data usable inside SAP, so it raises the value of their feed; their teams can point customers who ask "how do I get this into SAP" to Brisken.</li>
-      <li><b>Co-marketing:</b> a joint "govern your feed into SAP, no code" piece per vendor.</li>
+      <li><b>Public signals:</b> "uses Bloomberg + runs SAP" is target and hook. No permission.</li>
+      <li><b>App stores + joint content:</b> where a vendor tie is close enough. Your call.</li>
     </ul>
   </div>
 </div>
-<div class="callout green">
-  <span class="callout-title">Built on what you already have</span>
-  This track runs on assets that exist today. The only inputs it needs are your word on which vendor relationships are active enough to open, and the same sender sign-off the cold track needs. Cold outreach keeps running underneath it, so the two compound rather than compete.
+<div class="zone zone-purple">
+  <h3>AI search and content (always-on)</h3>
+  <ul>
+    <li>Be the answer when someone asks ChatGPT/Perplexity "how do I get market data into SAP". The topic is narrow, so it is winnable.</li>
+    <li>Already prepared: 30 of the exact buyer questions mapped to the right product, plus draft answer pages and an SAP Store tuning plan, ready to publish on your go-ahead. No spend, no live action until you approve where it is hosted.</li>
+    <li>A slow build, not a same-week lead source: it makes buyers arrive warmer and backs every personal message. Runs underneath LinkedIn, not instead of it.</li>
+  </ul>
 </div>
 
-<h2 id="rollout">Rolling the campaigns out</h2>
-<p class="h2-sub">Domains warm gradually, so campaigns go live in waves, not all at once. A proposed order by signal-readiness and clarity of ROI; the sequence is yours to set.</p>
-<div class="timeline-strip">
-  <div class="tl-card"><span class="wk">Wave 1</span><b>Market Data Hub, Remittance Advice Gate, Bank Fee Portal</b><span>Strongest ready signals and clearest hard-dollar ROI</span></div>
-  <div class="tl-card"><span class="wk">Wave 2</span><b>Trade Automation, Cash Flow &amp; Exposure Hub</b><span>Added as the first domains finish warm-up</span></div>
-  <div class="tl-card"><span class="wk">Wave 3</span><b>Credit Data Hub, ESG Data Hub, AI Digital Workforce</b><span>Layered on as capacity and learnings compound</span></div>
-  <div class="tl-card"><span class="wk">Parallel</span><b>OnePilot for FSI</b><span>Banking ICP; runs as its own track with its own research</span></div>
+<h2 id="outreach">What the outreach looks like</h2>
+<div class="zones">
+  <div class="zone zone-blue">
+    <h3>LinkedIn open (a Bloomberg-on-SAP company)</h3>
+    <p style="font-size:13.5px;">Noticed {Company} runs SAP treasury and lists Bloomberg in your postings. Usually someone is keying rates into SAP by hand, or babysitting a script that breaks at month-end. Brisken's Market Data Hub governs that feed into S/4HANA, no code, listed on the SAP Store. Send a one-page teardown of your setup?</p>
+  </div>
+  <div class="zone zone-green">
+    <h3>The forwardable one-pager</h3>
+    <ul>
+      <li>Their public signal quoted back, the manual step it implies, what MDH does instead, a 15-minute look.</li>
+      <li>Built to forward up to the budget owner; SAP-listed and co-innovation trust marks on it.</li>
+    </ul>
+    <p class="src">Illustrative; final copy signed by the Brisken identity you approve.</p>
+  </div>
 </div>
+
+<h2 id="rollout">How it rolls out</h2>
+<p class="h2-sub">The build needs no spend and no go-ahead. Going live needs one short yes from you.</p>
+<div class="gantt">
+  <div class="gantt-head"><div></div><div>W1</div><div>W2</div><div>W3</div><div>W4</div><div>W5</div><div>W6</div><div>W7</div><div>W8</div></div>
+  <div class="gantt-row"><div class="gantt-label">Targeting list + forwardables</div><div class="gantt-cell g-purple on"></div><div class="gantt-cell g-purple on"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div></div>
+  <div class="gantt-row"><div class="gantt-label">Your go-ahead (a short yes)</div><div class="gantt-cell"></div><div class="gantt-cell g-orange on"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div></div>
+  <div class="gantt-row"><div class="gantt-label">Personal LinkedIn outreach</div><div class="gantt-cell"></div><div class="gantt-cell g-blue on"></div><div class="gantt-cell g-blue on"></div><div class="gantt-cell g-blue on"></div><div class="gantt-cell g-blue on"></div><div class="gantt-cell g-blue on"></div><div class="gantt-cell g-blue on"></div><div class="gantt-cell g-blue on"></div></div>
+  <div class="gantt-row"><div class="gantt-label">Trust channels (compounding)</div><div class="gantt-cell g-green on"></div><div class="gantt-cell g-green on"></div><div class="gantt-cell g-green on"></div><div class="gantt-cell g-green on"></div><div class="gantt-cell g-green on"></div><div class="gantt-cell g-green on"></div><div class="gantt-cell g-green on"></div><div class="gantt-cell g-green on"></div></div>
+  <div class="gantt-row"><div class="gantt-label">First held demos</div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell g-purple on"></div><div class="gantt-cell g-purple on"></div><div class="gantt-cell g-purple on"></div><div class="gantt-cell g-purple on"></div><div class="gantt-cell g-purple on"></div></div>
+</div>
+<p class="src">One product live at a time to first proof: Market Data Hub leads, Trade Automation onto the same companies, then the platform widens the set.</p>
+<div class="callout green"><span class="callout-title">Built-in go/no-go checkpoints (so this never becomes an open-ended grind)</span>
+<ul class="kpts tight" style="margin-top:6px;">
+  <li><b>Week 4:</b> if the targeting and trust groundwork has produced no qualified reply, we re-cut the list and the message before going wider, not push more volume.</li>
+  <li><b>Week 8:</b> if nothing has booked, we pause new outreach and diagnose which of list, message, or product-fit is the miss, and decide together whether to continue.</li>
+  <li><b>Week 12:</b> if held demos are not turning into real pipeline for you, we stop and reassess the motion rather than keep spending your time and ours.</li>
+</ul></div>
 
 <h2 id="qualification">What counts as a lead</h2>
-<p class="h2-sub">You pay for held meetings with documented BANT evidence, nothing softer. Proposed mechanics below; final definition is yours to confirm.</p>
+<p class="h2-sub">You pay for held meetings with documented BANT evidence, nothing softer. Mechanics yours to confirm.</p>
 <div class="bant">
-  <div class="bant-card"><span class="letter">B</span><b>Budget</b><span>A budget signal exists: a live project, relevant hiring, or a migration deadline forcing spend</span></div>
-  <div class="bant-card"><span class="letter">A</span><b>Authority</b><span>Contact's title is on that campaign's agreed persona list</span></div>
-  <div class="bant-card"><span class="letter">N</span><b>Need</b><span>Stated pain matching the campaign, or an active S/4HANA data-integration workstream</span></div>
-  <div class="bant-card"><span class="letter">T</span><b>Timeline</b><span>Stated timeframe, or one implied by the ECC 2027/2030 deadline</span></div>
+  <div class="bant-card"><span class="letter">B</span><b>Budget</b><span>Live project, relevant hiring, or a migration deadline forcing spend</span></div>
+  <div class="bant-card"><span class="letter">A</span><b>Authority</b><span>Job title on the agreed target list for that product</span></div>
+  <div class="bant-card"><span class="letter">N</span><b>Need</b><span>Stated pain, or an active S/4HANA data-integration project</span></div>
+  <div class="bant-card"><span class="letter">T</span><b>Timeline</b><span>Stated, or implied by the ECC 2027/2030 deadline</span></div>
 </div>
-<div class="flow" style="grid-template-columns: repeat(4, 1fr);">
-  <div class="flow-step"><b>Reply comes in</b><span>We run a short qualifying exchange against the four checks</span></div>
-  <div class="flow-step"><b>Meeting booked</b><span>Directly into your calendar with the BANT evidence attached</span></div>
-  <div class="flow-step"><b>Meeting held</b><span>You take the discovery call; a missed meeting only counts if rescheduled and held within 2 weeks</span></div>
-  <div class="flow-step"><b>You decide</b><span>Accept or reject within 48h with a one-line reason; rejections tune the targeting</span></div>
-</div>
+<ul class="kpts tight">
+  <li>Reply &#8594; short qualifying exchange &#8594; meeting booked into your calendar with the evidence attached.</li>
+  <li>You take the demo; a missed meeting counts only if rescheduled and held within 2 weeks.</li>
+  <li>Accept or reject within 48h with a one-line reason; rejections sharpen the targeting.</li>
+</ul>
 
 <h2 id="commercial">Commercial shape</h2>
-<p class="h2-sub">Per your offer: a fixed fee per accepted BANT lead plus a commission on closed deals.</p>
-<p>The shape is agreed; the mechanics we still settle together: the commission percentage and its basis (first-year subscription value is the usual convention for a SaaS sale), the payment trigger, and who carries the modest running infrastructure (domains, mailboxes, sending and data tooling; estimated $250-500 per month). None of this blocks the build; we can start while the mechanics are settled.</p>
+<ul class="kpts">
+  <li><b>Your offer as we understood it (to confirm at terms):</b> a fixed fee per accepted BANT lead plus a commission on closed deals.</li>
+  <li><b>To settle:</b> commission % and basis (first-year subscription value is the SaaS norm), payment trigger, and how long a lead stays credited to us (the cycle runs 6 to 18 months, so the credit window has to match it).</li>
+  <li><b>Running cost is now small:</b> a LinkedIn Sales Navigator seat (~$99/month) is the only hard cost to the first demo; heavier tooling added only as a product proves it books.</li>
+  <li><b>One note:</b> content / AI search / co-sell build your own inbound and are harder to credit to a single lead; we agree how at terms.</li>
+</ul>
 
 <h2 id="needs">What we need from Brisken</h2>
 <table>
   <thead><tr><th>Item</th><th>Why</th><th>When</th></tr></thead>
   <tbody>
-    <tr><td>A calendar/booking link</td><td>Qualified replies book straight into your diary</td><td>Before week 2</td></tr>
-    <tr><td>Demo owner per campaign</td><td>Each booked meeting is a demo of that product; tell us who at Brisken takes which product's call</td><td>Before that campaign goes live</td></tr>
-    <tr><td>Sender identity sign-off</td><td>Cold email goes out under a Brisken-branded identity from dedicated domains; you should see and approve the exact name and domain once</td><td>Before email goes live (week 3)</td></tr>
-    <tr><td>Infrastructure cost decision</td><td>$250-500/month running cost; settle whose side carries it</td><td>With the commercial mechanics</td></tr>
+    <tr><td>Sending identity sign-off</td><td>Whose real Brisken profile fronts the outreach</td><td>Before outreach</td></tr>
+    <tr><td>Which vendor relationships are active</td><td>Which vendor channels we can open vs only spot from public signals</td><td>Before that channel</td></tr>
+    <tr><td>Demo owner per product</td><td>Who takes the MDH, Trade and platform calls</td><td>Before that product goes live</td></tr>
+    <tr><td>Go-ahead + one Sales Navigator seat</td><td>Green light + the only hard cost (~$99/month)</td><td>To start outreach</td></tr>
+    <tr><td>A calendar/booking link</td><td>Qualified replies book into your diary</td><td>Before week 4</td></tr>
   </tbody>
 </table>
-<div class="callout">
-  <span class="callout-title">Everything else is on us</span>
-  Company research, contact sourcing and verification, infrastructure setup, copywriting, sending, reply handling, qualification, booking, and a weekly delivery note with meetings booked, pipeline state, and what we learned.
-</div>
+<p class="src"><b>On us:</b> research and the weekly sweep, contact sourcing and verification, the trust groundwork, copywriting and the forwardables, outreach, qualifying, booking, and a weekly note.</p>
 
 <h2 id="expectations">Honest expectations</h2>
-<p>This is a precision market, not a volume one: each campaign's universe is small and senior. Realistic early output is a small number of held, qualified meetings per month in the first one to two months, growing as more campaigns come online, the email channel matures, and the weekly trigger sweep compounds. Conversion rates are unknowable until live; what we control is list quality, message quality, and qualification discipline. First meetings land in weeks 4-8, possibly earlier via LinkedIn. Running a campaign per product means more shots on goal without diluting any single message.</p>
+<ul class="kpts">
+  <li>Precision market: small, senior lists per product.</li>
+  <li>Early output: a few held, qualified meetings per month in months 1-2, growing as more companies are added and the trust channels compound.</li>
+  <li>First meetings land in weeks 4-8, possibly earlier via LinkedIn.</li>
+  <li>Conversion is unknown until live; we control list, message, and qualifying quality.</li>
+  <li>Honest on the close rate: your &gt;90% is on warm inbound that already raised its hand. The companies we source are colder, so they will close below that until the trust groundwork compounds. The BANT gate exists to narrow that gap, not to claim it away.</li>
+  <li>The economics: well-matched, signal-checked companies fed into a motion that already closes well, with the gate doing the work of getting them as close to your fit bar as a sourced lead can get.</li>
+</ul>
 
 <div class="footer">
   <div>Brisken &middot; UnpauseAI &middot; admin@unpauseai.com</div>
-  <div>Last updated: 2026-06-12</div>
+  <div>Last updated: 2026-06-15</div>
 </div>
 
 </main>

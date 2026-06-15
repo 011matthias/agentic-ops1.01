@@ -4,9 +4,9 @@ name: BANT Lead Generation (OnePilot products)
 type: service-engagement
 stage: spec
 orchestrator: none            # manual-first; automation candidates listed in Phase 4
-version: 0.3.0
+version: 0.4.1
 created: 2026-06-11
-updated: 2026-06-12
+updated: 2026-06-15
 trigger: manual
 systems:
   - linkedin-sales-navigator   # own seat, to be provisioned (NOT Meji's)
@@ -14,13 +14,14 @@ systems:
   - instantly                  # dedicated Brisken workspace, to be provisioned
   - neverbounce
   - google-sheets              # lead tracker v1
-last_changes: "Direction change 2026-06-12 (two steps): (1) Brisken does not want new treasury-CONSULTING clients; p2 sells the OnePilot PRODUCT suite + AI Digital Workforce. (2) Architecture is one shared engine running a SEPARATE CAMPAIGN PER PRODUCT (own ICP, signal, angle, product-demo CTA), not a single wedge. 8 core campaigns (7 apps + Digital Workforce) + OnePilot for FSI as a parallel banking track. Full product catalog + campaign library in context/lead-generation/brisken-product-catalog.md; Dirk-facing deck (HTML+PDF) reframed."
+last_changes: "Strategy hardening 2026-06-12 (owner): (1) COLD EMAIL RETIRED. Brisken already ran ~150 mailboxes / ~2M cold emails over an extended period for 0 leads; the buy is too high-risk to grant a meeting cold. Track B (cold email, Instantly, lookalike domains, warm-up) is dropped. (2) Product focus narrows 8->3: Market Data Hub + Trade Automation + OnePilot platform; the other 5 apps become subfunctions/proof under the OnePilot story (Remittance/Calvin kept as the best forwardable proof asset, not a standalone campaign). (3) The motion is demand-gen + borrowed-trust + a precision-LinkedIn tail, spine = a trigger-detection radar (context/lead-generation/targeting-radar.md). Diagnosis: Brisken has a discovery problem, not a closing problem (>90% close); the metric is warm triggered at-bats/month. (4) NEW disposition ICP: data-vendor users (Bloomberg/Refinitiv/360T/FXall/OANDA/CME + SAP) = proven pain, not firmographic guess; routes the product (market data->MDH, trading venue->Trade). (5) SAP co-sell + active vendor referral moved OFF the critical path (slow, Brisken-driven); Store-AEO + SAP-partner badge + reverse-sourced vendor signal are the dependable near-term levers."
+red_team_hardening_2026-06-15: "Applied the cheap red-team fixes (owner directive: build to presentable, no Dirk contact yet). Attribution window 12mo->18mo from demo date + dated account-lock list (findings A+B). Radar §6 retagged to §5 (Colgate/Corteva A1, rest B; vendor-unconfirmed != proven pain). Kill gates G1 wk4/G2 wk8/G3 wk12 added to orchestration §5.1 + the deck. Deck close-rate transfer fixed (funnel terminus, stat-card, honest-expectations population-split); 'Agreed' -> 'your offer as we understood it'. The pre-outreach Dirk email (the highest-ER fix) is deliberately NOT drafted; held for the present-to-Dirk step."
 next_steps:
-  - "Owner: set or confirm campaign rollout order (proposed wave 1: Market Data Hub, Remittance Advice Gate, Bank Fee Portal)"
-  - "Owner: confirm demo owner per product (who at Brisken takes which product's call)"
-  - "Owner: capture Dirk's verbatim offer message into context/lead-generation/terms (gates Phase 0 close)"
-  - "Terms call with Dirk: settle the 6 term-sheet items in §2 (commission basis now first-year subscription value)"
-  - "On terms confirm: provision own sourcing seats + sending infra, start warm-up, launch wave 1 campaigns"
+  - "Lane 1 (autonomous, now): run the targeting radar -- vendor-tag + trigger-verify the 7 JOB-signal accounts with public evidence; rank into tiers"
+  - "Lane 1 (autonomous): build the MDH 'your [vendor] feed into SAP, mapped' teardown + ABM 1-pager template + Calvin/Remittance forwardable clip brief"
+  - "Lane 1 (autonomous): draft the AEO substrate (~25-30 problem queries + Q&A page + Store-review seeding plan) and Dirk's enabler pack (co-sell business case + vendor-relationship matrix)"
+  - "Dirk go-live gate (compressed 5-min y/n): sending identity; which vendor relationships are live; go-ahead + ~$99/mo Sales Nav seat; demo owner per product + weekly capacity"
+  - "On go-live: precision LinkedIn into the triggered cohort via the reachable persona; AEO + Store reviews compound underneath; first held MDH demo = the BANT unit"
 ---
 
 # p2: BANT Lead Generation for Brisken
@@ -94,8 +95,14 @@ Term sheet to settle with Dirk. The verbatim offer is still uncaptured
    - **Trigger:** signed customer contract; paid within 30 days of
      Brisken receiving the customer's first payment.
    - **Attribution window:** any opportunity we sourced that signs
-     within 12 months is ours. Non-negotiable given the long cycle; a
-     short window makes the commission worthless.
+     within 18 months of the demo date is ours, scoped to a dated,
+     named account-lock list agreed up front so "sourced" is
+     falsifiable. Non-negotiable given the 6-18 month cycle: a 12-month
+     window can expire before a deal our demo started even closes, and
+     "any opportunity we sourced" with no account list is unprovable in
+     a universe Brisken already owns and has already touched. The lock
+     list (the accounts we name and Dirk accepts before we contact
+     them) is what makes the credit auditable for both sides.
    - **Cap/clawback:** uncapped or cap >= EUR 25k (SAP's basic-referrer
      cap); pro-rata clawback only if the customer churns inside year 1.
 
@@ -170,6 +177,21 @@ running SAP (ECC or S/4HANA) with an in-house treasury function,
 roughly $500M+ revenue; OR any company in an announced S/4HANA
 migration regardless of size band; the migration window is when
 treasury modules get re-evaluated.
+
+**Disposition axis (added 2026-06-12, the targeting sharpener):** on top
+of SAP fit, prioritize accounts that demonstrably USE a market-data or
+trading vendor whose feed has to reach SAP (Bloomberg, Refinitiv/LSEG,
+360T, FXall, OANDA, CME, ICE Data, Deutsche Borse). Paying for the
+vendor is proof the integration pain is real, not a firmographic guess:
+someone is getting that feed into SAP by hand or via a brittle script,
+which is exactly what MDH / Trade Automation remove. The vendor signal
+also routes the product (market-data vendors -> Market Data Hub; trading
+venues -> Trade Automation) and supplies the message hook. Detection
+method, vendor->product routing, scoring tiers, and the live list are in
+`context/lead-generation/targeting-radar.md`. This axis is NOT
+website-technographic (terminals don't show in Enlyft/TheirStack); it is
+sourced from job-post tool mentions, employee profiles, vendor case
+studies, and 10-K/earnings language.
 
 **Personas (multi-thread 3-5 per account):** Treasurer; VP/Director
 of Treasury; Cash Manager; Head of Treasury Operations; Director of
