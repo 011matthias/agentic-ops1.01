@@ -94,7 +94,11 @@
 <body>
   <nav class="site-nav">
     <div class="nav-left">Brisken <span class="nav-client">&middot; Expense Reconciliation</span></div>
-    <button class="nav-theme" onclick="(function(){var d=document.documentElement;var c=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',c);localStorage.setItem('theme',c);})()" aria-label="Toggle theme">Theme</button>
+    <div style="display:flex; align-items:center; gap:14px;">
+      <a href="/">Runs</a>
+      <a href="/memory">Memory</a>
+      <button class="nav-theme" onclick="(function(){var d=document.documentElement;var c=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',c);localStorage.setItem('theme',c);})()" aria-label="Toggle theme">Theme</button>
+    </div>
   </nav>
   <div class="wrap">
     {% block content %}{% endblock %}

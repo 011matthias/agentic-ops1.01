@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Learned memory{% endblock %}
+{% block content %}
+{% set v = view %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
+    <div>
+      <h1>What the tool has learned</h1>
+      <p class="muted" style="max-width:60ch;">Confirmed decisions the tool reuses on future runs: categories auto-fill known merchants, and aliases plus FX history sharpen matching. Forgetting a merchant removes everything learned about it (category, aliases, and FX) so the next run treats it fresh.</p>
+    </div>
+    <a class="btn btn-secondary" href="/">Back to runs</a>
+  </div>
+  <div class="stats" style="margin-top:16px;">
+    <div class="stat"><div class="stat-value">{{ v.counts.merchant_category }}</div><div class="stat-label">Merchant categories</div></div>
+    <div class="stat"><div class="stat-value">{{ v.counts.vendor_alias }}</div><div class="stat-label">Vendor aliases</div></div>
+    <div class="stat"><div class="stat-value">{{ v.counts.merchant_fx }}</div><div class="stat-label">FX histories</div></div>
+  </div>
+</div>
+
+{% if v.total == 0 %}
+<div class="card">
+  <p class="muted" style="margin:0;">Nothing learned yet. In a run, confirm matches and reclassify categories, then use <strong>Commit to memory</strong> to teach the tool. What you confirm will show up here.</p>
+</div>
+{% else %}
+
+{% if v.categories %}
+<div class="card">
+  <h2>Merchant categories ({{ v.categories | length }})</h2>
+  <table>
+    <thead><tr><th>Merchant</th><th>Category</th><th>Zoho account</th><th>Confirmed</th><th>Last</th><th></th></tr></thead>
+    <tbody>
+      {% for c in v.categories %}
+      <tr>
+        <td>{{ c.vendor }} <span class="muted mono" style="font-size:11px;">{{ c.entity }}</span></td>
+        <td>{{ c.category }}</td>
+        <td class="muted">{{ c.zoho_account }}</td>
+        <td class="mono">{{ c.count }}x</td>
+        <td class="muted mono">{{ c.last }}</td>
+        <td class="right">
+          <form method="post" action="/memory/forget" style="display:inline;" onsubmit="return confirm('Forget everything learned for {{ c.vendor }}?');">
+            <input type="hidden" name="legal_entity_id" value="{{ c.entity }}">
+            <input type="hidden" name="vendor" value="{{ c.vendor }}">
+            <button class="btn btn-secondary btn-small" type="submit">Forget</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if v.aliases %}
+<div class="card">
+  <h2>Vendor aliases ({{ v.aliases | length }})</h2>
+  <p class="muted" style="margin-top:0;">A bank's truncated name confirmed as the same merchant as a receipt's full name.</p>
+  <table>
+    <thead><tr><th>Statement name</th><th>Receipt name</th><th>Confirmed</th><th></th></tr></thead>
+    <tbody>
+      {% for a in v.aliases %}
+      <tr>
+        <td class="mono">{{ a.stmt }} <span class="muted" style="font-size:11px;">{{ a.entity }}</span></td>
+        <td class="mono">{{ a.receipt }}</td>
+        <td class="mono">{{ a.count }}x</td>
+        <td class="right">
+          <form method="post" action="/memory/forget" style="display:inline;" onsubmit="return confirm('Forget everything learned for {{ a.receipt }}?');">
+            <input type="hidden" name="legal_entity_id" value="{{ a.entity }}">
+            <input type="hidden" name="vendor" value="{{ a.receipt }}">
+            <button class="btn btn-secondary btn-small" type="submit">Forget</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if v.fx %}
+<div class="card">
+  <h2>FX histories ({{ v.fx | length }})</h2>
+  <p class="muted" style="margin-top:0;">Observed foreign-currency rates per merchant; they sharpen the match score within the existing bands, never widen them.</p>
+  <table>
+    <thead><tr><th>Merchant</th><th>Currency</th><th>Mean rate</th><th>Range</th><th>Samples</th><th></th></tr></thead>
+    <tbody>
+      {% for f in v.fx %}
+      <tr>
+        <td>{{ f.vendor }} <span class="muted mono" style="font-size:11px;">{{ f.entity }}</span></td>
+        <td class="mono">{{ f.pair }}</td>
+        <td class="mono">{{ f.mean }}</td>
+        <td class="muted mono">{{ f.range }}</td>
+        <td class="mono">{{ f.n }}</td>
+        <td class="right">
+          <form method="post" action="/memory/forget" style="display:inline;" onsubmit="return confirm('Forget everything learned for {{ f.vendor }}?');">
+            <input type="hidden" name="legal_entity_id" value="{{ f.entity }}">
+            <input type="hidden" name="vendor" value="{{ f.vendor }}">
+            <button class="btn btn-secondary btn-small" type="submit">Forget</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>Reset</h2>
+  <p class="muted" style="margin-top:0;">Clear everything the tool has learned. This cannot be undone; the next run behaves like the first time.</p>
+  <form method="post" action="/memory/reset" onsubmit="return confirm('Delete ALL learned memory? This cannot be undone.');">
+    <button class="btn btn-secondary" type="submit">Reset all learned memory</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

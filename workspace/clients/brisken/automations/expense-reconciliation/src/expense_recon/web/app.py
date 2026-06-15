@@ -30,10 +30,13 @@ from .service import (
     STATEMENT_MAP_FIELDS,
     RunForm,
     RunInputError,
+    build_memory_view,
     build_view,
     commit_to_memory,
     create_run,
+    forget_memory_vendor,
     regenerate_report,
+    reset_memory,
 )
 from .store import VALID_STATUSES, RunStore
 
@@ -247,6 +250,29 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             ),
         )
+
+    # ── Memory (PR 2e): see and correct what the tool has learned ──────
+    @app.get("/memory", response_class=HTMLResponse)
+    def memory(request: Request):
+        view = build_memory_view(app.state.learning_db_path)
+        return templates.TemplateResponse(request, "memory.html", {"view": view})
+
+    @app.post("/memory/forget")
+    def memory_forget(
+        legal_entity_id: str = Form(...), vendor: str = Form(...)
+    ):
+        forget_memory_vendor(app.state.learning_db_path, legal_entity_id, vendor)
+        return RedirectResponse(url="/memory", status_code=303)
+
+    @app.post("/memory/reset")
+    def memory_reset(
+        table: str = Form(""), legal_entity_id: str = Form("")
+    ):
+        reset_memory(
+            app.state.learning_db_path, table.strip() or None,
+            legal_entity_id.strip() or None,
+        )
+        return RedirectResponse(url="/memory", status_code=303)
 
     return app
 
