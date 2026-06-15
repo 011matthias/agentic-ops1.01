@@ -346,3 +346,69 @@ class LearningStore:
             last_seen_at=row["last_seen_at"],
             source_run=row["source_run"],
         )
+
+    # -- maintenance (the 2d escape hatch) --------------------------------
+
+    TABLES = ("merchant_category", "vendor_alias", "merchant_fx")
+
+    def forget_vendor(
+        self, legal_entity_id: str, vendor_norm: str
+    ) -> dict[str, int]:
+        """Drop everything learned about one vendor in one entity: its
+        category, its FX history, and any alias where it sits on EITHER
+        side. Returns per-table delete counts."""
+        counts = {
+            "merchant_category": self.conn.execute(
+                "DELETE FROM merchant_category WHERE legal_entity_id = ? "
+                "AND vendor_norm = ?",
+                (legal_entity_id, vendor_norm),
+            ).rowcount,
+            "merchant_fx": self.conn.execute(
+                "DELETE FROM merchant_fx WHERE legal_entity_id = ? "
+                "AND vendor_norm = ?",
+                (legal_entity_id, vendor_norm),
+            ).rowcount,
+            "vendor_alias": self.conn.execute(
+                "DELETE FROM vendor_alias WHERE legal_entity_id = ? AND "
+                "(stmt_vendor_norm = ? OR receipt_vendor_norm = ?)",
+                (legal_entity_id, vendor_norm, vendor_norm),
+            ).rowcount,
+        }
+        self.conn.commit()
+        return counts
+
+    def count_rows(self, legal_entity_id: str | None = None) -> dict[str, int]:
+        """Row counts per table (optionally scoped). Read-only; backs the
+        reset dry-run preview."""
+        counts = {}
+        for table in self.TABLES:
+            if legal_entity_id is None:
+                counts[table] = self.conn.execute(
+                    f"SELECT COUNT(*) AS n FROM {table}"
+                ).fetchone()["n"]
+            else:
+                counts[table] = self.conn.execute(
+                    f"SELECT COUNT(*) AS n FROM {table} WHERE legal_entity_id = ?",
+                    (legal_entity_id,),
+                ).fetchone()["n"]
+        return counts
+
+    def reset(
+        self, table: str | None = None, legal_entity_id: str | None = None
+    ) -> dict[str, int]:
+        """Delete all learned rows, optionally restricted to one table and/or
+        one entity. Returns per-table delete counts. `table` is validated
+        against the fixed set (the name interpolates into the SQL)."""
+        if table is not None and table not in self.TABLES:
+            raise ValueError(f"unknown table {table!r}; expected one of {self.TABLES}")
+        targets = (table,) if table else self.TABLES
+        counts: dict[str, int] = {}
+        for t in targets:
+            if legal_entity_id is None:
+                counts[t] = self.conn.execute(f"DELETE FROM {t}").rowcount
+            else:
+                counts[t] = self.conn.execute(
+                    f"DELETE FROM {t} WHERE legal_entity_id = ?", (legal_entity_id,)
+                ).rowcount
+        self.conn.commit()
+        return counts

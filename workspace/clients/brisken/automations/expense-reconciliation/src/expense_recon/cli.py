@@ -831,6 +831,13 @@ def main(argv: list[str] | None = None) -> int:
 
         return calibrate_main(argv[1:])
 
+    # `expense-recon memory list|forget|reset` — inspect / correct the
+    # cross-run learning store (Phase 2 escape hatch, 2d).
+    if argv and argv[0] == "memory":
+        from .learning_cli import main as memory_main
+
+        return memory_main(argv[1:])
+
     parser = argparse.ArgumentParser(
         prog="expense-recon",
         description="Brisken expense reconciliation tool (slice 1).",
