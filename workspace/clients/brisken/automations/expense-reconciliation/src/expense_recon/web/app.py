@@ -271,6 +271,22 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         view = build_view(run, decisions, overrides)
         return JSONResponse({"ok": True, "summary": view["summary"]})
 
+    @app.post("/runs/{run_id}/forget")
+    async def post_forget(run_id: str, request: Request):
+        # PR C — "this was wrong": drop everything the tool learned for one
+        # merchant so next month stops auto-filling it. JSON sibling of the
+        # /memory/forget form post, so the workbench can forget in place and
+        # then reopen the reclassify dropdown without a page nav.
+        body = await request.json()
+        legal_entity_id = (body.get("legal_entity_id") or "").strip()
+        vendor = (body.get("vendor") or "").strip()
+        if not legal_entity_id or not vendor:
+            return JSONResponse({"error": "bad request"}, status_code=400)
+        forgotten = forget_memory_vendor(
+            app.state.learning_db_path, legal_entity_id, vendor
+        )
+        return JSONResponse({"ok": True, "forgotten": forgotten})
+
     @app.post("/runs/{run_id}/commit-memory")
     def post_commit_memory(run_id: str):
         # Explicit finalize: fold THIS run's confirmed decisions into the

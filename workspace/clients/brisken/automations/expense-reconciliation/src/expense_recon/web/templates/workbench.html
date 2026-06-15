@@ -43,6 +43,7 @@
     <div class="stat"><div class="stat-value" id="stat-rate">{{ s.match_rate }}%</div><div class="stat-label">Match rate</div></div>
     <div class="stat"><div class="stat-value">{{ "yes" if s.invariant_ok else "NO" }}</div><div class="stat-label">All accounted for</div></div>
     <div class="stat"><div class="stat-value">{{ s.n_duplicate_groups }}</div><div class="stat-label">Dup groups</div></div>
+    <div class="stat"><div class="stat-value">{{ s.n_learned_lines }}</div><div class="stat-label">Auto-filled (memory)</div></div>
   </div>
   {% if s.n_parse_errors %}
   <p class="muted" style="margin-top:10px;">{{ s.n_parse_errors }} row(s) could not be parsed (see foot of page).</p>
@@ -52,12 +53,18 @@
 <div class="card">
   <h2>Transactions</h2>
   <input type="text" id="filter" placeholder="Filter by vendor..." style="margin-bottom:6px;" oninput="filterRows()">
-  <p class="muted kbd-hint" style="margin:0 0 14px; font-size:12px;">
+  <p class="muted kbd-hint" style="margin:0 0 8px; font-size:12px;">
     Keyboard: <kbd>j</kbd>/<kbd>k</kbd> move &middot; <kbd>c</kbd> confirm &middot; <kbd>r</kbd> reject &middot; <kbd>e</kbd> edit category &middot; <kbd>Ctrl/&#8984;+K</kbd> filter
   </p>
+  {% if s.n_learned_lines %}
+  <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text); margin:0 0 14px;">
+    <input type="checkbox" id="only-learned" style="width:auto;" onchange="filterRows()">
+    Show only rows auto-filled from memory ({{ s.n_learned_lines }})
+  </label>
+  {% endif %}
 
   {% for row in view.rows %}
-  <div class="txn" data-vendor="{{ row.vendor | lower }}" data-txid="{{ row.transaction_id }}" style="border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:12px;">
+  <div class="txn" data-vendor="{{ row.vendor | lower }}" data-txid="{{ row.transaction_id }}" data-learned="{{ '1' if row.has_learned else '0' }}" style="border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:12px;">
     <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
       <div>
         <span class="badge {{ row.effective_bucket }}" id="status-{{ row.transaction_id }}">{{ row.effective_bucket }}</span>
@@ -103,7 +110,14 @@
                   {% endfor %}
                 </select>
               </td>
-              <td class="muted">{{ li.source }}{% if li.provenance %}<br><span style="font-size:11px;">{{ li.provenance }}</span>{% endif %}</td>
+              <td class="muted">{{ li.source }}{% if li.provenance %}<br><span style="font-size:11px;">{{ li.provenance }}</span>{% endif %}
+                {% if li.is_learned %}
+                <br><button class="btn btn-secondary btn-small" style="margin-top:4px;"
+                    data-entity="{{ c.receipt.legal_entity_id }}" data-vendor="{{ c.receipt.vendor }}"
+                    data-doc="{{ c.receipt.document_id }}" data-line="{{ li.index }}"
+                    onclick="forgetAndReclassify(this)">This was wrong</button>
+                {% endif %}
+              </td>
             </tr>
             {% endfor %}
           </tbody>
@@ -393,11 +407,35 @@
 
   function filterRows() {
     const q = document.getElementById("filter").value.toLowerCase();
+    const onlyLearned = document.getElementById("only-learned");
+    const learnedOnly = onlyLearned && onlyLearned.checked;
     document.querySelectorAll(".txn").forEach(function (el) {
-      el.style.display = el.getAttribute("data-vendor").includes(q) ? "" : "none";
+      const matchText = el.getAttribute("data-vendor").includes(q);
+      const matchLearned = !learnedOnly || el.getAttribute("data-learned") === "1";
+      el.style.display = (matchText && matchLearned) ? "" : "none";
     });
     selIdx = -1;
     document.querySelectorAll(".txn.selected").forEach(function (el) { el.classList.remove("selected"); });
+  }
+
+  async function forgetAndReclassify(btn) {
+    // PR C — "this was wrong": forget the merchant (future runs stop
+    // auto-filling it) and open the reclassify dropdown for this line.
+    const res = await fetch(`/runs/${RUN_ID}/forget`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        legal_entity_id: btn.dataset.entity,
+        vendor: btn.dataset.vendor
+      })
+    });
+    if (!res.ok) { alert("Could not forget that merchant."); return; }
+    btn.disabled = true;
+    btn.textContent = "Forgotten - pick a category";
+    const sel = document.querySelector(
+      `select[data-doc="${CSS.escape(btn.dataset.doc)}"][data-line="${btn.dataset.line}"]`
+    );
+    if (sel) { sel.focus(); sel.style.borderColor = "var(--orange)"; }
   }
 
   // ── Keyboard triage (j/k move, c confirm, r reject, e edit category) ──
