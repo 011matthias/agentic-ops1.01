@@ -164,7 +164,7 @@
         <option value="{{ ar.document_id }}">{{ ar.vendor }} &middot; {{ ar.total }} {{ ar.currency }}{% if ar.held_by %} &middot; (steal from {{ ar.held_by }}){% else %} &middot; free{% endif %}</option>
         {% endif %}{% endfor %}
       </select>
-      <button class="btn btn-small" onclick="manualMatch('{{ row.transaction_id }}')">Assign</button>
+      <button class="btn btn-small" onclick="manualMatch('{{ row.transaction_id }}', this)">Assign</button>
     </div>
     {% endif %}
   </div>
@@ -293,7 +293,33 @@
 <script>
   const RUN_ID = "{{ view.run_id }}";
 
+  // Take over scroll handling so runFlash's scrollIntoView wins: the browser's
+  // own scroll restoration on reload otherwise fires afterwards and snaps back
+  // to the pre-reload offset, hiding the row we just changed.
+  if ("scrollRestoration" in history) { history.scrollRestoration = "manual"; }
+
   function badgeFor(bucket) { return bucket; }
+
+  // Single-row reload feedback. A manual match / reset triggers a full reload
+  // (needed because the change can also free a "stolen-from" charge), but the
+  // affected row re-sorts into a different group, often far out of view. Without
+  // a cue the reload reads as "nothing happened" and the button feels dead.
+  // flashAfterReload stashes the txid; runFlash (called at end of load) scrolls
+  // it back into view and flashes it.
+  function flashAfterReload(txId) {
+    try { sessionStorage.setItem("erc-flash", txId); } catch (_) {}
+  }
+  function runFlash() {
+    let id = null;
+    try { id = sessionStorage.getItem("erc-flash"); sessionStorage.removeItem("erc-flash"); } catch (_) {}
+    if (!id) return;
+    const row = document.querySelector('.txn[data-txid="' + id + '"]');
+    if (!row) return;
+    row.scrollIntoView({ block: "center" });
+    row.style.transition = "box-shadow .25s ease";
+    row.style.boxShadow = "0 0 0 3px var(--green)";
+    setTimeout(function () { row.style.boxShadow = ""; }, 1800);
+  }
 
   async function setDecision(txId, status, chosenDocId) {
     const res = await fetch(`/runs/${RUN_ID}/decisions`, {
@@ -307,7 +333,8 @@
     const badge = document.getElementById("status-" + txId);
     if (badge && effective) { badge.className = "badge " + effective; badge.textContent = effective; }
     if (status === "pending") {
-      // Reload to recompute the original bucket for this row.
+      // Reload to recompute the original bucket for this row, then flash it.
+      flashAfterReload(txId);
       window.location.reload(); return;
     }
     if (data.summary) {
@@ -365,10 +392,11 @@
     window.location.reload();
   }
 
-  async function manualMatch(txId) {
+  async function manualMatch(txId, btn) {
     const sel = document.getElementById("mm-" + txId);
     const doc = sel ? sel.value : "";
     if (!doc) { alert("Pick a receipt first."); return; }
+    if (btn) { btn.disabled = true; btn.textContent = "Assigning..."; }
     const res = await fetch(`/runs/${RUN_ID}/manual-match`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -377,9 +405,12 @@
     if (!res.ok) {
       let msg = "Could not assign that receipt.";
       try { const e = await res.json(); if (e.error) msg = e.error; } catch (_) {}
+      if (btn) { btn.disabled = false; btn.textContent = "Assign"; }
       alert(msg); return;
     }
-    // The assignment can also free a stolen-from charge; reload to re-render.
+    // The assignment can also free a stolen-from charge; reload to re-render,
+    // then scroll the now-reconciled row back into view and flash it.
+    flashAfterReload(txId);
     window.location.reload();
   }
 
@@ -496,5 +527,8 @@
       if (r) { const sel = r.querySelector("select"); if (sel) { e.preventDefault(); sel.focus(); } }
     }
   });
+
+  // After a single-row reload (manual match, reset), bring the row back and flash it.
+  runFlash();
 </script>
 {% endblock %}
