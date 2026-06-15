@@ -90,8 +90,19 @@
           <span class="muted">&middot; {{ c.receipt.date }} &middot; {{ c.receipt.total }} {{ c.receipt.currency }}</span>
           {% if c.receipt.report_number %}<span class="muted mono">&middot; {{ c.receipt.report_number }}</span>{% endif %}
           {% endif %}
-          {% if c.score %}<span class="badge" style="background:var(--bg); border:1px solid var(--border); color:var(--text);">score {{ c.score }}/100</span>{% endif %}
+          {% if c.amount_pct is not none %}
+          <details style="font-size:12px;">
+            <summary class="muted" style="cursor:pointer; list-style:revert;">score {{ c.score }}/100 &middot; conf {{ "%.2f"|format(c.confidence) }}</summary>
+            <div class="muted" style="margin-top:4px; padding-left:4px;">
+              amount <span class="mono">{{ c.amount_pct }}/100</span> &middot;
+              date <span class="mono">{{ c.date_pct }}/100</span> &middot;
+              vendor <span class="mono">{{ c.vendor_pct }}/100</span><br>
+              {{ c.reason }}
+            </div>
+          </details>
+          {% else %}
           <span class="muted" style="font-size:12px;">conf {{ "%.2f"|format(c.confidence) }} &middot; {{ c.reason }}</span>
+          {% endif %}
         </div>
 
         {% if c.receipt and c.receipt.line_items %}
@@ -128,6 +139,14 @@
     </div>
     {% else %}
     <div class="muted" style="margin-top:8px;">No candidate receipt.</div>
+    {% endif %}
+
+    {% if row.near_miss %}
+    <div class="muted" style="margin-top:8px; font-size:12px;">
+      Nearest free receipt: <strong>{{ row.near_miss.vendor }}</strong>
+      {{ row.near_miss.total }} {{ row.near_miss.currency }}
+      ({{ row.near_miss.amount_diff }} off{% if row.near_miss.date_diff_days is not none %}, {{ row.near_miss.date_diff_days }} day(s) off{% endif %})
+    </div>
     {% endif %}
 
     <div style="margin-top:12px; display:flex; gap:8px;">

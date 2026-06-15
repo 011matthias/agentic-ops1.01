@@ -165,6 +165,9 @@ def match_to_dict(m: Match) -> dict:
         "reason": m.reason,
         "requires_review": m.requires_review,
         "score": m.score,
+        "amount_score": m.amount_score,
+        "date_score": m.date_score,
+        "vendor_score": m.vendor_score,
     }
 
 
@@ -177,6 +180,9 @@ def match_from_dict(d: dict) -> Match:
         reason=d["reason"],
         requires_review=d.get("requires_review", False),
         score=d.get("score", 0),
+        amount_score=d.get("amount_score", 0.0),
+        date_score=d.get("date_score", 0.0),
+        vendor_score=d.get("vendor_score", 0.0),
     )
 
 
