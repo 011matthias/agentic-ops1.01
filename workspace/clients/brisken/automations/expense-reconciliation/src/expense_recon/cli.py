@@ -307,7 +307,20 @@ def _load_learned(cfg: dict, config_dir: Path):
     return MerchantCategoryLookup.from_db_path((config_dir / block["path"]).resolve())
 
 
-def reconcile(cfg: dict, config_dir: Path, *, learned=None) -> ReconcileResult:
+def _load_match_memory(cfg: dict, config_dir: Path):
+    """Build the Phase-2 (PR 2c) Match memory (vendor aliases + per-merchant
+    FX) from the same `learning:` config block. Absent => None."""
+    block = cfg.get("learning")
+    if not isinstance(block, dict) or not block.get("path"):
+        return None
+    from .learning import MatchMemory
+
+    return MatchMemory.from_db_path((config_dir / block["path"]).resolve())
+
+
+def reconcile(
+    cfg: dict, config_dir: Path, *, learned=None, match_memory=None
+) -> ReconcileResult:
     """Run ingest -> categorize -> match -> judgment and return the
     in-memory result, writing nothing to disk.
 
@@ -317,9 +330,10 @@ def reconcile(cfg: dict, config_dir: Path, *, learned=None) -> ReconcileResult:
     web UI.
 
     `learned` (Phase 2) is a `MerchantCategoryLookup` consulted on the
-    weak vendor-fallback path of categorization. The web UI passes it
-    directly; the CLI falls back to a `learning:` config block. None =>
-    no memory consult.
+    weak vendor-fallback path of categorization. `match_memory` (PR 2c)
+    is a `MatchMemory` (vendor aliases + per-merchant FX) feeding match
+    scoring/tie-break. The web UI passes both directly; the CLI falls back
+    to a `learning:` config block. None => no memory consult.
     """
     # LLM client first: folder-mode receipt ingest (slice 2.2 OCR)
     # needs it before any receipt is read.
@@ -371,7 +385,19 @@ def reconcile(cfg: dict, config_dir: Path, *, learned=None) -> ReconcileResult:
         receipts, client=llm_client, chart_of_accounts=account_labels, learned=learned
     )
 
-    outcome = match_month(transactions, receipts)
+    # PR 2c: learned vendor aliases + per-merchant FX feed match scoring /
+    # tie-break (never bucket membership). Empty memory => default config.
+    if match_memory is None:
+        match_memory = _load_match_memory(cfg, config_dir)
+    match_cfg = None
+    if match_memory:
+        from .matching.deterministic import MatchingConfig
+
+        match_cfg = MatchingConfig(
+            vendor_aliases=match_memory.vendor_aliases,
+            merchant_fx=dict(match_memory.merchant_fx),
+        )
+    outcome = match_month(transactions, receipts, match_cfg)
     logger.info(
         "matched=%d, judgment=%d, ambiguous=%d, unmatched_tx=%d, unmatched_rec=%d",
         len(outcome.matches),
