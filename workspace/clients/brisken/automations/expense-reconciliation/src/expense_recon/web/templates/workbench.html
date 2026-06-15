@@ -19,9 +19,11 @@
     </div>
     <div>
       <a class="btn" href="/runs/{{ view.run_id }}/report.xlsx">Download report (.xlsx)</a>
+      <button class="btn btn-secondary" onclick="commitMemory()" title="Teach the tool from the matches you confirmed and the categories you reclassified, so next month is less work.">Commit to memory</button>
       <a class="btn btn-secondary" href="/">New run</a>
     </div>
   </div>
+  <p id="memory-status" class="muted" style="margin-top:10px; display:none;"></p>
 
   <div class="stats" style="margin-top:16px;">
     <div class="stat"><div class="stat-value">{{ s.n_transactions }}</div><div class="stat-label">Transactions</div></div>
@@ -252,6 +254,28 @@
     });
     if (!res.ok) { alert("Could not save that category."); return; }
     sel.style.borderColor = "var(--green)";
+  }
+
+  async function commitMemory() {
+    const note = document.getElementById("memory-status");
+    note.style.display = "";
+    note.style.color = "var(--muted)";
+    note.textContent = "Saving what you confirmed...";
+    const res = await fetch(`/runs/${RUN_ID}/commit-memory`, { method: "POST" });
+    if (!res.ok) {
+      note.style.color = "var(--orange)";
+      note.textContent = "Could not commit to memory.";
+      return;
+    }
+    const data = await res.json();
+    const l = data.learned || {};
+    note.style.color = "var(--green)";
+    note.textContent =
+      `Learned: ${l.merchant_categories || 0} merchant categories, ` +
+      `${l.vendor_aliases || 0} vendor aliases, ${l.merchant_fx || 0} FX samples ` +
+      `(from ${l.confirmed_pairs || 0} confirmed matches` +
+      (l.skipped_mixed_category ? `; ${l.skipped_mixed_category} mixed-category vendor(s) skipped` : "") +
+      `). Next month's run will use these.`;
   }
 
   function filterRows() {

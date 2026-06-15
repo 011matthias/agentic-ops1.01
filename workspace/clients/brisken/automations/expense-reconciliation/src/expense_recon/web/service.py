@@ -38,6 +38,7 @@ from ..matching.types import (
     Receipt,
     Transaction,
 )
+from ..learning import LearningStore, learn_from_run
 from ..output.report_xlsx import write_report
 from .serialize import snapshot_from_dict, snapshot_to_dict
 from .store import (
@@ -628,3 +629,34 @@ def regenerate_report(
     out_path = Path(run.work_dir) / "report.xlsx"
     write_report(effective, transactions, receipts, out_path, parse_errors=parse_errors)
     return out_path
+
+
+def commit_to_memory(
+    run: RunRow,
+    decisions: dict[str, Decision],
+    overrides: dict,
+    learning_db_path: Path,
+    now_iso: str,
+) -> dict:
+    """Harvest this run's confirmed decisions into the durable learning
+    store (Phase 2 capture). This is the explicit finalize gate: only
+    confirmed matches (alias + FX) and explicit category reclassifications
+    (merchant -> category) teach; a half-reviewed run teaches nothing
+    wrong. Returns a summary of what was written."""
+    transactions, receipts, outcome, _ = snapshot_from_dict(run.snapshot)
+    effective = apply_decisions(outcome, transactions, receipts, decisions)
+    confirmed_tx_ids = {
+        tx_id for tx_id, d in decisions.items() if d.status == STATUS_CONFIRMED
+    }
+    with LearningStore(learning_db_path) as store:
+        summary = learn_from_run(
+            store,
+            transactions=transactions,
+            receipts=receipts,
+            outcome=effective,
+            confirmed_tx_ids=confirmed_tx_ids,
+            category_overrides=overrides,
+            source_run=run.run_id,
+            now_iso=now_iso,
+        )
+    return summary.as_dict()

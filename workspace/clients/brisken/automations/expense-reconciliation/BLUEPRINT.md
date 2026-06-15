@@ -342,6 +342,57 @@ by Chris's monthly runs, not by a pre-shared ground-truth month.
 
 ---
 
+## Slice 9 — Cross-run learning (Phase 2, in progress)
+
+**Goal.** Next month's pile is smaller because the tool remembers the
+reviewer's confirmed decisions instead of re-deriving them. Built on the
+web review-workbench (the sanctioned review surface), not the Excel
+round-trip — owner confirmed 2026-06-15.
+
+**Store** (`src/expense_recon/learning/`, opt-in SQLite `learning.sqlite`
+under the web data dir, all keys scoped by `legal_entity_id`, vendor keys
+normalized via the matcher's own `_normalize` so consult keys can't drift):
+
+| Table | Teaches | Consulted by |
+|---|---|---|
+| `merchant_category` | confirmed vendor → category (+ Zoho account) | Sort (2b) — promote to Tier-1 `LEARNED`, skip the LLM call |
+| `vendor_alias` | confirmed (statement-vendor, receipt-vendor) equivalence | Match (2c) — strengthen the token-similarity tie-break |
+| `merchant_fx` | observed implied FX rates per merchant + ccy pair (raw samples) | Judge (2c) — refine the band score, never widen the LD-5 bands |
+
+Conflict policy is latest-wins with a `decision_count` / `confirmed_count`
+audit trail (single-user tool, no quorum at n=1).
+
+**PR order: 2a → 2d → 2b → 2c** — the inspect/forget/reset escape hatch
+(2d) lands before any consult path, since the correction tool must exist
+before learned data can influence output.
+
+- **2a — capture (BUILT 2026-06-15, this PR).** `LearningStore` +
+  `learn_from_run` harvester + a "Commit to memory" action on the
+  workbench (`POST /runs/{id}/commit-memory`). EXPLICIT finalize gate
+  (owner decision #2): alias + FX from CONFIRMED matches only; merchant
+  category from explicit reclassifications only (a confirmed match does
+  not by itself confirm the LLM's category guess); a vendor whose
+  overrides disagree is skipped, never taught a wrong single mapping.
+  Capture-only — nothing reads the store yet. 15 tests
+  (`test_learning_store.py`, `test_learning_capture.py`,
+  `test_web_commit.py`); suite 288 green; `calibrate` exit 0.
+- **2d — `expense-recon memory` CLI (next):** list / forget / reset,
+  mirroring `runlog_cli`.
+- **2b — consult in Sort:** auto-apply to Tier-1 with a visible
+  provenance label + the override-retrains loop (owner decision #1, both
+  non-negotiable companions). **First commit of 2b adds a
+  categorization-accuracy metric to `calibrate`** (labeled fixture, %
+  correct, fails on regression) BEFORE the consult path — `calibrate`
+  today scores the reconciliation invariant + match scoring but NOT
+  categorization, so a subtly-wrong learned mapping would otherwise be
+  learning-blind (owner redline 2026-06-15).
+- **2c — consult in Match:** `MatchingConfig` gains optional
+  `vendor_aliases` + `merchant_fx`, populated from the store in
+  `reconcile()`; defaults empty so existing matcher tests + `calibrate`
+  are unchanged.
+
+---
+
 ## Slice 2 — LLM Layer (Receipt OCR + Real Judgment)
 
 **Goal.** Chris drops a folder of receipt images / PDFs instead of

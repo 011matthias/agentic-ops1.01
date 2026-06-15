@@ -31,6 +31,7 @@ from .service import (
     RunForm,
     RunInputError,
     build_view,
+    commit_to_memory,
     create_run,
     regenerate_report,
 )
@@ -61,6 +62,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     app = FastAPI(title="Brisken Expense Reconciliation")
     app.state.data_root = data_root_path
     app.state.db_path = db_path
+    # Durable cross-run memory (Phase 2). Separate db from the per-run web
+    # state: runs come and go, learned facts persist across months.
+    app.state.learning_db_path = data_root_path / "learning.sqlite"
     templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
     def open_store() -> RunStore:
@@ -210,6 +214,21 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 run_id, document_id, line_index, category, zoho_account, _now_iso()
             )
         return JSONResponse({"ok": True})
+
+    @app.post("/runs/{run_id}/commit-memory")
+    def post_commit_memory(run_id: str):
+        # Explicit finalize: fold THIS run's confirmed decisions into the
+        # durable learning store so next month consults them (Phase 2).
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found"}, status_code=404)
+            decisions = store.get_decisions(run_id)
+            overrides = store.get_category_overrides(run_id)
+        learned = commit_to_memory(
+            run, decisions, overrides, app.state.learning_db_path, _now_iso()
+        )
+        return JSONResponse({"ok": True, "learned": learned})
 
     @app.get("/runs/{run_id}/report.xlsx")
     def download_report(run_id: str):
