@@ -83,6 +83,7 @@ from .ingest.expense_csv import parse_expense_csv_tolerant
 from .ingest.receipts_csv import parse_receipts_csv_tolerant
 from .ingest.receipts_folder import parse_receipts_folder
 from .ingest.statement_csv import parse_statement_csv_tolerant
+from .ingest.statement_pdf import parse_statement_pdf_tolerant
 from .ingest.statement_xlsx import parse_statement_xlsx_tolerant
 from .llm.client import LLMClient, OpenAIClient
 from .llm.cost import CostTracker
@@ -117,20 +118,36 @@ def _load_statement(
     if not isinstance(s, dict):
         raise ConfigError("config.statement is missing or not an object")
 
-    required = ("path", "account_id", "legal_entity_id", "account_card_currency", "column_map")
-    missing = [k for k in required if k not in s]
-    if missing:
-        raise ConfigError(f"config.statement missing: {', '.join(missing)}")
+    if "path" not in s:
+        raise ConfigError("config.statement missing: path")
+    if "legal_entity_id" not in s:
+        raise ConfigError("config.statement missing: legal_entity_id")
 
     path = (config_dir / s["path"]).resolve()
     if not path.exists():
         raise ConfigError(f"statement file not found: {path}")
 
     suffix = path.suffix.lower()
-    column_map = s["column_map"]
+
+    # Chase statement PDF (2026-06-16): account_id comes from the per-card
+    # markers in the statement, and there is no column map. Only the path +
+    # legal entity (and an optional card currency) are needed.
+    if suffix == ".pdf":
+        return parse_statement_pdf_tolerant(
+            path=path,
+            legal_entity_id=s["legal_entity_id"],
+            account_card_currency=s.get("account_card_currency", "USD"),
+        )
+
+    # Tabular sources (CSV / Excel) carry one account and need a column map.
+    required = ("account_id", "account_card_currency", "column_map")
+    missing = [k for k in required if k not in s]
+    if missing:
+        raise ConfigError(f"config.statement missing: {', '.join(missing)}")
+
     kwargs = dict(
         path=path,
-        column_map=column_map,
+        column_map=s["column_map"],
         account_id=s["account_id"],
         legal_entity_id=s["legal_entity_id"],
         account_card_currency=s["account_card_currency"],
@@ -142,7 +159,7 @@ def _load_statement(
         sheet_name = s.get("sheet_name")
         return parse_statement_xlsx_tolerant(**kwargs, sheet_name=sheet_name)
     raise ConfigError(
-        f"statement.path must end in .csv / .xlsx / .xlsm, got {suffix!r}"
+        f"statement.path must end in .csv / .xlsx / .xlsm / .pdf, got {suffix!r}"
     )
 
 
