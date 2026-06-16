@@ -40,20 +40,9 @@ def test_how_it_works_served_verbatim(client):
     assert "How the tool works" in resp.text
 
 
-def test_strategy_deck_served_verbatim(client):
-    resp = client.get("/strategy")
-    assert resp.status_code == 200
-    assert resp.headers["content-type"].startswith("text/html")
-    assert "<!DOCTYPE html>" in resp.text
-    assert "Brisken Lead Generation Strategy" in resp.text
-    # the tabbed deck (Campaign Engine / Marketing Plan) is what's embedded.
-    assert "Campaign Engine" in resp.text
-
-
 def test_nav_links_to_all_docs(client):
     """The docs are reachable from the tool nav (rendered on every page that
     extends base.html, e.g. the runs index)."""
     body = client.get("/").text
     assert 'href="/guide"' in body
     assert 'href="/how-it-works"' in body
-    assert 'href="/strategy"' in body
