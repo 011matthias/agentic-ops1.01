@@ -175,6 +175,35 @@ class Receipt:
     ocr_text: str = ""
     line_items: tuple[LineItem, ...] = ()
 
+    # Zoho Expense report fields (BLUEPRINT 8.1 extension, 2026-06-16). A
+    # Zoho Expense report (ER-NNNNN) carries far more per line than the
+    # slice-1 receipts CSV; capturing it lets the tool's data and output hold
+    # the same information as the report. All optional (None for the slice-1
+    # receipts CSV and the slice-2 OCR folder). See ER-00214 for the shapes:
+    #
+    # * `payment_mode` — the paying card/account, e.g.
+    #   "1 - CorpServ 2838/1672 (Chase)". This is the bank/card the expense
+    #   was paid through; it is the account Dirk's "legal entity derived from
+    #   the account" (2026-06-16) keys on, the card a charge reconciles
+    #   against, and the cash/personal signal for the reimbursement case.
+    # * `paid_through` — the Zoho "Paid Through" account
+    #   ("ZZZ | Cash In Hand | DO NOT USE").
+    # * `zoho_category` — the Zoho GL category/account the report assigns,
+    #   e.g. "E100010 - Travel Expense". Carried as the posting account; the
+    #   tool's own AI category is the verify pass alongside it.
+    # * `exchange_rate` / `base_amount` — the report's own FX rate and
+    #   book-currency amount (1 BRL = 0.187586 USD -> $581.51), preserved
+    #   rather than re-derived.
+    # * `reimbursable` — the report "Reimbursable" / "Non Reimbursable" flag.
+    # * `expense_location` — the report "Expense Location".
+    payment_mode: str | None = None
+    paid_through: str | None = None
+    zoho_category: str | None = None
+    exchange_rate: Decimal | None = None
+    base_amount: Decimal | None = None
+    reimbursable: bool | None = None
+    expense_location: str | None = None
+
 
 @dataclass(frozen=True)
 class Match:

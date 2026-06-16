@@ -230,3 +230,95 @@ def test_parsed_receipt_is_matcher_ready(tmp_path):
     assert "EXP-A" in bound  # confident pairing on identical date/amount/vendor
     # reconciliation guarantee: nothing silently dropped
     assert "EXP-A" not in outcome.unmatched_receipts
+
+
+# --------------------------------------------------------------------------
+# Full Zoho Expense report fields (2026-06-16): payment mode, paid through,
+# GL category, FX rate, book amount, reimbursable flag, location. Shapes from
+# ER-00214 so the tool's data holds the same information as the report.
+# --------------------------------------------------------------------------
+
+ZOHO_FULL_HEADER = (
+    "Expense Date,Amount,Merchant,Currency,Report Number,Reference,Expense ID,"
+    "Receipt URL,Receipt Name,Payment Mode,Paid Through,Category,"
+    "Exchange Rate,Amount (USD),Reimbursable,Expense Location"
+)
+ZOHO_FULL_ROW = (
+    '2026-03-14,3099.99,MAGAZINE LUIZA S/A,BRL,ER-00214,795234,EXP-1,,,'
+    '1 - CorpServ 2838/1672 (Chase),ZZZ | Cash In Hand | DO NOT USE 2,'
+    'E100010 - Travel Expense,0.187586,581.51,Non Reimbursable,"Recife, Brazil"'
+)
+ZOHO_FULL_MAP = {
+    "expense_date": "Expense Date", "amount": "Amount", "vendor": "Merchant",
+    "currency": "Currency", "report_number": "Report Number", "reference": "Reference",
+    "document_id": "Expense ID", "receipt_url": "Receipt URL", "receipt_name": "Receipt Name",
+    "payment_mode": "Payment Mode", "paid_through": "Paid Through", "category": "Category",
+    "exchange_rate": "Exchange Rate", "amount_base": "Amount (USD)",
+    "reimbursable": "Reimbursable", "location": "Expense Location",
+}
+
+
+def test_parses_full_zoho_report_fields(tmp_path):
+    path = _write(tmp_path, ZOHO_FULL_HEADER, [ZOHO_FULL_ROW])
+    r = parse_expense_csv(path, "brisken-us", ZOHO_FULL_MAP)[0]
+    assert r.payment_mode == "1 - CorpServ 2838/1672 (Chase)"
+    assert r.paid_through == "ZZZ | Cash In Hand | DO NOT USE 2"
+    assert r.zoho_category == "E100010 - Travel Expense"
+    assert r.exchange_rate == Decimal("0.187586")
+    assert r.base_amount == Decimal("581.51")
+    assert r.reimbursable is False
+    assert r.expense_location == "Recife, Brazil"
+    assert r.detected_currency == "BRL"
+    assert r.detected_total == Decimal("3099.99")
+
+
+def test_absent_optional_column_is_skipped_not_fatal(tmp_path):
+    """The default map lists Payment Mode etc.; an export lacking those
+    columns must ingest cleanly (lenient optional), only present fields fill."""
+    path = _write(tmp_path, ZOHO_HEADER, ZOHO_ROWS)  # no Payment Mode / Category
+    receipts = parse_expense_csv(
+        path,
+        "brisken-us",
+        {**FULL_MAP, "payment_mode": "Payment Mode",
+         "category": "Category", "reimbursable": "Reimbursable"},
+        default_currency="USD",
+    )
+    assert len(receipts) == 3
+    assert receipts[0].payment_mode is None
+    assert receipts[0].zoho_category is None
+    assert receipts[0].reimbursable is None
+
+
+def test_reimbursable_flag_parsing(tmp_path):
+    header = "Expense Date,Amount,Merchant,Reimbursable"
+    rows = [
+        "2026-03-01,10.00,A,Reimbursable",
+        "2026-03-02,20.00,B,Non Reimbursable",
+        "2026-03-03,30.00,C,",
+    ]
+    path = _write(tmp_path, header, rows)
+    m = {
+        "expense_date": "Expense Date", "amount": "Amount",
+        "vendor": "Merchant", "reimbursable": "Reimbursable",
+    }
+    receipts = parse_expense_csv(path, "brisken-us", m)
+    assert [r.reimbursable for r in receipts] == [True, False, None]
+
+
+def test_zoho_category_carried_as_posting_account():
+    """categorize_receipts carries the Zoho GL category onto the line's
+    zoho_account (the posting account); the AI/keyword category is the verify
+    pass left alongside it."""
+    from expense_recon.categorize import categorize_receipts
+    from expense_recon.matching.types import Receipt
+
+    r = Receipt(
+        document_id="EXP-1", legal_entity_id="brisken-us",
+        detected_date=date(2026, 3, 14), detected_total=Decimal("581.51"),
+        detected_currency="USD", detected_vendor="MAGAZINE LUIZA",
+        zoho_category="E100010 - Travel Expense",
+    )
+    out = categorize_receipts([r])  # no client -> keyword stub
+    cat = out[0].line_items[0].categorization
+    assert cat is not None
+    assert cat.zoho_account == "E100010 - Travel Expense"

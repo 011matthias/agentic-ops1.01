@@ -136,6 +136,14 @@ def receipt_to_dict(r: Receipt) -> dict:
         "receipt_name": r.receipt_name,
         "ocr_text": r.ocr_text,
         "line_items": [lineitem_to_dict(li) for li in r.line_items],
+        # Zoho Expense report fields (2026-06-16).
+        "payment_mode": r.payment_mode,
+        "paid_through": r.paid_through,
+        "zoho_category": r.zoho_category,
+        "exchange_rate": _dec(r.exchange_rate),
+        "base_amount": _dec(r.base_amount),
+        "reimbursable": r.reimbursable,
+        "expense_location": r.expense_location,
     }
 
 
@@ -153,6 +161,13 @@ def receipt_from_dict(d: dict) -> Receipt:
         receipt_name=d.get("receipt_name"),
         ocr_text=d.get("ocr_text", ""),
         line_items=tuple(lineitem_from_dict(x) for x in d.get("line_items", [])),
+        payment_mode=d.get("payment_mode"),
+        paid_through=d.get("paid_through"),
+        zoho_category=d.get("zoho_category"),
+        exchange_rate=_as_dec(d.get("exchange_rate")),
+        base_amount=_as_dec(d.get("base_amount")),
+        reimbursable=d.get("reimbursable"),
+        expense_location=d.get("expense_location"),
     )
 
 

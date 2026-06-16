@@ -218,7 +218,7 @@ def _categorize_one(
             )
         else:
             categorized = tuple(_classify_line_keyword(li) for li in receipt.line_items)
-        return replace(receipt, line_items=categorized)
+        return _carry_zoho_account(replace(receipt, line_items=categorized))
 
     # No usable line items → the weak path that today re-pays for a vendor
     # guess and lands Tier-2. Memory FALLBACK first: a confirmed
@@ -228,8 +228,10 @@ def _categorize_one(
     synthesized = _synthesize_total_line(receipt)
     learned_cat = _learned_categorization(receipt, learned)
     if learned_cat is not None:
-        return replace(
-            receipt, line_items=(replace(synthesized, categorization=learned_cat),)
+        return _carry_zoho_account(
+            replace(
+                receipt, line_items=(replace(synthesized, categorization=learned_cat),)
+            )
         )
     if client is not None:
         classified = _classify_vendor_via_llm(
@@ -238,7 +240,28 @@ def _categorize_one(
         )
     else:
         classified = _classify_vendor_keyword(synthesized, receipt.detected_vendor)
-    return replace(receipt, line_items=(classified,))
+    return _carry_zoho_account(replace(receipt, line_items=(classified,)))
+
+
+def _carry_zoho_account(receipt: Receipt) -> Receipt:
+    """Carry the Zoho Expense GL category onto each line's categorization as
+    the posting account (Dirk 2026-06-16: Zoho expenses arrive pre-classified,
+    so Zoho's account is authoritative for posting; the tool's own AI category
+    is the verify pass shown alongside it). Only `zoho_account` is set from the
+    report; the AI/keyword category (our 8) is left untouched so the reviewer
+    sees both. No-op when the receipt carries no Zoho category."""
+    if not receipt.zoho_category:
+        return receipt
+    new_items = []
+    for li in receipt.line_items:
+        cat = li.categorization
+        if cat is not None:
+            new_items.append(
+                replace(li, categorization=replace(cat, zoho_account=receipt.zoho_category))
+            )
+        else:
+            new_items.append(li)
+    return replace(receipt, line_items=tuple(new_items))
 
 
 def _learned_categorization(

@@ -86,6 +86,19 @@ EXPENSE_OPTIONAL_KEYS: tuple[str, ...] = (
     "report_number",
     "receipt_url",
     "receipt_name",
+    # Full Zoho Expense report fields (2026-06-16). The report carries the
+    # paying card, the Zoho GL category, the FX rate + book amount, and the
+    # reimbursable flag; capturing them lets output hold the same information
+    # as the ER document. A mapped-but-absent optional column is skipped, not
+    # an error, so the default map can list every field without forcing every
+    # export to contain all of them.
+    "payment_mode",      # -> Receipt.payment_mode (the paying card/account)
+    "paid_through",      # -> Receipt.paid_through
+    "category",          # -> Receipt.zoho_category (Zoho GL account)
+    "exchange_rate",     # -> Receipt.exchange_rate
+    "amount_base",       # -> Receipt.base_amount (book-currency amount)
+    "reimbursable",      # -> Receipt.reimbursable (Reimbursable / Non Reimbursable)
+    "location",          # -> Receipt.expense_location
 )
 
 
@@ -134,13 +147,18 @@ def parse_expense_csv_tolerant(
             raise StatementParseError("Expense CSV has no header row")
 
         fieldnames = list(reader.fieldnames)
-        for logical_key, source_col in column_map.items():
+        # Effective copy: an absent REQUIRED column is fatal; an absent
+        # OPTIONAL column is simply dropped so the row reads as unmapped.
+        column_map = dict(column_map)
+        for logical_key, source_col in list(column_map.items()):
             if source_col not in fieldnames:
-                raise StatementParseError(
-                    f"Expense CSV missing column {source_col!r} "
-                    f"(mapped from logical key {logical_key!r}). "
-                    f"Available columns: {fieldnames}"
-                )
+                if logical_key in EXPENSE_REQUIRED_KEYS:
+                    raise StatementParseError(
+                        f"Expense CSV missing required column {source_col!r} "
+                        f"(mapped from logical key {logical_key!r}). "
+                        f"Available columns: {fieldnames}"
+                    )
+                del column_map[logical_key]
 
         seen_ids: dict[str, int] = {}
 
@@ -164,6 +182,15 @@ def parse_expense_csv_tolerant(
                 report_number = _opt(row, column_map, "report_number") or None
                 receipt_url = _opt(row, column_map, "receipt_url") or None
                 receipt_name = _opt(row, column_map, "receipt_name") or None
+
+                # Full Zoho Expense report fields (2026-06-16).
+                payment_mode = _opt(row, column_map, "payment_mode") or None
+                paid_through = _opt(row, column_map, "paid_through") or None
+                zoho_category = _opt(row, column_map, "category") or None
+                expense_location = _opt(row, column_map, "location") or None
+                exchange_rate = _opt_decimal(row, column_map, "exchange_rate")
+                base_amount = _opt_decimal(row, column_map, "amount_base")
+                reimbursable = _parse_reimbursable(_opt(row, column_map, "reimbursable"))
 
                 document_id = _opt(row, column_map, "document_id")
                 if not document_id:
@@ -199,6 +226,13 @@ def parse_expense_csv_tolerant(
                     report_number=report_number,
                     receipt_url=receipt_url,
                     receipt_name=receipt_name,
+                    payment_mode=payment_mode,
+                    paid_through=paid_through,
+                    zoho_category=zoho_category,
+                    exchange_rate=exchange_rate,
+                    base_amount=base_amount,
+                    reimbursable=reimbursable,
+                    expense_location=expense_location,
                 )
             )
 
@@ -220,3 +254,27 @@ def _opt(row: Mapping[str, str], column_map: Mapping[str, str], key: str) -> str
     if key not in column_map:
         return ""
     return (row.get(column_map[key]) or "").strip()
+
+
+def _opt_decimal(row: Mapping[str, str], column_map: Mapping[str, str], key: str):
+    """Parse an optional mapped numeric column to Decimal, or None when the
+    logical key is unmapped / the cell is blank. A non-numeric value raises
+    ValueError, which the row-level handler turns into a tolerant ParseIssue."""
+    raw = _opt(row, column_map, key)
+    if not raw:
+        return None
+    return parse_amount(raw)
+
+
+def _parse_reimbursable(raw: str):
+    """Map the Zoho report flag to a bool, or None when unknown. "Non
+    Reimbursable" -> False; "Reimbursable" -> True. Checks the "non" prefix
+    first because "reimbursable" is a substring of "non reimbursable"."""
+    s = (raw or "").strip().lower()
+    if not s:
+        return None
+    if s.startswith("non") or s in ("no", "false", "0", "n"):
+        return False
+    if "reimburs" in s or s in ("yes", "true", "1", "y"):
+        return True
+    return None
