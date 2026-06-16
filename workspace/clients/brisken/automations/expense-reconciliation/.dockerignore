@@ -1,0 +1,12 @@
+.venv/
+recon-web-data/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+tests/
+deliverables/
+examples/
+*.md
+fly.toml
+.git/

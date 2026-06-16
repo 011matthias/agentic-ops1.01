@@ -47,6 +47,7 @@ from .service import (
     validate_manual_match,
 )
 from .store import STATUS_CONFIRMED, VALID_STATUSES, RunStore
+from . import auth
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 
@@ -102,6 +103,51 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
 
     def open_store() -> RunStore:
         return RunStore(db_path)
+
+    # --- Password gate (hosted only) -------------------------------------
+    # Active iff EXPENSE_RECON_ACCESS_CODE is set. Loopback/local use leaves
+    # it unset and stays open; a public host MUST set it (this tool serves
+    # financial data). See auth.py.
+    @app.middleware("http")
+    async def require_login(request: Request, call_next):
+        if auth.gate_enabled() and not auth.path_is_open(request.url.path):
+            if not auth.token_valid(request.cookies.get(auth.COOKIE_NAME)):
+                if request.method == "GET":
+                    return RedirectResponse(url="/login", status_code=303)
+                return JSONResponse({"error": "authentication required"}, status_code=401)
+        return await call_next(request)
+
+    @app.get("/login", response_class=HTMLResponse)
+    def login_form(request: Request) -> HTMLResponse:
+        if not auth.gate_enabled():
+            return RedirectResponse(url="/", status_code=303)
+        return templates.TemplateResponse(request, "login.html", {"error": None})
+
+    @app.post("/login")
+    def login_submit(request: Request, code: str = Form("")):
+        if not auth.gate_enabled():
+            return RedirectResponse(url="/", status_code=303)
+        if not auth.code_matches(code):
+            return templates.TemplateResponse(
+                request, "login.html", {"error": "Wrong access code."}, status_code=401
+            )
+        resp = RedirectResponse(url="/", status_code=303)
+        resp.set_cookie(
+            auth.COOKIE_NAME, auth.issue_token(),
+            max_age=auth.SESSION_MAX_AGE, httponly=True,
+            secure=auth.cookie_is_secure(), samesite="lax",
+        )
+        return resp
+
+    @app.post("/logout")
+    def logout():
+        resp = RedirectResponse(url="/login", status_code=303)
+        resp.delete_cookie(auth.COOKIE_NAME)
+        return resp
+
+    @app.get("/healthz")
+    def healthz():
+        return JSONResponse({"status": "ok"})
 
     @app.get("/favicon.ico")
     def favicon():
