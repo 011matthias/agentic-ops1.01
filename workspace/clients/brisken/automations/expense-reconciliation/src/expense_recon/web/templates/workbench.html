@@ -295,6 +295,9 @@
       <a id="download-zoho" class="btn btn-secondary btn-small {{ '' if s.ready_to_post else 'disabled' }}"
          title="{{ 'Download the Zoho Books journal import' if s.ready_to_post else 'Clear the undecided rows first' }}"
          {% if s.ready_to_post %}href="/runs/{{ view.run_id }}/zoho.csv"{% endif %}>Zoho journal (.csv)</a>
+      <a id="download-reconciled" class="btn btn-secondary btn-small {{ '' if s.ready_to_post else 'disabled' }}"
+         title="{{ 'Download the flat reconciled data' if s.ready_to_post else 'Clear the undecided rows first' }}"
+         {% if s.ready_to_post %}href="/runs/{{ view.run_id }}/reconciled.csv"{% endif %}>Reconciled data (.csv)</a>
       <a id="download-report" class="btn btn-small {{ '' if s.ready_to_post else 'disabled' }}"
          title="{{ 'Download the review report' if s.ready_to_post else 'Clear the undecided rows first' }}"
          {% if s.ready_to_post %}href="/runs/{{ view.run_id }}/report.xlsx"{% endif %}>Download report (.xlsx)</a>
@@ -370,6 +373,7 @@
     document.getElementById("rb-unreconciled").textContent = parts.length ? parts.join(" · ") : "none";
     const dl = document.getElementById("download-report");
     const zoho = document.getElementById("download-zoho");
+    const recon = document.getElementById("download-reconciled");
     const head = document.getElementById("rb-headline");
     if (s.ready_to_post) {
       bar.className = "ready";
@@ -380,6 +384,9 @@
       zoho.classList.remove("disabled");
       zoho.setAttribute("href", `/runs/${RUN_ID}/zoho.csv`);
       zoho.setAttribute("title", "Download the Zoho Books journal import");
+      recon.classList.remove("disabled");
+      recon.setAttribute("href", `/runs/${RUN_ID}/reconciled.csv`);
+      recon.setAttribute("title", "Download the flat reconciled data");
     } else {
       bar.className = "notready";
       head.textContent = "Not ready to post";
@@ -389,6 +396,9 @@
       zoho.classList.add("disabled");
       zoho.removeAttribute("href");
       zoho.setAttribute("title", "Clear the undecided rows first");
+      recon.classList.add("disabled");
+      recon.removeAttribute("href");
+      recon.setAttribute("title", "Clear the undecided rows first");
     }
   }
 

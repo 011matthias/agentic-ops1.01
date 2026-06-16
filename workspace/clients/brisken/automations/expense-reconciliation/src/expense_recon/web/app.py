@@ -13,6 +13,8 @@ Routes:
     POST /runs/{id}/decisions   confirm / reject / pick a match (JSON)
     POST /runs/{id}/categories  reclassify one receipt line (JSON)
     GET  /runs/{id}/report.xlsx download the report with edits applied
+    GET  /runs/{id}/zoho.csv    download the Zoho journal import (matched)
+    GET  /runs/{id}/reconciled.csv  download the flat reconciled CSV
 """
 from __future__ import annotations
 
@@ -41,6 +43,7 @@ from .service import (
     forget_memory_vendor,
     matched_autopick_decisions,
     prepare_run,
+    regenerate_reconciled,
     regenerate_report,
     regenerate_zoho,
     reset_memory,
@@ -497,6 +500,24 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return FileResponse(
             path,
             filename=f"zoho-journal-{run_id}.csv",
+            media_type="text/csv",
+        )
+
+    @app.get("/runs/{run_id}/reconciled.csv")
+    def download_reconciled(run_id: str):
+        # The flat reconciled CSV — the CSV twin of the .xlsx report, with
+        # the reviewer's decisions + category overrides applied. Every
+        # statement line with its match status + matched-expense enrichment.
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return HTMLResponse("Run not found", status_code=404)
+            decisions = store.get_decisions(run_id)
+            overrides = store.get_category_overrides(run_id)
+        path = regenerate_reconciled(run, decisions, overrides)
+        return FileResponse(
+            path,
+            filename=f"reconciled-{run_id}.csv",
             media_type="text/csv",
         )
 
