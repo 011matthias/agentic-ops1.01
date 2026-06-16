@@ -219,13 +219,13 @@
 <main class="main-content">
 
 <section class="hero">
-  <span class="hero-badge">Tool walkthrough &middot; Path A standalone pipeline</span>
+  <span class="hero-badge">Tool walkthrough &middot; browser app + reconciliation engine</span>
   <h1>How the expense reconciliation tool works</h1>
-  <p class="hero-sub">A plain walk through what happens when the tool is handed a month of card activity and a set of receipts: how it reads them, matches every charge to its receipt, sorts each line into the right account, and hands back a review sheet plus a Books-ready journal. Nothing posts to Zoho on its own; the last step stays yours.</p>
+  <p class="hero-sub">A plain walk through what the tool does with a month of card activity and a set of receipts: how Chris runs it from the browser, how it matches every charge to its receipt, sorts each line into the right account, learns from what she confirms, and hands back a review screen plus a Books-ready journal. Nothing posts to Zoho on its own; the last step stays a person's call.</p>
   <div class="stats-row">
     <div class="stat-card"><div class="stat-value">3</div><div class="stat-label">receipt sources it can read</div></div>
     <div class="stat-card"><div class="stat-value">8</div><div class="stat-label">expense categories it sorts into</div></div>
-    <div class="stat-card"><div class="stat-value">255</div><div class="stat-label">automated tests behind it</div></div>
+    <div class="stat-card"><div class="stat-value">346</div><div class="stat-label">automated tests behind it</div></div>
     <div class="stat-card"><div class="stat-value">0</div><div class="stat-label">charges quietly dropped</div></div>
   </div>
 </section>
@@ -240,7 +240,7 @@
   <div class="flow-step"><span class="num">5</span><b>Judge</b><span>Send only the hard cases to a model for a second look.</span></div>
   <div class="flow-step"><span class="num">6</span><b>Hand back</b><span>A review sheet plus a Books-ready journal.</span></div>
 </div>
-<p>The tool is run once per month with a small settings file that points at the two inputs and says where to write the outputs. One command does the whole pass. There is also a preview mode that runs everything and prints a summary without writing a single file, so a run can be checked before it is kept.</p>
+<p>The engine runs the same six passes whether Chris drives it from the browser workbench (the everyday way) or from a single command (for a local run or automation). A preview mode runs everything and prints a summary without writing a single file, so a month can be checked before it is kept.</p>
 
 <div class="diagram" role="img" aria-label="Architecture: two inputs feed the engine, which writes to three tables and two output files.">
 <svg viewBox="0 0 980 320" xmlns="http://www.w3.org/2000/svg">
@@ -289,6 +289,16 @@
 </svg>
 </div>
 
+<h2 id="workbench">Where Chris works: the review screen</h2>
+<p class="h2-sub">The tool runs as a web app she opens in a browser. Nothing to install, nothing to set up each month.</p>
+<p>She opens a private web address and signs in with an access code, so only Brisken can reach it. She uploads the month's statement and the receipts, names the card and the entity, and starts the run. The pass works in the background behind a progress page, so she can leave the tab and come back to it.</p>
+<p>When it finishes, the review screen lists every charge. Each one shows its suggested receipt with a match score and the reason behind it. For each charge she can confirm the match, reject it, pick a different candidate, or, when nothing was found, assign a receipt by hand. Every receipt line carries a category she can change in place.</p>
+<p>A bar across the bottom tells her whether the month is ready to post, how many charges are still undecided, and how much is still unreconciled. The two downloads, the Zoho journal and the Excel review copy, unlock only once every charge is decided, so a half-finished month cannot be exported by accident. Keyboard shortcuts (j and k to move, c to confirm, r to reject) make a long month quick.</p>
+<div class="callout blue">
+  <span class="callout-title">Hosted in the EU, behind a password</span>
+  The app runs on EU servers over HTTPS, with its data on an encrypted disk, and an access code is required before any page loads. It can also be run on a single local machine when that is preferred; the access code applies to the hosted version.
+</div>
+
 <h2 id="inputs">What goes in</h2>
 <p class="h2-sub">Two things: the charges, and the proof for each charge.</p>
 <p>The <strong class="k">statement</strong> is the card or bank activity for the month, as a spreadsheet file. A small column map tells the tool which column holds the date, the amount, and the merchant, so the tool never hardcodes one bank's layout. A statement file can hold several cards at once; the Chase export does.</p>
@@ -325,7 +335,7 @@
 
 <h2 id="matching">Matching each charge to its receipt</h2>
 <p class="h2-sub">A plain match first. A model only when a plain match cannot settle it.</p>
-<p class="lead">The rule here is Dirk's: no model where a straightforward match already works. When a card charge and a receipt share the same card, the same day, and the same amount, the tool pairs them on the spot with full confidence and moves on. The model is never consulted for the easy majority.</p>
+<p class="lead">The rule here is Dirk's: no model where a straightforward match already works. When a card charge and a receipt share the same card, the same day, and the same amount, the tool pairs them on the spot with full confidence and moves on. The small AI model (gpt-4o-mini) is never consulted for the easy majority; it only sees the hard cases, and only when AI is switched on.</p>
 
 <h3>When the currencies differ</h3>
 <p>Travel makes this the interesting part. A receipt in euros or reais sits against a charge that posted in dollars, so the amounts will not line up to the cent. The tool checks how far apart they are once converted, and sorts the pair into one of three bands. The width of each band came from real Brisken receipts, not a guess.</p>
@@ -355,13 +365,18 @@
 
 <h2 id="categories">Sorting each line into an account</h2>
 <p class="h2-sub">Eight categories, and a confidence floor under every call.</p>
-<p>Before matching, the tool reads each receipt's line items and sorts them into one of eight categories: travel and transport, meals and entertainment, software and subscriptions, office supplies, equipment and hardware, marketing, professional services, and premises. It works from the line item itself, not from the merchant name, so a hardware charge at a general store still lands as hardware. Every call carries a confidence score, and anything under the floor is set aside for you rather than forced.</p>
+<p>Before matching, the tool reads each receipt's line items and sorts them into one of eight categories: travel and transport, meals and entertainment, software and subscriptions, office supplies, equipment and hardware, marketing, professional services, and premises. It works from the line item itself, not from the merchant name, so a hardware charge at a general store still lands as hardware. Every call carries a confidence score, and anything under the floor is set aside for you rather than forced. When AI categorization is switched on, this sorting and the currency judgment run on the small AI model (gpt-4o-mini); switched off, the tool falls back to a keyword classifier and still finishes the run.</p>
 <div class="tiers">
   <div class="tier"><span class="lvl">Tier 1</span><b>From the line</b><span>Read straight from the receipt's line item. Trusted; goes through.</span></div>
   <div class="tier"><span class="lvl">Tier 2</span><b>From the merchant</b><span>Used only when a receipt has no line detail. Marked so you give it a quick check.</span></div>
   <div class="tier"><span class="lvl">Tier 3</span><b>Left for you</b><span>Confidence too low, or nothing to go on. The account cell is left blank to assign.</span></div>
 </div>
 <p>The tool never writes an account it cannot back up. When the picked account does not exist in Brisken's chart of accounts, it flags the line as needing an account rather than inventing a plausible one.</p>
+
+<h2 id="memory">It gets better each month</h2>
+<p class="h2-sub">What Chris confirms once, the tool reuses next time.</p>
+<p>After a run she is happy with, one button (Commit to memory) saves what she confirmed: which category each merchant belongs to, the bank's short name for a merchant tied to the receipt's full name, and real foreign-exchange samples per merchant. The next month those merchants come pre-filled, so each run is lighter than the last.</p>
+<p>A Memory page shows everything the tool has learned. A Forget button drops a merchant that was learned wrong, so the next run treats it as new. This is separate from the record tables below: memory is what the tool has learned from Chris; the tables are where it files the raw inputs.</p>
 
 <h2 id="tables">The tool keeps its own records</h2>
 <p class="h2-sub">So the work stands on its own, even if Zoho is ever switched off.</p>
@@ -398,14 +413,14 @@
 </div>
 
 <h2 id="outputs">What you get back</h2>
-<p class="h2-sub">A sheet to review, and a journal to import when you are ready.</p>
+<p class="h2-sub">Two downloads, unlocked once every charge is decided.</p>
 <div class="zones two">
   <div class="zone zone-orange">
-    <h3>The Excel review sheet</h3>
+    <h3>The Excel review copy</h3>
     <ul>
-      <li>Every charge, its receipt, and the matched outcome side by side.</li>
-      <li>Rows colored by how the category was decided, so the ones that want a check stand out.</li>
-      <li>A separate tab lists anything the tool could not read, so nothing is silently skipped.</li>
+      <li>A Summary tab, then one tab per card, plus Needs Review, Unmatched, and Errors tabs.</li>
+      <li>Rows colored by how each category was decided, so the ones that want a check stand out.</li>
+      <li>A record of the same review done on screen, for the file or for anyone who prefers a spreadsheet.</li>
     </ul>
   </div>
   <div class="zone zone-orange">
@@ -429,8 +444,9 @@
 </table>
 
 <h2 id="running">Running it</h2>
-<p class="h2-sub">One command, one settings file.</p>
-<p>A run is one command pointed at a settings file. The settings file names the two inputs, their column maps, and which outputs to write. Here is the command, with the preview option underneath:</p>
+<p class="h2-sub">The everyday way is the browser; the command line is there for a local run or automation.</p>
+<p><strong class="k">In the browser.</strong> Chris opens the private link, signs in with the access code, uploads the statement and the receipts, reviews on screen, and downloads the journal and the review copy. Nothing to install.</p>
+<p><strong class="k">From the command line.</strong> A run is one command pointed at a settings file that names the two inputs, their column maps, and which outputs to write. Here is the command, with the preview option underneath:</p>
 <div class="codeblock">
   <button class="copy" type="button">Copy</button>
   <pre>expense-recon --config april.json
@@ -459,15 +475,16 @@ expense-recon --config april.json --dry-run</pre>
   <li><strong class="k">A pre-flight check.</strong> A <code>doctor</code> command looks over the settings and the input files before a real run, and points at anything missing or misnamed.</li>
   <li><strong class="k">A record of every run.</strong> When asked to, the tool logs each run and what it decided, so you can later ask what was done in a given month and compare two runs.</li>
   <li><strong class="k">Nothing posts on its own.</strong> The journal is written as a file. Posting it into Zoho is always a deliberate, human step.</li>
+  <li><strong class="k">Access is gated.</strong> The hosted app sits behind an access code over HTTPS, on EU servers with the data on an encrypted disk. The code can be changed at any time.</li>
 </ul>
 <div class="callout">
   <span class="callout-title">Built to stand on real months</span>
-  The whole pipeline is checked by 255 automated tests and has been run end to end on real Brisken travel months across three currencies, with every charge accounted for and the currency matching holding without over-pairing.
+  The whole pipeline is checked by 346 automated tests and has been run end to end on real Brisken travel months across three currencies, with every charge accounted for and the currency matching holding without over-pairing.
 </div>
 
 <div class="footer">
   <div>Brisken &middot; UnpauseAI &middot; admin@unpauseai.com</div>
-  <div>Last updated: 2026-06-12</div>
+  <div>Last updated: 2026-06-16</div>
 </div>
 
 </main>
