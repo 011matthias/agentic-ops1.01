@@ -360,14 +360,13 @@
   <div class="nav-links">
     <a href="#problem">Problem</a>
     <a href="#platform">Platform</a>
-    <a href="#products">Products</a>
-    <a href="#report">Research</a>
     <a href="#ai">AI</a>
-    <a href="#answers">Answers</a>
+    <a href="#products">Products</a>
+    <a href="#trust">Trust</a>
   </div>
   <div class="nav-right">
     <span class="nav-status">Prototype</span>
-    <a href="#demo" class="btn btn-primary nav-cta">Book a demo</a>
+    <a href="#products" class="btn btn-primary nav-cta">More details</a>
     <button class="nav-theme" onclick="(function(){
       var d=document.documentElement;
       var c=d.getAttribute('data-theme')==='dark'?'light':'dark';
@@ -383,7 +382,7 @@
       <div class="hero-copy">
         <span class="hero-badge">Modern financial-data platform for SAP, AI built in</span>
         <h1>Financial data, solved end to end.</h1>
-        <p class="hero-sub">OnePilot is the modern platform for market data, trades, bank files and remittances in SAP. AI gives your team one interface across every system, governed and no code. You buy the outcome, not another integration project.</p>
+        <p class="hero-sub">OnePilot is the governed, no-code platform that moves market data, trades, bank files and remittances in and out of SAP. AI agents do the repetitive work inside your controls. You buy the outcome, not another integration project.</p>
         <div class="hero-actions">
           <a href="#demo" class="btn btn-primary">Book a demo</a>
           <a href="#report" class="linkcta">Read the research <span class="arr">&#8594;</span></a>
@@ -481,16 +480,9 @@
         <p>Staff reading remittance emails and PDFs and retyping them into cash application, line by line.</p>
       </div>
     </div>
-    <a href="#report" class="linkcta">See the Shadow Integration Report <span class="arr">&#8594;</span></a>
-  </div>
-</section>
-
-<section class="section" id="report">
-  <div class="wrap">
-    <span class="eyebrow">The Shadow Integration Report</span>
-    <h2>SAP treasury teams describe this work in their own hiring ads</h2>
-    <p class="section-sub">We read public SAP-treasury job postings, where companies spell out the manual data work they are hiring to do.</p>
-    <div class="report">
+    <div class="report" id="report" style="margin-top:18px;">
+      <span class="eyebrow">Our research</span>
+      <h3 style="font-size:18px;margin:4px 0 12px;">SAP treasury teams describe this work in their own hiring ads</h3>
       <div class="report-grid">
         <div>
           <div class="big-stat">81%</div>
@@ -501,7 +493,7 @@
           <div class="mini"><span class="v">38%</span><span class="t">name a specific outside data or trading vendor whose feed has to reach SAP.</span></div>
         </div>
       </div>
-      <p class="method">Based on a first sample of 21 live postings, read and coded by hand (2026). We are widening it into a published figure. Full method and sources on request.</p>
+      <p class="method">From our own read of SAP-treasury hiring ads (first sample of 21, 2026), being widened into a published figure. Reading this market is what we do all day; method and sources on request.</p>
     </div>
   </div>
 </section>
@@ -509,8 +501,8 @@
 <section class="section" id="platform">
   <div class="wrap">
     <span class="eyebrow">The platform</span>
-    <h2>One governed platform, configured not coded</h2>
-    <p class="section-sub">OnePilot is a no-code orchestration layer on SAP Business Technology Platform. It connects SAP and non-SAP systems both ways, and governs the data end to end.</p>
+    <h2>One governed platform, configured by AI, not hand-coded</h2>
+    <p class="section-sub">OnePilot is a no-code orchestration layer on SAP Business Technology Platform. AI agents and a context-engineering layer learn your systems and recommend each mapping; you approve it, and the feed runs governed end to end, SAP and non-SAP, both ways.</p>
     <div class="flow">
       <div class="flow-step"><span class="num">1</span><b>Ingest</b><span>Any source and format: Bloomberg, Refinitiv, 360T, OANDA, central banks, banks, files, email.</span></div>
       <div class="flow-step"><span class="num">2</span><b>Validate and normalize</b><span>Cleansing, mapping, calculations, anomaly detection, before anything reaches SAP.</span></div>
@@ -529,92 +521,16 @@
   </div>
 </section>
 
-<section class="section" id="products">
-  <div class="wrap">
-    <span class="eyebrow">The suite</span>
-    <h2>One platform, the apps that remove each manual step</h2>
-    <p class="section-sub">Lead with Market Data Hub and Trade Automation; the rest run on the same governed framework.</p>
-    <div class="grid-4">
-      <div class="card">
-        <span class="lead">Flagship</span>
-        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg></span>
-        <h3>Market Data Hub</h3>
-        <p>Govern rates, curves and prices from every provider into SAP from one place, no code.</p>
-        <a href="#demo" class="linkcta">Book a demo <span class="arr">&#8594;</span></a>
-      </div>
-      <div class="card">
-        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg></span>
-        <h3>Trade Automation</h3>
-        <p>Straight-through capture from execution venue to SAP deal creation, no re-keying.</p>
-        <a href="#demo" class="linkcta">Book a demo <span class="arr">&#8594;</span></a>
-      </div>
-      <div class="card">
-        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11c3-4 6-4 9 0s6 4 9 0M3 16c3-4 6-4 9 0s6 4 9 0"/></svg></span>
-        <h3>Cash Flow &amp; Exposure Hub</h3>
-        <p>Collect cash and exposure data from any source into SAP for forecasting and hedging.</p>
-        <a href="#demo" class="linkcta">Book a demo <span class="arr">&#8594;</span></a>
-      </div>
-      <div class="card">
-        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg></span>
-        <h3>Bank Fee Portal</h3>
-        <p>Read any bank-fee format, enrich for analytics, and surface overcharges.</p>
-        <a href="#demo" class="linkcta">Book a demo <span class="arr">&#8594;</span></a>
-      </div>
-      <div class="card">
-        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18v12H3z"/><path d="M3 10h18M7 15h4"/></svg></span>
-        <h3>Credit Data Hub</h3>
-        <p>Turn credit data from APIs and PDFs into structured, scored input for SAP Credit Management.</p>
-        <a href="#demo" class="linkcta">Book a demo <span class="arr">&#8594;</span></a>
-      </div>
-      <div class="card">
-        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19c0-8 6-14 14-14 0 8-6 14-14 14zM6 18c3-3 6-5 9-6"/></svg></span>
-        <h3>ESG Data Hub</h3>
-        <p>Normalize ESG scores from many providers into SAP Sustainability Control Tower.</p>
-        <a href="#demo" class="linkcta">Book a demo <span class="arr">&#8594;</span></a>
-      </div>
-      <div class="card">
-        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h13v10H3z"/><path d="M3 8l8 5 5-3"/><path d="M19 3v4M17 5h4"/></svg></span>
-        <h3>Remittance Advice Gate</h3>
-        <p>AI reads unstructured remittances and posts them straight into SAP cash application.</p>
-        <a href="#demo" class="linkcta">Book a demo <span class="arr">&#8594;</span></a>
-      </div>
-      <div class="card">
-        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/></svg></span>
-        <h3>AI Digital Workforce</h3>
-        <p>One AI interface to work across SAP and every system around it.</p>
-        <a href="#demo" class="linkcta">Book a demo <span class="arr">&#8594;</span></a>
-      </div>
-    </div>
-  </div>
-</section>
-
 <section class="section section-ai" id="ai">
   <div class="wrap">
     <span class="eyebrow">AI</span>
-    <h2>One AI interface across every system your team works in</h2>
-    <p class="section-sub">Finance teams move between SAP, market-data terminals, bank portals, spreadsheets and email all day. OnePilot puts AI over them as a single interface, so the work happens in one place, inside your governance.</p>
-
-    <div class="ai-demo">
-      <span class="ai-demo-tag">One interface, every system</span>
-      <div class="ai-demo-head">
-        <h3>Ask once, instead of switching between tools</h3>
-        <p>Ask in plain language and the AI reads, retrieves and acts across the systems you connect: pull a position, draft a confirmation, post a record, check a rate, without opening three applications to do it.</p>
-      </div>
-      <div class="ai-systems">
-        <span class="ai-sys-lbl">One interface across</span>
-        <span class="sys-chip">SAP</span>
-        <span class="sys-chip">Market-data feeds</span>
-        <span class="sys-chip">Bank portals</span>
-        <span class="sys-chip">Email</span>
-        <span class="sys-chip">Files and spreadsheets</span>
-      </div>
-    </div>
-
+    <h2>AI agents that work inside your SAP governance</h2>
+    <p class="section-sub">OnePilot's AI is part of the platform, not a bolt-on chat box. Agents read, retrieve and act across the systems you connect, with every step on the record and inside the controls you set.</p>
     <div class="grid-2">
       <div class="card">
         <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 9h18M6.5 6.5h.01M9 6.5h.01"/></svg></span>
-        <h3>Why it matters</h3>
-        <p>Your team stops bouncing between a dozen systems and re-keying between them. They ask one interface and stay in it, and every step is on the record.</p>
+        <h3>What it does</h3>
+        <p>Your team hands the repetitive cross-system steps to an agent: pull a position, draft a confirmation, post a record, check a rate, then reviews the result instead of doing each one by hand.</p>
       </div>
       <div class="card">
         <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
@@ -622,11 +538,33 @@
         <p>Every action is audit-logged. Four-eye and segregation of duties apply where you want them. The same governance that runs OnePilot runs the AI, so it never acts outside the controls you set.</p>
       </div>
     </div>
-
     <div class="callout">
       <b>Live today</b>
       OnePilot runs AI in production now. An agricultural-sector company posts remittances into S/4HANA on a ChatGPT-powered gate, and a chemicals company runs an AI funding-request process across a complex SAP integration. Ask us for the numbers on the demo.
     </div>
+  </div>
+</section>
+
+<section class="section" id="products">
+  <div class="wrap">
+    <span class="eyebrow">The suite</span>
+    <h2>Two flagship apps, one platform underneath</h2>
+    <p class="section-sub">Market Data Hub and BST, Brisken Smart Trading, lead the suite. The rest run on the same governed framework.</p>
+    <div class="grid-2">
+      <div class="card">
+        <span class="lead">Flagship</span>
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg></span>
+        <h3>Market Data Hub</h3>
+        <p>Govern rates, curves and prices from every provider into SAP from one place, no code.</p>
+      </div>
+      <div class="card">
+        <span class="lead">Flagship</span>
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg></span>
+        <h3>BST, Brisken Smart Trading</h3>
+        <p>Straight-through capture from execution venue to SAP deal creation, no re-keying.</p>
+      </div>
+    </div>
+    <p class="section-sub" style="margin-top:16px;">On the same framework: Cash Flow &amp; Exposure Hub, Bank Fee Portal, Credit Data Hub, ESG Data Hub, Remittance Advice Gate, and the AI Digital Workforce.</p>
   </div>
 </section>
 
@@ -657,8 +595,8 @@
 
 <section class="section" id="trust">
   <div class="wrap">
-    <span class="eyebrow">Trust</span>
-    <h2>Why SAP teams trust OnePilot</h2>
+    <span class="eyebrow">What we do, and the proof</span>
+    <h2>Governed financial-data integration for SAP, proven by partners, certifications and live customers</h2>
     <div class="grid-2">
       <div class="card">
         <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="6" r="2.2"/><circle cx="12" cy="18" r="2.2"/><path d="M8 6h8M7.5 7.7l3.4 8.6M16.5 7.7l-3.4 8.6"/></svg></span>
@@ -687,6 +625,17 @@
         <h3>Chemicals</h3>
         <p>An AI funding-request process, fully automated across a complex SAP integration.</p>
       </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="demo">
+  <div class="wrap">
+    <div class="cta-band">
+      <h2>See it on your own SAP setup</h2>
+      <p>A short demo maps OnePilot onto your actual data flow into SAP. Fifteen to twenty minutes, no preparation needed.</p>
+      <a href="#demo" class="btn btn-primary">Book a demo</a>
+      <p class="cta-fine">SAP Co-Innovation Partner &middot; ISO 27001 &middot; SOC 1 Type II</p>
     </div>
   </div>
 </section>
@@ -731,13 +680,11 @@
   </div>
 </section>
 
-<section class="section" id="demo">
+<section class="section" id="feedback" style="padding-top:0;">
   <div class="wrap">
-    <div class="cta-band">
-      <h2>See it on your own SAP setup</h2>
-      <p>A short demo maps OnePilot onto your actual data flow into SAP. Fifteen to twenty minutes, no preparation needed.</p>
-      <a href="#demo" class="btn btn-primary">Book a demo</a>
-      <p class="cta-fine">SAP Co-Innovation Partner &middot; ISO 27001 &middot; SOC 1 Type II</p>
+    <div class="callout">
+      <b>Reviewing this prototype?</b>
+      Tell us what is unclear, wrong, or missing. On the live site this is a one-click feedback form; for now, note it on the demo call or in your reply.
     </div>
   </div>
 </section>
@@ -754,7 +701,7 @@
         <h4>Products</h4>
         <ul>
           <li><a href="#products">Market Data Hub</a></li>
-          <li><a href="#products">Trade Automation</a></li>
+          <li><a href="#products">BST, Brisken Smart Trading</a></li>
           <li><a href="#products">Bank Fee Portal</a></li>
           <li><a href="#products">Remittance Advice Gate</a></li>
           <li><a href="#ai">AI Digital Workforce</a></li>
@@ -768,6 +715,7 @@
           <li><a href="#platform">The platform</a></li>
           <li><a href="#answers">Answers</a></li>
           <li><a href="#demo">Book a demo</a></li>
+          <li><a href="#feedback">Feedback</a></li>
         </ul>
       </div>
       <div>
@@ -782,7 +730,7 @@
     </div>
     <div class="footer-bottom">
       <div>OnePilot by Brisken &middot; Houston, TX &middot; Prototype: content and layout for review, brand assets are a stand-in.</div>
-      <div>Last updated: 2026-06-16</div>
+      <div>Last updated: 2026-06-17</div>
     </div>
   </div>
 </footer>
@@ -836,6 +784,8 @@
   results.addEventListener('click', function(){ close(); });
 })();
 </script>
+
+<a href="#feedback" class="feedback-fab" aria-label="Send feedback" style="position:fixed;right:18px;bottom:18px;z-index:60;background:var(--accent);color:#fff;padding:10px 16px;border-radius:999px;font-size:13px;font-weight:700;text-decoration:none;box-shadow:var(--shadow-lift);">Feedback</a>
 
 </body>
 </html>
