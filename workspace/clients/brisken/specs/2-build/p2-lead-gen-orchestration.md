@@ -6,7 +6,7 @@ stage: build
 orchestrator: none            # manual-first; n8n automation candidates in §7
 version: 0.1.1
 created: 2026-06-12
-updated: 2026-06-15
+updated: 2026-06-16
 trigger: manual
 systems:
   - linkedin-sales-navigator   # own seat, to provision at go-live (the ONLY direct-outreach channel)
@@ -60,6 +60,21 @@ warmth, not volume.
 - **Products narrow 8->3:** Market Data Hub + Trade Automation + OnePilot
   platform; the other apps are subfunctions/proof (Remittance/Calvin =
   the best forwardable asset, not a standalone campaign).
+- **WhatsApp evaluated and excluded as an acquisition channel (agent
+  assessment 2026-06-16, owner to confirm).** Raised as a possible new
+  outreach angle, eventually openclaw-automated. Rejected for this
+  motion on three grounds: (1) it is a colder, more intrusive channel
+  than the cold email already proven dead here (0 leads on ~2M sends),
+  so it adds volume where the diagnosis calls for warmth; (2) US
+  enterprise treasury does not transact on WhatsApp and the ICP's
+  personal mobile numbers are not ethically or reliably sourceable;
+  (3) openclaw-automated WhatsApp Web outreach violates WhatsApp ToS
+  (number-ban risk) plus UWG §7 for any EU tail. Narrow legitimate uses
+  (post-consent demo logistics, inbound "WhatsApp us" surfaces, non-US
+  WhatsApp-native ICPs such as OnePilot for FSI, or the DE Route-2 local
+  motion) are not the wave-1 enterprise-SAP motion. The automation
+  instinct redirects to the §7 weekly trigger-detection radar sweep,
+  which is ToS-clean and compounds.
 
 Sections 1 and 9-11 hold as written. Sections 2-3 (the engine table's
 email rows) and 7 (Instantly automation) are superseded by this section

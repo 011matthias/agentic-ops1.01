@@ -6,7 +6,7 @@ stage: spec
 orchestrator: none            # manual-first; automation candidates listed in Phase 4
 version: 0.4.1
 created: 2026-06-11
-updated: 2026-06-15
+updated: 2026-06-16
 trigger: manual
 systems:
   - linkedin-sales-navigator   # own seat, to be provisioned (NOT Meji's)
@@ -15,7 +15,7 @@ systems:
   - neverbounce
   - google-sheets              # lead tracker v1
 last_changes: "Strategy hardening 2026-06-12 (owner): (1) COLD EMAIL RETIRED. Brisken already ran ~150 mailboxes / ~2M cold emails over an extended period for 0 leads; the buy is too high-risk to grant a meeting cold. Track B (cold email, Instantly, lookalike domains, warm-up) is dropped. (2) Product focus narrows 8->3: Market Data Hub + Trade Automation + OnePilot platform; the other 5 apps become subfunctions/proof under the OnePilot story (Remittance/Calvin kept as the best forwardable proof asset, not a standalone campaign). (3) The motion is demand-gen + borrowed-trust + a precision-LinkedIn tail, spine = a trigger-detection radar (context/lead-generation/targeting-radar.md). Diagnosis: Brisken has a discovery problem, not a closing problem (>90% close); the metric is warm triggered at-bats/month. (4) NEW disposition ICP: data-vendor users (Bloomberg/Refinitiv/360T/FXall/OANDA/CME + SAP) = proven pain, not firmographic guess; routes the product (market data->MDH, trading venue->Trade). (5) SAP co-sell + active vendor referral moved OFF the critical path (slow, Brisken-driven); Store-AEO + SAP-partner badge + reverse-sourced vendor signal are the dependable near-term levers."
-red_team_hardening_2026-06-15: "Applied the cheap red-team fixes (owner directive: build to presentable, no Dirk contact yet). Attribution window 12mo->18mo from demo date + dated account-lock list (findings A+B). Radar §6 retagged to §5 (Colgate/Corteva A1, rest B; vendor-unconfirmed != proven pain). Kill gates G1 wk4/G2 wk8/G3 wk12 added to orchestration §5.1 + the deck. Deck close-rate transfer fixed (funnel terminus, stat-card, honest-expectations population-split); 'Agreed' -> 'your offer as we understood it'. The pre-outreach Dirk email (the highest-ER fix) is deliberately NOT drafted; held for the present-to-Dirk step."
+red_team_hardening_2026-06-16: "Applied the cheap red-team fixes (owner directive: build to presentable, no Dirk contact yet). Attribution window 12mo->18mo from demo date + dated account-lock list (findings A+B). Radar §6 retagged to §5 (Colgate/Corteva A1, rest B; vendor-unconfirmed != proven pain). Kill gates G1 wk4/G2 wk8/G3 wk12 added to orchestration §5.1 + the deck. Deck close-rate transfer fixed (funnel terminus, stat-card, honest-expectations population-split); 'Agreed' -> 'your offer as we understood it'. The pre-outreach Dirk email (the highest-ER fix) is deliberately NOT drafted; held for the present-to-Dirk step."
 next_steps:
   - "Lane 1 (autonomous, now): run the targeting radar -- vendor-tag + trigger-verify the 7 JOB-signal accounts with public evidence; rank into tiers"
   - "Lane 1 (autonomous): build the MDH 'your [vendor] feed into SAP, mapped' teardown + ABM 1-pager template + Calvin/Remittance forwardable clip brief"
