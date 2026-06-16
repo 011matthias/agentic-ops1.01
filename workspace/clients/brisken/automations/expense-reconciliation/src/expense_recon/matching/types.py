@@ -133,6 +133,18 @@ class Transaction:
     vendor_from_statement: str
     raw_text: str = ""
 
+    # Foreign-purchase detail from the statement (2026-06-16, Chase PDF
+    # ingest). A USD card posts the converted USD in `amount`; the statement
+    # also prints the original purchase as a two-line FX detail
+    # ("EURO / 27.00 X 1.175185185 (EXCHG RATE)"). Captured so the bank
+    # data is preserved in full (Dirk: "all data from the bank statement
+    # must stay as it was") and a foreign receipt can later be matched on
+    # the original amount/currency rather than only the implied-rate band.
+    # None for same-currency (USD) charges.
+    original_amount: Decimal | None = None     # purchase amount before conversion
+    original_currency: str | None = None       # ISO of the original currency (EUR, BRL, ...)
+    fx_rate: Decimal | None = None             # rate the bank applied (original -> card)
+
 
 @dataclass(frozen=True)
 class Receipt:

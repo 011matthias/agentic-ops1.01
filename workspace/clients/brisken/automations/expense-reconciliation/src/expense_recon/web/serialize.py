@@ -104,6 +104,9 @@ def transaction_to_dict(t: Transaction) -> dict:
         "account_card_currency": t.account_card_currency,
         "vendor_from_statement": t.vendor_from_statement,
         "raw_text": t.raw_text,
+        "original_amount": _dec(t.original_amount),
+        "original_currency": t.original_currency,
+        "fx_rate": _dec(t.fx_rate),
     }
 
 
@@ -119,6 +122,9 @@ def transaction_from_dict(d: dict) -> Transaction:
         account_card_currency=d["account_card_currency"],
         vendor_from_statement=d["vendor_from_statement"],
         raw_text=d.get("raw_text", ""),
+        original_amount=_as_dec(d.get("original_amount")),
+        original_currency=d.get("original_currency"),
+        fx_rate=_as_dec(d.get("fx_rate")),
     )
 
 
