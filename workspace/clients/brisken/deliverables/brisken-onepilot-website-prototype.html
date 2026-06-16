@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- deliverable-allow: copy-clipboard | reason: marketing-site prototype with no code/command blocks; copy requirement applies to code blocks only -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OnePilot by Brisken: a modern financial data platform for SAP, with AI built in</title>
+<meta name="description" content="OnePilot is Brisken's modern platform for financial data in SAP: market data, trades, bank files and remittances handled end to end, with AI your team uses as one interface across every system. Governed, no-code, built on SAP BTP. An SAP Co-Innovation Partner.">
+<script>(function(){var t=localStorage.getItem('theme');
+  var d=document.documentElement;
+  d.setAttribute('data-theme',
+    t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');
+})();</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "How do I get Bloomberg market data into SAP TRM automatically?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "The SAP-native path is a Datafeed RFC connection with per-provider function lists and translation tables, or a per-security custom interface, both of which need ABAP upkeep and break when Bloomberg changes a field. A governed market-data hub ingests Bloomberg once, normalizes it, and distributes into SAP TRM with an audit trail and exception alerts, no code."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I automate CAMT.086 bank fee statement analysis in SAP?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "CAMT.086 is the ISO 20022 bank-fee-statement format that replaces TWIST BSB. SAP added native bank-fee analysis in S/4HANA 1809 via a Fiori app, but it expects clean CAMT.086 in; banks still send proprietary and TWIST formats. A bank-fee portal ingests any format, enriches for analytics, and distributes to the analyzer, so the fee review is not gated on format."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can AI read remittance advice emails and post them into SAP?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. Remittance advice arrives as unstructured email and PDF, which staff retype into SAP cash application. An AI-powered remittance gate reads the unstructured input, identifies and structures the data, and delivers it into SAP S/4HANA, with a monitor that trains it over time. A live agricultural-sector customer runs this on a ChatGPT-powered deployment."
+      }
+    }
+  ]
+}
+</script>
+<style>
+  :root, [data-theme="light"] {
+    --bg: #f3f6fb; --surface: #ffffff; --surface-2: #f7faff;
+    --border: #dbe3ee; --border-strong: #c3d0e0;
+    --text: #102239; --muted: #57667e; --heading: #003d7a;
+    --navy: #003d7a; --navy-deep: #002247;
+    --accent: #1769e0; --accent-strong: #0f57c4; --accent-bg: #eaf2fe;
+    --teal: #11b3c0;
+    --icon: #003d7a;
+    --shadow: 0 1px 2px rgba(2,18,43,.06), 0 8px 24px rgba(2,18,43,.05);
+    --shadow-lift: 0 2px 4px rgba(2,18,43,.08), 0 16px 36px rgba(2,18,43,.10);
+    --radius: 3px;
+  }
+  [data-theme="dark"] {
+    --bg: #06101f; --surface: #0c1c33; --surface-2: #0a1830;
+    --border: #1b3052; --border-strong: #2c466b;
+    --text: #e7eefa; --muted: #9fb2cc; --heading: #cfe0fb;
+    --navy: #0a4f96; --navy-deep: #021a35;
+    --accent: #4f9bff; --accent-strong: #74b1ff; --accent-bg: #0e2747;
+    --teal: #2bd3df;
+    --icon: #6fb0ff;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 26px rgba(0,0,0,.32);
+    --shadow-lift: 0 2px 6px rgba(0,0,0,.45), 0 18px 40px rgba(0,0,0,.42);
+    --radius: 3px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  section { scroll-margin-top: 76px; }
+  a { color: inherit; }
+
+  h1, h2, h3, .nav-logo, .big-stat, .flow-step .num, .mini .v {
+    font-family: "Poppins", "Century Gothic", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  }
+
+  /* Nav */
+  .site-nav {
+    position: sticky; top: 0; z-index: 50; display: flex; align-items: center;
+    justify-content: space-between; padding: 14px 30px;
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-left { display: flex; align-items: baseline; gap: 9px; }
+  .nav-logo { font-weight: 800; font-size: 18px; letter-spacing: -.02em; color: var(--heading); }
+  .nav-logo .dot { color: var(--accent); }
+  .nav-client { color: var(--muted); font-weight: 500; font-size: 13px; }
+  .nav-links { display: flex; gap: 22px; }
+  .nav-links a { color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 600; }
+  .nav-links a:hover { color: var(--accent); }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .nav-status {
+    font-size: 11px; padding: 4px 10px; border-radius: var(--radius); letter-spacing: .04em;
+    text-transform: uppercase; background: var(--accent-bg); color: var(--accent-strong); font-weight: 700;
+  }
+  .nav-theme {
+    border: 1px solid var(--border-strong); background: var(--surface); color: var(--text);
+    border-radius: var(--radius); padding: 6px 11px; cursor: pointer; font-size: 14px; line-height: 1;
+  }
+  .nav-theme:hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px; border-radius: var(--radius);
+    padding: 13px 26px; font-size: 15px; font-weight: 700; text-decoration: none; cursor: pointer;
+    border: 1px solid transparent; transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+  }
+  .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 4px 14px rgba(23,105,224,.32); }
+  .btn-primary:hover { background: var(--navy); transform: translateY(-1px); box-shadow: 0 8px 20px rgba(0,61,122,.3); }
+  .nav-cta { padding: 9px 18px; font-size: 14px; }
+
+  /* Link-style CTA */
+  .linkcta {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 13.5px; font-weight: 700;
+    color: var(--accent-strong); text-decoration: none; margin-top: 12px;
+  }
+  .linkcta .arr { transition: transform .12s ease; }
+  .linkcta:hover .arr { transform: translateX(3px); }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 30px; }
+  .section { padding: 84px 0; border-top: 1px solid var(--border); }
+  .eyebrow {
+    display: inline-block; font-size: 12px; font-weight: 800; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 14px;
+  }
+  h1 { font-size: 54px; line-height: 1.04; letter-spacing: -.03em; color: var(--heading); margin-bottom: 20px; font-weight: 800; }
+  h2 { font-size: 34px; line-height: 1.14; letter-spacing: -.02em; color: var(--heading); margin-bottom: 12px; font-weight: 800; max-width: 800px; }
+  .section-sub { color: var(--muted); font-size: 17px; max-width: 720px; margin-bottom: 34px; }
+  h3 { font-size: 17px; margin-bottom: 6px; letter-spacing: -.01em; color: var(--text); }
+  p { margin-bottom: 10px; }
+
+  /* Hero split */
+  .hero { padding: 0; border: none; }
+  .hero-grid {
+    display: grid; grid-template-columns: 1.05fr .95fr; gap: 56px; align-items: center;
+    padding: 90px 0 76px;
+  }
+  .hero-badge {
+    display: inline-block; font-size: 12px; font-weight: 800; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--accent-strong); background: var(--accent-bg);
+    padding: 6px 13px; border-radius: var(--radius); margin-bottom: 22px;
+  }
+  .hero-sub { color: var(--muted); font-size: 19px; line-height: 1.55; max-width: 560px; margin-bottom: 30px; }
+  .hero-actions { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+  .hero-actions .linkcta { margin-top: 0; font-size: 15px; }
+
+  .hero-art { position: relative; min-height: 420px; }
+  .hero-art svg { display: block; width: 100%; height: 100%; }
+
+  /* Trust strip */
+  .trust-band { background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .trust-row {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px 14px;
+    padding: 22px 0;
+  }
+  .trust-mark {
+    display: inline-flex; align-items: center; gap: 8px; padding: 8px 13px;
+    border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2);
+    font-size: 13px; font-weight: 700; color: var(--text);
+  }
+  .trust-mark svg { width: 16px; height: 16px; color: var(--icon); flex: none; }
+  .trust-div { width: 1px; height: 26px; background: var(--border-strong); margin: 0 4px; }
+  .trust-partners { display: inline-flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; }
+  .trust-partners .lbl { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .trust-partners .name { font-size: 14px; font-weight: 700; color: var(--muted); }
+
+  /* Grids + cards */
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 24px; box-shadow: var(--shadow); transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease;
+    display: flex; flex-direction: column;
+  }
+  .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); border-color: var(--border-strong); }
+  .ico {
+    width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: var(--radius); background: var(--accent-bg); color: var(--icon); margin-bottom: 16px;
+  }
+  .ico svg { width: 22px; height: 22px; }
+  .card p { color: var(--muted); font-size: 14.5px; margin-bottom: 0; }
+  .card .lead {
+    align-self: flex-start; font-size: 10.5px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase;
+    color: var(--accent-strong); background: var(--accent-bg); padding: 3px 9px; border-radius: var(--radius); margin-bottom: 12px;
+  }
+  .card .linkcta { margin-top: auto; padding-top: 12px; }
+
+  /* Report */
+  .report { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 38px; box-shadow: var(--shadow); }
+  .report-grid { display: grid; grid-template-columns: 1.05fr 1fr; gap: 36px; align-items: center; }
+  .big-stat { font-size: 78px; font-weight: 800; line-height: 1; letter-spacing: -.04em; color: var(--accent); }
+  .big-stat-label { color: var(--text); font-size: 18px; line-height: 1.5; margin-top: 12px; max-width: 380px; }
+  .mini-stats { display: grid; gap: 16px; }
+  .mini { display: flex; align-items: baseline; gap: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+  .mini:last-child { border-bottom: none; padding-bottom: 0; }
+  .mini .v { font-size: 30px; font-weight: 800; color: var(--navy); min-width: 104px; letter-spacing: -.02em; }
+  .mini .t { color: var(--muted); font-size: 14.5px; }
+  .method { font-size: 13px; color: var(--muted); margin-top: 24px; border-top: 1px solid var(--border); padding-top: 16px; }
+
+  /* Flow */
+  .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 8px; }
+  .flow-step { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 18px; position: relative; box-shadow: var(--shadow); }
+  .flow-step .num {
+    display: inline-flex; width: 28px; height: 28px; border-radius: var(--radius);
+    background: var(--navy); color: #fff; font-size: 13px; font-weight: 800;
+    align-items: center; justify-content: center; margin-bottom: 12px;
+  }
+  .flow-step b { display: block; font-size: 15px; margin-bottom: 5px; color: var(--text); }
+  .flow-step span { color: var(--muted); font-size: 13.5px; }
+  .flow-step:not(:last-child)::after {
+    content: "\2192"; position: absolute; right: -11px; top: 22px; color: var(--border-strong); font-size: 16px; z-index: 1;
+  }
+
+  /* Time-to-value (RAPSODY-style) */
+  .ttv {
+    margin-top: 22px; border-radius: var(--radius); padding: 26px 30px;
+    background: linear-gradient(120deg, var(--navy-deep), var(--navy));
+    color: #eaf2fe; display: flex; align-items: center; gap: 22px; box-shadow: var(--shadow);
+  }
+  .ttv .ico { background: rgba(255,255,255,.12); color: #fff; flex: none; margin-bottom: 0; width: 48px; height: 48px; }
+  .ttv .ico svg { width: 26px; height: 26px; }
+  .ttv .ttv-body { flex: 1 1 auto; }
+  .ttv h3 { color: #fff; font-size: 20px; margin-bottom: 4px; }
+  .ttv p { color: #c5d8f3; font-size: 14.5px; margin-bottom: 0; max-width: 640px; }
+  .ttv .ttv-tag {
+    flex: none; font-family: "Poppins", "Century Gothic", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    font-size: 30px; font-weight: 800; letter-spacing: -.02em; color: #fff; text-align: right; line-height: 1.05;
+  }
+  .ttv .ttv-tag small { display: block; font-size: 12px; font-weight: 600; letter-spacing: .04em; color: #9fc1ee; text-transform: uppercase; }
+
+  /* Answers / FAQ */
+  .answer { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px 24px; margin-bottom: 14px; box-shadow: var(--shadow); }
+  .answer-head { display: flex; align-items: flex-start; gap: 12px; }
+  .answer-head .ico { margin-bottom: 0; width: 34px; height: 34px; flex: none; }
+  .answer-head .ico svg { width: 19px; height: 19px; }
+  .answer h3 { font-size: 17px; margin-bottom: 0; padding-top: 6px; }
+  .answer p { color: var(--muted); font-size: 14.5px; margin: 12px 0 0; }
+
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 0; font-size: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  th { text-align: left; padding: 12px 14px; background: var(--surface-2); border-bottom: 2px solid var(--border); font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 800; }
+  td { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td:first-child { font-weight: 700; color: var(--text); }
+  tbody tr:last-child { background: var(--accent-bg); }
+
+  .callout {
+    border-radius: var(--radius); padding: 18px 22px; margin-top: 22px;
+    background: var(--accent-bg); border: 1px solid var(--border); border-left: 3px solid var(--accent); font-size: 14.5px;
+  }
+  .callout b { display: block; margin-bottom: 4px; color: var(--accent-strong); letter-spacing: .03em; text-transform: uppercase; font-size: 12px; }
+
+  /* AI feature section */
+  .section-ai { background: linear-gradient(180deg, var(--accent-bg), var(--bg)); }
+  .ai-demo {
+    margin: 8px 0 22px; border-radius: var(--radius); padding: 32px 34px;
+    background: linear-gradient(120deg, var(--navy-deep), var(--navy)); color: #eaf2fe; box-shadow: var(--shadow);
+  }
+  .ai-demo-tag {
+    display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+    color: #cfe0fb; background: rgba(255,255,255,.14); padding: 5px 12px; border-radius: var(--radius); margin-bottom: 16px;
+  }
+  .ai-demo-head h3 { color: #fff; font-size: 23px; letter-spacing: -.01em; margin-bottom: 8px; }
+  .ai-demo-head p { color: #c5d8f3; font-size: 15px; max-width: 700px; margin-bottom: 0; }
+  .ai-systems { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+  .ai-sys-lbl { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #9fc1ee; margin-right: 4px; }
+  .sys-chip {
+    background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18); border-radius: var(--radius);
+    padding: 8px 14px; font-size: 13.5px; font-weight: 600; color: #eaf2fe;
+  }
+
+  /* CTA band */
+  .cta-band {
+    background: linear-gradient(120deg, var(--navy-deep), var(--navy)); border-radius: var(--radius);
+    padding: 56px 40px; text-align: center; color: #fff; box-shadow: var(--shadow);
+  }
+  .cta-band h2 { margin-bottom: 12px; color: #fff; max-width: none; }
+  .cta-band p { color: #c5d8f3; max-width: 540px; margin: 0 auto 26px; font-size: 16px; }
+  .cta-band .btn-primary { background: #fff; color: var(--navy); }
+  .cta-band .btn-primary:hover { background: var(--accent-bg); color: var(--navy-deep); }
+  .cta-fine { margin-top: 18px; font-size: 13px; color: #9fc1ee; }
+
+  /* Footer */
+  .footer { background: var(--navy-deep); color: #c5d8f3; padding: 52px 0 0; }
+  .footer-grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1.3fr; gap: 30px; }
+  .footer h4 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: #87a8d6; margin-bottom: 14px; font-weight: 800; }
+  .footer .f-logo { font-family: "Poppins", "Century Gothic", "Avenir Next", "Segoe UI", system-ui, sans-serif; font-weight: 800; font-size: 19px; color: #fff; margin-bottom: 10px; letter-spacing: -.02em; }
+  .footer .f-logo .dot { color: var(--accent); }
+  .footer p { font-size: 14px; line-height: 1.6; color: #a9c2e4; max-width: 320px; }
+  .footer ul { list-style: none; }
+  .footer ul li { margin-bottom: 9px; }
+  .footer ul a { color: #c5d8f3; text-decoration: none; font-size: 14px; }
+  .footer ul a:hover { color: #fff; }
+  .f-badges { display: flex; flex-direction: column; gap: 8px; }
+  .f-badge { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: #c5d8f3; }
+  .f-badge svg { width: 15px; height: 15px; color: #6fb0ff; flex: none; }
+  .f-linkedin { display: inline-flex; align-items: center; gap: 7px; margin-top: 14px; color: #c5d8f3; text-decoration: none; font-size: 14px; font-weight: 600; }
+  .f-linkedin svg { width: 17px; height: 17px; }
+  .f-linkedin:hover { color: #fff; }
+  .footer-bottom {
+    margin-top: 44px; border-top: 1px solid rgba(255,255,255,.12); padding: 18px 0 40px;
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 12.5px; color: #87a8d6;
+  }
+
+  /* Search overlay */
+  #searchOverlay { display: none; position: fixed; inset: 0; background: rgba(2,18,43,.5); z-index: 100; padding-top: 12vh; }
+  #searchOverlay.open { display: block; }
+  .search-box { max-width: 520px; margin: 0 auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: 0 20px 56px rgba(0,0,0,.35); }
+  .search-box input { width: 100%; border: none; outline: none; padding: 16px 18px; font-size: 15px; background: var(--surface); color: var(--text); }
+  .search-results { max-height: 320px; overflow-y: auto; border-top: 1px solid var(--border); }
+  .search-results a { display: block; padding: 11px 18px; color: var(--text); text-decoration: none; font-size: 14px; }
+  .search-results a:hover, .search-results a.sel { background: var(--accent-bg); color: var(--accent-strong); }
+  .search-hint { text-align: center; margin-top: 12px; color: #cdd9ec; font-size: 12.5px; }
+
+  @media (max-width: 960px) {
+    .nav-links { display: none; }
+    .hero-grid { grid-template-columns: 1fr; gap: 28px; padding: 60px 0 50px; }
+    .hero-art { min-height: 280px; order: -1; }
+    h1 { font-size: 40px; }
+    h2 { font-size: 28px; }
+    .grid-4, .grid-3, .grid-2, .flow, .report-grid, .footer-grid { grid-template-columns: 1fr 1fr; }
+    .flow-step:not(:last-child)::after { content: ""; }
+    .ttv { flex-wrap: wrap; }
+    .ttv .ttv-tag { text-align: left; }
+  }
+  @media (max-width: 600px) {
+    .grid-4, .grid-3, .grid-2, .flow, .report-grid, .footer-grid { grid-template-columns: 1fr; }
+    h1 { font-size: 34px; }
+    .big-stat { font-size: 60px; }
+    .section { padding: 56px 0; }
+  }
+  @media print {
+    .site-nav, #searchOverlay, .hero-actions, .nav-cta { display: none !important; }
+    body { background: #fff; color: #000; }
+    .section { page-break-inside: avoid; border-top: 1px solid #ccc; }
+    .section-ai { background: #fff !important; }
+    .card, .report, .flow-step, .answer { box-shadow: none; }
+    .footer, .cta-band, .ttv, .ai-demo { background: #fff !important; color: #000 !important; }
+    .ai-demo-head h3, .ai-demo-head p, .ai-demo-tag, .sys-chip, .ai-sys-lbl { color: #000 !important; }
+    .sys-chip { border-color: #ccc; }
+  }
+</style>
+</head>
+<body data-updated="2026-06-16">
+
+<nav class="site-nav">
+  <div class="nav-left">
+    <span class="nav-logo">OnePilot<span class="dot">.</span></span>
+    <span class="nav-client">by Brisken</span>
+  </div>
+  <div class="nav-links">
+    <a href="#problem">Problem</a>
+    <a href="#platform">Platform</a>
+    <a href="#products">Products</a>
+    <a href="#report">Research</a>
+    <a href="#ai">AI</a>
+    <a href="#answers">Answers</a>
+  </div>
+  <div class="nav-right">
+    <span class="nav-status">Prototype</span>
+    <a href="#demo" class="btn btn-primary nav-cta">Book a demo</a>
+    <button class="nav-theme" onclick="(function(){
+      var d=document.documentElement;
+      var c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+      d.setAttribute('data-theme',c);
+      localStorage.setItem('theme',c);
+    })()" aria-label="Toggle theme">&#9788;/&#9790;</button>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <span class="hero-badge">Modern financial-data platform for SAP, AI built in</span>
+        <h1>Financial data, solved end to end.</h1>
+        <p class="hero-sub">OnePilot is the modern platform for market data, trades, bank files and remittances in SAP. AI gives your team one interface across every system, governed and no code. You buy the outcome, not another integration project.</p>
+        <div class="hero-actions">
+          <a href="#demo" class="btn btn-primary">Book a demo</a>
+          <a href="#report" class="linkcta">Read the research <span class="arr">&#8594;</span></a>
+        </div>
+      </div>
+      <div class="hero-art" aria-hidden="true">
+        <svg viewBox="0 0 600 480" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Abstract data flow into SAP">
+          <defs>
+            <radialGradient id="blobNavy" cx="42%" cy="36%" r="72%">
+              <stop offset="0%" stop-color="#0a5bb0"/>
+              <stop offset="58%" stop-color="#003d7a"/>
+              <stop offset="100%" stop-color="#002247"/>
+            </radialGradient>
+            <radialGradient id="blobTeal" cx="50%" cy="50%" r="62%">
+              <stop offset="0%" stop-color="#2fd0dc"/>
+              <stop offset="100%" stop-color="#0fa2b4"/>
+            </radialGradient>
+            <linearGradient id="blobAccent" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#3b86ff"/>
+              <stop offset="100%" stop-color="#1769e0"/>
+            </linearGradient>
+            <filter id="soften" x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur stdDeviation="28"/>
+            </filter>
+          </defs>
+          <g filter="url(#soften)">
+            <path d="M190 64 C320 24 482 64 506 196 C530 326 430 416 296 416 C150 416 70 322 92 220 C108 142 126 90 190 64 Z" fill="url(#blobNavy)" opacity="0.96"/>
+            <ellipse cx="438" cy="338" rx="146" ry="124" fill="url(#blobTeal)" opacity="0.5"/>
+            <circle cx="196" cy="332" r="92" fill="url(#blobAccent)" opacity="0.58"/>
+          </g>
+          <g fill="none" stroke="#ffffff" stroke-opacity="0.55" stroke-width="1.4" stroke-linecap="round">
+            <path d="M156 156 H300 V250 H432"/>
+            <path d="M156 214 H262 V250"/>
+            <path d="M300 250 V332 H402"/>
+          </g>
+          <g fill="#ffffff" fill-opacity="0.92">
+            <rect x="148" y="148" width="16" height="16" rx="2"/>
+            <rect x="148" y="206" width="16" height="16" rx="2"/>
+            <rect x="292" y="242" width="16" height="16" rx="2"/>
+            <rect x="394" y="324" width="16" height="16" rx="2"/>
+          </g>
+          <rect x="426" y="240" width="34" height="20" rx="2" fill="#ffffff"/>
+          <text x="443" y="254" font-family="Segoe UI, sans-serif" font-size="10" font-weight="800" fill="#003d7a" text-anchor="middle">SAP</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="trust-band">
+  <div class="wrap">
+    <div class="trust-row">
+      <span class="trust-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V6z"/><path d="M9 12l2 2 4-4"/></svg>SAP Co-Innovation Partner</span>
+      <span class="trust-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16l-1 4H5z"/><path d="M5 11v9h14v-9M9 20v-5h6v5"/></svg>Listed on the SAP Store</span>
+      <span class="trust-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 17a4 4 0 0 1 0-8 5 5 0 0 1 9.6-1.5A3.5 3.5 0 0 1 18 17z"/></svg>Built on SAP BTP</span>
+      <span class="trust-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l2.5 2.5L16 9"/></svg>ISO 27001</span>
+      <span class="trust-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 11h12v9H6zM9 11V8a3 3 0 0 1 6 0v3"/></svg>SOC 1 Type II</span>
+      <span class="trust-div"></span>
+      <span class="trust-partners">
+        <span class="lbl">Market data partners</span>
+        <span class="name">Bloomberg</span>
+        <span class="name">Refinitiv</span>
+        <span class="name">360T</span>
+        <span class="name">OANDA</span>
+        <span class="name">CME</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+<section class="section" id="problem">
+  <div class="wrap">
+    <span class="eyebrow">The problem</span>
+    <h2>A shadow integration is any data feed into SAP that someone built by hand and no one maintains</h2>
+    <p class="section-sub">It works until a provider changes a field, a person leaves, or the migration team finds it. It has no audit trail, no owner, and no monitoring. Most SAP finance teams run several without calling them that.</p>
+    <div class="grid-4">
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg></span>
+        <h3>Market data</h3>
+        <p>Bloomberg and Refinitiv rates and curves keyed into TRM by hand, or a custom script that breaks at month-end.</p>
+      </div>
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg></span>
+        <h3>Trades</h3>
+        <p>Deals from 360T, FXall and FX GO re-typed into SAP, a dual-entry control risk every time.</p>
+      </div>
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9l8-5 8 5M5 9v8M19 9v8M9 9v8M15 9v8M4 20h16"/></svg></span>
+        <h3>Bank files</h3>
+        <p>Fee statements in TWIST, CAMT and proprietary formats stitched in by hand, with overcharges left unchecked.</p>
+      </div>
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18v12H3z"/><path d="M3 7l9 6 9-6"/></svg></span>
+        <h3>Remittances</h3>
+        <p>Staff reading remittance emails and PDFs and retyping them into cash application, line by line.</p>
+      </div>
+    </div>
+    <a href="#report" class="linkcta">See the Shadow Integration Report <span class="arr">&#8594;</span></a>
+  </div>
+</section>
+
+<section class="section" id="report">
+  <div class="wrap">
+    <span class="eyebrow">The Shadow Integration Report</span>
+    <h2>SAP treasury teams describe this work in their own hiring ads</h2>
+    <p class="section-sub">We read public SAP-treasury job postings, where companies spell out the manual data work they are hiring to do.</p>
+    <div class="report">
+      <div class="report-grid">
+        <div>
+          <div class="big-stat">81%</div>
+          <div class="big-stat-label">of the live SAP-treasury job ads we read describe teams building or hand-running the data plumbing into SAP.</div>
+        </div>
+        <div class="mini-stats">
+          <div class="mini"><span class="v">62%</span><span class="t">are tied to an active S/4HANA migration, the moment those feeds get rebuilt.</span></div>
+          <div class="mini"><span class="v">38%</span><span class="t">name a specific outside data or trading vendor whose feed has to reach SAP.</span></div>
+        </div>
+      </div>
+      <p class="method">Based on a first sample of 21 live postings, read and coded by hand (2026). We are widening it into a published figure. Full method and sources on request.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="platform">
+  <div class="wrap">
+    <span class="eyebrow">The platform</span>
+    <h2>One governed platform, configured not coded</h2>
+    <p class="section-sub">OnePilot is a no-code orchestration layer on SAP Business Technology Platform. It connects SAP and non-SAP systems both ways, and governs the data end to end.</p>
+    <div class="flow">
+      <div class="flow-step"><span class="num">1</span><b>Ingest</b><span>Any source and format: Bloomberg, Refinitiv, 360T, OANDA, central banks, banks, files, email.</span></div>
+      <div class="flow-step"><span class="num">2</span><b>Validate and normalize</b><span>Cleansing, mapping, calculations, anomaly detection, before anything reaches SAP.</span></div>
+      <div class="flow-step"><span class="num">3</span><b>Govern</b><span>Audit trail, manage-by-exception, segregation of duties and four-eye on every record.</span></div>
+      <div class="flow-step"><span class="num">4</span><b>Distribute into SAP</b><span>Straight into TRM, Cash Management, Credit Management and more. No ABAP, no custom interface.</span></div>
+    </div>
+    <div class="ttv">
+      <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3L4 14h7l-1 7 9-11h-7z"/></svg></span>
+      <div class="ttv-body">
+        <h3>Live in weeks, not a rebuild</h3>
+        <p>OnePilot is configured, not coded. A new feed is set up on a managed product, so it goes live in weeks rather than a multi-quarter integration project your team has to build and then own.</p>
+      </div>
+      <div class="ttv-tag">Weeks<small>time to first feed</small></div>
+    </div>
+    <p class="section-sub" style="margin-top:22px;">Connectivity covers RFC and OData, SFTP, SOAP and REST, AMQP, email, an Excel add-in, XLSX, CSV and TXT, plus LLM and browser automation, push and pull. Off-the-shelf, third-party-managed, low-maintenance, on SAP BTP.</p>
+  </div>
+</section>
+
+<section class="section" id="products">
+  <div class="wrap">
+    <span class="eyebrow">The suite</span>
+    <h2>One platform, the apps that remove each manual step</h2>
+    <p class="section-sub">Lead with Market Data Hub and Trade Automation; the rest run on the same governed framework.</p>
+    <div class="grid-4">
+      <div class="card">
+        <span class="lead">Flagship</span>
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg></span>
+        <h3>Market Data Hub</h3>
+        <p>Govern rates, curves and prices from every provider into SAP from one place, no code.</p>
+        <a href="#demo" class="linkcta">Book a demo <span class="arr">&#8594;</span></a>
+      </div>
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg></span>
+        <h3>Trade Automation</h3>
+        <p>Straight-through capture from execution venue to SAP deal creation, no re-keying.</p>
+        <a href="#demo" class="linkcta">Book a demo <span class="arr">&#8594;</span></a>
+      </div>
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11c3-4 6-4 9 0s6 4 9 0M3 16c3-4 6-4 9 0s6 4 9 0"/></svg></span>
+        <h3>Cash Flow &amp; Exposure Hub</h3>
+        <p>Collect cash and exposure data from any source into SAP for forecasting and hedging.</p>
+        <a href="#demo" class="linkcta">Book a demo <span class="arr">&#8594;</span></a>
+      </div>
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg></span>
+        <h3>Bank Fee Portal</h3>
+        <p>Read any bank-fee format, enrich for analytics, and surface overcharges.</p>
+        <a href="#demo" class="linkcta">Book a demo <span class="arr">&#8594;</span></a>
+      </div>
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18v12H3z"/><path d="M3 10h18M7 15h4"/></svg></span>
+        <h3>Credit Data Hub</h3>
+        <p>Turn credit data from APIs and PDFs into structured, scored input for SAP Credit Management.</p>
+        <a href="#demo" class="linkcta">Book a demo <span class="arr">&#8594;</span></a>
+      </div>
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19c0-8 6-14 14-14 0 8-6 14-14 14zM6 18c3-3 6-5 9-6"/></svg></span>
+        <h3>ESG Data Hub</h3>
+        <p>Normalize ESG scores from many providers into SAP Sustainability Control Tower.</p>
+        <a href="#demo" class="linkcta">Book a demo <span class="arr">&#8594;</span></a>
+      </div>
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h13v10H3z"/><path d="M3 8l8 5 5-3"/><path d="M19 3v4M17 5h4"/></svg></span>
+        <h3>Remittance Advice Gate</h3>
+        <p>AI reads unstructured remittances and posts them straight into SAP cash application.</p>
+        <a href="#demo" class="linkcta">Book a demo <span class="arr">&#8594;</span></a>
+      </div>
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/></svg></span>
+        <h3>AI Digital Workforce</h3>
+        <p>One AI interface to work across SAP and every system around it.</p>
+        <a href="#demo" class="linkcta">Book a demo <span class="arr">&#8594;</span></a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-ai" id="ai">
+  <div class="wrap">
+    <span class="eyebrow">AI</span>
+    <h2>One AI interface across every system your team works in</h2>
+    <p class="section-sub">Finance teams move between SAP, market-data terminals, bank portals, spreadsheets and email all day. OnePilot puts AI over them as a single interface, so the work happens in one place, inside your governance.</p>
+
+    <div class="ai-demo">
+      <span class="ai-demo-tag">One interface, every system</span>
+      <div class="ai-demo-head">
+        <h3>Ask once, instead of switching between tools</h3>
+        <p>Ask in plain language and the AI reads, retrieves and acts across the systems you connect: pull a position, draft a confirmation, post a record, check a rate, without opening three applications to do it.</p>
+      </div>
+      <div class="ai-systems">
+        <span class="ai-sys-lbl">One interface across</span>
+        <span class="sys-chip">SAP</span>
+        <span class="sys-chip">Market-data feeds</span>
+        <span class="sys-chip">Bank portals</span>
+        <span class="sys-chip">Email</span>
+        <span class="sys-chip">Files and spreadsheets</span>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 9h18M6.5 6.5h.01M9 6.5h.01"/></svg></span>
+        <h3>Why it matters</h3>
+        <p>Your team stops bouncing between a dozen systems and re-keying between them. They ask one interface and stay in it, and every step is on the record.</p>
+      </div>
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
+        <h3>Why finance trusts it</h3>
+        <p>Every action is audit-logged. Four-eye and segregation of duties apply where you want them. The same governance that runs OnePilot runs the AI, so it never acts outside the controls you set.</p>
+      </div>
+    </div>
+
+    <div class="callout">
+      <b>Live today</b>
+      OnePilot runs AI in production now. An agricultural-sector company posts remittances into S/4HANA on a ChatGPT-powered gate, and a chemicals company runs an AI funding-request process across a complex SAP integration. Ask us for the numbers on the demo.
+    </div>
+  </div>
+</section>
+
+<section class="section" id="why-now">
+  <div class="wrap">
+    <span class="eyebrow">Why now</span>
+    <h2>Your S/4HANA migration is the moment these feeds get decided</h2>
+    <p class="section-sub">SAP ends mainstream maintenance for ECC in 2027, with extended maintenance to 2030. Migration is when the custom interfaces feeding market data, curves and bank files into the old system become legacy code the team has to rebuild, or replace with a product.</p>
+    <div class="grid-3">
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7M12 11v10"/></svg></span>
+        <h3>Buy instead of rebuild</h3>
+        <p>Move the feed onto a managed hub once, at the exact moment it is on the table.</p>
+      </div>
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5zM3 13l9 5 9-5"/></svg></span>
+        <h3>Clean core</h3>
+        <p>No new custom code in SAP, so nothing breaks on the next upgrade.</p>
+      </div>
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V6z"/><path d="M12 9v4M12 16h.01"/></svg></span>
+        <h3>Lower migration risk</h3>
+        <p>Governed, monitored data from day one, instead of a script no one wants to own.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="trust">
+  <div class="wrap">
+    <span class="eyebrow">Trust</span>
+    <h2>Why SAP teams trust OnePilot</h2>
+    <div class="grid-2">
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="6" r="2.2"/><circle cx="12" cy="18" r="2.2"/><path d="M8 6h8M7.5 7.7l3.4 8.6M16.5 7.7l-3.4 8.6"/></svg></span>
+        <h3>Inside the SAP ecosystem</h3>
+        <p>SAP Co-Innovation Partner and SAP PartnerEdge member. Part of SAP Industry Cloud for Financial Services and Commodities. Listed on the SAP Store. Runs on SAP Business Technology Platform.</p>
+      </div>
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 11h12v9H6zM9 11V8a3 3 0 0 1 6 0v3"/><path d="M12 14v3"/></svg></span>
+        <h3>Built for regulated finance</h3>
+        <p>ISO 27001 and SOC 1 Type II. Data partners include Bloomberg, Refinitiv, CME Group, 360T, Deutsche Boerse and OANDA.</p>
+      </div>
+    </div>
+    <div class="grid-3" style="margin-top:18px;">
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9l8-5 8 5M5 9v8M19 9v8M9 9v8M15 9v8M4 20h16"/></svg></span>
+        <h3>Financial services</h3>
+        <p>An S/4HANA Public Cloud customer governs several financial-data domains from one OnePilot deployment.</p>
+      </div>
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19c0-8 6-14 14-14 0 8-6 14-14 14zM6 18c3-3 6-5 9-6"/></svg></span>
+        <h3>Agriculture</h3>
+        <p>A Remittance Advice Gate, powered by ChatGPT, removes the human from the retype on S/4HANA.</p>
+      </div>
+      <div class="card">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6l-5 9a1.6 1.6 0 0 0 1.4 2.4h11.2A1.6 1.6 0 0 0 19 18l-5-9V3"/></svg></span>
+        <h3>Chemicals</h3>
+        <p>An AI funding-request process, fully automated across a complex SAP integration.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="answers">
+  <div class="wrap">
+    <span class="eyebrow">Answers</span>
+    <h2>The questions SAP teams actually search</h2>
+    <p class="section-sub">Short, honest answers to the integration questions buyers ask AI search and Google.</p>
+
+    <div class="answer">
+      <div class="answer-head">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 4.2 1.5c0 1.6-2 2.1-2 3.3M12 17h.01"/></svg></span>
+        <h3>How do I get Bloomberg market data into SAP TRM automatically?</h3>
+      </div>
+      <p>The SAP-native path is a Datafeed RFC connection with per-provider function lists and translation tables, or a per-security custom interface, both of which need ABAP upkeep and break when Bloomberg changes a field. A governed market-data hub ingests Bloomberg once, normalizes it, and distributes into SAP TRM with an audit trail and exception alerts, no code.</p>
+    </div>
+    <div class="answer">
+      <div class="answer-head">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 4.2 1.5c0 1.6-2 2.1-2 3.3M12 17h.01"/></svg></span>
+        <h3>How do I automate CAMT.086 bank fee statement analysis in SAP?</h3>
+      </div>
+      <p>CAMT.086 is the ISO 20022 bank-fee-statement format that replaces TWIST BSB. SAP added native bank-fee analysis in S/4HANA 1809 via a Fiori app, but it expects clean CAMT.086 in; banks still send proprietary and TWIST formats. A bank-fee portal ingests any format, enriches for analytics, and distributes to the analyzer, so the fee review is not gated on format.</p>
+    </div>
+    <div class="answer">
+      <div class="answer-head">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 4.2 1.5c0 1.6-2 2.1-2 3.3M12 17h.01"/></svg></span>
+        <h3>Can AI read remittance advice emails and post them into SAP?</h3>
+      </div>
+      <p>Yes. Remittance advice arrives as unstructured email and PDF, which staff retype into SAP cash application. An AI-powered remittance gate reads the unstructured input, identifies and structures the data, and delivers it into SAP S/4HANA, with a monitor that trains it over time. A live agricultural-sector customer runs this on a ChatGPT-powered deployment.</p>
+    </div>
+
+    <h3 style="margin-top:30px;">OnePilot vs the usual paths</h3>
+    <table>
+      <thead><tr><th>Approach</th><th>Maintenance</th><th>Providers</th><th>Governance</th></tr></thead>
+      <tbody>
+        <tr><td>Custom Datafeed config</td><td>ABAP upkeep, breaks on field changes</td><td>One at a time</td><td>Build it yourself</td></tr>
+        <tr><td>Single-vendor interface</td><td>Tied to that vendor</td><td>That vendor only</td><td>Limited</td></tr>
+        <tr><td>OnePilot</td><td>No code, third-party-managed</td><td>Multi-vendor, swap freely</td><td>Audit trail and exceptions built in</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section" id="demo">
+  <div class="wrap">
+    <div class="cta-band">
+      <h2>See it on your own SAP setup</h2>
+      <p>A short demo maps OnePilot onto your actual data flow into SAP. Fifteen to twenty minutes, no preparation needed.</p>
+      <a href="#demo" class="btn btn-primary">Book a demo</a>
+      <p class="cta-fine">SAP Co-Innovation Partner &middot; ISO 27001 &middot; SOC 1 Type II</p>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <div class="f-logo">OnePilot<span class="dot">.</span> <span style="font-weight:500;font-size:14px;color:#a9c2e4;">by Brisken</span></div>
+        <p>Governed, no-code financial data orchestration for SAP. Market data, trades, bank files and remittances into SAP, with a full audit trail. Built on SAP Business Technology Platform.</p>
+        <a href="#" class="f-linkedin"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4.98 3.5A2.5 2.5 0 1 1 0 3.5a2.5 2.5 0 0 1 4.98 0zM.4 8.2h4.2V24H.4zM8.3 8.2h4v2.2h.06c.56-1 1.9-2.2 4-2.2 4.25 0 5.04 2.8 5.04 6.45V24h-4.2v-6.7c0-1.6 0-3.65-2.23-3.65-2.23 0-2.57 1.74-2.57 3.54V24H8.3z"/></svg>Brisken on LinkedIn</a>
+      </div>
+      <div>
+        <h4>Products</h4>
+        <ul>
+          <li><a href="#products">Market Data Hub</a></li>
+          <li><a href="#products">Trade Automation</a></li>
+          <li><a href="#products">Bank Fee Portal</a></li>
+          <li><a href="#products">Remittance Advice Gate</a></li>
+          <li><a href="#ai">AI Digital Workforce</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Explore</h4>
+        <ul>
+          <li><a href="#problem">The problem</a></li>
+          <li><a href="#report">The research</a></li>
+          <li><a href="#platform">The platform</a></li>
+          <li><a href="#answers">Answers</a></li>
+          <li><a href="#demo">Book a demo</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Credentials</h4>
+        <div class="f-badges">
+          <span class="f-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V6z"/><path d="M9 12l2 2 4-4"/></svg>SAP Co-Innovation Partner</span>
+          <span class="f-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 17a4 4 0 0 1 0-8 5 5 0 0 1 9.6-1.5A3.5 3.5 0 0 1 18 17z"/></svg>Built on SAP BTP</span>
+          <span class="f-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l2.5 2.5L16 9"/></svg>ISO 27001</span>
+          <span class="f-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 11h12v9H6zM9 11V8a3 3 0 0 1 6 0v3"/></svg>SOC 1 Type II</span>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div>OnePilot by Brisken &middot; Houston, TX &middot; Prototype: content and layout for review, brand assets are a stand-in.</div>
+      <div>Last updated: 2026-06-16</div>
+    </div>
+  </div>
+</footer>
+
+<div id="searchOverlay">
+  <div class="search-box">
+    <input id="searchInput" type="text" placeholder="Jump to section..." autocomplete="off">
+    <div class="search-results" id="searchResults"></div>
+  </div>
+  <div class="search-hint">Type to filter, Enter to jump, Esc to close</div>
+</div>
+
+<script>
+(function(){
+  var overlay = document.getElementById('searchOverlay');
+  var input = document.getElementById('searchInput');
+  var results = document.getElementById('searchResults');
+  var sections = Array.prototype.slice.call(document.querySelectorAll('section[id]')).map(function(s){
+    var h = s.querySelector('h2');
+    return { id: s.id, label: h ? h.textContent : s.id };
+  });
+  var sel = 0;
+  function render(q){
+    var f = sections.filter(function(s){ return s.label.toLowerCase().indexOf(q.toLowerCase()) !== -1; });
+    if (sel >= f.length) sel = Math.max(0, f.length - 1);
+    results.innerHTML = f.map(function(s, i){
+      return '<a href="#'+s.id+'" class="'+(i===sel?'sel':'')+'">'+s.label+'</a>';
+    }).join('');
+    return f;
+  }
+  var current = render('');
+  function close(){ overlay.classList.remove('open'); }
+  function open(){
+    overlay.classList.add('open'); sel = 0;
+    input.value = localStorage.getItem('lastSearch') || '';
+    current = render(input.value); input.focus(); input.select();
+  }
+  document.addEventListener('keydown', function(e){
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); open(); }
+    if (!overlay.classList.contains('open')) return;
+    if (e.key === 'Escape') close();
+    if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(sel+1, current.length-1); current = render(input.value); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(sel-1, 0); current = render(input.value); }
+    if (e.key === 'Enter' && current[sel]) { location.hash = current[sel].id; close(); }
+  });
+  input.addEventListener('input', function(){
+    sel = 0; current = render(input.value);
+    localStorage.setItem('lastSearch', input.value);
+  });
+  overlay.addEventListener('click', function(e){ if (e.target === overlay) close(); });
+  results.addEventListener('click', function(){ close(); });
+})();
+</script>
+
+</body>
+</html>
