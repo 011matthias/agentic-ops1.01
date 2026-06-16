@@ -53,6 +53,10 @@ from .store import STATUS_CONFIRMED, VALID_STATUSES, RunStore
 from . import auth
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
+# Self-contained HTML docs embedded into the tool: the user guide and the
+# how-it-works walkthrough. Packaged with the app (the wheel ships the web
+# subtree, like templates/), served verbatim behind the gate.
+_GUIDES_DIR = Path(__file__).parent / "guides"
 
 
 def _now_iso() -> str:
@@ -519,6 +523,22 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             path,
             filename=f"reconciled-{run_id}.csv",
             media_type="text/csv",
+        )
+
+    # ── Embedded docs: the user guide + the how-it-works walkthrough,
+    # reached from the tool nav (gated like every other page). They are
+    # self-contained HTML deliverables, served verbatim rather than wrapped
+    # in the app chrome.
+    @app.get("/guide", response_class=HTMLResponse)
+    def user_guide() -> HTMLResponse:
+        return HTMLResponse(
+            (_GUIDES_DIR / "user-guide.html").read_text(encoding="utf-8")
+        )
+
+    @app.get("/how-it-works", response_class=HTMLResponse)
+    def tool_flow() -> HTMLResponse:
+        return HTMLResponse(
+            (_GUIDES_DIR / "tool-flow.html").read_text(encoding="utf-8")
         )
 
     # ── Memory (PR 2e): see and correct what the tool has learned ──────
