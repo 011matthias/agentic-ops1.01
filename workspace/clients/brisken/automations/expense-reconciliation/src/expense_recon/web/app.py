@@ -15,6 +15,7 @@ Routes:
     GET  /runs/{id}/report.xlsx download the report with edits applied
     GET  /runs/{id}/zoho.csv    download the Zoho journal import (matched)
     GET  /runs/{id}/reconciled.csv  download the flat reconciled CSV
+    GET  /guide / /how-it-works / /strategy  embedded docs
 """
 from __future__ import annotations
 
@@ -539,6 +540,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     def tool_flow() -> HTMLResponse:
         return HTMLResponse(
             (_GUIDES_DIR / "tool-flow.html").read_text(encoding="utf-8")
+        )
+
+    @app.get("/strategy", response_class=HTMLResponse)
+    def strategy() -> HTMLResponse:
+        return HTMLResponse(
+            (_GUIDES_DIR / "strategy.html").read_text(encoding="utf-8")
         )
 
     # ── Memory (PR 2e): see and correct what the tool has learned ──────
