@@ -179,11 +179,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         statement: UploadFile,
         receipts: UploadFile,
         account_id: str = Form(""),
-        legal_entity_id: str = Form(""),
+        account_legal_entities: str = Form(""),
         account_card_currency: str = Form("USD"),
         sheet_name: str = Form(""),
         receipts_source: str = Form("csv"),
-        receipts_default_currency: str = Form("USD"),
+        receipts_default_currency: str = Form(""),
         use_llm: str = Form(""),
         expense_column_map: str = Form(""),
         map_transaction_date: str = Form(""),
@@ -210,15 +210,34 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 templates, request, f"Receipt column map is not valid JSON: {exc}"
             )
 
+        # Account -> legal entity map (Dirk 2026-06-16): the legal entity is
+        # derived from the paying account, not typed each run. Blank => no
+        # map, the account name becomes the entity.
+        try:
+            entity_map_raw = (
+                json.loads(account_legal_entities)
+                if account_legal_entities.strip()
+                else {}
+            )
+            if not isinstance(entity_map_raw, dict):
+                raise ValueError("expected a JSON object of account -> legal entity")
+            entity_map = {str(k): str(v) for k, v in entity_map_raw.items()}
+        except (json.JSONDecodeError, ValueError) as exc:
+            return _render_form_error(
+                templates,
+                request,
+                f"Account to legal-entity map is not valid JSON: {exc}",
+            )
+
         form = RunForm(
             account_id=account_id.strip(),
-            legal_entity_id=legal_entity_id.strip(),
+            account_legal_entities=entity_map,
             account_card_currency=account_card_currency.strip() or "USD",
             sheet_name=sheet_name.strip() or None,
             column_map_overrides={k: v for k, v in overrides.items() if v},
             receipts_source=receipts_source.strip() or "csv",
             expense_column_map=expense_map,
-            receipts_default_currency=receipts_default_currency.strip() or "USD",
+            receipts_default_currency=receipts_default_currency.strip(),
             use_llm=bool(use_llm.strip()),
         )
 

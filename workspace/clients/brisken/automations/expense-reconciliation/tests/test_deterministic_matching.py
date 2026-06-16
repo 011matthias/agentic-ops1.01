@@ -346,3 +346,27 @@ def test_fx_receipt_assigned_to_single_best_transaction():
     assert out.judgment_required[0].document_id == "r-brl"
     # The other transaction has no other candidate -> unmatched.
     assert out.unmatched_transactions == ["t-far"]
+
+
+def test_unknown_currency_receipt_is_not_matched():
+    """Dirk 2026-06-16: an unknown receipt currency must not be silently
+    treated as the card's currency. Such a receipt is never matched (not
+    even amount+date exact); it surfaces as unmatched so the reviewer sets
+    the currency before it can reconcile."""
+    t = tx("t1", "50.00", date(2026, 4, 1))
+    r = receipt("r1", "50.00", date(2026, 4, 1), currency=None)
+    out = match_month([t], [r])
+    assert out.matches == []
+    assert out.judgment_required == []
+    assert "t1" in out.unmatched_transactions
+    assert "r1" in out.unmatched_receipts
+
+
+def test_known_currency_same_as_card_still_matches():
+    """Control for the guard above: with the currency present, the same
+    amount+date pair matches EXACT. Only the unknown-currency case changes."""
+    t = tx("t1", "50.00", date(2026, 4, 1))
+    r = receipt("r1", "50.00", date(2026, 4, 1), currency="USD")
+    out = match_month([t], [r])
+    assert len(out.matches) == 1
+    assert out.matches[0].match_type == MatchType.EXACT

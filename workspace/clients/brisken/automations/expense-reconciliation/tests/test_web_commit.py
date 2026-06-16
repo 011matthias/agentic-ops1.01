@@ -44,7 +44,9 @@ def _create_run(client) -> str:
         },
         data={
             "account_id": "amex-9001",
-            "legal_entity_id": "brisken-llc",
+            # Entity derived from the account (Dirk 2026-06-16): map amex-9001
+            # to brisken-llc so the learning store keys under that entity.
+            "account_legal_entities": '{"amex-9001": "brisken-llc"}',
             "account_card_currency": "USD",
             "receipts_source": "csv",
         },
