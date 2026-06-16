@@ -32,8 +32,9 @@ The config is a JSON file (stdlib only — no YAML dep) of the shape:
         "default_currency": "USD"
       },
       "output": {
-        "path": "report-may.xlsx"
-      },
+        "path": "report-may.xlsx",
+        "reconciled_csv": "reconciled-may.csv"  # optional flat reconciled
+      },                                         #   CSV; omit to skip
       "run_log": {                             # optional (slice 5b)
         "path": "history.sqlite",              # opt-in run history; omit
         "operator": "chris"                    #   the block to disable
@@ -90,6 +91,7 @@ from .llm.cost import CostTracker
 from .matching.deterministic import match_month
 from .matching.judgment import judge_ambiguous, judge_fx_match
 from .matching.types import Match, MatchOutcome, Receipt, Transaction
+from .output.reconciled_csv import write_reconciled_csv
 from .output.report_xlsx import write_report
 from .runlog import RunLog, decisions_from_outcome
 from .output.zoho_export import write_zoho_export
@@ -523,6 +525,26 @@ def run(
         )
         logger.info("wrote Zoho journal export: %s", export_path)
         print(f"Wrote Zoho export: {export_path}")
+
+    # Flat reconciled CSV (2026-06-16): the CSV twin of the xlsx report —
+    # one row per statement line, enriched with its matched expense. Written
+    # when `output.reconciled_csv` is set; reuses the same 8.4 receipt-URL /
+    # 8.3 report-reference lookups as the Zoho export so the references match,
+    # and needs no chart of accounts (it's the reconciliation view, not a
+    # posting file).
+    recon_csv = out_cfg.get("reconciled_csv")
+    if recon_csv:
+        recon_csv_path = (config_dir / recon_csv).resolve()
+        write_reconciled_csv(
+            outcome,
+            transactions,
+            receipts,
+            recon_csv_path,
+            receipt_urls=receipt_urls,
+            report_for=report_lookup,
+        )
+        logger.info("wrote reconciled CSV: %s", recon_csv_path)
+        print(f"Wrote reconciled CSV: {recon_csv_path}")
 
     # BLUEPRINT 5.7-5.10: append this run to the SQLite run-log when a
     # `run_log:` block is configured (opt-in; no block = no file, no

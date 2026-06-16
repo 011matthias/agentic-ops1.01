@@ -45,6 +45,7 @@ from ..learning import (
     learn_from_run,
     normalize_vendor,
 )
+from ..output.reconciled_csv import write_reconciled_csv
 from ..output.report_xlsx import write_report
 from ..output.zoho_export import write_zoho_export
 from .serialize import snapshot_from_dict, snapshot_to_dict
@@ -1058,6 +1059,28 @@ def regenerate_zoho(
     effective = apply_decisions(outcome, transactions, receipts, decisions)
     out_path = Path(run.work_dir) / "zoho_journal.csv"
     write_zoho_export(effective, transactions, receipts, out_path)
+    return out_path
+
+
+def regenerate_reconciled(
+    run: RunRow, decisions: dict[str, Decision], overrides: dict
+) -> Path:
+    """Write the flat reconciled CSV for a run with the reviewer's
+    decisions + category overrides applied. Returns the path.
+
+    The CSV twin of `regenerate_report` (Dirk: "CSV + Excel of the
+    reconciled data"): one row per statement line, every line's match
+    status and matched-expense enrichment, after the reviewer's edits.
+    Unlike the Zoho export, every statement line is written (matched,
+    review, and unmatched) — it is the reconciliation view, not a posting
+    file. Web runs carry no chart of accounts; the receipt's own 8.1
+    fields populate the reference columns.
+    """
+    transactions, receipts, outcome, _ = snapshot_from_dict(run.snapshot)
+    receipts = apply_overrides(receipts, overrides)
+    effective = apply_decisions(outcome, transactions, receipts, decisions)
+    out_path = Path(run.work_dir) / "reconciled.csv"
+    write_reconciled_csv(effective, transactions, receipts, out_path)
     return out_path
 
 
