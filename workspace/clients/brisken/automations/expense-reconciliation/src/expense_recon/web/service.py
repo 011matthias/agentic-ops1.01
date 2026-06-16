@@ -201,7 +201,16 @@ def prepare_run(
     stmt_path.write_bytes(statement_bytes)
     rcpt_path.write_bytes(receipts_bytes)
 
-    column_map = _resolve_statement_map(stmt_path, form)
+    # Chase statement PDF (2026-06-16): the parser reads the statement's own
+    # structure, so there is no column map to auto-detect, and the account id
+    # comes per-card from the PDF's cycle markers (one statement spans several
+    # cards), not the form. column_map=None marks the PDF path; _build_config
+    # emits the PDF-shaped statement block and the CLI's _load_statement routes
+    # on the .pdf suffix. CSV / Excel still auto-detect their column map.
+    if stmt_path.suffix.lower() == ".pdf":
+        column_map = None
+    else:
+        column_map = _resolve_statement_map(stmt_path, form)
 
     # A requested-but-unavailable AI key must NOT block the run. The
     # keyword classifier always produces a complete reconciliation, so we
@@ -358,14 +367,20 @@ def _build_config(
 ) -> dict:
     statement = {
         "path": stmt_name,
-        "account_id": form.account_id or "card",
         # Derived from the paying account (Dirk 2026-06-16), not typed.
         "legal_entity_id": form.resolve_legal_entity(),
         "account_card_currency": form.account_card_currency or "USD",
-        "column_map": column_map,
     }
-    if form.sheet_name:
-        statement["sheet_name"] = form.sheet_name
+    if column_map is None:
+        # PDF statement: no column map; the per-card account id comes from the
+        # PDF's cycle markers, so account_id is omitted here too (the parser
+        # ignores it). _load_statement routes on the .pdf suffix.
+        pass
+    else:
+        statement["account_id"] = form.account_id or "card"
+        statement["column_map"] = column_map
+        if form.sheet_name:
+            statement["sheet_name"] = form.sheet_name
 
     receipts: dict = {
         "path": rcpt_name,
