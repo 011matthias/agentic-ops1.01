@@ -12,7 +12,7 @@
 })();</script>
 <style>
   :root, [data-theme="light"] {
-    --bg: #f8fafc; --surface: #ffffff; --border: #e2e8f0;
+    --bg: #f8fafc; --surface: #ffffff; --border: #e2e8f0; --border-strong: #cbd5e1;
     --text: #0f172a; --muted: #64748b;
     --blue: #2563eb; --blue-bg: #eff6ff;
     --green: #059669; --green-bg: #ecfdf5;
@@ -20,7 +20,7 @@
     --purple: #7c3aed; --purple-bg: #f5f3ff;
   }
   [data-theme="dark"] {
-    --bg: #0b1220; --surface: #111a2e; --border: #233149;
+    --bg: #0b1220; --surface: #111a2e; --border: #233149; --border-strong: #3a4a66;
     --text: #e6edf7; --muted: #8fa3bf;
     --blue: #60a5fa; --blue-bg: #14213a;
     --green: #34d399; --green-bg: #0d2a22;
@@ -50,6 +50,28 @@
     border-radius: 999px; padding: 4px 12px; cursor: pointer; font-size: 13px;
   }
   .main-content { max-width: 980px; margin: 0 auto; padding: 36px 28px 64px; }
+
+  .tabbar { display: flex; gap: 8px; margin-bottom: 30px; }
+  .tab-btn {
+    appearance: none; cursor: pointer;
+    font-size: 14px; font-weight: 600; color: var(--muted);
+    padding: 9px 18px; border-radius: 10px;
+    border: 1px solid transparent; background: transparent;
+    transition: color .15s ease, background .15s ease, border-color .15s ease, box-shadow .15s ease;
+  }
+  .tab-btn:hover { color: var(--text); background: var(--blue-bg); }
+  .tab-btn.active {
+    color: var(--blue); font-weight: 700;
+    background: var(--surface); border-color: var(--border-strong);
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  }
+  .tab-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  @media print {
+    .tabbar { display: none !important; }
+    .tab-panel { display: block !important; }
+  }
 
   .hero { margin-bottom: 36px; }
   .hero-badge {
@@ -199,7 +221,7 @@
 <nav class="site-nav">
   <div class="nav-left">UnpauseAI <span class="nav-client">&middot; Brisken Lead Generation</span></div>
   <div class="nav-right">
-    <span class="nav-hint">Ctrl/Cmd+K to jump</span>
+    <span class="nav-hint">&larr; &rarr; switch tabs &middot; Ctrl/Cmd+K to jump</span>
     <span class="nav-status">Strategy Proposal</span>
     <button class="nav-theme" onclick="(function(){
       var d=document.documentElement;
@@ -211,6 +233,13 @@
 </nav>
 
 <main class="main-content">
+
+<div class="tabbar" role="tablist" aria-label="Sections">
+  <button class="tab-btn active" id="tabbtn-engine" role="tab" aria-selected="true" aria-controls="tab-engine" data-tab="tab-engine">Campaign Engine</button>
+  <button class="tab-btn" id="tabbtn-marketing" role="tab" aria-selected="false" aria-controls="tab-marketing" tabindex="-1" data-tab="tab-marketing">Marketing Plan</button>
+</div>
+
+<div class="tab-panel active" id="tab-engine" role="tabpanel" aria-labelledby="tabbtn-engine" tabindex="0">
 
 <section class="hero">
   <span class="hero-badge">Strategy &middot; OnePilot Outbound Campaigns</span>
@@ -474,9 +503,78 @@
 <h2 id="expectations">Honest expectations</h2>
 <p>This is a precision market, not a volume one: each campaign's universe is small and senior. Realistic early output is a small number of held, qualified meetings per month in the first one to two months, growing as more campaigns come online, the email channel matures, and the weekly trigger sweep compounds. Conversion rates are unknowable until live; what we control is list quality, message quality, and qualification discipline. First meetings land in weeks 4-8, possibly earlier via LinkedIn. Running a campaign per product means more shots on goal without diluting any single message.</p>
 
+</div><!-- /tab-engine -->
+
+<div class="tab-panel" id="tab-marketing" role="tabpanel" aria-labelledby="tabbtn-marketing" tabindex="0">
+
+<section class="hero">
+  <span class="hero-badge">Marketing &middot; Demand and Trust Layer</span>
+  <h1>The always-on layer that makes every outbound touch land warmer</h1>
+  <p class="hero-sub">The campaign engine books meetings now. Alongside it, a small set of marketing moves, modeled on how the leading SAP and treasury-software companies sell, builds recognition around the same target accounts so the first call is a warm follow-up rather than a cold start. Most of it needs no media spend and compounds month over month.</p>
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-value">4</div><div class="stat-label">moves drawn from how the category leaders market</div></div>
+    <div class="stat-card"><div class="stat-value">1</div><div class="stat-label">problem we name and own, repeated on every surface</div></div>
+    <div class="stat-card"><div class="stat-value">17/21</div><div class="stat-label">SAP treasury job ads in our first sample describe this pain in their own words</div></div>
+    <div class="stat-card"><div class="stat-value">$0</div><div class="stat-label">added media spend for most of these moves</div></div>
+  </div>
+</section>
+
+<h2 id="leaders">How the category leaders market</h2>
+<p class="h2-sub">Kyriba, HighRadius, FIS and Serrala outspend everyone, but four of their moves cost more in discipline than in dollars, and OnePilot can run all four.</p>
+<div class="zones">
+  <div class="zone zone-blue">
+    <h3>They name the problem, not the feature</h3>
+    <p>Kyriba sells against "liquidity gridlock"; HighRadius owns "autonomous finance." Buyers remember the named problem and the company that owns it long after a feature list fades.</p>
+  </div>
+  <div class="zone zone-green">
+    <h3>They publish their own research</h3>
+    <p>Kyriba runs a quarterly liquidity index; Tesorio an annual receivables benchmark. One proprietary, surprising number earns press, gets quoted, and pulls buyers in instead of chasing them.</p>
+  </div>
+  <div class="zone zone-purple">
+    <h3>They make AI concrete and governed</h3>
+    <p>The leaders give their AI a name, attach one before-and-after number, and lead with control and auditability, which is what wins a finance buyer wary of AI near the money.</p>
+  </div>
+  <div class="zone zone-orange">
+    <h3>They turn the SAP relationship into trust</h3>
+    <p>The strongest SAP add-on vendors make their certifications, co-sell status and SAP Store presence do visible work: an SAP customer trusts what SAP already vouches for.</p>
+  </div>
+</div>
+
+<h2 id="apply">The plan for OnePilot</h2>
+<p class="h2-sub">Four moves, in priority order. The first two start now with no input needed; the last two land harder with a short decision from you.</p>
+<div class="zones">
+  <div class="zone zone-blue">
+    <h3>1. Name the problem: "shadow integrations"</h3>
+    <p>The patchwork of hand-keyed data and home-built scripts moving market data, trades, bank files and remittances into SAP: fragile, unowned, unmonitored. The line that repeats everywhere: "replace your shadow integrations with one governed, no-code system, built to survive your next SAP upgrade." It carries OnePilot's real edge, governance and no code, in three words.</p>
+  </div>
+  <div class="zone zone-green">
+    <h3>2. Publish a benchmark: "The Shadow Integration Report"</h3>
+    <p>A short, sourced report built from public SAP-treasury job ads, which describe the manual data work openly. First read: of 21 live ads, 17 described building or hand-running that plumbing and 13 were tied to an S/4HANA migration. We are widening it into a clean, publishable figure that anchors the website, the deck and outreach.</p>
+  </div>
+  <div class="zone zone-purple">
+    <h3>3. Name and prove the AI</h3>
+    <p>Give the OnePilot digital co-worker a product name, pair it with one real number from the live ChatGPT customer, and lead with its governance. Brisken's audit trail and exception control are exactly the assurance the AI-wary finance buyer asks for, and few competitors can match it.</p>
+  </div>
+  <div class="zone zone-orange">
+    <h3>4. Make the SAP relationship work harder</h3>
+    <p>Tune the SAP Store listings to surface for problem searches, pursue the higher SAP trust badges, and where an SAP account team is open to it, co-sell into accounts SAP already owns. This is the warmest route Brisken has, and it borrows SAP's credibility.</p>
+  </div>
+</div>
+
+<div class="callout">
+  <span class="callout-title">What this needs from you</span>
+  The naming and the benchmark we run now. Two short inputs make moves 3 and 4 land: one named customer with a usable number for a reference, and a yes or no on whether OnePilot is on SAP's active co-sell motion or listed only. Publishing anything on brisken.com stays your call; we build it ready for your approval.
+</div>
+<div class="callout green">
+  <span class="callout-title">How it fits the engine</span>
+  Outbound on the first tab creates the meetings; this layer makes each target meet Brisken as the named answer to their problem before we reach out, and adds a slow inbound stream underneath. Same target accounts, two reinforcing surfaces.
+</div>
+
+</div><!-- /tab-marketing -->
+
 <div class="footer">
   <div>Brisken &middot; UnpauseAI &middot; admin@unpauseai.com</div>
-  <div>Last updated: 2026-06-12</div>
+  <div>Last updated: 2026-06-16</div>
 </div>
 
 </main>
@@ -519,6 +617,8 @@
     if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(sel+1, current.length-1); current = render(input.value); }
     if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(sel-1, 0); current = render(input.value); }
     if (e.key === 'Enter' && current[sel]) {
+      var el = document.getElementById(current[sel].id);
+      if (el && window.__activateTabFor) window.__activateTabFor(el);
       location.hash = current[sel].id; close();
     }
   });
@@ -527,7 +627,86 @@
     localStorage.setItem('lastSearch', input.value);
   });
   overlay.addEventListener('click', function(e){ if (e.target === overlay) close(); });
-  results.addEventListener('click', function(){ close(); });
+  results.addEventListener('click', function(e){
+    var a = e.target.closest('a');
+    if (a) {
+      var el = document.getElementById(a.getAttribute('href').slice(1));
+      if (el && window.__activateTabFor) window.__activateTabFor(el);
+    }
+    close();
+  });
+})();
+</script>
+
+<script>
+(function(){
+  var btns = Array.prototype.slice.call(document.querySelectorAll('.tab-btn'));
+  var panels = Array.prototype.slice.call(document.querySelectorAll('.tab-panel'));
+  if (!btns.length) return;
+
+  function indexOf(id){
+    for (var i = 0; i < btns.length; i++) {
+      if (btns[i].getAttribute('data-tab') === id) return i;
+    }
+    return 0;
+  }
+  function currentId(){
+    var open = document.querySelector('.tab-panel.active');
+    return open ? open.id : btns[0].getAttribute('data-tab');
+  }
+
+  // Switch to a tab by id. `focusBtn` moves keyboard focus to its button
+  // (used by arrow-key navigation, not by a plain click).
+  function activate(id, focusBtn){
+    panels.forEach(function(p){ p.classList.toggle('active', p.id === id); });
+    btns.forEach(function(b){
+      var on = b.getAttribute('data-tab') === id;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      b.tabIndex = on ? 0 : -1;
+    });
+    try { localStorage.setItem('lastTab', id); } catch(e){}
+    if (focusBtn) btns[indexOf(id)].focus();
+  }
+
+  // Jump back and forth: move `delta` tabs from the current one, wrapping
+  // at the ends so the two tabs toggle. Exposed as window.__tabStep so any
+  // in-page control can drive it too.
+  function step(delta, focusBtn){
+    var next = (indexOf(currentId()) + delta + btns.length) % btns.length;
+    activate(btns[next].getAttribute('data-tab'), focusBtn !== false);
+    window.scrollTo(0, 0);
+  }
+  window.__tabStep = step;
+
+  btns.forEach(function(b){
+    b.addEventListener('click', function(){
+      activate(b.getAttribute('data-tab'));
+      window.scrollTo(0, 0);
+    });
+  });
+
+  // Keyboard: Left/Right (or [ / ]) jump between tabs; Home/End to the ends.
+  // Ignored while typing in the search box or with a modifier held, so it
+  // never fights the Ctrl/Cmd+K palette or text entry.
+  document.addEventListener('keydown', function(e){
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === 'ArrowRight' || e.key === ']') { e.preventDefault(); step(1); }
+    else if (e.key === 'ArrowLeft' || e.key === '[') { e.preventDefault(); step(-1); }
+    else if (e.key === 'Home') { e.preventDefault(); activate(btns[0].getAttribute('data-tab'), true); window.scrollTo(0, 0); }
+    else if (e.key === 'End') { e.preventDefault(); activate(btns[btns.length - 1].getAttribute('data-tab'), true); window.scrollTo(0, 0); }
+  });
+
+  window.__activateTabFor = function(el){
+    var p = el.closest('.tab-panel');
+    if (p) activate(p.id);
+  };
+
+  var saved = null;
+  try { saved = localStorage.getItem('lastTab'); } catch(e){}
+  if (saved && document.getElementById(saved)) activate(saved);
 })();
 </script>
 
