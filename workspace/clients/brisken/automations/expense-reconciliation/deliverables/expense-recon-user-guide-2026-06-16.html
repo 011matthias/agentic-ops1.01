@@ -156,7 +156,7 @@
 
     <div class="card" data-search="overview what it does">
       <h2>What this tool does</h2>
-      <p class="sub" style="margin-bottom:0;">It takes one card statement and its receipts, matches each charge to a receipt, suggests a category for every line, and gives you a review screen where you confirm or correct each charge. Once every charge is decided, it produces a Zoho Books journal import and an Excel review report. Everything runs on your own computer; no financial data leaves the machine.</p>
+      <p class="sub" style="margin-bottom:0;">It takes one card statement and its receipts, matches each charge to a receipt, suggests a category for every line, and gives you a review screen where you confirm or correct each charge. Once every charge is decided, it produces a Zoho Books journal import, a flat reconciled CSV, and an Excel review report. Everything runs on your own computer; no financial data leaves the machine.</p>
     </div>
 
     <div class="card" data-search="contents table">
@@ -199,11 +199,12 @@
     <div class="card" id="en-run" data-search="reconcile month upload statement receipts form currency entity ai">
       <h2>3. Reconcile a month</h2>
       <ol>
-        <li>On <strong>Runs</strong> you need two files: the <strong>card statement</strong> (.csv or .xlsx) and the <strong>receipts file</strong> (.csv).</li>
-        <li><strong>Card / account name</strong> and <strong>Legal entity</strong>: short labels that say which card and which company this run belongs to, for example <code class="inl">amex-9001</code> and <code class="inl">brisken-llc</code>.</li>
+        <li>On <strong>Runs</strong> you need two files: the <strong>card statement</strong> (.csv, .xlsx, or a Chase PDF) and the <strong>receipts file</strong> (.csv).</li>
+        <li><strong>Card / account name</strong> and <strong>Account to legal entity</strong>: the legal entity is taken from the account that paid, so you map each card or account to its company, for example <code class="inl">amex-9001</code> to <code class="inl">brisken-llc</code>; an unmapped account uses its own name. A Chase PDF needs no card name; the cards are read from the statement itself.</li>
         <li><strong>Card currency</strong>: the currency the card is billed in (USD by default).</li>
         <li><strong>Receipts source</strong>: choose <em>Extracted-fields CSV</em> for the standard receipt export, or <em>Zoho Expense export CSV</em> if your receipts come straight from Zoho Expense. For the Zoho option a column map appears; leave it as is unless a header name differs in your file.</li>
-        <li><strong>Statement column overrides</strong>: the tool auto-detects the statement columns. Open this section only if a column was read wrongly.</li>
+        <li><strong>Receipts currency</strong>: the currency to assume when a receipt does not state one. Leave it blank to flag those receipts as unknown rather than assume dollars.</li>
+        <li><strong>Statement column overrides</strong>: the tool auto-detects the statement columns; a Chase PDF needs no column map. Open this section only if a column was read wrongly.</li>
         <li><strong>AI categorization</strong>: tick this to let the AI suggest categories and judge foreign-currency charges. It needs an OpenAI key set on the server. Without a key the tool uses its keyword classifier and still finishes the run.</li>
         <li>Click <strong>Run reconciliation</strong>. A progress screen appears; you can leave the tab, the work continues in the background.</li>
       </ol>
@@ -219,6 +220,7 @@
           <tr><td>Reconciled</td><td>Confirmed against a receipt.</td></tr>
           <tr><td>Needs review</td><td>Matched, but the tool wants your eyes on it.</td></tr>
           <tr><td>Unmatched</td><td>No receipt found yet.</td></tr>
+          <tr><td>Unknown currency</td><td>Receipts whose currency could not be read; set it so they can reconcile.</td></tr>
           <tr><td>Match rate</td><td>Share of charges already matched.</td></tr>
           <tr><td>All accounted for</td><td><span class="pill green">yes</span> means no charge was silently dropped.</td></tr>
           <tr><td>Dup groups</td><td>Possible double charges or re-uploaded receipts.</td></tr>
@@ -255,7 +257,7 @@
       <ul>
         <li>The bar at the bottom tells you whether you are <span class="pill orange">Not ready to post</span> or <span class="pill green">Ready to post</span>. It also shows how many charges are still undecided, any amount still unreconciled, and how many lines still need a category.</li>
         <li><strong>Confirm all matched</strong> accepts every clean match in one click.</li>
-        <li>When the bar turns to <strong>Ready to post</strong>, two downloads unlock: <strong>Zoho journal (.csv)</strong> for import into Zoho Books, and <strong>Download report (.xlsx)</strong> as the review record.</li>
+        <li>When the bar turns to <strong>Ready to post</strong>, three downloads unlock: <strong>Zoho journal (.csv)</strong> for import into Zoho Books, <strong>Reconciled data (.csv)</strong> the flat file with one row per charge and its match status, and <strong>Download report (.xlsx)</strong> as the review record.</li>
       </ul>
       <div class="note">The downloads stay locked until every charge is decided, so an incomplete month cannot be posted by accident.</div>
     </div>
@@ -292,7 +294,7 @@
 
     <div class="card" data-search="ueberblick was das werkzeug macht">
       <h2>Was dieses Werkzeug macht</h2>
-      <p class="sub" style="margin-bottom:0;">Es nimmt einen Kartenauszug und die zugehorigen Belege, ordnet jede Buchung einem Beleg zu, schlagt fur jede Zeile eine Kategorie vor und zeigt Ihnen eine Prufansicht, in der Sie jede Buchung bestatigen oder korrigieren. Sobald alle Buchungen entschieden sind, erzeugt es einen Journal-Import fur Zoho Books und einen Prufbericht als Excel-Datei. Alles lauft auf Ihrem eigenen Rechner; keine Finanzdaten verlassen das Gerat.</p>
+      <p class="sub" style="margin-bottom:0;">Es nimmt einen Kartenauszug und die zugehorigen Belege, ordnet jede Buchung einem Beleg zu, schlagt fur jede Zeile eine Kategorie vor und zeigt Ihnen eine Prufansicht, in der Sie jede Buchung bestatigen oder korrigieren. Sobald alle Buchungen entschieden sind, erzeugt es einen Journal-Import fur Zoho Books, eine flache abgeglichene CSV-Datei und einen Prufbericht als Excel-Datei. Alles lauft auf Ihrem eigenen Rechner; keine Finanzdaten verlassen das Gerat.</p>
     </div>
 
     <div class="card" data-search="inhalt">
@@ -335,11 +337,12 @@
     <div class="card" id="de-run" data-search="abgleichen monat hochladen auszug belege formular waehrung einheit ki">
       <h2>3. Einen Monat abgleichen</h2>
       <ol>
-        <li>In <strong>Runs</strong> brauchen Sie zwei Dateien: den <strong>Kartenauszug</strong> (.csv oder .xlsx) und die <strong>Belegdatei</strong> (.csv).</li>
-        <li><strong>Karten- / Kontoname</strong> und <strong>Rechtstrager (Legal entity)</strong>: kurze Bezeichnungen dafur, zu welcher Karte und welcher Gesellschaft dieser Lauf gehort, zum Beispiel <code class="inl">amex-9001</code> und <code class="inl">brisken-llc</code>.</li>
+        <li>In <strong>Runs</strong> brauchen Sie zwei Dateien: den <strong>Kartenauszug</strong> (.csv, .xlsx oder ein Chase-PDF) und die <strong>Belegdatei</strong> (.csv).</li>
+        <li><strong>Karten- / Kontoname</strong> und <strong>Konto zu Rechtstrager</strong>: der Rechtstrager wird aus dem Konto ubernommen, das gezahlt hat; ordnen Sie also jede Karte oder jedes Konto seiner Gesellschaft zu, zum Beispiel <code class="inl">amex-9001</code> zu <code class="inl">brisken-llc</code>; ein nicht zugeordnetes Konto verwendet seinen eigenen Namen. Ein Chase-PDF braucht keinen Kartennamen; die Karten werden aus dem Auszug selbst gelesen.</li>
         <li><strong>Kartenwahrung</strong>: die Wahrung, in der die Karte abgerechnet wird (Standard ist USD).</li>
         <li><strong>Belegquelle</strong>: wahlen Sie <em>Extracted-fields CSV</em> fur den ublichen Beleg-Export oder <em>Zoho Expense export CSV</em>, wenn Ihre Belege direkt aus Zoho Expense kommen. Bei der Zoho-Option erscheint eine Spaltenzuordnung; lassen Sie sie unverandert, ausser ein Spaltenname weicht in Ihrer Datei ab.</li>
-        <li><strong>Spalten des Auszugs uberschreiben</strong>: das Werkzeug erkennt die Spalten automatisch. Offnen Sie diesen Abschnitt nur, wenn eine Spalte falsch gelesen wurde.</li>
+        <li><strong>Belegwahrung</strong>: die Wahrung, die angenommen wird, wenn ein Beleg keine angibt. Lassen Sie das Feld leer, um solche Belege als unbekannt zu markieren, statt Dollar anzunehmen.</li>
+        <li><strong>Spalten des Auszugs uberschreiben</strong>: das Werkzeug erkennt die Spalten automatisch; ein Chase-PDF braucht keine Spaltenzuordnung. Offnen Sie diesen Abschnitt nur, wenn eine Spalte falsch gelesen wurde.</li>
         <li><strong>KI-Kategorisierung</strong>: aktivieren Sie dies, damit die KI Kategorien vorschlagt und Fremdwahrungsbuchungen beurteilt. Dafur muss ein OpenAI-Schlussel auf dem Server gesetzt sein. Ohne Schlussel nutzt das Werkzeug den Stichwort-Klassifizierer und schliesst den Lauf trotzdem ab.</li>
         <li>Klicken Sie auf <strong>Run reconciliation</strong>. Eine Fortschrittsansicht erscheint; Sie konnen den Tab verlassen, die Arbeit lauft im Hintergrund weiter.</li>
       </ol>
@@ -355,6 +358,7 @@
           <tr><td>Reconciled</td><td>Gegen einen Beleg bestatigt.</td></tr>
           <tr><td>Needs review</td><td>Zugeordnet, aber das Werkzeug bittet um Ihren Blick.</td></tr>
           <tr><td>Unmatched</td><td>Noch kein Beleg gefunden.</td></tr>
+          <tr><td>Unknown currency</td><td>Belege, deren Wahrung nicht gelesen werden konnte; setzen Sie sie, damit sie abgeglichen werden konnen.</td></tr>
           <tr><td>Match rate</td><td>Anteil der bereits zugeordneten Buchungen.</td></tr>
           <tr><td>All accounted for</td><td><span class="pill green">yes</span> bedeutet, keine Buchung ging stillschweigend verloren.</td></tr>
           <tr><td>Dup groups</td><td>Mogliche Doppelbuchungen oder erneut hochgeladene Belege.</td></tr>
@@ -391,7 +395,7 @@
       <ul>
         <li>Die Leiste unten zeigt, ob Sie <span class="pill orange">Not ready to post</span> oder <span class="pill green">Ready to post</span> sind. Sie zeigt auch, wie viele Buchungen noch offen sind, welcher Betrag noch nicht abgeglichen ist und wie viele Zeilen noch eine Kategorie brauchen.</li>
         <li><strong>Confirm all matched</strong> nimmt jede saubere Zuordnung mit einem Klick an.</li>
-        <li>Wenn die Leiste auf <strong>Ready to post</strong> wechselt, werden zwei Downloads frei: <strong>Zoho journal (.csv)</strong> fur den Import in Zoho Books und <strong>Download report (.xlsx)</strong> als Prufnachweis.</li>
+        <li>Wenn die Leiste auf <strong>Ready to post</strong> wechselt, werden drei Downloads frei: <strong>Zoho journal (.csv)</strong> fur den Import in Zoho Books, <strong>Reconciled data (.csv)</strong> die flache Datei mit einer Zeile je Buchung und ihrem Abgleichstatus und <strong>Download report (.xlsx)</strong> als Prufnachweis.</li>
       </ul>
       <div class="note">Die Downloads bleiben gesperrt, bis jede Buchung entschieden ist; so kann ein unvollstandiger Monat nicht versehentlich gebucht werden.</div>
     </div>
@@ -428,7 +432,7 @@
 
     <div class="card" data-search="visao geral o que a ferramenta faz">
       <h2>O que esta ferramenta faz</h2>
-      <p class="sub" style="margin-bottom:0;">Ela recebe um extrato do cartao e seus recibos, associa cada lancamento a um recibo, sugere uma categoria para cada linha e mostra uma tela de revisao onde voce confirma ou corrige cada lancamento. Quando todos os lancamentos estao decididos, ela gera uma importacao de lancamentos contabeis para o Zoho Books e um relatorio de revisao em Excel. Tudo roda no seu proprio computador; nenhum dado financeiro sai da maquina.</p>
+      <p class="sub" style="margin-bottom:0;">Ela recebe um extrato do cartao e seus recibos, associa cada lancamento a um recibo, sugere uma categoria para cada linha e mostra uma tela de revisao onde voce confirma ou corrige cada lancamento. Quando todos os lancamentos estao decididos, ela gera uma importacao de lancamentos contabeis para o Zoho Books, um CSV conciliado simples e um relatorio de revisao em Excel. Tudo roda no seu proprio computador; nenhum dado financeiro sai da maquina.</p>
     </div>
 
     <div class="card" data-search="conteudo indice">
@@ -471,11 +475,12 @@
     <div class="card" id="pt-run" data-search="conciliar mes enviar extrato recibos formulario moeda entidade ia">
       <h2>3. Conciliar um mes</h2>
       <ol>
-        <li>Em <strong>Runs</strong> voce precisa de dois arquivos: o <strong>extrato do cartao</strong> (.csv ou .xlsx) e o <strong>arquivo de recibos</strong> (.csv).</li>
-        <li><strong>Nome do cartao / conta</strong> e <strong>Entidade legal (Legal entity)</strong>: rotulos curtos que indicam a qual cartao e a qual empresa esta execucao pertence, por exemplo <code class="inl">amex-9001</code> e <code class="inl">brisken-llc</code>.</li>
+        <li>Em <strong>Runs</strong> voce precisa de dois arquivos: o <strong>extrato do cartao</strong> (.csv, .xlsx ou um PDF da Chase) e o <strong>arquivo de recibos</strong> (.csv).</li>
+        <li><strong>Nome do cartao / conta</strong> e <strong>Conta para entidade legal</strong>: a entidade legal vem da conta que pagou, entao mapeie cada cartao ou conta a sua empresa, por exemplo <code class="inl">amex-9001</code> para <code class="inl">brisken-llc</code>; uma conta nao mapeada usa o proprio nome. Um PDF da Chase nao precisa de nome de cartao; os cartoes sao lidos do proprio extrato.</li>
         <li><strong>Moeda do cartao</strong>: a moeda em que o cartao e cobrado (USD por padrao).</li>
         <li><strong>Origem dos recibos</strong>: escolha <em>Extracted-fields CSV</em> para o export padrao de recibos, ou <em>Zoho Expense export CSV</em> se seus recibos vierem direto do Zoho Expense. Na opcao Zoho aparece um mapa de colunas; deixe como esta, a menos que o nome de uma coluna seja diferente no seu arquivo.</li>
-        <li><strong>Substituir colunas do extrato</strong>: a ferramenta detecta as colunas automaticamente. Abra esta secao apenas se uma coluna tiver sido lida de forma errada.</li>
+        <li><strong>Moeda dos recibos</strong>: a moeda a assumir quando um recibo nao informa nenhuma. Deixe em branco para sinalizar esses recibos como desconhecidos, em vez de assumir dolares.</li>
+        <li><strong>Substituir colunas do extrato</strong>: a ferramenta detecta as colunas automaticamente; um PDF da Chase nao precisa de mapa de colunas. Abra esta secao apenas se uma coluna tiver sido lida de forma errada.</li>
         <li><strong>Categorizacao por IA</strong>: marque para a IA sugerir categorias e avaliar lancamentos em moeda estrangeira. Ela precisa de uma chave OpenAI configurada no servidor. Sem chave, a ferramenta usa o classificador por palavras-chave e ainda assim conclui a execucao.</li>
         <li>Clique em <strong>Run reconciliation</strong>. Uma tela de progresso aparece; voce pode sair da aba, o trabalho continua em segundo plano.</li>
       </ol>
@@ -491,6 +496,7 @@
           <tr><td>Reconciled</td><td>Confirmados contra um recibo.</td></tr>
           <tr><td>Needs review</td><td>Associados, mas a ferramenta quer sua atencao.</td></tr>
           <tr><td>Unmatched</td><td>Nenhum recibo encontrado ainda.</td></tr>
+          <tr><td>Unknown currency</td><td>Recibos cuja moeda nao pode ser lida; defina-a para que possam ser conciliados.</td></tr>
           <tr><td>Match rate</td><td>Proporcao de lancamentos ja associados.</td></tr>
           <tr><td>All accounted for</td><td><span class="pill green">yes</span> significa que nenhum lancamento foi descartado em silencio.</td></tr>
           <tr><td>Dup groups</td><td>Possiveis cobrancas em duplicidade ou recibos reenviados.</td></tr>
@@ -527,7 +533,7 @@
       <ul>
         <li>A barra na parte de baixo informa se voce esta <span class="pill orange">Not ready to post</span> ou <span class="pill green">Ready to post</span>. Ela tambem mostra quantos lancamentos ainda estao indecisos, qual valor ainda nao foi conciliado e quantas linhas ainda precisam de categoria.</li>
         <li><strong>Confirm all matched</strong> aceita toda associacao limpa com um clique.</li>
-        <li>Quando a barra muda para <strong>Ready to post</strong>, dois downloads sao liberados: <strong>Zoho journal (.csv)</strong> para importar no Zoho Books e <strong>Download report (.xlsx)</strong> como registro da revisao.</li>
+        <li>Quando a barra muda para <strong>Ready to post</strong>, tres downloads sao liberados: <strong>Zoho journal (.csv)</strong> para importar no Zoho Books, <strong>Reconciled data (.csv)</strong> o arquivo simples com uma linha por lancamento e seu status de conciliacao e <strong>Download report (.xlsx)</strong> como registro da revisao.</li>
       </ul>
       <div class="note">Os downloads ficam bloqueados ate que todo lancamento esteja decidido, para que um mes incompleto nao seja lancado por engano.</div>
     </div>
