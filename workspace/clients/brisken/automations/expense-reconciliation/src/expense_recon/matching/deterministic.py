@@ -242,6 +242,16 @@ def match_one(
     Returns None when the candidate does not pass the minimum bar
     (no plausible amount or date relationship).
     """
+    # Unknown receipt currency (Dirk 2026-06-16: "if we really do not know
+    # the currency, then we should say so"). We refuse to silently treat an
+    # unknown currency as the card's currency; doing so would let a foreign
+    # receipt amount-match a USD charge as if it were same-currency and post
+    # as a trusted EXACT. No deterministic candidate is produced, so the
+    # receipt surfaces in `unmatched_receipts`, flagged "currency unknown" in
+    # the workbench for the reviewer to set before it can reconcile.
+    if receipt.detected_currency is None:
+        return None
+
     # Vendor similarity feeds the graded 0-100 triage score in every
     # branch (3.9 signal reused); a confirmed alias (PR 2c) pins it to 1.0.
     vendor_score = _vendor_score(tx, receipt, cfg)

@@ -108,14 +108,27 @@ class RunInputError(Exception):
 @dataclass
 class RunForm:
     account_id: str
-    legal_entity_id: str
+    # Account -> legal entity map (Dirk 2026-06-16: the legal entity should
+    # be derived from the card/account that paid, not typed up front). The
+    # run's legal entity is looked up from `account_id`; an unmapped account
+    # falls back to the account name itself (never a fabricated "brisken"),
+    # which is visibly "not yet mapped" rather than a confident wrong guess.
+    account_legal_entities: dict[str, str]
     account_card_currency: str
     sheet_name: str | None
     column_map_overrides: dict[str, str]
     receipts_source: str            # "csv" | "expense_csv"
     expense_column_map: dict[str, str]
+    # Receipts currency. Blank means "unknown": we do NOT default to USD
+    # (Dirk 2026-06-16). A receipt with neither a per-row currency nor this
+    # default keeps `detected_currency=None` and is flagged for review.
     receipts_default_currency: str
     use_llm: bool
+
+    def resolve_legal_entity(self) -> str:
+        """Derive this run's legal entity from the paying account."""
+        account_id = self.account_id or "card"
+        return self.account_legal_entities.get(account_id) or account_id
 
 
 def _safe_name(name: str, fallback: str) -> str:
@@ -335,7 +348,8 @@ def _build_config(
     statement = {
         "path": stmt_name,
         "account_id": form.account_id or "card",
-        "legal_entity_id": form.legal_entity_id or "brisken",
+        # Derived from the paying account (Dirk 2026-06-16), not typed.
+        "legal_entity_id": form.resolve_legal_entity(),
         "account_card_currency": form.account_card_currency or "USD",
         "column_map": column_map,
     }
@@ -345,8 +359,12 @@ def _build_config(
     receipts: dict = {
         "path": rcpt_name,
         "source": form.receipts_source,
-        "default_currency": form.receipts_default_currency or "USD",
     }
+    # Only set a default currency when one was given. Blank => omit it, so a
+    # receipt with no currency stays unknown (detected_currency=None) and
+    # gets flagged, instead of being silently stamped USD (Dirk 2026-06-16).
+    if form.receipts_default_currency:
+        receipts["default_currency"] = form.receipts_default_currency
     if form.receipts_source == "expense_csv":
         receipts["column_map"] = form.expense_column_map or DEFAULT_EXPENSE_COLUMN_MAP
 
@@ -643,6 +661,9 @@ def _receipt_view(r: Receipt, overrides: dict[tuple[str, int], dict]) -> dict:
         "date": r.detected_date.isoformat() if r.detected_date else "",
         "total": _fmt_amount(r.detected_total),
         "currency": r.detected_currency or "",
+        # Dirk 2026-06-16: when the currency is unknown, say so in the UI
+        # rather than showing a blank or a silently-assumed USD.
+        "currency_unknown": r.detected_currency is None,
         "reference": r.detected_reference or "",
         "report_number": r.report_number or "",
         "receipt_url": r.receipt_url or "",
@@ -941,9 +962,13 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
     ]
 
     n_tx = len(transactions)
+    n_unknown_currency = sum(1 for r in receipts if r.detected_currency is None)
     summary = {
         "n_transactions": n_tx,
         "n_receipts": len(receipts),
+        # Dirk 2026-06-16: receipts whose currency we could not determine.
+        # Surfaced so the reviewer sets them rather than the tool guessing.
+        "n_unknown_currency": n_unknown_currency,
         "n_reconciled": n_reconciled,
         "n_review": n_review,
         "n_unmatched_tx": n_unmatched_tx,

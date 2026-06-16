@@ -261,3 +261,125 @@ def test_confirm_all_matched_does_not_stomp_an_explicit_reject(client):
     db.close()
     # The explicit reject survived the batch confirm.
     assert decisions[matched_tx].status == "rejected"
+
+
+# --------------------------------------------------------------------------
+# Dirk 2026-06-16 corrections: legal entity derived from the paying account,
+# and unknown currency flagged rather than silently defaulted to USD.
+# --------------------------------------------------------------------------
+
+_RECEIPTS_NO_CURRENCY = (
+    "document_id,detected_date,detected_total,detected_vendor\n"
+    "rcpt-001,2026-04-01,5.75,Coffee Shop NYC\n"
+)
+
+
+def _files_no_currency():
+    return {
+        "statement": (
+            "statement.example.csv",
+            (EXAMPLES / "statement.example.csv").read_bytes(),
+            "text/csv",
+        ),
+        "receipts": ("receipts.csv", _RECEIPTS_NO_CURRENCY.encode(), "text/csv"),
+    }
+
+
+def _run_id(resp) -> str:
+    assert resp.status_code == 303, resp.text
+    return resp.headers["location"].rstrip("/").rsplit("/", 1)[-1]
+
+
+def _snapshot(client, run_id):
+    db = RunStore(client._data_root / "recon-web.sqlite")
+    run = db.get_run(run_id)
+    db.close()
+    return run
+
+
+def test_legal_entity_derived_from_account_map(client):
+    # The legal entity comes from the account -> entity map, not a typed
+    # field. Both transactions and receipts carry the mapped entity.
+    resp = client.post(
+        "/runs",
+        files=_statement_files(),
+        data={
+            "account_id": "amex-9001",
+            "account_legal_entities": '{"amex-9001": "brisken-llc"}',
+            "account_card_currency": "USD",
+            "receipts_source": "csv",
+        },
+        follow_redirects=False,
+    )
+    run = _snapshot(client, _run_id(resp))
+    assert run.snapshot["transactions"]
+    assert all(
+        t["legal_entity_id"] == "brisken-llc" for t in run.snapshot["transactions"]
+    )
+    assert all(
+        r["legal_entity_id"] == "brisken-llc" for r in run.snapshot["receipts"]
+    )
+
+
+def test_legal_entity_falls_back_to_account_when_unmapped(client):
+    # No map: the entity is the account name itself, never a fabricated
+    # "brisken" default. The account is visibly its own (unmapped) entity.
+    resp = client.post(
+        "/runs",
+        files=_statement_files(),
+        data={
+            "account_id": "amex-9001",
+            "account_card_currency": "USD",
+            "receipts_source": "csv",
+        },
+        follow_redirects=False,
+    )
+    run = _snapshot(client, _run_id(resp))
+    assert all(
+        t["legal_entity_id"] == "amex-9001" for t in run.snapshot["transactions"]
+    )
+
+
+def test_unknown_currency_flagged_not_defaulted(client):
+    # Receipts file has no currency column; the form currency is left blank.
+    # The receipt must NOT be stamped USD: it is flagged unknown and left
+    # unmatched (Dirk 2026-06-16).
+    resp = client.post(
+        "/runs",
+        files=_files_no_currency(),
+        data={
+            "account_id": "amex-9001",
+            "account_card_currency": "USD",
+            "receipts_source": "csv",
+            "receipts_default_currency": "",
+        },
+        follow_redirects=False,
+    )
+    run_id = _run_id(resp)
+    wb = client.get(f"/runs/{run_id}")
+    assert wb.status_code == 200
+    assert "unknown currency" in wb.text.lower()
+    # The one receipt had an unknown currency, so it matched nothing.
+    run = _snapshot(client, run_id)
+    assert run.summary["n_matched"] == 0
+    assert run.snapshot["receipts"][0]["detected_currency"] is None
+
+
+def test_currency_default_applies_when_set(client):
+    # Same data, but the reviewer states the currency: it is applied and the
+    # receipt reconciles. Confirms blank-vs-set is the only difference.
+    resp = client.post(
+        "/runs",
+        files=_files_no_currency(),
+        data={
+            "account_id": "amex-9001",
+            "account_card_currency": "USD",
+            "receipts_source": "csv",
+            "receipts_default_currency": "USD",
+        },
+        follow_redirects=False,
+    )
+    run_id = _run_id(resp)
+    run = _snapshot(client, run_id)
+    assert run.summary["n_matched"] == 1
+    assert run.snapshot["receipts"][0]["detected_currency"] == "USD"
