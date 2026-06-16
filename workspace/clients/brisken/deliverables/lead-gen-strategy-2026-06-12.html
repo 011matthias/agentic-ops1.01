@@ -55,15 +55,14 @@
   .tab-btn {
     appearance: none; cursor: pointer;
     font-size: 14px; font-weight: 600; color: var(--muted);
-    padding: 9px 18px; border-radius: 10px;
+    padding: 8px 16px; border-radius: 7px;
     border: 1px solid transparent; background: transparent;
-    transition: color .15s ease, background .15s ease, border-color .15s ease, box-shadow .15s ease;
+    transition: color .15s ease, background .15s ease, border-color .15s ease;
   }
   .tab-btn:hover { color: var(--text); background: var(--blue-bg); }
   .tab-btn.active {
     color: var(--blue); font-weight: 700;
     background: var(--surface); border-color: var(--border-strong);
-    box-shadow: 0 1px 3px rgba(0,0,0,.08);
   }
   .tab-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
   .tab-panel { display: none; }
