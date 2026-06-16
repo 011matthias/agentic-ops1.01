@@ -190,7 +190,7 @@
   <div class="stats-row">
     <div class="stat-card"><div class="stat-value">3</div><div class="stat-label">ways to bring in receipts</div></div>
     <div class="stat-card"><div class="stat-value">8</div><div class="stat-label">expense categories</div></div>
-    <div class="stat-card"><div class="stat-value">346</div><div class="stat-label">automated checks behind it</div></div>
+    <div class="stat-card"><div class="stat-value">392</div><div class="stat-label">automated checks behind it</div></div>
     <div class="stat-card"><div class="stat-value">0</div><div class="stat-label">charges dropped</div></div>
   </div>
 </section>
@@ -203,7 +203,7 @@
   <div class="flow-step"><span class="num">4</span><b>Check</b><span>Send only the tricky ones to the AI.</span></div>
   <div class="flow-step"><span class="num">5</span><b>Hand back</b><span>A screen to review, then the files.</span></div>
 </div>
-<p>Two things go in: the card statement (the charges) and the receipts (the proof). One statement can hold several cards at once. Receipts can come however they already exist: exported from Zoho Expense (the usual way), typed into a simple file, or a folder of photos and PDFs that the tool reads on its own.</p>
+<p>Two things go in: the card statement (the charges) and the receipts (the proof). The statement can be the Chase PDF itself: the tool reads the cards in it (one statement covers several), and for any foreign charge it reads the original amount and currency printed under the line, not just the dollar total. A plain CSV or Excel statement works too. Receipts can come however they already exist: exported from Zoho Expense (the usual way, which also carries the paying card and Chris's own category), typed into a simple file, or a folder of photos and PDFs that the tool reads on its own.</p>
 
 <div class="diagram" role="img" aria-label="The statement and the receipts feed the tool, which produces a review screen and a Zoho journal.">
 <svg viewBox="0 0 880 200" xmlns="http://www.w3.org/2000/svg">
@@ -241,7 +241,9 @@
 
 <h2 id="matching">Pairing charges with receipts</h2>
 <p class="lead">The tool only calls the AI when a plain match won't settle it. Same card, same day, same amount: paired on the spot. Travel is where it earns its keep.</p>
-<p>A receipt in euros sits against a charge that posted in dollars, so they never match to the cent. The tool measures the gap once converted and sorts each pair into three bands:</p>
+<p>A receipt that was paid on a named card is only checked against that card's own charges, so a charge on one card can't pick up a receipt that belongs to another.</p>
+<p>For a foreign charge, the Chase statement prints the original amount in its own currency right under the line. When a euro receipt lines up with that euro figure, the tool pairs them directly, euro against euro, with no exchange-rate estimate and no AI; the dollars on the statement are only the card settling up afterwards. The estimate below is the fallback, for when the statement does not carry that original figure.</p>
+<p>Then a receipt in euros sits against a charge that posted in dollars, so they never match to the cent. The tool measures the gap once converted and sorts each pair into three bands:</p>
 <div class="fxkey">
   <span><span class="dot g"></span><b>Within about 3%</b> confident</span>
   <span><span class="dot o"></span><b>3% to about 13%</b> check it</span>
@@ -254,6 +256,7 @@
 </div>
 <p>The middle band is wide on purpose. Cards often add their own markup when they convert at the till, up to about 13% on Brisken's own receipts, so a charge can run high and still be the right receipt. When the receipt prints a dollar figure, the tool trusts that over any estimate. The bands came from real Brisken receipts, not a guess.</p>
 <p>Banks also chop merchant names: Chase prints <span class="bankname">MEGA CENTE CONSTR</span> for a shop with a much longer name. The tool still lines the chopped name up with the full one on the receipt. The name is a tie-breaker, never the whole basis for a match.</p>
+<p>If a receipt's currency can't be read at all, the tool says so and holds the receipt back rather than assuming dollars, so a foreign amount is never quietly booked as if it were a dollar one.</p>
 <p>Whatever happens, no charge disappears. Every one lands in exactly one of three places, and you can see the split at a glance:</p>
 <div class="buckets">
   <div class="bucket green"><div class="big">Matched</div><span>Paired with its receipt, ready for the journal.</span></div>
@@ -268,7 +271,7 @@
 <p>When Chris is happy with a month, one button teaches the tool what she decided: this merchant is that category, this short bank name is that shop, this is the going exchange rate. Next month those arrive already filled in, so each run is quicker than the last. A separate page shows everything it has learned, and she can make it forget anything that turned out wrong.</p>
 
 <h2 id="outputs">What you get back</h2>
-<p>Two files, and only once every charge is checked. A review copy in Excel (a summary, one tab per card, and tabs for anything that needs a look), and the journal to import into Zoho Books. Every journal line carries a link to its receipt and the report it came from, so the proof is one click away.</p>
+<p>Three files, and only once every charge is checked. A review copy in Excel (a summary, one tab per card, and tabs for anything that needs a look); a flat reconciled file in CSV with one row per statement line, each marked matched, needs-a-look, or unmatched and carried next to the receipt it paired with; and the journal to import into Zoho Books. Every journal line carries a link to its receipt and the report it came from, so the proof is one click away.</p>
 <table>
   <thead><tr><th>On each journal line</th><th>What it is</th></tr></thead>
   <tbody>
@@ -289,7 +292,7 @@
 </ul>
 <div class="callout">
   <span class="callout-title">Built to stand on real months</span>
-  Checked by 346 automated checks and run end to end on real Brisken travel months across three currencies, with every charge accounted for.
+  Checked by 392 automated checks and run end to end on real Brisken travel months across three currencies, with every charge accounted for.
 </div>
 
 <div class="footer">
