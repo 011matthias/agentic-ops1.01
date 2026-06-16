@@ -2,7 +2,7 @@
 {% block content %}
 <div class="card">
   <h1>Reconcile a month</h1>
-  <p class="muted">Upload one card statement and the matching receipts. The tool matches, categorizes, and gives you a review workbench. The column mapping for the statement is auto-detected; override only if a field is wrong.</p>
+  <p class="muted">Upload one card statement and the matching receipts. The tool matches, categorizes, and gives you a review workbench. For a CSV or Excel statement the column mapping is auto-detected; override only if a field is wrong. A Chase PDF statement needs no column map and no card name; the cards and the per-charge foreign-currency detail are read straight from the PDF.</p>
 
   {% if error %}
   <div class="alert">{{ error }}</div>
@@ -16,8 +16,8 @@
         onsubmit="var b=this.querySelector('button[type=submit]'); b.disabled=true; b.textContent='Starting reconciliation...';">
     <div class="grid">
       <div>
-        <label for="statement">Card statement (.csv / .xlsx)</label>
-        <input type="file" id="statement" name="statement" accept=".csv,.xlsx,.xlsm" required>
+        <label for="statement">Card statement (.csv / .xlsx / .pdf)</label>
+        <input type="file" id="statement" name="statement" accept=".csv,.xlsx,.xlsm,.pdf" required>
       </div>
       <div>
         <label for="receipts">Receipts file (.csv)</label>
