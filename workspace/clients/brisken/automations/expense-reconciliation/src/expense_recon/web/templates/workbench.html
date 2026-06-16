@@ -96,6 +96,13 @@
           <strong>{{ c.receipt.vendor }}</strong>
           <span class="muted">&middot; {{ c.receipt.date }} &middot; {{ c.receipt.total }} {{ c.receipt.currency }}</span>
           {% if c.receipt.report_number %}<span class="muted mono">&middot; {{ c.receipt.report_number }}</span>{% endif %}
+          {% if c.receipt.payment_mode or c.receipt.zoho_category or c.receipt.reimbursable is sameas true %}
+          <div class="muted" style="font-size:12px; margin-top:2px;">
+            {% if c.receipt.payment_mode %}Paid via: {{ c.receipt.payment_mode }}{% endif %}
+            {% if c.receipt.zoho_category %} &middot; Zoho: {{ c.receipt.zoho_category }}{% endif %}
+            {% if c.receipt.reimbursable is sameas true %} &middot; <span style="color:var(--orange); font-weight:600;">Reimbursable</span>{% endif %}
+          </div>
+          {% endif %}
           {% endif %}
           {% if c.amount_pct is not none %}
           <details style="font-size:12px;">

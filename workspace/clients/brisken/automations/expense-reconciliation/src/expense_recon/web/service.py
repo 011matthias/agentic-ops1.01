@@ -71,6 +71,16 @@ DEFAULT_EXPENSE_COLUMN_MAP: dict[str, str] = {
     "document_id": "Expense ID",
     "receipt_url": "Receipt URL",
     "receipt_name": "Receipt Name",
+    # Full Zoho Expense report fields (2026-06-16). Header names are the
+    # documented-format template; an absent optional column is skipped, not
+    # an error, so these are safe to list even when an export lacks some.
+    "payment_mode": "Payment Mode",
+    "paid_through": "Paid Through",
+    "category": "Category",
+    "exchange_rate": "Exchange Rate",
+    "amount_base": "Amount (USD)",
+    "reimbursable": "Reimbursable",
+    "location": "Expense Location",
 }
 
 # Logical statement-column fields the form exposes for manual override.
@@ -668,6 +678,15 @@ def _receipt_view(r: Receipt, overrides: dict[tuple[str, int], dict]) -> dict:
         "report_number": r.report_number or "",
         "receipt_url": r.receipt_url or "",
         "receipt_name": r.receipt_name or "",
+        # Zoho Expense report fields (2026-06-16) so the workbench shows the
+        # same information the ER document carries.
+        "payment_mode": r.payment_mode or "",
+        "paid_through": r.paid_through or "",
+        "zoho_category": r.zoho_category or "",
+        "exchange_rate": (str(r.exchange_rate) if r.exchange_rate is not None else ""),
+        "base_amount": _fmt_amount(r.base_amount),
+        "reimbursable": r.reimbursable,
+        "expense_location": r.expense_location or "",
         "line_items": items,
     }
 
