@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Brisken Expense Reconciliation: How the tool works</title>
+<!-- deliverable-allow: copy-clipboard | reason: plain-language walkthrough for a non-technical reader; no code or command blocks to copy (the CLI/config section was removed) -->
 <script>(function(){var t=localStorage.getItem('theme');
   var d=document.documentElement;
   d.setAttribute('data-theme',
@@ -50,16 +51,16 @@
     border: 1px solid var(--border); background: var(--surface); color: var(--text);
     border-radius: 999px; padding: 4px 12px; cursor: pointer; font-size: 13px;
   }
-  .main-content { max-width: 980px; margin: 0 auto; padding: 36px 28px 64px; }
+  .main-content { max-width: 860px; margin: 0 auto; padding: 36px 28px 64px; }
 
-  .hero { margin-bottom: 32px; }
+  .hero { margin-bottom: 30px; }
   .hero-badge {
     display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .06em;
     text-transform: uppercase; color: var(--blue); background: var(--blue-bg);
     padding: 4px 12px; border-radius: 999px; margin-bottom: 14px;
   }
-  h1 { font-size: 31px; line-height: 1.2; margin-bottom: 10px; }
-  .hero-sub { color: var(--muted); font-size: 16px; max-width: 740px; }
+  h1 { font-size: 30px; line-height: 1.2; margin-bottom: 10px; }
+  .hero-sub { color: var(--muted); font-size: 16px; max-width: 680px; }
   .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 24px; }
   .stat-card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
@@ -69,20 +70,19 @@
   .stat-label { font-size: 12px; color: var(--muted); margin-top: 2px; }
 
   h2 {
-    font-size: 21px; margin: 46px 0 6px; padding-top: 18px;
+    font-size: 21px; margin: 42px 0 10px; padding-top: 18px;
     border-top: 1px solid var(--border);
   }
-  .h2-sub { color: var(--muted); font-size: 14px; margin-bottom: 16px; }
-  h3 { font-size: 15px; margin: 20px 0 8px; }
+  h3 { font-size: 15px; margin: 18px 0 6px; }
   p { margin-bottom: 11px; }
   p.lead { font-size: 15.5px; }
   ul.plain { margin: 8px 0 12px 20px; font-size: 14.5px; }
-  ul.plain li { margin-bottom: 5px; }
-  .src { font-size: 12px; color: var(--muted); }
+  ul.plain li { margin-bottom: 6px; }
   strong.k { color: var(--text); }
+  .bankname { font-family: "SFMono-Regular", Consolas, Menlo, monospace; font-size: 12.5px; background: var(--blue-bg); color: var(--blue); padding: 1px 6px; border-radius: 5px; }
 
-  /* pipeline flow */
-  .flow { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 20px 0 8px; }
+  /* run flow */
+  .flow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 18px 0 8px; }
   .flow-step {
     background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
     padding: 12px 10px; position: relative; font-size: 13px;
@@ -99,33 +99,20 @@
     color: var(--muted); font-size: 13px; z-index: 1;
   }
 
-  /* zones (cards) */
-  .zones { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin: 16px 0; }
-  .zones.two { grid-template-columns: 1fr 1fr; }
-  .zone { border-radius: 12px; padding: 16px 18px; border: 1px solid var(--border); background: var(--surface); }
-  .zone h3 { margin-top: 0; }
-  .zone-blue { border-left: 4px solid var(--blue); }
-  .zone-green { border-left: 4px solid var(--green); }
-  .zone-purple { border-left: 4px solid var(--purple); }
-  .zone-orange { border-left: 4px solid var(--orange); }
-  .zone ul { margin: 8px 0 0 18px; font-size: 13.5px; }
-  .zone li { margin-bottom: 4px; }
-  .zone .tagline { color: var(--muted); font-size: 13px; margin-top: 6px; }
-
-  /* svg architecture */
+  /* svg diagram */
   .diagram { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin: 18px 0; overflow-x: auto; }
-  .diagram svg { display: block; width: 100%; height: auto; min-width: 640px; }
+  .diagram svg { display: block; width: 100%; height: auto; min-width: 560px; }
   .diagram text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
 
-  /* fx band bar (graph) */
-  .fxbar { display: flex; height: 40px; border-radius: 8px; overflow: hidden; margin: 14px 0 6px; border: 1px solid var(--border); }
+  /* fx band bar */
+  .fxbar { display: flex; height: 38px; border-radius: 8px; overflow: hidden; margin: 12px 0 6px; border: 1px solid var(--border); }
   .fxseg { display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12.5px; font-weight: 600; }
   .fxseg.s1 { background: var(--green); flex: 3; }
   .fxseg.s2 { background: var(--orange); flex: 2.5; }
   .fxseg.s3 { background: var(--red); flex: 1.6; }
   .fxkey { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
   .fxkey b { color: var(--text); }
-  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: baseline; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
   .dot.g { background: var(--green); } .dot.o { background: var(--orange); } .dot.r { background: var(--red); }
 
   /* buckets */
@@ -137,17 +124,10 @@
   .bucket.red { border-left: 4px solid var(--red); }
   .bucket span { color: var(--muted); font-size: 13px; display: block; margin-top: 4px; }
 
-  /* tiers */
-  .tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 14px 0; }
-  .tier { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; background: var(--surface); }
-  .tier .lvl { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--purple); }
-  .tier b { display: block; margin: 4px 0 3px; }
-  .tier span { color: var(--muted); font-size: 13px; }
-
   table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.5px; }
   th { text-align: left; padding: 8px 10px; border-bottom: 2px solid var(--border); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
   td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
-  td code, p code, li code { background: var(--blue-bg); color: var(--blue); padding: 1px 6px; border-radius: 5px; font-size: 12.5px; }
+  td code { background: var(--blue-bg); color: var(--blue); padding: 1px 6px; border-radius: 5px; font-size: 12.5px; }
 
   .callout {
     border-radius: 12px; padding: 14px 18px; margin: 18px 0;
@@ -157,23 +137,8 @@
   .callout.blue { background: var(--blue-bg); border-left-color: var(--blue); }
   .callout-title { font-weight: 700; display: block; margin-bottom: 3px; }
 
-  /* code blocks with copy */
-  .codeblock { position: relative; margin: 14px 0; }
-  .codeblock pre {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-    padding: 14px 16px; overflow-x: auto; font-size: 13px; line-height: 1.5;
-    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; color: var(--text);
-  }
-  .codeblock .copy {
-    position: absolute; top: 8px; right: 8px; border: 1px solid var(--border);
-    background: var(--bg); color: var(--muted); border-radius: 7px; padding: 3px 10px;
-    font-size: 12px; cursor: pointer; opacity: 0; transition: opacity .15s;
-  }
-  .codeblock:hover .copy { opacity: 1; }
-  .codeblock .copy.done { color: var(--green); border-color: var(--green); }
-
   .footer {
-    margin-top: 50px; padding-top: 18px; border-top: 1px solid var(--border);
+    margin-top: 46px; padding-top: 18px; border-top: 1px solid var(--border);
     color: var(--muted); font-size: 13px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
   }
 
@@ -189,10 +154,10 @@
     .stats-row { grid-template-columns: repeat(2, 1fr); }
     .flow { grid-template-columns: repeat(2, 1fr); }
     .flow-step:not(:last-child)::after { content: ""; }
-    .zones, .zones.two, .buckets, .tiers { grid-template-columns: 1fr; }
+    .buckets { grid-template-columns: 1fr; }
   }
   @media print {
-    .site-nav, #searchOverlay, .codeblock .copy { display: none !important; }
+    .site-nav, #searchOverlay { display: none !important; }
     body { background: #fff; }
     .main-content { padding-top: 0; max-width: 100%; }
     h2 { page-break-before: always; }
@@ -206,7 +171,7 @@
   <div class="nav-left">UnpauseAI <span class="nav-client">&middot; Brisken Expense Reconciliation</span></div>
   <div class="nav-right">
     <span class="nav-hint">Ctrl/Cmd+K to jump</span>
-    <span class="nav-status">Tool walkthrough</span>
+    <span class="nav-status">How it works</span>
     <button class="nav-theme" onclick="(function(){
       var d=document.documentElement;
       var c=d.getAttribute('data-theme')==='dark'?'light':'dark';
@@ -219,267 +184,112 @@
 <main class="main-content">
 
 <section class="hero">
-  <span class="hero-badge">Tool walkthrough &middot; browser app + reconciliation engine</span>
-  <h1>How the expense reconciliation tool works</h1>
-  <p class="hero-sub">A plain walk through what the tool does with a month of card activity and a set of receipts: how Chris runs it from the browser, how it matches every charge to its receipt, sorts each line into the right account, learns from what she confirms, and hands back a review screen plus a Books-ready journal. Nothing posts to Zoho on its own; the last step stays a person's call.</p>
+  <span class="hero-badge">How the tool works</span>
+  <h1>The expense tool, end to end</h1>
+  <p class="hero-sub">What it does with a month of card charges and their receipts: it pairs each charge to its receipt, files it under the right account, and gives Chris a screen to check before anything reaches the books. Nothing goes to Zoho on its own.</p>
   <div class="stats-row">
-    <div class="stat-card"><div class="stat-value">3</div><div class="stat-label">receipt sources it can read</div></div>
-    <div class="stat-card"><div class="stat-value">8</div><div class="stat-label">expense categories it sorts into</div></div>
-    <div class="stat-card"><div class="stat-value">346</div><div class="stat-label">automated tests behind it</div></div>
-    <div class="stat-card"><div class="stat-value">0</div><div class="stat-label">charges quietly dropped</div></div>
+    <div class="stat-card"><div class="stat-value">3</div><div class="stat-label">ways to bring in receipts</div></div>
+    <div class="stat-card"><div class="stat-value">8</div><div class="stat-label">expense categories</div></div>
+    <div class="stat-card"><div class="stat-value">346</div><div class="stat-label">automated checks behind it</div></div>
+    <div class="stat-card"><div class="stat-value">0</div><div class="stat-label">charges dropped</div></div>
   </div>
 </section>
 
-<h2 id="overview">The shape of one run</h2>
-<p class="h2-sub">Six passes, left to right. Each one hands its result to the next.</p>
+<h2 id="overview">In one run</h2>
 <div class="flow">
-  <div class="flow-step"><span class="num">1</span><b>Read</b><span>Load the statement and the receipts into one common shape.</span></div>
-  <div class="flow-step"><span class="num">2</span><b>Remember</b><span>File the statement and receipts in the tool's own tables.</span></div>
-  <div class="flow-step"><span class="num">3</span><b>Sort</b><span>Put every receipt line into one of eight categories.</span></div>
-  <div class="flow-step"><span class="num">4</span><b>Match</b><span>Pair each charge with its receipt.</span></div>
-  <div class="flow-step"><span class="num">5</span><b>Judge</b><span>Send only the hard cases to a model for a second look.</span></div>
-  <div class="flow-step"><span class="num">6</span><b>Hand back</b><span>A review sheet plus a Books-ready journal.</span></div>
+  <div class="flow-step"><span class="num">1</span><b>Read</b><span>Take in the statement and the receipts.</span></div>
+  <div class="flow-step"><span class="num">2</span><b>Pair</b><span>Match each charge to its receipt.</span></div>
+  <div class="flow-step"><span class="num">3</span><b>Sort</b><span>File each one under the right account.</span></div>
+  <div class="flow-step"><span class="num">4</span><b>Check</b><span>Send only the tricky ones to the AI.</span></div>
+  <div class="flow-step"><span class="num">5</span><b>Hand back</b><span>A screen to review, then the files.</span></div>
 </div>
-<p>The engine runs the same six passes whether Chris drives it from the browser workbench (the everyday way) or from a single command (for a local run or automation). A preview mode runs everything and prints a summary without writing a single file, so a month can be checked before it is kept.</p>
+<p>Two things go in: the card statement (the charges) and the receipts (the proof). One statement can hold several cards at once. Receipts can come however they already exist: exported from Zoho Expense (the usual way), typed into a simple file, or a folder of photos and PDFs that the tool reads on its own.</p>
 
-<div class="diagram" role="img" aria-label="Architecture: two inputs feed the engine, which writes to three tables and two output files.">
-<svg viewBox="0 0 980 320" xmlns="http://www.w3.org/2000/svg">
+<div class="diagram" role="img" aria-label="The statement and the receipts feed the tool, which produces a review screen and a Zoho journal.">
+<svg viewBox="0 0 880 200" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
       <path d="M0,0 L9,4.5 L0,9 z" fill="var(--muted)"/>
     </marker>
   </defs>
-  <!-- inputs -->
-  <rect x="14" y="40" width="170" height="52" rx="9" fill="var(--blue-bg)" stroke="var(--blue)"/>
-  <text x="99" y="63" text-anchor="middle" font-size="13" font-weight="700" fill="var(--text)">Card statement</text>
-  <text x="99" y="80" text-anchor="middle" font-size="11.5" fill="var(--muted)">the charges</text>
-  <rect x="14" y="120" width="170" height="52" rx="9" fill="var(--blue-bg)" stroke="var(--blue)"/>
-  <text x="99" y="143" text-anchor="middle" font-size="13" font-weight="700" fill="var(--text)">Receipts</text>
-  <text x="99" y="160" text-anchor="middle" font-size="11.5" fill="var(--muted)">the proof</text>
-  <line x1="184" y1="66" x2="296" y2="120" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="184" y1="146" x2="296" y2="140" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
-  <!-- engine -->
-  <rect x="300" y="86" width="200" height="120" rx="11" fill="var(--purple-bg)" stroke="var(--purple)"/>
-  <text x="400" y="112" text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)">The engine</text>
-  <text x="400" y="134" text-anchor="middle" font-size="11.5" fill="var(--muted)">sort, match,</text>
-  <text x="400" y="150" text-anchor="middle" font-size="11.5" fill="var(--muted)">judge the hard cases</text>
-  <text x="400" y="178" text-anchor="middle" font-size="11" fill="var(--muted)">nothing dropped:</text>
-  <text x="400" y="193" text-anchor="middle" font-size="11" fill="var(--muted)">every charge accounted for</text>
-  <!-- tables -->
-  <rect x="616" y="14" width="200" height="44" rx="9" fill="var(--green-bg)" stroke="var(--green)"/>
-  <text x="716" y="33" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--text)">Statement table</text>
-  <text x="716" y="48" text-anchor="middle" font-size="11" fill="var(--muted)">dedupes re-downloads</text>
-  <rect x="616" y="68" width="200" height="44" rx="9" fill="var(--green-bg)" stroke="var(--green)"/>
-  <text x="716" y="87" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--text)">Report table</text>
-  <text x="716" y="102" text-anchor="middle" font-size="11" fill="var(--muted)">groups expenses by report</text>
-  <rect x="616" y="122" width="200" height="44" rx="9" fill="var(--green-bg)" stroke="var(--green)"/>
-  <text x="716" y="141" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--text)">Receipt store</text>
-  <text x="716" y="156" text-anchor="middle" font-size="11" fill="var(--muted)">keeps each image at a link</text>
-  <!-- outputs -->
-  <rect x="616" y="200" width="200" height="44" rx="9" fill="var(--orange-bg)" stroke="var(--orange)"/>
-  <text x="716" y="219" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--text)">Excel review sheet</text>
-  <text x="716" y="234" text-anchor="middle" font-size="11" fill="var(--muted)">you check and fix</text>
-  <rect x="616" y="254" width="200" height="50" rx="9" fill="var(--orange-bg)" stroke="var(--orange)"/>
-  <text x="716" y="275" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--text)">Zoho Books journal</text>
-  <text x="716" y="291" text-anchor="middle" font-size="11" fill="var(--muted)">with receipt link + report ref</text>
-  <line x1="500" y1="120" x2="612" y2="60" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="500" y1="135" x2="612" y2="120" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="500" y1="160" x2="612" y2="210" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
-  <line x1="500" y1="172" x2="612" y2="268" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+  <rect x="10" y="34" width="180" height="50" rx="9" fill="var(--blue-bg)" stroke="var(--blue)"/>
+  <text x="100" y="56" text-anchor="middle" font-size="13" font-weight="700" fill="var(--text)">Card statement</text>
+  <text x="100" y="73" text-anchor="middle" font-size="11.5" fill="var(--muted)">the charges</text>
+  <rect x="10" y="116" width="180" height="50" rx="9" fill="var(--blue-bg)" stroke="var(--blue)"/>
+  <text x="100" y="138" text-anchor="middle" font-size="13" font-weight="700" fill="var(--text)">Receipts</text>
+  <text x="100" y="155" text-anchor="middle" font-size="11.5" fill="var(--muted)">the proof</text>
+  <line x1="190" y1="60" x2="330" y2="92" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="190" y1="140" x2="330" y2="108" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+  <rect x="334" y="62" width="200" height="76" rx="11" fill="var(--purple-bg)" stroke="var(--purple)"/>
+  <text x="434" y="92" text-anchor="middle" font-size="14" font-weight="700" fill="var(--text)">The tool</text>
+  <text x="434" y="112" text-anchor="middle" font-size="11.5" fill="var(--muted)">pair, sort, check the</text>
+  <text x="434" y="127" text-anchor="middle" font-size="11.5" fill="var(--muted)">tricky ones</text>
+  <line x1="534" y1="92" x2="676" y2="62" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="534" y1="108" x2="676" y2="140" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+  <rect x="680" y="34" width="190" height="50" rx="9" fill="var(--orange-bg)" stroke="var(--orange)"/>
+  <text x="775" y="56" text-anchor="middle" font-size="13" font-weight="700" fill="var(--text)">Review screen</text>
+  <text x="775" y="73" text-anchor="middle" font-size="11.5" fill="var(--muted)">Chris checks and fixes</text>
+  <rect x="680" y="116" width="190" height="50" rx="9" fill="var(--orange-bg)" stroke="var(--orange)"/>
+  <text x="775" y="138" text-anchor="middle" font-size="13" font-weight="700" fill="var(--text)">Zoho journal</text>
+  <text x="775" y="155" text-anchor="middle" font-size="11.5" fill="var(--muted)">ready to import</text>
 </svg>
 </div>
 
-<h2 id="workbench">Where Chris works: the review screen</h2>
-<p class="h2-sub">The tool runs as a web app she opens in a browser. Nothing to install, nothing to set up each month.</p>
-<p>She opens a private web address and signs in with an access code, so only Brisken can reach it. She uploads the month's statement and the receipts, names the card and the entity, and starts the run. The pass works in the background behind a progress page, so she can leave the tab and come back to it.</p>
-<p>When it finishes, the review screen lists every charge. Each one shows its suggested receipt with a match score and the reason behind it. For each charge she can confirm the match, reject it, pick a different candidate, or, when nothing was found, assign a receipt by hand. Every receipt line carries a category she can change in place.</p>
-<p>A bar across the bottom tells her whether the month is ready to post, how many charges are still undecided, and how much is still unreconciled. The two downloads, the Zoho journal and the Excel review copy, unlock only once every charge is decided, so a half-finished month cannot be exported by accident. Keyboard shortcuts (j and k to move, c to confirm, r to reject) make a long month quick.</p>
-<div class="callout blue">
-  <span class="callout-title">Hosted in the EU, behind a password</span>
-  The app runs on EU servers over HTTPS, with its data on an encrypted disk, and an access code is required before any page loads. It can also be run on a single local machine when that is preferred; the access code applies to the hosted version.
-</div>
+<h2 id="workbench">How Chris uses it</h2>
+<p>She opens a private web link and signs in with a password, so only Brisken can reach it. She uploads the month's statement and receipts and starts it; it runs on its own while she does something else.</p>
+<p>When it finishes she gets a screen: every charge next to the receipt the tool paired it with, and how sure it is. She confirms the good ones, fixes the rest, and for anything left over she picks the receipt herself. A bar at the bottom shows when the month is fully checked, and only then can she download the results, so a half-finished month can't slip out by accident.</p>
 
-<h2 id="inputs">What goes in</h2>
-<p class="h2-sub">Two things: the charges, and the proof for each charge.</p>
-<p>The <strong class="k">statement</strong> is the card or bank activity for the month, as a spreadsheet file. A small column map tells the tool which column holds the date, the amount, and the merchant, so the tool never hardcodes one bank's layout. A statement file can hold several cards at once; the Chase export does.</p>
-<p>The <strong class="k">receipts</strong> are the proof for each charge. The tool reads them from any of three sources, and the rest of the pipeline does not care which one was used:</p>
-<div class="zones">
-  <div class="zone zone-blue">
-    <h3>Zoho Expense export</h3>
-    <p class="tagline">The main source today.</p>
-    <ul>
-      <li>The expense lines already typed into Zoho Expense, exported as a file.</li>
-      <li>Each line carries its report number and a link to the attached receipt.</li>
-      <li>Read through the same column map idea, so no Zoho header name is baked in.</li>
-    </ul>
-  </div>
-  <div class="zone zone-green">
-    <h3>A typed-out file</h3>
-    <p class="tagline">The simple fallback.</p>
-    <ul>
-      <li>A plain file with the receipt fields already filled in.</li>
-      <li>Useful for a quick one-off or a hand-built set.</li>
-    </ul>
-  </div>
-  <div class="zone zone-purple">
-    <h3>A folder of images</h3>
-    <p class="tagline">For receipts that never went through Zoho.</p>
-    <ul>
-      <li>Drop in photos and PDFs of receipts.</li>
-      <li>The tool reads the text off each one with OCR, which means reading text from a picture.</li>
-      <li>Digital PDFs are read from their text layer first, which is cheaper and more exact than reading the image.</li>
-    </ul>
-  </div>
-</div>
-<p class="src">The tool also pulls Brisken's chart of accounts (the list of real Books accounts) when a run is set up to write the journal, so it can name real accounts instead of placeholders.</p>
-
-<h2 id="matching">Matching each charge to its receipt</h2>
-<p class="h2-sub">A plain match first. A model only when a plain match cannot settle it.</p>
-<p class="lead">The rule here is Dirk's: no model where a straightforward match already works. When a card charge and a receipt share the same card, the same day, and the same amount, the tool pairs them on the spot with full confidence and moves on. The small AI model (gpt-4o-mini) is never consulted for the easy majority; it only sees the hard cases, and only when AI is switched on.</p>
-
-<h3>When the currencies differ</h3>
-<p>Travel makes this the interesting part. A receipt in euros or reais sits against a charge that posted in dollars, so the amounts will not line up to the cent. The tool checks how far apart they are once converted, and sorts the pair into one of three bands. The width of each band came from real Brisken receipts, not a guess.</p>
+<h2 id="matching">Pairing charges with receipts</h2>
+<p class="lead">The tool only calls the AI when a plain match won't settle it. Same card, same day, same amount: paired on the spot. Travel is where it earns its keep.</p>
+<p>A receipt in euros sits against a charge that posted in dollars, so they never match to the cent. The tool measures the gap once converted and sorts each pair into three bands:</p>
 <div class="fxkey">
-  <span><span class="dot g"></span><b>Within ~3%</b> confident match</span>
-  <span><span class="dot o"></span><b>3% to ~13%</b> conversion-fee suspect, send for a second look</span>
-  <span><span class="dot r"></span><b>Over ~13%</b> too far apart, hold it back</span>
+  <span><span class="dot g"></span><b>Within about 3%</b> confident</span>
+  <span><span class="dot o"></span><b>3% to about 13%</b> check it</span>
+  <span><span class="dot r"></span><b>Over about 13%</b> held back</span>
 </div>
-<div class="fxbar" role="img" aria-label="Three matching bands: within 3 percent confident, 3 to 13 percent suspect, over 13 percent held back.">
+<div class="fxbar" role="img" aria-label="Three bands: within 3 percent confident, 3 to 13 percent check, over 13 percent held back.">
   <div class="fxseg s1">confident</div>
-  <div class="fxseg s2">second look</div>
-  <div class="fxseg s3">hold back</div>
+  <div class="fxseg s2">check it</div>
+  <div class="fxseg s3">held back</div>
 </div>
-<p>The wider band exists because of DCC, dynamic currency conversion, where the card does its own conversion at the till and adds a markup. On the Brisken receipts that markup ran from about 3.5% up to nearly 13%, so a charge can sit well above the network rate and still be the right receipt. The tool reads the dollar figure printed on the receipt when there is one, because Dirk's rule is to trust the printed dollar amount over an estimate.</p>
-
-<h3>When the merchant name is mangled</h3>
-<p>Banks truncate. The Chase export prints <code>MEGA CENTE CONSTR</code> for a shop whose full name runs to a dozen words. The tool compares the two names token by token and scores how close they are, so a chopped word still matches its full form. The name is a tie-breaker, never the only thing a match rests on.</p>
-
-<h3>Nothing is dropped</h3>
-<p>This is the promise the whole engine is built around. After the pass, every single charge has landed in exactly one of three places, and you can see the split at a glance:</p>
+<p>The middle band is wide on purpose. Cards often add their own markup when they convert at the till, up to about 13% on Brisken's own receipts, so a charge can run high and still be the right receipt. When the receipt prints a dollar figure, the tool trusts that over any estimate. The bands came from real Brisken receipts, not a guess.</p>
+<p>Banks also chop merchant names: Chase prints <span class="bankname">MEGA CENTE CONSTR</span> for a shop with a much longer name. The tool still lines the chopped name up with the full one on the receipt. The name is a tie-breaker, never the whole basis for a match.</p>
+<p>Whatever happens, no charge disappears. Every one lands in exactly one of three places, and you can see the split at a glance:</p>
 <div class="buckets">
-  <div class="bucket green"><div class="big">Matched</div><span>Paired with its receipt and ready for the journal.</span></div>
-  <div class="bucket orange"><div class="big">Needs your judgment</div><span>A currency case or a tie between two close receipts. Surfaced for review, with the model's read attached.</span></div>
-  <div class="bucket red"><div class="big">Unmatched</div><span>No receipt found, or no charge found. Flagged so the gap is visible, never hidden.</span></div>
+  <div class="bucket green"><div class="big">Matched</div><span>Paired with its receipt, ready for the journal.</span></div>
+  <div class="bucket orange"><div class="big">Needs a look</div><span>A currency gap, or two receipts that both fit. Set aside for Chris with the tool's reasoning shown.</span></div>
+  <div class="bucket red"><div class="big">Unmatched</div><span>No receipt, or no charge. Flagged so the gap is visible, never hidden.</span></div>
 </div>
-<p>A charge can never vanish between the input and the output. If the tool cannot resolve something, it says so on the review sheet rather than guessing.</p>
 
-<h2 id="categories">Sorting each line into an account</h2>
-<p class="h2-sub">Eight categories, and a confidence floor under every call.</p>
-<p>Before matching, the tool reads each receipt's line items and sorts them into one of eight categories: travel and transport, meals and entertainment, software and subscriptions, office supplies, equipment and hardware, marketing, professional services, and premises. It works from the line item itself, not from the merchant name, so a hardware charge at a general store still lands as hardware. Every call carries a confidence score, and anything under the floor is set aside for you rather than forced. When AI categorization is switched on, this sorting and the currency judgment run on the small AI model (gpt-4o-mini); switched off, the tool falls back to a keyword classifier and still finishes the run.</p>
-<div class="tiers">
-  <div class="tier"><span class="lvl">Tier 1</span><b>From the line</b><span>Read straight from the receipt's line item. Trusted; goes through.</span></div>
-  <div class="tier"><span class="lvl">Tier 2</span><b>From the merchant</b><span>Used only when a receipt has no line detail. Marked so you give it a quick check.</span></div>
-  <div class="tier"><span class="lvl">Tier 3</span><b>Left for you</b><span>Confidence too low, or nothing to go on. The account cell is left blank to assign.</span></div>
-</div>
-<p>The tool never writes an account it cannot back up. When the picked account does not exist in Brisken's chart of accounts, it flags the line as needing an account rather than inventing a plausible one.</p>
+<h2 id="categories">Sorting each charge to an account</h2>
+<p>The tool reads what's on the receipt and files each line under one of eight everyday categories: travel, meals, software, office supplies, equipment, marketing, professional services, and premises. It goes by what was bought, not where, so a drill from a supermarket still counts as equipment. When it isn't sure, it leaves the account blank for Chris rather than guess, and it won't use an account that isn't in Brisken's books. The AI does this sorting when it's switched on; switched off, a simpler word-match does it and the run still finishes.</p>
 
-<h2 id="memory">It gets better each month</h2>
-<p class="h2-sub">What Chris confirms once, the tool reuses next time.</p>
-<p>After a run she is happy with, one button (Commit to memory) saves what she confirmed: which category each merchant belongs to, the bank's short name for a merchant tied to the receipt's full name, and real foreign-exchange samples per merchant. The next month those merchants come pre-filled, so each run is lighter than the last.</p>
-<p>A Memory page shows everything the tool has learned. A Forget button drops a merchant that was learned wrong, so the next run treats it as new. This is separate from the record tables below: memory is what the tool has learned from Chris; the tables are where it files the raw inputs.</p>
-
-<h2 id="tables">The tool keeps its own records</h2>
-<p class="h2-sub">So the work stands on its own, even if Zoho is ever switched off.</p>
-<p>Rather than recompute from loose files every month, the tool files its inputs in three of its own stores. This is what lets the history live in the tool itself instead of only inside Zoho.</p>
-<div class="zones">
-  <div class="zone zone-green">
-    <h3>Statement table</h3>
-    <ul>
-      <li>One running record of every card transaction across all cards.</li>
-      <li>Each charge is filed under a fingerprint of its own contents, so re-downloading an overlapping period counts each charge once.</li>
-      <li>If a re-download has a changed amount, the tool flags the difference instead of double-storing it.</li>
-    </ul>
-  </div>
-  <div class="zone zone-green">
-    <h3>Report table</h3>
-    <ul>
-      <li>The Zoho Expense reports and which expense belongs to which report.</li>
-      <li>Carries the report's period and its per-currency totals.</li>
-      <li>This is what puts the report reference on every journal line.</li>
-    </ul>
-  </div>
-  <div class="zone zone-green">
-    <h3>Receipt store</h3>
-    <ul>
-      <li>A kept copy of each receipt image, filed under a fingerprint of the image.</li>
-      <li>Each one gets a stable link the journal can carry.</li>
-      <li>The same image is only ever stored once.</li>
-    </ul>
-  </div>
-</div>
-<div class="callout blue">
-  <span class="callout-title">All three are optional and off by default</span>
-  A run only keeps these records when the settings file asks for them. A plain run writes nothing extra, and a preview run keeps nothing at all.
-</div>
+<h2 id="memory">It learns each month</h2>
+<p>When Chris is happy with a month, one button teaches the tool what she decided: this merchant is that category, this short bank name is that shop, this is the going exchange rate. Next month those arrive already filled in, so each run is quicker than the last. A separate page shows everything it has learned, and she can make it forget anything that turned out wrong.</p>
 
 <h2 id="outputs">What you get back</h2>
-<p class="h2-sub">Two downloads, unlocked once every charge is decided.</p>
-<div class="zones two">
-  <div class="zone zone-orange">
-    <h3>The Excel review copy</h3>
-    <ul>
-      <li>A Summary tab, then one tab per card, plus Needs Review, Unmatched, and Errors tabs.</li>
-      <li>Rows colored by how each category was decided, so the ones that want a check stand out.</li>
-      <li>A record of the same review done on screen, for the file or for anyone who prefers a spreadsheet.</li>
-    </ul>
-  </div>
-  <div class="zone zone-orange">
-    <h3>The Zoho Books journal</h3>
-    <ul>
-      <li>One balanced entry per charge: the expense on one side, the card on the other.</li>
-      <li>Only charges that actually matched are written; the rest wait for your review.</li>
-      <li>Two extra columns carry the receipt link and the report reference, on every line, so you can click straight to the proof.</li>
-    </ul>
-  </div>
-</div>
-<p>The journal is a file to import. Posting it into Zoho stays a separate step that a person triggers, because a posted journal is hard to take back. The tool writes the file; it never posts on its own.</p>
+<p>Two files, and only once every charge is checked. A review copy in Excel (a summary, one tab per card, and tabs for anything that needs a look), and the journal to import into Zoho Books. Every journal line carries a link to its receipt and the report it came from, so the proof is one click away.</p>
 <table>
-  <thead><tr><th>Column</th><th>What it holds</th></tr></thead>
+  <thead><tr><th>On each journal line</th><th>What it is</th></tr></thead>
   <tbody>
-    <tr><td><code>Date</code>, <code>Account</code>, <code>Debit</code>, <code>Credit</code></td><td>The standard double-entry journal fields.</td></tr>
-    <tr><td><code>Reference#</code></td><td>Ties the lines of one entry together.</td></tr>
-    <tr><td><code>Receipt URL</code></td><td>A link to the receipt image: the Zoho link when the export carried one, otherwise the tool's own kept copy.</td></tr>
+    <tr><td><code>Date</code>, <code>Account</code>, <code>Debit</code>, <code>Credit</code></td><td>The standard journal fields: the expense on one side, the card on the other.</td></tr>
+    <tr><td><code>Reference#</code></td><td>Ties the two halves of one entry together.</td></tr>
+    <tr><td><code>Receipt URL</code></td><td>A link straight to the receipt.</td></tr>
     <tr><td><code>Report Reference</code></td><td>The Zoho Expense report the charge traces back to.</td></tr>
   </tbody>
 </table>
+<p>Importing it into Zoho stays Chris's decision. The tool writes the file; it never posts.</p>
 
-<h2 id="running">Running it</h2>
-<p class="h2-sub">The everyday way is the browser; the command line is there for a local run or automation.</p>
-<p><strong class="k">In the browser.</strong> Chris opens the private link, signs in with the access code, uploads the statement and the receipts, reviews on screen, and downloads the journal and the review copy. Nothing to install.</p>
-<p><strong class="k">From the command line.</strong> A run is one command pointed at a settings file that names the two inputs, their column maps, and which outputs to write. Here is the command, with the preview option underneath:</p>
-<div class="codeblock">
-  <button class="copy" type="button">Copy</button>
-  <pre>expense-recon --config april.json
-
-# preview only: run everything, print a summary, write nothing
-expense-recon --config april.json --dry-run</pre>
-</div>
-<p>The settings file reads like this. The <code>store</code> and <code>hosting</code> sections are the optional records from earlier; leave them out and the run still produces the review sheet and the journal.</p>
-<div class="codeblock">
-  <button class="copy" type="button">Copy</button>
-  <pre>{
-  "statement": { "path": "chase-april.csv", "account_id": "chase-2838",
-                 "column_map": { "transaction_date": "Date", "amount": "Amount", "vendor": "Description" } },
-  "receipts":  { "path": "expense-april.csv", "source": "expense_csv",
-                 "column_map": { "expense_date": "Expense Date", "amount": "Amount", "vendor": "Merchant" } },
-  "store":     { "statements_path": "statements.sqlite", "reports_path": "reports.sqlite" },
-  "hosting":   { "root": "receipt-store", "receipts_dir": "receipts" },
-  "zoho":      { "export_path": "zoho-journal.csv" }
-}</pre>
-</div>
-
-<h2 id="safety">Safety and audit</h2>
-<p class="h2-sub">Check before you keep it, and know what every past run did.</p>
+<h2 id="control">Staying in control</h2>
 <ul class="plain">
-  <li><strong class="k">Preview first.</strong> The dry run does the whole pass and prints the counts without writing a file, so a month can be checked before it is kept.</li>
-  <li><strong class="k">A pre-flight check.</strong> A <code>doctor</code> command looks over the settings and the input files before a real run, and points at anything missing or misnamed.</li>
-  <li><strong class="k">A record of every run.</strong> When asked to, the tool logs each run and what it decided, so you can later ask what was done in a given month and compare two runs.</li>
-  <li><strong class="k">Nothing posts on its own.</strong> The journal is written as a file. Posting it into Zoho is always a deliberate, human step.</li>
-  <li><strong class="k">Access is gated.</strong> The hosted app sits behind an access code over HTTPS, on EU servers with the data on an encrypted disk. The code can be changed at any time.</li>
+  <li>Nothing is final until every charge is checked and the month is downloaded.</li>
+  <li>Nothing reaches Zoho automatically; the import is always a person.</li>
+  <li>The site is password-protected and runs on EU servers; the password can change at any time.</li>
+  <li>The tool keeps its own copy of the statements and receipts, so the history doesn't depend on Zoho staying switched on.</li>
 </ul>
 <div class="callout">
   <span class="callout-title">Built to stand on real months</span>
-  The whole pipeline is checked by 346 automated tests and has been run end to end on real Brisken travel months across three currencies, with every charge accounted for and the currency matching holding without over-pairing.
+  Checked by 346 automated checks and run end to end on real Brisken travel months across three currencies, with every charge accounted for.
 </div>
 
 <div class="footer">
@@ -497,20 +307,6 @@ expense-recon --config april.json --dry-run</pre>
 </div>
 
 <script>
-// copy-to-clipboard on code blocks
-Array.prototype.forEach.call(document.querySelectorAll('.codeblock'), function(block){
-  var btn = block.querySelector('.copy');
-  var pre = block.querySelector('pre');
-  if (!btn || !pre) return;
-  btn.addEventListener('click', function(){
-    var text = pre.innerText;
-    navigator.clipboard.writeText(text).then(function(){
-      btn.textContent = 'Copied'; btn.classList.add('done');
-      setTimeout(function(){ btn.textContent = 'Copy'; btn.classList.remove('done'); }, 1400);
-    });
-  });
-});
-
 // Ctrl/Cmd+K section search, with the last query remembered
 (function(){
   var overlay = document.getElementById('searchOverlay');
