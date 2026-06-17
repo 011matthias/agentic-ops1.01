@@ -110,7 +110,7 @@
   .nav-logo, .f-logo { font-family: var(--font-display); }
   .eyebrow, .nav-status, .hero-badge, .lead, .big-stat, .mini .v,
   .flow-step .num, .trust-partners .name, .trust-partners .lbl,
-  .ttv .ttv-tag, th, .method, .cta-fine, .pl-label, .pl-gate-label {
+  .ttv .ttv-tag, th, .method, .cta-fine, .uh-label {
     font-family: var(--font-mono);
   }
 
@@ -202,24 +202,40 @@
   /* Hero signature: the governed pipeline */
   .hero-art { position: relative; min-height: 430px; display: flex; align-items: center; }
   .hero-art svg { display: block; width: 100%; height: auto; overflow: visible; }
-  .pl-label { font-size: 12.5px; fill: var(--muted); letter-spacing: .02em; }
-  .pl-node { fill: var(--surface); stroke: var(--mist-strong); stroke-width: 1.4; }
-  .pl-tangle { fill: none; stroke: var(--mist-strong); stroke-width: 1.6; opacity: .6; stroke-linecap: round; }
-  .pl-gate-soft { fill: var(--teal-bg); stroke: var(--teal); stroke-width: 1.3; }
-  .pl-gate-body { fill: var(--teal); }
-  .pl-gate-label { fill: var(--teal-strong); font-size: 11px; letter-spacing: .18em; }
-  .pl-tick { fill: none; stroke: #fff; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
-  .pl-out { fill: none; stroke: var(--teal); stroke-width: 2; stroke-linecap: round; }
-  .pl-sap-box { fill: var(--navy); }
-  .pl-sap-text { fill: #fff; font-weight: 600; font-family: var(--font-display); }
-  .pl-sap-sub { fill: #aecbe8; font-size: 10.5px; letter-spacing: .16em; font-family: var(--font-mono); }
-  @keyframes pl-fade { from { opacity: 0; } to { opacity: 1; } }
-  @keyframes pl-draw { to { stroke-dashoffset: 0; } }
-  .pl-src { opacity: 0; animation: pl-fade .5s ease forwards; }
-  .pl-tangle { stroke-dasharray: 440; stroke-dashoffset: 440; animation: pl-draw .85s ease .45s forwards; }
-  .pl-gate { opacity: 0; animation: pl-fade .55s ease .95s forwards; }
-  .pl-out { stroke-dasharray: 150; stroke-dashoffset: 150; animation: pl-draw .55s ease 1.2s forwards; }
-  .pl-sap { opacity: 0; animation: pl-fade .55s ease 1.45s forwards; }
+  /* open universal hub: translucent core, many systems in from every side,
+     one governed stream out, streams visible through the glass */
+  .uh-aura { animation: uh-pulse 4.5s ease-in-out infinite; }
+  .uh-aura-0 { stop-color: var(--teal); stop-opacity: .20; }
+  .uh-aura-1 { stop-color: var(--teal); stop-opacity: .05; }
+  .uh-aura-2 { stop-color: var(--teal); stop-opacity: 0; }
+  .uh-line { fill: none; stroke: var(--mist-strong); stroke-width: 1.5; opacity: .5; stroke-linecap: round; }
+  .uh-flow { fill: none; stroke: var(--teal); stroke-width: 1.8; stroke-linecap: round; stroke-dasharray: 3 11; opacity: .85; animation: uh-flow 1.7s linear infinite; }
+  .uh-hub { fill: var(--teal); fill-opacity: .07; stroke: var(--teal); stroke-width: 1.5; }
+  .uh-core-0 { stop-color: var(--teal); stop-opacity: .32; }
+  .uh-core-1 { stop-color: var(--teal); stop-opacity: 0; }
+  .uh-glass-0 { stop-color: #ffffff; stop-opacity: .16; }
+  .uh-glass-1 { stop-color: #ffffff; stop-opacity: 0; }
+  .uh-hub-eyebrow { fill: var(--teal-strong); font-family: var(--font-mono); font-size: 8.5px; letter-spacing: .22em; }
+  .uh-hub-text { fill: var(--heading); font-family: var(--font-display); font-weight: 600; font-size: 19px; letter-spacing: -.01em; }
+  .uh-out { fill: none; stroke: var(--teal); stroke-width: 2; opacity: .5; stroke-linecap: round; }
+  .uh-out-flow { fill: none; stroke: var(--teal); stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 3 11; animation: uh-flow 1.5s linear infinite; }
+  .uh-out-label { fill: var(--teal-strong); font-family: var(--font-mono); font-size: 9px; letter-spacing: .18em; }
+  .uh-sap-box { fill: var(--navy); }
+  .uh-sap-text { fill: #fff; font-weight: 600; font-family: var(--font-display); }
+  .uh-sap-sub { fill: #aecbe8; font-size: 10px; letter-spacing: .16em; font-family: var(--font-mono); }
+  .uh-label { font-size: 12.5px; fill: var(--muted); letter-spacing: .02em; }
+  .uh-node { fill: var(--surface); stroke: var(--teal); stroke-width: 1.5; }
+  @keyframes uh-flow { to { stroke-dashoffset: -28; } }
+  @keyframes uh-pulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+  @keyframes uh-fade { from { opacity: 0; } to { opacity: 1; } }
+  .uh-src, .uh-sap, .uh-out-label { opacity: 0; animation: uh-fade .6s ease forwards; }
+  .uh-hub-g { opacity: 0; animation: uh-fade .7s ease .25s forwards; }
+  .uh-sap { animation-delay: .5s; }
+  .uh-out-label { animation-delay: .65s; }
+  @media (prefers-reduced-motion: reduce) {
+    .uh-flow, .uh-out-flow, .uh-aura { animation: none; }
+    .uh-src, .uh-sap, .uh-out-label, .uh-hub-g { animation: none; opacity: 1; }
+  }
 
   /* Trust band: customers, platform + certifications, and market-data partners
      as three tiers of ONE system, sharing label style, alignment, and rhythm. */
@@ -580,8 +596,8 @@
   }
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
-    .pl-src, .pl-gate, .pl-sap { opacity: 1 !important; animation: none !important; }
-    .pl-tangle, .pl-out { stroke-dashoffset: 0 !important; animation: none !important; }
+    .uh-src, .uh-sap, .uh-out-label, .uh-hub-g { opacity: 1 !important; animation: none !important; }
+    .uh-flow, .uh-out-flow, .uh-aura { animation: none !important; }
     * { transition-duration: .01ms !important; }
   }
   @media print {
@@ -643,34 +659,63 @@
           </div>
         </div>
         <div class="hero-art">
-        <svg viewBox="0 0 580 360" role="img" aria-label="Tangled financial-data feeds resolving through a governed gate into SAP">
-          <g class="pl-src" style="animation-delay:.05s"><text class="pl-label" x="8" y="74">Bloomberg</text><rect class="pl-node" x="150" y="64" width="12" height="12" rx="2"/></g>
-          <g class="pl-src" style="animation-delay:.14s"><text class="pl-label" x="18" y="126">Refinitiv</text><rect class="pl-node" x="150" y="116" width="12" height="12" rx="2"/></g>
-          <g class="pl-src" style="animation-delay:.23s"><text class="pl-label" x="40" y="178">360T</text><rect class="pl-node" x="150" y="168" width="12" height="12" rx="2"/></g>
-          <g class="pl-src" style="animation-delay:.32s"><text class="pl-label" x="30" y="230">OANDA</text><rect class="pl-node" x="150" y="220" width="12" height="12" rx="2"/></g>
-          <g class="pl-src" style="animation-delay:.41s"><text class="pl-label" x="48" y="282">CME</text><rect class="pl-node" x="150" y="272" width="12" height="12" rx="2"/></g>
+        <svg viewBox="0 0 580 360" role="img" aria-label="OnePilot as an open, transparent core: many systems flow in from every side and one governed stream flows out to SAP">
+          <defs>
+            <radialGradient id="uhAura" cx="50%" cy="50%" r="50%">
+              <stop class="uh-aura-0" offset="0%"/><stop class="uh-aura-1" offset="68%"/><stop class="uh-aura-2" offset="100%"/>
+            </radialGradient>
+            <radialGradient id="uhCore" cx="50%" cy="50%" r="50%">
+              <stop class="uh-core-0" offset="0%"/><stop class="uh-core-1" offset="100%"/>
+            </radialGradient>
+            <linearGradient id="uhGlass" x1="0" y1="0" x2="0" y2="1">
+              <stop class="uh-glass-0" offset="0%"/><stop class="uh-glass-1" offset="62%"/>
+            </linearGradient>
+          </defs>
 
-          <path class="pl-tangle" d="M162 70 C 232 96 208 202 296 172"/>
-          <path class="pl-tangle" d="M162 122 C 256 120 204 80 296 176"/>
-          <path class="pl-tangle" d="M162 174 C 214 174 272 202 296 178"/>
-          <path class="pl-tangle" d="M162 226 C 250 226 200 118 296 180"/>
-          <path class="pl-tangle" d="M162 278 C 276 274 214 150 296 174"/>
+          <circle class="uh-aura" cx="296" cy="180" r="134" fill="url(#uhAura)"/>
 
-          <g class="pl-gate">
-            <text class="pl-gate-label" x="312" y="120" text-anchor="middle">GOVERNED</text>
-            <rect class="pl-gate-soft" x="293" y="130" width="38" height="92" rx="7"/>
-            <rect class="pl-gate-body" x="303" y="140" width="18" height="72" rx="4"/>
-            <path class="pl-tick" d="M306 176 l4 5 l8 -10"/>
+          <g class="uh-streams">
+            <path class="uh-line" d="M148 70 C 200 92 240 150 296 180"/>
+            <path class="uh-line" d="M112 150 C 180 158 232 176 296 180"/>
+            <path class="uh-line" d="M148 230 C 200 224 240 200 296 180"/>
+            <path class="uh-line" d="M250 56 C 260 104 280 144 296 180"/>
+            <path class="uh-line" d="M188 300 C 224 264 262 216 296 180"/>
+            <path class="uh-line" d="M300 312 C 300 264 298 220 296 180"/>
+            <path class="uh-flow" d="M148 70 C 200 92 240 150 296 180"/>
+            <path class="uh-flow" style="animation-delay:.25s" d="M112 150 C 180 158 232 176 296 180"/>
+            <path class="uh-flow" style="animation-delay:.5s" d="M148 230 C 200 224 240 200 296 180"/>
+            <path class="uh-flow" style="animation-delay:.75s" d="M250 56 C 260 104 280 144 296 180"/>
+            <path class="uh-flow" style="animation-delay:1s" d="M188 300 C 224 264 262 216 296 180"/>
+            <path class="uh-flow" style="animation-delay:1.25s" d="M300 312 C 300 264 298 220 296 180"/>
           </g>
 
-          <path class="pl-out" d="M331 162 H448"/>
-          <path class="pl-out" d="M331 176 H448"/>
-          <path class="pl-out" d="M331 190 H448"/>
+          <g class="uh-hub-g">
+            <rect class="uh-hub" x="238" y="122" width="116" height="116" rx="16"/>
+            <circle class="uh-core" cx="296" cy="180" r="46" fill="url(#uhCore)"/>
+            <rect class="uh-glass" x="238" y="122" width="116" height="116" rx="16" fill="url(#uhGlass)"/>
+            <text class="uh-hub-eyebrow" x="296" y="168" text-anchor="middle">UNIVERSAL AI</text>
+            <text class="uh-hub-text" x="296" y="192" text-anchor="middle">OnePilot</text>
+          </g>
 
-          <g class="pl-sap">
-            <rect class="pl-sap-box" x="448" y="140" width="112" height="72" rx="8"/>
-            <text class="pl-sap-text" x="504" y="178" text-anchor="middle" font-size="23">SAP</text>
-            <text class="pl-sap-sub" x="504" y="197" text-anchor="middle">S/4HANA</text>
+          <text class="uh-out-label" x="403" y="158" text-anchor="middle">GOVERNED</text>
+          <path class="uh-out" d="M354 168 H452"/>
+          <path class="uh-out" d="M354 180 H452"/>
+          <path class="uh-out" d="M354 192 H452"/>
+          <path class="uh-out-flow" d="M354 180 H452"/>
+
+          <g class="uh-sap">
+            <rect class="uh-sap-box" x="452" y="146" width="104" height="68" rx="8"/>
+            <text class="uh-sap-text" x="504" y="182" text-anchor="middle" font-size="22">SAP</text>
+            <text class="uh-sap-sub" x="504" y="200" text-anchor="middle">S/4HANA</text>
+          </g>
+
+          <g class="uh-srcs">
+            <g class="uh-src"><text class="uh-label" x="136" y="74" text-anchor="end">Market data</text><circle class="uh-node" cx="148" cy="70" r="5"/></g>
+            <g class="uh-src" style="animation-delay:.1s"><text class="uh-label" x="100" y="154" text-anchor="end">Banks</text><circle class="uh-node" cx="112" cy="150" r="5"/></g>
+            <g class="uh-src" style="animation-delay:.2s"><text class="uh-label" x="136" y="234" text-anchor="end">Files</text><circle class="uh-node" cx="148" cy="230" r="5"/></g>
+            <g class="uh-src" style="animation-delay:.3s"><text class="uh-label" x="250" y="40" text-anchor="middle">AI</text><circle class="uh-node" cx="250" cy="56" r="5"/></g>
+            <g class="uh-src" style="animation-delay:.4s"><text class="uh-label" x="188" y="324" text-anchor="middle">Email</text><circle class="uh-node" cx="188" cy="300" r="5"/></g>
+            <g class="uh-src" style="animation-delay:.5s"><text class="uh-label" x="300" y="332" text-anchor="middle">ERPs</text><circle class="uh-node" cx="300" cy="312" r="5"/></g>
           </g>
         </svg>
         </div>
