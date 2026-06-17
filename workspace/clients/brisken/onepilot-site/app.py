@@ -192,11 +192,26 @@ async def feedback(request: Request) -> JSONResponse:
     comment = str(data.get("comment", "")).strip()
     if not comment:
         return JSONResponse({"ok": False, "error": "comment is required"}, status_code=400)
+    # Sanitize the position payload to numeric fields only, so a note can be
+    # located exactly later: document/viewport coordinates, scroll, and how far
+    # down the page (%) the reviewer clicked.
+    raw_pos = data.get("pos")
+    pos = {}
+    if isinstance(raw_pos, dict):
+        for k in ("pageX", "pageY", "clientX", "clientY", "scrollY", "vw", "vh", "docH", "pct"):
+            v = raw_pos.get(k)
+            if isinstance(v, bool):
+                continue
+            if isinstance(v, (int, float)):
+                pos[k] = int(v)
     entry = {
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "name": name[:200],
         "section": str(data.get("section", "")).strip()[:200],
+        "section_id": str(data.get("sectionId", "")).strip()[:120],
+        "selector": str(data.get("selector", "")).strip()[:480],
         "anchor": str(data.get("anchor", "")).strip()[:300],
+        "pos": pos or None,
         "comment": comment[:8000],
         "path": str(data.get("path", ""))[:300],
         "title": str(data.get("title", ""))[:300],
@@ -223,6 +238,37 @@ def _read_feedback() -> list:
     return rows
 
 
+def _where_cell(r: dict) -> str:
+    """Render the full location of a note: section (deep-linked), the clicked
+    text, where on the page (% down + coordinates + viewport), and a CSS
+    selector path to the exact element."""
+    parts = []
+    section = r.get("section", "") or "This page"
+    sid = r.get("section_id", "") or ""
+    if sid:
+        parts.append(f"<a class=where-sec href='/#{html.escape(sid, quote=True)}'>{html.escape(section)}</a>")
+    else:
+        parts.append(f"<span class=where-sec>{html.escape(section)}</span>")
+    anchor = r.get("anchor", "")
+    if anchor:
+        parts.append(f"<span class=anchor>&#8220;{html.escape(anchor)}&#8221;</span>")
+    pos = r.get("pos") or {}
+    bits = []
+    if isinstance(pos, dict):
+        if pos.get("pct") is not None:
+            bits.append(f"{int(pos['pct'])}% down")
+        if pos.get("pageY") is not None:
+            bits.append(f"x={int(pos.get('pageX', 0))} y={int(pos['pageY'])}px")
+        if pos.get("vw"):
+            bits.append(f"{int(pos['vw'])}&#215;{int(pos.get('vh', 0))} vp")
+    if bits:
+        parts.append("<span class=pos>" + " &middot; ".join(bits) + "</span>")
+    selector = r.get("selector", "")
+    if selector:
+        parts.append(f"<code class=sel>{html.escape(selector)}</code>")
+    return "<br>".join(parts)
+
+
 @app.get("/feedback-log", response_class=HTMLResponse)
 async def feedback_log() -> HTMLResponse:
     rows = _read_feedback()
@@ -231,8 +277,7 @@ async def feedback_log() -> HTMLResponse:
         body = "".join(
             "<tr>"
             f"<td class=ts>{html.escape(r.get('ts',''))}</td>"
-            f"<td>{html.escape(r.get('section','') or 'This page')}"
-            f"{('<br><span class=role>&#8220;'+html.escape(r.get('anchor',''))+'&#8221;</span>') if r.get('anchor') else ''}</td>"
+            f"<td class=where>{_where_cell(r)}</td>"
             f"<td class=comment>{html.escape(r.get('comment',''))}</td>"
             f"<td><b>{html.escape(r.get('name',''))}</b></td>"
             "</tr>"
@@ -329,7 +374,14 @@ LOG_TEMPLATE = (
     "td{padding:11px 13px;border-bottom:1px solid var(--border);vertical-align:top}"
     "td.ts{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);white-space:nowrap}"
     "td.comment{line-height:1.5}"
-    "span.role{color:var(--muted);font-size:12.5px}"
+    "td.where{max-width:330px}"
+    "a.where-sec{color:var(--navy);font-weight:600;text-decoration:none;border-bottom:1px dotted var(--border)}"
+    "a.where-sec:hover{color:var(--teal)}"
+    "span.where-sec{font-weight:600;color:var(--navy)}"
+    "span.anchor{color:var(--muted);font-size:12.5px}"
+    "span.pos{display:inline-block;margin-top:2px;color:var(--muted);font-family:'IBM Plex Mono',monospace;font-size:11px}"
+    "code.sel{display:inline-block;margin-top:3px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--teal);"
+    "background:#eef3fa;padding:2px 6px;border-radius:2px;word-break:break-all;line-height:1.4}"
     "td.empty{text-align:center;color:var(--muted);padding:28px}"
     "</style></head><body><div class=wrap>"
     "<div class=head><div class=brand>" + _BRAND_CUBE + "<span class=wm>brisken</span><span class=pr>OnePilot</span></div>"

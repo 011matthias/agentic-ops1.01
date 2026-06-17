@@ -1018,7 +1018,7 @@
   var asEl = document.getElementById('fbAs');
   var body = document.getElementById('fbBody');
   var done = document.getElementById('fbDone');
-  var ctx = { section: '', anchor: '' };
+  var ctx = { section: '', sectionId: '', selector: '', anchor: '', pos: null };
   var reviewer = (typeof window.__fbReviewer === 'string') ? window.__fbReviewer : '';
   if (asEl) asEl.textContent = reviewer ? 'Leaving feedback as ' + reviewer : '';
 
@@ -1041,7 +1041,10 @@
   function open(opts){
     opts = opts || {};
     ctx.section = opts.section || '';
+    ctx.sectionId = opts.sectionId || '';
+    ctx.selector = opts.selector || '';
     ctx.anchor = opts.anchor || '';
+    ctx.pos = opts.pos || null;
     whereText.textContent = opts.label || (ctx.section || 'this page');
     body.hidden = false; done.hidden = true; setStatus('');
     commentI.value = '';
@@ -1050,21 +1053,47 @@
   }
   function close(){ pop.hidden = true; }
 
-  function captureContext(el){
-    var sec = el.closest && el.closest('section[id], header[id], footer');
-    var label = '';
-    if (sec) { var h = sec.querySelector('h1, h2, h3'); label = (h ? h.textContent : (sec.id || '')).trim(); }
-    var t = (el.textContent || '').replace(/\s+/g, ' ').trim();
-    return { section: label.slice(0, 140), anchor: t ? t.slice(0, 90) : '' };
+  // A stable CSS-selector path to the clicked element, anchored to the nearest
+  // ancestor id so a developer can jump straight to the exact spot later.
+  function buildSelector(el){
+    if (!el || el.nodeType !== 1) return '';
+    var parts = [], node = el, depth = 0;
+    while (node && node.nodeType === 1 && node.tagName.toLowerCase() !== 'body' && depth < 8) {
+      if (node.id) { parts.unshift('#' + node.id); break; }
+      var seg = node.tagName.toLowerCase(), p = node.parentNode;
+      if (p && p.children) {
+        var sibs = Array.prototype.filter.call(p.children, function(c){ return c.tagName === node.tagName; });
+        if (sibs.length > 1) seg += ':nth-of-type(' + (Array.prototype.indexOf.call(sibs, node) + 1) + ')';
+      }
+      parts.unshift(seg);
+      node = p; depth++;
+    }
+    return parts.join(' > ').slice(0, 480);
   }
 
-  // Double-click anywhere -> anchored feedback at that spot
+  function captureContext(el){
+    var sec = el.closest && el.closest('section[id], header[id], footer');
+    var label = '', secId = '';
+    if (sec) { var h = sec.querySelector('h1, h2, h3'); label = (h ? h.textContent : (sec.id || '')).trim(); secId = sec.id || ''; }
+    var t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+    return { section: label.slice(0, 140), sectionId: secId, selector: buildSelector(el), anchor: t ? t.slice(0, 90) : '' };
+  }
+
+  // Double-click anywhere -> anchored feedback at that spot, with full position
   document.addEventListener('dblclick', function(e){
     if (e.target.closest('#fbPop, #fbHintOverlay, a, button, input, textarea, select, label')) return;
     var c = captureContext(e.target);
     var sel = window.getSelection && window.getSelection(); if (sel) sel.removeAllRanges();
+    var docH = Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0) || 1;
+    var pos = {
+      pageX: Math.round(e.pageX), pageY: Math.round(e.pageY),
+      clientX: Math.round(e.clientX), clientY: Math.round(e.clientY),
+      scrollY: Math.round(window.pageYOffset || 0),
+      vw: window.innerWidth, vh: window.innerHeight,
+      docH: Math.round(docH), pct: Math.round((e.pageY / docH) * 100)
+    };
     var label = c.anchor ? '“' + c.anchor.slice(0, 44) + (c.anchor.length > 44 ? '…' : '') + '”' : (c.section || 'this page');
-    open({ x: e.clientX, y: e.clientY, section: c.section, anchor: c.anchor, label: label });
+    open({ x: e.clientX, y: e.clientY, section: c.section, sectionId: c.sectionId, selector: c.selector, anchor: c.anchor, pos: pos, label: label });
   });
 
   // "Leave a note" buttons + floating button -> general (centered) feedback
@@ -1084,7 +1113,7 @@
     sendBtn.disabled = true; setStatus('Sending...');
     fetch('/feedback', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ comment: comment, section: ctx.section, anchor: ctx.anchor, path: location.pathname, title: document.title })
+      body: JSON.stringify({ comment: comment, section: ctx.section, sectionId: ctx.sectionId, selector: ctx.selector, anchor: ctx.anchor, pos: ctx.pos, path: location.pathname, title: document.title })
     }).then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function(){ sendBtn.disabled = false; body.hidden = true; done.hidden = false;
         setTimeout(function(){ if (!pop.hidden && !done.hidden) close(); }, 2200); })
