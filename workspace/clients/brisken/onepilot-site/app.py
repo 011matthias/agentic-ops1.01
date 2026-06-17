@@ -1,13 +1,17 @@
-"""Brisken OnePilot prototype: gated static host + feedback collector.
+"""Brisken OnePilot prototype: name-gated static host + feedback collector.
 
-Serves the single-file marketing prototype behind a shared access code and
-records reviewer feedback to a JSONL file on the Fly volume. The gate mirrors
-the expense-reconciliation web gate (signed-cookie, env-activated): it is on
-ONLY when ``BRISKEN_SITE_ACCESS_CODE`` is set, so local loopback runs stay
-open. The cookie carries only an HMAC of a fixed marker, never the code.
+Serves the single-file marketing prototype behind a name gate: each reviewer
+enters their name before the prototype is shown, and that name is carried in a
+signed cookie. Every feedback note is attributed to the cookie's name server
+side, so reviewers never retype it. There is no shared password; the gate is
+identification, not access control (this is a pre-Dirk internal review). Notes
+are appended to a JSONL file on the Fly volume.
+
+The name cookie is `<b64(name)>.<hmac>`: the HMAC (keyed by the auth secret)
+makes it tamper-evident, so a forged cookie fails to validate and the visitor
+is sent back to the name page.
 
 Env vars:
-    BRISKEN_SITE_ACCESS_CODE   shared password; gate is on iff set
     BRISKEN_SITE_AUTH_SECRET   HMAC key for the cookie (set in prod so
                                sessions survive restarts; random per-process
                                when unset)
@@ -19,6 +23,7 @@ Env vars:
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import html
@@ -43,37 +48,40 @@ SITE_HTML = Path(os.environ.get("BRISKEN_SITE_HTML", str(APP_DIR / "site" / "ind
 DATA_DIR = Path(os.environ.get("BRISKEN_SITE_DATA", str(APP_DIR / "data")))
 FEEDBACK_FILE = DATA_DIR / "feedback.jsonl"
 
-COOKIE_NAME = "brisken_session"
+COOKIE_NAME = "brisken_reviewer"
 SESSION_MAX_AGE = 60 * 60 * 12  # 12 hours
-OPEN_PATHS = frozenset({"/login", "/logout", "/healthz", "/favicon.ico"})
+OPEN_PATHS = frozenset({"/welcome", "/logout", "/healthz", "/favicon.ico"})
+NAME_MAX_LEN = 80
 _PROCESS_SECRET = secrets.token_hex(32)
 
 
-# ---- gate helpers --------------------------------------------------------
-def access_code() -> "str | None":
-    code = os.environ.get("BRISKEN_SITE_ACCESS_CODE", "").strip()
-    return code or None
-
-
-def gate_enabled() -> bool:
-    return access_code() is not None
-
-
+# ---- name-gate helpers ---------------------------------------------------
 def _secret() -> bytes:
     return (os.environ.get("BRISKEN_SITE_AUTH_SECRET") or _PROCESS_SECRET).encode("utf-8")
 
 
-def issue_token() -> str:
-    return hmac.new(_secret(), b"authenticated", hashlib.sha256).hexdigest()
+def _sig(raw: str) -> str:
+    return hmac.new(_secret(), raw.encode("ascii"), hashlib.sha256).hexdigest()[:32]
 
 
-def token_valid(token: "str | None") -> bool:
-    return bool(token) and hmac.compare_digest(token, issue_token())
+def sign_name(name: str) -> str:
+    """Cookie value `<b64(name)>.<hmac>` carrying the reviewer's name."""
+    raw = base64.urlsafe_b64encode(name.encode("utf-8")).decode("ascii")
+    return raw + "." + _sig(raw)
 
 
-def code_matches(submitted: str) -> bool:
-    code = access_code()
-    return code is not None and hmac.compare_digest(submitted.strip(), code)
+def read_name(cookie: "str | None") -> "str | None":
+    """Return the reviewer's name from a valid signed cookie, else None."""
+    if not cookie or "." not in cookie:
+        return None
+    raw, sig = cookie.rsplit(".", 1)
+    if not hmac.compare_digest(sig, _sig(raw)):
+        return None
+    try:
+        name = base64.urlsafe_b64decode(raw.encode("ascii")).decode("utf-8").strip()
+    except Exception:
+        return None
+    return name or None
 
 
 def cookie_is_secure() -> bool:
@@ -93,11 +101,11 @@ app = FastAPI(title="Brisken OnePilot prototype", docs_url=None, redoc_url=None,
 
 @app.middleware("http")
 async def gate(request: Request, call_next):
-    if gate_enabled() and request.url.path not in OPEN_PATHS:
-        if not token_valid(request.cookies.get(COOKIE_NAME)):
+    if request.url.path not in OPEN_PATHS:
+        if read_name(request.cookies.get(COOKIE_NAME)) is None:
             if request.url.path == "/feedback":
-                return JSONResponse({"ok": False, "error": "unauthorized"}, status_code=401)
-            return RedirectResponse("/login?next=" + request.url.path, status_code=303)
+                return JSONResponse({"ok": False, "error": "no reviewer name"}, status_code=401)
+            return RedirectResponse("/welcome?next=" + request.url.path, status_code=303)
     return await call_next(request)
 
 
@@ -111,68 +119,79 @@ async def favicon() -> Response:
     return Response(status_code=204)
 
 
-def render_login(error: str, nxt: str) -> str:
+def render_welcome(error: str, nxt: str) -> str:
     err_block = f'<p class="err">{html.escape(error)}</p>' if error else ""
     return (
-        LOGIN_TEMPLATE
+        WELCOME_TEMPLATE
         .replace("%%ERROR%%", err_block)
         .replace("%%NEXT%%", html.escape(nxt, quote=True))
     )
 
 
-@app.get("/login", response_class=HTMLResponse)
-async def login_form(next: str = "/") -> HTMLResponse:
-    if not gate_enabled():
-        return RedirectResponse("/", status_code=303)
-    return HTMLResponse(render_login("", safe_next(next)))
+@app.get("/welcome", response_class=HTMLResponse)
+async def welcome_form(request: Request, next: str = "/") -> HTMLResponse:
+    if read_name(request.cookies.get(COOKIE_NAME)) is not None:
+        return RedirectResponse(safe_next(next), status_code=303)
+    return HTMLResponse(render_welcome("", safe_next(next)))
 
 
-@app.post("/login")
-async def login_submit(request: Request):
+@app.post("/welcome")
+async def welcome_submit(request: Request):
     form = await request.form()
-    code = str(form.get("code", ""))
+    name = str(form.get("name", "")).strip()[:NAME_MAX_LEN]
     nxt = safe_next(str(form.get("next", "/")))
-    if code_matches(code):
-        resp = RedirectResponse(nxt, status_code=303)
-        resp.set_cookie(
-            COOKIE_NAME,
-            issue_token(),
-            max_age=SESSION_MAX_AGE,
-            httponly=True,
-            secure=cookie_is_secure(),
-            samesite="lax",
-        )
-        return resp
-    return HTMLResponse(render_login("That access code was not recognized.", nxt), status_code=401)
+    if not name:
+        return HTMLResponse(render_welcome("Please enter your name to continue.", nxt), status_code=400)
+    resp = RedirectResponse(nxt, status_code=303)
+    resp.set_cookie(
+        COOKIE_NAME,
+        sign_name(name),
+        max_age=SESSION_MAX_AGE,
+        httponly=True,
+        secure=cookie_is_secure(),
+        samesite="lax",
+    )
+    return resp
 
 
 @app.get("/logout")
 async def logout() -> RedirectResponse:
-    resp = RedirectResponse("/login", status_code=303)
+    resp = RedirectResponse("/welcome", status_code=303)
     resp.delete_cookie(COOKIE_NAME)
     return resp
 
 
 @app.get("/", response_class=HTMLResponse)
-async def index() -> HTMLResponse:
+async def index(request: Request) -> HTMLResponse:
+    reviewer = read_name(request.cookies.get(COOKIE_NAME)) or ""
     try:
-        return HTMLResponse(SITE_HTML.read_text(encoding="utf-8"))
+        text = SITE_HTML.read_text(encoding="utf-8")
     except FileNotFoundError:
         return HTMLResponse("<h1>Prototype HTML not found.</h1>", status_code=500)
+    # Expose the reviewer's name to the page so the feedback popover can show
+    # "leaving feedback as ...". The authoritative name for storage is the
+    # cookie, read server-side in /feedback. Escape "<" so a crafted name can
+    # not break out of the <script>.
+    inject = "<script>window.__fbReviewer=" + json.dumps(reviewer).replace("<", "\\u003c") + ";</script>"
+    return HTMLResponse(text.replace("</head>", inject + "</head>", 1))
 
 
 @app.post("/feedback")
 async def feedback(request: Request) -> JSONResponse:
+    # The reviewer's name is taken from the signed cookie, never the body, so
+    # every note is attributed to the name entered at the gate.
+    name = read_name(request.cookies.get(COOKIE_NAME))
+    if not name:
+        return JSONResponse({"ok": False, "error": "no reviewer name"}, status_code=401)
     try:
         data = await request.json()
     except Exception:
         return JSONResponse({"ok": False, "error": "invalid json"}, status_code=400)
     if not isinstance(data, dict):
         return JSONResponse({"ok": False, "error": "invalid payload"}, status_code=400)
-    name = str(data.get("name", "")).strip()
     comment = str(data.get("comment", "")).strip()
-    if not name or not comment:
-        return JSONResponse({"ok": False, "error": "name and comment are required"}, status_code=400)
+    if not comment:
+        return JSONResponse({"ok": False, "error": "comment is required"}, status_code=400)
     entry = {
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "name": name[:200],
@@ -241,10 +260,10 @@ _BRAND_CUBE = (
     '<polygon points="28,10 16,17 16,31 28,24" fill="#0b6f7a"/></svg>'
 )
 
-LOGIN_TEMPLATE = (
+WELCOME_TEMPLATE = (
     "<!DOCTYPE html><html lang=en><head><meta charset=UTF-8>"
     "<meta name=viewport content='width=device-width, initial-scale=1'>"
-    "<title>Brisken OnePilot, access</title>"
+    "<title>Brisken OnePilot, prototype review</title>"
     "<style>"
     ":root{--navy:#00396f;--navy-deep:#042a52;--teal:#0e7c86;--teal-strong:#0b626a;"
     "--paper:#f4f7fb;--surface:#fff;--text:#0a1a2f;--muted:#56657c;--border:#c8d5e5;}"
@@ -271,15 +290,15 @@ LOGIN_TEMPLATE = (
     "p.err{background:#fdecea;color:#b3261e;border-radius:2px;padding:9px 12px;font-size:13px;margin-bottom:16px}"
     "p.foot{margin-top:20px;font-size:12px;color:var(--muted);text-align:center}"
     "</style></head><body>"
-    "<form class=card method=post action=/login>"
+    "<form class=card method=post action=/welcome>"
     "<div class=brand>" + _BRAND_CUBE + "<span class=wm>brisken</span><span class=pr>OnePilot</span></div>"
-    "<h1>Prototype review access</h1>"
-    "<p class=sub>This site is a working prototype shared for review. Enter the access code to continue.</p>"
+    "<h1>Review the OnePilot prototype</h1>"
+    "<p class=sub>Enter your name to start. We attach it to any feedback you leave, so the team knows who said what.</p>"
     "%%ERROR%%"
     "<input type=hidden name=next value='%%NEXT%%'>"
-    "<label for=code>Access code</label>"
-    "<input id=code name=code type=password autocomplete=current-password autofocus required>"
-    "<button type=submit>Enter</button>"
+    "<label for=name>Your name</label>"
+    "<input id=name name=name type=text autocomplete=name maxlength=80 autofocus required placeholder='e.g. Dirk Brisken'>"
+    "<button type=submit>Start reviewing</button>"
     "<p class=foot>Brisken OnePilot &middot; internal review</p>"
     "</form></body></html>"
 )

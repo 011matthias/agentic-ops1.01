@@ -400,6 +400,8 @@
   .fbpop-done b { color: var(--heading); font-size: 15px; display: flex; align-items: center; gap: 8px; }
   .fbpop-done b svg { width: 18px; height: 18px; color: var(--approved); flex: none; }
   .fbpop-done span { color: var(--muted); font-size: 13px; display: block; margin-top: 4px; }
+  .fbpop-as { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin: 10px 0 0; }
+  .fbpop-as:empty { display: none; }
 
   /* one-time intro hint */
   .fbhint-overlay { position: fixed; inset: 0; z-index: 130; background: rgba(2,18,43,.46); display: flex; align-items: center; justify-content: center; padding: 24px; }
@@ -842,10 +844,6 @@
   <div id="fbBody">
     <div class="fb-row">
       <div>
-        <label class="fb-label" for="fbName">Name</label>
-        <input class="fb-input" type="text" id="fbName" maxlength="120" autocomplete="name" placeholder="Your name">
-      </div>
-      <div>
         <label class="fb-label" for="fbComment">Comment</label>
         <textarea class="fb-input" id="fbComment" maxlength="4000" placeholder="What stood out, what is off, what is missing?"></textarea>
       </div>
@@ -854,6 +852,7 @@
       <button type="button" class="btn btn-primary" id="fbSend">Send</button>
       <span class="fb-status" id="fbStatus" role="status" aria-live="polite"></span>
     </div>
+    <p class="fbpop-as" id="fbAs"></p>
   </div>
   <div class="fbpop-done" id="fbDone" hidden>
     <b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l2.5 2.5L16 9"/></svg> Thank you, that is logged.</b>
@@ -879,13 +878,15 @@
   var pop = document.getElementById('fbPop');
   if (!pop) return;
   var whereText = document.getElementById('fbWhereText');
-  var nameI = document.getElementById('fbName');
   var commentI = document.getElementById('fbComment');
   var sendBtn = document.getElementById('fbSend');
   var statusEl = document.getElementById('fbStatus');
+  var asEl = document.getElementById('fbAs');
   var body = document.getElementById('fbBody');
   var done = document.getElementById('fbDone');
   var ctx = { section: '', anchor: '' };
+  var reviewer = (typeof window.__fbReviewer === 'string') ? window.__fbReviewer : '';
+  if (asEl) asEl.textContent = reviewer ? 'Leaving feedback as ' + reviewer : '';
 
   function setStatus(m, k){ statusEl.textContent = m || ''; statusEl.className = 'fb-status' + (k ? ' ' + k : ''); }
 
@@ -909,10 +910,9 @@
     ctx.anchor = opts.anchor || '';
     whereText.textContent = opts.label || (ctx.section || 'this page');
     body.hidden = false; done.hidden = true; setStatus('');
-    nameI.value = localStorage.getItem('fbName') || '';
     commentI.value = '';
     position(opts.x, opts.y);
-    (nameI.value ? commentI : nameI).focus();
+    commentI.focus();
   }
   function close(){ pop.hidden = true; }
 
@@ -945,13 +945,12 @@
   });
 
   sendBtn.addEventListener('click', function(){
-    var name = nameI.value.trim(), comment = commentI.value.trim();
-    if (!name || !comment){ setStatus('Add your name and a comment.', 'err'); return; }
-    try { localStorage.setItem('fbName', name); } catch (e) {}
+    var comment = commentI.value.trim();
+    if (!comment){ setStatus('Add a comment.', 'err'); return; }
     sendBtn.disabled = true; setStatus('Sending...');
     fetch('/feedback', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name, comment: comment, section: ctx.section, anchor: ctx.anchor, path: location.pathname, title: document.title })
+      body: JSON.stringify({ comment: comment, section: ctx.section, anchor: ctx.anchor, path: location.pathname, title: document.title })
     }).then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function(){ sendBtn.disabled = false; body.hidden = true; done.hidden = false;
         setTimeout(function(){ if (!pop.hidden && !done.hidden) close(); }, 2200); })
