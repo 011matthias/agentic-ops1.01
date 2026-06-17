@@ -251,11 +251,17 @@ Beyond SAP-Treasury job posts:
   treasury.
 
 **C. Warm-channel multipliers (CONFIRMED live 2026-06-12; exploit, not build).**
-- **SAP Store (live, extensive).** OnePilot is listed across sap.com /
-  store.sap.com: Trade Automation + Market Data Hub with multiple
-  variants (Central Banks, Financial Services, Commodities, OANDA),
-  Remittance Advice Gate, Bank Fee Portal. The SAP Store AI advisor
-  already surfaces OnePilot for the brand query. Levers: (1) use the
+- **SAP Store (audited live 2026-06-17).** The buyable transactional
+  SAP Store (store.sap.com DCP) carries only TWO Brisken listings:
+  Market Data Hub and Trade Automation. The MDH per-vendor variants
+  (OANDA / Central Banks / Commodities / Financial Services) exist as
+  sap.com partner MARKETING pages, not as buyable store listings.
+  Remittance Advice Gate and Bank Fee Portal did NOT surface on any SAP
+  channel (store or indexed partner pages); they are on brisken.com
+  only. (The sap.com partner pages were index-only this audit because
+  Akamai blocked live fetch, so confirm against the partner cockpit
+  once Dirk's access is available.) The SAP Store AI advisor already
+  surfaces OnePilot for the brand query. Levers: (1) use the
   SAP-listed page as the cold-outreach CTA + trust asset; (2) AEO the
   listings so the advisor surfaces them for problem/category queries,
   capturing in-marketplace demand where every visitor is an SAP
@@ -351,9 +357,11 @@ already running, then do it."
 
 **A. SAP partner channel.**
 
-- Already running (asset, not a task): OnePilot is live on SAP Store
-  (Trade Automation + MDH variants + Remittance + Bank Fee); the
-  advisor surfaces it on the brand query.
+- Already running (asset, not a task): OnePilot is live on the SAP
+  Store, but only as two buyable listings (Market Data Hub + Trade
+  Automation) per the 2026-06-17 audit; the MDH variants are sap.com
+  marketing pages and Remittance / Bank Fee are not on any SAP channel
+  (brisken.com only). The advisor surfaces OnePilot on the brand query.
 - Net-new:
   1. **SAP co-sell / PartnerEdge "Sell"**: account-exec referrals + RFP
      bundling. Fits the 2025 cloud + embedded-AI direction; the bigger
