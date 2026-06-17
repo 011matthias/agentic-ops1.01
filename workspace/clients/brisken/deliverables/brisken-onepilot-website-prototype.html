@@ -463,6 +463,37 @@
   .search-results a:hover, .search-results a.sel { background: var(--teal-bg); color: var(--teal-strong); }
   .search-hint { text-align: center; margin-top: 12px; color: #cdd9ec; font-size: 12.5px; }
 
+  /* ===== Centered layout (owner directive: centralize the entire prototype) ===== */
+  .trust-row { justify-content: center; }
+  .hero-grid { grid-template-columns: 1fr; text-align: center; justify-items: center; gap: 40px; }
+  .hero-copy { display: flex; flex-direction: column; align-items: center; }
+  .hero-sub { margin-left: auto; margin-right: auto; }
+  .hero-actions { justify-content: center; }
+  .hero-art { order: 2; width: 100%; max-width: 560px; }
+  .report { text-align: center; }
+  .report-grid { grid-template-columns: 1fr; gap: 22px; justify-items: center; }
+  .big-stat-label { margin-left: auto; margin-right: auto; }
+  .mini-stats { max-width: 580px; margin-left: auto; margin-right: auto; }
+  .mini { justify-content: center; text-align: center; }
+  .section { text-align: center; }
+  .section h2, .section .section-sub { margin-left: auto; margin-right: auto; }
+  .card { text-align: center; align-items: center; }
+  .card .ico, .card .lead { align-self: center; }
+  .card .linkcta { justify-content: center; }
+  .flow-step { text-align: center; }
+  .flow-step .num { margin-left: auto; margin-right: auto; }
+  .ttv { flex-direction: column; text-align: center; }
+  .ttv .ico { margin-left: auto; margin-right: auto; }
+  .ttv .ttv-tag { text-align: center; }
+  .cert-seals { justify-content: center; }
+  .fb-card-actions { justify-content: center; }
+  #ai, #trust { text-align: center; }
+  #ai p, #trust p { max-width: 760px; margin-left: auto; margin-right: auto; }
+  /* readability holdouts: tabular data and the Q&A answer copy stay left-aligned */
+  .answer { text-align: left; }
+  .answer-head { justify-content: flex-start; }
+  table th, table td { text-align: left; }
+
   @media (max-width: 960px) {
     .nav-links { display: none; }
     .hero-grid { grid-template-columns: 1fr; gap: 28px; padding: 64px 0 50px; }
