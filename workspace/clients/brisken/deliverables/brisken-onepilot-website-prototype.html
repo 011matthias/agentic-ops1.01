@@ -322,6 +322,34 @@
   }
   .ttv .ttv-tag small { display: block; font-size: 11px; font-weight: 500; letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
 
+  /* OnePilot Agents: command-stack diagram */
+  .cmdstack { display: flex; flex-direction: column; align-items: stretch; max-width: 560px; margin: 18px auto 0; }
+  .cmd-tier {
+    border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);
+    box-shadow: var(--shadow); padding: 15px 20px; text-align: center;
+  }
+  .cmd-tier .cmd-role {
+    display: block; font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--teal-strong); margin-bottom: 5px;
+  }
+  .cmd-tier b { display: block; font-family: var(--font-display); font-size: 16px; color: var(--heading); letter-spacing: -.01em; }
+  .cmd-tier .cmd-desc { display: block; font-size: 13px; color: var(--muted); line-height: 1.5; margin-top: 4px; }
+  .cmd-tier.cmd-pilot { border-color: var(--teal); border-width: 1.5px; background: var(--teal-bg); }
+  .cmd-guards { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 11px; }
+  .cmd-guard {
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .04em; color: var(--teal-strong);
+    border: 1px solid var(--teal); border-radius: var(--radius); padding: 3px 9px; background: var(--surface);
+  }
+  .cmd-link { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 7px 0; }
+  .cmd-link svg { width: 15px; height: 15px; color: var(--teal); }
+  .cmd-link small { font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .cmd-proof { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 560px; margin: 20px auto 0; }
+  .cmd-proof-card { border: 1px solid var(--border); border-left: 3px solid var(--teal); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); padding: 14px 16px; text-align: center; }
+  .cmd-proof-card .cmd-proof-tag { display: block; font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--teal-strong); margin-bottom: 5px; }
+  .cmd-proof-card b { display: block; font-size: 14.5px; color: var(--heading); margin-bottom: 3px; }
+  .cmd-proof-card span { display: block; font-size: 13px; color: var(--muted); line-height: 1.5; }
+  @media (max-width: 600px) { .cmd-proof { grid-template-columns: 1fr; } }
+
   /* Answers / FAQ */
   .answer { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px 24px; margin-bottom: 14px; box-shadow: var(--shadow); }
   .answer-head { display: flex; align-items: flex-start; gap: 12px; }
@@ -720,7 +748,51 @@
     <div id="ai" style="margin-top:36px;padding-top:28px;border-top:1px solid var(--border);">
       <span class="eyebrow">OnePilot Agents</span>
       <h3 style="font-size:18px;margin:6px 0 10px;">OnePilot runs it. You stay in command.</h3>
-      <p>OnePilot is the autonomous layer underneath every application: the no-code platform on SAP BTP that moves and governs the data, with OnePilot Agents doing the repetitive work inside your controls. Think cockpit and pilot: TreasuryCentral is what you see; OnePilot flies the operation; every move is logged, with four-eye and segregation of duties where you want them. Not a chat box bolted on, not a dashboard you babysit. Live today: an agricultural customer posts remittances into S/4HANA on a governed AI gate, and a chemicals customer runs an AI funding-request process across a complex SAP integration.</p>
+      <p style="max-width:620px;margin-left:auto;margin-right:auto;">You set the rules and approve exceptions; OnePilot Agents fly the operation underneath every app, inside your controls. Cockpit and pilot, not a chat box bolted on or a dashboard you babysit.</p>
+
+      <div class="cmdstack">
+        <div class="cmd-tier">
+          <span class="cmd-role">Command</span>
+          <b>You</b>
+          <span class="cmd-desc">Set the policy, approve exceptions. Nothing moves outside the rules you define.</span>
+        </div>
+        <div class="cmd-link"><small>approve &middot; oversee</small><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></div>
+        <div class="cmd-tier">
+          <span class="cmd-role">What you see</span>
+          <b>TreasuryCentral</b>
+          <span class="cmd-desc">The cockpit: cash, investments, debt, FX and governance on one screen.</span>
+        </div>
+        <div class="cmd-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></div>
+        <div class="cmd-tier cmd-pilot">
+          <span class="cmd-role">The autonomous layer</span>
+          <b>OnePilot Agents fly it</b>
+          <span class="cmd-desc">The repetitive work: ingest, validate, post and reconcile, end to end.</span>
+          <div class="cmd-guards">
+            <span class="cmd-guard">four-eye</span>
+            <span class="cmd-guard">segregation of duties</span>
+            <span class="cmd-guard">full audit log</span>
+          </div>
+        </div>
+        <div class="cmd-link"><small>governed &middot; both ways</small><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></div>
+        <div class="cmd-tier">
+          <span class="cmd-role">Systems of record</span>
+          <b>SAP and your sources</b>
+          <span class="cmd-desc">Into S/4HANA, TRM, Cash and Credit Management. Every record traceable.</span>
+        </div>
+      </div>
+
+      <div class="cmd-proof">
+        <div class="cmd-proof-card">
+          <span class="cmd-proof-tag">Live today</span>
+          <b>Agricultural customer</b>
+          <span>Posts remittances into S/4HANA on a governed AI gate.</span>
+        </div>
+        <div class="cmd-proof-card">
+          <span class="cmd-proof-tag">Live today</span>
+          <b>Chemicals customer</b>
+          <span>Runs an AI funding-request process across a complex SAP integration.</span>
+        </div>
+      </div>
     </div>
 
     <div id="trust" style="margin-top:36px;padding-top:28px;border-top:1px solid var(--border);">
