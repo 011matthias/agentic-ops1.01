@@ -6,7 +6,7 @@
 <title>Brisken Expense Reconciliation, User Guide</title>
 <script>
   (function () {
-    var t = localStorage.getItem('erg-theme');
+    var t = localStorage.getItem('theme');
     var d = document.documentElement;
     d.setAttribute('data-theme',
       t === 'dark' || (t !== 'light' && window.matchMedia('(prefers-color-scheme:dark)').matches) ? 'dark' : 'light');
@@ -61,6 +61,14 @@
   }
   .langset button + button { border-left: 1px solid var(--border); }
   .langset button.active { background: var(--accent); color: #fff; }
+  /* App tab bar, mirrors base.html so every tab stays in the same window. */
+  .nav-tabs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .nav-tab {
+    text-decoration: none; color: var(--muted); font-weight: 600; font-size: 13px;
+    padding: 5px 11px; border-radius: 7px; border: 1px solid transparent;
+  }
+  .nav-tab:hover { color: var(--text); }
+  .nav-tab.active { color: var(--accent); border-color: var(--border); }
   .theme-btn {
     background: var(--surface); color: var(--text); border: 1px solid var(--border);
     border-radius: 8px; width: 34px; height: 32px; cursor: pointer; font-size: 15px; line-height: 1;
@@ -132,7 +140,14 @@
 <body>
 <header class="topbar">
   <div class="topbar-inner">
-    <div class="brand">Brisken Expense Reconciliation <span>&middot; User Guide</span></div>
+    <div class="brand">Brisken <span>&middot; Expense Reconciliation</span></div>
+    <div class="nav-tabs" role="tablist">
+      <a class="nav-tab" href="/">Runs</a>
+      <a class="nav-tab" href="/compare">Compare</a>
+      <a class="nav-tab" href="/memory">Memory</a>
+      <a class="nav-tab active" href="/guide">Guide</a>
+      <a class="nav-tab" href="/how-it-works">How it works</a>
+    </div>
     <div class="spacer"></div>
     <div class="search-wrap">
       <input type="text" id="search" placeholder="Search / Suchen / Buscar" autocomplete="off" aria-label="Search the guide">
@@ -579,7 +594,7 @@
     var d = document.documentElement;
     var c = d.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     d.setAttribute('data-theme', c);
-    localStorage.setItem('erg-theme', c);
+    localStorage.setItem('theme', c);
     syncThemeIcon();
   });
 

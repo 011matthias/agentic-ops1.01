@@ -46,3 +46,22 @@ def test_nav_links_to_all_docs(client):
     body = client.get("/").text
     assert 'href="/guide"' in body
     assert 'href="/how-it-works"' in body
+
+
+# The full app tab bar (Runs / Compare / Memory / Guide / How it works) is
+# present on the doc pages too, so every tab navigates within the same window
+# instead of dropping the reader onto a chromeless standalone page.
+_APP_TABS = ('href="/"', 'href="/compare"', 'href="/memory"',
+             'href="/guide"', 'href="/how-it-works"')
+
+
+@pytest.mark.parametrize("path,active_href", [
+    ("/guide", '/guide'),
+    ("/how-it-works", '/how-it-works'),
+])
+def test_doc_pages_carry_app_nav(client, path, active_href):
+    body = client.get(path).text
+    for tab in _APP_TABS:
+        assert tab in body, f"{path} is missing tab {tab}"
+    # the current doc's tab is marked active
+    assert f'class="nav-tab active" href="{active_href}"' in body
