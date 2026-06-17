@@ -36,10 +36,11 @@ A Brisken / OnePilot marketing site that does three jobs:
 | Page | Job |
 |---|---|
 | Home | The full narrative on one page (this prototype) |
-| Platform | How OnePilot works: ingest, govern, distribute; the no-code framework; integration tech; security |
-| Products | Per-app pages, leading with Market Data Hub + Trade Automation; the rest as the suite |
+| TreasuryCentral | The cockpit and flagship: one screen for cash, investments, debt, FX, market news and governance on SAP data |
+| Applications | Per-app pages, leading with the Wave 1 trio (Market Data Hub, BST, Remittance Advice Gate); the rest on the same platform |
+| Platform / autonomous layer | How OnePilot runs it: ingest, govern, distribute; the no-code framework on SAP BTP; OnePilot Agents; security |
 | The Shadow Integration Report | The research asset: the lead magnet and the AEO authority page |
-| AI Digital Workforce | The named co-worker, governed, the email-to-bank-transfer example |
+| AI Digital Workforce | Governed AI for finance ops, the email-to-bank-transfer example (cross-sell) |
 | Why now | ECC 2027 / S/4HANA migration as the buying window |
 | Answers | The AEO hub: buyer-question Q&A clusters with FAQPage schema |
 | Trust / About | Partner badges, certifications, customers |
@@ -52,7 +53,7 @@ A Brisken / OnePilot marketing site that does three jobs:
 |---|---|
 | Name the problem | Hero, the Problem section, the master line in nav / footer / meta description |
 | Publish the benchmark | The Shadow Integration Report page, a hero stat, and the citations in Answers |
-| Name and prove the AI | The AI Digital Workforce page, governance-first, one customer metric (Dirk-gated) |
+| Name and prove the AI | OnePilot Agents (the autonomous layer), governance-first, one customer metric (Dirk-gated) |
 | Make the SAP relationship work | Trust strip on every page, SAP Store deep-links, co-sell-ready CTA, Built-on-BTP |
 | AEO substrate (enabler) | The Answers hub, extractable 40 to 60 word answers, FAQPage JSON-LD, `llms.txt` |
 
