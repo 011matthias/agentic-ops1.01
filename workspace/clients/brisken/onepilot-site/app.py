@@ -176,8 +176,8 @@ async def feedback(request: Request) -> JSONResponse:
     entry = {
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "name": name[:200],
-        "role": str(data.get("role", "")).strip()[:200],
         "section": str(data.get("section", "")).strip()[:200],
+        "anchor": str(data.get("anchor", "")).strip()[:300],
         "comment": comment[:8000],
         "path": str(data.get("path", ""))[:300],
         "title": str(data.get("title", ""))[:300],
@@ -212,10 +212,10 @@ async def feedback_log() -> HTMLResponse:
         body = "".join(
             "<tr>"
             f"<td class=ts>{html.escape(r.get('ts',''))}</td>"
-            f"<td><b>{html.escape(r.get('name',''))}</b>"
-            f"{('<br><span class=role>'+html.escape(r.get('role',''))+'</span>') if r.get('role') else ''}</td>"
-            f"<td>{html.escape(r.get('section','') or 'Whole page')}</td>"
+            f"<td>{html.escape(r.get('section','') or 'This page')}"
+            f"{('<br><span class=role>&#8220;'+html.escape(r.get('anchor',''))+'&#8221;</span>') if r.get('anchor') else ''}</td>"
             f"<td class=comment>{html.escape(r.get('comment',''))}</td>"
+            f"<td><b>{html.escape(r.get('name',''))}</b></td>"
             "</tr>"
             for r in rows
         )
@@ -317,7 +317,7 @@ LOG_TEMPLATE = (
     "<a href='/' style='color:var(--teal);font-size:13px;text-decoration:none'>&larr; Back to the prototype</a></div>"
     "<h1>Reviewer feedback</h1>"
     "<p class=meta>%%COUNT%% entr&#105;es &middot; newest first &middot; <a href='/feedback.jsonl'>download JSONL</a></p>"
-    "<table><thead><tr><th>When (UTC)</th><th>Who</th><th>Section</th><th>Comment</th></tr></thead>"
+    "<table><thead><tr><th>When (UTC)</th><th>Where</th><th>Comment</th><th>Who</th></tr></thead>"
     "<tbody>%%ROWS%%</tbody></table>"
     "</div></body></html>"
 )

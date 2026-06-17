@@ -352,48 +352,68 @@
   .feedback-fab {
     position: fixed; right: 18px; bottom: 18px; z-index: 60; background: var(--teal); color: #fff;
     padding: 10px 16px; border-radius: var(--radius-pill); font-size: 13px; font-weight: 600; text-decoration: none;
-    box-shadow: var(--shadow-lift); border: none;
+    box-shadow: var(--shadow-lift); border: none; cursor: pointer; font-family: var(--font-body);
   }
   .feedback-fab:hover { background: var(--teal-strong); }
 
-  /* Feedback form */
+  /* Feedback: explainer card + dynamic popover + one-time intro hint */
   .fb-card {
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
     border-left: 3px solid var(--teal); padding: 30px 32px; box-shadow: var(--shadow);
   }
-  .fb-intro .eyebrow { margin-bottom: 10px; }
-  .fb-intro h2 { font-size: clamp(22px, 2.6vw, 27px); margin-bottom: 8px; }
-  .fb-intro .section-sub { margin-bottom: 24px; }
-  .fb-form { display: flex; flex-direction: column; gap: 16px; }
-  .fb-form[hidden], .fb-done[hidden] { display: none !important; }
-  .fb-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .fb-field { display: flex; flex-direction: column; gap: 6px; }
-  .fb-field > span {
-    font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: .1em;
-    text-transform: uppercase; color: var(--muted);
-  }
-  .fb-field > span em { font-style: normal; text-transform: none; letter-spacing: 0; opacity: .8; }
-  .fb-field input, .fb-field select, .fb-field textarea {
-    font-family: var(--font-body); font-size: 15px; color: var(--text); background: var(--bg);
-    border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 11px 13px; width: 100%;
+  .fb-card .eyebrow { margin-bottom: 10px; }
+  .fb-card h2 { font-size: clamp(22px, 2.6vw, 27px); margin-bottom: 8px; }
+  .fb-card .section-sub { margin-bottom: 0; }
+  .fb-card .dbl { color: var(--text); font-weight: 600; }
+  .fb-card-actions { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-top: 22px; }
+
+  /* shared field look (popover) */
+  .fb-label { font-family: var(--font-mono); font-size: 10.5px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 6px; }
+  .fb-input {
+    font-family: var(--font-body); font-size: 14.5px; color: var(--text); background: var(--bg);
+    border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 10px 12px; width: 100%;
     transition: border-color .12s ease, box-shadow .12s ease;
   }
-  .fb-field textarea { resize: vertical; min-height: 96px; line-height: 1.5; }
-  .fb-field input:focus, .fb-field select:focus, .fb-field textarea:focus {
-    outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 18%, transparent);
-  }
-  .fb-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 4px; }
-  .fb-actions .btn-primary[disabled] { opacity: .6; cursor: progress; transform: none; }
-  .fb-status { font-family: var(--font-mono); font-size: 13px; }
+  textarea.fb-input { resize: vertical; min-height: 84px; line-height: 1.5; }
+  .fb-input:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 18%, transparent); }
+  .fb-status { font-family: var(--font-mono); font-size: 12.5px; min-height: 1em; }
   .fb-status.err { color: #c2410c; }
-  .fb-status.ok { color: var(--approved); }
   [data-theme="dark"] .fb-status.err { color: #fca873; }
-  .fb-done { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
-  .fb-done .ico { background: var(--approved-bg); color: var(--approved); margin-bottom: 8px; }
-  .fb-done h3 { color: var(--heading); font-size: 19px; }
-  .fb-done p { color: var(--muted); font-size: 14.5px; }
-  .fb-done .linkcta { background: none; border: none; cursor: pointer; padding: 8px 0 0; }
-  @media (max-width: 600px) { .fb-row { grid-template-columns: 1fr; } .fb-card { padding: 24px 20px; } }
+  .fb-status.ok { color: var(--approved); }
+
+  /* floating popover (appears where the reviewer double-clicks) */
+  .fbpop {
+    position: fixed; z-index: 120; width: 320px; max-width: calc(100vw - 24px);
+    background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius);
+    box-shadow: 0 18px 50px rgba(2,18,43,.30); padding: 16px;
+  }
+  .fbpop[hidden] { display: none; }
+  .fbpop-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+  .fbpop-where { font-family: var(--font-mono); font-size: 11.5px; color: var(--teal-strong); line-height: 1.35; }
+  .fbpop-where b { display: block; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; font-weight: 500; }
+  .fbpop-x { border: none; background: none; color: var(--muted); cursor: pointer; font-size: 19px; line-height: 1; padding: 0 2px; flex: none; }
+  .fbpop-x:hover { color: var(--text); }
+  .fbpop .fb-row { display: flex; flex-direction: column; gap: 11px; }
+  .fbpop-actions { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+  .fbpop .btn-primary { padding: 9px 18px; font-size: 14px; }
+  .fbpop .btn-primary[disabled] { opacity: .6; cursor: progress; }
+  .fbpop-done b { color: var(--heading); font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .fbpop-done b svg { width: 18px; height: 18px; color: var(--approved); flex: none; }
+  .fbpop-done span { color: var(--muted); font-size: 13px; display: block; margin-top: 4px; }
+
+  /* one-time intro hint */
+  .fbhint-overlay { position: fixed; inset: 0; z-index: 130; background: rgba(2,18,43,.46); display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .fbhint-overlay[hidden] { display: none; }
+  .fbhint {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: 0 24px 60px rgba(2,18,43,.4); max-width: 430px; width: 100%; padding: 30px 30px 26px;
+  }
+  .fbhint .eyebrow { margin-bottom: 12px; }
+  .fbhint h3 { font-family: var(--font-display); font-size: 22px; color: var(--heading); margin-bottom: 12px; letter-spacing: -.01em; }
+  .fbhint p { color: var(--muted); font-size: 14.5px; line-height: 1.6; margin-bottom: 9px; }
+  .fbhint .cursor { color: var(--teal-strong); font-weight: 600; }
+  .fbhint-actions { display: flex; gap: 12px; margin-top: 20px; }
+  @media (max-width: 600px) { .fb-card { padding: 24px 20px; } .fbpop { width: calc(100vw - 24px); } }
 
   /* Search overlay */
   #searchOverlay { display: none; position: fixed; inset: 0; background: rgba(2,18,43,.5); z-index: 100; padding-top: 12vh; }
@@ -432,7 +452,7 @@
     * { transition-duration: .01ms !important; }
   }
   @media print {
-    .site-nav, #searchOverlay, .hero-actions, .nav-cta, .feedback-fab { display: none !important; }
+    .site-nav, #searchOverlay, .hero-actions, .nav-cta, .feedback-fab, #fbPop, #fbHintOverlay { display: none !important; }
     body { background: #fff; color: #000; }
     .section { page-break-inside: avoid; border-top: 1px solid #ccc; }
     .card, .report, .flow, .answer, .ttv { box-shadow: none; }
@@ -696,47 +716,12 @@
 <section class="section" id="feedback" style="padding-top:0;">
   <div class="wrap">
     <div class="fb-card">
-      <div class="fb-intro">
-        <span class="eyebrow">Reviewing this prototype?</span>
-        <h2>Tell us what is unclear, wrong, or missing</h2>
-        <p class="section-sub">This goes straight to the team building the site. Your name and role help us weigh the note; the section field is optional.</p>
-      </div>
-      <form class="fb-form" id="fbForm" novalidate>
-        <div class="fb-row">
-          <label class="fb-field"><span>Name</span>
-            <input type="text" name="name" id="fbName" required maxlength="120" autocomplete="name" placeholder="Your name">
-          </label>
-          <label class="fb-field"><span>Role</span>
-            <input type="text" name="role" id="fbRole" maxlength="120" autocomplete="organization-title" placeholder="e.g. Treasury lead">
-          </label>
-        </div>
-        <label class="fb-field"><span>Section <em>(optional)</em></span>
-          <select name="section" id="fbSection">
-            <option value="">Whole page</option>
-            <option>Hero and first impression</option>
-            <option>The problem (shadow integrations)</option>
-            <option>Our research (the statistic)</option>
-            <option>The platform and how it works</option>
-            <option>The OnePilot suite and products</option>
-            <option>Why now (S/4HANA timing)</option>
-            <option>Answers and FAQ</option>
-            <option>Trust, proof and credentials</option>
-            <option>Branding and look and feel</option>
-          </select>
-        </label>
-        <label class="fb-field"><span>Comment</span>
-          <textarea name="comment" id="fbComment" required maxlength="4000" rows="4" placeholder="What stood out, what is off, what is missing?"></textarea>
-        </label>
-        <div class="fb-actions">
-          <button type="submit" class="btn btn-primary" id="fbSubmit">Send feedback</button>
-          <span class="fb-status" id="fbStatus" role="status" aria-live="polite"></span>
-        </div>
-      </form>
-      <div class="fb-done" id="fbDone" hidden>
-        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l2.5 2.5L16 9"/></svg></span>
-        <h3>Thank you, that is logged.</h3>
-        <p>Your note reached the team. Add another anytime.</p>
-        <button type="button" class="linkcta" id="fbAgain">Leave another note <span class="arr">&#8594;</span></button>
+      <span class="eyebrow">Reviewing this prototype?</span>
+      <h2>Tell us what is unclear, wrong, or missing</h2>
+      <p class="section-sub"><span class="dbl">Double-click anywhere on the page</span> to drop a note on that exact spot, a headline, a number, a section, the wording. Your notes go straight to the team building the site.</p>
+      <div class="fb-card-actions">
+        <button type="button" class="btn btn-primary" data-fb-open>Leave a note</button>
+        <button type="button" class="linkcta" data-fb-hint>How does this work? <span class="arr">&#8594;</span></button>
       </div>
     </div>
   </div>
@@ -846,70 +831,143 @@
 })();
 </script>
 
-<a href="#feedback" class="feedback-fab" aria-label="Send feedback">Feedback</a>
+<button type="button" class="feedback-fab" data-fb-open aria-label="Leave feedback">Feedback</button>
+
+<!-- Dynamic feedback popover: appears where the reviewer double-clicks -->
+<div class="fbpop" id="fbPop" role="dialog" aria-label="Leave feedback" hidden>
+  <div class="fbpop-head">
+    <div class="fbpop-where"><b>Feedback on</b><span id="fbWhereText">this page</span></div>
+    <button type="button" class="fbpop-x" id="fbClose" aria-label="Close">&#215;</button>
+  </div>
+  <div id="fbBody">
+    <div class="fb-row">
+      <div>
+        <label class="fb-label" for="fbName">Name</label>
+        <input class="fb-input" type="text" id="fbName" maxlength="120" autocomplete="name" placeholder="Your name">
+      </div>
+      <div>
+        <label class="fb-label" for="fbComment">Comment</label>
+        <textarea class="fb-input" id="fbComment" maxlength="4000" placeholder="What stood out, what is off, what is missing?"></textarea>
+      </div>
+    </div>
+    <div class="fbpop-actions">
+      <button type="button" class="btn btn-primary" id="fbSend">Send</button>
+      <span class="fb-status" id="fbStatus" role="status" aria-live="polite"></span>
+    </div>
+  </div>
+  <div class="fbpop-done" id="fbDone" hidden>
+    <b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l2.5 2.5L16 9"/></svg> Thank you, that is logged.</b>
+    <span>Double-click anywhere to leave another.</span>
+  </div>
+</div>
+
+<!-- One-time explainer for the double-click feedback -->
+<div class="fbhint-overlay" id="fbHintOverlay" hidden>
+  <div class="fbhint" role="dialog" aria-label="How to leave feedback" aria-modal="true">
+    <span class="eyebrow">Reviewing this prototype?</span>
+    <h3>Leave feedback anywhere</h3>
+    <p><span class="cursor">Double-click anywhere on the page</span> to leave a note about that exact spot: a headline, a number, a section, the wording.</p>
+    <p>Prefer a general note? Use the <b>Feedback</b> button in the bottom corner. Everything goes straight to the team building the site.</p>
+    <div class="fbhint-actions">
+      <button type="button" class="btn btn-primary" id="fbHintOk">Got it</button>
+    </div>
+  </div>
+</div>
 
 <script>
 (function(){
-  var form = document.getElementById('fbForm');
-  if (!form) return;
+  var pop = document.getElementById('fbPop');
+  if (!pop) return;
+  var whereText = document.getElementById('fbWhereText');
+  var nameI = document.getElementById('fbName');
+  var commentI = document.getElementById('fbComment');
+  var sendBtn = document.getElementById('fbSend');
   var statusEl = document.getElementById('fbStatus');
-  var submitBtn = document.getElementById('fbSubmit');
-  var doneEl = document.getElementById('fbDone');
-  var againBtn = document.getElementById('fbAgain');
-  var fab = document.querySelector('.feedback-fab');
+  var body = document.getElementById('fbBody');
+  var done = document.getElementById('fbDone');
+  var ctx = { section: '', anchor: '' };
 
-  // Move focus to the name field when the floating button is used.
-  if (fab) fab.addEventListener('click', function(){
-    setTimeout(function(){ var n = document.getElementById('fbName'); if (n) n.focus(); }, 350);
-  });
+  function setStatus(m, k){ statusEl.textContent = m || ''; statusEl.className = 'fb-status' + (k ? ' ' + k : ''); }
 
-  function setStatus(msg, kind){
-    statusEl.textContent = msg || '';
-    statusEl.className = 'fb-status' + (kind ? ' ' + kind : '');
+  function position(x, y){
+    pop.style.visibility = 'hidden';
+    pop.hidden = false;
+    var w = pop.offsetWidth, h = pop.offsetHeight, vw = window.innerWidth, vh = window.innerHeight, left, top;
+    if (vw < 560 || x == null) {
+      left = Math.max(12, (vw - w) / 2);
+      top = Math.max(12, vh - h - 20);
+    } else {
+      left = Math.min(Math.max(12, x + 14), vw - w - 12);
+      top = Math.min(Math.max(12, y + 14), vh - h - 12);
+    }
+    pop.style.left = left + 'px'; pop.style.top = top + 'px'; pop.style.visibility = '';
   }
 
-  form.addEventListener('submit', function(e){
-    e.preventDefault();
-    var name = document.getElementById('fbName').value.trim();
-    var comment = document.getElementById('fbComment').value.trim();
-    if (!name || !comment){
-      setStatus('Please add your name and a comment.', 'err');
-      return;
-    }
-    var payload = {
-      name: name,
-      role: document.getElementById('fbRole').value.trim(),
-      section: document.getElementById('fbSection').value,
-      comment: comment,
-      path: location.pathname,
-      title: document.title
-    };
-    submitBtn.disabled = true;
-    setStatus('Sending...', '');
-    fetch('/feedback', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    }).then(function(r){
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    }).then(function(){
-      form.hidden = true;
-      doneEl.hidden = false;
-      doneEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }).catch(function(){
-      submitBtn.disabled = false;
-      setStatus('Could not reach the server just now. Please try again, or mention it on the call.', 'err');
-    });
+  function open(opts){
+    opts = opts || {};
+    ctx.section = opts.section || '';
+    ctx.anchor = opts.anchor || '';
+    whereText.textContent = opts.label || (ctx.section || 'this page');
+    body.hidden = false; done.hidden = true; setStatus('');
+    nameI.value = localStorage.getItem('fbName') || '';
+    commentI.value = '';
+    position(opts.x, opts.y);
+    (nameI.value ? commentI : nameI).focus();
+  }
+  function close(){ pop.hidden = true; }
+
+  function captureContext(el){
+    var sec = el.closest && el.closest('section[id], header[id], footer');
+    var label = '';
+    if (sec) { var h = sec.querySelector('h1, h2, h3'); label = (h ? h.textContent : (sec.id || '')).trim(); }
+    var t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+    return { section: label.slice(0, 140), anchor: t ? t.slice(0, 90) : '' };
+  }
+
+  // Double-click anywhere -> anchored feedback at that spot
+  document.addEventListener('dblclick', function(e){
+    if (e.target.closest('#fbPop, #fbHintOverlay, a, button, input, textarea, select, label')) return;
+    var c = captureContext(e.target);
+    var sel = window.getSelection && window.getSelection(); if (sel) sel.removeAllRanges();
+    var label = c.anchor ? '“' + c.anchor.slice(0, 44) + (c.anchor.length > 44 ? '…' : '') + '”' : (c.section || 'this page');
+    open({ x: e.clientX, y: e.clientY, section: c.section, anchor: c.anchor, label: label });
   });
 
-  if (againBtn) againBtn.addEventListener('click', function(){
-    form.reset();
-    doneEl.hidden = true;
-    form.hidden = false;
-    setStatus('', '');
-    var n = document.getElementById('fbName'); if (n) n.focus();
+  // "Leave a note" buttons + floating button -> general (centered) feedback
+  Array.prototype.forEach.call(document.querySelectorAll('[data-fb-open]'), function(b){
+    b.addEventListener('click', function(e){ e.preventDefault(); open({ section: 'General note', label: 'this page' }); });
   });
+
+  document.getElementById('fbClose').addEventListener('click', close);
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && !pop.hidden) close(); });
+  document.addEventListener('mousedown', function(e){
+    if (!pop.hidden && !e.target.closest('#fbPop') && !e.target.closest('[data-fb-open]')) close();
+  });
+
+  sendBtn.addEventListener('click', function(){
+    var name = nameI.value.trim(), comment = commentI.value.trim();
+    if (!name || !comment){ setStatus('Add your name and a comment.', 'err'); return; }
+    try { localStorage.setItem('fbName', name); } catch (e) {}
+    sendBtn.disabled = true; setStatus('Sending...');
+    fetch('/feedback', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name, comment: comment, section: ctx.section, anchor: ctx.anchor, path: location.pathname, title: document.title })
+    }).then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function(){ sendBtn.disabled = false; body.hidden = true; done.hidden = false;
+        setTimeout(function(){ if (!pop.hidden && !done.hidden) close(); }, 2200); })
+      .catch(function(){ sendBtn.disabled = false; setStatus('Could not reach the server. Try again, or mention it on the call.', 'err'); });
+  });
+
+  // One-time explainer
+  var ov = document.getElementById('fbHintOverlay');
+  function hideHint(){ ov.hidden = true; try { localStorage.setItem('fbHintSeen', '1'); } catch (e) {} }
+  document.getElementById('fbHintOk').addEventListener('click', hideHint);
+  ov.addEventListener('mousedown', function(e){ if (e.target === ov) hideHint(); });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-fb-hint]'), function(b){
+    b.addEventListener('click', function(e){ e.preventDefault(); ov.hidden = false; });
+  });
+  try { if (!localStorage.getItem('fbHintSeen')) setTimeout(function(){ ov.hidden = false; }, 600); }
+  catch (e) { setTimeout(function(){ ov.hidden = false; }, 600); }
 })();
 </script>
 
