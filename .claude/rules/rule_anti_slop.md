@@ -57,6 +57,20 @@ body sentence. The H3 adds no signal.
 summarize", "the bottom line". The last sentence of the section IS
 the close; do not announce it.
 
+**Invented or padded sections (IA-level slop).** The prose bans above
+have a structural sibling: a *section* the content does not support is
+slop at the information-architecture level. A stat band with no real
+metric, an evidence block with no real proof, a three-card row padded
+to three for symmetry. Structure follows content: a section exists
+because the content earns it, never because "a page like this usually
+has one." Thin content is a signal to surface and ask, not a gap to
+fill with an invented claim, metric, testimonial, or logo. This is the
+IA-derivation-time catch; B4 and `validate-output.py` `unsourced-claim`
+are the downstream backstop. Source: 2026-06-17 content-adaptive
+prototype work (Brisken OnePilot hero `81%` off n=21, `#why-now`
+three-symmetric-card row); operationalized in the `skil_prototype`
+front end.
+
 ## What is NOT slop (allowed)
 
 - Per-category narration where each category breaks the pattern in
