@@ -491,6 +491,11 @@
   .hero-sub { margin-left: auto; margin-right: auto; }
   .hero-actions { justify-content: center; }
   .hero-art { order: 2; width: 100%; max-width: 560px; }
+  /* hero head (badge + h1) centered; research and pipeline art sit side by side */
+  .hero-head { display: flex; flex-direction: column; align-items: center; }
+  .hero-split { display: grid; grid-template-columns: 1fr 1fr; gap: 52px; align-items: center; width: 100%; }
+  .hero-split .hero-research { padding: 0; margin: 0; }
+  .hero-split .hero-art { justify-self: center; order: 0; min-height: 0; }
   .report { text-align: center; }
   /* research block promoted into the hero (replaces the old prose sub) */
   .hero-research { border-top: none; padding: 16px 0 4px; margin-top: 4px; }
@@ -521,6 +526,7 @@
   @media (max-width: 960px) {
     .nav-links { display: none; }
     .hero-grid { grid-template-columns: 1fr; gap: 28px; padding: 64px 0 50px; }
+    .hero-split { grid-template-columns: 1fr; gap: 28px; }
     .hero-art { min-height: 300px; order: 2; }
     .grid-4, .grid-3, .grid-2, .report-grid, .footer-grid { grid-template-columns: 1fr 1fr; }
     .flow { grid-template-columns: 1fr 1fr; }
@@ -589,9 +595,11 @@
 <header class="hero" id="top">
   <div class="wrap">
     <div class="hero-grid">
-      <div class="hero-copy">
+      <div class="hero-head">
         <span class="hero-badge">Modern financial-data platform for SAP, AI built in</span>
         <h1>Financial data, solved end to end.</h1>
+      </div>
+      <div class="hero-split">
         <div class="report hero-research" id="report">
           <span class="eyebrow">Our research</span>
           <div class="report-grid">
@@ -604,13 +612,8 @@
               <div class="mini"><span class="v">38%</span><span class="t">name a specific outside data or trading vendor whose feed must reach SAP.</span></div>
             </div>
           </div>
-          <p class="method">From our own read of SAP-treasury hiring ads (first sample of 21, 2026), being widened into a published figure. Method and sources on request.</p>
         </div>
-        <div class="hero-actions">
-          <a href="#demo" class="btn btn-primary">Book a demo</a>
-        </div>
-      </div>
-      <div class="hero-art">
+        <div class="hero-art">
         <svg viewBox="0 0 580 360" role="img" aria-label="Tangled financial-data feeds resolving through a governed gate into SAP">
           <g class="pl-src" style="animation-delay:.05s"><text class="pl-label" x="8" y="74">Bloomberg</text><rect class="pl-node" x="150" y="64" width="12" height="12" rx="2"/></g>
           <g class="pl-src" style="animation-delay:.14s"><text class="pl-label" x="18" y="126">Refinitiv</text><rect class="pl-node" x="150" y="116" width="12" height="12" rx="2"/></g>
@@ -641,6 +644,10 @@
             <text class="pl-sap-sub" x="504" y="197" text-anchor="middle">S/4HANA</text>
           </g>
         </svg>
+        </div>
+      </div>
+      <div class="hero-actions">
+        <a href="#demo" class="btn btn-primary">Book a demo</a>
       </div>
     </div>
   </div>
