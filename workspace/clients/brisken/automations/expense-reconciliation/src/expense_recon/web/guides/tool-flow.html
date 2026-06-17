@@ -47,6 +47,14 @@
     background: var(--blue-bg); color: var(--blue); font-weight: 600;
   }
   .nav-hint { font-size: 12px; color: var(--muted); }
+  /* App tab bar, mirrors base.html so every tab stays in the same window. */
+  .nav-tabs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .nav-tab {
+    text-decoration: none; color: var(--muted); font-weight: 600; font-size: 13px;
+    padding: 5px 11px; border-radius: 7px; border: 1px solid transparent;
+  }
+  .nav-tab:hover { color: var(--text); }
+  .nav-tab.active { color: var(--blue); border-color: var(--border); }
   .nav-theme {
     border: 1px solid var(--border); background: var(--surface); color: var(--text);
     border-radius: 999px; padding: 4px 12px; cursor: pointer; font-size: 13px;
@@ -168,10 +176,16 @@
 <body>
 
 <nav class="site-nav">
-  <div class="nav-left">UnpauseAI <span class="nav-client">&middot; Brisken Expense Reconciliation</span></div>
+  <div class="nav-left">Brisken <span class="nav-client">&middot; Expense Reconciliation</span></div>
+  <div class="nav-tabs" role="tablist">
+    <a class="nav-tab" href="/">Runs</a>
+    <a class="nav-tab" href="/compare">Compare</a>
+    <a class="nav-tab" href="/memory">Memory</a>
+    <a class="nav-tab" href="/guide">Guide</a>
+    <a class="nav-tab active" href="/how-it-works">How it works</a>
+  </div>
   <div class="nav-right">
     <span class="nav-hint">Ctrl/Cmd+K to jump</span>
-    <span class="nav-status">How it works</span>
     <button class="nav-theme" onclick="(function(){
       var d=document.documentElement;
       var c=d.getAttribute('data-theme')==='dark'?'light':'dark';
