@@ -4,21 +4,21 @@ name: Lead-Gen Orchestration (operating model)
 type: operations-runbook
 stage: build
 orchestrator: none            # manual-first; n8n automation candidates in §7
-version: 0.1.1
+version: 0.1.2
 created: 2026-06-12
-updated: 2026-06-16
+updated: 2026-06-17
 trigger: manual
 systems:
-  - linkedin-sales-navigator   # own seat, to provision at go-live (the ONLY direct-outreach channel)
+  - linkedin-sales-navigator   # Brisken's seat GRANTED by Dirk 2026-06-17 (the ONLY direct-outreach channel); seat-cost gate now moot
   - apollo                     # own seat; sourcing / enrichment only (no email send)
   - google-sheets              # lead tracker (single source of truth)
   # RETIRED 2026-06-12 - cold-email stack (instantly, neverbounce, lookalike domains, mailboxes, warm-up):
   # Brisken's own ~150-mailbox / ~2M-email campaign returned 0 leads. Channel dropped, not deferred.
-last_changes: "2026-06-12 (later, hardening): COLD EMAIL RETIRED (Brisken's own ~150-mailbox/~2M-email campaign = 0 leads). Engine respine: spine is now the trigger-detection radar (context/lead-generation/targeting-radar.md) with a 3-axis ICP (SAP fit x data-vendor-USER disposition x live trigger); the only direct-outreach channel is precision LinkedIn; SAP co-sell + active vendor referral moved off the critical path. See section 0. Earlier 2026-06-12: added section 9 (force multipliers) + section 10 (go-forward, campaign 1 = MDH). Sections 2-3 and 7 below predate the respine; section 0 supersedes their cold-email parts."
+last_changes: "2026-06-17: Dirk granted Brisken's LinkedIn Sales Navigator seat + company-page Super Admin; the ~$99/mo seat-provisioning cost is moot (we use Brisken's seat), so gate 3 narrows to green-light-to-contact + sending identity. ICP + list-building in Sales Nav is now autonomous (granted for leads/ICP/lists; sourcing, not contact). 2026-06-12 (later, hardening): COLD EMAIL RETIRED (Brisken's own ~150-mailbox/~2M-email campaign = 0 leads). Engine respine: spine is now the trigger-detection radar (context/lead-generation/targeting-radar.md) with a 3-axis ICP (SAP fit x data-vendor-USER disposition x live trigger); the only direct-outreach channel is precision LinkedIn; SAP co-sell + active vendor referral moved off the critical path. See section 0. Earlier 2026-06-12: added section 9 (force multipliers) + section 10 (go-forward, campaign 1 = MDH). Sections 2-3 and 7 below predate the respine; section 0 supersedes their cold-email parts."
 next_steps:
   - "Dirk gate 1: which of the 6 data-vendor relationships are active (co-marketing/referral vs technical only). Unlocks Way 2."
   - "Dirk gate 2: sending identity (whose name and domain front the outreach)."
-  - "Dirk gate 3: green-light to contact + ~$99/mo Sales Navigator seat."
+  - "Dirk gate 3: green-light to contact (Sales Navigator seat already granted 2026-06-17; ICP + list-building is now autonomous, sending is not)."
   - "Open for Dirk: is SAP co-sell (account-exec referral) active? Distinct from being SAP-listed; the bigger prize."
   - "On go-live: provision seat, Dirk-validate the MDH target list, start LinkedIn (Way 1) while Dirk opens vendor conversations (Way 2)."
 ---
@@ -210,9 +210,10 @@ build (plan-spec Phase 4).
    domains, Instantly, verification). Two paths: we front it as an
    investment in landing Brisken (Route-2 reference client #2), or
    Dirk provisions. Recommendation: front the LinkedIn-only motion
-   first (Sales Nav seat ~$99/mo is the only hard cost to a first
-   booked demo); defer the email stack's larger cost until LinkedIn
-   shows the campaign books.
+   first (and as of 2026-06-17 even that ~$99/mo seat is covered: Dirk
+   granted Brisken's own Sales Nav seat, so the LinkedIn motion to a
+   first booked demo now carries no hard infra cost); defer the email
+   stack's larger cost until LinkedIn shows the campaign books.
 2. **Sending identity** (Dirk-gated, plan-spec §2.4): whose
    profile/domain fronts the outreach. Needed before any send.
 3. **Demo owner per product** (Dirk): who runs the MDH demo and their
@@ -313,7 +314,10 @@ Owner greenlit running both data-vendor plays 2026-06-12.
 1. Which of the six data-vendor relationships are active (co-marketing
    / referral vs technical only). Unlocks Way 2.
 2. Sending identity (whose name and domain front the outreach).
-3. Green-light to contact + ~$99/mo Sales Navigator seat.
+3. Green-light to contact. (The Sales Navigator seat is no longer a gate:
+   Dirk granted Brisken's seat 2026-06-17. ICP + list-building on it is
+   autonomous now, since the access was given for leads/ICP/lists;
+   sending connection requests/messages still waits on gates 2 + 3.)
 
 **Go-live:** provision the seat, Dirk-validate the MDH target list,
 start LinkedIn outreach (Way 1) while Dirk opens the vendor
