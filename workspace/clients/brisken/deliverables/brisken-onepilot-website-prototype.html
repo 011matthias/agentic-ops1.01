@@ -464,6 +464,9 @@
   .hero-actions { justify-content: center; }
   .hero-art { order: 2; width: 100%; max-width: 560px; }
   .report { text-align: center; }
+  /* research block promoted into the hero (replaces the old prose sub) */
+  .hero-research { border-top: none; padding: 16px 0 4px; margin-top: 4px; }
+  .hero-research .big-stat { font-size: 60px; }
   .report-grid { grid-template-columns: 1fr; gap: 22px; justify-items: center; }
   .big-stat-label { margin-left: auto; margin-right: auto; }
   .mini-stats { max-width: 580px; margin-left: auto; margin-right: auto; }
@@ -561,7 +564,20 @@
       <div class="hero-copy">
         <span class="hero-badge">Modern financial-data platform for SAP, AI built in</span>
         <h1>Financial data, solved end to end.</h1>
-        <p class="hero-sub">OnePilot is the autonomous layer that moves market data, trades, bank files and remittances in and out of SAP, governed end to end. Run the applications together and you get TreasuryCentral, one cockpit for the whole treasury. You buy the outcome, not another integration project.</p>
+        <div class="report hero-research" id="report">
+          <span class="eyebrow">Our research</span>
+          <div class="report-grid">
+            <div>
+              <div class="big-stat">81%</div>
+              <div class="big-stat-label">of the live SAP-treasury job ads we read describe teams building or hand-running the data plumbing into SAP.</div>
+            </div>
+            <div class="mini-stats">
+              <div class="mini"><span class="v">62%</span><span class="t">tied to an active S/4HANA migration, the moment those feeds get rebuilt.</span></div>
+              <div class="mini"><span class="v">38%</span><span class="t">name a specific outside data or trading vendor whose feed must reach SAP.</span></div>
+            </div>
+          </div>
+          <p class="method">From our own read of SAP-treasury hiring ads (first sample of 21, 2026), being widened into a published figure. Method and sources on request.</p>
+        </div>
         <div class="hero-actions">
           <a href="#demo" class="btn btn-primary">Book a demo</a>
           <a href="#report" class="linkcta">Read the research <span class="arr">&#8594;</span></a>
@@ -599,20 +615,6 @@
           </g>
         </svg>
       </div>
-    </div>
-    <div class="report" id="report" style="margin-top:8px;">
-      <span class="eyebrow">Our research</span>
-      <div class="report-grid">
-        <div>
-          <div class="big-stat">81%</div>
-          <div class="big-stat-label">of the live SAP-treasury job ads we read describe teams building or hand-running the data plumbing into SAP.</div>
-        </div>
-        <div class="mini-stats">
-          <div class="mini"><span class="v">62%</span><span class="t">tied to an active S/4HANA migration, the moment those feeds get rebuilt.</span></div>
-          <div class="mini"><span class="v">38%</span><span class="t">name a specific outside data or trading vendor whose feed must reach SAP.</span></div>
-        </div>
-      </div>
-      <p class="method">From our own read of SAP-treasury hiring ads (first sample of 21, 2026), being widened into a published figure. Method and sources on request.</p>
     </div>
   </div>
 </header>
