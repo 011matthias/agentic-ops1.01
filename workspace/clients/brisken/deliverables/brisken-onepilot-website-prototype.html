@@ -4,8 +4,16 @@
 <!-- deliverable-allow: copy-clipboard | reason: marketing-site prototype with no code/command blocks; copy requirement applies to code blocks only -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OnePilot by Brisken: a modern financial data platform for SAP, with AI built in</title>
-<meta name="description" content="OnePilot is Brisken's modern platform for financial data in SAP: market data, trades, bank files and remittances handled end to end, with AI your team uses as one interface across every system. Governed, no-code, built on SAP BTP. An SAP Co-Innovation Partner.">
+<title>Brisken OnePilot, a financial-data platform for SAP with AI built in</title>
+<meta name="description" content="OnePilot is Brisken's governed, no-code platform for financial data in SAP: market data, trades, bank files and remittances handled end to end, with AI your team uses as one interface across every system. Built on SAP BTP. From Brisken, an SAP Co-Innovation Partner.">
+<meta name="author" content="Brisken">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Brisken">
+<meta property="og:title" content="Brisken OnePilot, a financial-data platform for SAP">
+<meta property="og:description" content="OnePilot is Brisken's governed, no-code platform that moves market data, trades, bank files and remittances in and out of SAP, with AI inside your controls.">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Brisken OnePilot, a financial-data platform for SAP">
+<meta name="twitter:description" content="Brisken's governed, no-code financial-data platform for SAP, with AI built in.">
 <script>(function(){var t=localStorage.getItem('theme');
   var d=document.documentElement;
   d.setAttribute('data-theme',
@@ -58,6 +66,8 @@
     --bg: var(--paper); --border: var(--mist); --border-strong: var(--mist-strong);
     --accent: var(--teal); --accent-strong: var(--teal-strong); --accent-bg: var(--teal-bg);
     --icon: var(--teal-strong);
+    /* Brisken brand mark (from brisken.com): lowercase wordmark + cyan cube */
+    --brand-ink: #003a96; --brand-cyan: #00b8ce; --brand-cyan-lo: #5fd3df; --brand-cyan-hi: #0b6f7a;
     --radius: 2px; --radius-pill: 999px;
     --space-tight: 56px; --space: 88px; --space-sig: 120px;
     --shadow: 0 1px 2px rgba(10,26,47,.05), 0 10px 30px rgba(10,26,47,.06);
@@ -77,6 +87,7 @@
     --bg: var(--paper); --border: var(--mist); --border-strong: var(--mist-strong);
     --accent: var(--teal); --accent-strong: var(--teal-strong); --accent-bg: var(--teal-bg);
     --icon: var(--teal);
+    --brand-ink: #e9f1fb; --brand-cyan: #2fc6d6; --brand-cyan-lo: #8fe6ef; --brand-cyan-hi: #167e8a;
     --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 30px rgba(0,0,0,.34);
     --shadow-lift: 0 2px 8px rgba(0,0,0,.46), 0 22px 46px rgba(0,0,0,.44);
   }
@@ -109,10 +120,13 @@
     -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--border);
   }
-  .nav-left { display: flex; align-items: baseline; gap: 9px; }
-  .nav-logo { font-weight: 700; font-size: 19px; letter-spacing: -.02em; color: var(--heading); }
-  .nav-logo .dot { color: var(--teal); }
-  .nav-client { color: var(--muted); font-weight: 500; font-size: 13px; }
+  .nav-left { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .brand-cube { width: 25px; height: 25px; flex: none; display: block; }
+  .nav-logo { font-family: var(--font-display); font-weight: 700; font-size: 21px; letter-spacing: -.018em; color: var(--brand-ink); line-height: 1; }
+  .nav-product {
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--muted); font-weight: 500; padding-left: 10px; margin-left: 1px; border-left: 1px solid var(--border-strong);
+  }
   .nav-links { display: flex; gap: 24px; }
   .nav-links a { color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500; transition: color .12s ease; }
   .nav-links a:hover { color: var(--teal-strong); }
@@ -315,8 +329,9 @@
   .footer { background: var(--navy-deep); color: #c5d8f3; padding: 52px 0 0; }
   .footer-grid { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1.3fr; gap: 30px; }
   .footer h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: #87a8d6; margin-bottom: 14px; font-weight: 500; font-family: var(--font-mono); }
-  .footer .f-logo { font-weight: 700; font-size: 19px; color: #fff; margin-bottom: 10px; letter-spacing: -.02em; }
-  .footer .f-logo .dot { color: var(--teal); }
+  .f-brand { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
+  .footer .f-logo { font-family: var(--font-display); font-weight: 700; font-size: 21px; color: #fff; letter-spacing: -.018em; line-height: 1; }
+  .f-product { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: #9fc1ee; padding-left: 9px; border-left: 1px solid rgba(255,255,255,.22); }
   .footer p { font-size: 14px; line-height: 1.6; color: #a9c2e4; max-width: 320px; }
   .footer ul { list-style: none; }
   .footer ul li { margin-bottom: 9px; }
@@ -340,6 +355,45 @@
     box-shadow: var(--shadow-lift); border: none;
   }
   .feedback-fab:hover { background: var(--teal-strong); }
+
+  /* Feedback form */
+  .fb-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    border-left: 3px solid var(--teal); padding: 30px 32px; box-shadow: var(--shadow);
+  }
+  .fb-intro .eyebrow { margin-bottom: 10px; }
+  .fb-intro h2 { font-size: clamp(22px, 2.6vw, 27px); margin-bottom: 8px; }
+  .fb-intro .section-sub { margin-bottom: 24px; }
+  .fb-form { display: flex; flex-direction: column; gap: 16px; }
+  .fb-form[hidden], .fb-done[hidden] { display: none !important; }
+  .fb-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .fb-field { display: flex; flex-direction: column; gap: 6px; }
+  .fb-field > span {
+    font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .fb-field > span em { font-style: normal; text-transform: none; letter-spacing: 0; opacity: .8; }
+  .fb-field input, .fb-field select, .fb-field textarea {
+    font-family: var(--font-body); font-size: 15px; color: var(--text); background: var(--bg);
+    border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 11px 13px; width: 100%;
+    transition: border-color .12s ease, box-shadow .12s ease;
+  }
+  .fb-field textarea { resize: vertical; min-height: 96px; line-height: 1.5; }
+  .fb-field input:focus, .fb-field select:focus, .fb-field textarea:focus {
+    outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 18%, transparent);
+  }
+  .fb-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 4px; }
+  .fb-actions .btn-primary[disabled] { opacity: .6; cursor: progress; transform: none; }
+  .fb-status { font-family: var(--font-mono); font-size: 13px; }
+  .fb-status.err { color: #c2410c; }
+  .fb-status.ok { color: var(--approved); }
+  [data-theme="dark"] .fb-status.err { color: #fca873; }
+  .fb-done { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+  .fb-done .ico { background: var(--approved-bg); color: var(--approved); margin-bottom: 8px; }
+  .fb-done h3 { color: var(--heading); font-size: 19px; }
+  .fb-done p { color: var(--muted); font-size: 14.5px; }
+  .fb-done .linkcta { background: none; border: none; cursor: pointer; padding: 8px 0 0; }
+  @media (max-width: 600px) { .fb-row { grid-template-columns: 1fr; } .fb-card { padding: 24px 20px; } }
 
   /* Search overlay */
   #searchOverlay { display: none; position: fixed; inset: 0; background: rgba(2,18,43,.5); z-index: 100; padding-top: 12vh; }
@@ -369,7 +423,7 @@
     .flow-step:last-child { border-bottom: none; }
     .big-stat { font-size: 54px; }
     .section { padding: 56px 0; }
-    .nav-status { display: none; }
+    .nav-status, .nav-product { display: none; }
   }
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
@@ -391,10 +445,15 @@
 <body data-updated="2026-06-16">
 
 <nav class="site-nav">
-  <div class="nav-left">
-    <span class="nav-logo">OnePilot<span class="dot">.</span></span>
-    <span class="nav-client">by Brisken</span>
-  </div>
+  <a class="nav-left" href="#top" aria-label="Brisken OnePilot, back to top">
+    <svg class="brand-cube" viewBox="0 0 32 32" role="img" aria-label="Brisken">
+      <polygon points="16,3 28,10 16,17 4,10" fill="var(--brand-cyan-lo)" stroke="var(--surface)" stroke-width="1" stroke-linejoin="round"/>
+      <polygon points="4,10 16,17 16,31 4,24" fill="var(--brand-cyan)" stroke="var(--surface)" stroke-width="1" stroke-linejoin="round"/>
+      <polygon points="28,10 16,17 16,31 28,24" fill="var(--brand-cyan-hi)" stroke="var(--surface)" stroke-width="1" stroke-linejoin="round"/>
+    </svg>
+    <span class="nav-logo">brisken</span>
+    <span class="nav-product">OnePilot</span>
+  </a>
   <div class="nav-links">
     <a href="#problem">Problem</a>
     <a href="#platform">Platform</a>
@@ -412,7 +471,7 @@
   </div>
 </nav>
 
-<header class="hero">
+<header class="hero" id="top">
   <div class="wrap">
     <div class="hero-grid">
       <div class="hero-copy">
@@ -531,7 +590,7 @@
     </div>
 
     <div id="products" style="margin-top:36px;padding-top:28px;border-top:1px solid var(--border);">
-      <span class="eyebrow">The suite</span>
+      <span class="eyebrow">The OnePilot suite</span>
       <h3 style="font-size:18px;margin:6px 0 12px;">Two flagship apps, one platform underneath</h3>
       <div class="grid-2">
         <div class="card">
@@ -636,9 +695,49 @@
 
 <section class="section" id="feedback" style="padding-top:0;">
   <div class="wrap">
-    <div class="callout">
-      <b>Reviewing this prototype?</b>
-      Tell us what is unclear, wrong, or missing. On the live site this is a one-click feedback form; for now, note it on the demo call or in your reply.
+    <div class="fb-card">
+      <div class="fb-intro">
+        <span class="eyebrow">Reviewing this prototype?</span>
+        <h2>Tell us what is unclear, wrong, or missing</h2>
+        <p class="section-sub">This goes straight to the team building the site. Your name and role help us weigh the note; the section field is optional.</p>
+      </div>
+      <form class="fb-form" id="fbForm" novalidate>
+        <div class="fb-row">
+          <label class="fb-field"><span>Name</span>
+            <input type="text" name="name" id="fbName" required maxlength="120" autocomplete="name" placeholder="Your name">
+          </label>
+          <label class="fb-field"><span>Role</span>
+            <input type="text" name="role" id="fbRole" maxlength="120" autocomplete="organization-title" placeholder="e.g. Treasury lead">
+          </label>
+        </div>
+        <label class="fb-field"><span>Section <em>(optional)</em></span>
+          <select name="section" id="fbSection">
+            <option value="">Whole page</option>
+            <option>Hero and first impression</option>
+            <option>The problem (shadow integrations)</option>
+            <option>Our research (the statistic)</option>
+            <option>The platform and how it works</option>
+            <option>The OnePilot suite and products</option>
+            <option>Why now (S/4HANA timing)</option>
+            <option>Answers and FAQ</option>
+            <option>Trust, proof and credentials</option>
+            <option>Branding and look and feel</option>
+          </select>
+        </label>
+        <label class="fb-field"><span>Comment</span>
+          <textarea name="comment" id="fbComment" required maxlength="4000" rows="4" placeholder="What stood out, what is off, what is missing?"></textarea>
+        </label>
+        <div class="fb-actions">
+          <button type="submit" class="btn btn-primary" id="fbSubmit">Send feedback</button>
+          <span class="fb-status" id="fbStatus" role="status" aria-live="polite"></span>
+        </div>
+      </form>
+      <div class="fb-done" id="fbDone" hidden>
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l2.5 2.5L16 9"/></svg></span>
+        <h3>Thank you, that is logged.</h3>
+        <p>Your note reached the team. Add another anytime.</p>
+        <button type="button" class="linkcta" id="fbAgain">Leave another note <span class="arr">&#8594;</span></button>
+      </div>
     </div>
   </div>
 </section>
@@ -647,8 +746,16 @@
   <div class="wrap">
     <div class="footer-grid">
       <div>
-        <div class="f-logo">OnePilot<span class="dot">.</span> <span style="font-weight:500;font-size:14px;color:#a9c2e4;">by Brisken</span></div>
-        <p>Governed, no-code financial data orchestration for SAP. Market data, trades, bank files and remittances into SAP, with a full audit trail. Built on SAP Business Technology Platform.</p>
+        <div class="f-brand">
+          <svg class="brand-cube" viewBox="0 0 32 32" role="img" aria-label="Brisken">
+            <polygon points="16,3 28,10 16,17 4,10" fill="var(--brand-cyan-lo)" stroke="#0b1b32" stroke-width="1" stroke-linejoin="round"/>
+            <polygon points="4,10 16,17 16,31 4,24" fill="var(--brand-cyan)" stroke="#0b1b32" stroke-width="1" stroke-linejoin="round"/>
+            <polygon points="28,10 16,17 16,31 28,24" fill="var(--brand-cyan-hi)" stroke="#0b1b32" stroke-width="1" stroke-linejoin="round"/>
+          </svg>
+          <span class="f-logo">brisken</span>
+          <span class="f-product">OnePilot</span>
+        </div>
+        <p>OnePilot is Brisken's governed, no-code platform for financial data in SAP: market data, trades, bank files and remittances into SAP, with a full audit trail. Built on SAP Business Technology Platform.</p>
         <a href="#" class="f-linkedin"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4.98 3.5A2.5 2.5 0 1 1 0 3.5a2.5 2.5 0 0 1 4.98 0zM.4 8.2h4.2V24H.4zM8.3 8.2h4v2.2h.06c.56-1 1.9-2.2 4-2.2 4.25 0 5.04 2.8 5.04 6.45V24h-4.2v-6.7c0-1.6 0-3.65-2.23-3.65-2.23 0-2.57 1.74-2.57 3.54V24H8.3z"/></svg>Brisken on LinkedIn</a>
       </div>
       <div>
@@ -683,7 +790,7 @@
       </div>
     </div>
     <div class="footer-bottom">
-      <div>OnePilot by Brisken &middot; Houston, TX &middot; Prototype: content and layout for review, brand assets are a stand-in.</div>
+      <div>Brisken LLC &middot; The Woodlands, TX &middot; Prototype for internal review; layout and content only.</div>
       <div>Last updated: 2026-06-17</div>
     </div>
   </div>
@@ -740,6 +847,71 @@
 </script>
 
 <a href="#feedback" class="feedback-fab" aria-label="Send feedback">Feedback</a>
+
+<script>
+(function(){
+  var form = document.getElementById('fbForm');
+  if (!form) return;
+  var statusEl = document.getElementById('fbStatus');
+  var submitBtn = document.getElementById('fbSubmit');
+  var doneEl = document.getElementById('fbDone');
+  var againBtn = document.getElementById('fbAgain');
+  var fab = document.querySelector('.feedback-fab');
+
+  // Move focus to the name field when the floating button is used.
+  if (fab) fab.addEventListener('click', function(){
+    setTimeout(function(){ var n = document.getElementById('fbName'); if (n) n.focus(); }, 350);
+  });
+
+  function setStatus(msg, kind){
+    statusEl.textContent = msg || '';
+    statusEl.className = 'fb-status' + (kind ? ' ' + kind : '');
+  }
+
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    var name = document.getElementById('fbName').value.trim();
+    var comment = document.getElementById('fbComment').value.trim();
+    if (!name || !comment){
+      setStatus('Please add your name and a comment.', 'err');
+      return;
+    }
+    var payload = {
+      name: name,
+      role: document.getElementById('fbRole').value.trim(),
+      section: document.getElementById('fbSection').value,
+      comment: comment,
+      path: location.pathname,
+      title: document.title
+    };
+    submitBtn.disabled = true;
+    setStatus('Sending...', '');
+    fetch('/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function(r){
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function(){
+      form.hidden = true;
+      doneEl.hidden = false;
+      doneEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }).catch(function(){
+      submitBtn.disabled = false;
+      setStatus('Could not reach the server just now. Please try again, or mention it on the call.', 'err');
+    });
+  });
+
+  if (againBtn) againBtn.addEventListener('click', function(){
+    form.reset();
+    doneEl.hidden = true;
+    form.hidden = false;
+    setStatus('', '');
+    var n = document.getElementById('fbName'); if (n) n.focus();
+  });
+})();
+</script>
 
 </body>
 </html>
