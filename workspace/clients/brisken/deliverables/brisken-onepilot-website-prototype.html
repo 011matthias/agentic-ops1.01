@@ -696,6 +696,11 @@
     .mm-tier { padding: 16px 15px; gap: 13px; }
     .mm-tier-go { display: none; }
     .mm-cta-pill { right: 14px; bottom: 70px; }
+    /* mobile horizontal-overflow fixes: fluid research text column (the base
+       .mini is a hard 76px+300px grid) + horizontally scrollable FAQ table */
+    .hero-split .hero-research .mini-stats { width: 100%; max-width: 100%; }
+    .hero-split .hero-research .mini { grid-template-columns: 76px minmax(0, 1fr); }
+    .faq-section table { display: block; overflow-x: auto; max-width: 100%; }
   }
   @media (prefers-reduced-motion: reduce) {
     .mm-tier, .mm-tier-go, .mm-loc { transition: none !important; }
