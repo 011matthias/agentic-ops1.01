@@ -47,6 +47,7 @@ One-line index of `tools/` scripts. Auto-loaded at session start to reduce `miss
 | `build-hours-tracker.py` | Build a blank hours tracker at `workspace/hours-tracker.xlsx`. |
 | `sync-hours.py` | Sync `workspace/hours-tracker.xlsx` with git commit activity. |
 | `send_email.py` | Reusable plain-text email sender (Resend HTTP API, stdlib only). Shared by `morning_briefing.py` and the scheduled agents. |
+| `prompt-queue-ui.py [--port N\|--no-open]` | Serve the miniature prompt-queue UI (default `http://127.0.0.1:7077`) over `.claude/queue/pending.md`: add/edit/reorder/delete/clear pending prompts + read-only `done.md` tail. File stays source of truth (hash-guarded writes). Companion to the skil_prompt-queue drain skill. |
 
 ## Output validators — JSON contract
 

@@ -102,6 +102,11 @@ CANONICAL_HOOKS = {
                     "command": _cmd(".claude/hooks/reference-anchor-gate.py"),
                     "timeout": 10000,
                 },
+                {
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/file-placement-gate.py"),
+                    "timeout": 10000,
+                },
             ],
         },
         {
@@ -202,6 +207,7 @@ EXPECTED_HOOK_SCRIPTS = {
     "input-classifier.py",
     "auto-approve-protected.py",
     "reference-anchor-gate.py",
+    "file-placement-gate.py",
     "instantly-invasive-gate.py",
     "no-auto-commit-gate.py",
     "cd-guard.py",
