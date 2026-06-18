@@ -23,6 +23,12 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    import _scope  # canonical path->category scope predicates (shared)
+except Exception:  # never let a missing shared lib brick the hook
+    _scope = None
+
 REPO = Path(__file__).resolve().parent.parent.parent
 TOOLS_DIR = REPO / "tools"
 HOOK_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hook-log.txt")
@@ -49,31 +55,13 @@ def normalize_for_match(file_path: str) -> str:
 
 
 def in_deliverable_scope(file_path: str) -> bool:
-    if not file_path:
-        return False
-    p = normalize_for_match(file_path)
-    if not p.endswith((".html", ".htm", ".md", ".markdown", ".mdx")):
-        return False
-    return any(m in p for m in (
-        "/platform/public/",
-        "/deliverables/",
-        "/hero-exports/",
-        "/notion-pages/",
-        "/doc-site/",
-    ))
+    # Canonical predicate in _scope.py (shared with em-dash-strip / reference-anchor).
+    return bool(_scope) and _scope.in_deliverable_scope(file_path)
 
 
 def in_comms_scope(file_path: str) -> bool:
-    if not file_path:
-        return False
-    p = normalize_for_match(file_path)
-    if not p.endswith((".md", ".markdown", ".mdx")):
-        return False
-    if "/context/drafts/" in p or "/proposals/" in p:
-        return True
-    if p.endswith("/comms-log.md"):
-        return True
-    return False
+    # md-gated drafts/proposals + comms-log.md; advisory linter scope.
+    return bool(_scope) and _scope.in_comms_scope(file_path)
 
 
 def in_output_scope(file_path: str) -> bool:
