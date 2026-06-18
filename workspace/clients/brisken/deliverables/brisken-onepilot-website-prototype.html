@@ -611,41 +611,151 @@
     .footer p, .footer ul a, .footer h4, .footer .f-logo { color: #000 !important; }
   }
 
-  /* ===== Interactive platform map (mindmap) ===== */
-  .mm-section { border-top: 1px solid var(--border); }
-  .mm-graph { margin-top: 30px; }
-  .mm-canvas { position: relative; width: 100%; aspect-ratio: 1000 / 470; margin: 0 auto; }
+  /* ===== Interactive explorable platform map ===== */
+  .mm-section { border-top: 1px solid var(--border); position: relative; padding-top: 40px; overflow: hidden; }
+  .mm-head { text-align: center; }
+  .mm-hint { max-width: 640px; margin-left: auto; margin-right: auto; }
+  .mm-section[data-view="drill"] .mm-hint, .mm-section[data-view="deep"] .mm-hint { opacity: 0; pointer-events: none; }
+
+  /* chrome: breadcrumb + back */
+  .mm-crumbs { position: absolute; top: 16px; left: 30px; z-index: 6; display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 12px; }
+  .mm-section[data-view="overview"] .mm-crumbs { opacity: .5; }
+  .mm-crumb { background: none; border: none; cursor: pointer; color: var(--muted); font: inherit; padding: 4px 2px; }
+  .mm-crumb:hover { color: var(--teal-strong); }
+  .mm-crumb[aria-current="page"] { color: var(--heading); font-weight: 600; cursor: default; }
+  .mm-crumb-sep { color: var(--border-strong); }
+  .mm-back { position: absolute; top: 14px; right: 30px; z-index: 6; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-pill); cursor: pointer; color: var(--text); font-family: var(--font-body); font-size: 13px; font-weight: 500; padding: 7px 16px; box-shadow: var(--shadow); }
+  .mm-back:hover { border-color: var(--teal); color: var(--teal-strong); }
+
+  /* full-bleed viewport */
+  .mm-viewport { position: relative; width: 100%; margin-left: 0; height: 74svh; min-height: 520px; margin-top: 8px; overflow: hidden; }
+  .mm-stage { position: absolute; inset: 0; transform-origin: 0 0; transform: translate(var(--tx,0),var(--ty,0)) scale(var(--sc,1)); transition: transform .5s cubic-bezier(.22,.61,.36,1); }
   .mm-edges { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-  .mm-edge { fill: none; stroke: var(--border-strong); stroke-width: 1.4; transition: stroke .2s, stroke-width .2s; }
-  .mm-edge.is-active { stroke: var(--teal); stroke-width: 2.6; }
-  .mm-hub { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 190px; max-width: 30%; text-align: center; background: var(--navy); color: #fff; border-radius: var(--radius); padding: 18px 16px; box-shadow: var(--shadow-lift); }
-  .mm-hub-name { display: block; font-family: var(--font-display); font-size: 22px; font-weight: 600; letter-spacing: -.01em; }
-  .mm-hub-sub { display: block; font-size: 11.5px; color: #c7d6ec; margin-top: 6px; line-height: 1.4; }
-  .mm-node { position: absolute; transform: translate(-50%,-50%); width: 188px; max-width: 27%; display: flex; flex-direction: column; gap: 3px; text-align: left; cursor: pointer; background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 12px 14px; box-shadow: var(--shadow); font-family: var(--font-body); transition: transform .15s, border-color .15s, box-shadow .15s; }
-  .mm-node:hover { border-color: var(--teal); box-shadow: var(--shadow-lift); transform: translate(-50%,-50%) translateY(-2px); }
+  .mm-edge { fill: none; stroke: var(--border-strong); stroke-width: 1.5; transition: stroke .25s, stroke-width .25s; }
+  .mm-edge.is-active { stroke: var(--teal); stroke-width: 3; }
+  .mm-flow { fill: none; stroke: var(--teal); stroke-width: 2; stroke-dasharray: 5 17; opacity: .42; animation: mmDash 5.5s linear infinite; }
+  .mm-ring { fill: none; stroke: var(--teal); stroke-width: 1.4; stroke-dasharray: 5 12; opacity: .28; animation: mmDash 13s linear infinite reverse; }
+  @keyframes mmDash { to { stroke-dashoffset: -44; } }
+  /* dim non-active branches/edges at drill+deep */
+  .mm-section[data-view="drill"] .mm-flow, .mm-section[data-view="deep"] .mm-flow { opacity: 0; }
+  .mm-section:is([data-view="drill"],[data-view="deep"]) .mm-branch:not([data-branch]) { }
+  .mm-section:is([data-view="drill"],[data-view="deep"]) .mm-edge:not(.is-active) { opacity: .25; }
+
+  /* hub */
+  .mm-hub { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: clamp(196px,17vw,272px); text-align: center; background: var(--navy); color: #fff; border-radius: var(--radius); padding: clamp(18px,2vw,28px) 18px; box-shadow: var(--shadow-lift); border: 1px solid var(--teal); transition: opacity .4s; }
+  .mm-hub-name { display: block; font-family: var(--font-display); font-size: clamp(22px,2vw,30px); font-weight: 600; letter-spacing: -.01em; }
+  .mm-hub-sub { display: block; font-size: clamp(11px,.85vw,13px); color: #c7d6ec; margin-top: 7px; line-height: 1.4; }
+
+  /* branch wrapper + node */
+  .mm-branch { position: absolute; left: var(--bx); top: var(--by); transform: translate(-50%,-50%); width: 0; height: 0; }
+  .mm-node { position: absolute; left: 0; top: 0; transform: translate(-50%,-50%); width: clamp(186px,15vw,236px); display: flex; flex-direction: column; gap: 4px; text-align: left; cursor: pointer; background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 15px 16px; box-shadow: var(--shadow); font-family: var(--font-body); transition: transform .16s, border-color .16s, box-shadow .16s, opacity .35s; }
+  .mm-node-cue { color: var(--teal-strong); width: 26px; height: 26px; margin-bottom: 2px; }
+  .mm-node-cue svg { width: 26px; height: 26px; }
+  .mm-node:hover { border-color: var(--teal); box-shadow: var(--shadow-lift); transform: translate(-50%,-50%) translateY(-3px); }
   .mm-node:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
-  .mm-node[aria-expanded="true"] { border-color: var(--teal); box-shadow: var(--shadow-lift); }
-  .mm-node-t { font-family: var(--font-display); font-weight: 600; font-size: 15px; color: var(--heading); line-height: 1.2; }
-  .mm-node-teaser { font-size: 12px; color: var(--muted); line-height: 1.3; }
-  .mm-cta { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 28px; flex-wrap: wrap; }
-  .mm-cta-note { font-size: 13px; color: var(--muted); }
-  .mm-drawer { margin-top: 26px; }
-  .mm-panel { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); padding: 32px 32px 36px; scroll-margin-top: 92px; animation: mmFade .25s ease; }
+  .mm-node[aria-expanded="true"] { border-color: var(--teal); border-width: 1.5px; box-shadow: var(--shadow-lift); }
+  .mm-node-t { font-family: var(--font-display); font-weight: 600; font-size: clamp(15px,1.1vw,17px); color: var(--heading); line-height: 1.2; }
+  .mm-node-teaser { font-size: 12.5px; color: var(--muted); line-height: 1.3; }
+  /* recede the non-focused branches on drill/deep */
+  .mm-section:is([data-view="drill"],[data-view="deep"]) .mm-branch { opacity: .16; }
+  .mm-section:is([data-view="drill"],[data-view="deep"]) .mm-branch.is-active { opacity: 1; }
+  .mm-branch:not(.is-active) .mm-node { pointer-events: none; }
+  .mm-section[data-view="overview"] .mm-branch { opacity: 1; }
+  .mm-section[data-view="overview"] .mm-branch .mm-node { pointer-events: auto; }
+
+  /* L2 clusters (fan) */
+  .mm-cluster { position: absolute; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 12px; width: max-content; }
+  .mm-branch[data-side="left"] .mm-cluster { left: 132px; }
+  .mm-branch[data-side="right"] .mm-cluster { right: 132px; align-items: flex-end; }
+  .mm-cluster[hidden] { display: none; }
+  .mm-sub { background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 11px 15px; font-family: var(--font-body); font-size: 14px; font-weight: 500; color: var(--heading); cursor: pointer; box-shadow: var(--shadow); white-space: nowrap; transition: transform .14s, border-color .14s, box-shadow .14s, opacity .3s; opacity: 0; transform: translateY(6px); }
+  .mm-branch.is-active .mm-sub { opacity: 1; transform: none; }
+  .mm-branch.is-active .mm-sub:nth-child(1){ transition-delay: .04s; } .mm-branch.is-active .mm-sub:nth-child(2){ transition-delay: .09s; } .mm-branch.is-active .mm-sub:nth-child(3){ transition-delay: .14s; } .mm-branch.is-active .mm-sub:nth-child(4){ transition-delay: .19s; }
+  .mm-sub:hover { border-color: var(--teal); color: var(--teal-strong); box-shadow: var(--shadow-lift); transform: translateX(2px); }
+  .mm-sub:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+  /* platform pipeline cluster (signature) */
+  .mm-pipeline { flex-direction: column; gap: 16px; align-items: stretch !important; }
+  .mm-branch[data-side="right"] .mm-pipeline { right: 132px; }
+  .mm-lane { display: flex; align-items: stretch; gap: 4px; }
+  .mm-step { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; text-align: left; width: 150px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 12px 13px; cursor: pointer; box-shadow: var(--shadow); font-family: var(--font-body); transition: border-color .14s, box-shadow .14s, transform .14s; opacity: 0; transform: translateY(8px); }
+  .mm-branch.is-active .mm-step { opacity: 1; transform: none; }
+  .mm-branch.is-active .mm-step:nth-of-type(1){ transition-delay:.05s;} .mm-branch.is-active .mm-step:nth-of-type(2){ transition-delay:.18s;} .mm-branch.is-active .mm-step:nth-of-type(3){ transition-delay:.31s;} .mm-branch.is-active .mm-step:nth-of-type(4){ transition-delay:.44s;}
+  .mm-step:hover { border-color: var(--teal); box-shadow: var(--shadow-lift); }
+  .mm-step:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+  .mm-step-n { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: var(--radius); background: var(--teal); color: #fff; font-family: var(--font-mono); font-size: 12px; font-weight: 600; }
+  .mm-step-t { font-family: var(--font-display); font-weight: 600; font-size: 13.5px; color: var(--heading); line-height: 1.25; }
+  .mm-flow-arrow { width: 22px; height: 22px; align-self: center; color: var(--teal); flex: none; }
+  .mm-branch.is-active .mm-flow-arrow { animation: mmArrow 1.8s ease-in-out infinite; }
+  @keyframes mmArrow { 0%,100% { opacity: .35; transform: translateX(-2px); } 50% { opacity: 1; transform: translateX(2px); } }
+  .mm-sap { display: flex; flex-direction: column; gap: 3px; justify-content: center; width: 168px; background: var(--navy); color: #fff; border-radius: var(--radius); padding: 12px 14px; box-shadow: var(--shadow-lift); opacity: 0; transition: opacity .3s .55s; }
+  .mm-branch.is-active .mm-sap { opacity: 1; }
+  .mm-sap-t { font-family: var(--font-display); font-weight: 600; font-size: 17px; }
+  .mm-sap-s { font-size: 11px; color: #c7d6ec; }
+  .mm-docks { display: flex; gap: 12px; flex-wrap: wrap; }
+
+  /* minimap */
+  .mm-minimap { position: absolute; left: 24px; bottom: 22px; z-index: 6; width: 132px; height: 92px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 8px; opacity: .92; transition: opacity .3s, transform .3s; }
+  .mm-section[data-view="overview"] .mm-minimap { opacity: 0; transform: translateY(8px); pointer-events: none; }
+  .mm-minimap svg { width: 100%; height: 100%; overflow: visible; }
+  .mm-mini-edge { stroke: var(--border-strong); stroke-width: 4; }
+  .mm-mini-hub { fill: var(--navy); }
+  .mm-mini-dot { fill: var(--border-strong); cursor: pointer; transition: fill .2s; }
+  .mm-mini-dot:hover { fill: var(--teal); }
+  .mm-mini-dot.is-active { fill: var(--teal); }
+  .mm-mini-view { fill: rgba(14,124,134,.12); stroke: var(--teal); stroke-width: 6; transition: all .4s cubic-bezier(.22,.61,.36,1); }
+
+  /* L3 side-rail */
+  .mm-rail { position: absolute; top: 0; right: 0; width: min(560px, 46vw); height: 100%; background: var(--surface); border-left: 1px solid var(--border); box-shadow: -18px 0 44px rgba(2,18,43,.12); z-index: 7; display: flex; flex-direction: column; transform: translateX(100%); transition: transform .42s cubic-bezier(.22,.61,.36,1); }
+  .mm-section[data-view="deep"] .mm-rail { transform: none; }
+  .mm-rail[hidden] { display: flex; }
+  .mm-rail-head { display: flex; justify-content: flex-end; padding: 14px 16px 0; }
+  .mm-rail-close { background: none; border: 1px solid var(--border-strong); border-radius: var(--radius); width: 34px; height: 34px; cursor: pointer; color: var(--muted); font-size: 15px; }
+  .mm-rail-close:hover { border-color: var(--teal); color: var(--teal-strong); }
+  .mm-rail-body { flex: 1; overflow-y: auto; padding: 8px 34px 40px; }
+  .mm-panel { animation: mmFade .3s ease; }
   .mm-panel[hidden] { display: none; }
   .mm-panel > .eyebrow { margin-bottom: 10px; }
-  .mm-panel > h2 { margin-bottom: 6px; }
-  .mm-panel > h2:focus-visible { outline: none; }
+  .mm-panel > h2 { margin-bottom: 8px; }
+  .mm-panel > h2:focus-visible, .mm-panel h3:focus-visible { outline: none; }
   @keyframes mmFade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-  @media (max-width: 860px) {
-    .mm-canvas { aspect-ratio: auto; display: flex; flex-direction: column; gap: 12px; }
-    .mm-edges { display: none; }
-    .mm-hub { position: static; transform: none; width: 100%; max-width: none; }
-    .mm-node { position: static !important; left: auto !important; top: auto !important; transform: none !important; width: 100% !important; max-width: none !important; }
+  /* the viewport dims behind the rail but stays interactive */
+  .mm-section[data-view="deep"] .mm-viewport::after { content: ""; position: absolute; inset: 0; background: rgba(2,18,43,.04); pointer-events: none; }
+
+  /* persistent CTA pill */
+  .mm-cta-pill { position: fixed; right: 22px; bottom: 22px; z-index: 40; display: inline-flex; align-items: center; background: var(--teal); color: #fff; border-radius: var(--radius-pill); padding: 12px 22px; font-family: var(--font-body); font-size: 14px; font-weight: 600; text-decoration: none; box-shadow: 0 6px 20px rgba(14,124,134,.4); transition: transform .15s, background .15s; }
+  .mm-cta-pill:hover { background: var(--teal-strong); transform: translateY(-2px); }
+  .mm-cta-note { font-weight: 400; opacity: .85; }
+  @media (max-width: 600px) { .mm-cta-note { display: none; } }
+
+  .mm-sr-title { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+  /* ---- mobile: vertical stacked map, same DOM ---- */
+  @media (max-width: 760px) {
+    .mm-viewport { position: static; width: auto; margin-left: 0; height: auto; min-height: 0; overflow: visible; margin-top: 18px; }
+    .mm-stage { position: static; transform: none !important; display: flex; flex-direction: column; gap: 12px; }
+    .mm-edges, .mm-ring, .mm-minimap { display: none; }
+    .mm-hub { position: static; transform: none; width: 100%; }
+    .mm-branch { position: static; transform: none; width: 100%; height: auto; opacity: 1 !important; }
+    .mm-node { position: static; transform: none !important; width: 100% !important; }
     .mm-node:hover { transform: none !important; }
-    .mm-panel { padding: 24px 20px 28px; }
+    .mm-cluster { position: static; transform: none; width: 100%; margin-top: 10px; padding-left: 16px; border-left: 2px solid var(--border); }
+    .mm-branch[data-side="right"] .mm-cluster { align-items: stretch; }
+    .mm-sub, .mm-step { opacity: 1 !important; transform: none !important; white-space: normal; width: 100%; }
+    .mm-lane { flex-direction: column; align-items: stretch; }
+    .mm-flow-arrow { transform: rotate(90deg); align-self: flex-start; }
+    .mm-sap { width: 100%; }
+    .mm-rail { position: static; width: 100%; height: auto; transform: none; border-left: none; border-top: 1px solid var(--border); box-shadow: none; }
+    .mm-rail-body { padding: 8px 4px 20px; }
+    .mm-back { position: static; display: inline-block; margin: 12px 0 0 30px; }
+    .mm-crumbs { position: static; margin: 14px 0 0 30px; }
+    .mm-cta-pill { right: 14px; bottom: 14px; }
   }
+
   @media (prefers-reduced-motion: reduce) {
-    .mm-panel { animation: none; }
+    .mm-stage, .mm-rail, .mm-mini-view { transition: none !important; }
+    .mm-flow, .mm-ring, .mm-flow-arrow { animation: none !important; }
+    .mm-panel, .mm-sub, .mm-step, .mm-sap { animation: none !important; opacity: 1 !important; transform: none !important; transition: none !important; }
     .mm-node, .mm-edge { transition: none; }
     .mm-node:hover { transform: translate(-50%,-50%); }
   }
@@ -780,58 +890,104 @@
   </div>
 </div>
 
-<section class="section mm-section" id="map" aria-label="Explore the OnePilot platform">
-  <div class="wrap">
+<section class="section mm-section" id="map" data-view="overview" aria-label="Explore the OnePilot platform">
+  <h2 class="mm-sr-title">OnePilot platform map</h2>
+  <div class="wrap mm-head">
     <span class="eyebrow">Explore OnePilot</span>
-    <h2>One governed platform for SAP. Pick a branch.</h2>
-    <p class="section-sub">Click a node to open it. Everything OnePilot does with your financial data, in one map.</p>
+    <p class="section-sub mm-hint">Click a branch to drill in. Everything OnePilot does with your financial data, governed end to end, in one map.</p>
+  </div>
 
-    <div class="mm-graph">
-      <div class="mm-canvas" role="group" aria-label="OnePilot platform map">
-        <svg class="mm-edges" viewBox="0 0 1000 470" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-          <path class="mm-edge" data-edge="problem" d="M500 235 L185 96"/>
-          <path class="mm-edge" data-edge="treasury-central" d="M500 235 L160 235"/>
-          <path class="mm-edge" data-edge="applications" d="M500 235 L185 374"/>
-          <path class="mm-edge" data-edge="platform" d="M500 235 L815 96"/>
-          <path class="mm-edge" data-edge="why-now" d="M500 235 L840 235"/>
-          <path class="mm-edge" data-edge="answers" d="M500 235 L815 374"/>
+  <nav class="mm-crumbs" aria-label="Map location" aria-live="polite">
+    <button class="mm-crumb" type="button" data-go="overview" aria-current="page">Map</button>
+  </nav>
+  <button class="mm-back" type="button" hidden>&#8592; Back</button>
+
+  <div class="mm-viewport">
+    <div class="mm-stage">
+      <svg class="mm-edges" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+          <circle class="mm-ring" cx="500" cy="350" r="118"/>
+          <path class="mm-edge" data-edge="problem" d="M500 350 L230 150"/>
+          <path class="mm-edge" data-edge="treasury-central" d="M500 350 L200 350"/>
+          <path class="mm-edge" data-edge="applications" d="M500 350 L230 550"/>
+          <path class="mm-edge" data-edge="platform" d="M500 350 L770 150"/>
+          <path class="mm-edge" data-edge="why-now" d="M500 350 L800 350"/>
+          <path class="mm-edge" data-edge="answers" d="M500 350 L770 550"/>
+          <path class="mm-flow" data-flow="problem" style="animation-delay:0.0s" d="M230 150 L500 350"/>
+          <path class="mm-flow" data-flow="treasury-central" style="animation-delay:-0.9s" d="M200 350 L500 350"/>
+          <path class="mm-flow" data-flow="applications" style="animation-delay:-1.8s" d="M230 550 L500 350"/>
+          <path class="mm-flow" data-flow="platform" style="animation-delay:-2.7s" d="M770 150 L500 350"/>
+          <path class="mm-flow" data-flow="why-now" style="animation-delay:-3.6s" d="M800 350 L500 350"/>
+          <path class="mm-flow" data-flow="answers" style="animation-delay:-4.5s" d="M770 550 L500 350"/>
         </svg>
-        <div class="mm-hub" aria-hidden="true">
-          <span class="mm-hub-name">OnePilot</span>
-          <span class="mm-hub-sub">Governed financial-data integration for SAP</span>
+      <div class="mm-hub" aria-hidden="true">
+        <span class="mm-hub-name">OnePilot</span>
+        <span class="mm-hub-sub">Governed financial-data integration for SAP</span>
+      </div>
+        <div class="mm-branch" data-branch="problem" data-side="left" style="--bx:23%;--by:21.5%">
+          <button class="mm-node" id="node-problem" data-mm="problem" data-fan="0" aria-expanded="false" aria-controls="problem">
+            <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 14.5 7 17a3.5 3.5 0 0 1-5-5l2.5-2.5"/><path d="m14.5 9.5 2.5-2.5a3.5 3.5 0 0 1 5 5l-2.5 2.5"/><path d="M9 15l2-2M13 11l2-2" stroke-dasharray="1 2.4"/></svg></span>
+            <span class="mm-node-t">The problem</span><span class="mm-node-teaser">Shadow feeds no one owns</span>
+          </button>
+          
         </div>
-        <button class="mm-node" id="node-problem" data-mm="problem" aria-expanded="false" aria-controls="problem" style="left:18.5%;top:20.5%">
-          <span class="mm-node-t">The problem</span><span class="mm-node-teaser">Shadow feeds no one owns</span>
-        </button>
-        <button class="mm-node" id="node-treasury-central" data-mm="treasury-central" aria-expanded="false" aria-controls="treasury-central" style="left:16%;top:50%">
-          <span class="mm-node-t">TreasuryCentral</span><span class="mm-node-teaser">One cockpit for treasury</span>
-        </button>
-        <button class="mm-node" id="node-applications" data-mm="applications" aria-expanded="false" aria-controls="applications" style="left:18.5%;top:79.5%">
-          <span class="mm-node-t">The applications</span><span class="mm-node-teaser">Buy one job, run it in weeks</span>
-        </button>
-        <button class="mm-node" id="node-platform" data-mm="platform" aria-expanded="false" aria-controls="platform" style="left:81.5%;top:20.5%">
-          <span class="mm-node-t">The autonomous layer</span><span class="mm-node-teaser">OnePilot Agents on SAP BTP</span>
-        </button>
-        <button class="mm-node" id="node-why-now" data-mm="why-now" aria-expanded="false" aria-controls="why-now" style="left:84%;top:50%">
-          <span class="mm-node-t">Why now</span><span class="mm-node-teaser">Your S/4HANA moment</span>
-        </button>
-        <button class="mm-node" id="node-answers" data-mm="answers" aria-expanded="false" aria-controls="answers" style="left:81.5%;top:79.5%">
-          <span class="mm-node-t">Answers</span><span class="mm-node-teaser">The questions buyers search</span>
-        </button>
-      </div>
+        <div class="mm-branch" data-branch="treasury-central" data-side="left" style="--bx:20%;--by:50%">
+          <button class="mm-node" id="node-treasury-central" data-mm="treasury-central" data-fan="1" aria-expanded="false" aria-controls="treasury-central">
+            <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 9v11"/></svg></span>
+            <span class="mm-node-t">TreasuryCentral</span><span class="mm-node-teaser">One cockpit for treasury</span>
+          </button>
+          <div class="mm-cluster" data-branch="treasury-central" role="group" aria-label="TreasuryCentral detail" hidden><button class="mm-sub" data-mm="treasury-central" data-sub="money">One view of the money</button><button class="mm-sub" data-mm="treasury-central" data-sub="fx">FX & market data, governed</button><button class="mm-sub" data-mm="treasury-central" data-sub="control">Control built in</button></div>
+        </div>
+        <div class="mm-branch" data-branch="applications" data-side="left" style="--bx:23%;--by:78.5%">
+          <button class="mm-node" id="node-applications" data-mm="applications" data-fan="1" aria-expanded="false" aria-controls="applications">
+            <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
+            <span class="mm-node-t">The applications</span><span class="mm-node-teaser">Buy one job, run it in weeks</span>
+          </button>
+          <div class="mm-cluster" data-branch="applications" role="group" aria-label="The applications detail" hidden><button class="mm-sub" data-mm="applications" data-sub="mdh">Market Data Hub</button><button class="mm-sub" data-mm="applications" data-sub="bst">BST, Brisken Smart Trading</button><button class="mm-sub" data-mm="applications" data-sub="rag">Remittance Advice Gate</button><button class="mm-sub" data-mm="applications" data-sub="set">On-platform set</button></div>
+        </div>
+        <div class="mm-branch" data-branch="platform" data-side="right" style="--bx:77%;--by:21.5%">
+          <button class="mm-node" id="node-platform" data-mm="platform" data-fan="1" aria-expanded="false" aria-controls="platform">
+            <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3 4 14h7l-1 7 9-11h-7z"/></svg></span>
+            <span class="mm-node-t">The autonomous layer</span><span class="mm-node-teaser">OnePilot Agents on SAP BTP</span>
+          </button>
+          <div class="mm-cluster mm-pipeline" data-branch="platform" role="group" aria-label="The autonomous layer detail" hidden><div class="mm-lane"><button class="mm-step" data-mm="platform" data-sub="ingest"><span class="mm-step-n">1</span><span class="mm-step-t">Ingest</span></button><svg class="mm-flow-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg><button class="mm-step" data-mm="platform" data-sub="validate"><span class="mm-step-n">2</span><span class="mm-step-t">Validate & normalize</span></button><svg class="mm-flow-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg><button class="mm-step" data-mm="platform" data-sub="govern"><span class="mm-step-n">3</span><span class="mm-step-t">Govern</span></button><svg class="mm-flow-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg><button class="mm-step" data-mm="platform" data-sub="distribute"><span class="mm-step-n">4</span><span class="mm-step-t">Distribute into SAP</span></button><div class="mm-sap"><span class="mm-sap-t">SAP</span><span class="mm-sap-s">S/4HANA &middot; TRM &middot; Cash &middot; Credit</span></div></div><div class="mm-docks"><button class="mm-sub" data-mm="platform" data-sub="agents">OnePilot Agents</button><button class="mm-sub" data-mm="platform" data-sub="conn">Connectivity</button><button class="mm-sub" data-mm="platform" data-sub="weeks">Live in weeks</button></div></div>
+        </div>
+        <div class="mm-branch" data-branch="why-now" data-side="right" style="--bx:80%;--by:50%">
+          <button class="mm-node" id="node-why-now" data-mm="why-now" data-fan="0" aria-expanded="false" aria-controls="why-now">
+            <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4M9 15h4l-2-2m2 2-2 2"/></svg></span>
+            <span class="mm-node-t">Why now</span><span class="mm-node-teaser">Your S/4HANA moment</span>
+          </button>
+          
+        </div>
+        <div class="mm-branch" data-branch="answers" data-side="right" style="--bx:77%;--by:78.5%">
+          <button class="mm-node" id="node-answers" data-mm="answers" data-fan="1" aria-expanded="false" aria-controls="answers">
+            <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 4.2 1.5c0 1.6-2 2.1-2 3.3M12 17h.01"/></svg></span>
+            <span class="mm-node-t">Answers</span><span class="mm-node-teaser">The questions buyers search</span>
+          </button>
+          <div class="mm-cluster" data-branch="answers" role="group" aria-label="Answers detail" hidden><button class="mm-sub" data-mm="answers" data-sub="q1">Bloomberg into SAP TRM</button><button class="mm-sub" data-mm="answers" data-sub="q2">CAMT.086 bank fees</button><button class="mm-sub" data-mm="answers" data-sub="q3">AI reads remittance emails</button><button class="mm-sub" data-mm="answers" data-sub="cmp">OnePilot vs the usual paths</button></div>
+        </div>
+    </div>
+  </div>
 
-      <div class="mm-cta">
-        <a href="#demo" class="btn btn-primary">Book a demo</a>
-        <span class="mm-cta-note">15 to 20 minutes on your own SAP setup</span>
-      </div>
+  <div class="mm-minimap" aria-hidden="true">
+    <svg viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet">
+      <line class="mm-mini-edge" x1="500" y1="350" x2="230" y2="150"/><line class="mm-mini-edge" x1="500" y1="350" x2="200" y2="350"/><line class="mm-mini-edge" x1="500" y1="350" x2="230" y2="550"/><line class="mm-mini-edge" x1="500" y1="350" x2="770" y2="150"/><line class="mm-mini-edge" x1="500" y1="350" x2="800" y2="350"/><line class="mm-mini-edge" x1="500" y1="350" x2="770" y2="550"/>
+      <circle class="mm-mini-dot" data-dot="problem" cx="230.0" cy="150.5" r="34"/><circle class="mm-mini-dot" data-dot="treasury-central" cx="200.0" cy="350.0" r="34"/><circle class="mm-mini-dot" data-dot="applications" cx="230.0" cy="549.5" r="34"/><circle class="mm-mini-dot" data-dot="platform" cx="770.0" cy="150.5" r="34"/><circle class="mm-mini-dot" data-dot="why-now" cx="800.0" cy="350.0" r="34"/><circle class="mm-mini-dot" data-dot="answers" cx="770.0" cy="549.5" r="34"/>
+      <circle class="mm-mini-hub" cx="500" cy="350" r="44"/>
+      <rect class="mm-mini-view" x="0" y="0" width="1000" height="700"/>
+    </svg>
+  </div>
 
-      <div class="mm-drawer">
+  <aside class="mm-rail" aria-label="Detail" hidden>
+    <div class="mm-rail-head">
+      <span class="mm-rail-eyebrow"></span>
+      <button class="mm-rail-close" type="button" aria-label="Close detail">&#10005;</button>
+    </div>
+    <div class="mm-rail-body">
         <section class="mm-panel" id="problem" hidden aria-labelledby="node-problem">
           <span class="eyebrow">The problem</span>
           <h2>A shadow integration is any SAP data feed built by hand that no one maintains</h2>
           <p class="section-sub">It breaks when a provider changes a field, a person leaves, or the migration team finds it: no audit trail, no owner, no monitoring. Most SAP finance teams run several, across market data, trades, bank files and remittances.</p>
         </section>
-
         <section class="mm-panel" id="treasury-central" hidden aria-labelledby="node-treasury-central">
           <span class="eyebrow">The cockpit</span>
           <h2>TreasuryCentral: one cockpit for the whole treasury</h2>
@@ -842,7 +998,6 @@
             <div class="card"><h3>Control built in</h3><p>Audit trail, manage-by-exception, four-eye and segregation of duties on every record.</p></div>
           </div>
         </section>
-
         <section class="mm-panel" id="applications" hidden aria-labelledby="node-applications">
           <span class="eyebrow">The applications</span>
           <h2>Pick the job you need first</h2>
@@ -867,7 +1022,6 @@
           </div>
           <p class="section-sub" style="margin-top:14px;">On the same platform: Cash Flow &amp; Exposure Hub, Bank Fee Portal, Credit Data Hub, ESG Data Hub, plus the AI Digital Workforce as a cross-sell.</p>
         </section>
-
         <section class="mm-panel" id="platform" hidden aria-labelledby="node-platform">
           <span class="eyebrow">The autonomous layer</span>
           <h2>The autonomous layer that runs it, on SAP BTP</h2>
@@ -917,7 +1071,6 @@
             </div>
           </div>
         </section>
-
         <section class="mm-panel" id="why-now" hidden aria-labelledby="node-why-now">
           <span class="eyebrow">Why now</span>
           <h2>Your S/4HANA migration is the moment these feeds get decided</h2>
@@ -940,7 +1093,6 @@
             </div>
           </div>
         </section>
-
         <section class="mm-panel" id="answers" hidden aria-labelledby="node-answers">
           <span class="eyebrow">Answers</span>
           <h2>The questions SAP teams actually search</h2>
@@ -976,9 +1128,10 @@
             </tbody>
           </table>
         </section>
-      </div>
     </div>
-  </div>
+  </aside>
+
+  <a class="mm-cta-pill" href="#demo">Book a demo<span class="mm-cta-note"> &middot; 15 to 20 min on your SAP setup</span></a>
 </section>
 
 <section class="section" id="demo">
@@ -1303,55 +1456,188 @@
   var map = document.getElementById('map');
   if (!map) return;
   var PANELS = ['problem','treasury-central','applications','platform','why-now','answers'];
-  var nodes = Array.prototype.slice.call(map.querySelectorAll('.mm-node'));
+  var FAN = { 'treasury-central':1, 'applications':1, 'answers':1, 'platform':1 };
+  var LABEL = { problem:'The problem','treasury-central':'TreasuryCentral', applications:'The applications', platform:'The autonomous layer','why-now':'Why now', answers:'Answers' };
+  var BR = { problem:[.23,.215,'left'], 'treasury-central':[.20,.50,'left'], applications:[.23,.785,'left'], platform:[.77,.215,'right'], 'why-now':[.80,.50,'right'], answers:[.77,.785,'right'] };
+  var stage = map.querySelector('.mm-stage');
   var edges = map.querySelector('.mm-edges');
-  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  function edge(id){ return edges ? edges.querySelector('[data-edge="' + id + '"]') : null; }
-  function nodeFor(id){ for (var i=0;i<nodes.length;i++){ if (nodes[i].getAttribute('data-mm')===id) return nodes[i]; } return null; }
-  function setOpen(id, open){
-    var n = nodeFor(id), p = document.getElementById(id), e = edge(id);
-    if (!n || !p) return;
-    n.setAttribute('aria-expanded', open ? 'true' : 'false');
-    p.hidden = !open;
-    if (e) e.classList.toggle('is-active', open);
+  var rail  = map.querySelector('.mm-rail');
+  var crumbs= map.querySelector('.mm-crumbs');
+  var back  = map.querySelector('.mm-back');
+  var miniView = map.querySelector('.mm-mini-view');
+  var mq = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  var mqMobile = window.matchMedia ? window.matchMedia('(max-width: 760px)') : null;
+  function reduced(){ return mq && mq.matches; }
+  function mobile(){ return mqMobile && mqMobile.matches; }
+  function q(sel,root){ return (root||map).querySelector(sel); }
+  function branchEl(b){ return q('.mm-branch[data-branch="'+b+'"]'); }
+  function nodeFor(b){ return document.getElementById('node-'+b); }
+  function panelFor(b){ return document.getElementById(b); }
+  function edgeFor(b){ return edges ? edges.querySelector('.mm-edge[data-edge="'+b+'"]') : null; }
+  function clusterFor(b){ var br=branchEl(b); return br ? br.querySelector('.mm-cluster') : null; }
+
+  var S = { level:'overview', branch:null };
+  var allowPush = false;
+
+  function curMatrix(){ var tr=getComputedStyle(stage).transform; try { return new DOMMatrixReadOnly(tr==='none'?'':tr); } catch(e){ return new DOMMatrixReadOnly(); } }
+  function camera(){
+    if (mobile()){ stage.style.removeProperty('--tx'); stage.style.removeProperty('--ty'); stage.style.removeProperty('--sc'); return; }
+    if (S.level === 'overview' || !S.branch){ stage.style.setProperty('--tx','0%'); stage.style.setProperty('--ty','0%'); stage.style.setProperty('--sc','1'); if(miniView){ miniView.setAttribute('x','0'); miniView.setAttribute('y','0'); miniView.setAttribute('width','1000'); miniView.setAttribute('height','700'); } return; }
+    var br = branchEl(S.branch); if (!br) return;
+    var vp = stage.parentNode.getBoundingClientRect();
+    var m = curMatrix(), cs = m.a || 1, ctx = m.e || 0, cty = m.f || 0;
+    var rects = [br.querySelector('.mm-node').getBoundingClientRect()];
+    var cl = br.querySelector('.mm-cluster'); if (cl && !cl.hidden) rects.push(cl.getBoundingClientRect());
+    var L=1e9,T=1e9,R=-1e9,B=-1e9;
+    rects.forEach(function(r){
+      var lx=(r.left-vp.left-ctx)/cs, rx=(r.right-vp.left-ctx)/cs, ty=(r.top-vp.top-cty)/cs, by=(r.bottom-vp.top-cty)/cs;
+      if(lx<L)L=lx; if(rx>R)R=rx; if(ty<T)T=ty; if(by>B)B=by;
+    });
+    var bw=R-L, bh=B-T, bcx=(L+R)/2, bcy=(T+B)/2;
+    var railW = (S.level==='deep') ? Math.min(560, vp.width*0.46) : 0;
+    var availW = vp.width - railW, availH = vp.height, pad = 0.84;
+    var sc = Math.min((availW*pad)/bw, (availH*pad)/bh); sc = Math.max(0.72, Math.min(1.5, sc));
+    var tcx = railW ? (availW/2) : (vp.width/2), tcy = vp.height/2;
+    var txpx = tcx - sc*bcx, typx = tcy - sc*bcy;
+    stage.style.setProperty('--sc', sc.toFixed(3));
+    stage.style.setProperty('--tx', (txpx/vp.width*100).toFixed(2)+'%');
+    stage.style.setProperty('--ty', (typx/vp.height*100).toFixed(2)+'%');
+    if (miniView){ var b=BR[S.branch], fx=tcx/vp.width, fy=tcy/vp.height, w=1000/sc, h=700/sc; miniView.setAttribute('width',w.toFixed(0)); miniView.setAttribute('height',h.toFixed(0)); miniView.setAttribute('x',(b[0]*1000 - fx*w).toFixed(0)); miniView.setAttribute('y',(b[1]*700 - fy*h).toFixed(0)); }
   }
-  function closeAll(except){ PANELS.forEach(function(id){ if (id !== except) setOpen(id, false); }); }
-  function open(id, focusHeading){
-    closeAll(id);
-    setOpen(id, true);
-    var p = document.getElementById(id);
-    try { p.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest' }); } catch (err) { p.scrollIntoView(); }
-    if (focusHeading){ var h = p.querySelector('h2, h3'); if (h){ h.setAttribute('tabindex','-1'); h.focus({ preventScroll: true }); } }
+
+  function willChange(on){ if (reduced()) return; stage.style.willChange = on ? 'transform' : ''; }
+  stage.addEventListener('transitionend', function(){ willChange(false); });
+
+  function renderChrome(){
+    var html = '<button class="mm-crumb" type="button" data-go="overview"'+(S.level==='overview'?' aria-current="page"':'')+'>Map</button>';
+    if (S.branch){ html += '<span class="mm-crumb-sep" aria-hidden="true">›</span><button class="mm-crumb" type="button" data-go="drill" data-branch="'+S.branch+'"'+(S.level==='drill'?' aria-current="page"':'')+'>'+LABEL[S.branch]+'</button>'; }
+    if (S.level==='deep'){ html += '<span class="mm-crumb-sep" aria-hidden="true">›</span><button class="mm-crumb" type="button" aria-current="page">Detail</button>'; }
+    crumbs.innerHTML = html;
+    back.hidden = (S.level==='overview');
+    map.querySelectorAll('.mm-mini-dot').forEach(function(d){ d.classList.toggle('is-active', d.getAttribute('data-dot')===S.branch); });
   }
-  nodes.forEach(function(n){
+
+  function showCluster(b, show){ var c=clusterFor(b); if(c) c.hidden = !show; var br=branchEl(b); if(br) br.classList.toggle('is-active', !!show); }
+
+  function setPanel(b, on){
+    var n=nodeFor(b), p=panelFor(b), e=edgeFor(b);
+    if(n) n.setAttribute('aria-expanded', on?'true':'false');
+    if(p) p.hidden = !on;
+    if(e) e.classList.toggle('is-active', on);
+  }
+  function closePanels(except){ PANELS.forEach(function(b){ if(b!==except) setPanel(b,false); }); }
+
+  // render is the ONLY writer of view state
+  function render(focusTarget){
+    map.setAttribute('data-view', S.level);
+    if (S.branch) map.setAttribute('data-branch', S.branch); else map.removeAttribute('data-branch');
+    // branch active flags + clusters + edges
+    PANELS.forEach(function(b){
+      var br=branchEl(b), e=edgeFor(b);
+      var active = (b===S.branch && S.level!=='overview');
+      if(br) br.classList.toggle('is-active', active);
+      if(e) e.classList.toggle('is-active', active);
+      showCluster(b, active && !!FAN[b]);
+    });
+    // rail / panels
+    if (S.level==='deep' && S.branch){ rail.hidden=false; closePanels(S.branch); setPanel(S.branch,true); var ey=rail.querySelector('.mm-rail-eyebrow'); if(ey) ey.textContent=LABEL[S.branch]; }
+    else { closePanels(null); }
+    camera();
+    renderChrome();
+    // history + hash
+    var hash = '#map' + (S.branch?('/'+S.branch):'') + (S.level==='deep'?'/detail':'');
+    if (allowPush && location.hash !== hash){ try { history.pushState(S, '', hash); } catch(e){} }
+    // focus
+    if (focusTarget==='node' && S.branch){ var n=nodeFor(S.branch); if(n) n.focus(); }
+    else if (focusTarget==='panel' && S.branch){ var p=panelFor(S.branch); var h=p&&p.querySelector('h2,h3'); if(h){ h.setAttribute('tabindex','-1'); h.focus({preventScroll:true}); } }
+    else if (focusTarget==='cluster' && S.branch){ var c=clusterFor(S.branch); var f=c&&c.querySelector('.mm-sub,.mm-step'); if(f) f.focus(); }
+  }
+
+  function go(level, branch, focusTarget){ willChange(true); S.level=level; S.branch=(level==='overview')?null:branch; render(focusTarget); }
+
+  // branch node click: fan branches -> drill; direct branches -> deep
+  PANELS.forEach(function(b){
+    var n=nodeFor(b); if(!n) return;
     n.addEventListener('click', function(){
-      var id = n.getAttribute('data-mm');
-      if (n.getAttribute('aria-expanded') === 'true') { setOpen(id, false); }
-      else { open(id, true); }
+      if (S.level!=='overview' && S.branch===b){ go('overview',null,'node'); return; }
+      if (FAN[b]){ go('drill', b, 'cluster'); }
+      else { go('deep', b, 'panel'); }
     });
   });
-  // in-page links (nav, footer) that target a panel id open that node
-  document.addEventListener('click', function(ev){
-    var a = ev.target.closest && ev.target.closest('a[href^="#"]');
-    if (!a) return;
-    var id = a.getAttribute('href').slice(1);
-    if (PANELS.indexOf(id) === -1) return;
-    ev.preventDefault();
-    open(id, true);
+  // sub-node / pipeline-step click -> deep
+  map.querySelectorAll('.mm-sub, .mm-step').forEach(function(s){
+    s.addEventListener('click', function(){ go('deep', s.getAttribute('data-mm'), 'panel'); });
   });
-  // Esc closes the open node and returns focus to its button
+  // back + rail close + crumbs
+  back.addEventListener('click', function(){ popOne(); });
+  var rc = rail.querySelector('.mm-rail-close'); if(rc) rc.addEventListener('click', function(){ popOne(); });
+  crumbs.addEventListener('click', function(ev){ var c=ev.target.closest('.mm-crumb'); if(!c) return; var lvl=c.getAttribute('data-go'); if(lvl==='overview') go('overview',null,'node'); else if(lvl==='drill') go('drill', c.getAttribute('data-branch'),'cluster'); });
+  map.querySelectorAll('.mm-mini-dot').forEach(function(d){ d.addEventListener('click', function(){ var b=d.getAttribute('data-dot'); if(FAN[b]) go('drill',b,'cluster'); else go('deep',b,'panel'); }); });
+
+  function popOne(){
+    if (S.level==='deep'){ var b=S.branch; if (FAN[b]){ go('drill', b, 'cluster'); } else { go('overview', null, 'node'); var n=nodeFor(b); if(n) n.focus(); } }
+    else if (S.level==='drill'){ var b2=S.branch; go('overview', null, null); var n2=nodeFor(b2); if(n2) n2.focus(); }
+  }
+
+  // roving tabindex inside the active cluster (arrow keys)
+  map.addEventListener('keydown', function(ev){
+    if (S.level!=='drill') return;
+    var c=clusterFor(S.branch); if(!c) return;
+    var items=Array.prototype.slice.call(c.querySelectorAll('.mm-sub,.mm-step'));
+    if(!items.length || items.indexOf(document.activeElement)===-1) return;
+    var i=items.indexOf(document.activeElement);
+    if(ev.key==='ArrowDown'||ev.key==='ArrowRight'){ ev.preventDefault(); items[(i+1)%items.length].focus(); }
+    else if(ev.key==='ArrowUp'||ev.key==='ArrowLeft'){ ev.preventDefault(); items[(i-1+items.length)%items.length].focus(); }
+    else if(ev.key==='Home'){ ev.preventDefault(); items[0].focus(); }
+    else if(ev.key==='End'){ ev.preventDefault(); items[items.length-1].focus(); }
+  });
+
+  // Escape arbitration: fbPop > search > map
   document.addEventListener('keydown', function(ev){
-    if (ev.key !== 'Escape') return;
-    for (var i=0;i<nodes.length;i++){
-      if (nodes[i].getAttribute('aria-expanded') === 'true'){
-        var id = nodes[i].getAttribute('data-mm');
-        setOpen(id, false); nodes[i].focus(); break;
-      }
+    if (ev.key!=='Escape') return;
+    var fb=document.getElementById('fbPop'); if (fb && !fb.hidden){ return; }
+    var so=document.getElementById('searchOverlay'); if (so && so.classList.contains('open')){ return; }
+    if (S.level!=='overview'){ ev.stopPropagation(); popOne(); }
+  }, true);
+
+  // browser back / shared deep links
+  window.addEventListener('popstate', function(ev){ applyHash(false); });
+  function applyHash(focus){
+    var h=location.hash.replace(/^#/,'');
+    if (h===''||h==='map'){ go('overview', null, null); return; }
+    var parts=h.split('/'); // map / branch / detail
+    if (parts[0]!=='map'){ // legacy "#platform" deep link
+      if (PANELS.indexOf(parts[0])!==-1){ go('deep', parts[0], focus?'panel':null); }
+      return;
     }
+    var b=parts[1];
+    if (PANELS.indexOf(b)===-1){ go('overview', null, null); return; }
+    if (parts[2]==='detail'){ go('deep', b, focus?'panel':null); }
+    else if (FAN[b]){ go('drill', b, null); }
+    else { go('deep', b, null); }
+  }
+
+  // legacy in-page links (nav/footer #platform etc.) open the map
+  document.addEventListener('click', function(ev){
+    var a=ev.target.closest && ev.target.closest('a[href^="#"]');
+    if(!a) return;
+    var id=a.getAttribute('href').slice(1);
+    if (PANELS.indexOf(id)===-1) return;
+    ev.preventDefault();
+    if (FAN[id]) go('drill', id, 'cluster'); else go('deep', id, 'panel');
+    map.scrollIntoView({ behavior: reduced()?'auto':'smooth', block:'start' });
   });
-  // deep link on load (#platform etc.)
-  var h = location.hash.slice(1);
-  if (PANELS.indexOf(h) !== -1) { open(h, false); }
+  // Ctrl/Cmd+K search sets location.hash directly -> react to it
+  window.addEventListener('hashchange', function(){ var h=location.hash.replace(/^#/,''); if (PANELS.indexOf(h)!==-1){ if (FAN[h]) go('drill',h,null); else go('deep',h,null); } });
+
+  if (mq && mq.addEventListener) mq.addEventListener('change', camera);
+  if (mqMobile && mqMobile.addEventListener) mqMobile.addEventListener('change', function(){ render(null); });
+
+  // boot
+  var initial = location.hash.replace(/^#/,'');
+  if (initial && (initial.indexOf('map')===0 || PANELS.indexOf(initial)!==-1)) applyHash(false);
+  else render(null);
+  allowPush = true;
 })();
 </script>
 </body>
