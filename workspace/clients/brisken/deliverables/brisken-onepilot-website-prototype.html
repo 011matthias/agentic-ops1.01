@@ -153,7 +153,7 @@
   .nav-theme:hover { border-color: var(--teal); color: var(--teal); }
 
   .btn {
-    display: inline-flex; align-items: center; gap: 8px; border-radius: var(--radius);
+    display: inline-flex; align-items: center; gap: 8px; border-radius: var(--radius-pill);
     padding: 13px 26px; font-size: 15px; font-weight: 600; text-decoration: none; cursor: pointer;
     border: 1px solid transparent; transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
   }
@@ -171,6 +171,9 @@
 
   .wrap { max-width: 1120px; margin: 0 auto; padding: 0 30px; }
   .section { padding: var(--space) 0; border-top: 1px solid var(--border); }
+  /* no divider lines anywhere below the platform map */
+  #map ~ .section { border-top: none; }
+  #map ~ .section .report, #map ~ .section .qa-list { border-top: none; }
   #problem { padding-bottom: var(--space-tight); }
   #answers, #feedback { padding-top: var(--space-tight); }
   .eyebrow {
@@ -656,6 +659,9 @@
   .mm-node.is-base { background: rgba(0,57,111,.05); }
   [data-theme="dark"] .mm-node.is-base { background: rgba(127,227,236,.06); }
 
+  /* the four OnePilot branch nodes share one size */
+  .mm-graph .mm-node:not(.is-hub):not(.is-tc) { width: 190px; max-width: 190px; min-height: 98px; justify-content: center; }
+
   /* the "why now" node: a separate wide pill centered under the map */
   .mm-why-wrap { display: flex; justify-content: center; margin-top: 12px; }
   .mm-section[data-view="open"] .mm-why-wrap { pointer-events: none; }
@@ -717,6 +723,8 @@
     .faq-section table { display: block; overflow-x: auto; max-width: 100%; }
     .mm-node.is-why { width: 100%; max-width: none; border-radius: 16px; justify-content: flex-start; }
     .mm-why-wrap { margin-top: 0; }
+    .mm-graph .mm-node:not(.is-hub):not(.is-tc) { width: 100%; max-width: none; min-height: 0; justify-content: flex-start; }
+    .mm-read table { display: block; overflow-x: auto; max-width: 100%; }
   }
   @media (prefers-reduced-motion: reduce) {
     .mm-node, .mm-loc { transition: none !important; }
@@ -1080,6 +1088,15 @@
             <p><b>Clean core.</b> No new custom code in SAP, so nothing breaks on the next upgrade.</p>
             <p><b>Lower migration risk.</b> Governed, monitored data from day one, instead of a script no one wants to own.</p>
           </div>
+          <h3 style="margin-top:30px;">OnePilot vs the usual paths</h3>
+          <table>
+            <thead><tr><th>Approach</th><th>Maintenance</th><th>Providers</th><th>Governance</th></tr></thead>
+            <tbody>
+              <tr><td>Custom Datafeed config</td><td>ABAP upkeep, breaks on field changes</td><td>One at a time</td><td>Build it yourself</td></tr>
+              <tr><td>Single-vendor interface</td><td>Tied to that vendor</td><td>That vendor only</td><td>Limited</td></tr>
+              <tr><td>OnePilot</td><td>No code, third-party-managed</td><td>Multi-vendor, swap freely</td><td>Audit trail and exceptions built in</td></tr>
+            </tbody>
+          </table>
         </section>
     </div>
   </div>
@@ -1134,15 +1151,6 @@
           <div class="qa-a" id="qa-rem" hidden><p>Yes. Remittance advice arrives as unstructured email and PDF, which staff retype into SAP cash application. An AI-powered remittance gate reads the unstructured input, identifies and structures the data, and delivers it into SAP S/4HANA, with a monitor that trains it over time. A live agricultural-sector customer runs this on a ChatGPT-powered deployment.</p></div>
         </div>
       </div>
-      <h3 style="margin-top:30px;">OnePilot vs the usual paths</h3>
-      <table>
-        <thead><tr><th>Approach</th><th>Maintenance</th><th>Providers</th><th>Governance</th></tr></thead>
-        <tbody>
-          <tr><td>Custom Datafeed config</td><td>ABAP upkeep, breaks on field changes</td><td>One at a time</td><td>Build it yourself</td></tr>
-          <tr><td>Single-vendor interface</td><td>Tied to that vendor</td><td>That vendor only</td><td>Limited</td></tr>
-          <tr><td>OnePilot</td><td>No code, third-party-managed</td><td>Multi-vendor, swap freely</td><td>Audit trail and exceptions built in</td></tr>
-        </tbody>
-      </table>
     </div>
   </div>
 </section>
