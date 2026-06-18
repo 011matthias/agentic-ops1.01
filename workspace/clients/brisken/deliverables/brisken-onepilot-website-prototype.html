@@ -744,6 +744,20 @@
     .mm-open.is-opening, .mm-open.is-closing { animation: none !important; }
     .mm-backdrop { transition: none !important; }
   }
+
+  /* minimalist Q&A accordion (click to reveal) */
+  .qa-list { max-width: 760px; margin: 20px auto 0; text-align: left; border-top: 1px solid var(--border); }
+  .qa { border-bottom: 1px solid var(--border); }
+  .qa-q { margin: 0; }
+  .qa-toggle { display: flex; align-items: center; gap: 18px; width: 100%; background: none; border: none; cursor: pointer; padding: 15px 2px; text-align: left; font-family: var(--font-display); font-weight: 600; font-size: 15.5px; color: var(--heading); line-height: 1.35; transition: color .14s; }
+  .qa-qt { flex: 1; min-width: 0; }
+  .qa-toggle:hover { color: var(--teal-strong); }
+  .qa-toggle:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; border-radius: 4px; }
+  .qa-chev { flex: none; width: 17px; height: 17px; color: var(--muted); transition: transform .22s ease, color .14s; }
+  .qa-toggle[aria-expanded="true"] .qa-chev { transform: rotate(180deg); color: var(--teal-strong); }
+  .qa-a { padding: 0 2px 16px; }
+  .qa-a[hidden] { display: none; }
+  .qa-a p { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.6; }
 </style>
 </head>
 <body data-updated="2026-06-18">
@@ -1087,26 +1101,19 @@
     <div class="faq-block" id="answers">
       <span class="eyebrow">Answers</span>
       <h2>The questions SAP teams actually search</h2>
-      <div class="answer">
-        <div class="answer-head">
-          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 4.2 1.5c0 1.6-2 2.1-2 3.3M12 17h.01"/></svg></span>
-          <h3>How do I get Bloomberg market data into SAP TRM automatically?</h3>
+      <div class="qa-list">
+        <div class="qa">
+          <h3 class="qa-q"><button type="button" class="qa-toggle" aria-expanded="false" aria-controls="qa-bbg"><span class="qa-qt">How do I get Bloomberg market data into SAP TRM automatically?</span><svg class="qa-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></h3>
+          <div class="qa-a" id="qa-bbg" hidden><p>The SAP-native path is a Datafeed RFC connection with per-provider function lists and translation tables, or a per-security custom interface, both of which need ABAP upkeep and break when Bloomberg changes a field. A governed market-data hub ingests Bloomberg once, normalizes it, and distributes into SAP TRM with an audit trail and exception alerts, no code.</p></div>
         </div>
-        <p>The SAP-native path is a Datafeed RFC connection with per-provider function lists and translation tables, or a per-security custom interface, both of which need ABAP upkeep and break when Bloomberg changes a field. A governed market-data hub ingests Bloomberg once, normalizes it, and distributes into SAP TRM with an audit trail and exception alerts, no code.</p>
-      </div>
-      <div class="answer">
-        <div class="answer-head">
-          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 4.2 1.5c0 1.6-2 2.1-2 3.3M12 17h.01"/></svg></span>
-          <h3>How do I automate CAMT.086 bank fee statement analysis in SAP?</h3>
+        <div class="qa">
+          <h3 class="qa-q"><button type="button" class="qa-toggle" aria-expanded="false" aria-controls="qa-camt"><span class="qa-qt">How do I automate CAMT.086 bank fee statement analysis in SAP?</span><svg class="qa-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></h3>
+          <div class="qa-a" id="qa-camt" hidden><p>CAMT.086 is the ISO 20022 bank-fee-statement format that replaces TWIST BSB. SAP added native bank-fee analysis in S/4HANA 1809 via a Fiori app, but it expects clean CAMT.086 in; banks still send proprietary and TWIST formats. A bank-fee portal ingests any format, enriches for analytics, and distributes to the analyzer, so the fee review is not gated on format.</p></div>
         </div>
-        <p>CAMT.086 is the ISO 20022 bank-fee-statement format that replaces TWIST BSB. SAP added native bank-fee analysis in S/4HANA 1809 via a Fiori app, but it expects clean CAMT.086 in; banks still send proprietary and TWIST formats. A bank-fee portal ingests any format, enriches for analytics, and distributes to the analyzer, so the fee review is not gated on format.</p>
-      </div>
-      <div class="answer">
-        <div class="answer-head">
-          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 4.2 1.5c0 1.6-2 2.1-2 3.3M12 17h.01"/></svg></span>
-          <h3>Can AI read remittance advice emails and post them into SAP?</h3>
+        <div class="qa">
+          <h3 class="qa-q"><button type="button" class="qa-toggle" aria-expanded="false" aria-controls="qa-rem"><span class="qa-qt">Can AI read remittance advice emails and post them into SAP?</span><svg class="qa-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></h3>
+          <div class="qa-a" id="qa-rem" hidden><p>Yes. Remittance advice arrives as unstructured email and PDF, which staff retype into SAP cash application. An AI-powered remittance gate reads the unstructured input, identifies and structures the data, and delivers it into SAP S/4HANA, with a monitor that trains it over time. A live agricultural-sector customer runs this on a ChatGPT-powered deployment.</p></div>
         </div>
-        <p>Yes. Remittance advice arrives as unstructured email and PDF, which staff retype into SAP cash application. An AI-powered remittance gate reads the unstructured input, identifies and structures the data, and delivers it into SAP S/4HANA, with a monitor that trains it over time. A live agricultural-sector customer runs this on a ChatGPT-powered deployment.</p>
       </div>
       <h3 style="margin-top:30px;">OnePilot vs the usual paths</h3>
       <table>
@@ -1532,6 +1539,19 @@
   if (TIERS.indexOf(initial)!==-1) openTier(initial, null);
   else render(null);
   allowPush = true;
+})();
+</script>
+
+<script>
+(function(){
+  Array.prototype.forEach.call(document.querySelectorAll('.qa-toggle'), function(btn){
+    btn.addEventListener('click', function(){
+      var open = btn.getAttribute('aria-expanded')==='true';
+      btn.setAttribute('aria-expanded', open?'false':'true');
+      var panel = document.getElementById(btn.getAttribute('aria-controls'));
+      if (panel) panel.hidden = open;
+    });
+  });
 })();
 </script>
 </body>
