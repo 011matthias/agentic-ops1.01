@@ -5,7 +5,20 @@ argument-hint: "[project-name] [--audit-only]"
 
 # System Development Loop
 
-Structured system improvement session. Reviews recent work, identifies where human involvement was required but shouldn't have been, and builds primitives to close those gaps.
+Structured system improvement session. Reviews recent work, identifies where human involvement was required but shouldn't have been, and builds primitives to close those gaps. It also self-anneals: it audits the toolkit for internal contradiction and bloat, and measures whether the system is converging cycle-over-cycle (sharper) rather than just accreting (bigger).
+
+## Fixed points (never annealed away)
+
+This loop sharpens the toolkit; it never relaxes the constraints that make the sharpening safe. Held fixed across every cycle:
+
+- **Approval gate** — Phase 4 designs are proposed, never auto-built; the human approves the diff.
+- **Reversibility** — every change ships as a reviewable PR; no auto-commit to main (`rule_no_auto_commit` B6).
+- **Evidence basis** — every proposed change cites a friction-register row, a metric, or an audit finding. No speculative self-refactoring.
+- **Guardrails preserved** — safety/quality gates and honesty constraints are NOT "friction to streamline"; friction that protects correctness stays.
+- **No value drift** — the cycle changes tools, never purpose or character.
+- **Goodhart guard** — "fewer assets" is a direction, not a number to game: a deletion still needs a cited finding + Phase-4 approval.
+
+Annealing converges only because these are held fixed.
 
 ## Context
 
@@ -32,6 +45,7 @@ Then call: `python tools/rename-chat.py "sys--system-dev"` (or `sys--system-dev-
 
 1. **Client name** (optional): If provided, focus analysis on that client's recent work
 2. **`--audit-only`** (optional): Stop after friction analysis — report findings without implementing fixes
+3. **`--metrics-only`** (optional): Run `tools/anneal-metrics.py` only — print the convergence row + drift, then stop. The cheap "where do we stand?" check.
 
 ## Phase 0: Backlog Triage
 
@@ -68,9 +82,22 @@ Read the following to understand recent work and where friction occurred:
 - `workspace/clients/*/context/build-log.md` and `workspace/projects/*/context/build-log.md` — per-project build iteration history and error patterns
 - `.claude/rules/rule_behaviors.md` — refresh the self-annealing framework and behavioral constraints
 - Current CLAUDE.md — understand existing primitives
+- **Convergence + drift baseline**: run `uv run tools/anneal-metrics.py --format json` for asset counts, friction recurrence, and documented-vs-actual drift; read the latest row of `docs/anneal-ledger.md` for the prior cycle's numbers.
 
 ### Ask the user:
 > "What required your involvement in recent sessions that the system should have handled autonomously? List the friction points — even small ones."
+
+## Phase 1.5: Toolkit-Introspection Audit
+
+Friction in the register is REACTIVE evidence (what already broke). This phase is PROACTIVE: audit the toolkit itself for defects that may never have been logged. Combine the deterministic drift from `anneal-metrics.py` with these judgment checks:
+
+1. **Documented-vs-actual drift** (from the tool): CLAUDE.md advertised counts vs real asset counts; rules-LOC vs the stated budget. Already computed — read it off the metrics output.
+2. **Rule contradictions**: scan `.claude/rules/*.md` for two rules prescribing different behavior for the same trigger (the tool can only hint via keyword overlap; this is a judgment call).
+3. **Overlapping / redundant skills**: skills whose `description` WHEN-clauses overlap enough to confuse routing. The make-pack / n8n-pack consolidation is the template for the fix.
+4. **Overloaded skill**: a `SKILL.md` over the ~500-line norm, or one doing three unrelated jobs → split candidate.
+5. **Stale conventions**: a count, path, or budget cited in CLAUDE.md / a rule / DECISION-TREE that no longer matches reality.
+
+Add each confirmed toolkit defect to the friction list as a synthetic entry (Client = `system`, Type = `toolkit-drift` or `toolkit-redundancy`) so Phases 2-4 treat it like any other defect. **`--audit-only` includes these and stops at Phase 3.**
 
 ## Phase 2: Categorize Friction
 
@@ -84,6 +111,7 @@ For each friction point identified (from checkpoints + user input), classify:
 | **Behavioral constraint** | Agent did something it shouldn't (or didn't do something it should) | Rule update |
 | **Cross-artifact inconsistency** | Blueprint ↔ data store ↔ sheet ↔ template drift | Reconciliation tool |
 | **Missing diagnostic** | User had to investigate what agent could have checked | Diagnostic module in relevant skill |
+| **Toolkit redundancy / contradiction** | Two rules conflict, two skills overlap, or a cited count/convention drifted | **Consolidate or delete** (not create) |
 
 ## Phase 3: Prioritize by ROI
 
@@ -117,8 +145,10 @@ For each friction point with ROI > 5 (or top 3 if all are low-ROI):
    - Search existing skill modules for partial coverage
    - **Always prefer extending over creating**
 
-3. Draft the primitive specification:
-   - File path
+3. **Classify the direction** of each fix: `CONSOLIDATE` / `DELETE` / `EXTEND` / `CREATE`. Trend toward fewer, sharper assets — merging two overlapping skills or deleting a dead rule is as valuable as adding one. If this round only ADDS, it is accreting, not annealing: every `CREATE` must first rule out a `CONSOLIDATE` or `DELETE` that resolves the same defect.
+
+4. Draft the specification (a primitive spec, or a consolidation/deletion plan):
+   - File path(s) — created, edited, or removed
    - Purpose (1 sentence)
    - Key content/steps
    - How it integrates with existing infrastructure
@@ -141,7 +171,18 @@ After all primitives are created:
 
 1. **Update CLAUDE.md** — Add new skills/commands/agents to the appropriate sections
 2. **Update MEMORY.md** — If any critical patterns were discovered, add them (with dedup check)
-3. **Check rules budget** — `wc -l .claude/rules/*.md` — must stay under 500 total
+3. **Report rules-LOC** via `uv run tools/anneal-metrics.py` — the rule files total far exceeds the legacy "under 500" figure this step once asserted (and DECISION-TREE's 250). Treat the budget-vs-actual gap as a toolkit-drift FINDING for this session (resolve by consolidation, or set a realistic budget with the user), not a silent number to rewrite here.
+
+## Phase 6.5: Convergence Measurement
+
+Record whether THIS cycle moved the system toward "sharper", not just "bigger".
+
+1. Run `uv run tools/anneal-metrics.py --append` to append this cycle's row to `docs/anneal-ledger.md`. The tool fills every column except **Top Finding**.
+2. Compare to the prior row (the tool computes `NetD`, `ChangeSet`, `Smaller?`). Apply the **convergence test**:
+   - Is this cycle's change-set SMALLER than the last? (settling, not thrashing)
+   - Are asset count (`NetD` ≤ 0 preferred), `Drift`, `Unres`, and recurrence stable or falling?
+3. Write the verdict — **converging** (smaller changes, falling drift/asset count) or **oscillating / accreting** (growing change-set, the same defects recurring, asset count climbing) — and fill the row's `Top Finding` with the cycle's headline.
+4. If a metric is rising monotonically or oscillating, NAME it and recommend pausing changes to that area next cycle rather than tweaking it again.
 
 ## Phase 7: Checkpoint
 
@@ -165,6 +206,10 @@ At the end of the session, summarize:
 | Item | First Logged | Age | Reason for Deferral |
 |------|-------------|-----|---------------------|
 | {description} | {date} | {N days} | {specific reason — not "medium priority"} |
+
+### Convergence (this cycle)
+{the appended docs/anneal-ledger.md row} — verdict: {converging | oscillating | accreting}.
+{one line on the trend, e.g. "net asset -2 (merged 2 skills), drift 3->1, change-set smaller than last: yes"}
 
 ### Next /system-dev session should focus on:
 - [Priority items for next round — Phase 0 will surface these automatically]
