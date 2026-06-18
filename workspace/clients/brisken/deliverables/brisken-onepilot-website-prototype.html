@@ -605,7 +605,7 @@
     * { transition-duration: .01ms !important; }
   }
   @media print {
-    .site-nav, #searchOverlay, .hero-actions, .nav-cta, .feedback-fab, #fbPop, #fbHintOverlay { display: none !important; }
+    .site-nav, #searchOverlay, .hero-actions, .nav-cta, .feedback-fab, .float-demo, #fbPop, #fbHintOverlay { display: none !important; }
     body { background: #fff; color: #000; }
     .section { page-break-inside: avoid; border-top: 1px solid #ccc; }
     .card, .report, .flow, .answer, .ttv { box-shadow: none; }
@@ -688,10 +688,11 @@
   .mm-panel > h2:focus-visible, .mm-panel h3:focus-visible { outline: none; }
   @keyframes mmFade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
-  .mm-cta-pill { position: fixed; right: 18px; bottom: 78px; z-index: 61; display: inline-flex; align-items: center; background: var(--teal); color: #fff; border-radius: var(--radius-pill); padding: 12px 22px; font-family: var(--font-body); font-size: 14px; font-weight: 600; text-decoration: none; box-shadow: 0 6px 20px rgba(14,124,134,.4); transition: transform .15s, background .15s; }
-  .mm-cta-pill:hover { background: var(--teal-strong); transform: translateY(-2px); }
-  .mm-cta-note { font-weight: 400; opacity: .85; }
-  @media (max-width: 600px) { .mm-cta-note { display: none; } }
+  /* the hero "Book a demo" carried down on scroll: a fixed clone that fades in and expands slightly */
+  .float-demo { position: fixed; right: 18px; bottom: 74px; z-index: 61; opacity: 0; transform: translateY(10px) scale(.9); transform-origin: bottom right; pointer-events: none; box-shadow: 0 8px 24px rgba(14,124,134,.42); transition: opacity .3s ease, transform .35s cubic-bezier(.22,.61,.30,1); }
+  .float-demo.is-shown { opacity: 1; transform: translateY(0) scale(1.06); pointer-events: auto; }
+  .float-demo.is-shown:hover { transform: translateY(-2px) scale(1.06); }
+  @media (prefers-reduced-motion: reduce) { .float-demo { transition: opacity .2s ease; } .float-demo.is-shown, .float-demo.is-shown:hover { transform: none; } }
 
   .mm-sr-title { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
@@ -717,7 +718,7 @@
     .mm-node { position: static; transform: none; width: 100%; max-width: none; flex-direction: row; justify-content: flex-start; gap: 14px; text-align: left; padding: 15px 16px; }
     .mm-node:hover { transform: none; }
     .mm-node.is-hub, .mm-node.is-tc { border-radius: 16px; padding: 16px; }
-    .mm-cta-pill { right: 14px; bottom: 70px; }
+    .float-demo { right: 14px; bottom: 70px; }
     .hero-split .hero-research .mini-stats { width: 100%; max-width: 100%; }
     .hero-split .hero-research .mini { grid-template-columns: 76px minmax(0, 1fr); }
     .faq-section table { display: block; overflow-x: auto; max-width: 100%; }
@@ -886,7 +887,7 @@
         </div>
       </div>
       <div class="hero-actions">
-        <a href="#demo" class="btn btn-primary">Book a demo</a>
+        <a href="#demo" class="btn btn-primary" id="heroDemo">Book a demo</a>
       </div>
     </div>
   </div>
@@ -1101,7 +1102,6 @@
     </div>
   </div>
 
-  <a class="mm-cta-pill" href="#demo">Book a demo<span class="mm-cta-note"> &middot; 15 to 20 min on your SAP setup</span></a>
   <div class="mm-backdrop" hidden aria-hidden="true"></div>
 </section>
 
@@ -1268,7 +1268,26 @@
 })();
 </script>
 
+<a href="#demo" class="btn btn-primary float-demo" id="floatDemo" aria-hidden="true" tabindex="-1">Book a demo</a>
 <button type="button" class="feedback-fab" data-fb-open aria-label="Leave feedback">Feedback</button>
+<script>
+(function(){
+  var hero = document.getElementById('heroDemo');
+  var float = document.getElementById('floatDemo');
+  if (!hero || !float) return;
+  function setShown(on){ float.classList.toggle('is-shown', on); }
+  if ('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(entries){
+      setShown(!entries[0].isIntersecting);
+    }, { rootMargin: '0px 0px -40px 0px', threshold: 0 });
+    io.observe(hero);
+  } else {
+    var onScroll = function(){ setShown(hero.getBoundingClientRect().bottom < 0); };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  }
+})();
+</script>
 
 <!-- Dynamic feedback popover: appears where the reviewer double-clicks -->
 <div class="fbpop" id="fbPop" role="dialog" aria-label="Leave feedback" hidden>
