@@ -611,116 +611,66 @@
     .footer p, .footer ul a, .footer h4, .footer .f-logo { color: #000 !important; }
   }
 
-  /* ===== Interactive explorable platform map ===== */
-  .mm-section { border-top: 1px solid var(--border); position: relative; padding-top: 40px; overflow: hidden; }
+  /* ===== TreasuryCentral stack (explorable architecture) ===== */
+  .mm-section { border-top: 1px solid var(--border); position: relative; padding-top: 44px; }
   .mm-head { text-align: center; }
-  .mm-hint { max-width: 640px; margin-left: auto; margin-right: auto; }
-  .mm-section[data-view="drill"] .mm-hint, .mm-section[data-view="deep"] .mm-hint { opacity: 0; pointer-events: none; }
+  .mm-hint { max-width: 620px; margin: 6px auto 0; }
+  .mm-section[data-view="open"] .mm-hint { display: none; }
 
-  /* chrome: breadcrumb + back */
-  .mm-crumbs { position: absolute; top: 16px; left: 30px; z-index: 6; display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 12px; }
-  .mm-section[data-view="overview"] .mm-crumbs { opacity: .5; }
+  /* breadcrumb + back (only when a layer is open) */
+  .mm-crumbs { display: flex; align-items: center; justify-content: center; gap: 6px; font-family: var(--font-mono); font-size: 12px; margin-top: 14px; }
+  .mm-section[data-view="overview"] .mm-crumbs { display: none; }
   .mm-crumb { background: none; border: none; cursor: pointer; color: var(--muted); font: inherit; padding: 4px 2px; }
   .mm-crumb:hover { color: var(--teal-strong); }
   .mm-crumb[aria-current="page"] { color: var(--heading); font-weight: 600; cursor: default; }
   .mm-crumb-sep { color: var(--border-strong); }
-  .mm-back { position: absolute; top: 14px; right: 30px; z-index: 6; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-pill); cursor: pointer; color: var(--text); font-family: var(--font-body); font-size: 13px; font-weight: 500; padding: 7px 16px; box-shadow: var(--shadow); }
+  .mm-back { display: inline-flex; align-items: center; gap: 6px; margin: 18px auto 0; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-pill); cursor: pointer; color: var(--text); font-family: var(--font-body); font-size: 13px; font-weight: 500; padding: 8px 18px; box-shadow: var(--shadow); }
   .mm-back:hover { border-color: var(--teal); color: var(--teal-strong); }
+  .mm-section[data-view="overview"] .mm-back { display: none; }
 
-  /* full-bleed viewport */
-  .mm-viewport { position: relative; width: 100%; margin-left: 0; height: 74svh; min-height: 520px; margin-top: 8px; overflow: hidden; }
-  .mm-stage { position: absolute; inset: 0; transform-origin: 0 0; transform: translate(var(--tx,0),var(--ty,0)) scale(var(--sc,1)); transition: transform .5s cubic-bezier(.22,.61,.36,1); }
-  .mm-edges { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-  .mm-edge { fill: none; stroke: var(--border-strong); stroke-width: 1.5; transition: stroke .25s, stroke-width .25s; }
-  .mm-edge.is-active { stroke: var(--teal); stroke-width: 3; }
-  .mm-flow { fill: none; stroke: var(--teal); stroke-width: 2; stroke-dasharray: 5 17; opacity: .42; animation: mmDash 5.5s linear infinite; }
-  .mm-ring { fill: none; stroke: var(--teal); stroke-width: 1.4; stroke-dasharray: 5 12; opacity: .28; animation: mmDash 13s linear infinite reverse; }
-  @keyframes mmDash { to { stroke-dashoffset: -44; } }
-  /* dim non-active branches/edges at drill+deep */
-  .mm-section[data-view="drill"] .mm-flow, .mm-section[data-view="deep"] .mm-flow { opacity: 0; }
-  .mm-section:is([data-view="drill"],[data-view="deep"]) .mm-branch:not([data-branch]) { }
-  .mm-section:is([data-view="drill"],[data-view="deep"]) .mm-edge:not(.is-active) { opacity: .25; }
+  /* the stack diagram (overview) */
+  .mm-stack { max-width: 780px; margin: 28px auto 0; display: flex; flex-direction: column; align-items: stretch; }
+  .mm-section[data-view="open"] .mm-stack { display: none; }
+  .mm-tier { position: relative; display: flex; align-items: center; gap: 18px; text-align: left; width: 100%; cursor: pointer; border-radius: var(--radius); padding: 20px 22px; font-family: var(--font-body); background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow); transition: transform .16s, border-color .16s, box-shadow .16s; }
+  .mm-tier:hover { border-color: var(--teal); box-shadow: var(--shadow-lift); transform: translateY(-2px); }
+  .mm-tier:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+  .mm-tier-cue { flex: none; width: 30px; height: 30px; color: var(--teal-strong); }
+  .mm-tier-cue svg { width: 30px; height: 30px; }
+  .mm-tier-main { flex: 1; min-width: 0; display: block; }
+  .mm-tier-name { display: block; font-family: var(--font-display); font-weight: 600; font-size: clamp(18px,1.5vw,23px); color: var(--heading); letter-spacing: -.01em; line-height: 1.15; }
+  .mm-tier-role { display: block; font-size: 13px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+  .mm-tier-chips { display: block; font-family: var(--font-mono); font-size: 11.5px; color: var(--teal-strong); margin-top: 8px; letter-spacing: .01em; }
+  .mm-tier-go { flex: none; color: var(--muted); width: 22px; height: 22px; transition: transform .16s, color .16s; }
+  .mm-tier:hover .mm-tier-go { color: var(--teal-strong); transform: translateX(3px); }
+  .mm-tier.is-product { background: var(--navy); border-color: var(--teal); box-shadow: var(--shadow-lift); }
+  .mm-tier.is-product .mm-tier-name { color: #fff; }
+  .mm-tier.is-product .mm-tier-role { color: #c7d6ec; }
+  .mm-tier.is-product .mm-tier-cue, .mm-tier.is-product .mm-tier-go { color: #7fe3ec; }
+  .mm-tier.is-product .mm-tier-chips { color: #8fd9e0; }
+  .mm-tier.is-base { background: rgba(0,57,111,.05); }
+  [data-theme="dark"] .mm-tier.is-base { background: rgba(127,227,236,.05); }
 
-  /* hub */
-  .mm-hub { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: clamp(196px,17vw,272px); text-align: center; background: var(--navy); color: #fff; border-radius: var(--radius); padding: clamp(18px,2vw,28px) 18px; box-shadow: var(--shadow-lift); border: 1px solid var(--teal); transition: opacity .4s; }
-  .mm-hub-name { display: block; font-family: var(--font-display); font-size: clamp(22px,2vw,30px); font-weight: 600; letter-spacing: -.01em; }
-  .mm-hub-sub { display: block; font-size: clamp(11px,.85vw,13px); color: #c7d6ec; margin-top: 7px; line-height: 1.4; }
+  /* connector between tiers (the relationship verb, from the one-pager) */
+  .mm-link { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 7px 0; pointer-events: none; }
+  .mm-link-line { width: 1px; height: 12px; background: var(--border-strong); }
+  .mm-link-verb { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: .02em; }
 
-  /* branch wrapper + node */
-  .mm-branch { position: absolute; left: var(--bx); top: var(--by); transform: translate(-50%,-50%); width: 0; height: 0; }
-  .mm-node { position: absolute; left: 0; top: 0; transform: translate(-50%,-50%); width: clamp(186px,15vw,236px); display: flex; flex-direction: column; gap: 4px; text-align: left; cursor: pointer; background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 15px 16px; box-shadow: var(--shadow); font-family: var(--font-body); transition: transform .16s, border-color .16s, box-shadow .16s, opacity .35s; }
-  .mm-node-cue { color: var(--teal-strong); width: 26px; height: 26px; margin-bottom: 2px; }
-  .mm-node-cue svg { width: 26px; height: 26px; }
-  .mm-node:hover { border-color: var(--teal); box-shadow: var(--shadow-lift); transform: translate(-50%,-50%) translateY(-3px); }
-  .mm-node:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
-  .mm-node[aria-expanded="true"] { border-color: var(--teal); border-width: 1.5px; box-shadow: var(--shadow-lift); }
-  .mm-node-t { font-family: var(--font-display); font-weight: 600; font-size: clamp(15px,1.1vw,17px); color: var(--heading); line-height: 1.2; }
-  .mm-node-teaser { font-size: 12.5px; color: var(--muted); line-height: 1.3; }
-  /* recede the non-focused branches on drill/deep */
-  .mm-section:is([data-view="drill"],[data-view="deep"]) .mm-branch { opacity: .16; }
-  .mm-section:is([data-view="drill"],[data-view="deep"]) .mm-branch.is-active { opacity: 1; }
-  .mm-branch:not(.is-active) .mm-node { pointer-events: none; }
-  .mm-section[data-view="overview"] .mm-branch { opacity: 1; }
-  .mm-section[data-view="overview"] .mm-branch .mm-node { pointer-events: auto; }
-
-  /* L2 clusters (fan) */
-  .mm-cluster { position: absolute; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 12px; width: max-content; }
-  .mm-branch[data-side="left"] .mm-cluster { left: 132px; }
-  .mm-branch[data-side="right"] .mm-cluster { right: 132px; align-items: flex-end; }
-  .mm-cluster[hidden] { display: none; }
-  .mm-sub { background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 11px 15px; font-family: var(--font-body); font-size: 14px; font-weight: 500; color: var(--heading); cursor: pointer; box-shadow: var(--shadow); white-space: nowrap; transition: transform .14s, border-color .14s, box-shadow .14s, opacity .3s; opacity: 0; transform: translateY(6px); }
-  .mm-branch.is-active .mm-sub { opacity: 1; transform: none; }
-  .mm-branch.is-active .mm-sub:nth-child(1){ transition-delay: .04s; } .mm-branch.is-active .mm-sub:nth-child(2){ transition-delay: .09s; } .mm-branch.is-active .mm-sub:nth-child(3){ transition-delay: .14s; } .mm-branch.is-active .mm-sub:nth-child(4){ transition-delay: .19s; }
-  .mm-sub:hover { border-color: var(--teal); color: var(--teal-strong); box-shadow: var(--shadow-lift); transform: translateX(2px); }
-  .mm-sub:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
-
-  /* platform pipeline cluster (signature) */
-  .mm-pipeline { flex-direction: column; gap: 16px; align-items: stretch !important; }
-  .mm-branch[data-side="right"] .mm-pipeline { right: 132px; }
-  .mm-lane { display: flex; align-items: stretch; gap: 4px; }
-  .mm-step { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; text-align: left; width: 150px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 12px 13px; cursor: pointer; box-shadow: var(--shadow); font-family: var(--font-body); transition: border-color .14s, box-shadow .14s, transform .14s; opacity: 0; transform: translateY(8px); }
-  .mm-branch.is-active .mm-step { opacity: 1; transform: none; }
-  .mm-branch.is-active .mm-step:nth-of-type(1){ transition-delay:.05s;} .mm-branch.is-active .mm-step:nth-of-type(2){ transition-delay:.18s;} .mm-branch.is-active .mm-step:nth-of-type(3){ transition-delay:.31s;} .mm-branch.is-active .mm-step:nth-of-type(4){ transition-delay:.44s;}
-  .mm-step:hover { border-color: var(--teal); box-shadow: var(--shadow-lift); }
-  .mm-step:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
-  .mm-step-n { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: var(--radius); background: var(--teal); color: #fff; font-family: var(--font-mono); font-size: 12px; font-weight: 600; }
-  .mm-step-t { font-family: var(--font-display); font-weight: 600; font-size: 13.5px; color: var(--heading); line-height: 1.25; }
-  .mm-flow-arrow { width: 22px; height: 22px; align-self: center; color: var(--teal); flex: none; }
-  .mm-branch.is-active .mm-flow-arrow { animation: mmArrow 1.8s ease-in-out infinite; }
-  @keyframes mmArrow { 0%,100% { opacity: .35; transform: translateX(-2px); } 50% { opacity: 1; transform: translateX(2px); } }
-  .mm-sap { display: flex; flex-direction: column; gap: 3px; justify-content: center; width: 168px; background: var(--navy); color: #fff; border-radius: var(--radius); padding: 12px 14px; box-shadow: var(--shadow-lift); opacity: 0; transition: opacity .3s .55s; }
-  .mm-branch.is-active .mm-sap { opacity: 1; }
-  .mm-sap-t { font-family: var(--font-display); font-weight: 600; font-size: 17px; }
-  .mm-sap-s { font-size: 11px; color: #c7d6ec; }
-  .mm-docks { display: flex; gap: 12px; flex-wrap: wrap; }
-
-  /* minimap */
-  .mm-minimap { position: absolute; left: 24px; bottom: 22px; z-index: 6; width: 132px; height: 92px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 8px; opacity: .92; transition: opacity .3s, transform .3s; }
-  .mm-section[data-view="overview"] .mm-minimap { opacity: 0; transform: translateY(8px); pointer-events: none; }
-  .mm-minimap svg { width: 100%; height: 100%; overflow: visible; }
-  .mm-mini-edge { stroke: var(--border-strong); stroke-width: 4; }
-  .mm-mini-hub { fill: var(--navy); }
-  .mm-mini-dot { fill: var(--border-strong); cursor: pointer; transition: fill .2s; }
-  .mm-mini-dot:hover { fill: var(--teal); }
-  .mm-mini-dot.is-active { fill: var(--teal); }
-  .mm-mini-view { fill: rgba(14,124,134,.12); stroke: var(--teal); stroke-width: 6; transition: all .4s cubic-bezier(.22,.61,.36,1); }
-
-  /* L3 side-rail */
-  .mm-rail { position: absolute; top: 0; right: 0; width: min(560px, 46vw); height: 100%; background: var(--surface); border-left: 1px solid var(--border); box-shadow: -18px 0 44px rgba(2,18,43,.12); z-index: 7; display: flex; flex-direction: column; transform: translateX(100%); transition: transform .42s cubic-bezier(.22,.61,.36,1); }
-  .mm-section[data-view="deep"] .mm-rail { transform: none; }
-  .mm-rail[hidden] { display: flex; }
-  .mm-rail-head { display: flex; justify-content: flex-end; padding: 14px 16px 0; }
-  .mm-rail-close { background: none; border: 1px solid var(--border-strong); border-radius: var(--radius); width: 34px; height: 34px; cursor: pointer; color: var(--muted); font-size: 15px; }
-  .mm-rail-close:hover { border-color: var(--teal); color: var(--teal-strong); }
-  .mm-rail-body { flex: 1; overflow-y: auto; padding: 8px 34px 40px; }
+  /* open-read area (full-width, centered) */
+  .mm-open { max-width: 880px; margin: 0 auto; }
+  .mm-section[data-view="overview"] .mm-open { display: none; }
+  .mm-locator { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 24px auto 4px; }
+  .mm-loc { display: inline-flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 6px 14px 6px 11px; font-family: var(--font-body); font-size: 12.5px; font-weight: 500; color: var(--muted); cursor: pointer; transition: border-color .14s, color .14s, background .14s; }
+  .mm-loc-n { font-family: var(--font-mono); font-size: 10.5px; opacity: .7; }
+  .mm-loc:hover { border-color: var(--teal); color: var(--teal-strong); }
+  .mm-loc.is-active { background: var(--teal); border-color: var(--teal); color: #fff; }
+  .mm-loc.is-active .mm-loc-n { opacity: .85; }
+  .mm-read { margin-top: 20px; }
   .mm-panel { animation: mmFade .3s ease; }
   .mm-panel[hidden] { display: none; }
-  .mm-panel > .eyebrow { margin-bottom: 10px; }
+  .mm-panel > .eyebrow { margin-bottom: 8px; }
   .mm-panel > h2 { margin-bottom: 8px; }
   .mm-panel > h2:focus-visible, .mm-panel h3:focus-visible { outline: none; }
   @keyframes mmFade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-  /* the viewport dims behind the rail but stays interactive */
-  .mm-section[data-view="deep"] .mm-viewport::after { content: ""; position: absolute; inset: 0; background: rgba(2,18,43,.04); pointer-events: none; }
 
   /* persistent CTA pill */
   .mm-cta-pill { position: fixed; right: 18px; bottom: 78px; z-index: 61; display: inline-flex; align-items: center; background: var(--teal); color: #fff; border-radius: var(--radius-pill); padding: 12px 22px; font-family: var(--font-body); font-size: 14px; font-weight: 600; text-decoration: none; box-shadow: 0 6px 20px rgba(14,124,134,.4); transition: transform .15s, background .15s; }
@@ -730,38 +680,31 @@
 
   .mm-sr-title { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
-  /* ---- mobile: vertical stacked map, same DOM ---- */
+  /* hero problem strip (folds the problem into the hero zone) */
+  .hero-problem { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--surface); }
+  .hero-problem .wrap { padding-top: 20px; padding-bottom: 20px; }
+  .hero-problem p { margin: 0; max-width: 820px; color: var(--text); font-size: clamp(14.5px,1.3vw,16.5px); line-height: 1.55; }
+  .hero-problem b { color: var(--heading); font-weight: 600; }
+
+  /* compact FAQ (why now + answers) */
+  .faq-section .faq-block + .faq-block { margin-top: 40px; padding-top: 36px; border-top: 1px solid var(--border); }
+  .faq-why { display: grid; gap: 10px; margin-top: 14px; max-width: 780px; }
+  .faq-why p { margin: 0; line-height: 1.5; }
+  .faq-why b { color: var(--heading); }
+
   @media (max-width: 760px) {
-    .mm-viewport { position: static; width: auto; margin-left: 0; height: auto; min-height: 0; overflow: visible; margin-top: 18px; }
-    .mm-stage { position: static; transform: none !important; display: flex; flex-direction: column; gap: 12px; }
-    .mm-edges, .mm-ring, .mm-minimap { display: none; }
-    .mm-hub { position: static; transform: none; width: 100%; }
-    .mm-branch { position: static; transform: none; width: 100%; height: auto; opacity: 1 !important; }
-    .mm-node { position: static; transform: none !important; width: 100% !important; }
-    .mm-node:hover { transform: none !important; }
-    .mm-cluster { position: static; transform: none; width: 100%; margin-top: 10px; padding-left: 16px; border-left: 2px solid var(--border); }
-    .mm-branch[data-side="right"] .mm-cluster { align-items: stretch; }
-    .mm-sub, .mm-step { opacity: 1 !important; transform: none !important; white-space: normal; width: 100%; }
-    .mm-lane { flex-direction: column; align-items: stretch; }
-    .mm-flow-arrow { transform: rotate(90deg); align-self: flex-start; }
-    .mm-sap { width: 100%; }
-    .mm-rail { position: static; width: 100%; height: auto; transform: none; border-left: none; border-top: 1px solid var(--border); box-shadow: none; }
-    .mm-rail-body { padding: 8px 4px 20px; }
-    .mm-back { position: static; display: inline-block; margin: 12px 0 0 30px; }
-    .mm-crumbs { position: static; margin: 14px 0 0 30px; }
+    .mm-tier { padding: 16px 15px; gap: 13px; }
+    .mm-tier-go { display: none; }
     .mm-cta-pill { right: 14px; bottom: 70px; }
   }
-
   @media (prefers-reduced-motion: reduce) {
-    .mm-stage, .mm-rail, .mm-mini-view { transition: none !important; }
-    .mm-flow, .mm-ring, .mm-flow-arrow { animation: none !important; }
-    .mm-panel, .mm-sub, .mm-step, .mm-sap { animation: none !important; opacity: 1 !important; transform: none !important; transition: none !important; }
-    .mm-node, .mm-edge { transition: none; }
-    .mm-node:hover { transform: translate(-50%,-50%); }
+    .mm-tier, .mm-tier-go, .mm-loc { transition: none !important; }
+    .mm-tier:hover { transform: none; }
+    .mm-panel { animation: none !important; }
   }
 </style>
 </head>
-<body data-updated="2026-06-16">
+<body data-updated="2026-06-18">
 
 <nav class="site-nav">
   <a class="nav-left" href="#top" aria-label="Brisken OnePilot, back to top">
@@ -770,9 +713,9 @@
     <span class="nav-product">OnePilot</span>
   </a>
   <div class="nav-links">
-    <a href="#problem">Problem</a>
     <a href="#treasury-central">TreasuryCentral</a>
-    <a href="#platform">Platform</a>
+    <a href="#onepilot">OnePilot</a>
+    <a href="#applications">Applications</a>
     <a href="#why-now">Why now</a>
   </div>
   <div class="nav-right">
@@ -873,6 +816,12 @@
   </div>
 </header>
 
+<section class="hero-problem" id="problem">
+  <div class="wrap">
+    <p><b>The problem we remove.</b> Most SAP finance teams run several brittle, hand-built feeds to move market data, trades, bank files and remittances in and out of SAP. They break when a provider changes a field or the person who built them leaves: no audit trail, no owner, no monitoring. TreasuryCentral takes them off your team.</p>
+  </div>
+</section>
+
 <div class="trust-band">
   <div class="wrap">
     <p class="trust-tier-label">Trusted by teams at</p>
@@ -898,11 +847,11 @@
   </div>
 </div>
 
-<section class="section mm-section" id="map" data-view="overview" aria-label="Explore the OnePilot platform">
-  <h2 class="mm-sr-title">OnePilot platform map</h2>
+<section class="section mm-section" id="map" data-view="overview" aria-label="The TreasuryCentral stack">
+  <h2 class="mm-sr-title">The TreasuryCentral stack</h2>
   <div class="wrap mm-head">
-    <span class="eyebrow">Explore OnePilot</span>
-    <p class="section-sub mm-hint">Click a branch to drill in. Everything OnePilot does with your financial data, governed end to end, in one map.</p>
+    <span class="eyebrow">The architecture</span>
+    <p class="section-sub mm-hint">One interface on top; the AI layer, the applications and your SAP data underneath. Open any layer to see what it does.</p>
   </div>
 
   <nav class="mm-crumbs" aria-label="Map location" aria-live="polite">
@@ -910,92 +859,40 @@
   </nav>
   <button class="mm-back" type="button" hidden>&#8592; Back</button>
 
-  <div class="mm-viewport">
-    <div class="mm-stage">
-      <svg class="mm-edges" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-          <circle class="mm-ring" cx="500" cy="350" r="118"/>
-          <path class="mm-edge" data-edge="problem" d="M500 350 L230 150"/>
-          <path class="mm-edge" data-edge="treasury-central" d="M500 350 L200 350"/>
-          <path class="mm-edge" data-edge="applications" d="M500 350 L230 550"/>
-          <path class="mm-edge" data-edge="platform" d="M500 350 L770 150"/>
-          <path class="mm-edge" data-edge="why-now" d="M500 350 L800 350"/>
-          <path class="mm-edge" data-edge="answers" d="M500 350 L770 550"/>
-          <path class="mm-flow" data-flow="problem" style="animation-delay:0.0s" d="M230 150 L500 350"/>
-          <path class="mm-flow" data-flow="treasury-central" style="animation-delay:-0.9s" d="M200 350 L500 350"/>
-          <path class="mm-flow" data-flow="applications" style="animation-delay:-1.8s" d="M230 550 L500 350"/>
-          <path class="mm-flow" data-flow="platform" style="animation-delay:-2.7s" d="M770 150 L500 350"/>
-          <path class="mm-flow" data-flow="why-now" style="animation-delay:-3.6s" d="M800 350 L500 350"/>
-          <path class="mm-flow" data-flow="answers" style="animation-delay:-4.5s" d="M770 550 L500 350"/>
-        </svg>
-      <div class="mm-hub" aria-hidden="true">
-        <span class="mm-hub-name">OnePilot</span>
-        <span class="mm-hub-sub">Governed financial-data integration for SAP</span>
-      </div>
-        <div class="mm-branch" data-branch="problem" data-side="left" style="--bx:23%;--by:21.5%">
-          <button class="mm-node" id="node-problem" data-mm="problem" data-fan="0" aria-expanded="false" aria-controls="problem">
-            <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 14.5 7 17a3.5 3.5 0 0 1-5-5l2.5-2.5"/><path d="m14.5 9.5 2.5-2.5a3.5 3.5 0 0 1 5 5l-2.5 2.5"/><path d="M9 15l2-2M13 11l2-2" stroke-dasharray="1 2.4"/></svg></span>
-            <span class="mm-node-t">The problem</span><span class="mm-node-teaser">Shadow feeds no one owns</span>
-          </button>
-          
-        </div>
-        <div class="mm-branch" data-branch="treasury-central" data-side="left" style="--bx:20%;--by:50%">
-          <button class="mm-node" id="node-treasury-central" data-mm="treasury-central" data-fan="1" aria-expanded="false" aria-controls="treasury-central">
-            <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 9v11"/></svg></span>
-            <span class="mm-node-t">TreasuryCentral</span><span class="mm-node-teaser">One cockpit for treasury</span>
-          </button>
-          <div class="mm-cluster" data-branch="treasury-central" role="group" aria-label="TreasuryCentral detail" hidden><button class="mm-sub" data-mm="treasury-central" data-sub="money">One view of the money</button><button class="mm-sub" data-mm="treasury-central" data-sub="fx">FX & market data, governed</button><button class="mm-sub" data-mm="treasury-central" data-sub="control">Control built in</button></div>
-        </div>
-        <div class="mm-branch" data-branch="applications" data-side="left" style="--bx:23%;--by:78.5%">
-          <button class="mm-node" id="node-applications" data-mm="applications" data-fan="1" aria-expanded="false" aria-controls="applications">
-            <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
-            <span class="mm-node-t">The applications</span><span class="mm-node-teaser">Buy one job, run it in weeks</span>
-          </button>
-          <div class="mm-cluster" data-branch="applications" role="group" aria-label="The applications detail" hidden><button class="mm-sub" data-mm="applications" data-sub="mdh">Market Data Hub</button><button class="mm-sub" data-mm="applications" data-sub="bst">BST, Brisken Smart Trading</button><button class="mm-sub" data-mm="applications" data-sub="rag">Remittance Advice Gate</button><button class="mm-sub" data-mm="applications" data-sub="set">On-platform set</button></div>
-        </div>
-        <div class="mm-branch" data-branch="platform" data-side="right" style="--bx:77%;--by:21.5%">
-          <button class="mm-node" id="node-platform" data-mm="platform" data-fan="1" aria-expanded="false" aria-controls="platform">
-            <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3 4 14h7l-1 7 9-11h-7z"/></svg></span>
-            <span class="mm-node-t">The autonomous layer</span><span class="mm-node-teaser">OnePilot Agents on SAP BTP</span>
-          </button>
-          <div class="mm-cluster mm-pipeline" data-branch="platform" role="group" aria-label="The autonomous layer detail" hidden><div class="mm-lane"><button class="mm-step" data-mm="platform" data-sub="ingest"><span class="mm-step-n">1</span><span class="mm-step-t">Ingest</span></button><svg class="mm-flow-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg><button class="mm-step" data-mm="platform" data-sub="validate"><span class="mm-step-n">2</span><span class="mm-step-t">Validate & normalize</span></button><svg class="mm-flow-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg><button class="mm-step" data-mm="platform" data-sub="govern"><span class="mm-step-n">3</span><span class="mm-step-t">Govern</span></button><svg class="mm-flow-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg><button class="mm-step" data-mm="platform" data-sub="distribute"><span class="mm-step-n">4</span><span class="mm-step-t">Distribute into SAP</span></button><div class="mm-sap"><span class="mm-sap-t">SAP</span><span class="mm-sap-s">S/4HANA &middot; TRM &middot; Cash &middot; Credit</span></div></div><div class="mm-docks"><button class="mm-sub" data-mm="platform" data-sub="agents">OnePilot Agents</button><button class="mm-sub" data-mm="platform" data-sub="conn">Connectivity</button><button class="mm-sub" data-mm="platform" data-sub="weeks">Live in weeks</button></div></div>
-        </div>
-        <div class="mm-branch" data-branch="why-now" data-side="right" style="--bx:80%;--by:50%">
-          <button class="mm-node" id="node-why-now" data-mm="why-now" data-fan="0" aria-expanded="false" aria-controls="why-now">
-            <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4M9 15h4l-2-2m2 2-2 2"/></svg></span>
-            <span class="mm-node-t">Why now</span><span class="mm-node-teaser">Your S/4HANA moment</span>
-          </button>
-          
-        </div>
-        <div class="mm-branch" data-branch="answers" data-side="right" style="--bx:77%;--by:78.5%">
-          <button class="mm-node" id="node-answers" data-mm="answers" data-fan="1" aria-expanded="false" aria-controls="answers">
-            <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 4.2 1.5c0 1.6-2 2.1-2 3.3M12 17h.01"/></svg></span>
-            <span class="mm-node-t">Answers</span><span class="mm-node-teaser">The questions buyers search</span>
-          </button>
-          <div class="mm-cluster" data-branch="answers" role="group" aria-label="Answers detail" hidden><button class="mm-sub" data-mm="answers" data-sub="q1">Bloomberg into SAP TRM</button><button class="mm-sub" data-mm="answers" data-sub="q2">CAMT.086 bank fees</button><button class="mm-sub" data-mm="answers" data-sub="q3">AI reads remittance emails</button><button class="mm-sub" data-mm="answers" data-sub="cmp">OnePilot vs the usual paths</button></div>
-        </div>
-    </div>
+  <div class="mm-stack" aria-label="The TreasuryCentral stack, top to bottom">
+    <button class="mm-tier is-product" type="button" data-tier="treasury-central" id="node-treasury-central" aria-expanded="false" aria-controls="treasury-central">
+      <span class="mm-tier-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 9v11"/></svg></span>
+      <span class="mm-tier-main"><span class="mm-tier-name">TreasuryCentral</span><span class="mm-tier-role">The universal interface. The single screen treasury works in.</span></span>
+      <svg class="mm-tier-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+    </button>
+    <span class="mm-link" aria-hidden="true"><span class="mm-link-line"></span><span class="mm-link-verb">runs on</span><span class="mm-link-line"></span></span>
+    <button class="mm-tier" type="button" data-tier="onepilot" id="node-onepilot" aria-expanded="false" aria-controls="onepilot">
+      <span class="mm-tier-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3 4 14h7l-1 7 9-11h-7z"/></svg></span>
+      <span class="mm-tier-main"><span class="mm-tier-name">OnePilot</span><span class="mm-tier-role">The AI layer. Autonomous functions that run everything below, governed; you set the rules and approve exceptions.</span></span>
+      <svg class="mm-tier-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+    </button>
+    <span class="mm-link" aria-hidden="true"><span class="mm-link-line"></span><span class="mm-link-verb">brings together</span><span class="mm-link-line"></span></span>
+    <button class="mm-tier" type="button" data-tier="applications" id="node-applications" aria-expanded="false" aria-controls="applications">
+      <span class="mm-tier-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
+      <span class="mm-tier-main"><span class="mm-tier-name">The applications</span><span class="mm-tier-role">The capabilities OnePilot orchestrates and TreasuryCentral surfaces.</span><span class="mm-tier-chips">Market Data Hub &middot; Brisken Smart Trading &middot; Remittance Advice Gate</span></span>
+      <svg class="mm-tier-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+    </button>
+    <span class="mm-link" aria-hidden="true"><span class="mm-link-line"></span><span class="mm-link-verb">on</span><span class="mm-link-line"></span></span>
+    <button class="mm-tier is-base" type="button" data-tier="sap" id="node-sap" aria-expanded="false" aria-controls="sap">
+      <span class="mm-tier-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4z"/><path d="M3 7v10l9 4 9-4V7M3 12l9 4 9-4"/></svg></span>
+      <span class="mm-tier-main"><span class="mm-tier-name">Your SAP applications &amp; data</span><span class="mm-tier-role">The systems and data it all sits on, in and out of SAP, full audit trail.</span><span class="mm-tier-chips">S/4HANA &middot; TRM &middot; Cash &middot; Credit</span></span>
+      <svg class="mm-tier-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+    </button>
   </div>
 
-  <div class="mm-minimap" aria-hidden="true">
-    <svg viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet">
-      <line class="mm-mini-edge" x1="500" y1="350" x2="230" y2="150"/><line class="mm-mini-edge" x1="500" y1="350" x2="200" y2="350"/><line class="mm-mini-edge" x1="500" y1="350" x2="230" y2="550"/><line class="mm-mini-edge" x1="500" y1="350" x2="770" y2="150"/><line class="mm-mini-edge" x1="500" y1="350" x2="800" y2="350"/><line class="mm-mini-edge" x1="500" y1="350" x2="770" y2="550"/>
-      <circle class="mm-mini-dot" data-dot="problem" cx="230.0" cy="150.5" r="34"/><circle class="mm-mini-dot" data-dot="treasury-central" cx="200.0" cy="350.0" r="34"/><circle class="mm-mini-dot" data-dot="applications" cx="230.0" cy="549.5" r="34"/><circle class="mm-mini-dot" data-dot="platform" cx="770.0" cy="150.5" r="34"/><circle class="mm-mini-dot" data-dot="why-now" cx="800.0" cy="350.0" r="34"/><circle class="mm-mini-dot" data-dot="answers" cx="770.0" cy="549.5" r="34"/>
-      <circle class="mm-mini-hub" cx="500" cy="350" r="44"/>
-      <rect class="mm-mini-view" x="0" y="0" width="1000" height="700"/>
-    </svg>
-  </div>
-
-  <aside class="mm-rail" aria-label="Detail" hidden>
-    <div class="mm-rail-head">
-      <span class="mm-rail-eyebrow"></span>
-      <button class="mm-rail-close" type="button" aria-label="Close detail">&#10005;</button>
+  <div class="mm-open">
+    <div class="mm-locator" role="tablist" aria-label="Stack layers">
+      <button class="mm-loc" type="button" role="tab" data-tier="treasury-central"><span class="mm-loc-n">1</span>TreasuryCentral</button>
+      <button class="mm-loc" type="button" role="tab" data-tier="onepilot"><span class="mm-loc-n">2</span>OnePilot</button>
+      <button class="mm-loc" type="button" role="tab" data-tier="applications"><span class="mm-loc-n">3</span>The applications</button>
+      <button class="mm-loc" type="button" role="tab" data-tier="sap"><span class="mm-loc-n">4</span>SAP data</button>
     </div>
-    <div class="mm-rail-body">
-        <section class="mm-panel" id="problem" hidden aria-labelledby="node-problem">
-          <span class="eyebrow">The problem</span>
-          <h2>A shadow integration is any SAP data feed built by hand that no one maintains</h2>
-          <p class="section-sub">It breaks when a provider changes a field, a person leaves, or the migration team finds it: no audit trail, no owner, no monitoring. Most SAP finance teams run several, across market data, trades, bank files and remittances.</p>
-        </section>
+    <div class="mm-read">
         <section class="mm-panel" id="treasury-central" hidden aria-labelledby="node-treasury-central">
           <span class="eyebrow">The cockpit</span>
           <h2>TreasuryCentral: one cockpit for the whole treasury</h2>
@@ -1030,8 +927,8 @@
           </div>
           <p class="section-sub" style="margin-top:14px;">On the same platform: Cash Flow &amp; Exposure Hub, Bank Fee Portal, Credit Data Hub, ESG Data Hub, plus the AI Digital Workforce as a cross-sell.</p>
         </section>
-        <section class="mm-panel" id="platform" hidden aria-labelledby="node-platform">
-          <span class="eyebrow">The autonomous layer</span>
+        <section class="mm-panel" id="onepilot" hidden aria-labelledby="node-onepilot">
+          <span class="eyebrow">The AI layer</span>
           <h2>The autonomous layer that runs it, on SAP BTP</h2>
           <p class="section-sub">A no-code orchestration layer on SAP Business Technology Platform. OnePilot Agents learn your systems and recommend each mapping; you approve it, and the feed runs governed end to end, SAP and non-SAP, both ways.</p>
           <div class="flow">
@@ -1079,65 +976,18 @@
             </div>
           </div>
         </section>
-        <section class="mm-panel" id="why-now" hidden aria-labelledby="node-why-now">
-          <span class="eyebrow">Why now</span>
-          <h2>Your S/4HANA migration is the moment these feeds get decided</h2>
-          <p class="section-sub">SAP ends mainstream maintenance for ECC in 2027, with extended maintenance to 2030. Migration is when the custom interfaces feeding market data, curves and bank files into the old system become legacy code the team has to rebuild, or replace with a product.</p>
+        <section class="mm-panel" id="sap" hidden aria-labelledby="node-sap">
+          <span class="eyebrow">The foundation</span>
+          <h2>Your SAP applications and data</h2>
+          <p class="section-sub">The systems and data it all sits on. OnePilot moves data in and out of SAP, both ways, with a full audit trail on every record, no ABAP and no custom interface for your team to own.</p>
           <div class="grid-3">
-            <div class="card">
-              <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7M12 11v10"/></svg></span>
-              <h3>Buy instead of rebuild</h3>
-              <p>Move the feed onto a managed hub once, at the exact moment it is on the table.</p>
-            </div>
-            <div class="card">
-              <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5zM3 13l9 5 9-5"/></svg></span>
-              <h3>Clean core</h3>
-              <p>No new custom code in SAP, so nothing breaks on the next upgrade.</p>
-            </div>
-            <div class="card">
-              <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V6z"/><path d="M12 9v4M12 16h.01"/></svg></span>
-              <h3>Lower migration risk</h3>
-              <p>Governed, monitored data from day one, instead of a script no one wants to own.</p>
-            </div>
+            <div class="card"><h3>S/4HANA and TRM</h3><p>Market data, curves, trades and positions land in Treasury and Risk Management, governed end to end.</p></div>
+            <div class="card"><h3>Cash and Credit</h3><p>Bank files, remittances and exposures post into Cash and Credit Management, reconciled to source.</p></div>
+            <div class="card"><h3>In and out, both ways</h3><p>SAP and non-SAP sources on a clean core: nothing custom added to SAP, so nothing breaks on the next upgrade.</p></div>
           </div>
-        </section>
-        <section class="mm-panel" id="answers" hidden aria-labelledby="node-answers">
-          <span class="eyebrow">Answers</span>
-          <h2>The questions SAP teams actually search</h2>
-          <p class="section-sub">Short, honest answers to the integration questions buyers ask AI search and Google.</p>
-          <div class="answer">
-            <div class="answer-head">
-              <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 4.2 1.5c0 1.6-2 2.1-2 3.3M12 17h.01"/></svg></span>
-              <h3>How do I get Bloomberg market data into SAP TRM automatically?</h3>
-            </div>
-            <p>The SAP-native path is a Datafeed RFC connection with per-provider function lists and translation tables, or a per-security custom interface, both of which need ABAP upkeep and break when Bloomberg changes a field. A governed market-data hub ingests Bloomberg once, normalizes it, and distributes into SAP TRM with an audit trail and exception alerts, no code.</p>
-          </div>
-          <div class="answer">
-            <div class="answer-head">
-              <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 4.2 1.5c0 1.6-2 2.1-2 3.3M12 17h.01"/></svg></span>
-              <h3>How do I automate CAMT.086 bank fee statement analysis in SAP?</h3>
-            </div>
-            <p>CAMT.086 is the ISO 20022 bank-fee-statement format that replaces TWIST BSB. SAP added native bank-fee analysis in S/4HANA 1809 via a Fiori app, but it expects clean CAMT.086 in; banks still send proprietary and TWIST formats. A bank-fee portal ingests any format, enriches for analytics, and distributes to the analyzer, so the fee review is not gated on format.</p>
-          </div>
-          <div class="answer">
-            <div class="answer-head">
-              <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 4.2 1.5c0 1.6-2 2.1-2 3.3M12 17h.01"/></svg></span>
-              <h3>Can AI read remittance advice emails and post them into SAP?</h3>
-            </div>
-            <p>Yes. Remittance advice arrives as unstructured email and PDF, which staff retype into SAP cash application. An AI-powered remittance gate reads the unstructured input, identifies and structures the data, and delivers it into SAP S/4HANA, with a monitor that trains it over time. A live agricultural-sector customer runs this on a ChatGPT-powered deployment.</p>
-          </div>
-          <h3 style="margin-top:30px;">OnePilot vs the usual paths</h3>
-          <table>
-            <thead><tr><th>Approach</th><th>Maintenance</th><th>Providers</th><th>Governance</th></tr></thead>
-            <tbody>
-              <tr><td>Custom Datafeed config</td><td>ABAP upkeep, breaks on field changes</td><td>One at a time</td><td>Build it yourself</td></tr>
-              <tr><td>Single-vendor interface</td><td>Tied to that vendor</td><td>That vendor only</td><td>Limited</td></tr>
-              <tr><td>OnePilot</td><td>No code, third-party-managed</td><td>Multi-vendor, swap freely</td><td>Audit trail and exceptions built in</td></tr>
-            </tbody>
-          </table>
         </section>
     </div>
-  </aside>
+  </div>
 
   <a class="mm-cta-pill" href="#demo">Book a demo<span class="mm-cta-note"> &middot; 15 to 20 min on your SAP setup</span></a>
 </section>
@@ -1165,6 +1015,55 @@
     <div class="cmd-proof" style="margin-top:30px;">
       <div class="cmd-proof-card"><span class="cmd-proof-tag">Live today</span><b>Agricultural customer</b><span>Posts remittances into S/4HANA on a governed AI gate.</span></div>
       <div class="cmd-proof-card"><span class="cmd-proof-tag">Live today</span><b>Chemicals customer</b><span>Runs an AI funding-request process across a complex SAP integration.</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="section faq-section" id="faq">
+  <div class="wrap">
+    <div class="faq-block" id="why-now">
+      <span class="eyebrow">Why now</span>
+      <h2>Your S/4HANA migration is the moment these feeds get decided</h2>
+      <p class="section-sub">SAP ends mainstream maintenance for ECC in 2027, with extended maintenance to 2030. Migration is when the custom interfaces feeding market data, curves and bank files into the old system become legacy code the team has to rebuild, or replace with a product.</p>
+      <div class="faq-why">
+        <p><b>Buy instead of rebuild.</b> Move the feed onto a managed hub once, at the exact moment it is on the table.</p>
+        <p><b>Clean core.</b> No new custom code in SAP, so nothing breaks on the next upgrade.</p>
+        <p><b>Lower migration risk.</b> Governed, monitored data from day one, instead of a script no one wants to own.</p>
+      </div>
+    </div>
+    <div class="faq-block" id="answers">
+      <span class="eyebrow">Answers</span>
+      <h2>The questions SAP teams actually search</h2>
+      <div class="answer">
+        <div class="answer-head">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 4.2 1.5c0 1.6-2 2.1-2 3.3M12 17h.01"/></svg></span>
+          <h3>How do I get Bloomberg market data into SAP TRM automatically?</h3>
+        </div>
+        <p>The SAP-native path is a Datafeed RFC connection with per-provider function lists and translation tables, or a per-security custom interface, both of which need ABAP upkeep and break when Bloomberg changes a field. A governed market-data hub ingests Bloomberg once, normalizes it, and distributes into SAP TRM with an audit trail and exception alerts, no code.</p>
+      </div>
+      <div class="answer">
+        <div class="answer-head">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 4.2 1.5c0 1.6-2 2.1-2 3.3M12 17h.01"/></svg></span>
+          <h3>How do I automate CAMT.086 bank fee statement analysis in SAP?</h3>
+        </div>
+        <p>CAMT.086 is the ISO 20022 bank-fee-statement format that replaces TWIST BSB. SAP added native bank-fee analysis in S/4HANA 1809 via a Fiori app, but it expects clean CAMT.086 in; banks still send proprietary and TWIST formats. A bank-fee portal ingests any format, enriches for analytics, and distributes to the analyzer, so the fee review is not gated on format.</p>
+      </div>
+      <div class="answer">
+        <div class="answer-head">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 4.2 1.5c0 1.6-2 2.1-2 3.3M12 17h.01"/></svg></span>
+          <h3>Can AI read remittance advice emails and post them into SAP?</h3>
+        </div>
+        <p>Yes. Remittance advice arrives as unstructured email and PDF, which staff retype into SAP cash application. An AI-powered remittance gate reads the unstructured input, identifies and structures the data, and delivers it into SAP S/4HANA, with a monitor that trains it over time. A live agricultural-sector customer runs this on a ChatGPT-powered deployment.</p>
+      </div>
+      <h3 style="margin-top:30px;">OnePilot vs the usual paths</h3>
+      <table>
+        <thead><tr><th>Approach</th><th>Maintenance</th><th>Providers</th><th>Governance</th></tr></thead>
+        <tbody>
+          <tr><td>Custom Datafeed config</td><td>ABAP upkeep, breaks on field changes</td><td>One at a time</td><td>Build it yourself</td></tr>
+          <tr><td>Single-vendor interface</td><td>Tied to that vendor</td><td>That vendor only</td><td>Limited</td></tr>
+          <tr><td>OnePilot</td><td>No code, third-party-managed</td><td>Multi-vendor, swap freely</td><td>Audit trail and exceptions built in</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </section>
@@ -1210,7 +1109,7 @@
           <li><a href="#problem">The problem</a></li>
           <li><a href="#treasury-central">TreasuryCentral</a></li>
           <li><a href="#applications">Applications</a></li>
-          <li><a href="#platform">The autonomous layer</a></li>
+          <li><a href="#onepilot">The autonomous layer</a></li>
           <li><a href="#answers">Answers</a></li>
           <li><a href="#demo">Book a demo</a></li>
         </ul>
@@ -1227,7 +1126,7 @@
     </div>
     <div class="footer-bottom">
       <div>Brisken LLC &middot; The Woodlands, TX &middot; Prototype for internal review; layout and content only.</div>
-      <div>Last updated: 2026-06-17</div>
+      <div>Last updated: 2026-06-18</div>
     </div>
   </div>
 </footer>
@@ -1463,187 +1362,82 @@
 (function(){
   var map = document.getElementById('map');
   if (!map) return;
-  var PANELS = ['problem','treasury-central','applications','platform','why-now','answers'];
-  var FAN = { 'treasury-central':1, 'applications':1, 'answers':1, 'platform':1 };
-  var LABEL = { problem:'The problem','treasury-central':'TreasuryCentral', applications:'The applications', platform:'The autonomous layer','why-now':'Why now', answers:'Answers' };
-  var BR = { problem:[.23,.215,'left'], 'treasury-central':[.20,.50,'left'], applications:[.23,.785,'left'], platform:[.77,.215,'right'], 'why-now':[.80,.50,'right'], answers:[.77,.785,'right'] };
-  var stage = map.querySelector('.mm-stage');
-  var edges = map.querySelector('.mm-edges');
-  var rail  = map.querySelector('.mm-rail');
-  var crumbs= map.querySelector('.mm-crumbs');
-  var back  = map.querySelector('.mm-back');
-  var miniView = map.querySelector('.mm-mini-view');
+  var TIERS = ['treasury-central','onepilot','applications','sap'];
+  var LABEL = { 'treasury-central':'TreasuryCentral', onepilot:'OnePilot', applications:'The applications', sap:'SAP applications & data' };
+  var crumbs = map.querySelector('.mm-crumbs');
+  var back = map.querySelector('.mm-back');
   var mq = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
-  var mqMobile = window.matchMedia ? window.matchMedia('(max-width: 760px)') : null;
   function reduced(){ return mq && mq.matches; }
-  function mobile(){ return mqMobile && mqMobile.matches; }
-  function q(sel,root){ return (root||map).querySelector(sel); }
-  function branchEl(b){ return q('.mm-branch[data-branch="'+b+'"]'); }
-  function nodeFor(b){ return document.getElementById('node-'+b); }
-  function panelFor(b){ return document.getElementById(b); }
-  function edgeFor(b){ return edges ? edges.querySelector('.mm-edge[data-edge="'+b+'"]') : null; }
-  function clusterFor(b){ var br=branchEl(b); return br ? br.querySelector('.mm-cluster') : null; }
+  function panelFor(t){ return document.getElementById(t); }
+  function tierBtn(t){ return map.querySelector('.mm-tier[data-tier="'+t+'"]'); }
+  function locBtn(t){ return map.querySelector('.mm-loc[data-tier="'+t+'"]'); }
 
-  var S = { level:'overview', branch:null };
+  var S = { view:'overview', tier:null };
   var allowPush = false;
 
-  function curMatrix(){ var tr=getComputedStyle(stage).transform; try { return new DOMMatrixReadOnly(tr==='none'?'':tr); } catch(e){ return new DOMMatrixReadOnly(); } }
-  function camera(){
-    if (mobile()){ stage.style.removeProperty('--tx'); stage.style.removeProperty('--ty'); stage.style.removeProperty('--sc'); return; }
-    if (S.level === 'overview' || !S.branch){ stage.style.setProperty('--tx','0%'); stage.style.setProperty('--ty','0%'); stage.style.setProperty('--sc','1'); if(miniView){ miniView.setAttribute('x','0'); miniView.setAttribute('y','0'); miniView.setAttribute('width','1000'); miniView.setAttribute('height','700'); } return; }
-    var br = branchEl(S.branch); if (!br) return;
-    var vp = stage.parentNode.getBoundingClientRect();
-    var m = curMatrix(), cs = m.a || 1, ctx = m.e || 0, cty = m.f || 0;
-    var rects = [br.querySelector('.mm-node').getBoundingClientRect()];
-    var cl = br.querySelector('.mm-cluster'); if (cl && !cl.hidden) rects.push(cl.getBoundingClientRect());
-    var L=1e9,T=1e9,R=-1e9,B=-1e9;
-    rects.forEach(function(r){
-      var lx=(r.left-vp.left-ctx)/cs, rx=(r.right-vp.left-ctx)/cs, ty=(r.top-vp.top-cty)/cs, by=(r.bottom-vp.top-cty)/cs;
-      if(lx<L)L=lx; if(rx>R)R=rx; if(ty<T)T=ty; if(by>B)B=by;
+  function render(focus){
+    map.setAttribute('data-view', S.view);
+    if (S.tier) map.setAttribute('data-tier', S.tier); else map.removeAttribute('data-tier');
+    TIERS.forEach(function(t){
+      var on = (S.view==='open' && t===S.tier);
+      var p = panelFor(t); if (p) p.hidden = !on;
+      var b = tierBtn(t); if (b) b.setAttribute('aria-expanded', on?'true':'false');
+      var l = locBtn(t); if (l){ l.classList.toggle('is-active', on); l.setAttribute('aria-selected', on?'true':'false'); l.setAttribute('tabindex', on?'0':'-1'); }
     });
-    var bw=R-L, bh=B-T, bcx=(L+R)/2, bcy=(T+B)/2;
-    var railW = (S.level==='deep') ? Math.min(560, vp.width*0.46) : 0;
-    var availW = vp.width - railW, availH = vp.height, pad = 0.84;
-    var sc = Math.min((availW*pad)/bw, (availH*pad)/bh); sc = Math.max(0.72, Math.min(1.5, sc));
-    var tcx = railW ? (availW/2) : (vp.width/2), tcy = vp.height/2;
-    var txpx = tcx - sc*bcx, typx = tcy - sc*bcy;
-    stage.style.setProperty('--sc', sc.toFixed(3));
-    stage.style.setProperty('--tx', (txpx/vp.width*100).toFixed(2)+'%');
-    stage.style.setProperty('--ty', (typx/vp.height*100).toFixed(2)+'%');
-    if (miniView){ var b=BR[S.branch], fx=tcx/vp.width, fy=tcy/vp.height, w=1000/sc, h=700/sc; miniView.setAttribute('width',w.toFixed(0)); miniView.setAttribute('height',h.toFixed(0)); miniView.setAttribute('x',(b[0]*1000 - fx*w).toFixed(0)); miniView.setAttribute('y',(b[1]*700 - fy*h).toFixed(0)); }
-  }
-
-  function willChange(on){ if (reduced()) return; stage.style.willChange = on ? 'transform' : ''; }
-  stage.addEventListener('transitionend', function(){ willChange(false); });
-
-  function renderChrome(){
-    var html = '<button class="mm-crumb" type="button" data-go="overview"'+(S.level==='overview'?' aria-current="page"':'')+'>Map</button>';
-    if (S.branch){ html += '<span class="mm-crumb-sep" aria-hidden="true">›</span><button class="mm-crumb" type="button" data-go="drill" data-branch="'+S.branch+'"'+(S.level==='drill'?' aria-current="page"':'')+'>'+LABEL[S.branch]+'</button>'; }
-    if (S.level==='deep'){ html += '<span class="mm-crumb-sep" aria-hidden="true">›</span><button class="mm-crumb" type="button" aria-current="page">Detail</button>'; }
+    back.hidden = (S.view!=='open');
+    var html = '<button class="mm-crumb" type="button" data-go="overview"'+(S.view==='overview'?' aria-current="page"':'')+'>The stack</button>';
+    if (S.view==='open'){ html += '<span class="mm-crumb-sep" aria-hidden="true">&#8250;</span><button class="mm-crumb" type="button" aria-current="page">'+LABEL[S.tier]+'</button>'; }
     crumbs.innerHTML = html;
-    back.hidden = (S.level==='overview');
-    map.querySelectorAll('.mm-mini-dot').forEach(function(d){ d.classList.toggle('is-active', d.getAttribute('data-dot')===S.branch); });
+    var hash = (S.view==='open') ? ('#'+S.tier) : '#map';
+    if (allowPush && location.hash !== hash){ try { history.pushState({mmTier:S.tier}, '', hash); } catch(e){} }
+    if (focus==='panel' && S.tier){ var pp=panelFor(S.tier); var h=pp&&pp.querySelector('h2,h3'); if(h){ h.setAttribute('tabindex','-1'); h.focus({preventScroll:true}); } }
+    else if (focus==='tier' && S.tier){ var bb=tierBtn(S.tier); if(bb) bb.focus(); }
   }
 
-  function showCluster(b, show){ var c=clusterFor(b); if(c) c.hidden = !show; var br=branchEl(b); if(br) br.classList.toggle('is-active', !!show); }
+  function openTier(t, focus){ if (TIERS.indexOf(t)===-1) return; S.view='open'; S.tier=t; render(focus===undefined?'panel':focus); }
+  function closeTier(refocus){ var t=S.tier; S.view='overview'; S.tier=null; render(null); if (refocus!==false){ var b=t&&tierBtn(t); if(b) b.focus(); } }
 
-  function setPanel(b, on){
-    var n=nodeFor(b), p=panelFor(b), e=edgeFor(b);
-    if(n) n.setAttribute('aria-expanded', on?'true':'false');
-    if(p) p.hidden = !on;
-    if(e) e.classList.toggle('is-active', on);
-  }
-  function closePanels(except){ PANELS.forEach(function(b){ if(b!==except) setPanel(b,false); }); }
-
-  // render is the ONLY writer of view state
-  function render(focusTarget){
-    map.setAttribute('data-view', S.level);
-    if (S.branch) map.setAttribute('data-branch', S.branch); else map.removeAttribute('data-branch');
-    // branch active flags + clusters + edges
-    PANELS.forEach(function(b){
-      var br=branchEl(b), e=edgeFor(b);
-      var active = (b===S.branch && S.level!=='overview');
-      if(br) br.classList.toggle('is-active', active);
-      if(e) e.classList.toggle('is-active', active);
-      showCluster(b, active && !!FAN[b]);
-    });
-    // rail / panels
-    if (S.level==='deep' && S.branch){ rail.hidden=false; closePanels(S.branch); setPanel(S.branch,true); var ey=rail.querySelector('.mm-rail-eyebrow'); if(ey) ey.textContent=LABEL[S.branch]; }
-    else { closePanels(null); }
-    camera();
-    renderChrome();
-    // history + hash
-    var hash = '#map' + (S.branch?('/'+S.branch):'') + (S.level==='deep'?'/detail':'');
-    if (allowPush && location.hash !== hash){ try { history.pushState(S, '', hash); } catch(e){} }
-    // focus
-    if (focusTarget==='node' && S.branch){ var n=nodeFor(S.branch); if(n) n.focus(); }
-    else if (focusTarget==='panel' && S.branch){ var p=panelFor(S.branch); var h=p&&p.querySelector('h2,h3'); if(h){ h.setAttribute('tabindex','-1'); h.focus({preventScroll:true}); } }
-    else if (focusTarget==='cluster' && S.branch){ var c=clusterFor(S.branch); var f=c&&c.querySelector('.mm-sub,.mm-step'); if(f) f.focus(); }
-  }
-
-  function go(level, branch, focusTarget){ willChange(true); S.level=level; S.branch=(level==='overview')?null:branch; render(focusTarget); }
-
-  // branch node click: fan branches -> drill; direct branches -> deep
-  PANELS.forEach(function(b){
-    var n=nodeFor(b); if(!n) return;
-    n.addEventListener('click', function(){
-      if (S.level!=='overview' && S.branch===b){ go('overview',null,'node'); return; }
-      if (FAN[b]){ go('drill', b, 'cluster'); }
-      else { go('deep', b, 'panel'); }
-    });
+  map.querySelectorAll('.mm-tier').forEach(function(b){
+    b.addEventListener('click', function(){ var t=b.getAttribute('data-tier'); if (S.view==='open' && S.tier===t) closeTier(); else openTier(t,'panel'); });
   });
-  // sub-node / pipeline-step click -> deep
-  map.querySelectorAll('.mm-sub, .mm-step').forEach(function(s){
-    s.addEventListener('click', function(){ go('deep', s.getAttribute('data-mm'), 'panel'); });
+  map.querySelectorAll('.mm-loc').forEach(function(b){
+    b.addEventListener('click', function(){ openTier(b.getAttribute('data-tier'),'panel'); });
   });
-  // back + rail close + crumbs
-  back.addEventListener('click', function(){ popOne(); });
-  var rc = rail.querySelector('.mm-rail-close'); if(rc) rc.addEventListener('click', function(){ popOne(); });
-  crumbs.addEventListener('click', function(ev){ var c=ev.target.closest('.mm-crumb'); if(!c) return; var lvl=c.getAttribute('data-go'); if(lvl==='overview') go('overview',null,'node'); else if(lvl==='drill') go('drill', c.getAttribute('data-branch'),'cluster'); });
-  map.querySelectorAll('.mm-mini-dot').forEach(function(d){ d.addEventListener('click', function(){ var b=d.getAttribute('data-dot'); if(FAN[b]) go('drill',b,'cluster'); else go('deep',b,'panel'); }); });
+  back.addEventListener('click', function(){ closeTier(); });
+  crumbs.addEventListener('click', function(ev){ var c=ev.target.closest('.mm-crumb'); if (c && c.getAttribute('data-go')==='overview') closeTier(); });
 
-  function popOne(){
-    if (S.level==='deep'){ var b=S.branch; if (FAN[b]){ go('drill', b, 'cluster'); } else { go('overview', null, 'node'); var n=nodeFor(b); if(n) n.focus(); } }
-    else if (S.level==='drill'){ var b2=S.branch; go('overview', null, null); var n2=nodeFor(b2); if(n2) n2.focus(); }
-  }
-
-  // roving tabindex inside the active cluster (arrow keys)
-  map.addEventListener('keydown', function(ev){
-    if (S.level!=='drill') return;
-    var c=clusterFor(S.branch); if(!c) return;
-    var items=Array.prototype.slice.call(c.querySelectorAll('.mm-sub,.mm-step'));
-    if(!items.length || items.indexOf(document.activeElement)===-1) return;
-    var i=items.indexOf(document.activeElement);
-    if(ev.key==='ArrowDown'||ev.key==='ArrowRight'){ ev.preventDefault(); items[(i+1)%items.length].focus(); }
-    else if(ev.key==='ArrowUp'||ev.key==='ArrowLeft'){ ev.preventDefault(); items[(i-1+items.length)%items.length].focus(); }
-    else if(ev.key==='Home'){ ev.preventDefault(); items[0].focus(); }
-    else if(ev.key==='End'){ ev.preventDefault(); items[items.length-1].focus(); }
+  var loc = map.querySelector('.mm-locator');
+  if (loc) loc.addEventListener('keydown', function(ev){
+    if (['ArrowRight','ArrowLeft','Home','End'].indexOf(ev.key)===-1) return;
+    var i = TIERS.indexOf(S.tier); if (i===-1) return; ev.preventDefault();
+    var j = ev.key==='Home' ? 0 : ev.key==='End' ? TIERS.length-1 : ev.key==='ArrowRight' ? (i+1)%TIERS.length : (i-1+TIERS.length)%TIERS.length;
+    openTier(TIERS[j],'panel'); var nb=locBtn(TIERS[j]); if(nb) nb.focus();
   });
 
-  // Escape arbitration: fbPop > search > map
   document.addEventListener('keydown', function(ev){
     if (ev.key!=='Escape') return;
-    var fb=document.getElementById('fbPop'); if (fb && !fb.hidden){ return; }
-    var so=document.getElementById('searchOverlay'); if (so && so.classList.contains('open')){ return; }
-    if (S.level!=='overview'){ ev.stopPropagation(); popOne(); }
+    var fb=document.getElementById('fbPop'); if (fb && !fb.hidden) return;
+    var so=document.getElementById('searchOverlay'); if (so && so.classList.contains('open')) return;
+    if (S.view==='open'){ ev.stopPropagation(); closeTier(); }
   }, true);
 
-  // browser back / shared deep links
-  window.addEventListener('popstate', function(ev){ applyHash(false); });
-  function applyHash(focus){
-    var h=location.hash.replace(/^#/,'');
-    if (h===''||h==='map'){ go('overview', null, null); return; }
-    var parts=h.split('/'); // map / branch / detail
-    if (parts[0]!=='map'){ // legacy "#platform" deep link
-      if (PANELS.indexOf(parts[0])!==-1){ go('deep', parts[0], focus?'panel':null); }
-      return;
-    }
-    var b=parts[1];
-    if (PANELS.indexOf(b)===-1){ go('overview', null, null); return; }
-    if (parts[2]==='detail'){ go('deep', b, focus?'panel':null); }
-    else if (FAN[b]){ go('drill', b, null); }
-    else { go('deep', b, null); }
+  function applyHash(){
+    var h = location.hash.replace(/^#/,'');
+    if (h==='' || h==='map'){ if (S.view!=='overview') closeTier(false); return; }
+    if (TIERS.indexOf(h)!==-1){ openTier(h, null); map.scrollIntoView({ behavior: reduced()?'auto':'smooth', block:'start' }); }
   }
-
-  // legacy in-page links (nav/footer #platform etc.) open the map
+  window.addEventListener('popstate', function(){ applyHash(); });
+  window.addEventListener('hashchange', function(){ applyHash(); });
   document.addEventListener('click', function(ev){
-    var a=ev.target.closest && ev.target.closest('a[href^="#"]');
-    if(!a) return;
-    var id=a.getAttribute('href').slice(1);
-    if (PANELS.indexOf(id)===-1) return;
+    var a = ev.target.closest && ev.target.closest('a[href^="#"]'); if (!a) return;
+    var id = a.getAttribute('href').slice(1);
+    if (TIERS.indexOf(id)===-1) return;
     ev.preventDefault();
-    if (FAN[id]) go('drill', id, 'cluster'); else go('deep', id, 'panel');
-    map.scrollIntoView({ behavior: reduced()?'auto':'smooth', block:'start' });
+    openTier(id,'panel'); map.scrollIntoView({ behavior: reduced()?'auto':'smooth', block:'start' });
   });
-  // Ctrl/Cmd+K search sets location.hash directly -> react to it
-  window.addEventListener('hashchange', function(){ var h=location.hash.replace(/^#/,''); if (PANELS.indexOf(h)!==-1){ if (FAN[h]) go('drill',h,null); else go('deep',h,null); } });
 
-  if (mq && mq.addEventListener) mq.addEventListener('change', camera);
-  if (mqMobile && mqMobile.addEventListener) mqMobile.addEventListener('change', function(){ render(null); });
-
-  // boot
   var initial = location.hash.replace(/^#/,'');
-  if (initial && (initial.indexOf('map')===0 || PANELS.indexOf(initial)!==-1)) applyHash(false);
+  if (TIERS.indexOf(initial)!==-1) openTier(initial, null);
   else render(null);
   allowPush = true;
 })();
