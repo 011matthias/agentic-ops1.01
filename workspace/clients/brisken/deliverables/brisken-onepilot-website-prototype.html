@@ -656,6 +656,15 @@
   .mm-node.is-base { background: rgba(0,57,111,.05); }
   [data-theme="dark"] .mm-node.is-base { background: rgba(127,227,236,.06); }
 
+  /* the "why now" node: a separate wide pill centered under the map */
+  .mm-why-wrap { display: flex; justify-content: center; margin-top: 12px; }
+  .mm-section[data-view="open"] .mm-why-wrap { pointer-events: none; }
+  .mm-node.is-why { position: static; left: auto; top: auto; transform: none; flex-direction: row; align-items: center; justify-content: center; gap: 11px; width: min(360px, 84vw); max-width: 360px; padding: 13px 28px; border-radius: var(--radius-pill); border-style: dashed; }
+  .mm-node.is-why:hover { transform: translateY(-3px); }
+  .mm-node.is-why .mm-node-cue { width: 22px; height: 22px; }
+  .mm-node.is-why .mm-node-cue svg { width: 22px; height: 22px; }
+  .mm-node.is-why .mm-node-name { font-size: 15px; }
+
   /* open-read area (full-width, centered) */
   .mm-open { max-width: 880px; margin: 0 auto; }
   .mm-section[data-view="overview"] .mm-open { display: none; }
@@ -706,6 +715,8 @@
     .hero-split .hero-research .mini-stats { width: 100%; max-width: 100%; }
     .hero-split .hero-research .mini { grid-template-columns: 76px minmax(0, 1fr); }
     .faq-section table { display: block; overflow-x: auto; max-width: 100%; }
+    .mm-node.is-why { width: 100%; max-width: none; border-radius: 16px; justify-content: flex-start; }
+    .mm-why-wrap { margin-top: 0; }
   }
   @media (prefers-reduced-motion: reduce) {
     .mm-node, .mm-loc { transition: none !important; }
@@ -952,6 +963,13 @@
     </button>
   </div>
 
+  <div class="mm-why-wrap">
+    <button class="mm-node is-why" type="button" data-tier="why-now" id="node-why-now" aria-expanded="false" aria-controls="why-now">
+      <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.3a2.8 2.8 0 0 1 5.4 1c0 1.9-2.8 2.5-2.8 2.5"/><path d="M12 17h.01"/></svg></span>
+      <span class="mm-node-name">Why now</span>
+    </button>
+  </div>
+
   <div class="mm-open">
     <nav class="mm-crumbs" aria-label="Map location" aria-live="polite">
       <button class="mm-crumb" type="button" data-go="overview" aria-current="page">Map</button>
@@ -964,6 +982,7 @@
       <button class="mm-loc" type="button" role="tab" data-tier="bst"><span class="mm-loc-n">4</span>Smart Trading</button>
       <button class="mm-loc" type="button" role="tab" data-tier="rag"><span class="mm-loc-n">5</span>Remittance</button>
       <button class="mm-loc" type="button" role="tab" data-tier="sap"><span class="mm-loc-n">6</span>SAP</button>
+      <button class="mm-loc" type="button" role="tab" data-tier="why-now"><span class="mm-loc-n">7</span>Why now</button>
     </div>
     <div class="mm-read">
         <section class="mm-panel" id="treasury-central" hidden aria-labelledby="node-treasury-central">
@@ -1052,6 +1071,16 @@
             <div class="card"><h3>In and out, both ways</h3><p>SAP and non-SAP sources on a clean core: nothing custom added to SAP, so nothing breaks on the next upgrade.</p></div>
           </div>
         </section>
+        <section class="mm-panel" id="why-now" hidden aria-labelledby="node-why-now">
+          <span class="eyebrow">Why now</span>
+          <h2>Your S/4HANA migration is the moment these feeds get decided</h2>
+          <p class="section-sub">SAP ends mainstream maintenance for ECC in 2027, with extended maintenance to 2030. Migration is when the custom interfaces feeding market data, curves and bank files into the old system become legacy code the team has to rebuild, or replace with a product.</p>
+          <div class="faq-why">
+            <p><b>Buy instead of rebuild.</b> Move the feed onto a managed hub once, at the exact moment it is on the table.</p>
+            <p><b>Clean core.</b> No new custom code in SAP, so nothing breaks on the next upgrade.</p>
+            <p><b>Lower migration risk.</b> Governed, monitored data from day one, instead of a script no one wants to own.</p>
+          </div>
+        </section>
     </div>
   </div>
 
@@ -1088,16 +1117,6 @@
 
 <section class="section faq-section" id="faq">
   <div class="wrap">
-    <div class="faq-block" id="why-now">
-      <span class="eyebrow">Why now</span>
-      <h2>Your S/4HANA migration is the moment these feeds get decided</h2>
-      <p class="section-sub">SAP ends mainstream maintenance for ECC in 2027, with extended maintenance to 2030. Migration is when the custom interfaces feeding market data, curves and bank files into the old system become legacy code the team has to rebuild, or replace with a product.</p>
-      <div class="faq-why">
-        <p><b>Buy instead of rebuild.</b> Move the feed onto a managed hub once, at the exact moment it is on the table.</p>
-        <p><b>Clean core.</b> No new custom code in SAP, so nothing breaks on the next upgrade.</p>
-        <p><b>Lower migration risk.</b> Governed, monitored data from day one, instead of a script no one wants to own.</p>
-      </div>
-    </div>
     <div class="faq-block" id="answers">
       <span class="eyebrow">Answers</span>
       <h2>The questions SAP teams actually search</h2>
@@ -1422,8 +1441,8 @@
 (function(){
   var map = document.getElementById('map');
   if (!map) return;
-  var TIERS = ['treasury-central','onepilot','mdh','bst','rag','sap'];
-  var LABEL = { 'treasury-central':'TreasuryCentral', onepilot:'OnePilot', mdh:'Market Data Hub', bst:'Brisken Smart Trading', rag:'Remittance Advice Gate', sap:'SAP applications & data' };
+  var TIERS = ['treasury-central','onepilot','mdh','bst','rag','sap','why-now'];
+  var LABEL = { 'treasury-central':'TreasuryCentral', onepilot:'OnePilot', mdh:'Market Data Hub', bst:'Brisken Smart Trading', rag:'Remittance Advice Gate', sap:'SAP applications & data', 'why-now':'Why now' };
   var crumbs = map.querySelector('.mm-crumbs');
   var back = map.querySelector('.mm-back');
   var mmOpen = map.querySelector('.mm-open');
