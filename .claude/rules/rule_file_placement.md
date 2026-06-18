@@ -51,13 +51,24 @@ If a kind has no row here, it has no established home: route to
 `.scratch/` or ask. Do **not** silently create a new tracked top-level
 directory.
 
+Two further committed homes the gate recognizes but that aren't their own
+row above: `.github/` (CI workflows) and `.agents/` (vendored skill
+assets, distinct from `.claude/agents/` repo agent definitions). The
+remaining top-level dirs the gate knows (`.vscode/`, `.serena/`,
+`.playwright-mcp/`, `.tmp/`, `internal/`, `node_modules/`) are gitignored
+tooling and never get a placement advisory.
+
 ## 3. The five placement rules
 
-1. **Never default to the repo root.** Root is reserved for the existing
-   config + top-level docs (`CLAUDE.md`, `README.md`, `DELIVERY-GUIDE.md`,
+1. **Never default to the repo root.** Root is reserved for config + top-level
+   docs: the existing set (`CLAUDE.md`, `README.md`, `DELIVERY-GUIDE.md`,
    `.gitignore`, `.mcp.json`, `pytest.ini`, `ruff.toml`,
-   `.pre-commit-config.yaml`, `skills-lock.json`). A generated file never
-   lands at root.
+   `.pre-commit-config.yaml`, `skills-lock.json`) plus conventional
+   root-only build/tooling config that has no other home (`Makefile`,
+   `Dockerfile`, `package.json`, `tsconfig.json`, `vercel.json`,
+   `pyproject.toml`, `uv.lock`, `.nvmrc`, `CHANGELOG.md`, `CONTRIBUTING.md`,
+   `SECURITY.md`, and the like; see the gate's `ROOT_ALLOWLIST`). A generated
+   artifact (a report, a data dump, an image) never lands at root.
 2. **Separate ephemeral from durable, hard.** Scratch scripts, temp
    outputs, debug renders, one-off analyses, and API response dumps go to
    the gitignored `.scratch/` — never into a tracked directory. This is
@@ -89,19 +100,47 @@ are still honored where they exist, but new ephemeral writes route to
 
 ## 6. Scratch + never-commit name patterns (predictable, enforced)
 
-The placement gate (§7) treats these basename patterns as ephemeral and
-will deny them anywhere outside a gitignored area:
+The placement gate (§7) keys on basename patterns. These lists are a
+**non-exhaustive deny floor**, not complete coverage: the rule + skill still
+govern any credential- or scratch-shaped file the patterns don't name. And
+because the gate sees only the path, an innocuously-named dump
+(`analysis-results.json`) or a raw export into a tracked dir passes the hook
+silently; not creating those is the agent's W1 responsibility.
 
-- scratch: `scratch-*`, `tmp-*`, `temp-*`, `debug-*`, `snapshot-*`,
-  `state-<digits>*`, `*-dump.*`, `*-debug.*`, `*.tmp`, `*.bak`
+**Scratch** (denied outside a gitignored area):
 
-never-commit (denied into any tracked path):
+- Hard (always ephemeral): `*-dump.*`, `*-debug.*`, `*.tmp`, `*.bak`,
+  `state-<digits>*`.
+- Prefix (`scratch-*`, `tmp-*`, `temp-*`, `debug-*`, `snapshot-*`): denied
+  ONLY for non-durable files. A committed source/test/doc with a durable
+  extension (`.py`, `.ts/.tsx`, `.js`, `.md`, `.go`, `.rs`, a `.spec.`/`.test.`
+  file, ...) that merely starts with one of these words is NOT scratch and
+  passes (a real `debug-helper.py` or `snapshot-utils.ts` is source).
 
-- `*.env`, `*.env.*`, `client_secrets.json`, `token.json`, `*.pem`,
-  `*.key`, `*secret*.json`, `*credential*.json`
+**Never-commit** (denied into any tracked path; passes only when the path is
+already gitignored):
 
-When an artifact legitimately needs one of these shapes, write it under
-`.scratch/`.
+- env: `.env`, `.env.<anything>` (e.g. `.env.local`, `.env.production`) —
+  EXCEPT the secret-free templates `.env.example` / `.env.sample` /
+  `.env.template` / `.env.dist`, which are committable and pass.
+- keys/certs: `*.pem`, `*.key`, `*.key.json`, `*.p12`, `*.pfx`, `*.jks`,
+  `*.keystore`, the SSH private-key names `id_rsa` / `id_dsa` / `id_ecdsa` /
+  `id_ed25519`, and extension-less `*_key` (`id_rsa.pub` and `*_key.py`
+  stay committable).
+- secret/credential payloads (word-boundary, not descriptive substring):
+  `secrets?.{json,yaml,yml,toml,ini,conf,cfg}` and
+  `credentials?.{...}` (so `api-credentials.json` denies but
+  `secrets-rotation-guide.json` passes), `client_secrets.json`,
+  `token.json` / `*_token.json`, `service-account*.json`, `sa-key.json`,
+  `firebase-adminsdk*.json`.
+
+**Token-bearing dotfiles** (`.npmrc`, `.pypirc`, `.netrc`, `.dockercfg`) and
+**data/PII exports** (`*-export.csv`, `leads*.csv`, `*-pii-*`) into a tracked
+path get an **advisory** (a name-only gate can't see an inline token or raw
+PII), not a hard deny.
+
+When an artifact legitimately needs a scratch/never-commit shape, write it
+under `.scratch/` (or the client's gitignored `context/`).
 
 ## 7. Enforcement
 
