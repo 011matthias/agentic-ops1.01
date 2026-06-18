@@ -90,7 +90,14 @@ same turn.
 - **Root** → only the W2 §3 allowlist lives at root; everything else gets
   a home or `.scratch/`.
 
-The gate (`.claude/hooks/file-placement-gate.py`) is the backstop: it
-denies a root-write, a never-commit-into-tracked, or a scratch-pattern
-into a non-gitignored path, and warns on an unknown top-level dir. This
-skill is how you get it right before the gate has to.
+The gate (`.claude/hooks/file-placement-gate.py`) is the backstop. It
+**denies** a NEW non-allowlisted, non-gitignored file at the repo root, a
+never-commit pattern into a tracked path, and a scratch pattern into a
+non-gitignored path. It **advises** (does not deny) on an already-gitignored
+root artifact, a token-bearing dotfile, a data/PII export, and an unknown
+top-level directory; it **passes** allowlisted root names, committable env
+templates, durable source files with a scratch-ish prefix, and writes
+already in a known home. It matches on basename PATTERN only, so an
+innocuously-named dump (`analysis-results.json`) into a tracked dir slips
+through — this skill, plus W1, is how you get placement right before the
+gate has to.
