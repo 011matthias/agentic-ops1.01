@@ -171,7 +171,7 @@ After all primitives are created:
 
 1. **Update CLAUDE.md** — Add new skills/commands/agents to the appropriate sections
 2. **Update MEMORY.md** — If any critical patterns were discovered, add them (with dedup check)
-3. **Report rules-LOC** via `uv run tools/anneal-metrics.py` — the rule files total far exceeds the legacy "under 500" figure this step once asserted (and DECISION-TREE's 250). Treat the budget-vs-actual gap as a toolkit-drift FINDING for this session (resolve by consolidation, or set a realistic budget with the user), not a silent number to rewrite here.
+3. **Report rules-LOC** via `uv run tools/anneal-metrics.py` — there is no repo-wide LOC budget (the legacy "under 500" and DECISION-TREE's "250" both contradicted the ~2.2k real total and were retired 2026-06-18). The discipline is a per-file soft ceiling (~250 lines) plus "no duplicated bans across rules"; the tool surfaces per-file overages (split candidates) as an advisory, not as drift. Treat a NEW duplicated ban or a freshly oversized rule file as the finding to resolve by consolidation.
 
 ## Phase 6.5: Convergence Measurement
 

@@ -50,15 +50,19 @@ HOOK_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hook-log.tx
 READ_PATHS = ("/leads/list", "/campaigns/analytics", "/analytics")
 
 # Mutating-method signal. Covers curl (-X/--request), requests/httpx/aiohttp
-# client idioms, and the urllib `Request(..., method="POST")` kwarg. Does NOT
-# include the loaders' internal `api("POST", "/leads/list")` helper idiom: that
-# would false-fire on read-only census scripts that POST to /leads/list, and
-# loaders are judged by --stage (layer B) not by content anyway.
+# client idioms, and the urllib `Request(..., method="POST")` kwarg. Also covers
+# a curl body flag (-d/--data*/-F/--form) with no explicit -X: curl sends those
+# as an implicit POST, so `curl --data '{}' .../pause` was slipping through
+# unguarded (register #11/#177 follow-up 2026-06-18, the highest-blast-radius
+# gate). Does NOT include the loaders' internal `api("POST", "/leads/list")`
+# helper idiom: that would false-fire on read-only census scripts that POST to
+# /leads/list, and loaders are judged by --stage (layer B) not by content anyway.
 MUTATING_METHOD = re.compile(
     r"""(?ix)
     (?:-X\s*|--request\s+)(?:POST|PUT|PATCH|DELETE)\b
     | \b(?:requests|httpx|session|client|aiohttp)\s*\.\s*(?:post|put|patch|delete)\b
     | \bmethod\s*=\s*["'](?:POST|PUT|PATCH|DELETE)["']
+    | (?:^|\s)(?:-d|--data(?:-raw|-binary|-urlencode)?|-F|--form)\b
     """
 )
 MUTATING_STAGES = {

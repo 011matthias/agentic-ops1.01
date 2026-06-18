@@ -36,7 +36,7 @@ workspace/clients/{client}/automations/
 
 ## Step 1: Determine Task Type
 
-Reference: `.claude/rules/trigger-dev/basic-tasks.md`
+Reference: `../../skil_trigger-pack/modules/TASKS.md`
 
 | Trigger | Use |
 |---------|-----|
@@ -45,7 +45,7 @@ Reference: `.claude/rules/trigger-dev/basic-tasks.md`
 | Manual/One-off | `task()` — called by user or another task |
 | AI-powered | `task()` + AI SDK inside Python — invoke `trigger-agents` skill |
 
-**For scheduled tasks**, reference `.claude/rules/trigger-dev/scheduled-tasks.md`.
+**For scheduled tasks**, reference `../../skil_trigger-pack/modules/TASKS.md`.
 
 ---
 
@@ -184,7 +184,7 @@ export const {taskName} = schedules.task({
 });
 ```
 
-Reference: `.claude/rules/trigger-dev/scheduled-tasks.md` for cron syntax.
+Reference: `../../skil_trigger-pack/modules/TASKS.md` for cron syntax.
 
 ---
 
@@ -198,7 +198,7 @@ If the automation uses LLMs or AI:
 
 ## Step 6: Advanced Patterns
 
-Reference: `.claude/rules/trigger-dev/advanced-tasks.md`
+Reference: `../../skil_trigger-pack/modules/TASKS.md`
 
 | Need | Pattern |
 |------|---------|
@@ -266,4 +266,4 @@ If the client needs a frontend progress indicator or streaming output:
 - Invoke `trigger-realtime` skill for React hooks, public tokens, and stream setup
 - Key hooks: `useRealtimeRun`, `useRealtimeTaskTrigger`, `useRealtimeStream`
 
-Reference: `.claude/rules/trigger-dev/realtime.md`
+Reference: `../../skil_trigger-pack/modules/REALTIME.md`

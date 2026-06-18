@@ -32,7 +32,7 @@ Workspace-specific guidance that supplements the generic flowchart below. **This
 | "Update spec frontmatter before checkpointing" | "n8n Code nodes can't import external packages" |
 | "After every fix, ask if this is preventable" | "Gmail modules are unreliable via API deployment" |
 
-Rules have a **250-line budget** across all `.claude/rules/*.md`. Check with `wc -l .claude/rules/*.md` before proposing a new rule or expanding one.
+Rules discipline (no repo-wide LOC budget; the old "250 total" was ~8x under the real total and rewarded nothing). Two checks before adding or expanding a rule: (1) **no duplicated bans** — a ban already stated elsewhere is not restated; the voice / em-dash / corporate-thesaurus lists live once in `rule_anti_slop.md` and are reused by cross-reference; (2) **per-file soft ceiling ~250 lines** — a single `rule_*.md` over it is a split candidate. Check per-file with `wc -l .claude/rules/*.md`; `tools/anneal-metrics.py` surfaces per-file overages as an advisory.
 
 ### Extend vs. Create
 

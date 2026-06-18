@@ -80,7 +80,7 @@ specific to outbound human comms:
   subject is the client: "Send me…", "Give me…", "Point me to…",
   "Tell me…", "Confirm…". Rewrite as a soft optional request:
   "Whenever it's convenient, if you could…", "No rush at all on
-  this — when you have a moment…".
+  this; when you have a moment…".
 - **No telling the client how/when to pay or commit.** Banned:
   "You shouldn't commit to ongoing money before X.", "Wait until
   you've seen it before paying.", any prescription on their
@@ -93,14 +93,11 @@ specific to outbound human comms:
   (this last validates the broader framing as well as the specific
   point). When holding a line, restate it; do not pre-discount it.
 
-All other bans from [[rule_platform_standards]] §2 apply: zero
-em-dashes (` — `, `&mdash;`, ` -- `), the corporate-thesaurus list
-(robust, leverage, ensure, facilitate, comprehensive, streamline,
-optimize, holistic, drive results/value/growth, unlock), the meta-
-phrases (it's important to note, keep in mind, in summary, in
-conclusion, not just X but Y, sentence-opening Notably/Importantly/
-Interestingly), the performed-humanness tics (Honestly, Look, Here's
-the thing).
+All enumerated voice bans in [[rule_anti_slop]] apply (corporate
+thesaurus, meta-phrases, "not just X but Y", sentence-opening adverbs,
+performed-humanness), plus the platform typography rule in
+[[rule_platform_standards]] §2: zero em-dashes (` — `, `&mdash;`,
+` -- `).
 
 ## 3. Anchor on the client's actual words
 
@@ -128,7 +125,7 @@ Every outbound message ends in one of three ways. No fourth option.
 
 - **A soft offer to talk** (Register A or any thread where the
   next step is a conversation): "Happy to jump on a quick call
-  if that's easier — whenever suits you." Used sparingly; one
+  if that's easier; whenever suits you." Used sparingly; one
   per thread, not per message.
 - **A concrete next-step proposal** (any register, when there
   IS a next step in our court): "I'll draft X by Thursday and

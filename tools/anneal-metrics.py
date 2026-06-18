@@ -41,10 +41,12 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 TOOLS_DIR = REPO / "tools"
 
-# The rules-LOC budget comd_system-dev Phase 6 currently asserts ("under 500
-# total"). DECISION-TREE.md states 250. We report against the command's 500 and
-# surface the disagreement; the tool does NOT pick a new budget.
-STATED_RULES_BUDGET = 500
+# Rules discipline (resolved 2026-06-18): there is no honest repo-wide LOC budget
+# (the legacy "under 500" and DECISION-TREE's "250" both contradicted the real
+# ~2.2k total). The discipline is now a PER-FILE soft ceiling plus "no duplicated
+# bans across rules" (see DECISION-TREE.md). The tool surfaces per-file overages
+# as an advisory, NOT as documented-vs-actual drift.
+PER_FILE_RULE_CEILING = 250
 
 LEDGER_COLUMNS = [
     "Date", "Cmds", "Skills(dir/adv)", "Agents", "Tools", "Rules(files/LOC)",
@@ -78,10 +80,13 @@ def count_assets(repo: Path) -> dict:
                  if p.is_file() and p.suffix in (".py", ".sh", ".cjs", ".mjs")]) if tools_root.is_dir() else 0
     rule_files = list((repo / ".claude" / "rules").glob("*.md"))
     rules = len(rule_files)
-    rules_loc = sum(
-        len(p.read_text(encoding="utf-8", errors="replace").splitlines())
-        for p in rule_files
+    per_file = sorted(
+        ((p.name, len(p.read_text(encoding="utf-8", errors="replace").splitlines()))
+         for p in rule_files),
+        key=lambda t: t[1], reverse=True,
     )
+    rules_loc = sum(loc for _, loc in per_file)
+    rules_oversized = [(n, loc) for n, loc in per_file if loc > PER_FILE_RULE_CEILING]
     return {
         "cmds": cmds,
         "skills_skil": skill_skil,
@@ -90,6 +95,7 @@ def count_assets(repo: Path) -> dict:
         "tools": tools,
         "rules": rules,
         "rules_loc": rules_loc,
+        "rules_oversized": rules_oversized,
     }
 
 
@@ -100,8 +106,9 @@ def _advertised(text: str, label: str) -> int | None:
 
 
 def compute_drift(repo: Path, assets: dict) -> list[str]:
-    """Documented-vs-actual drift: CLAUDE.md advertised counts vs reality, plus
-    rules-LOC over the stated budget."""
+    """Documented-vs-actual drift: CLAUDE.md advertised counts vs reality. The
+    rules-LOC budget is no longer a drift item (the per-file ceiling is an
+    advisory; see oversized_rule_advisory)."""
     drift: list[str] = []
     claude_md = repo / "CLAUDE.md"
     if claude_md.is_file():
@@ -117,11 +124,6 @@ def compute_drift(repo: Path, assets: dict) -> list[str]:
             adv = _advertised(text, label)
             if adv is not None and adv != actual:
                 drift.append(f"{label}: CLAUDE.md advertises {adv}, actual {actual_str}")
-    if assets["rules_loc"] > STATED_RULES_BUDGET:
-        drift.append(
-            f"rules-LOC {assets['rules_loc']} exceeds the stated budget "
-            f"{STATED_RULES_BUDGET} (comd_system-dev Phase 6)"
-        )
     return drift
 
 
@@ -271,6 +273,13 @@ def render_text(m: dict) -> str:
             lines.append(f"    - {d}")
     else:
         lines.append("  drift: none")
+    over = a.get("rules_oversized") or []
+    if over:
+        lines.append(
+            f"  advisory: {len(over)} rule file(s) over the {PER_FILE_RULE_CEILING}-line "
+            f"per-file ceiling (split candidates): "
+            + ", ".join(f"{n} ({loc})" for n, loc in over)
+        )
     lines.append("=" * 64)
     return "\n".join(lines)
 

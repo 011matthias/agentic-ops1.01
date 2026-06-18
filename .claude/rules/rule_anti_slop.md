@@ -7,9 +7,14 @@ unearned paragraph teaches the reader to skim, and in client-facing
 context it reads as AI-generated even when the underlying judgment
 is human-quality.
 
-This rule supersedes the older PDF voice pass in
-`rule_deliverables.md` (still valid, but narrower) by stating the
-general principle and routing the specific bans to it.
+This rule is the canonical home for the enumerated voice bans (the
+corporate-thesaurus words, banned meta-phrases, "not just X but Y",
+performed-humanness, sentence-opening adverbs). The surface rules
+reuse this list by cross-reference and add only their surface-specific
+deltas: [[rule_deliverables]] (HTML/PDF), [[rule_platform_standards]]
+§2 (marketing site), [[rule_human_communication]] §2 (outbound). It
+supersedes the older PDF voice pass in `rule_deliverables.md` (still
+valid, narrower).
 
 ## What counts as slop (banned)
 
@@ -29,9 +34,9 @@ the same information density, collapse them.
 **Empty section intros.** Do not start a section by summarizing what
 the section is about to say. Just start it.
 
-**Hedging / buffer language.** "It's worth noting", "to be clear",
-"keep in mind", "worth mentioning", "as you can see", and similar
-meta-commentary about the writing itself. Cut.
+**Hedging / buffer language.** "It's worth noting", "it's important
+to note", "to be clear", "keep in mind", "worth mentioning", "as you
+can see", and similar meta-commentary about the writing itself. Cut.
 
 **Corporate thesaurus.** Banned verbs: robust, leverage, ensure,
 facilitate, comprehensive, streamline, optimize, holistic, drive,
