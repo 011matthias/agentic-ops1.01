@@ -131,3 +131,27 @@ def test_build_py_passes(tmp_path):
 def test_running_instantly_test_file_does_not_ask(tmp_path):
     p = _run("uv run python -m pytest tools/tests/test_instantly_invasive_gate.py", tmp_path)
     assert p.returncode == 0 and p.stdout.strip() == ""
+
+
+# --- 2026-06-18: curl body flag implies POST with no -X. A body-bearing curl
+# (register #11/#177 follow-up) was slipping through as a read. ---
+def test_curl_data_implicit_post_to_pause_asks(tmp_path):
+    p = _run("curl --data '{}' https://api.instantly.ai/api/v2/campaigns/123/pause", tmp_path)
+    assert permission_decision(p.stdout) == "ask"
+
+
+def test_curl_short_d_file_implicit_post_asks(tmp_path):
+    p = _run("curl -d @body.json https://api.instantly.ai/api/v2/campaigns/123/activate", tmp_path)
+    assert permission_decision(p.stdout) == "ask"
+
+
+def test_curl_form_upload_import_asks(tmp_path):
+    p = _run("curl -F file=@leads.csv https://api.instantly.ai/api/v2/leads/import", tmp_path)
+    assert permission_decision(p.stdout) == "ask"
+
+
+def test_curl_data_to_read_path_still_passes(tmp_path):
+    # read-path short-circuit precedes the method check: a body POST to a read
+    # endpoint still allows, so the new clause adds no read-path false positive.
+    p = _run("curl --data '{}' https://api.instantly.ai/api/v2/leads/list", tmp_path)
+    assert p.returncode == 0 and p.stdout.strip() == ""

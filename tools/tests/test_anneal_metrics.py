@@ -72,6 +72,7 @@ def test_asset_counts_on_temp_tree(tmp_path):
     assert a["skills_skil"] == 2 and a["skills_total"] == 4   # 2 skil_ + 2 vendored
     assert a["agents"] == 1 and a["tools"] == 4 and a["rules"] == 2
     assert a["rules_loc"] == 14   # 2 files x 7 lines
+    assert a["rules_oversized"] == []   # 7 lines each, under the per-file ceiling
 
 
 def test_parse_reuses_friction_watch(tmp_path):
@@ -105,11 +106,15 @@ def test_drift_detection(tmp_path):
     assert not any("budget" in d for d in drift)
 
 
-def test_rules_budget_drift(tmp_path):
-    _make_repo(tmp_path, rules=1, rule_lines=AM.STATED_RULES_BUDGET + 50, claude_md="x")
+def test_oversized_rule_is_advisory_not_drift(tmp_path):
+    # A rule file over the per-file ceiling is surfaced as an advisory in the
+    # assets census, NOT as documented-vs-actual drift (the repo-wide LOC budget
+    # was retired 2026-06-18).
+    _make_repo(tmp_path, rules=1, rule_lines=AM.PER_FILE_RULE_CEILING + 50, claude_md="x")
     a = AM.count_assets(tmp_path)
+    assert any(loc > AM.PER_FILE_RULE_CEILING for _, loc in a["rules_oversized"])
     drift = AM.compute_drift(tmp_path, a)
-    assert any("budget" in d for d in drift)
+    assert not any("budget" in d.lower() or "ceiling" in d.lower() for d in drift)
 
 
 def test_net_delta_against_prior_ledger_row(tmp_path):

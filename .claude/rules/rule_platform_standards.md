@@ -47,31 +47,25 @@ Scope of "internal" (this rule does NOT apply, except brand spelling):
 
 ## 2. Language (banned typography + banned constructions)
 
-These are non-negotiable for public-facing surfaces. Identical to the
-`rule_deliverables.md` HTML deliverable standard, extended to the
-platform's JSX and proposal markdowns:
+These are non-negotiable for public-facing surfaces.
 
+- **Enumerated voice bans** (corporate-thesaurus words, banned
+  meta-phrases, "not just X but Y", sentence-opening adverbs,
+  performed-humanness): the single canonical list lives in
+  [[rule_anti_slop]] and applies in full here. Platform-specific
+  exception: a banned corporate-thesaurus word is allowed inside a
+  verbatim quotation of the source posting (block-quoted or quoted
+  with attribution).
 - **Em-dashes**: zero. Banned forms are `—` (U+2014), `&mdash;` entity,
   and ` -- ` (space-dash-dash-space) as a typographic substitute.
   Replace with semicolons (`; ` is the conventional substitution in
   `tools/strip-em-dash.py`), colons, commas, or by splitting into two
   sentences. Choose the punctuation that preserves meaning; default
   to semicolon when in doubt.
-- **Banned corporate-thesaurus words** (case-insensitive): `robust`,
-  `leverage`, `ensure`, `facilitate`, `comprehensive`, `streamline`,
-  `optimize`, `holistic`, `drive (results|value|growth)`, `unlock`.
-  Exception: appears inside a verbatim quotation of the source
-  posting (block-quoted or quoted with attribution).
-- **Banned meta-phrases**: "it's important to note", "keep in mind",
-  "worth mentioning", "in summary", "in conclusion", "to summarize",
-  "not just X but Y" constructions, sentence-opening adverbs
-  ("Notably,", "Importantly,", "Interestingly,").
-- **No performed humanness**: no "Honestly,", "Look,", "Here's the
-  thing".
 - **Contractions in prose, full forms in table cells.**
 - **Dates**: every visible date stamp must reflect the actual prep or
   last-update day. Footer copyright year uses `new Date().getFullYear()`
-  (already correct) — never hardcode the year. Proposal frontmatter
+  (already correct); never hardcode the year. Proposal frontmatter
   `created:`, `sent:`, and any "Last updated:" footer in a page must
   be queried/verified, never invented.
 
@@ -115,7 +109,7 @@ the strategic owner consolidates them (see Section 8), the rule is:
 - CTA destinations are uniform per kind:
   - "Tell us about your workflow" → `/contact`
   - "Get a personalized assessment" → `/assessment`
-  - Proposal-specific "Let's talk, {prospect}" → `mailto:nicolas.neumann@unpauseai.com`
+  - Proposal-specific "Let's talk, {prospect}" → `mailto:admin@unpauseai.com` (the `CONTACT_EMAIL` env value, defaults to admin@; §1 canonical)
 
 ## 5. Voice and CTA copy (uniform vocabulary)
 
@@ -186,9 +180,6 @@ This rule does NOT decide:
   which (if any) should be removed or merged.
 - Whether `/oneproposal` and `/assessment` belong in the header
   nav (currently only `/assessment` is in the footer).
-- Whether to migrate the public contact address from
-  `nicolas.neumann@unpauseai.com` to a shared `hello@unpauseai.com`
-  (the latter currently appears in `ProposalCTA.tsx` only).
 
 When the owner decides these, update this rule in the same change.
 
