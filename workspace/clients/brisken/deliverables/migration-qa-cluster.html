@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- deliverable-allow: copy-clipboard | reason: linear Q&A reference page, no code/command blocks to copy -->
+<!-- deliverable-allow: keyboard-search | reason: single linear page; native browser find is sufficient, no filterable dataset UI -->
+<!-- BYLINE: Dirk to name the real Brisken SAP-treasury expert before publish; author is set to the Brisken organization until then (E-E-A-T, do not invent a person). -->
+<!-- PUBLISH GATE: hosting on a Brisken property + go-live are Dirk-gated (owned property). This file is ready-to-publish, not published. -->
+<!-- AEO: Cluster G, covers substrate queries 28-29 (migration why-now, the broad fan-out catcher per substrate 5.3) + 26-27 (AI Digital Workforce). Sourced stat folded in: Shadow Integration Report 34% migration / 71% manual (N=41, 2026-06-17). -->
+<!-- ACCURACY: ECC end-of-mainstream-maintenance 2027 (extended maintenance to 2030) is SAP's published roadmap; stated as the buying-window context, not a Brisken claim. -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Treasury data integrations to rebuild during an ECC-to-S/4HANA migration</title>
+<meta name="description" content="Which SAP treasury data feeds get re-plumbed in an ECC-to-S/4HANA migration, and how to re-platform market-data, trade, bank and remittance interfaces once onto a governed hub instead of re-coding each one. Plus AI digital co-workers for SAP finance.">
+<meta name="author" content="Brisken">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Brisken OnePilot">
+<meta property="og:title" content="Treasury data integrations to rebuild during an ECC-to-S/4HANA migration">
+<meta property="og:description" content="The migration re-plumbs every treasury feed. Re-platform once onto a governed hub instead of re-coding each interface. 34% of US SAP-treasury roles sit inside an active migration.">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="SAP treasury integrations in an S/4HANA migration (Brisken OnePilot)">
+<meta name="twitter:description" content="What gets re-plumbed in an ECC-to-S/4HANA treasury migration, and how to move onto a governed hub once instead of re-coding each feed.">
+<script>(function(){var t=localStorage.getItem('theme');
+  var d=document.documentElement;
+  d.setAttribute('data-theme',
+    t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');
+})();</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What treasury data integrations need rebuilding during an ECC-to-S/4HANA migration?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A treasury move to S/4HANA touches every external feed: market-data and rate interfaces, trade capture from FX venues, bank connectivity and payment files, and remittance or cash-application flows. Each custom interface built for ECC has to be re-validated or rebuilt for S/4HANA. The migration is when teams decide whether to re-code them or move onto a governed hub."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I avoid re-coding market-data interfaces when moving SAP treasury to S/4HANA?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Re-platform the feed once instead of re-coding per interface. Moving market-data, rate and curve feeds onto a governed hub during the migration keeps the integration in configuration, not ABAP, so the S/4HANA cutover is a re-point rather than a rebuild, and future provider changes do not trigger another code change."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can an AI co-worker execute SAP finance processes (ChatGPT in SAP finance)?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. An LLM-powered digital co-worker runs SAP finance steps conversationally: in Brisken's Calvin demo it reads an email funding request, summarizes it, suggests the action, creates the memo record, fetches the cash position, and sends a confirmation. The human approves; the co-worker does the fetch, summarize and execute work."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I automate repetitive treasury tasks in SAP without adding headcount?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A digital workforce assigns one AI co-worker per repetitive process, a clerk, an analyst, a specialist, that fetches, summarizes, recommends and executes across SAP and other systems. The work that previously scaled only by hiring (data pulls, reconciliations, status checks) moves to a co-worker, with a human reviewing the output."
+      }
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  "name": "Treasury data integrations to rebuild during an ECC-to-S/4HANA migration",
+  "about": ["S/4HANA migration", "SAP ECC to S/4HANA", "SAP treasury", "SAP TRM", "treasury data integration", "AI digital workforce", "SAP finance automation"],
+  "publisher": {
+    "@type": "Organization",
+    "name": "Brisken",
+    "description": "SAP Co-Innovation Partner; governed, no-code financial-data orchestration for SAP."
+  },
+  "dateModified": "2026-06-18"
+}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+  :root, [data-theme="light"] {
+    --navy: #00396f; --teal: #0e7c86; --teal-strong: #0b626a; --teal-bg: #e4f3f4;
+    --approved: #1e8e5a;
+    --paper: #f4f7fb; --surface: #ffffff; --surface-2: #eef3fa;
+    --mist: #e2e9f2; --mist-strong: #c8d5e5;
+    --text: #0a1a2f; --muted: #56657c; --heading: #00396f;
+    --bg: var(--paper); --border: var(--mist); --border-strong: var(--mist-strong);
+    --accent: var(--teal); --accent-strong: var(--teal-strong); --accent-bg: var(--teal-bg);
+    --brand-ink: #003a96; --brand-cyan: #00b8ce;
+    --radius: 3px; --radius-pill: 999px;
+    --shadow: 0 1px 2px rgba(10,26,47,.05), 0 10px 30px rgba(10,26,47,.06);
+    --font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+    --font-body: "IBM Plex Sans", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  [data-theme="dark"] {
+    --navy: #0b4a8c; --teal: #3fb9c4; --teal-strong: #6ad3dc; --teal-bg: #0c2e36;
+    --approved: #34b879;
+    --paper: #081320; --surface: #0e2036; --surface-2: #0b1a2e;
+    --mist: #1e3550; --mist-strong: #2e4865;
+    --text: #e8eef6; --muted: #9db0c8; --heading: #dbe8fa;
+    --brand-ink: #e9f1fb; --brand-cyan: #2fc6d6;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 30px rgba(0,0,0,.34);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { font-family: var(--font-body); background: var(--bg); color: var(--text); line-height: 1.65; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 24px; }
+  a { color: var(--teal-strong); }
+  [data-theme="dark"] a { color: var(--teal-strong); }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+  h1 { font-family: var(--font-display); font-size: clamp(28px, 5vw, 44px); line-height: 1.12; letter-spacing: -.02em; color: var(--heading); }
+  h2 { font-family: var(--font-display); font-size: clamp(21px, 3.4vw, 28px); line-height: 1.2; letter-spacing: -.01em; color: var(--heading); margin-bottom: 14px; }
+  h3 { font-size: 17px; color: var(--heading); margin-bottom: 6px; }
+  p { margin-bottom: 14px; }
+  section { scroll-margin-top: 72px; }
+
+  /* Nav */
+  .site-nav { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between;
+    padding: 13px 24px; background: color-mix(in srgb, var(--surface) 88%, transparent);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
+  .nav-left { display: flex; align-items: center; gap: 9px; text-decoration: none; }
+  .brand-cube { width: 22px; height: 22px; flex: none; }
+  .nav-logo { font-family: var(--font-display); font-weight: 700; font-size: 20px; letter-spacing: -.018em; color: var(--brand-ink); line-height: 1; }
+  .nav-product { font-family: var(--font-mono); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted);
+    font-weight: 500; padding-left: 9px; margin-left: 1px; border-left: 1px solid var(--border-strong); }
+  .nav-right { display: flex; align-items: center; gap: 14px; }
+  .nav-status { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .nav-theme { border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); border-radius: var(--radius-pill);
+    width: 34px; height: 34px; cursor: pointer; font-size: 14px; line-height: 1; display: inline-flex; align-items: center; justify-content: center;
+    transition: border-color .12s, color .12s; }
+  .nav-theme:hover { border-color: var(--teal); color: var(--teal); }
+
+  /* Hero */
+  .hero { padding: 64px 0 36px; }
+  .eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--teal-strong); margin-bottom: 16px; display: inline-block; }
+  .hero-sub { font-size: 18px; color: var(--muted); max-width: 680px; margin-top: 16px; }
+  .lead-answer { font-size: 17px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--teal);
+    border-radius: 0 var(--radius) var(--radius) 0; padding: 18px 22px; margin-top: 26px; box-shadow: var(--shadow); }
+
+  /* Stat band */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden; margin: 32px 0 8px; }
+  .stat { background: var(--surface); padding: 24px 20px; }
+  .stat .v { font-family: var(--font-display); font-size: 40px; font-weight: 700; color: var(--teal-strong); line-height: 1; letter-spacing: -.02em; }
+  .stat.lead .v { color: var(--navy); }
+  [data-theme="dark"] .stat.lead .v { color: var(--teal-strong); }
+  .stat .k { font-size: 13.5px; color: var(--muted); margin-top: 8px; }
+  .stat .n { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-top: 10px; }
+  .stat-foot { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); margin-bottom: 40px; }
+
+  /* Sections */
+  .section { padding: 30px 0; border-top: 1px solid var(--border); }
+  .section:first-of-type { border-top: none; }
+  ul.clean { list-style: none; margin: 0 0 14px; }
+  ul.clean li { position: relative; padding-left: 20px; margin-bottom: 9px; }
+  ul.clean li::before { content: ""; position: absolute; left: 2px; top: 10px; width: 6px; height: 6px; border-radius: 50%; background: var(--teal); }
+
+  /* Q&A blocks */
+  .qa { border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 22px; margin-bottom: 16px; background: var(--surface); box-shadow: var(--shadow); }
+  .qa q { display: block; font-weight: 600; color: var(--heading); font-size: 16px; margin-bottom: 8px; quotes: none; }
+  .qa q::before, .qa q::after { content: ""; }
+  .qa .ans { color: var(--text); }
+  .qa .depth { color: var(--muted); font-size: 14.5px; margin-top: 10px; }
+  .qa .tag { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-top: 10px; display: block; }
+
+  /* Callout */
+  .callout { border-left: 3px solid var(--teal); background: var(--teal-bg); padding: 16px 20px; border-radius: 0 var(--radius) var(--radius) 0; margin: 6px 0 16px; }
+  [data-theme="dark"] .callout { background: var(--surface-2); }
+  .master { font-family: var(--font-display); font-size: 19px; color: var(--heading); font-weight: 600; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 16px; font-size: 14.5px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+  td.own { color: var(--text); font-weight: 500; }
+
+  /* Footer */
+  .footer { border-top: 1px solid var(--border); margin-top: 36px; padding: 30px 0 50px; }
+  .footer .byline { font-size: 14px; color: var(--muted); margin-bottom: 10px; }
+  .trust { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); letter-spacing: .03em; margin-bottom: 14px; }
+  .footer-bottom { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; font-size: 12.5px; color: var(--muted); }
+
+  @media (max-width: 620px) { .stats { grid-template-columns: 1fr; } }
+
+  @media print {
+    .site-nav { display: none !important; }
+    body { background: #fff; color: #000; }
+    .qa, .callout, .lead-answer { box-shadow: none; }
+    h2 { page-break-before: always; }
+    h2:first-of-type { page-break-before: avoid; }
+    .hero { padding-top: 12px; }
+  }
+</style>
+</head>
+<body id="top">
+
+<nav class="site-nav">
+  <a class="nav-left" href="#top" aria-label="Brisken OnePilot, back to top">
+    <svg class="brand-cube" viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M16 3 L28 9.5 V22.5 L16 29 L4 22.5 V9.5 Z" fill="none" stroke="var(--brand-cyan)" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M16 3 L16 16 M16 16 L28 9.5 M16 16 L4 9.5" fill="none" stroke="var(--brand-cyan)" stroke-width="2" stroke-linejoin="round"/>
+    </svg>
+    <span class="nav-logo">brisken</span>
+    <span class="nav-product">OnePilot</span>
+  </a>
+  <div class="nav-right">
+    <span class="nav-status">S/4HANA Migration &middot; Q&amp;A</span>
+    <button class="nav-theme" onclick="(function(){
+      var d=document.documentElement;
+      var c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+      d.setAttribute('data-theme',c);
+      localStorage.setItem('theme',c);
+    })()" aria-label="Toggle theme">&#9788;/&#9790;</button>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <header class="hero">
+    <span class="eyebrow">OnePilot &middot; The migration window</span>
+    <h1>The S/4HANA migration re-plumbs every treasury feed. That is the moment to decide how.</h1>
+    <p class="hero-sub">Moving SAP treasury from ECC to S/4HANA forces a rebuild of the data feeds: market data, trade capture, bank connectivity, remittance. Here is what gets touched, and why re-platforming onto a governed hub once beats re-coding each interface.</p>
+    <div class="lead-answer">
+      Moving SAP treasury from ECC to S/4HANA forces every external data feed to be re-plumbed: market-data interfaces, trade capture, bank connectivity, remittance and cash-application flows. The migration is the cheapest moment to replace hand-built scripts with a governed hub, because the feeds are being rebuilt anyway. In a read of US SAP-treasury job ads, 34% sat inside an active migration.
+    </div>
+  </header>
+
+  <section class="section">
+    <h2>The questions a migrating treasury team asks</h2>
+
+    <div class="qa">
+      <q>What treasury data integrations need rebuilding during an ECC-to-S/4HANA migration?</q>
+      <div class="ans">A treasury move to S/4HANA touches every external feed: market-data and rate interfaces, trade capture from FX venues, bank connectivity and payment files, and remittance or cash-application flows. Each custom interface built for ECC has to be re-validated or rebuilt for S/4HANA. The migration is when teams decide whether to re-code them or move onto a governed hub.</div>
+      <span class="tag">Extractable answer &middot; 58 words</span>
+    </div>
+
+    <div class="qa">
+      <q>How do I avoid re-coding market-data interfaces when moving SAP treasury to S/4HANA?</q>
+      <div class="ans">Re-platform the feed once instead of re-coding per interface. Moving market-data, rate and curve feeds onto a governed hub during the migration keeps the integration in configuration, not ABAP, so the S/4HANA cutover is a re-point rather than a rebuild, and future provider changes do not trigger another code change.</div>
+      <span class="tag">Extractable answer &middot; 49 words</span>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Why now: the buying window has a deadline</h2>
+    <p>SAP's published roadmap ends mainstream maintenance for ECC (Business Suite 7) in 2027, with extended maintenance to 2030, so the install base is moving to S/4HANA on a clock. For treasury that is not a back-office event: it is the one time the external data feeds are reopened. A hand-built market-data script or a manual rate upload that "works for now" stops being invisible the moment the platform under it changes, because someone has to make it work on S/4HANA. That is the decision point: rebuild it as it was, or move it onto a managed interface that does not need rebuilding next time.</p>
+    <table>
+      <tr>
+        <th>Dimension</th>
+        <th>Move onto a governed hub (re-point once)</th>
+        <th>Re-code each ECC interface for S/4HANA</th>
+      </tr>
+      <tr>
+        <td>Migration effort</td>
+        <td class="own">Re-point configuration to the S/4HANA target</td>
+        <td>Rebuild and retest each custom interface</td>
+      </tr>
+      <tr>
+        <td>A future provider change</td>
+        <td class="own">Absorbed in configuration</td>
+        <td>New ABAP edit each time</td>
+      </tr>
+      <tr>
+        <td>Governance</td>
+        <td class="own">Audit trail, segregation of duties, exception alerts built in</td>
+        <td>Per-interface, manual or custom</td>
+      </tr>
+      <tr>
+        <td>Cutover risk</td>
+        <td class="own">One managed surface to validate</td>
+        <td>Many custom feeds to validate</td>
+      </tr>
+      <tr>
+        <td>Maintenance after go-live</td>
+        <td class="own">Vendor-managed (SaaS)</td>
+        <td>In-house ABAP</td>
+      </tr>
+    </table>
+  </section>
+
+  <section class="section">
+    <h2>The migration is also when AI co-workers go in</h2>
+    <p>A migration reopens the processes, not only the interfaces, which is when teams add a digital workforce rather than re-document the manual steps. The same questions come up.</p>
+
+    <div class="qa">
+      <q>Can an AI co-worker execute SAP finance processes (ChatGPT in SAP finance)?</q>
+      <div class="ans">Yes. An LLM-powered digital co-worker runs SAP finance steps conversationally: in Brisken's Calvin demo it reads an email funding request, summarizes it, suggests the action, creates the memo record, fetches the cash position, and sends a confirmation. The human approves; the co-worker does the fetch, summarize and execute work.</div>
+      <span class="tag">Extractable answer &middot; 50 words</span>
+    </div>
+
+    <div class="qa">
+      <q>How do I automate repetitive treasury tasks in SAP without adding headcount?</q>
+      <div class="ans">A digital workforce assigns one AI co-worker per repetitive process, a clerk, an analyst, a specialist, that fetches, summarizes, recommends and executes across SAP and other systems. The work that previously scaled only by hiring (data pulls, reconciliations, status checks) moves to a co-worker, with a human reviewing the output.</div>
+      <span class="tag">Extractable answer &middot; 49 words</span>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>What the market looks like</h2>
+    <p>From Brisken's <a href="/shadow-integration-report.html">Shadow Integration Report</a>, a read of 41 US SAP-treasury job ads (US-only, 2026-06-17). The migration share is the timing read: one in three of these roles is already inside an S/4HANA move.</p>
+    <div class="stats">
+      <div class="stat lead">
+        <div class="v">34%</div>
+        <div class="k">of US SAP-treasury roles are tied to an active S/4HANA migration or SAP implementation</div>
+        <div class="n">14 of 41</div>
+      </div>
+      <div class="stat">
+        <div class="v">71%</div>
+        <div class="k">describe building or hand-running integrations into SAP, or manual data work</div>
+        <div class="n">29 of 41</div>
+      </div>
+      <div class="stat">
+        <div class="v">N=41</div>
+        <div class="k">US-only sample of public SAP corporate-treasury, TRM and FSCM job ads</div>
+        <div class="n">read 2026-06-17</div>
+      </div>
+    </div>
+    <div class="stat-foot">Source: Brisken Shadow Integration Report, N=41, read 2026-06-17. Market-research figures, not a product performance metric.</div>
+  </section>
+
+  <section class="section">
+    <h2>What it means for the migration plan</h2>
+    <p>The integrations are getting rebuilt either way; the only choice is what they get rebuilt into. Re-coding each feed for S/4HANA recreates the same shadow integrations on a newer platform, and the next provider change starts the cycle again. Moving the feeds onto a governed hub during the cutover spends the migration effort once and removes the rebuild-next-time, which is why the migration window, not a quiet quarter afterwards, is when the decision is cheapest.</p>
+    <div class="callout">
+      <span class="master">Re-plumb once, onto a managed interface, while the feeds are already open.</span>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="byline">Brisken OnePilot. The Market Data Hub and Trade Automation are listed on the SAP Store. SAP roadmap dates reflect SAP's published maintenance timeline; product capabilities and the Calvin demo trace to Brisken's product decks.</div>
+    <div class="trust">SAP Co-Innovation Partner &middot; listed on the SAP Store &middot; built on SAP BTP &middot; ISO 27001 / SOC 1 Type II</div>
+    <div class="footer-bottom">
+      <div>Brisken LLC &middot; governed, no-code financial-data orchestration for SAP</div>
+      <div>Last updated: 2026-06-18</div>
+    </div>
+  </footer>
+
+</main>
+</body>
+</html>
