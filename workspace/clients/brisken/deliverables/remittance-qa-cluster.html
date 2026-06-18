@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- deliverable-allow: copy-clipboard | reason: linear Q&A reference page, no code/command blocks to copy -->
+<!-- deliverable-allow: keyboard-search | reason: single linear page; native browser find is sufficient, no filterable dataset UI -->
+<!-- BYLINE: Dirk to name the real Brisken SAP-treasury expert before publish; author is set to the Brisken organization until then (E-E-A-T, do not invent a person). -->
+<!-- PUBLISH GATE: hosting on a Brisken property + go-live are Dirk-gated (owned property). This file is ready-to-publish, not published. -->
+<!-- AEO: Cluster D (Remittance Advice Gate), covers substrate queries 16-18 + fan-out siblings. Sourced stat folded in: Shadow Integration Report 71% (N=41, 2026-06-17). -->
+<!-- ACCURACY: Remittance Advice Gate is NOT on any SAP Store / sap.com channel (audit 2026-06-17, brisken.com only); trust marks here stay company-level, no per-product store claim. -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Automating remittance advice into SAP cash application with AI</title>
+<meta name="description" content="How AI reads unstructured remittance emails and PDFs and posts them into SAP S/4HANA cash application, removing the manual retype. A live agricultural-sector customer runs this on a ChatGPT-powered deployment.">
+<meta name="author" content="Brisken">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Brisken OnePilot">
+<meta property="og:title" content="Automating remittance advice into SAP cash application with AI">
+<meta property="og:description" content="AI reads unstructured remittance email and PDF, structures it, posts it into SAP S/4HANA. Live ChatGPT-powered customer proof. The questions cash-application teams actually ask.">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="AI remittance advice into SAP (Brisken OnePilot)">
+<meta name="twitter:description" content="Read unstructured remittance email and PDF, post structured data into SAP S/4HANA cash application. No manual retype.">
+<script>(function(){var t=localStorage.getItem('theme');
+  var d=document.documentElement;
+  d.setAttribute('data-theme',
+    t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');
+})();</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "How do I automate unstructured remittance advice emails into SAP cash application?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Remittance advice arrives as unstructured email and PDF, which staff retype into SAP cash application. An AI-powered remittance gate reads the unstructured input, identifies and structures the data (payer, invoices, amounts, deductions), and delivers it into SAP S/4HANA, with a monitor that trains it over time. The manual retype step is removed."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can AI read remittance PDFs and post them to SAP S/4HANA?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. A remittance gate uses an LLM to read remittance PDFs, email bodies and attachments, extract the structured fields, and post them into SAP S/4HANA cash application. A live agricultural-sector customer runs this on a ChatGPT-powered deployment on S/4HANA Private Cloud, with the stated goal of removing the human from the retype."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I reduce manual cash-application matching in SAP?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Manual cash application is staff reading a remittance, finding the invoices, and keying the match into SAP. A remittance gate does the reading and structuring automatically and hands SAP the data already formatted for matching, so the team reviews exceptions instead of retyping every remittance by hand."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What remittance inputs can an AI gate read?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Remittance advice arrives in many shapes: email bodies, PDF attachments, scanned documents and spreadsheet exports. An AI-powered gate reads the unstructured input directly rather than relying on a fixed template, extracts payer, invoice references, amounts and deductions, and a monitor lets the team correct and retrain it as new layouts appear."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Does an AI remittance gate work with Serrala, BPI or HighRadius?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "The remittance gate delivers structured remittance data into SAP S/4HANA, and can also target cash-application platforms such as Serrala, BPI or HighRadius. It sits upstream as the step that turns unstructured remittances into clean, structured input, rather than replacing the matching engine a team already runs."
+      }
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  "name": "Automating remittance advice into SAP cash application with AI",
+  "about": ["SAP cash application", "remittance advice", "SAP S/4HANA", "accounts receivable automation", "treasury automation", "AI document processing"],
+  "publisher": {
+    "@type": "Organization",
+    "name": "Brisken",
+    "description": "SAP Co-Innovation Partner; governed, no-code financial-data orchestration for SAP."
+  },
+  "dateModified": "2026-06-18"
+}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+  :root, [data-theme="light"] {
+    --navy: #00396f; --teal: #0e7c86; --teal-strong: #0b626a; --teal-bg: #e4f3f4;
+    --approved: #1e8e5a;
+    --paper: #f4f7fb; --surface: #ffffff; --surface-2: #eef3fa;
+    --mist: #e2e9f2; --mist-strong: #c8d5e5;
+    --text: #0a1a2f; --muted: #56657c; --heading: #00396f;
+    --bg: var(--paper); --border: var(--mist); --border-strong: var(--mist-strong);
+    --accent: var(--teal); --accent-strong: var(--teal-strong); --accent-bg: var(--teal-bg);
+    --brand-ink: #003a96; --brand-cyan: #00b8ce;
+    --radius: 3px; --radius-pill: 999px;
+    --shadow: 0 1px 2px rgba(10,26,47,.05), 0 10px 30px rgba(10,26,47,.06);
+    --font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+    --font-body: "IBM Plex Sans", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  [data-theme="dark"] {
+    --navy: #0b4a8c; --teal: #3fb9c4; --teal-strong: #6ad3dc; --teal-bg: #0c2e36;
+    --approved: #34b879;
+    --paper: #081320; --surface: #0e2036; --surface-2: #0b1a2e;
+    --mist: #1e3550; --mist-strong: #2e4865;
+    --text: #e8eef6; --muted: #9db0c8; --heading: #dbe8fa;
+    --brand-ink: #e9f1fb; --brand-cyan: #2fc6d6;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 30px rgba(0,0,0,.34);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { font-family: var(--font-body); background: var(--bg); color: var(--text); line-height: 1.65; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 24px; }
+  a { color: var(--teal-strong); }
+  [data-theme="dark"] a { color: var(--teal-strong); }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+  h1 { font-family: var(--font-display); font-size: clamp(28px, 5vw, 44px); line-height: 1.12; letter-spacing: -.02em; color: var(--heading); }
+  h2 { font-family: var(--font-display); font-size: clamp(21px, 3.4vw, 28px); line-height: 1.2; letter-spacing: -.01em; color: var(--heading); margin-bottom: 14px; }
+  h3 { font-size: 17px; color: var(--heading); margin-bottom: 6px; }
+  p { margin-bottom: 14px; }
+  section { scroll-margin-top: 72px; }
+
+  /* Nav */
+  .site-nav { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between;
+    padding: 13px 24px; background: color-mix(in srgb, var(--surface) 88%, transparent);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
+  .nav-left { display: flex; align-items: center; gap: 9px; text-decoration: none; }
+  .brand-cube { width: 22px; height: 22px; flex: none; }
+  .nav-logo { font-family: var(--font-display); font-weight: 700; font-size: 20px; letter-spacing: -.018em; color: var(--brand-ink); line-height: 1; }
+  .nav-product { font-family: var(--font-mono); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted);
+    font-weight: 500; padding-left: 9px; margin-left: 1px; border-left: 1px solid var(--border-strong); }
+  .nav-right { display: flex; align-items: center; gap: 14px; }
+  .nav-status { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .nav-theme { border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); border-radius: var(--radius-pill);
+    width: 34px; height: 34px; cursor: pointer; font-size: 14px; line-height: 1; display: inline-flex; align-items: center; justify-content: center;
+    transition: border-color .12s, color .12s; }
+  .nav-theme:hover { border-color: var(--teal); color: var(--teal); }
+
+  /* Hero */
+  .hero { padding: 64px 0 36px; }
+  .eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--teal-strong); margin-bottom: 16px; display: inline-block; }
+  .hero-sub { font-size: 18px; color: var(--muted); max-width: 680px; margin-top: 16px; }
+  .lead-answer { font-size: 17px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--teal);
+    border-radius: 0 var(--radius) var(--radius) 0; padding: 18px 22px; margin-top: 26px; box-shadow: var(--shadow); }
+
+  /* Stat band */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden; margin: 32px 0 8px; }
+  .stat { background: var(--surface); padding: 24px 20px; }
+  .stat .v { font-family: var(--font-display); font-size: 40px; font-weight: 700; color: var(--teal-strong); line-height: 1; letter-spacing: -.02em; }
+  .stat.lead .v { color: var(--navy); }
+  [data-theme="dark"] .stat.lead .v { color: var(--teal-strong); }
+  .stat .k { font-size: 13.5px; color: var(--muted); margin-top: 8px; }
+  .stat .n { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-top: 10px; }
+  .stat-foot { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); margin-bottom: 40px; }
+
+  /* Sections */
+  .section { padding: 30px 0; border-top: 1px solid var(--border); }
+  .section:first-of-type { border-top: none; }
+  ul.clean { list-style: none; margin: 0 0 14px; }
+  ul.clean li { position: relative; padding-left: 20px; margin-bottom: 9px; }
+  ul.clean li::before { content: ""; position: absolute; left: 2px; top: 10px; width: 6px; height: 6px; border-radius: 50%; background: var(--teal); }
+
+  /* Q&A blocks */
+  .qa { border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 22px; margin-bottom: 16px; background: var(--surface); box-shadow: var(--shadow); }
+  .qa q { display: block; font-weight: 600; color: var(--heading); font-size: 16px; margin-bottom: 8px; quotes: none; }
+  .qa q::before, .qa q::after { content: ""; }
+  .qa .ans { color: var(--text); }
+  .qa .depth { color: var(--muted); font-size: 14.5px; margin-top: 10px; }
+  .qa .tag { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-top: 10px; display: block; }
+
+  /* Callout */
+  .callout { border-left: 3px solid var(--teal); background: var(--teal-bg); padding: 16px 20px; border-radius: 0 var(--radius) var(--radius) 0; margin: 6px 0 16px; }
+  [data-theme="dark"] .callout { background: var(--surface-2); }
+  .master { font-family: var(--font-display); font-size: 19px; color: var(--heading); font-weight: 600; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 16px; font-size: 14.5px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+  td.own { color: var(--text); font-weight: 500; }
+
+  /* Footer */
+  .footer { border-top: 1px solid var(--border); margin-top: 36px; padding: 30px 0 50px; }
+  .footer .byline { font-size: 14px; color: var(--muted); margin-bottom: 10px; }
+  .trust { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); letter-spacing: .03em; margin-bottom: 14px; }
+  .footer-bottom { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; font-size: 12.5px; color: var(--muted); }
+
+  @media (max-width: 620px) { .stats { grid-template-columns: 1fr; } }
+
+  @media print {
+    .site-nav { display: none !important; }
+    body { background: #fff; color: #000; }
+    .qa, .callout, .lead-answer { box-shadow: none; }
+    h2 { page-break-before: always; }
+    h2:first-of-type { page-break-before: avoid; }
+    .hero { padding-top: 12px; }
+  }
+</style>
+</head>
+<body id="top">
+
+<nav class="site-nav">
+  <a class="nav-left" href="#top" aria-label="Brisken OnePilot, back to top">
+    <svg class="brand-cube" viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M16 3 L28 9.5 V22.5 L16 29 L4 22.5 V9.5 Z" fill="none" stroke="var(--brand-cyan)" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M16 3 L16 16 M16 16 L28 9.5 M16 16 L4 9.5" fill="none" stroke="var(--brand-cyan)" stroke-width="2" stroke-linejoin="round"/>
+    </svg>
+    <span class="nav-logo">brisken</span>
+    <span class="nav-product">OnePilot</span>
+  </a>
+  <div class="nav-right">
+    <span class="nav-status">Remittance Advice Gate &middot; Q&amp;A</span>
+    <button class="nav-theme" onclick="(function(){
+      var d=document.documentElement;
+      var c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+      d.setAttribute('data-theme',c);
+      localStorage.setItem('theme',c);
+    })()" aria-label="Toggle theme">&#9788;/&#9790;</button>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <header class="hero">
+    <span class="eyebrow">OnePilot &middot; Remittance Advice Gate</span>
+    <h1>Reading remittance advice into SAP, without the retype.</h1>
+    <p class="hero-sub">Remittance advice still lands as email and PDF that someone keys into SAP cash application by hand. Here is how an AI gate reads the unstructured input and posts it into SAP S/4HANA, and what a live ChatGPT-powered deployment already does.</p>
+    <div class="lead-answer">
+      Remittance advice arrives as unstructured email and PDF that staff retype into SAP cash application. An AI-powered remittance gate reads the unstructured input, identifies and structures the payment and invoice data, and posts it into SAP S/4HANA, with a monitor that improves it over time. A live agricultural-sector customer runs this on a ChatGPT-powered deployment.
+    </div>
+  </header>
+
+  <section class="section">
+    <h2>The questions cash-application teams actually ask</h2>
+
+    <div class="qa">
+      <q>How do I automate unstructured remittance advice emails into SAP cash application?</q>
+      <div class="ans">Remittance advice arrives as unstructured email and PDF, which staff retype into SAP cash application. An AI-powered remittance gate reads the unstructured input, identifies and structures the data (payer, invoices, amounts, deductions), and delivers it into SAP S/4HANA, with a monitor that trains it over time. The manual retype step is removed.</div>
+      <span class="tag">Extractable answer &middot; 52 words</span>
+    </div>
+
+    <div class="qa">
+      <q>Can AI read remittance PDFs and post them to SAP S/4HANA?</q>
+      <div class="ans">Yes. A remittance gate uses an LLM to read remittance PDFs, email bodies and attachments, extract the structured fields, and post them into SAP S/4HANA cash application. A live agricultural-sector customer runs this on a ChatGPT-powered deployment on S/4HANA Private Cloud, with the stated goal of removing the human from the retype.</div>
+      <span class="tag">Extractable answer &middot; 51 words</span>
+    </div>
+
+    <div class="qa">
+      <q>How do I reduce manual cash-application matching in SAP?</q>
+      <div class="ans">Manual cash application is staff reading a remittance, finding the invoices, and keying the match into SAP. A remittance gate does the reading and structuring automatically and hands SAP the data already formatted for matching, so the team reviews exceptions instead of retyping every remittance by hand.</div>
+      <span class="tag">Extractable answer &middot; 47 words</span>
+    </div>
+
+    <div class="qa">
+      <q>What remittance inputs can an AI gate read?</q>
+      <div class="ans">Remittance advice arrives in many shapes: email bodies, PDF attachments, scanned documents and spreadsheet exports. An AI-powered gate reads the unstructured input directly rather than relying on a fixed template, extracts payer, invoice references, amounts and deductions, and a monitor lets the team correct and retrain it as new layouts appear.</div>
+      <span class="tag">Extractable answer &middot; 52 words</span>
+    </div>
+
+    <div class="qa">
+      <q>Does an AI remittance gate work with Serrala, BPI or HighRadius?</q>
+      <div class="ans">The remittance gate delivers structured remittance data into SAP S/4HANA, and can also target cash-application platforms such as Serrala, BPI or HighRadius. It sits upstream as the step that turns unstructured remittances into clean, structured input, rather than replacing the matching engine a team already runs.</div>
+      <span class="tag">Extractable answer &middot; 48 words</span>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Remittance Advice Gate vs the two usual paths</h2>
+    <p>Honest comparison. Manual cash application and template-based capture are both real, working approaches; the gate's difference is reading unstructured input directly and learning from corrections, not a claim that the alternatives do nothing.</p>
+    <table>
+      <tr>
+        <th>Dimension</th>
+        <th>OnePilot Remittance Advice Gate</th>
+        <th>Manual cash application</th>
+        <th>Rules / template OCR</th>
+      </tr>
+      <tr>
+        <td>Reads unstructured email + PDF</td>
+        <td class="own">AI extraction, no fixed template</td>
+        <td>Human reads and keys</td>
+        <td>Works only on known layouts</td>
+      </tr>
+      <tr>
+        <td>A new remittance format</td>
+        <td class="own">Handled, monitor retrains it</td>
+        <td>Staff adapt by hand</td>
+        <td>New template rule needed</td>
+      </tr>
+      <tr>
+        <td>Output into SAP</td>
+        <td class="own">Structured, posted to S/4HANA</td>
+        <td>Hand-keyed</td>
+        <td>Structured if the template matched</td>
+      </tr>
+      <tr>
+        <td>Effort per remittance</td>
+        <td class="own">Review exceptions only</td>
+        <td>Full retype each time</td>
+        <td>Fix the unmatched ones</td>
+      </tr>
+      <tr>
+        <td>Live proof</td>
+        <td class="own">ChatGPT-powered agricultural-sector customer</td>
+        <td>Not applicable</td>
+        <td>Not applicable</td>
+      </tr>
+    </table>
+  </section>
+
+  <section class="section">
+    <h2>What the market looks like</h2>
+    <p>From Brisken's <a href="/shadow-integration-report.html">Shadow Integration Report</a>, a read of 41 US SAP-treasury job ads (US-only, 2026-06-17). The manual cash-application and payment-file work a remittance gate removes is part of what these numbers count.</p>
+    <div class="stats">
+      <div class="stat lead">
+        <div class="v">71%</div>
+        <div class="k">of US SAP-treasury roles describe building or hand-running integrations into SAP, or manual data work</div>
+        <div class="n">29 of 41</div>
+      </div>
+      <div class="stat">
+        <div class="v">34%</div>
+        <div class="k">are tied to an active S/4HANA migration or SAP implementation</div>
+        <div class="n">14 of 41</div>
+      </div>
+      <div class="stat">
+        <div class="v">N=41</div>
+        <div class="k">US-only sample of public SAP corporate-treasury, TRM and FSCM job ads</div>
+        <div class="n">read 2026-06-17</div>
+      </div>
+    </div>
+    <div class="stat-foot">Source: Brisken Shadow Integration Report, N=41, read 2026-06-17. These are market-research figures, not a Remittance Advice Gate performance metric.</div>
+  </section>
+
+  <section class="section">
+    <h2>What it means for an AR or shared-service team</h2>
+    <p>If cash application is still a person opening a remittance, finding the invoices, and keying the match, then volume is capped by headcount and month-end is where the backlog shows. Reading the remittance with AI and posting structured data into SAP turns the job from retype-everything into review-the-exceptions, and the live agricultural deployment is the proof that the unstructured-to-structured step works on real customer mail.</p>
+    <div class="callout">
+      <span class="master">Read the remittance once. Post it into SAP, structured, and review only the exceptions.</span>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="byline">Brisken OnePilot. The Remittance Advice Gate capabilities and the agricultural-customer proof trace to Brisken's product decks; it is a brisken.com product, not currently an SAP Store listing.</div>
+    <div class="trust">SAP Co-Innovation Partner &middot; built on SAP BTP &middot; ISO 27001 / SOC 1 Type II</div>
+    <div class="footer-bottom">
+      <div>Brisken LLC &middot; governed, no-code financial-data orchestration for SAP</div>
+      <div>Last updated: 2026-06-18</div>
+    </div>
+  </footer>
+
+</main>
+</body>
+</html>
