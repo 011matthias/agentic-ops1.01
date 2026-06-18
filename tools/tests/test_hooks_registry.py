@@ -23,7 +23,9 @@ def test_all_registered_hooks_exist_on_disk():
 
 
 def test_no_unregistered_hooks_on_disk():
-    on_disk = {p.name for p in HOOKS.glob("*.py")}
+    # `_`-prefixed files are shared libraries imported by hooks (e.g. _scope.py),
+    # NOT wired hooks — they are not in EXPECTED_HOOK_SCRIPTS by design.
+    on_disk = {p.name for p in HOOKS.glob("*.py") if not p.name.startswith("_")}
     expected = set(wh.EXPECTED_HOOK_SCRIPTS)
     orphan = sorted(on_disk - expected)  # file present, not registered
     ghost = sorted(expected - on_disk)   # registered, file absent

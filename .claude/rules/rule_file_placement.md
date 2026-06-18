@@ -25,38 +25,51 @@ multi-purpose files, and announce the reasoning (§4).
 
 ## 2. The home map (this repo's real directories)
 
-| Kind + intent | Home | Committed |
+Grouped by parent home so each path-thread is stated once. **gi** =
+gitignored.
+
+**Client work — `workspace/clients/{client}/`**
+
+| Sub-home | What | Committed |
 |---|---|---|
-| Client automation code | `workspace/clients/{client}/automations/` | yes (subtree) |
-| Automation spec | `workspace/clients/{client}/specs/{1-spec…4-live}/` | yes |
-| Client IDs / keys / comms / raw data | `workspace/clients/{client}/context/` | **gitignored** (except `context/portable/`) |
-| Client-facing deliverable | `workspace/clients/{client}/deliverables/` | yes |
-| Prospect proposal site | `platform/public/clients/{slug}/` | yes |
-| Gated active-client doc site | `platform/public/docs/{client}/` | yes |
-| Proposal markdown | `platform/src/content/proposals/` | yes |
-| Platform app source / static | `platform/src/` · `platform/public/` | yes |
-| Reusable repo tool | `tools/` (+ manifest line in `tools/INDEX.md`) | yes |
-| Repo tests / fixtures | `tools/tests/` · `tools/fixtures/` | yes |
-| Rule / skill / agent / hook | `.claude/rules/` · `.claude/skills/{n}/SKILL.md` · `.claude/agents/` · `.claude/hooks/` | yes |
-| One-off automation script (kept) | `scripts/` (ephemeral variant: `scripts/.<name>`, gitignored) | yes / no |
-| Session log / checkpoint | `docs/{YYYY-MM-DD} - Topic/` · `docs/sessions/` | yes (`*-context.yaml` gitignored) |
-| Durable internal report / analysis | `docs/` (`references/`, `digests/`) | yes |
-| Local prototype site | `workspace/projects/local-web/` | yes |
-| Fetched API docs | `api-docs/` | **gitignored** |
-| Memory fact | `~/.claude/projects/.../memory/*.md` | (separate store) |
-| **Ephemeral / scratch** (debug render, temp download, one-off analysis output, API response dump, throwaway script) | **`.scratch/`** | **never** |
-| **Never-commit** (secrets, tokens, raw PII export, large data) | gitignored path, or do not write | **never** |
+| `automations/` | automation code | yes (git subtree) |
+| `specs/{1-spec…4-live}/` | specs, by stage | yes |
+| `context/` | IDs / keys / comms / raw client data | **gi** (except `context/portable/`) |
+| `deliverables/` | client-facing deliverables | yes |
 
-If a kind has no row here, it has no established home: route to
-`.scratch/` or ask. Do **not** silently create a new tracked top-level
-directory.
+**Platform — `platform/`**
 
-Two further committed homes the gate recognizes but that aren't their own
-row above: `.github/` (CI workflows) and `.agents/` (vendored skill
-assets, distinct from `.claude/agents/` repo agent definitions). The
-remaining top-level dirs the gate knows (`.vscode/`, `.serena/`,
-`.playwright-mcp/`, `.tmp/`, `internal/`, `node_modules/`) are gitignored
-tooling and never get a placement advisory.
+| Sub-home | What |
+|---|---|
+| `src/` | Next.js app source |
+| `public/clients/{slug}/` · `public/docs/{client}/` | prospect proposal sites · gated active-client doc sites |
+| `src/content/proposals/` | proposal markdown |
+
+**Repo infrastructure**
+
+| Home | What |
+|---|---|
+| `tools/` (+ a row in `tools/INDEX.md`) · `tools/tests/` · `tools/fixtures/` | reusable tools · tests · fixtures |
+| `.claude/{rules, skills/{n}/SKILL.md, agents, hooks}/` | Claude primitives |
+| `scripts/` (`.<name>` → **gi**) | one-off automation scripts |
+| `docs/{YYYY-MM-DD} - Topic/` · `docs/sessions/` · `docs/references/` · `docs/digests/` | session logs · checkpoints · internal reports (`sessions/*-context.yaml` → **gi**) |
+| `.github/` · `.agents/` | CI workflows · vendored skill assets (NOT `.claude/agents/`) |
+| `api-docs/` | fetched API docs (**gi**) |
+| `workspace/projects/local-web/` | local prototype sites |
+
+**Ephemeral / never-commit**
+
+| Home | What |
+|---|---|
+| **`.scratch/`** | ALL ephemeral output (debug renders, temp downloads, one-off analysis, API dumps, throwaway scripts) — **never** committed |
+| a gitignored path, or don't write | secrets, tokens, raw PII export, large data — **never** committed |
+| `~/.claude/.../memory/*.md` | memory facts (separate store) |
+
+If a kind has no row here, it has no established home: route to `.scratch/`
+or ask. Do **not** silently create a new tracked top-level directory. (The
+gate also recognizes the gitignored tooling dirs `.vscode/`, `.serena/`,
+`.playwright-mcp/`, `.tmp/`, `internal/`, `node_modules/` and never advises
+on a write there.)
 
 ## 3. The five placement rules
 
