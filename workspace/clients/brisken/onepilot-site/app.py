@@ -114,9 +114,24 @@ async def healthz() -> PlainTextResponse:
     return PlainTextResponse("ok")
 
 
+# Brisken cube mark (matches _BRAND_CUBE below and the wordmark on brisken.com),
+# served so every page (gate, prototype, feedback log) shows it in the tab. The
+# standalone SVG needs the xmlns the inline _BRAND_CUBE omits.
+_FAVICON_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
+    '<polygon points="16,3 28,10 16,17 4,10" fill="#5fd3df"/>'
+    '<polygon points="4,10 16,17 16,31 4,24" fill="#00b8ce"/>'
+    '<polygon points="28,10 16,17 16,31 28,24" fill="#0b6f7a"/></svg>'
+)
+
+
 @app.get("/favicon.ico")
 async def favicon() -> Response:
-    return Response(status_code=204)
+    return Response(
+        _FAVICON_SVG,
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 def render_welcome(error: str, nxt: str) -> str:
