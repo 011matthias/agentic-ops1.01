@@ -96,6 +96,15 @@ Add buyer-question entries (they double as answer-engine bait):
 This is the one large structural item from the review, not a copy edit.
 Treat it as a separate work-block; items 1-7 ship independently of it.
 
+> Critical overlay: this section captures what Dirk's OnePilot vision implies
+> for the site, taken on its own terms. Before acting on the homepage calls in
+> §8.B-C (the Universal-UI-first title / hero), read
+> `brisken-onepilot-vision-strategy-fit.md` §4: reconciled against the
+> marketing strategy, the homepage and AEO root stay on the SAP-data wedge and
+> the Universal UI moves to its own platform/vision page one click away. The
+> rest of §8 (the OnePilot-vs-TreasuryCentral hierarchy, the platform-map
+> redesign, the AEO re-nesting, the overclaim guardrail) stands.
+
 ### A. Diagnosis
 
 The prototype is built as a TreasuryCentral product site with OnePilot
