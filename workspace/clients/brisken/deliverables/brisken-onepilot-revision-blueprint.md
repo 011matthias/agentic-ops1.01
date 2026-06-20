@@ -104,6 +104,11 @@ Treat it as a separate work-block; items 1-7 ship independently of it.
 > the Universal UI moves to its own platform/vision page one click away. The
 > rest of §8 (the OnePilot-vs-TreasuryCentral hierarchy, the platform-map
 > redesign, the AEO re-nesting, the overclaim guardrail) stands.
+> The vision was updated 2026-06-20 to the CONTINUOUS version (five competitive
+> slices, stronger Gartner adoption stats, "orchestrate don't replace", "your
+> best practice not the vendor's"); the §8 line-number citations point to the
+> earlier V001 extract, but its substance (the must-hold distinction and the
+> overclaim guardrail) is unchanged. See the fit memo §6 for the delta.
 
 ### A. Diagnosis
 

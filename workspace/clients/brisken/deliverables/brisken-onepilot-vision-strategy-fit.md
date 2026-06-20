@@ -38,7 +38,7 @@ Eight moves. Each names where it applies and why it beats a literal reading of t
 
 **2. Homepage leads with the SAP-data wedge across the WHOLE crawlable page, not only the H1.** WHERE: homepage H1, `<title>`, meta description, and body copy. A literal reading (blueprint §8.B-C) makes "OnePilot, the Universal UI for the whole working day" the headline and title. That loses, because the homepage is both the outbound landing surface and the AEO root: a warm LinkedIn touch that quoted "Bloomberg into SAP" back to the buyer, landing on "your whole working day," reads as a different company, and the cold-skeptical SAP buyer reads that incoherence as "this vendor doesn't know what it is." But the trap is subtler than the headline. Google AI Overviews rank the whole page, not just the H1, and the per-app clusters share the homepage as their root. So a "prominent Universal-UI section" with "compose your surface / any role / whole working day" copy on the homepage body injects horizontal-category strings into the one URL the engines crawl as the root, and quietly poisons retrieval even with a clean H1. The rule: the Universal-UI presence on the homepage is a single clearly-bounded section that LINKS OUT to the dedicated platform/vision page and does NOT introduce the horizontal query strings into the homepage body. The breadth narrative lives on the separate human-read page (not AEO-targeted, mark it noindex if needed). The homepage body stays SAP-data-wedge end to end.
 
-**3. Keep the relief / adoption thesis, spend it at PLATFORM and in the room, and treat it as the commercial-value argument, not only call rhetoric.** WHERE: platform page, second-meeting narrative, and the deal-economics logic in §5. Dirk's sharpest commercial insight is real and it is the vision's single most defensible non-obvious thesis: 2026 enterprise-AI spend (forecast well over forty billion dollars) under-delivers because licences get bought and not adopted, and adoption follows relief. As a COLD open it fails, exactly as the brief argues: "you lose ~40% to context switching" is true of every company, names no signal, and maps to no product. But it is not only discovery-call rhetoric; it is a deal-economics argument. Brisken's model is fee-per-held-BANT-lead plus commission on first-year subscription value, so a platform that actually gets adopted renews and expands, which raises both the commission base and the lifetime value of every lead we source. Land the wedge, then expand to TreasuryCentral / OnePilot-the-layer, and the breadth becomes a revenue argument for our own model, not only a ceiling-raiser for Brisken's pitch. Accuracy caveat, same discipline the strategy applies to its own stats (it cites Precisely 2025 for the 59% S/4HANA figure; substrate §6 requires verifiable facts): the ~40% context-switching figure is attributed to a named analyst source or phrased "analysts estimate" before it enters any room, and it is never a measured Brisken number.
+**3. Keep the relief / adoption thesis, spend it at PLATFORM and in the room, and treat it as the commercial-value argument, not only call rhetoric.** WHERE: platform page, second-meeting narrative, and the deal-economics logic in §5. Dirk's sharpest commercial insight is real and it is the vision's single most defensible non-obvious thesis: 2026 worldwide AI spend is forecast at $2.5 trillion (Gartner), yet adoption, not capability, is the binding constraint; Gartner expects at least 30% of generative-AI projects abandoned after proof of concept and over 40% of agentic-AI projects cancelled by 2027. Licences get bought and not adopted; adoption follows relief. As a COLD open it fails, exactly as the brief argues: "you lose ~40% to context switching" is true of every company, names no signal, and maps to no product. But it is not only discovery-call rhetoric; it is a deal-economics argument. Brisken's model is fee-per-held-BANT-lead plus commission on first-year subscription value, so a platform that actually gets adopted renews and expands, which raises both the commission base and the lifetime value of every lead we source. Land the wedge, then expand to TreasuryCentral / OnePilot-the-layer, and the breadth becomes a revenue argument for our own model, not only a ceiling-raiser for Brisken's pitch. Accuracy caveat, same discipline the strategy applies to its own stats (it cites Precisely 2025 for the 59% S/4HANA figure; substrate §6 requires verifiable facts): the CONTINUOUS vision now carries a Sources section (context-switching up to 40% from the APA, ~1,200 toggles/day from HBR 2022, the $2.5T spend and the abandonment rates from Gartner); confirm the exact citation and wording before any of them enters a room, and never present any as a measured Brisken number.
 
 **4. Make Cluster F the only home for breadth in AEO, cap it precisely, and keep SAP as the anchor noun.** WHERE: the AEO substrate. Cluster F (queries 22-25: "no-code integration layer for SAP BTP finance data," "buy vs build a custom SAP treasury data integration," "SAP-listed alternative to custom middleware for finance data," "add audit trail to SAP treasury data feeds") is broader than "Bloomberg into SAP" but still SAP-BTP-scoped and problem-shaped, so it still retrieves. WHY it beats leading AEO with the vision: "Universal UI" drops Brisken into the Glean / M365 Copilot / Gemini / Notion query space, where it has no third-party citation surface and cannot win retrieval, and it abandons winnable SAP strings across Clusters A-G. Note the collateral specifically: leading AEO with breadth also strands Cluster G (queries 28-29), the migration why-now cluster that substrate §5.3 calls the broadest fan-out catcher. That is an argument for keeping AEO SAP-narrow; it is NOT an argument about Cluster F's scope, and the migration cluster stays at LAND (see move 5 and the §4 correction). Safe Cluster F ceiling, re-anchored to the actual substrate strings so SAP stays the head noun in every one: "no-code integration layer for SAP BTP finance data," "buy vs build a custom SAP treasury data integration," "governed audit trail across SAP treasury data feeds." If the four product domains are named at all, keep them subordinate: "...across the SAP finance data estate (market data, trades, bank fees, remittance)," never the bare "across market data, trades, bank fees, remittance," which reads as "one layer covers everything" and drops the SAP anchor. Unsafe at any altitude in AEO: email, Teams, "any role," "whole working day."
 
@@ -85,3 +85,51 @@ The genuine open questions, which only you can answer:
 - **Is the EXPAND page titled "TreasuryCentral" or "OnePilot for Treasury"?** The hierarchy itself we are treating as settled per your §7 and the blueprint: OnePilot is the framework, TreasuryCentral is its scoped edition, the products sit under OnePilot. So this is a label decision, not the umbrella-vs-peers architecture question; the architecture is decided, the wording on the edition page is yours. We have held off re-skinning the OnePilot-as-platform assets until you confirm the label.
 - **How prominent should the platform/vision page be now, given the strategy's "one product live at a time, then the platform widens the set" sequencing?** The page gets built, but the strategy already answers the sequencing: the platform/vision page is timed to the "platform widens the set" stage and must not be the outbound landing surface before the wedge is proving out. So the open call is how prominent, not whether to ship it as the hero in parallel with first MDH outbound; that last option is the breadth-in-the-cold-open risk moves 2 and 5 rule out.
 - **On the PLATFORM page, do you want FSI foregrounded as the lead future track?** Note FSI and the role-editions are two different axes. The role-editions (finance/controlling, sales, operations, executive) are your vision's same-buyer illustrative editions and stay on the "where this goes" page as illustration. FSI is the strategy's separate banking track with a different ICP (Cluster H, query 30), so it is not one of the four role-editions; it is a distinct future track. Our recommendation: foreground FSI as the lead future track on the platform page precisely because it is the largest, named, real expansion and the strongest available proof the surface generalizes beyond SAP-finance, "the same surface, going into banking cores like Temenos / Finastra." Keep it walled off from AEO and outbound regardless. We would rather make this positioning call with you than for you.
+
+## 6. Update: what the CONTINUOUS vision (2026-06-20) changes
+
+Grounded now on the CONTINUOUS version of the vision, not the V001 draft. The
+reconciliation does not move; it is reinforced. Three things are worth folding in,
+and one new conflict is worth naming.
+
+**Reinforced, not changed.** The competitive map is now FIVE crowded horizontal
+slices, not four: the new one is AI app / auto-builders (Lovable, Base44, Replit,
+v0, Bolt). A fifth crowded category makes the case stronger, not weaker, that
+Universal-UI breadth cannot be the acquisition headline or the AEO target; there is
+even more noise to lose in. The land / expand / platform model and the §8.B-C
+homepage reversal stand exactly as written.
+
+**Stronger stats, already folded into move 3.** The adoption argument is now sourced
+and much larger: $2.5T 2026 AI spend, at least 30% of GenAI projects abandoned after
+PoC, over 40% of agentic projects cancelled by 2027 (Gartner), plus the APA 40% and
+HBR ~1,200-toggles figures. This sharpens the platform/exec and commercial case; it
+stays at PLATFORM and in the room, never the cold open.
+
+**New platform-altitude ammunition (use at PLATFORM / second meeting, not LAND).**
+
+- "Orchestrate, don't replace." The new doc states it plainly: the book of record
+  stays in SAP, execution on the trading platform via BST, market data via MDH;
+  OnePilot orchestrates across them. This is a clean platform-page line AND it
+  hardens move 1: the apps (MDH, BST) have a stated role under the one OnePilot, so
+  "OnePilot is the framework, the apps are products under it" is now the vision's own
+  language, not our inference.
+- "Your best practice, not the vendor's." The strongest new differentiator for the
+  strategic buyer: composed-in-plain-language processes that fit one company, versus
+  one vendor's frozen template. Good second-meeting and platform-page material.
+- Auto-builders as an input, not a rival (publish Lovable templates so apps are
+  born connectable). A platform-page point against the vibe-coding wave; minor, and
+  platform-only.
+
+**The one new conflict to flag (channel risk).** "Your best practice, not the
+vendor's" is framed in the doc as an explicit swipe at SAP's "best practice" as one
+vendor's frozen opinion. The entire marketing motion leans on SAP goodwill: SAP
+Store listing, SAP Co-Innovation Partner trust mark, the co-sell prize. An anti-SAP
+line on a public surface, or anywhere a SAP partner manager reads it, can cost more
+in channel access than it wins in differentiation. Recommendation: keep the
+"run the way that is best for you" idea, drop the SAP-as-frozen-opinion framing on
+any SAP-channel-facing or public surface; if used at all, it lives in the room with
+a non-SAP-aligned buyer, never in copy. Worth a direct word with Dirk, since it is
+his line and his SAP relationship.
+
+This is the only place the update introduces a NEW decision rather than reinforcing
+an existing one; everything else above is confirmation.
