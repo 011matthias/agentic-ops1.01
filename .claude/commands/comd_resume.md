@@ -52,7 +52,8 @@ If a recent `docs/sessions/{date}-context.yaml` exists and contains an entry for
 2. Extract the project's entry (`orchestrator`, `active_specs`, `next_steps`, `open_questions`, `comms`)
 3. Also read `{resolved_path}/infrastructure.yaml` for instance IDs and `type` (1 file, fast)
 4. Also read `{resolved_path}/context/comms-log.md` if it exists — extract `last_contact`, count unresolved open items
-5. Jump directly to **Step 6: Summarize** using the YAML data + live comms state — skip Steps 1-5
+5. Also read `{resolved_path}/status/*.md` if the folder exists — the per-workstream status of elements (surface `blocked` workstreams + open gates)
+6. Jump directly to **Step 6: Summarize** using the YAML data + live comms state — skip Steps 1-5
 
 If no YAML exists or the client isn't in it, proceed with Steps 1-5 below (full context load).
 
@@ -77,6 +78,23 @@ If `{resolved_path}/specs/README.md` exists, read it to understand:
 - Any open bug fixes
 
 (Non-client projects may not have a specs/ directory — skip silently if absent.)
+
+## Step 2.5: Read Project Status (status-of-elements)
+
+If `{resolved_path}/status/` exists, read its `*.md` files. These are the
+per-workstream status files (one per discrete piece of work) plus any group
+general-reference file — the at-a-glance state of the moving parts of each
+workstream and where each element stands. They are the canonical "what's in
+flight here and what's next" surface (see `rule_project_status.md` /
+`skil_project-status`).
+
+- Each file's frontmatter has `state` (active | blocked | paused | done | live |
+  dormant) and `updated`. Surface any `blocked` workstreams and any open
+  decisions / gates as **task inputs** in the Step 6 summary.
+- Run `uv run tools/project_status.py --client {client} --check` to flag stale or
+  malformed status files; mention stale ones so they get refreshed this session.
+
+(Projects without a `status/` folder: skip silently.)
 
 ## Step 3: Read Context
 
