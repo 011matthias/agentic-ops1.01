@@ -413,6 +413,8 @@
     max-width:780px;margin-left:auto;margin-right:auto;text-align:center;}
   #applications .sec-head .sec-intro,#governed .sec-head .sec-intro,#problem .sec-head .sec-intro,#answers .sec-head .sec-intro{
     margin-left:auto;margin-right:auto;}
+  #applications .sec-head h2,#governed .sec-head h2,#problem .sec-head h2,#answers .sec-head h2{
+    margin-left:auto;margin-right:auto;}
   #governed .holds-line{border-left:none;border-top:1px solid var(--line-2);padding:18px 0 0;text-align:center;max-width:74ch;margin-left:auto;margin-right:auto;}
   #answers .qa{margin-left:auto;margin-right:auto;}
   #answers .qa-group{text-align:center;}
@@ -630,7 +632,7 @@
       </a>
     </div>
     <div class="app-more">
-      <p>TreasuryCentral is the finance edition. <b>The same platform runs other teams' work on the same governed surface</b>, and the value is having it in one place: one login, one permission model, one audit trail, instead of ten tabs and ten passwords.</p>
+      <p><b>OnePilot is not limited to SAP, or to finance.</b> These five apps are the finance edition; the platform itself composes whatever a team works with, from wherever they have access: ERP, banking, market data, email, Teams, spreadsheets, anything with an API. The value is one governed surface across all of it, one login and one audit trail instead of ten tabs and ten passwords.</p>
       <div class="more-chips">
         <span>Finance and controlling <i>Illustration</i></span>
         <span>Sales and account desk <i>Illustration</i></span>
@@ -879,6 +881,14 @@
     <p class="lead" style="margin-bottom:0">OnePilot is the framework. <b>TreasuryCentral</b> is its one shipped edition, live on SAP with customers now: the treasurer's whole day, cash, FX, market data, trades, bank files and remittances, on one governed surface. The other editions on this map are illustrations of the same pattern.</p>
   </article>
 
+  <article data-key="integrations">
+    <p class="lead">OnePilot composes whatever you have access to, from wherever it lives. <b>It is not tied to SAP, or to finance.</b> The surface reaches into the systems you already use and brings them onto one canvas, with agents that carry your exact permissions across all of them.</p>
+    <div class="sub">What it reaches</div>
+    <div class="estate-chips"><span>SAP and other ERPs</span><span>Bank portals and files</span><span>Market data: Bloomberg, Refinitiv, 360T, OANDA, CME</span><span>Trading platforms</span><span>Email and Teams</span><span>Spreadsheets</span><span>Anything with an API</span></div>
+    <div class="sub">SAP is one source, not the boundary</div>
+    <p class="lead" style="margin-bottom:0">TreasuryCentral, the shipped edition, runs on SAP today, so the first proof is in SAP treasury. The platform itself is source- and department-agnostic: the same surface composes a sales desk, an operations queue or an executive cockpit from whatever those teams have access to.</p>
+  </article>
+
 </div>
 
 <script>
@@ -908,15 +918,17 @@
     diff:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>',
     treasury:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V10M19 21V10M3 10l9-6 9 6M9 21v-6h6v6"/></svg>',
     adopt:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="3"/><path d="M2 20a6 6 0 0 1 12 0"/><path d="M16 11l2.5 2.5L22 9"/></svg>',
-    onepilot:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="9" ry="3.4"/><path d="M12 3v18"/></svg>'
+    onepilot:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="9" ry="3.4"/><path d="M12 3v18"/></svg>',
+    integrations:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v6M12 16v6M2 12h6M16 12h6"/><circle cx="12" cy="4" r="1.5"/><circle cx="12" cy="20" r="1.5"/><circle cx="4" cy="12" r="1.5"/><circle cx="20" cy="12" r="1.5"/></svg>'
   };
   var NODES = [
-    {key:'problem', eyebrow:'The problem',      short:'The ten-tab day',    title:'The ten-tab day',                tip:'Ten tabs, the same numbers re-keyed.',          hue:'var(--h-problem)'},
-    {key:'surface', eyebrow:'What it is',        short:'Composed by you',    title:'One composable surface',         tip:'Your spaces, assembled in plain language.',     hue:'var(--h-surface)'},
-    {key:'govern',  eyebrow:'Governance',        short:'Your permissions',   title:'Agents inside your permissions', tip:'Agents reach exactly what you can, no more.',   hue:'var(--h-govern)'},
-    {key:'diff',    eyebrow:'Why different',     short:'Not just a slice',   title:'The whole surface, not a slice', tip:'The market covers slices; OnePilot closes the ring.', hue:'var(--h-diff)'},
-    {key:'treasury',eyebrow:'Live on SAP',       short:'TreasuryCentral',    title:'TreasuryCentral, live on SAP',   tip:"The treasurer's whole day, shipped today.",     hue:'var(--h-treasury)'},
-    {key:'adopt',   eyebrow:'Why it gets used',  short:'Built to be used',   title:'Adoption, not just capability',  tip:'It gets used because people want to use it.', hue:'var(--h-adopt)'}
+    {key:'problem',      eyebrow:'Why it exists', short:'The problem',        title:'The problem today',            tip:'Ten tabs, the same numbers re-keyed.',                hue:'var(--h-problem)'},
+    {key:'surface',      eyebrow:'The idea',      short:'What OnePilot is',   title:'What OnePilot is',             tip:'One surface, assembled by you in plain language.',    hue:'var(--h-surface)'},
+    {key:'integrations', eyebrow:'Connects to',   short:'Integrations',       title:'What it connects to',          tip:'ERP, banks, market data, email, any API. Not just SAP.', hue:'var(--h-adopt)'},
+    {key:'govern',       eyebrow:'Trust',         short:'Security & control', title:'Security and control',         tip:'Agents reach exactly what you can, no more.',         hue:'var(--h-govern)'},
+    {key:'diff',         eyebrow:'Versus',        short:'How it compares',    title:'How OnePilot compares',        tip:'The market covers slices; OnePilot closes the ring.', hue:'var(--h-diff)'},
+    {key:'treasury',     eyebrow:'Live on SAP',   short:'TreasuryCentral',    title:'TreasuryCentral, live on SAP', tip:"The treasurer's whole day, shipped today.",           hue:'var(--h-treasury)'},
+    {key:'adopt',        eyebrow:'Why it sticks', short:'Why teams adopt it', title:'Why teams adopt it',           tip:'It gets used because people want to use it.',         hue:'var(--h-adopt)'}
   ];
   var ONEPILOT = {key:'onepilot', eyebrow:'The platform', title:'OnePilot, the universal UI', hue:'var(--brand-cyan)'};
 
