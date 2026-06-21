@@ -1,0 +1,1246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- deliverable-allow: copy-clipboard | reason: vision page, no code/command blocks; copy applies to code blocks only -->
+<!-- deliverable-allow: keyboard-search | reason: single-purpose scrolling vision page (9 anchored sections), not a searchable doc site or tool -->
+<!-- deliverable-allow: relative-path | reason: flat sibling pages served from one directory on the Fly/FastAPI host (not Vercel nested routes); relative links keep local file:// review working for the owner -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OnePilot, the Universal UI for the whole working day</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHBvbHlnb24gcG9pbnRzPSIxNiwzIDI4LDEwIDE2LDE3IDQsMTAiIGZpbGw9IiM1ZmQzZGYiLz48cG9seWdvbiBwb2ludHM9IjQsMTAgMTYsMTcgMTYsMzEgNCwyNCIgZmlsbD0iIzAwYjhjZSIvPjxwb2x5Z29uIHBvaW50cz0iMjgsMTAgMTYsMTcgMTYsMzEgMjgsMjQiIGZpbGw9IiMwYjZmN2EiLz48L3N2Zz4=">
+<meta name="description" content="OnePilot is Brisken's governed, no-code Universal UI: one surface where each user composes the spaces, apps and data their work needs, and AI agents do the repetitive work across all of it inside their permissions. TreasuryCentral is its first scoped edition, live on SAP today.">
+<meta name="author" content="Brisken">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Brisken">
+<meta property="og:title" content="OnePilot, the Universal UI for the whole working day">
+<meta property="og:description" content="One surface, as many workspaces as your work needs, assembled by you, run with AI inside your permissions. TreasuryCentral is its first scoped edition, live on SAP.">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="OnePilot, the Universal UI for the whole working day">
+<meta name="twitter:description" content="Brisken's governed, no-code platform. One surface, composed by you, run with AI. TreasuryCentral is its first scoped edition, live on SAP today.">
+<!-- Boot script: set theme before paint to avoid a flash. -->
+<script>(function(){var t=localStorage.getItem('theme');
+  var d=document.documentElement;
+  d.setAttribute('data-theme',
+    t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');
+})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+  :root, [data-theme="light"] {
+    --ink: #0a1a2f;
+    --navy: #00396f; --navy-deep: #042a52;
+    --teal: #0e7c86; --teal-strong: #0b626a; --teal-bg: #e4f3f4;
+    --approved: #1e8e5a; --approved-bg: #e6f4ec;
+    --amber: #b5701b; --amber-bg: #fbeede;
+    --paper: #f4f7fb; --surface: #ffffff; --surface-2: #eef3fa; --surface-3: #e7eefa;
+    --mist: #e2e9f2; --mist-strong: #c8d5e5;
+    --text: #0a1a2f; --muted: #56657c; --heading: #00396f;
+    --bg: var(--paper); --border: var(--mist); --border-strong: var(--mist-strong);
+    --accent: var(--teal); --accent-strong: var(--teal-strong); --accent-bg: var(--teal-bg);
+    --brand-ink: #003a96; --brand-cyan: #00b8ce; --brand-cyan-lo: #5fd3df; --brand-cyan-hi: #0b6f7a;
+    --radius: 3px; --radius-lg: 6px; --radius-pill: 999px;
+    --space-tight: 56px; --space: 92px; --space-sig: 116px;
+    --shadow: 0 1px 2px rgba(10,26,47,.05), 0 10px 30px rgba(10,26,47,.06);
+    --shadow-lift: 0 2px 6px rgba(10,26,47,.08), 0 20px 44px rgba(10,26,47,.11);
+    --font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+    --font-body: "IBM Plex Sans", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  [data-theme="dark"] {
+    --ink: #e8eef6;
+    --navy: #0b4a8c; --navy-deep: #061a30;
+    --teal: #3fb9c4; --teal-strong: #6ad3dc; --teal-bg: #0c2e36;
+    --approved: #34b879; --approved-bg: #0d2a1e;
+    --amber: #e0a35a; --amber-bg: #2a1d0c;
+    --paper: #081320; --surface: #0e2036; --surface-2: #0b1a2e; --surface-3: #122843;
+    --mist: #1e3550; --mist-strong: #2e4865;
+    --text: #e8eef6; --muted: #9db0c8; --heading: #dbe8fa;
+    --bg: var(--paper); --border: var(--mist); --border-strong: var(--mist-strong);
+    --accent: var(--teal); --accent-strong: var(--teal-strong); --accent-bg: var(--teal-bg);
+    --brand-ink: #e9f1fb; --brand-cyan: #2fc6d6; --brand-cyan-lo: #8fe6ef; --brand-cyan-hi: #167e8a;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 30px rgba(0,0,0,.34);
+    --shadow-lift: 0 2px 8px rgba(0,0,0,.46), 0 22px 46px rgba(0,0,0,.44);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--font-body); font-size: 18px;
+    background: var(--bg); color: var(--text); line-height: 1.6;
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  }
+  section { scroll-margin-top: 76px; }
+  a { color: inherit; }
+  a:focus-visible, button:focus-visible, input:focus-visible, .btn:focus-visible {
+    outline: 2px solid var(--teal); outline-offset: 3px; border-radius: 2px;
+  }
+  h1, h2, h3 { font-family: var(--font-display); color: var(--heading); }
+  .eyebrow, .nav-status, .hero-badge, .mono { font-family: var(--font-mono); }
+
+  .wrap { max-width: 1140px; margin: 0 auto; padding: 0 32px; }
+  .eyebrow {
+    display: inline-block; font-size: 12px; font-weight: 500; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--teal-strong); margin-bottom: 14px;
+  }
+  h1 { font-size: clamp(40px, 5.4vw, 60px); line-height: 1.04; letter-spacing: -.025em; margin-bottom: 20px; font-weight: 700; }
+  h2 { font-size: clamp(28px, 3.5vw, 38px); line-height: 1.12; letter-spacing: -.02em; margin-bottom: 14px; font-weight: 600; max-width: 18ch; }
+  .section-sub { color: var(--muted); font-size: 19px; line-height: 1.58; max-width: 60ch; margin-bottom: 36px; }
+  h3 { font-size: 18px; font-weight: 600; margin-bottom: 7px; letter-spacing: -.005em; color: var(--text); }
+  p { margin-bottom: 10px; }
+
+  /* Nav */
+  .site-nav {
+    position: sticky; top: 0; z-index: 50; display: flex; align-items: center;
+    justify-content: space-between; padding: 14px 32px;
+    background: color-mix(in srgb, var(--surface) 84%, transparent);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-left { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .brand-cube { width: 26px; height: 26px; flex: none; display: block; }
+  .nav-logo { font-family: var(--font-display); font-weight: 700; font-size: 22px; letter-spacing: -.018em; color: var(--brand-ink); line-height: 1; }
+  .nav-product {
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--muted); font-weight: 500; padding-left: 10px; margin-left: 1px; border-left: 1px solid var(--border-strong);
+  }
+  .nav-links { display: flex; gap: 26px; }
+  .nav-links a { color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500; transition: color .12s ease; }
+  .nav-links a:hover { color: var(--teal-strong); }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .nav-status {
+    font-size: 10.5px; padding: 5px 11px; border-radius: var(--radius-pill); letter-spacing: .12em;
+    text-transform: uppercase; background: var(--teal-bg); color: var(--teal-strong); font-weight: 500;
+    border: 1px solid color-mix(in srgb, var(--teal) 28%, transparent);
+  }
+  .nav-theme {
+    border: 1px solid var(--border-strong); background: var(--surface); color: var(--text);
+    border-radius: var(--radius-pill); width: 34px; height: 34px; cursor: pointer; font-size: 14px; line-height: 1;
+    display: inline-flex; align-items: center; justify-content: center; transition: border-color .12s, color .12s;
+  }
+  .nav-theme:hover { border-color: var(--teal); color: var(--teal); }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px; border-radius: var(--radius-pill);
+    padding: 13px 26px; font-size: 15px; font-weight: 600; text-decoration: none; cursor: pointer;
+    border: 1px solid transparent; font-family: var(--font-body);
+    transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+  }
+  .btn-primary { background: var(--teal); color: #fff; box-shadow: 0 4px 16px color-mix(in srgb, var(--teal) 36%, transparent); }
+  .btn-primary:hover { background: var(--teal-strong); transform: translateY(-1px); box-shadow: 0 8px 22px color-mix(in srgb, var(--teal) 42%, transparent); }
+  .btn-ghost { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
+  .btn-ghost:hover { border-color: var(--teal); color: var(--teal-strong); transform: translateY(-1px); }
+  .nav-cta { padding: 9px 18px; font-size: 14px; }
+  .linkcta {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 600;
+    color: var(--teal-strong); text-decoration: none;
+  }
+  .linkcta .arr { transition: transform .12s ease; }
+  .linkcta:hover .arr { transform: translateX(3px); }
+  .navhint {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; color: var(--teal-strong);
+    background: var(--accent-bg); border: 1px solid color-mix(in srgb, var(--teal) 24%, transparent);
+    padding: 3px 9px; border-radius: var(--radius-pill); display: inline-flex; align-items: center; gap: 6px;
+  }
+  .navhint::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--teal); }
+
+  /* Section frame */
+  .section { padding: var(--space) 0; }
+  .section + .section { border-top: 1px solid var(--border); }
+  .section-alt { background: var(--surface-2); }
+  .section-head { max-width: 760px; }
+
+  /* ===== Hero (signature moment) ===== */
+  .hero { padding: var(--space-sig) 0 var(--space); }
+  .hero-grid { display: grid; grid-template-columns: 1.02fr 1.1fr; gap: 56px; align-items: center; }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 8px; font-size: 11.5px; font-weight: 500; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--teal-strong); background: var(--teal-bg);
+    padding: 6px 13px; border-radius: var(--radius-pill); margin-bottom: 24px;
+    border: 1px solid color-mix(in srgb, var(--teal) 24%, transparent);
+  }
+  .hero-badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 22%, transparent); }
+  .hero h1 .grad {
+    background: linear-gradient(96deg, var(--teal-strong), var(--brand-cyan));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero-sub { color: var(--muted); font-size: 20.5px; line-height: 1.5; max-width: 36ch; margin-bottom: 30px; }
+  .hero-actions { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; margin-bottom: 34px; }
+  .stats-row { display: flex; flex-wrap: wrap; gap: 14px; }
+  .stat { flex: 1; min-width: 150px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 15px 17px; box-shadow: var(--shadow); }
+  .stat .v { font-family: var(--font-display); font-size: 17px; color: var(--heading); display: block; font-weight: 600; margin-bottom: 2px; }
+  .stat .t { font-size: 13.5px; color: var(--muted); line-height: 1.4; }
+
+  /* Hero signature art: sources flowing into one surface, an agent moving across */
+  .hero-art { position: relative; }
+  .hero-art svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .surf-pill rect { fill: var(--surface); stroke: var(--border-strong); }
+  .surf-pill text { fill: var(--muted); font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; }
+  .surf-flow { fill: none; stroke: var(--teal); stroke-width: 1.7; stroke-linecap: round; stroke-dasharray: 2 9; opacity: .8; animation: surf-flow 1.5s linear infinite; }
+  .surf-line { fill: none; stroke: var(--mist-strong); stroke-width: 1.3; opacity: .55; }
+  @keyframes surf-flow { to { stroke-dashoffset: -22; } }
+  .surf-panel { fill: var(--surface); stroke: var(--teal); stroke-width: 1.6; }
+  .surf-aura { fill: var(--teal); opacity: .07; }
+  .surf-tile { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1; }
+  .surf-tile-bar { fill: var(--teal); opacity: .55; }
+  .surf-tile-bar.lo { opacity: .28; }
+  .surf-cap { fill: var(--teal-strong); font-family: var(--font-mono); font-size: 8.5px; letter-spacing: .18em; }
+  .surf-agent { fill: var(--brand-cyan); stroke: var(--surface); stroke-width: 1.5; animation: surf-agent 7s ease-in-out infinite; }
+  .surf-agent-ring { fill: none; stroke: var(--brand-cyan); stroke-width: 1.2; opacity: .5; animation: surf-agent 7s ease-in-out infinite; }
+  @keyframes surf-agent {
+    0%,12% { transform: translate(0,0); } 22%,34% { transform: translate(96px,0); }
+    44%,56% { transform: translate(96px,78px); } 66%,78% { transform: translate(0,78px); }
+    88%,100% { transform: translate(0,0); }
+  }
+
+  /* ===== Generic grids + cards ===== */
+  .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow); }
+  .card h3 { font-size: 18px; margin-bottom: 8px; }
+  .card p { font-size: 15.5px; color: var(--muted); margin: 0; }
+  .card .step { font-family: var(--font-mono); font-size: 12px; color: var(--accent-strong); display: block; margin-bottom: 10px; letter-spacing: .1em; }
+
+  /* ===== Problem: the ten-tab day ===== */
+  .tentab { display: grid; grid-template-columns: 1.15fr .85fr; gap: 40px; align-items: center; }
+  .tab-scatter { position: relative; min-height: 270px; }
+  .tab-chip {
+    position: absolute; font-family: var(--font-mono); font-size: 12.5px; padding: 8px 13px;
+    background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius);
+    color: var(--muted); box-shadow: var(--shadow); white-space: nowrap;
+    transition: transform .6s cubic-bezier(.4,0,.2,1), opacity .5s ease;
+  }
+  .tab-chip .dot { display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin-right: 7px; vertical-align: middle; background: var(--amber); }
+  .tab-surface {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%) scale(.7); opacity: 0;
+    width: 196px; padding: 18px; background: var(--surface); border: 1.5px solid var(--teal);
+    border-radius: var(--radius-lg); box-shadow: var(--shadow-lift); text-align: center;
+    transition: transform .55s cubic-bezier(.4,0,.2,1) .15s, opacity .5s ease .15s;
+  }
+  .tab-surface .mono { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--teal-strong); }
+  .tab-surface b { display: block; font-family: var(--font-display); font-size: 17px; color: var(--heading); margin-top: 4px; }
+  .tentab.collapsed .tab-chip { opacity: 0; transform: translate(var(--cx,0), var(--cy,0)) scale(.5); }
+  .tentab.collapsed .tab-surface { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+  .tab-stats .big { font-family: var(--font-display); font-size: clamp(40px,5vw,56px); color: var(--heading); font-weight: 700; line-height: 1; letter-spacing: -.03em; }
+  .tab-stat { padding: 16px 0; border-bottom: 1px solid var(--border); }
+  .tab-stat:last-of-type { border-bottom: none; }
+  .tab-stat .lbl { color: var(--muted); font-size: 15px; margin-top: 4px; }
+  .tab-stat .src { font-family: var(--font-mono); font-size: 11px; color: var(--muted); opacity: .8; letter-spacing: .04em; }
+  .tab-toggle { margin-top: 8px; }
+
+  /* ===== Three layers ===== */
+  .layers { display: flex; flex-direction: column; gap: 12px; max-width: 940px; }
+  .layer {
+    border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface);
+    box-shadow: var(--shadow); overflow: hidden; transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  .layer-btn {
+    width: 100%; display: grid; grid-template-columns: 54px 1fr auto; gap: 18px; align-items: center;
+    padding: 20px 22px; background: none; border: none; cursor: pointer; text-align: left; font-family: inherit; color: inherit;
+  }
+  .layer-num {
+    width: 54px; height: 54px; border-radius: var(--radius); display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-display); font-weight: 700; font-size: 22px; color: var(--teal-strong);
+    background: var(--accent-bg); border: 1px solid color-mix(in srgb, var(--teal) 24%, transparent); transition: all .18s ease;
+  }
+  .layer-head h3 { margin: 0 0 2px; font-size: 19px; }
+  .layer-head .who { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); letter-spacing: .03em; }
+  .layer-chev { color: var(--muted); transition: transform .2s ease; flex: none; }
+  .layer-body { max-height: 0; overflow: hidden; transition: max-height .28s ease; }
+  .layer-body-inner { padding: 0 22px 22px 94px; color: var(--muted); font-size: 16px; line-height: 1.6; }
+  .layer.open { border-color: var(--teal); box-shadow: var(--shadow-lift); }
+  .layer.open .layer-body { max-height: 260px; }
+  .layer.open .layer-chev { transform: rotate(180deg); }
+  .layer.open .layer-num { background: var(--teal); color: #fff; border-color: var(--teal); }
+
+  /* ===== Composable space ===== */
+  .composer { border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-2); box-shadow: var(--shadow-lift); overflow: hidden; }
+  .composer-bar { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .composer-prompt {
+    flex: 1; font-family: var(--font-mono); font-size: 14.5px; color: var(--text);
+    background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--radius-pill); padding: 10px 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .composer-prompt .pre { color: var(--muted); }
+  .composer-prompt .typed { color: var(--teal-strong); font-weight: 500; }
+  .composer-canvas {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; padding: 22px; min-height: 230px;
+  }
+  .widget {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow);
+    opacity: 0; transform: translateY(14px) scale(.97); transition: opacity .4s ease, transform .4s cubic-bezier(.4,0,.2,1);
+  }
+  .composer.assembled .widget { opacity: 1; transform: none; }
+  .widget .wt { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--teal-strong); display: block; margin-bottom: 8px; }
+  .widget .wbody { display: flex; align-items: flex-end; gap: 5px; height: 46px; }
+  .widget .bar { flex: 1; background: var(--accent-bg); border-radius: 2px 2px 0 0; }
+  .widget .bar.f { background: color-mix(in srgb, var(--teal) 55%, transparent); }
+  .widget .wline { height: 9px; border-radius: 2px; background: var(--surface-3); margin-bottom: 6px; }
+  .widget .wline.s { width: 70%; }
+  .widget .wnum { font-family: var(--font-display); font-size: 22px; color: var(--heading); font-weight: 600; }
+  .widget .wsub { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+  .composer-foot { padding: 0 22px 22px; }
+
+  /* ===== Agent reach ===== */
+  .reach-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 44px; align-items: center; }
+  .reach-art svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .rb-bound { fill: color-mix(in srgb, var(--teal) 8%, transparent); stroke: var(--teal); stroke-width: 1.4; stroke-dasharray: 5 5; }
+  .rb-line { stroke: var(--teal); stroke-width: 1.5; opacity: .5; stroke-linecap: round; }
+  .rb-node rect { fill: var(--surface); stroke: var(--border-strong); }
+  .rb-node text { fill: var(--muted); font-family: var(--font-mono); font-size: 10.5px; }
+  .rb-node.off rect { stroke-dasharray: 3 3; opacity: .5; }
+  .rb-node.off text { opacity: .5; }
+  .rb-core { fill: var(--teal); }
+  .rb-core-text { fill: #fff; font-family: var(--font-display); font-size: 12px; font-weight: 600; }
+  .rb-cap { fill: var(--muted); font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .1em; }
+  .reach-guards { display: flex; flex-direction: column; gap: 12px; }
+  .guard { display: grid; grid-template-columns: 22px 1fr; gap: 13px; align-items: start; }
+  .guard svg { width: 20px; height: 20px; color: var(--teal); margin-top: 2px; }
+  .guard h3 { font-size: 16px; margin: 0 0 2px; }
+  .guard p { font-size: 14.5px; color: var(--muted); margin: 0; }
+
+  /* ===== Why different: before/after toggle ===== */
+  .flip-switch { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--radius-pill); padding: 4px; background: var(--surface); margin-bottom: 28px; gap: 4px; }
+  .flip-switch button {
+    font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; font-weight: 500;
+    padding: 9px 18px; border: none; border-radius: var(--radius-pill); cursor: pointer; color: var(--muted); background: none; transition: all .18s ease;
+  }
+  .flip-switch button[aria-pressed="true"] { background: var(--teal); color: #fff; }
+  .flip-table { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface); box-shadow: var(--shadow); }
+  .flip-row { display: grid; grid-template-columns: 220px 1fr; gap: 0; border-bottom: 1px solid var(--border); }
+  .flip-row:last-child { border-bottom: none; }
+  .flip-dim { padding: 16px 20px; font-weight: 600; color: var(--text); font-size: 15.5px; background: var(--surface-2); display: flex; align-items: center; }
+  .flip-val { padding: 16px 20px; color: var(--muted); font-size: 15.5px; display: flex; align-items: center; transition: color .2s ease, background .2s ease; }
+  .flip-table[data-mode="app"] .flip-val .b { display: none; }
+  .flip-table[data-mode="user"] .flip-val .a { display: none; }
+  .flip-table[data-mode="user"] .flip-val { color: var(--text); background: color-mix(in srgb, var(--teal) 6%, transparent); }
+
+  /* ===== Coverage map ===== */
+  .cov-list { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+  .cov {
+    border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .cov-btn {
+    width: 100%; display: grid; grid-template-columns: 1fr 200px 22px; gap: 18px; align-items: center;
+    padding: 16px 20px; background: none; border: none; cursor: pointer; text-align: left; font-family: inherit; color: inherit;
+  }
+  .cov-name b { font-family: var(--font-display); font-size: 16.5px; color: var(--heading); font-weight: 600; }
+  .cov-name span { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .cov-bar { height: 8px; border-radius: 4px; background: var(--surface-3); position: relative; overflow: hidden; }
+  .cov-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--mist-strong); border-radius: 4px; }
+  .cov-chev { color: var(--muted); transition: transform .2s ease; }
+  .cov.open .cov-chev { transform: rotate(180deg); }
+  .cov-body { max-height: 0; overflow: hidden; transition: max-height .28s ease; }
+  .cov-body-inner { padding: 0 20px 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .cov.open .cov-body { max-height: 240px; }
+  .cov-col .h { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 6px; }
+  .cov-col.gives .h { color: var(--approved); }
+  .cov-col.leaves .h { color: var(--amber); }
+  .cov-col p { font-size: 14.5px; color: var(--muted); margin: 0; }
+  .cov.is-op { border-color: var(--teal); box-shadow: var(--shadow-lift); background: color-mix(in srgb, var(--teal) 5%, var(--surface)); }
+  .cov.is-op .cov-bar i { background: var(--teal); }
+  .cov.is-op .cov-name b { color: var(--teal-strong); }
+
+  /* ===== Treasurer day ===== */
+  .day-list { display: flex; flex-direction: column; gap: 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); background: var(--surface); }
+  .day-row { display: grid; grid-template-columns: 230px 1fr 1fr; align-items: stretch; border-bottom: 1px solid var(--border); }
+  .day-row:last-child { border-bottom: none; }
+  .day-task { padding: 18px 20px; background: var(--surface-2); display: flex; flex-direction: column; justify-content: center; }
+  .day-task .mono { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--teal-strong); margin-bottom: 4px; }
+  .day-task b { font-family: var(--font-display); font-size: 16px; color: var(--heading); font-weight: 600; }
+  .day-before, .day-after { padding: 18px 20px; font-size: 14.5px; line-height: 1.5; }
+  .day-before { color: var(--muted); border-left: 1px solid var(--border); }
+  .day-after { color: var(--text); border-left: 1px solid var(--border); background: color-mix(in srgb, var(--teal) 5%, transparent); }
+  .day-tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; display: block; margin-bottom: 5px; }
+  .day-before .day-tag { color: var(--amber); }
+  .day-after .day-tag { color: var(--approved); }
+
+  .motion { margin-top: 34px; border: 1px solid var(--border-strong); border-radius: var(--radius-lg); padding: 28px; background: var(--surface); box-shadow: var(--shadow); }
+  .motion h3 { font-size: 19px; margin-bottom: 4px; }
+  .motion .lead-line { color: var(--muted); font-size: 15.5px; margin-bottom: 22px; }
+  .motion-flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; }
+  .motion-step { position: relative; padding: 0 18px; }
+  .motion-step:first-child { padding-left: 0; }
+  .motion-step + .motion-step::before { content: ""; position: absolute; left: 0; top: 16px; width: 1px; bottom: 8px; background: var(--border); }
+  .motion-step .n { font-family: var(--font-mono); font-size: 11px; color: var(--teal-strong); letter-spacing: .12em; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .motion-step .n::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--teal); flex: none; }
+  .motion-step b { display: block; font-size: 15px; color: var(--heading); margin-bottom: 3px; }
+  .motion-step p { font-size: 13.5px; color: var(--muted); margin: 0; }
+
+  /* ===== Personas ===== */
+  .persona-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+  .persona-tab {
+    font-family: var(--font-mono); font-size: 12.5px; letter-spacing: .04em; padding: 9px 16px; cursor: pointer;
+    border: 1px solid var(--border-strong); border-radius: var(--radius-pill); background: var(--surface); color: var(--muted); transition: all .15s ease;
+  }
+  .persona-tab[aria-selected="true"] { background: var(--teal); color: #fff; border-color: var(--teal); }
+  .persona-panel { display: none; }
+  .persona-panel.active { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .persona-card { padding: 24px 26px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow); }
+  .persona-card.today { background: var(--surface-2); }
+  .persona-card .h { font-family: var(--font-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 10px; }
+  .persona-card.today .h { color: var(--amber); }
+  .persona-card.gives .h { color: var(--approved); }
+  .persona-card p { font-size: 16px; line-height: 1.55; color: var(--text); margin: 0; }
+  .persona-card.today p { color: var(--muted); }
+
+  .adopt { margin-top: 36px; padding: 30px 32px; border-radius: var(--radius-lg); border: 1px solid var(--border-strong); background: var(--surface); box-shadow: var(--shadow); }
+  .adopt-lead { font-size: 18px; color: var(--text); max-width: 70ch; margin-bottom: 22px; }
+  .adopt-lead b { color: var(--heading); }
+  .adopt-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .adopt-stat { text-align: left; }
+  .adopt-stat .v { font-family: var(--font-display); font-size: clamp(30px,3.6vw,40px); color: var(--heading); font-weight: 700; line-height: 1; letter-spacing: -.02em; }
+  .adopt-stat .t { font-size: 14.5px; color: var(--muted); margin-top: 6px; }
+  .adopt-stat .src { font-family: var(--font-mono); font-size: 11px; color: var(--muted); opacity: .8; margin-top: 4px; }
+
+  /* ===== Editions ===== */
+  .ed-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 16px; align-items: stretch; }
+  .ed-lead { grid-row: span 2; display: flex; flex-direction: column; justify-content: center; padding: 30px; border: 1.5px solid var(--teal); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--teal) 5%, var(--surface)); box-shadow: var(--shadow-lift); }
+  .ed-lead .badge { font-family: var(--font-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--teal-strong); display: inline-flex; align-items: center; gap: 7px; margin-bottom: 12px; }
+  .ed-lead .badge .live { width: 8px; height: 8px; border-radius: 50%; background: var(--approved); box-shadow: 0 0 0 3px var(--approved-bg); }
+  .ed-lead h3 { font-size: 23px; margin-bottom: 8px; }
+  .ed-lead p { color: var(--muted); font-size: 15.5px; margin-bottom: 16px; }
+  .ed-ghost { padding: 22px; border: 1px dashed var(--border-strong); border-radius: var(--radius); background: var(--surface); opacity: .82; }
+  .ed-ghost .tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); display: inline-block; margin-bottom: 9px; padding: 2px 8px; border: 1px solid var(--border); border-radius: var(--radius-pill); }
+  .ed-ghost h3 { font-size: 17px; color: var(--muted); margin-bottom: 5px; }
+  .ed-ghost p { font-size: 13.5px; color: var(--muted); margin: 0; }
+  .ed-note { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); margin-top: 20px; letter-spacing: .02em; }
+
+  /* ===== CTA band + footer ===== */
+  .cta-band { background: var(--navy-deep); color: #eaf2ff; text-align: center; padding: 76px 0; }
+  .cta-band h2 { color: #fff; max-width: none; margin-left: auto; margin-right: auto; }
+  .cta-band p { color: #b9cdec; max-width: 56ch; margin: 0 auto 26px; font-size: 18px; }
+  .cta-band .btn-primary { background: #fff; color: var(--navy-deep); box-shadow: 0 6px 20px rgba(0,0,0,.28); }
+  .cta-band .btn-primary:hover { background: var(--teal-bg); color: var(--navy-deep); }
+  .footer { background: var(--surface-2); border-top: 1px solid var(--border); padding: 40px 0; }
+  .footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px; align-items: baseline; }
+  .footer p { font-size: 14px; color: var(--muted); margin: 0; }
+  .footer a { color: var(--accent-strong); text-decoration: none; }
+  .footer .updated { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); }
+  .f-privacy { width: 100%; font-size: 12.5px; line-height: 1.6; color: var(--muted); max-width: 80ch; margin-top: 6px; opacity: .85; }
+
+  /* ===== Feedback tooling (ported from the TreasuryCentral prototype) ===== */
+  .feedback-fab {
+    position: fixed; right: 18px; bottom: 18px; z-index: 60; background: var(--teal); color: #fff;
+    padding: 10px 16px; border-radius: var(--radius-pill); font-size: 13px; font-weight: 600; text-decoration: none;
+    box-shadow: var(--shadow-lift); border: none; cursor: pointer; font-family: var(--font-body);
+  }
+  .feedback-fab:hover { background: var(--teal-strong); }
+  .fb-label { font-family: var(--font-mono); font-size: 10.5px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 6px; }
+  .fb-input {
+    font-family: var(--font-body); font-size: 14.5px; color: var(--text); background: var(--bg);
+    border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 10px 12px; width: 100%;
+    transition: border-color .12s ease, box-shadow .12s ease;
+  }
+  textarea.fb-input { resize: vertical; min-height: 84px; line-height: 1.5; }
+  .fb-input:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--teal) 18%, transparent); }
+  .fb-status { font-family: var(--font-mono); font-size: 12.5px; min-height: 1em; }
+  .fb-status.err { color: #c2410c; }
+  [data-theme="dark"] .fb-status.err { color: #fca873; }
+  .fb-status.ok { color: var(--approved); }
+  .fbpop {
+    position: fixed; z-index: 120; width: 320px; max-width: calc(100vw - 24px);
+    background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius);
+    box-shadow: 0 18px 50px rgba(2,18,43,.30); padding: 16px;
+  }
+  .fbpop[hidden] { display: none; }
+  .fbpop-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+  .fbpop-where { font-family: var(--font-mono); font-size: 11.5px; color: var(--teal-strong); line-height: 1.35; }
+  .fbpop-where b { display: block; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; font-weight: 500; }
+  .fbpop-x { border: none; background: none; color: var(--muted); cursor: pointer; font-size: 19px; line-height: 1; padding: 0 2px; flex: none; }
+  .fbpop-x:hover { color: var(--text); }
+  .fbpop .fb-row { display: flex; flex-direction: column; gap: 11px; }
+  .fbpop-actions { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+  .fbpop .btn-primary { padding: 9px 18px; font-size: 14px; }
+  .fbpop .btn-primary[disabled] { opacity: .6; cursor: progress; }
+  .fbpop-done b { color: var(--heading); font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .fbpop-done b svg { width: 18px; height: 18px; color: var(--approved); flex: none; }
+  .fbpop-done span { color: var(--muted); font-size: 13px; display: block; margin-top: 4px; }
+  .fbpop-as { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin: 10px 0 0; }
+  .fbpop-as:empty { display: none; }
+  .fbhint-overlay { position: fixed; inset: 0; z-index: 130; background: rgba(2,18,43,.46); display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .fbhint-overlay[hidden] { display: none; }
+  .fbhint {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: 0 24px 60px rgba(2,18,43,.4); max-width: 430px; width: 100%; padding: 30px 30px 26px;
+  }
+  .fbhint .eyebrow { margin-bottom: 12px; }
+  .fbhint h3 { font-family: var(--font-display); font-size: 22px; color: var(--heading); margin-bottom: 12px; letter-spacing: -.01em; }
+  .fbhint p { color: var(--muted); font-size: 14.5px; line-height: 1.6; margin-bottom: 9px; }
+  .fbhint .cursor { color: var(--teal-strong); font-weight: 600; }
+  .fbhint-actions { display: flex; gap: 12px; margin-top: 20px; }
+
+  /* ===== Responsive ===== */
+  @media (max-width: 980px) {
+    .nav-links, .navhint { display: none; }
+    .hero-grid { grid-template-columns: 1fr; gap: 40px; }
+    .hero-art { order: 2; max-width: 540px; }
+    .tentab, .reach-grid { grid-template-columns: 1fr; gap: 32px; }
+    .ed-grid { grid-template-columns: 1fr 1fr; }
+    .ed-lead { grid-row: auto; grid-column: span 2; }
+    .motion-flow { grid-template-columns: 1fr 1fr; gap: 22px 0; }
+  }
+  @media (max-width: 640px) {
+    body { font-size: 17px; }
+    .wrap { padding: 0 20px; }
+    .section { padding: 60px 0; }
+    .grid-2, .grid-3, .composer-canvas, .persona-panel.active, .adopt-stats, .cov-body-inner { grid-template-columns: 1fr !important; }
+    .nav-status, .nav-product { display: none; }
+    .flip-row { grid-template-columns: 1fr; }
+    .flip-dim { border-bottom: 1px solid var(--border); }
+    .day-row { grid-template-columns: 1fr; }
+    .day-before, .day-after { border-left: none; border-top: 1px solid var(--border); }
+    .ed-grid { grid-template-columns: 1fr; }
+    .ed-lead { grid-column: auto; }
+    .motion-flow { grid-template-columns: 1fr; }
+    .motion-step { padding: 0; }
+    .motion-step + .motion-step::before { display: none; }
+    .motion-step + .motion-step { border-top: 1px solid var(--border); padding-top: 16px; margin-top: 16px; }
+    .cta-band { padding: 56px 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .surf-flow, .surf-agent, .surf-agent-ring { animation: none !important; }
+    * { transition-duration: .01ms !important; }
+  }
+  @media print {
+    .site-nav, .feedback-fab, #fbPop, #fbHintOverlay, .cta-band { display: none !important; }
+    body { background: #fff; color: #000; font-size: 11pt; }
+    .section { page-break-inside: avoid; border-top: 1px solid #ccc; }
+    .card, .composer, .day-list, .flip-table { box-shadow: none; }
+    h2 { page-break-after: avoid; }
+  }
+</style>
+</head>
+<body data-updated="2026-06-21">
+
+<nav class="site-nav">
+  <a class="nav-left" href="#top" aria-label="Brisken OnePilot, back to top">
+    <svg class="brand-cube" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,3 28,10 16,17 4,10" fill="#5fd3df"/><polygon points="4,10 16,17 16,31 4,24" fill="#00b8ce"/><polygon points="28,10 16,17 16,31 28,24" fill="#0b6f7a"/></svg>
+    <span class="nav-logo">brisken</span>
+    <span class="nav-product">OnePilot</span>
+  </a>
+  <div class="nav-links">
+    <a href="#problem">The problem</a>
+    <a href="#layers">How it works</a>
+    <a href="#different">Why different</a>
+    <a href="#treasury">In treasury</a>
+    <a href="#editions">Where it goes</a>
+  </div>
+  <div class="nav-right">
+    <span class="navhint" aria-hidden="true">Double-click to comment</span>
+    <a href="/brisken-onepilot-website-prototype.html" class="btn btn-ghost nav-cta">TreasuryCentral, live on SAP</a>
+    <button class="nav-theme" onclick="(function(){var d=document.documentElement;var c=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',c);localStorage.setItem('theme',c);})()" aria-label="Toggle light and dark theme">&#9788;/&#9790;</button>
+  </div>
+</nav>
+
+<!-- ============ HERO: the paradigm shift as thesis (signature) ============ -->
+<header class="hero" id="top">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <span class="hero-badge">The Universal UI from Brisken</span>
+      <h1>One surface. As many workspaces as your work needs. <span class="grad">Assembled by you, run with AI.</span></h1>
+      <p class="hero-sub">OnePilot is Brisken's governed, no-code platform. Each user composes the spaces, apps and data a job needs on one surface, and AI agents do the repetitive work across all of it, inside that user's exact permissions.</p>
+      <div class="hero-actions">
+        <a href="#problem" class="btn btn-primary">See how it works</a>
+        <a href="/brisken-onepilot-website-prototype.html" class="linkcta">TreasuryCentral, live on SAP <span class="arr">&rarr;</span></a>
+      </div>
+      <div class="stats-row">
+        <div class="stat"><span class="v">One surface</span><span class="t">the apps, the data and the agents in one place, not ten tabs.</span></div>
+        <div class="stat"><span class="v">Your permissions</span><span class="t">agents reach exactly what you can, no more.</span></div>
+        <div class="stat"><span class="v">Live on SAP</span><span class="t">TreasuryCentral runs a money-critical job end to end today.</span></div>
+      </div>
+    </div>
+    <div class="hero-art" aria-hidden="true">
+      <svg viewBox="0 0 560 440" role="img" aria-label="Disparate systems flowing into one surface, with an AI agent working across it">
+        <ellipse class="surf-aura" cx="280" cy="220" rx="150" ry="135"/>
+        <g class="surf-pill">
+          <g transform="translate(20,28)"><rect width="96" height="30" rx="4"/><text x="48" y="20" text-anchor="middle">SAP / ERP</text></g>
+          <g transform="translate(232,8)"><rect width="96" height="30" rx="4"/><text x="48" y="20" text-anchor="middle">Email</text></g>
+          <g transform="translate(444,28)"><rect width="96" height="30" rx="4"/><text x="48" y="20" text-anchor="middle">Teams</text></g>
+          <g transform="translate(0,205)"><rect width="104" height="30" rx="4"/><text x="52" y="20" text-anchor="middle">Bloomberg</text></g>
+          <g transform="translate(456,205)"><rect width="92" height="30" rx="4"/><text x="46" y="20" text-anchor="middle">Banks</text></g>
+          <g transform="translate(36,392)"><rect width="96" height="30" rx="4"/><text x="48" y="20" text-anchor="middle">Trading</text></g>
+          <g transform="translate(420,392)"><rect width="116" height="30" rx="4"/><text x="58" y="20" text-anchor="middle">Market data</text></g>
+        </g>
+        <path class="surf-line" d="M68,58 C90,120 150,140 180,160"/>
+        <path class="surf-flow" d="M68,58 C90,120 150,140 180,160"/>
+        <path class="surf-line" d="M280,38 C280,90 280,110 280,138"/>
+        <path class="surf-flow" d="M280,38 C280,90 280,110 280,138"/>
+        <path class="surf-line" d="M492,58 C470,120 410,140 380,160"/>
+        <path class="surf-flow" d="M492,58 C470,120 410,140 380,160"/>
+        <path class="surf-line" d="M104,220 C140,222 160,222 178,222"/>
+        <path class="surf-flow" d="M104,220 C140,222 160,222 178,222"/>
+        <path class="surf-line" d="M456,220 C420,222 400,222 382,222"/>
+        <path class="surf-flow" d="M456,220 C420,222 400,222 382,222"/>
+        <path class="surf-line" d="M84,392 C110,330 150,310 184,288"/>
+        <path class="surf-flow" d="M84,392 C110,330 150,310 184,288"/>
+        <path class="surf-line" d="M478,392 C452,330 410,310 376,288"/>
+        <path class="surf-flow" d="M478,392 C452,330 410,310 376,288"/>
+        <rect class="surf-panel" x="180" y="138" width="200" height="164" rx="8"/>
+        <text class="surf-cap" x="196" y="158">ONE SURFACE</text>
+        <rect class="surf-tile" x="196" y="166" width="78" height="58" rx="4"/>
+        <rect class="surf-tile" x="286" y="166" width="78" height="58" rx="4"/>
+        <rect class="surf-tile" x="196" y="232" width="78" height="58" rx="4"/>
+        <rect class="surf-tile" x="286" y="232" width="78" height="58" rx="4"/>
+        <rect class="surf-tile-bar" x="204" y="200" width="10" height="16" rx="1"/>
+        <rect class="surf-tile-bar lo" x="218" y="190" width="10" height="26" rx="1"/>
+        <rect class="surf-tile-bar" x="232" y="196" width="10" height="20" rx="1"/>
+        <rect class="surf-tile-bar lo" x="296" y="182" width="58" height="6" rx="1"/>
+        <rect class="surf-tile-bar lo" x="296" y="194" width="44" height="6" rx="1"/>
+        <rect class="surf-tile-bar lo" x="296" y="206" width="52" height="6" rx="1"/>
+        <rect class="surf-tile-bar" x="204" y="256" width="58" height="6" rx="1"/>
+        <rect class="surf-tile-bar lo" x="204" y="268" width="40" height="6" rx="1"/>
+        <rect class="surf-tile-bar lo" x="296" y="250" width="10" height="32" rx="1"/>
+        <rect class="surf-tile-bar" x="310" y="258" width="10" height="24" rx="1"/>
+        <rect class="surf-tile-bar lo" x="324" y="246" width="10" height="36" rx="1"/>
+        <g class="surf-agent-ring"><circle cx="235" cy="195" r="13"/></g>
+        <g class="surf-agent"><circle cx="235" cy="195" r="7"/></g>
+        <text class="surf-cap" x="196" y="322" style="font-size:8px">AI AGENT, INSIDE YOUR PERMISSIONS</text>
+      </svg>
+    </div>
+  </div>
+</header>
+
+<!-- ============ PROBLEM: the ten-tab day ============ -->
+<section class="section section-alt" id="problem">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">The problem</span>
+      <h2>Knowledge work became a tab-management job</h2>
+      <p class="section-sub">The day is spent moving between disconnected apps, re-keying the same numbers, and losing the thread. The market's two answers, faster search and one more point tool, leave the other ten apps exactly where they were.</p>
+    </div>
+    <!-- B4: figures sourced from the OnePilot vision Sources section (APA, HBR 2022, Productiv 2024). Confirm exact citation/wording before any public publish; never present as a Brisken-measured number. -->
+    <div class="tentab" id="tentab">
+      <div class="tab-scatter" id="tabScatter" aria-hidden="true">
+        <span class="tab-chip" style="left:2%;top:6%;--cx:130px;--cy:90px"><span class="dot"></span>SAP</span>
+        <span class="tab-chip" style="left:54%;top:0%;--cx:-60px;--cy:110px"><span class="dot"></span>Outlook</span>
+        <span class="tab-chip" style="left:30%;top:20%;--cx:30px;--cy:70px"><span class="dot"></span>Teams</span>
+        <span class="tab-chip" style="left:72%;top:18%;--cx:-110px;--cy:70px"><span class="dot"></span>Bloomberg</span>
+        <span class="tab-chip" style="left:6%;top:40%;--cx:120px;--cy:10px"><span class="dot"></span>Excel</span>
+        <span class="tab-chip" style="left:46%;top:44%;--cx:-10px;--cy:0px"><span class="dot"></span>Bank portal</span>
+        <span class="tab-chip" style="left:78%;top:46%;--cx:-120px;--cy:0px"><span class="dot"></span>Trading</span>
+        <span class="tab-chip" style="left:14%;top:66%;--cx:90px;--cy:-70px"><span class="dot"></span>Reuters</span>
+        <span class="tab-chip" style="left:50%;top:74%;--cx:-20px;--cy:-100px"><span class="dot"></span>Files</span>
+        <span class="tab-chip" style="left:74%;top:70%;--cx:-110px;--cy:-80px"><span class="dot"></span>Browser</span>
+        <div class="tab-surface"><span class="mono">OnePilot</span><b>One surface</b></div>
+      </div>
+      <div class="tab-stats">
+        <div class="tab-stat">
+          <span class="big">~1,200</span>
+          <div class="lbl">app and site switches the average worker makes in a day.</div>
+          <div class="src">Harvard Business Review, 2022</div>
+        </div>
+        <div class="tab-stat">
+          <span class="big">up to 40%</span>
+          <div class="lbl">of productive time lost to switching between disconnected apps.</div>
+          <div class="src">American Psychological Association</div>
+        </div>
+        <div class="tab-stat">
+          <span class="big">~340</span>
+          <div class="lbl">SaaS apps running in a large enterprise; any single-suite answer is partial.</div>
+          <div class="src">Productiv, State of SaaS, 2024</div>
+        </div>
+        <button type="button" class="btn btn-ghost tab-toggle" id="tabToggle" aria-pressed="false">Collapse the estate &rarr;</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ HOW IT WORKS: three layers ============ -->
+<section class="section" id="layers">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">What it is</span>
+      <h2>One framework, your spaces, agents inside your permissions</h2>
+      <p class="section-sub">OnePilot is not a fixed product; it is a framework in three layers. The framework is set up once; the spaces and the agents are yours, changed in plain language. Open a layer to see who controls it.</p>
+    </div>
+    <div class="layers" id="layers-acc">
+      <div class="layer">
+        <button type="button" class="layer-btn" aria-expanded="false" aria-controls="layer-1">
+          <span class="layer-num">1</span>
+          <span class="layer-head"><h3>The framework</h3><span class="who">Controlled by Brisken and IT, once</span></span>
+          <svg class="layer-chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="layer-body" id="layer-1"><div class="layer-body-inner">Connectivity, permissions, security and boundaries. Set up once, it makes the surface safe to build on and keeps every space inside the same governed perimeter. This is the part IT owns; nothing else needs a ticket.</div></div>
+      </div>
+      <div class="layer">
+        <button type="button" class="layer-btn" aria-expanded="false" aria-controls="layer-2">
+          <span class="layer-num">2</span>
+          <span class="layer-head"><h3>Your spaces</h3><span class="who">Controlled by the user, continuously, in plain language</span></span>
+          <svg class="layer-chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="layer-body" id="layer-2"><div class="layer-body-inner">A space is a canvas of widgets that pull in whatever you work with, from wherever you have access. You build as many as the work needs: one for the day's flow, one for a recurring job, one for the task that comes up now and then. No build queue, no IT ticket.</div></div>
+      </div>
+      <div class="layer">
+        <button type="button" class="layer-btn" aria-expanded="false" aria-controls="layer-3">
+          <span class="layer-num">3</span>
+          <span class="layer-head"><h3>The agents</h3><span class="who">The user directs; the framework constrains</span></span>
+          <svg class="layer-chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="layer-body" id="layer-3"><div class="layer-body-inner">AI agents see and act across everything in your spaces, strictly within your permissions. You set the rules and approve the exceptions; the agents do the busywork: ingesting, validating, posting and reconciling, by exception, underneath.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ COMPOSABLE SPACE, ASSEMBLED ============ -->
+<section class="section section-alt" id="compose">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Composed, not coded</span>
+      <h2>Ask for a space; the surface assembles it</h2>
+      <p class="section-sub">Integration moves from the IT ticket to a plain-language ask. Describe the space you want and the widgets compose onto the canvas, each pulling live from a connected source.</p>
+    </div>
+    <div class="composer" id="composer">
+      <div class="composer-bar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4"/><circle cx="12" cy="12" r="3"/></svg>
+        <div class="composer-prompt"><span class="pre">Build me</span> <span class="typed">a morning cash space</span></div>
+        <button type="button" class="btn btn-primary" id="composeBtn" style="padding:9px 18px;font-size:14px">Assemble</button>
+      </div>
+      <div class="composer-canvas" id="composerCanvas">
+        <div class="widget"><span class="wt">Cash position</span><div class="wbody"><span class="bar" style="height:60%"></span><span class="bar f" style="height:85%"></span><span class="bar" style="height:45%"></span><span class="bar f" style="height:70%"></span><span class="bar" style="height:55%"></span></div></div>
+        <div class="widget"><span class="wt">FX exposure</span><div class="wnum">EUR 4.2m</div><div class="wsub">net, 3 pairs open</div></div>
+        <div class="widget"><span class="wt">Bank files</span><div class="wline"></div><div class="wline s"></div><div class="wline"></div><div class="wsub">2 statements to confirm</div></div>
+        <div class="widget"><span class="wt">Email and Teams</span><div class="wline"></div><div class="wline s"></div><div class="wsub">3 approvals waiting</div></div>
+        <div class="widget"><span class="wt">Board pack</span><div class="wline"></div><div class="wline"></div><div class="wline s"></div><div class="wsub">drafted to template</div></div>
+        <div class="widget"><span class="wt">Market data</span><div class="wbody"><span class="bar f" style="height:40%"></span><span class="bar" style="height:65%"></span><span class="bar f" style="height:80%"></span><span class="bar" style="height:50%"></span><span class="bar f" style="height:72%"></span></div></div>
+      </div>
+      <div class="composer-foot"><p class="mono" style="font-size:12.5px;color:var(--muted);margin:0">Each widget reads live from a connected source, inside your permissions. The same surface builds a close space, a deal space, an operations space.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ AGENT REACH, WITHIN PERMISSIONS ============ -->
+<section class="section" id="reach">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Governance</span>
+      <h2>The agent reaches exactly what you can, no more</h2>
+      <p class="section-sub">The framework constrains; the user directs. An agent carries the same access limits as the person it works for, with the controls a regulated finance team needs to standardize on it.</p>
+    </div>
+    <div class="reach-grid">
+      <div class="reach-art" aria-hidden="true">
+        <svg viewBox="0 0 460 320" role="img" aria-label="An agent at the centre connected to permitted sources inside a permission boundary, with one source outside it greyed out">
+          <rect class="rb-bound" x="20" y="20" width="380" height="280" rx="12"/>
+          <text class="rb-cap" x="32" y="44">YOUR PERMISSION BOUNDARY</text>
+          <g class="rb-node"><rect x="44" y="74" width="92" height="30" rx="4"/><text x="90" y="94" text-anchor="middle">SAP TRM</text></g>
+          <g class="rb-node"><rect x="44" y="210" width="92" height="30" rx="4"/><text x="90" y="230" text-anchor="middle">Bank files</text></g>
+          <g class="rb-node"><rect x="284" y="74" width="96" height="30" rx="4"/><text x="332" y="94" text-anchor="middle">Market data</text></g>
+          <g class="rb-node"><rect x="290" y="210" width="90" height="30" rx="4"/><text x="335" y="230" text-anchor="middle">Email</text></g>
+          <line class="rb-line" x1="136" y1="92" x2="200" y2="150"/>
+          <line class="rb-line" x1="136" y1="222" x2="200" y2="166"/>
+          <line class="rb-line" x1="284" y1="92" x2="244" y2="150"/>
+          <line class="rb-line" x1="290" y1="222" x2="244" y2="166"/>
+          <circle class="rb-core" cx="222" cy="158" r="34"/>
+          <text class="rb-core-text" x="222" y="156" text-anchor="middle">AI</text>
+          <text class="rb-core-text" x="222" y="170" text-anchor="middle" style="font-size:9px;font-weight:500">agent</text>
+          <g class="rb-node off"><rect x="356" y="276" width="92" height="30" rx="4"/><text x="402" y="296" text-anchor="middle">HR records</text></g>
+          <line class="rb-line" x1="402" y1="276" x2="402" y2="252" stroke-dasharray="3 3" opacity=".4"/>
+        </svg>
+      </div>
+      <div class="reach-guards">
+        <div class="guard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <div><h3>Permission-bound agents</h3><p>An agent sees and acts only on what the user is allowed to. Access outside that boundary is not dimmed, it is absent.</p></div>
+        </div>
+        <div class="guard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="3"/><circle cx="15" cy="15" r="3"/><path d="M9 12v0M15 12v0"/></svg>
+          <div><h3>Four-eye and segregation of duties</h3><p>Approvals and separation of duties on the actions that need them. The agent prepares; a person releases.</p></div>
+        </div>
+        <div class="guard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15l2 2 4-4"/></svg>
+          <div><h3>Full audit trail</h3><p>Every record traceable, manage by exception, nothing moves outside the rules you set.</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ WHY DIFFERENT: flip + coverage ============ -->
+<section class="section section-alt" id="different">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">The paradigm shift</span>
+      <h2>From application-centric to user-centric</h2>
+      <p class="section-sub">Most software makes the user adapt to the application. OnePilot inverts it: the surface adapts to the user, and the AI lives inside that surface with the same reach and limits as the person. Flip the model to see what changes.</p>
+    </div>
+    <div class="flip-switch" role="group" aria-label="Toggle between the two models">
+      <button type="button" id="flipApp" aria-pressed="true">Application-centric</button>
+      <button type="button" id="flipUser" aria-pressed="false">User-centric</button>
+    </div>
+    <div class="flip-table" id="flipTable" data-mode="app">
+      <div class="flip-row"><div class="flip-dim">Who adapts</div><div class="flip-val"><span class="a">The user bends to the application</span><span class="b">The surface adapts to the user</span></div></div>
+      <div class="flip-row"><div class="flip-dim">Where work happens</div><div class="flip-val"><span class="a">Across ten disconnected apps</span><span class="b">On one composed surface</span></div></div>
+      <div class="flip-row"><div class="flip-dim">Who integrates</div><div class="flip-val"><span class="a">IT, by ticket and project</span><span class="b">The user, in plain language</span></div></div>
+      <div class="flip-row"><div class="flip-dim">What the AI does</div><div class="flip-val"><span class="a">Bolted onto one function at a time</span><span class="b">Acts across every space, by exception</span></div></div>
+      <div class="flip-row"><div class="flip-dim">Coverage</div><div class="flip-val"><span class="a">One suite, one slice of the day</span><span class="b">ERP, banking, market data, mail, Teams</span></div></div>
+    </div>
+
+    <div class="section-head" style="margin-top:56px">
+      <h2 style="font-size:clamp(22px,2.8vw,28px)">The market covers slices; OnePilot covers the surface</h2>
+      <p class="section-sub">Five crowded categories each solve part of the problem and add one more tool to the estate. The gap none of them close is a composable, user-built surface that reaches down into the heavy systems and carries permissioned agents across them. Open a category to see what it gives and what it leaves.</p>
+    </div>
+    <div class="cov-list" id="covList">
+      <div class="cov">
+        <button type="button" class="cov-btn" aria-expanded="false">
+          <span class="cov-name"><b>Search and context layers</b><span>Glean</span></span>
+          <span class="cov-bar"><i style="width:22%"></i></span>
+          <svg class="cov-chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="cov-body"><div class="cov-body-inner">
+          <div class="cov-col gives"><div class="h">Gives</div><p>Permission-aware search; finds things faster across your tools.</p></div>
+          <div class="cov-col leaves"><div class="h">Leaves</div><p>The ten tools in place. It finds; it does not become the place you work or execute.</p></div>
+        </div></div>
+      </div>
+      <div class="cov">
+        <button type="button" class="cov-btn" aria-expanded="false">
+          <span class="cov-name"><b>Ecosystem-bound assistants</b><span>M365 Copilot, Gemini for Workspace</span></span>
+          <span class="cov-bar"><i style="width:38%"></i></span>
+          <svg class="cov-chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="cov-body"><div class="cov-body-inner">
+          <div class="cov-col gives"><div class="h">Gives</div><p>Deep AI inside one suite, where most desk work already happens.</p></div>
+          <div class="cov-col leaves"><div class="h">Leaves</div><p>Shallow and ungoverned the moment work crosses out of the suite into ERP, banking or market data.</p></div>
+        </div></div>
+      </div>
+      <div class="cov">
+        <button type="button" class="cov-btn" aria-expanded="false">
+          <span class="cov-name"><b>Agent platforms</b><span>Agentforce, Copilot Studio</span></span>
+          <span class="cov-bar"><i style="width:44%"></i></span>
+          <svg class="cov-chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="cov-body"><div class="cov-body-inner">
+          <div class="cov-col gives"><div class="h">Gives</div><p>Agents that act, not just answer.</p></div>
+          <div class="cov-col leaves"><div class="h">Leaves</div><p>The agents sit beside the old tools; there is no single cockpit the user works from.</p></div>
+        </div></div>
+      </div>
+      <div class="cov">
+        <button type="button" class="cov-btn" aria-expanded="false">
+          <span class="cov-name"><b>Workspace and app builders</b><span>Notion, Airtable, Taskade</span></span>
+          <span class="cov-bar"><i style="width:40%"></i></span>
+          <svg class="cov-chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="cov-body"><div class="cov-body-inner">
+          <div class="cov-col gives"><div class="h">Gives</div><p>Light composable spaces; easy to assemble.</p></div>
+          <div class="cov-col leaves"><div class="h">Leaves</div><p>Little deep ERP, treasury or market-data integration, and no permissioned agents across live systems.</p></div>
+        </div></div>
+      </div>
+      <div class="cov">
+        <button type="button" class="cov-btn" aria-expanded="false">
+          <span class="cov-name"><b>AI app and auto-builders</b><span>Lovable, Base44, Replit, v0, Bolt</span></span>
+          <span class="cov-bar"><i style="width:30%"></i></span>
+          <svg class="cov-chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="cov-body"><div class="cov-body-inner">
+          <div class="cov-col gives"><div class="h">Gives</div><p>Generate apps from a prompt, fast.</p></div>
+          <div class="cov-col leaves"><div class="h">Leaves</div><p>Point solutions with low governance and no unified surface. They add to the estate; OnePilot can consume what they build, born connectable.</p></div>
+        </div></div>
+      </div>
+      <div class="cov is-op">
+        <button type="button" class="cov-btn" aria-expanded="false">
+          <span class="cov-name"><b>OnePilot</b><span>The surface that absorbs all of them</span></span>
+          <span class="cov-bar"><i style="width:100%"></i></span>
+          <svg class="cov-chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="cov-body"><div class="cov-body-inner">
+          <div class="cov-col gives"><div class="h">Gives</div><p>A composable, user-built surface that becomes the one place you work, reaches into ERP, banking and market data, and carries agents with your exact permissions across every source.</p></div>
+          <div class="cov-col leaves"><div class="h">Holds the line</div><p>It orchestrates; it does not try to become the system of record. The book of record stays in SAP, execution on the trading platform, market data through the hub.</p></div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ IN TREASURY: the treasurer's day ============ -->
+<section class="section" id="treasury">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">The first scoped edition</span>
+      <h2>The treasurer's whole day on one surface</h2>
+      <p class="section-sub">TreasuryCentral is OnePilot scoped to the treasurer, live on SAP today. It grounds the framework in a real, money-critical job: each task moves from a string of logins to one glance.</p>
+    </div>
+    <div class="day-list">
+      <div class="day-row">
+        <div class="day-task"><span class="mono">07:30</span><b>Morning cash position</b></div>
+        <div class="day-before"><span class="day-tag">Today</span>Log in to two bank portals and SAP, export, reconcile balances by hand in a spreadsheet.</div>
+        <div class="day-after"><span class="day-tag">On OnePilot</span>Cash across banks and SAP, reconciled overnight by exception, on the surface when you sit down.</div>
+      </div>
+      <div class="day-row">
+        <div class="day-task"><span class="mono">Daily</span><b>Payment runs, without the keying</b></div>
+        <div class="day-before"><span class="day-tag">Today</span>Remittances retyped into cash application, payments keyed and chased across systems.</div>
+        <div class="day-after"><span class="day-tag">On OnePilot</span>The agent reads remittances, structures them into SAP, and stages the run; you release under four-eye.</div>
+      </div>
+      <div class="day-row">
+        <div class="day-task"><span class="mono">Month-end</span><b>The board pack, drafted</b></div>
+        <div class="day-before"><span class="day-tag">Today</span>Pull figures from five places, paste into slides, format to the template, version by email.</div>
+        <div class="day-after"><span class="day-tag">On OnePilot</span>The agent pulls the figures and drafts the pack to your template; you review and adjust.</div>
+      </div>
+      <div class="day-row">
+        <div class="day-task"><span class="mono">In the moment</span><b>FX execution in context</b></div>
+        <div class="day-before"><span class="day-tag">Today</span>Switch to the trading platform, check exposure in another tab, execute, log it back by hand.</div>
+        <div class="day-after"><span class="day-tag">On OnePilot</span>Exposure, market data and execution on the same surface, the action logged and governed automatically.</div>
+      </div>
+    </div>
+
+    <div class="motion">
+      <h3>One surface, one conversation, work done</h3>
+      <p class="lead-line">Preparing a review meeting, as a single continuous motion rather than ten apps and a triage.</p>
+      <div class="motion-flow">
+        <div class="motion-step"><span class="n">01</span><b>Open a space</b><p>The review space, with the figures and the template already in view.</p></div>
+        <div class="motion-step"><span class="n">02</span><b>The agent pulls the figures</b><p>Cash, exposure and market data, current and reconciled, from the connected sources.</p></div>
+        <div class="motion-step"><span class="n">03</span><b>It builds the deck</b><p>Drafted against your template, ready to review and adjust.</p></div>
+        <div class="motion-step"><span class="n">04</span><b>It drafts and sends</b><p>The review email written for the room; it goes on your word.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ BY AUDIENCE + adoption ============ -->
+<section class="section section-alt" id="audience">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Value by audience</span>
+      <h2>Each role feels a different relief</h2>
+      <p class="section-sub">The same surface answers a different question for each person who touches it. Pick a role to see what changes.</p>
+    </div>
+    <div class="persona-tabs" role="tablist" aria-label="Roles">
+      <button class="persona-tab" role="tab" aria-selected="true" id="pt-user" aria-controls="pp-user">User</button>
+      <button class="persona-tab" role="tab" aria-selected="false" id="pt-lead" aria-controls="pp-lead">Team lead</button>
+      <button class="persona-tab" role="tab" aria-selected="false" id="pt-it" aria-controls="pp-it">IT</button>
+      <button class="persona-tab" role="tab" aria-selected="false" id="pt-ciso" aria-controls="pp-ciso">CISO</button>
+      <button class="persona-tab" role="tab" aria-selected="false" id="pt-cfo" aria-controls="pp-cfo">CFO / sponsor</button>
+    </div>
+    <div class="persona-panel active" id="pp-user" role="tabpanel" aria-labelledby="pt-user">
+      <div class="persona-card today"><div class="h">What they feel today</div><p>Ten tabs, the same numbers re-keyed, the day spent moving data instead of using it.</p></div>
+      <div class="persona-card gives"><div class="h">What OnePilot gives</div><p>One surface, the mundane work gone; the day shifts to judgment and the exceptions that need a person.</p></div>
+    </div>
+    <div class="persona-panel" id="pp-lead" role="tabpanel" aria-labelledby="pt-lead" hidden>
+      <div class="persona-card today"><div class="h">What they feel today</div><p>Every change to how the team works is an IT ticket and a wait.</p></div>
+      <div class="persona-card gives"><div class="h">What OnePilot gives</div><p>Automate the team's own work in plain language, no ticket, no build queue.</p></div>
+    </div>
+    <div class="persona-panel" id="pp-it" role="tabpanel" aria-labelledby="pt-it" hidden>
+      <div class="persona-card today"><div class="h">What they feel today</div><p>A backlog of integrations to build and own, and shadow tools springing up around them.</p></div>
+      <div class="persona-card gives"><div class="h">What OnePilot gives</div><p>One governed framework, defined once; the breadth is composed on top without new code to maintain.</p></div>
+    </div>
+    <div class="persona-panel" id="pp-ciso" role="tabpanel" aria-labelledby="pt-ciso" hidden>
+      <div class="persona-card today"><div class="h">What they feel today</div><p>Ungoverned assistants reaching across systems with unclear access.</p></div>
+      <div class="persona-card gives"><div class="h">What OnePilot gives</div><p>Agents that access exactly what the user can, no more, with four-eye, segregation of duties and a full audit trail.</p></div>
+    </div>
+    <div class="persona-panel" id="pp-cfo" role="tabpanel" aria-labelledby="pt-cfo" hidden>
+      <div class="persona-card today"><div class="h">What they feel today</div><p>AI licences signed and then barely used; spend without adoption.</p></div>
+      <div class="persona-card gives"><div class="h">What OnePilot gives</div><p>Adoption, because people want to use it. A platform that gets used renews and expands.</p></div>
+    </div>
+
+    <div class="adopt">
+      <p class="adopt-lead">Software gets bought and not used. <b>The constraint on enterprise AI is adoption, not capability.</b> OnePilot sells relief, the mundane work taken off people and put in one governed place, which is what makes a platform get used.</p>
+      <!-- B4: Gartner figures from the OnePilot vision Sources section (2024-2026). Confirm exact citation/wording before any public publish; never present as a Brisken-measured number. -->
+      <div class="adopt-stats">
+        <div class="adopt-stat"><div class="v">$2.5T</div><div class="t">forecast worldwide AI spending in 2026.</div><div class="src">Gartner</div></div>
+        <div class="adopt-stat"><div class="v">30%+</div><div class="t">of generative-AI projects abandoned after the proof-of-concept stage.</div><div class="src">Gartner</div></div>
+        <div class="adopt-stat"><div class="v">40%+</div><div class="t">of agentic-AI projects expected to be cancelled by 2027.</div><div class="src">Gartner</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FRAMEWORK -> EDITIONS ============ -->
+<section class="section" id="editions">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Where this goes</span>
+      <h2>Scope it to a role, don't rebuild it</h2>
+      <p class="section-sub">TreasuryCentral is the first edition. The same surface scopes to other roles by composition, not by a new build; the next editions are scoping, not rebuilding.</p>
+    </div>
+    <div class="ed-grid">
+      <div class="ed-lead">
+        <span class="badge"><span class="live"></span>Live on SAP today</span>
+        <h3>TreasuryCentral</h3>
+        <p>The treasurer's day in one cockpit: cash, FX, market data, trades, bank files and remittances, on SAP, governed end to end. Live with customers now.</p>
+        <a href="/brisken-onepilot-website-prototype.html" class="linkcta">Open TreasuryCentral <span class="arr">&rarr;</span></a>
+      </div>
+      <div class="ed-ghost"><span class="tag">Illustration</span><h3>Finance and controlling</h3><p>A close-and-reconcile space: the numbers and the surrounding work on one surface.</p></div>
+      <div class="ed-ghost"><span class="tag">Illustration</span><h3>Sales and account management</h3><p>A deal space: pipeline, account history and the next action together.</p></div>
+      <div class="ed-ghost"><span class="tag">Illustration</span><h3>Operations and shared services</h3><p>A request-handling space, the intake and the systems in one place.</p></div>
+      <div class="ed-ghost"><span class="tag">Illustration</span><h3>Executive and cross-functional</h3><p>One morning surface across functions, drafted by the agent overnight.</p></div>
+    </div>
+    <p class="ed-note">The four role spaces are illustrations of the pattern, not a launch list. TreasuryCentral is the one live, shipped edition.</p>
+  </div>
+</section>
+
+<!-- ============ CTA ============ -->
+<section class="cta-band">
+  <div class="wrap">
+    <h2>See it running on SAP</h2>
+    <p>TreasuryCentral is OnePilot's first scoped edition, live with customers on SAP today. It is the proof the surface runs a money-critical job end to end.</p>
+    <a href="/brisken-onepilot-website-prototype.html" class="btn btn-primary">Open TreasuryCentral &rarr;</a>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="wrap">
+    <p>Brisken &middot; OnePilot, the governed no-code platform &middot; <a href="https://www.brisken.com">www.brisken.com</a></p>
+    <p class="updated">Last updated: 2026-06-21</p>
+    <p class="f-privacy">Internal review prototype. The market figures cited on this page are from third-party sources (Gartner, Harvard Business Review, the American Psychological Association, Productiv) and are attributed where they appear; they are not Brisken-measured results. Feedback you leave is stored with the name you entered, for the team building this page.</p>
+  </div>
+</footer>
+
+<button type="button" class="feedback-fab" data-fb-open aria-label="Leave feedback">Feedback</button>
+
+<!-- Dynamic feedback popover: appears where the reviewer double-clicks -->
+<div class="fbpop" id="fbPop" role="dialog" aria-label="Leave feedback" hidden>
+  <div class="fbpop-head">
+    <div class="fbpop-where"><b>Feedback on</b><span id="fbWhereText">this page</span></div>
+    <button type="button" class="fbpop-x" id="fbClose" aria-label="Close">&#215;</button>
+  </div>
+  <div id="fbBody">
+    <div class="fb-row">
+      <div>
+        <label class="fb-label" for="fbComment">Comment</label>
+        <textarea class="fb-input" id="fbComment" maxlength="4000" placeholder="What stood out, what is off, what is missing?"></textarea>
+      </div>
+    </div>
+    <div class="fbpop-actions">
+      <button type="button" class="btn btn-primary" id="fbSend">Send</button>
+      <span class="fb-status" id="fbStatus" role="status" aria-live="polite"></span>
+    </div>
+    <p class="fbpop-as" id="fbAs"></p>
+  </div>
+  <div class="fbpop-done" id="fbDone" hidden>
+    <b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l2.5 2.5L16 9"/></svg> Thank you, that is logged.</b>
+    <span>Double-click anywhere to leave another.</span>
+  </div>
+</div>
+
+<!-- One-time explainer for the double-click feedback -->
+<div class="fbhint-overlay" id="fbHintOverlay" hidden>
+  <div class="fbhint" role="dialog" aria-label="How to leave feedback" aria-modal="true">
+    <span class="eyebrow">Reviewing this page?</span>
+    <h3>Leave feedback anywhere</h3>
+    <p><span class="cursor">Double-click anywhere on the page</span> to leave a note about that exact spot: a headline, a number, a section, the wording.</p>
+    <p>Prefer a general note? Use the <b>Feedback</b> button in the bottom corner. Everything goes straight to the team building the site.</p>
+    <div class="fbhint-actions">
+      <button type="button" class="btn btn-primary" id="fbHintOk">Got it</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---- Interactive concepts (progressive enhancement; content is in the DOM) ---- */
+(function(){
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Three-layer accordion
+  Array.prototype.forEach.call(document.querySelectorAll('#layers-acc .layer'), function(layer){
+    var btn = layer.querySelector('.layer-btn');
+    btn.addEventListener('click', function(){
+      var open = layer.classList.toggle('open');
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+  });
+  var first = document.querySelector('#layers-acc .layer');
+  if (first) { first.classList.add('open'); first.querySelector('.layer-btn').setAttribute('aria-expanded','true'); }
+
+  // Ten-tab collapse
+  var tentab = document.getElementById('tentab');
+  var tabToggle = document.getElementById('tabToggle');
+  if (tentab && tabToggle){
+    var collapsed = false;
+    tabToggle.addEventListener('click', function(){
+      collapsed = !collapsed;
+      tentab.classList.toggle('collapsed', collapsed);
+      tabToggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+      tabToggle.innerHTML = collapsed ? 'Show the estate again' : 'Collapse the estate &rarr;';
+    });
+  }
+
+  // Composer assembly
+  var composer = document.getElementById('composer');
+  var composeBtn = document.getElementById('composeBtn');
+  if (composer && composeBtn){
+    var widgets = composer.querySelectorAll('.widget');
+    function assemble(animated){
+      if (animated && !reduce){
+        composer.classList.remove('assembled');
+        widgets.forEach(function(w,i){ w.style.transitionDelay = (i*90)+'ms'; });
+        requestAnimationFrame(function(){ requestAnimationFrame(function(){ composer.classList.add('assembled'); }); });
+      } else {
+        widgets.forEach(function(w){ w.style.transitionDelay = '0ms'; });
+        composer.classList.add('assembled');
+      }
+    }
+    composeBtn.addEventListener('click', function(){ assemble(true); composeBtn.textContent = 'Re-assemble'; });
+    if ('IntersectionObserver' in window && !reduce){
+      var io = new IntersectionObserver(function(es){
+        es.forEach(function(e){ if (e.isIntersecting){ assemble(true); io.disconnect(); } });
+      }, { threshold: .35 });
+      io.observe(composer);
+    } else { assemble(false); }
+  }
+
+  // Before/after flip
+  var flipTable = document.getElementById('flipTable');
+  var flipApp = document.getElementById('flipApp');
+  var flipUser = document.getElementById('flipUser');
+  if (flipTable && flipApp && flipUser){
+    function setMode(m){
+      flipTable.setAttribute('data-mode', m);
+      flipApp.setAttribute('aria-pressed', m==='app' ? 'true':'false');
+      flipUser.setAttribute('aria-pressed', m==='user' ? 'true':'false');
+    }
+    flipApp.addEventListener('click', function(){ setMode('app'); });
+    flipUser.addEventListener('click', function(){ setMode('user'); });
+  }
+
+  // Coverage map disclosures
+  Array.prototype.forEach.call(document.querySelectorAll('#covList .cov'), function(cov){
+    var btn = cov.querySelector('.cov-btn');
+    btn.addEventListener('click', function(){
+      var open = cov.classList.toggle('open');
+      btn.setAttribute('aria-expanded', open ? 'true':'false');
+    });
+  });
+
+  // Personas tabs
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('.persona-tab'));
+  function selectTab(tab){
+    tabs.forEach(function(t){
+      var sel = t === tab;
+      t.setAttribute('aria-selected', sel ? 'true':'false');
+      var panel = document.getElementById(t.getAttribute('aria-controls'));
+      if (panel){ panel.classList.toggle('active', sel); panel.hidden = !sel; }
+    });
+  }
+  tabs.forEach(function(t, i){
+    t.addEventListener('click', function(){ selectTab(t); });
+    t.addEventListener('keydown', function(e){
+      var idx = i;
+      if (e.key === 'ArrowRight') idx = (i+1) % tabs.length;
+      else if (e.key === 'ArrowLeft') idx = (i-1+tabs.length) % tabs.length;
+      else return;
+      e.preventDefault(); tabs[idx].focus(); selectTab(tabs[idx]);
+    });
+  });
+})();
+</script>
+
+<script>
+/* ---- Feedback tooling (ported from the TreasuryCentral prototype; posts to the page-agnostic /feedback) ---- */
+(function(){
+  var pop = document.getElementById('fbPop');
+  if (!pop) return;
+  var whereText = document.getElementById('fbWhereText');
+  var commentI = document.getElementById('fbComment');
+  var sendBtn = document.getElementById('fbSend');
+  var statusEl = document.getElementById('fbStatus');
+  var asEl = document.getElementById('fbAs');
+  var body = document.getElementById('fbBody');
+  var done = document.getElementById('fbDone');
+  var ctx = { section: '', sectionId: '', selector: '', anchor: '', pos: null };
+  var reviewer = (typeof window.__fbReviewer === 'string') ? window.__fbReviewer : '';
+  if (asEl) asEl.textContent = reviewer ? 'Leaving feedback as ' + reviewer : '';
+
+  function setStatus(m, k){ statusEl.textContent = m || ''; statusEl.className = 'fb-status' + (k ? ' ' + k : ''); }
+
+  function position(x, y){
+    pop.style.visibility = 'hidden';
+    pop.hidden = false;
+    var w = pop.offsetWidth, h = pop.offsetHeight, vw = window.innerWidth, vh = window.innerHeight, left, top;
+    if (vw < 560 || x == null) {
+      left = Math.max(12, (vw - w) / 2);
+      top = Math.max(12, vh - h - 20);
+    } else {
+      left = Math.min(Math.max(12, x + 14), vw - w - 12);
+      top = Math.min(Math.max(12, y + 14), vh - h - 12);
+    }
+    pop.style.left = left + 'px'; pop.style.top = top + 'px'; pop.style.visibility = '';
+  }
+
+  function open(opts){
+    opts = opts || {};
+    ctx.section = opts.section || '';
+    ctx.sectionId = opts.sectionId || '';
+    ctx.selector = opts.selector || '';
+    ctx.anchor = opts.anchor || '';
+    ctx.pos = opts.pos || null;
+    whereText.textContent = opts.label || (ctx.section || 'this page');
+    body.hidden = false; done.hidden = true; setStatus('');
+    commentI.value = '';
+    position(opts.x, opts.y);
+    commentI.focus();
+  }
+  function close(){ pop.hidden = true; }
+
+  function buildSelector(el){
+    if (!el || el.nodeType !== 1) return '';
+    var parts = [], node = el, depth = 0;
+    while (node && node.nodeType === 1 && node.tagName.toLowerCase() !== 'body' && depth < 8) {
+      if (node.id) { parts.unshift('#' + node.id); break; }
+      var seg = node.tagName.toLowerCase(), p = node.parentNode;
+      if (p && p.children) {
+        var sibs = Array.prototype.filter.call(p.children, function(c){ return c.tagName === node.tagName; });
+        if (sibs.length > 1) seg += ':nth-of-type(' + (Array.prototype.indexOf.call(sibs, node) + 1) + ')';
+      }
+      parts.unshift(seg);
+      node = p; depth++;
+    }
+    return parts.join(' > ').slice(0, 480);
+  }
+
+  function captureContext(el){
+    var sec = el.closest && el.closest('section[id], header[id], footer');
+    var label = '', secId = '';
+    if (sec) { var h = sec.querySelector('h1, h2, h3'); label = (h ? h.textContent : (sec.id || '')).trim(); secId = sec.id || ''; }
+    var t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+    return { section: label.slice(0, 140), sectionId: secId, selector: buildSelector(el), anchor: t ? t.slice(0, 90) : '' };
+  }
+
+  document.addEventListener('dblclick', function(e){
+    if (e.target.closest('#fbPop, #fbHintOverlay, a, button, input, textarea, select, label')) return;
+    var c = captureContext(e.target);
+    var sel = window.getSelection && window.getSelection(); if (sel) sel.removeAllRanges();
+    var docH = Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0) || 1;
+    var pos = {
+      pageX: Math.round(e.pageX), pageY: Math.round(e.pageY),
+      clientX: Math.round(e.clientX), clientY: Math.round(e.clientY),
+      scrollY: Math.round(window.pageYOffset || 0),
+      vw: window.innerWidth, vh: window.innerHeight,
+      docH: Math.round(docH), pct: Math.round((e.pageY / docH) * 100)
+    };
+    var label = c.anchor ? '“' + c.anchor.slice(0, 44) + (c.anchor.length > 44 ? '…' : '') + '”' : (c.section || 'this page');
+    open({ x: e.clientX, y: e.clientY, section: c.section, sectionId: c.sectionId, selector: c.selector, anchor: c.anchor, pos: pos, label: label });
+  });
+
+  Array.prototype.forEach.call(document.querySelectorAll('[data-fb-open]'), function(b){
+    b.addEventListener('click', function(e){ e.preventDefault(); open({ section: 'General note', label: 'this page' }); });
+  });
+
+  document.getElementById('fbClose').addEventListener('click', close);
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && !pop.hidden) close(); });
+  document.addEventListener('mousedown', function(e){
+    if (!pop.hidden && !e.target.closest('#fbPop') && !e.target.closest('[data-fb-open]')) close();
+  });
+
+  sendBtn.addEventListener('click', function(){
+    var comment = commentI.value.trim();
+    if (!comment){ setStatus('Add a comment.', 'err'); return; }
+    sendBtn.disabled = true; setStatus('Sending...');
+    fetch('/feedback', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ comment: comment, section: ctx.section, sectionId: ctx.sectionId, selector: ctx.selector, anchor: ctx.anchor, pos: ctx.pos, path: location.pathname, title: document.title })
+    }).then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function(){ sendBtn.disabled = false; body.hidden = true; done.hidden = false;
+        setTimeout(function(){ if (!pop.hidden && !done.hidden) close(); }, 2200); })
+      .catch(function(){ sendBtn.disabled = false; setStatus('Could not reach the server. Try again, or mention it on the call.', 'err'); });
+  });
+
+  var ov = document.getElementById('fbHintOverlay');
+  function hideHint(){ ov.hidden = true; try { localStorage.setItem('fbHintSeenPlatform', '1'); } catch (e) {} }
+  document.getElementById('fbHintOk').addEventListener('click', hideHint);
+  ov.addEventListener('mousedown', function(e){ if (e.target === ov) hideHint(); });
+  try { if (!localStorage.getItem('fbHintSeenPlatform')) setTimeout(function(){ ov.hidden = false; }, 600); }
+  catch (e) { setTimeout(function(){ ov.hidden = false; }, 600); }
+})();
+</script>
+
+</body>
+</html>
