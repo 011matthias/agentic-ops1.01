@@ -4,17 +4,17 @@
 <!-- deliverable-allow: copy-clipboard | reason: marketing-site prototype with no code/command blocks; copy requirement applies to code blocks only -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Brisken TreasuryCentral, a financial-data platform for SAP, AI native</title>
+<title>Brisken TreasuryCentral, financial data into SAP. Governed, no code.</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHBvbHlnb24gcG9pbnRzPSIxNiwzIDI4LDEwIDE2LDE3IDQsMTAiIGZpbGw9IiM1ZmQzZGYiLz48cG9seWdvbiBwb2ludHM9IjQsMTAgMTYsMTcgMTYsMzEgNCwyNCIgZmlsbD0iIzAwYjhjZSIvPjxwb2x5Z29uIHBvaW50cz0iMjgsMTAgMTYsMTcgMTYsMzEgMjgsMjQiIGZpbGw9IiMwYjZmN2EiLz48L3N2Zz4=">
-<meta name="description" content="TreasuryCentral is Brisken's one interface for financial data in SAP: cash, FX, market data, trades, bank files and remittances handled end to end. OnePilot, the AI layer, runs it underneath, governed. From Brisken, an SAP Co-Innovation Partner.">
+<meta name="description" content="TreasuryCentral is Brisken's one interface for financial data in SAP: cash, FX, market data, trades, bank files and remittances handled end to end. Powered by OnePilot, Brisken's governed, no-code platform on SAP BTP. From Brisken, an SAP Co-Innovation Partner.">
 <meta name="author" content="Brisken">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Brisken">
-<meta property="og:title" content="Brisken TreasuryCentral, a financial-data platform for SAP">
-<meta property="og:description" content="TreasuryCentral is Brisken's one interface that moves market data, trades, bank files and remittances in and out of SAP, run by OnePilot, the AI layer, inside your controls.">
+<meta property="og:title" content="Brisken TreasuryCentral, financial data into SAP">
+<meta property="og:description" content="TreasuryCentral is Brisken's one interface that moves market data, trades, bank files and remittances in and out of SAP. Powered by OnePilot, Brisken's governed, no-code platform, inside your controls.">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Brisken TreasuryCentral, a financial-data platform for SAP">
-<meta name="twitter:description" content="Brisken's governed, no-code financial-data platform for SAP, AI native.">
+<meta name="twitter:title" content="Brisken TreasuryCentral, financial data into SAP">
+<meta name="twitter:description" content="TreasuryCentral, powered by OnePilot: Brisken's governed, no-code platform for SAP financial data.">
 <script>(function(){var t=localStorage.getItem('theme');
   var d=document.documentElement;
   d.setAttribute('data-theme',
@@ -611,6 +611,21 @@
   .answer-head { justify-content: flex-start; }
   table th, table td { text-align: left; }
 
+  /* expandable capability cards (TreasuryCentral): reuse the .qa-toggle disclosure */
+  .grid-exp { align-items: start; }
+  .card-exp { padding: 20px 22px; text-align: left; align-items: stretch; align-self: start; }
+  .card-exp:hover { transform: none; box-shadow: var(--shadow); border-color: var(--border); }
+  .card-exp .card-exp-q { margin: 0; }
+  .card-exp .qa-toggle { padding: 0; gap: 12px; align-items: flex-start; font-size: 16px; }
+  .card-exp .qa-qt { line-height: 1.3; }
+  .card-exp .qa-chev { margin-top: 3px; }
+  .card-exp .card-teaser { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 9px 0 0; }
+  .card-exp .card-more { margin-top: 13px; padding: 13px 0 2px; border-top: 1px solid var(--border); }
+  .card-exp .card-more p { color: var(--muted); font-size: 13.5px; line-height: 1.56; margin: 0 0 9px; }
+  .card-exp .card-more p:last-child { margin-bottom: 0; }
+  .card-exp .card-more b { color: var(--heading); font-weight: 600; }
+  .card-exp:has(.qa-toggle[aria-expanded="true"]) { border-color: var(--teal); box-shadow: var(--shadow-lift); }
+
   @media (max-width: 960px) {
     .nav-links { display: none; }
     .hero-grid { grid-template-columns: 1fr; gap: 28px; padding: 64px 0 50px; }
@@ -670,7 +685,7 @@
   .mm-section[data-view="overview"] .mm-back { display: none; }
 
   /* the node graph (overview) */
-  .mm-graph { position: relative; max-width: 940px; margin: 22px auto 0; height: clamp(470px, 56vh, 600px); }
+  .mm-graph { position: relative; max-width: 940px; margin: 48px auto 0; height: clamp(540px, 62vh, 690px); }
   .mm-section[data-view="open"] .mm-graph { pointer-events: none; }
   .mm-edges { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
   .mm-edge { fill: none; stroke: var(--border-strong); stroke-width: 1.4; vector-effect: non-scaling-stroke; }
@@ -739,13 +754,16 @@
 
   .mm-sr-title { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
-  /* compact hero: headline + problem + research + art on the first screen */
-  .hero-grid { padding: 34px 0 26px; gap: 16px; }
-  .hero h1 { font-size: clamp(30px, 3.9vw, 46px); line-height: 1.07; }
-  .hero-intro { max-width: 730px; margin: 6px auto 0; color: var(--text); font-size: clamp(13.5px, 1.1vw, 15.5px); line-height: 1.5; }
+  /* hero: headline + research + art, given more room in length and width */
+  .hero > .wrap { max-width: 1240px; }
+  .hero-grid { padding: 62px 0 56px; gap: 26px; }
+  .hero h1 { font-size: clamp(40px, 5.4vw, 70px); line-height: 1.04; }
+  .hero-intro { max-width: 760px; margin: 8px auto 0; color: var(--text); font-size: clamp(14px, 1.15vw, 16px); line-height: 1.5; }
   .hero-intro b { color: var(--heading); font-weight: 600; }
-  .hero-split { gap: 32px; margin-top: 2px; align-items: center; }
-  .hero-split .hero-art { max-width: 410px; }
+  .hero-split { gap: 56px; margin-top: 16px; align-items: center; }
+  .hero-split .hero-art { max-width: 540px; }
+  .hero-research .big-stat { font-size: 76px; }
+  .hero-research .big-stat-label { font-size: 17px; max-width: 340px; }
   .hero-art { min-height: 0; }
   .hero-actions { margin-top: 0; }
 
@@ -756,6 +774,9 @@
   .faq-why b { color: var(--heading); }
 
   @media (max-width: 760px) {
+    .hero-grid { padding: 40px 0 30px; gap: 18px; }
+    .hero-split { gap: 30px; margin-top: 8px; }
+    .hero-research .big-stat { font-size: 54px; }
     .mm-graph { height: auto; display: flex; flex-direction: column; gap: 11px; align-items: stretch; margin-top: 18px; }
     .mm-edges { display: none; }
     .mm-node { position: static; transform: none; width: 100%; max-width: none; flex-direction: row; justify-content: flex-start; gap: 14px; text-align: left; padding: 15px 16px; }
@@ -853,19 +874,14 @@
   <div class="wrap">
     <div class="hero-grid">
       <div class="hero-head">
-        <span class="hero-badge">Modern financial-data platform for SAP. AI native.</span>
+        <span class="hero-badge">Financial-data platform for SAP. Governed, no code.</span>
         <h1>Financial Data. Solved. End to End.</h1>
-        <p class="hero-intro"><b>The problem we remove.</b> Most SAP finance teams run several brittle, hand-built feeds to move market data, trades, bank files and remittances in and out of SAP. They break when a field changes or the person who built them leaves: no audit trail, no owner, no monitoring. TreasuryCentral takes them off your team.</p>
       </div>
       <div class="hero-split">
         <div class="report hero-research" id="report">
           <span class="eyebrow">Our research</span>
           <div class="big-stat">71%</div>
-          <div class="mini-stats">
-            <div class="mini"><span class="v" aria-hidden="true"></span><span class="t lead-t">of the live SAP-treasury job ads we read describe teams building or hand-running the data plumbing into SAP.</span></div>
-            <div class="mini"><span class="v">34%</span><span class="t">tied to an active S/4HANA migration, the moment those feeds get rebuilt.</span></div>
-            <div class="mini"><span class="v">22%</span><span class="t">name a specific outside data or trading vendor whose feed must reach SAP.</span></div>
-          </div>
+          <p class="big-stat-label">of the live SAP treasury job ads describe extensive manual data plumbing into SAP.</p>
         </div>
         <div class="hero-art">
         <svg viewBox="0 0 580 360" role="img" aria-label="OnePilot as an open, transparent core: many systems flow in from every side and one governed stream flows out to SAP">
@@ -968,14 +984,14 @@
   </div>
 </div>
 
-<section class="section mm-section" id="map" data-view="overview" aria-label="TreasuryCentral platform map">
-  <h2 class="mm-sr-title">TreasuryCentral platform map</h2>
+<section class="section mm-section" id="map" data-view="overview" aria-label="OnePilot platform map">
+  <h2 class="mm-sr-title">OnePilot platform map</h2>
   <div class="wrap mm-head">
     <span class="eyebrow">Explore the platform</span>
-    <p class="section-sub mm-hint">TreasuryCentral, the cockpit your treasury works in, runs on OnePilot, the AI layer. Click any node to open it.</p>
+    <p class="section-sub mm-hint">OnePilot is Brisken's governed, no-code platform. TreasuryCentral is its treasurer's edition, bringing the treasury apps together. Click any node to open it.</p>
   </div>
 
-  <div class="mm-graph" aria-label="TreasuryCentral platform map">
+  <div class="mm-graph" aria-label="OnePilot platform map">
     <svg class="mm-edges" viewBox="0 0 1000 600" preserveAspectRatio="none" aria-hidden="true">
       <path class="mm-edge" d="M500 100 C500 150 500 195 500 216"/>
       <path class="mm-edge" d="M488 296 C400 360 250 415 162 462"/>
@@ -989,16 +1005,16 @@
       <path class="mm-flow" style="animation-delay:-1.5s" d="M500 100 C500 150 500 195 500 216"/>
     </svg>
 
-    <button class="mm-node is-tc" type="button" data-tier="treasury-central" id="node-treasury-central" aria-expanded="false" aria-controls="treasury-central" style="--nx:50%;--ny:10%">
+    <button class="mm-node is-tc" type="button" data-tier="treasury-central" id="node-treasury-central" aria-expanded="false" aria-controls="treasury-central" style="--nx:50%;--ny:43%">
       <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 9v11"/></svg></span>
       <span class="mm-node-name">TreasuryCentral</span>
-      <span class="mm-node-sub">The cockpit your treasury works in</span>
+      <span class="mm-node-sub">The treasurer's edition</span>
     </button>
 
-    <button class="mm-node is-hub" type="button" data-tier="onepilot" id="node-onepilot" aria-expanded="false" aria-controls="onepilot" style="--nx:50%;--ny:43%">
+    <button class="mm-node is-hub" type="button" data-tier="onepilot" id="node-onepilot" aria-expanded="false" aria-controls="onepilot" style="--nx:50%;--ny:10%">
       <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3 4 14h7l-1 7 9-11h-7z"/></svg></span>
       <span class="mm-node-name">OnePilot</span>
-      <span class="mm-node-sub">The AI layer</span>
+      <span class="mm-node-sub">The platform</span>
     </button>
 
     <button class="mm-node" type="button" data-tier="mdh" id="node-mdh" aria-expanded="false" aria-controls="mdh" style="--nx:15%;--ny:80%">
@@ -1022,16 +1038,6 @@
     </button>
   </div>
 
-  <div class="mm-endpoints-wrap">
-    <p class="mm-endpoints-label">OnePilot moves data in and out of</p>
-    <div class="mm-endpoints" aria-label="Connected systems and destinations">
-      <span class="mm-endpoint">SAP S/4HANA &amp; ECC</span>
-      <span class="mm-endpoint">Other systems</span>
-      <span class="mm-endpoint">Bank &amp; provider portals</span>
-      <span class="mm-endpoint">Web apps</span>
-    </div>
-  </div>
-
   <div class="mm-why-wrap">
     <button class="mm-node is-why" type="button" data-tier="why-now" id="node-why-now" aria-expanded="false" aria-controls="why-now">
       <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.3a2.8 2.8 0 0 1 5.4 1c0 1.9-2.8 2.5-2.8 2.5"/><path d="M12 17h.01"/></svg></span>
@@ -1045,8 +1051,8 @@
     </nav>
     <button class="mm-back" type="button" hidden>&#8592; Back</button>
     <div class="mm-locator" role="tablist" aria-label="Map nodes">
-      <button class="mm-loc" type="button" role="tab" data-tier="treasury-central"><span class="mm-loc-n">1</span>TreasuryCentral</button>
-      <button class="mm-loc" type="button" role="tab" data-tier="onepilot"><span class="mm-loc-n">2</span>OnePilot</button>
+      <button class="mm-loc" type="button" role="tab" data-tier="onepilot"><span class="mm-loc-n">1</span>OnePilot</button>
+      <button class="mm-loc" type="button" role="tab" data-tier="treasury-central"><span class="mm-loc-n">2</span>TreasuryCentral</button>
       <button class="mm-loc" type="button" role="tab" data-tier="mdh"><span class="mm-loc-n">3</span>Market Data</button>
       <button class="mm-loc" type="button" role="tab" data-tier="bst"><span class="mm-loc-n">4</span>Smart Trading</button>
       <button class="mm-loc" type="button" role="tab" data-tier="rag"><span class="mm-loc-n">5</span>Remittance</button>
@@ -1055,13 +1061,36 @@
     </div>
     <div class="mm-read">
         <section class="mm-panel" id="treasury-central" hidden aria-labelledby="node-treasury-central">
+          <span class="eyebrow">The problem we remove</span>
+          <p class="section-sub">Most SAP finance teams run several brittle, hand-built feeds to move market data, trades, bank files and remittances in and out of SAP. They break when a field changes or the person who built them leaves: no audit trail, no owner, no monitoring. <b style="color:var(--heading);">TreasuryCentral takes them off your team.</b></p>
           <span class="eyebrow">The cockpit</span>
-          <h2>TreasuryCentral: one cockpit for the whole treasury</h2>
-          <p class="section-sub">Cash, investments, debt, FX, market risk management and governance on one screen, on your SAP data. The applications feed it; OnePilot keeps it running, governed end to end.</p>
-          <div class="grid-3">
-            <div class="card"><h3>One view of the money</h3><p>Cash, investments and debt across entities, current and reconciled to SAP, not stitched from spreadsheets.</p></div>
-            <div class="card"><h3>FX and market data with governance</h3><p>Rates, curves and exposures from your providers, validated before they reach a decision.</p></div>
-            <div class="card"><h3>Control built in</h3><p>Audit trail, manage-by-exception, four-eye and segregation of duties on every record.</p></div>
+          <h2>TreasuryCentral, powered by OnePilot: one cockpit for the whole treasury</h2>
+          <p class="section-sub">Cash, investments, debt, FX, market risk management and governance on one screen, on your SAP data. It is OnePilot scoped to the treasurer; the apps run on OnePilot, which moves the data in and out of SAP, governed end to end.</p>
+          <div class="grid-3 grid-exp">
+            <div class="card card-exp">
+              <h3 class="qa-q card-exp-q"><button type="button" class="qa-toggle card-exp-toggle" aria-expanded="false" aria-controls="tc-money"><span class="qa-qt">One view of the money</span><svg class="qa-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></h3>
+              <p class="card-teaser">Cash, investments and debt across entities, current and reconciled to SAP, not stitched from spreadsheets.</p>
+              <div class="qa-a card-more" id="tc-money" hidden>
+                <p>Cash positions roll up from every bank account and entity, reconciled to the statements already in SAP, so the group number is current instead of a Monday spreadsheet pull.</p>
+                <p>Investments, debt and intercompany loans sit on the same screen with their maturities and interest, and every figure links back to the SAP record it came from.</p>
+              </div>
+            </div>
+            <div class="card card-exp">
+              <h3 class="qa-q card-exp-q"><button type="button" class="qa-toggle card-exp-toggle" aria-expanded="false" aria-controls="tc-fx"><span class="qa-qt">FX and market data with governance</span><svg class="qa-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></h3>
+              <p class="card-teaser">Rates, curves and exposures from your providers, validated before they reach a decision.</p>
+              <div class="qa-a card-more" id="tc-fx" hidden>
+                <p>Spot and forward rates, yield curves and prices arrive from Bloomberg, Refinitiv, 360T and central-bank feeds, normalized once and checked for gaps and outliers before anything posts.</p>
+                <p>FX exposure by currency and entity updates as positions move, with the source and the validation recorded against each value, so a hedge decision rests on numbers you can trace.</p>
+              </div>
+            </div>
+            <div class="card card-exp">
+              <h3 class="qa-q card-exp-q"><button type="button" class="qa-toggle card-exp-toggle" aria-expanded="false" aria-controls="tc-control"><span class="qa-qt">Control built in</span><svg class="qa-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></h3>
+              <p class="card-teaser">Audit trail, manage-by-exception, four-eye and segregation of duties on every record.</p>
+              <div class="qa-a card-more" id="tc-control" hidden>
+                <p>Every value carries where it came from, who approved it and when, so an audit follows the trail without a reconstruction project.</p>
+                <p>Limits and tolerances are set once; only the records that breach them surface for a person, and a second approver signs off before a payment or a deal is released.</p>
+              </div>
+            </div>
           </div>
         </section>
         <section class="mm-panel" id="mdh" hidden aria-labelledby="node-mdh">
@@ -1081,9 +1110,9 @@
           <p class="section-sub">AI reads messy remittance advice in any format, a direct link, a PDF, a CSV or an email, and posts it into SAP S/4HANA, so the team stops retyping. Live today on a governed AI gate, a ChatGPT-powered deployment at an agricultural-sector customer.</p>
         </section>
         <section class="mm-panel" id="onepilot" hidden aria-labelledby="node-onepilot">
-          <span class="eyebrow">The AI layer</span>
-          <h2>The AI layer that runs it</h2>
-          <p class="section-sub">A no-code orchestration layer over your SAP landscape. OnePilot Agents learn your systems and recommend each mapping; you approve it, and the feed runs governed end to end, SAP and non-SAP, both ways.</p>
+          <span class="eyebrow">The platform</span>
+          <h2>OnePilot, the platform it all runs on</h2>
+          <p class="section-sub">A governed, no-code platform over your SAP landscape. OnePilot Agents learn your systems and recommend each mapping; you approve it, and the feed runs governed end to end, SAP and non-SAP, both ways.</p>
           <div class="flow">
             <div class="flow-step"><span class="num">1</span><b>Ingest</b><span>Any source and format: Bloomberg, Refinitiv, 360T, OANDA, central banks, banks, files, email.</span></div>
             <div class="flow-step"><span class="num">2</span><b>Validate and normalize</b><span>Cleansing, mapping, calculations, anomaly detection, before anything reaches SAP.</span></div>
@@ -1100,6 +1129,7 @@
           </div>
           <p class="section-sub" style="margin-top:22px;">Connectivity covers RFC and OData, SFTP, SOAP and REST, AMQP, email, an Excel add-in, XLSX, CSV and TXT, plus LLM and browser automation, push and pull. Off-the-shelf, third-party-managed, low-maintenance.</p>
           <p class="section-sub" style="margin-top:14px;">Beyond the three headline apps, the same platform also runs Cash Flow &amp; Exposure Hub, Bank Fee Portal, Credit Data Hub, ESG Data Hub and the AI Digital Workforce.</p>
+          <p class="section-sub" style="margin-top:14px;"><a href="/brisken-onepilot-platform.html" style="color:var(--accent-strong);font-weight:600;text-decoration:none;">OnePilot is the platform behind TreasuryCentral. See the full platform &rarr;</a></p>
           <div id="ai" style="margin-top:32px;padding-top:26px;border-top:1px solid var(--border);">
             <span class="eyebrow">OnePilot Agents</span>
             <h3 style="font-size:18px;margin:6px 0 10px;">OnePilot runs it. You stay in command.</h3>
@@ -1116,7 +1146,7 @@
               </div>
               <div class="cmd-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></div>
               <div class="cmd-tier cmd-pilot">
-                <span class="cmd-role">The AI layer</span><b>OnePilot Agents fly it</b>
+                <span class="cmd-role">The platform</span><b>OnePilot Agents fly it</b>
                 <span class="cmd-desc">The repetitive work: ingest, validate, post and reconcile, end to end.</span>
                 <div class="cmd-guards">
                   <span class="cmd-guard">four-eye</span><span class="cmd-guard">segregation of duties</span><span class="cmd-guard">full audit log</span>
@@ -1272,7 +1302,7 @@
           <li><a href="#top">The problem</a></li>
           <li><a href="#treasury-central">TreasuryCentral</a></li>
           <li><a href="#map">Applications</a></li>
-          <li><a href="#onepilot">The AI layer</a></li>
+          <li><a href="/brisken-onepilot-platform.html">The OnePilot platform</a></li>
           <li><a href="#answers">Answers</a></li>
           <li><a href="#demo">Book a demo</a></li>
         </ul>
@@ -1289,7 +1319,7 @@
     <p class="f-privacy">Privacy: the financial data you connect is processed only to run the services you configure. We do not use it to train models and we do not sell it; access is logged and governed end to end, and data stays within the controls you set.</p>
     <div class="footer-bottom">
       <div>Brisken LLC &middot; The Woodlands, TX &middot; Prototype for internal review; layout and content only.</div>
-      <div>Last updated: 2026-06-18</div>
+      <div>Last updated: 2026-06-21</div>
     </div>
   </div>
 </footer>
@@ -1530,7 +1560,7 @@
 </script>
 
 <script>
-/* Duplicate the customer logos once so the marquee loops seamlessly. Done at
+/* Duplicate the customer logos once so the marquee loops without a visible gap. Done at
    runtime to keep the base64 logos single in the source file. */
 (function(){
   if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
