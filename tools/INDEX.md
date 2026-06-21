@@ -10,6 +10,7 @@ One-line index of `tools/` scripts. Auto-loaded at session start to reduce `miss
 | `lint-comms-draft.py FILE.md` | Anti-AI lint for comms drafts and comms-log entries. Auto-fires on writes to `/context/drafts/`, `/proposals/`, or `comms-log.md`. |
 | `voice-check.py FILE.md` | Bilingual (DE/EN) anti-slop checker for client deliverables. Run before publishing markdown. |
 | `friction-watch.py` | Push-based `/comd_system-dev` trigger. Surfaces concentration, memory-sprawl, staleness, recurrence patterns from friction register. Hook-friendly with `--quiet --format json`. |
+| `anneal-metrics.py [--format json\|--append\|--date D]` | Convergence + toolkit-drift metrics for the `/comd_system-dev` anneal cycle (Phase 1.5 / 6.5). Reuses `friction-watch.py`'s parser; computes asset counts, recurrence/memory-fix %, documented-vs-actual drift (CLAUDE.md advertised counts vs reality), and git change-set size since the prior cycle. `--append` writes a row to `docs/anneal-ledger.md`. Advisory (exit 0). |
 | `session_state.py [--status\|--list-candidates\|--clear-candidates\|--reset]` | Session-scoped instrumentation store (tempdir JSON). Shared by `session-pressure-meter.py` + the gate hooks: holds pressure counters (tool calls, distinct files) and auto-captured friction CANDIDATES. `/comd_checkpoint` drains candidates via `--list-candidates` → classify (promote/discard) → `--clear-candidates`. Detection is automated; promotion to the register is a judgment call. Self-manages session boundary via payload `session_id`. |
 | `validate-proposal.py` | Proposal frontmatter/structure validation. Use before `/comd_publish-proposal`. |
 | `strip-em-dash.py FILE [...]` | Mechanical em-dash → semicolon replacement in prose (skips fenced code). Use after voice-check flags em-dashes. |
@@ -46,7 +47,9 @@ One-line index of `tools/` scripts. Auto-loaded at session start to reduce `miss
 | `web-build-signals.py` | Deterministic session-entry state probe for local-web: git-dirty site dirs, dev-server port, per-site BRIEF/TEST/dist presence, latest critique scores. Run at web-build session start; lead with pointed next steps instead of scope questions. |
 | `build-hours-tracker.py` | Build a blank hours tracker at `workspace/hours-tracker.xlsx`. |
 | `sync-hours.py` | Sync `workspace/hours-tracker.xlsx` with git commit activity. |
+| `log-brisken-hours.py [--status\|--add ROWS.json\|--export-csv] [--dry-run]` | Brisken hourly-agreement hours writer. `--status` = last-logged boundary + computed totals per engagement tab (Lead Generation / Timesheet); `--add` = gotcha-safe append (copies cell styles + Hours/Earnings formulas, extends the table ref, keeps B4 period live, refreshes CSV mirrors, idempotent, self-verifies). Backs the `/comd_brisken-hours` command. |
 | `send_email.py` | Reusable plain-text email sender (Resend HTTP API, stdlib only). Shared by `morning_briefing.py` and the scheduled agents. |
+| `prompt-queue-ui.py [--port N\|--no-open]` | Serve the miniature prompt-queue UI (default `http://127.0.0.1:7077`) over `.claude/queue/pending.md`: add/edit/reorder/delete/clear pending prompts + read-only `done.md` tail. File stays source of truth (hash-guarded writes). Companion to the skil_prompt-queue drain skill. |
 
 ## Output validators — JSON contract
 
