@@ -4,7 +4,7 @@ workstream: p1-expense-reconciliation
 group: ""
 spec: p1
 state: active
-updated: 2026-06-20
+updated: 2026-06-21
 ---
 
 # Brisken / Expense Reconciliation (p1)
@@ -20,19 +20,23 @@ The tool is hosted and running on real data at brisken-expense-recon.fly.dev
 (gated by `EXPENSE_RECON_ACCESS_CODE`). Verify the deployed origin, not localhost,
 after UI edits (`flyctl deploy`).
 
-## Elements
+## Elements (index)
 
-| Element | State | Status | Next action | Blocker | Detail |
-|---|---|---|---|---|---|
-| Statement ingest (CSV + XLSX) | done | Parsers shipped; tests green | none | none | `automations/expense-reconciliation/src/ingest/` |
-| Receipt OCR (vision + PDF text) | done | Folder ingest + live OCR calibration done | none | none | BLUEPRINT slice 2 |
-| LLM categorizer (gpt-4o-mini) | live | Runs on the "OpenAI Brisken" key; degrades gracefully when key absent | Confirm rotated key with Dirk | none | BLUEPRINT "Provider Pivot"; `project_brisken_openai_key` memory |
-| Deterministic matcher | done | Card-scoped + exact-FX precision; 32 tests green | none | none | `src/matching/`; BLUEPRINT slice 3 |
-| Cross-run memory (Phase 2) | in-progress | Store + capture + consult + CLI + in-browser view built | Land remaining Phase 2 slices | none | BLUEPRINT Phase 2 |
-| Review workbench (web) | live | Triage, manual match, match transparency, run progress, compare | none | none | brisken-expense-recon.fly.dev |
-| Zoho journal CSV export | in-progress | Download from the workbench shipped | Full Zoho Books API replication | Zoho API access / file-export confirm | BLUEPRINT slice 4 |
-| Run history + doctor pre-flight | done | SQLite run-log, history/diff, slice 5.14 doctor | none | none | BLUEPRINT slice 5/5b |
-| COA pre-write gate + export idempotency (Phase 5) | not-started | Gap | Build pre-write chart-of-accounts gate | none | `project_brisken_expense_recon_review_surface` memory |
+State at a glance only. Live slice-level status, next actions, and detail are in
+`automations/expense-reconciliation/BLUEPRINT.md` + `ANNEALING.md` (the authority);
+this table is the index, not a second record.
+
+| Element | State | Tracked in |
+|---|---|---|
+| Statement ingest (CSV + XLSX) | done | BLUEPRINT (ingest) |
+| Receipt OCR (vision + PDF text) | done | BLUEPRINT slice 2 |
+| LLM categorizer (gpt-4o-mini, OpenAI Brisken key) | live | BLUEPRINT "Provider Pivot" |
+| Deterministic matcher | done | BLUEPRINT slice 3 |
+| Cross-run memory (Phase 2) | in-progress | BLUEPRINT Phase 2 |
+| Review workbench (web, Fly-hosted) | live | BLUEPRINT; brisken-expense-recon.fly.dev |
+| Zoho journal CSV export | in-progress | BLUEPRINT slice 4 |
+| Run history + doctor pre-flight | done | BLUEPRINT slice 5/5b |
+| COA pre-write gate + export idempotency | not-started | BLUEPRINT Phase 5 (gap) |
 
 ## Open decisions / gates
 

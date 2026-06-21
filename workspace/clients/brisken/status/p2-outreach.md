@@ -4,7 +4,7 @@ workstream: p2-outreach
 group: lead-generation
 spec: p2
 state: active
-updated: 2026-06-20
+updated: 2026-06-21
 general_ref: status/p2-lead-gen-general.md
 ---
 
@@ -29,9 +29,11 @@ grant a meeting cold). Shared lead-gen context is in
 
 ## Open decisions / gates
 
-- Sending identity + green-light to contact (gates 1-2) turn the LinkedIn motion live.
-- Publish the research (gate 3) makes the outreach land warmer.
-- SAP partner-cockpit access (gate 5) unblocks the badge + the Terms-link fix.
+The gates that block THIS workstream (sending identity + green-light for the
+LinkedIn motion, publish-the-research to warm the outreach, SAP partner-cockpit
+access for the badge + Terms-link fix) are group gates. Current state is
+maintained in `context/lead-generation/dirk-go-live-sheet.md` (indexed in
+`status/p2-lead-gen-general.md`), not restated here.
 
 ## Pointers
 

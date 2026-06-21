@@ -4,7 +4,7 @@ workstream: p2-targeting
 group: lead-generation
 spec: p2
 state: active
-updated: 2026-06-20
+updated: 2026-06-21
 general_ref: status/p2-lead-gen-general.md
 ---
 
@@ -28,9 +28,12 @@ into tiers, feeding the precision-LinkedIn cohort. List-building is autonomous
 
 ## Open decisions / gates
 
-- Green-light to contact (group gate 2): the seat is granted and list-building is
-  autonomous; only pressing send on the Wave-1 lists waits.
-- Which vendor relationships are live (gate 6): routes the warmest channels.
+- Green-light to contact: list-building is autonomous (seat granted); only
+  pressing send on the Wave-1 lists waits.
+- The group gates that block THIS workstream (green-light, and which vendor
+  relationships are live) are maintained in
+  `context/lead-generation/dirk-go-live-sheet.md` (indexed in
+  `status/p2-lead-gen-general.md`), not restated here.
 
 ## Pointers
 

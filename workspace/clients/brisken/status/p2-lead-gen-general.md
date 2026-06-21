@@ -4,7 +4,7 @@ workstream: lead-gen-general
 group: lead-generation
 spec: p2
 state: active
-updated: 2026-06-20
+updated: 2026-06-21
 ---
 
 # Brisken / Lead Generation (group general reference)
@@ -30,21 +30,13 @@ trigger-detection radar.
 | Product catalog + evidence | `context/lead-generation/evidence/brisken-product-catalog.md`, `context/lead-generation/evidence/` | Product spine, benchmarks, shadow-integration data |
 | Disposition ICP | `specs/1-spec/p2-bant-lead-generation.md` | Data-vendor users (Bloomberg/Refinitiv/360T/FXall/OANDA/CME + SAP) |
 
-## Group-level gates (one Dirk conversation unblocks the engine)
+## Group-level gates
 
-Full index: `context/lead-generation/dirk-go-live-sheet.md`. The decisions Dirk
-owns, smallest unblock first:
-
-1. Sending identity (whose Brisken profile/domain fronts outreach).
-2. Green-light to contact (press send on the Wave-1 lists; seat already granted).
-3. Publish the research (host the shadow-integration report on a Brisken property).
-4. LinkedIn page go-live (approve rewrite + first post batch).
-5. SAP partner-cockpit access (fixes a live customer-trust bug; unblocks badge).
-6. Co-sell + vendor relationships (parallel workstream, compounds, not a blocker).
-
-Two product-shape decisions that gate the copy: TreasuryCentral / OnePilot
-hierarchy (umbrella vs peers), and publish the blended 71% vs a sharper in-house
-sub-rate.
+One Dirk conversation unblocks the engine. The current gate list (the decisions
+Dirk owns, the two product-shape decisions, and the staged-and-ready assets) is
+maintained in `context/lead-generation/dirk-go-live-sheet.md`; that sheet is the
+authority and this file does not restate it. Highest-leverage pair: sending identity
++ green-light to contact (turns the LinkedIn + Wave-1 motion live).
 
 ## Workstreams in this group
 
