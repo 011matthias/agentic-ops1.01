@@ -104,7 +104,7 @@
   /* hover-peek: the title sits over a softly blurred orbit; hovering fades the title (quick) and brings the orbit forward, sharp + eased-in; leaving settles back slowly (~3.4s) */
   .orbit,.guides,.core{filter:blur(5px);transition:transform 3.4s cubic-bezier(.2,.8,.2,1), filter 3.4s ease;}
   .orbit,.guides{transform-origin:50% 58%;}
-  .stage.peek .thesis{opacity:0;transform:scale(.97);transition:opacity .5s ease, transform .5s ease;}
+  .stage.peek .thesis{opacity:0;transform:scale(.97);transition:opacity 1.3s ease, transform 1.3s ease;}
   .stage.peek .orbit,.stage.peek .guides,.stage.peek .core{filter:blur(0);transition:transform .6s cubic-bezier(.2,.8,.2,1), filter .55s ease;}
   .stage.peek .orbit{transform:scale(1.05);}
   .stage.peek .guides{transform:scale(1.05);}
@@ -538,7 +538,6 @@
     <a href="#answers">Answers</a>
   </nav>
   <div class="bar-right">
-    <a class="pillbtn" href="/brisken-onepilot-website-prototype.html">TreasuryCentral, live on SAP</a>
     <button class="pillbtn theme-btn" id="themeBtn" aria-label="Toggle light and dark theme">&#9788;/&#9790;</button>
   </div>
 </div>
@@ -742,7 +741,7 @@
   </div>
 </footer>
 
-<a class="demo-fab" href="https://www.brisken.com">Book a demo</a>
+<a class="demo-fab" href="https://www.brisken.com">Contact us</a>
 
 <div class="scrim" id="scrim"></div>
 <aside class="panel" id="panel" role="dialog" aria-modal="false" aria-labelledby="panelTitle">
@@ -1089,7 +1088,13 @@
 
   /* hover-peek: the overlapping title fades and the orbit eases in a touch (pointer devices only) */
   if(window.matchMedia('(hover:hover) and (pointer:fine)').matches){
-    stage.addEventListener('pointermove', function(){ if(openIndex<0 && !coreOpen) stage.classList.add('peek'); });
+    stage.addEventListener('pointermove', function(e){
+      if(openIndex>=0 || coreOpen){ return; }
+      // ignition zone is the central ~70% of the stage (8% inset each side), so the title only fades when the pointer is near the title/orbit, not at the edges
+      var r=stage.getBoundingClientRect(), ix=r.width*0.08, iy=r.height*0.08;
+      var inside = e.clientX>r.left+ix && e.clientX<r.right-ix && e.clientY>r.top+iy && e.clientY<r.bottom-iy;
+      stage.classList.toggle('peek', inside);
+    });
     stage.addEventListener('pointerleave', function(){ stage.classList.remove('peek'); });
   }
 
