@@ -89,17 +89,25 @@
     background-size:180px 180px;}
   [data-theme="light"] .grain{opacity:.2;}
 
-  /* thesis */
-  .thesis{position:absolute;left:0;right:0;top:clamp(78px,12vh,128px);z-index:5;text-align:center;
-    padding:0 24px;pointer-events:none;}
+  /* thesis (large, overlapping the orbit; fades on hover to reveal + zoom the orbit) */
+  .thesis{position:absolute;left:0;right:0;top:clamp(108px,28vh,290px);z-index:95;text-align:center;
+    padding:0 24px;pointer-events:none;transition:opacity .55s ease, transform .55s ease;}
   .thesis .eyebrow{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;
-    color:var(--brand-cyan-lo);display:inline-flex;align-items:center;gap:8px;margin-bottom:14px;}
+    color:var(--brand-cyan-lo);display:inline-flex;align-items:center;gap:8px;margin-bottom:16px;}
   .thesis .eyebrow::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--brand-cyan);
     box-shadow:0 0 0 4px color-mix(in srgb,var(--brand-cyan) 22%,transparent);}
-  .thesis h1{font-size:clamp(28px,4.4vw,50px);line-height:1.05;letter-spacing:-.025em;max-width:18ch;margin:0 auto;}
+  .thesis h1{font-size:clamp(38px,6.6vw,80px);line-height:.98;letter-spacing:-.035em;max-width:15ch;margin:0 auto;
+    text-shadow:0 2px 46px var(--bg-0),0 1px 4px color-mix(in srgb,var(--bg-0) 70%,transparent);}
   .thesis h1 .grad{background:linear-gradient(96deg,var(--brand-cyan-lo),var(--h-adopt));
     -webkit-background-clip:text;background-clip:text;color:transparent;}
-  .thesis p{color:var(--muted);font-size:clamp(15px,1.7vw,18.5px);max-width:52ch;margin:14px auto 0;line-height:1.5;}
+
+  /* hover-peek: title fades, orbit eases in a touch */
+  .orbit,.guides,.core{transition:transform .6s cubic-bezier(.2,.8,.2,1);}
+  .orbit,.guides{transform-origin:50% 58%;}
+  .stage.peek .thesis{opacity:0;transform:scale(.97);}
+  .stage.peek .orbit{transform:scale(1.05);}
+  .stage.peek .guides{transform:scale(1.05);}
+  .stage.peek .core{transform:translate(-50%,-50%) scale(1.05);}
 
   /* ---- core ---- */
   .core{position:absolute;left:50%;top:58%;z-index:90;transform:translate(-50%,-50%);perspective:640px;
@@ -343,7 +351,7 @@
     backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line);}
 
   .wrap{max-width:1140px;margin:0 auto;padding:0 clamp(20px,4vw,40px);}
-  .sec{position:relative;z-index:1;padding:clamp(62px,9vh,104px) 0;border-top:1px solid var(--line);background:var(--bg-2);}
+  .sec{position:relative;z-index:1;padding:clamp(62px,9vh,104px) 0;background:var(--bg-2);}
   .sec-alt{background:linear-gradient(180deg,var(--bg-1),var(--bg-2));}
   .sec-head{max-width:780px;margin-bottom:38px;}
   .sec .eyebrow{display:inline-block;font-family:var(--font-mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--brand-cyan-lo);margin-bottom:13px;}
@@ -384,19 +392,60 @@
   .q .a{font-size:16px;color:var(--ink);line-height:1.6;margin-bottom:9px;}
   .q .d{font-size:14.5px;color:var(--muted);line-height:1.6;}
 
+  /* answers: click-to-reveal accordion (content stays in the DOM for AEO) */
+  .q{padding:0;}
+  .q-head{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;
+    background:none;border:none;cursor:pointer;text-align:left;padding:20px 0;color:inherit;}
+  .q-head h3{margin-bottom:0;transition:color .15s;}
+  .q-head:hover h3{color:var(--brand-cyan-lo);}
+  .q-chev{flex:none;width:22px;height:22px;position:relative;color:var(--brand-cyan-lo);}
+  .q-chev::before,.q-chev::after{content:"";position:absolute;top:50%;left:50%;width:13px;height:2px;
+    background:currentColor;border-radius:2px;transform:translate(-50%,-50%);transition:transform .25s ease;}
+  .q-chev::after{transform:translate(-50%,-50%) rotate(90deg);}
+  .q.open .q-chev::after{transform:translate(-50%,-50%) rotate(0);}
+  .q-body{max-height:0;overflow:hidden;transition:max-height .32s ease;}
+  .q.open .q-body{max-height:460px;}
+  .q-body-inner{padding:0 0 22px;}
+
+  /* centralize the page from the applications section down */
+  #applications .sec-head,#governed .sec-head,#problem .sec-head,#answers .sec-head{
+    max-width:780px;margin-left:auto;margin-right:auto;text-align:center;}
+  #applications .sec-head .sec-intro,#governed .sec-head .sec-intro,#problem .sec-head .sec-intro,#answers .sec-head .sec-intro{
+    margin-left:auto;margin-right:auto;}
+  #governed .holds-line{border-left:none;border-top:1px solid var(--line-2);padding:18px 0 0;text-align:center;max-width:74ch;margin-left:auto;margin-right:auto;}
+  #answers .qa{margin-left:auto;margin-right:auto;}
+  #answers .qa-group{text-align:center;}
+  #answers .q-head{justify-content:center;gap:12px;}
+  #answers .q-body-inner{text-align:left;}
+
+  /* problem: emphasize using the data, not moving it */
+  .point{font-size:clamp(18px,2vw,21px);line-height:1.55;color:var(--ink);max-width:64ch;margin:18px auto 0;}
+  .point b{color:var(--brand-cyan-lo);}
+
+  /* applications: the platform runs beyond finance (illustrative) */
+  .app-more{margin-top:32px;text-align:center;}
+  .app-more p{color:var(--muted);font-size:15.5px;line-height:1.6;max-width:72ch;margin:0 auto 16px;}
+  .app-more p b{color:var(--ink);}
+  .more-chips{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;}
+  .more-chips span{font-family:var(--font-mono);font-size:12px;color:var(--muted);
+    background:color-mix(in srgb,var(--brand-cyan) 6%,transparent);border:1px solid var(--line-2);
+    padding:7px 13px;border-radius:var(--pill);display:inline-flex;align-items:center;gap:8px;}
+  .more-chips span i{font-style:normal;font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--faint);border:1px solid var(--line-2);border-radius:var(--pill);padding:2px 6px;}
+
   .pstats{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:26px;}
   .pstat{border-left:2px solid var(--line-2);padding-left:16px;}
   .pstat .v{font-family:var(--font-display);font-weight:700;font-size:clamp(26px,3vw,34px);color:var(--heading);line-height:1;letter-spacing:-.02em;}
   .pstat .t{font-size:14px;color:var(--muted);line-height:1.45;margin-top:9px;}
   .pstat .src{font-family:var(--font-mono);font-size:11px;color:var(--faint);margin-top:7px;}
 
-  .demo{position:relative;z-index:1;text-align:center;padding:clamp(60px,9vh,96px) 0;border-top:1px solid var(--line);
+  .demo{position:relative;z-index:1;text-align:center;padding:clamp(60px,9vh,96px) 0;
     background:radial-gradient(120% 130% at 50% 0%, color-mix(in srgb,var(--brand-cyan) 12%,transparent), transparent 58%), var(--bg-0);}
   .demo h2{font-size:clamp(26px,3.3vw,37px);letter-spacing:-.02em;margin-bottom:13px;}
   .demo p{color:var(--muted);font-size:17px;max-width:56ch;margin:0 auto 26px;line-height:1.55;}
-  .demo .row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;}
+  .demo .row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;border-left:none;padding-left:0;}
 
-  .site-footer{position:relative;z-index:1;background:var(--bg-2);border-top:1px solid var(--line);padding:58px 0 40px;}
+  .site-footer{position:relative;z-index:1;background:var(--bg-2);padding:58px 0 40px;}
   .foot-grid{display:grid;grid-template-columns:1.7fr 1fr 1fr;gap:40px;max-width:1140px;margin:0 auto;padding:0 clamp(20px,4vw,40px);}
   .foot-brand .lock{display:flex;align-items:center;gap:10px;margin-bottom:15px;}
   .foot-brand .lock svg{width:26px;height:26px;}
@@ -510,7 +559,6 @@
   <div class="thesis">
     <span class="eyebrow">The Universal UI from Brisken</span>
     <h1>Your whole working day, <span class="grad">in orbit around one surface.</span></h1>
-    <p>The apps, the data and the agents of your day revolve around OnePilot. Draw a topic in to look closer; open it to read the detail.</p>
   </div>
 
   <button class="core" id="core" aria-label="OnePilot, the surface. Close any open topic.">
@@ -536,7 +584,6 @@
 
   <div class="stack" id="stack" aria-label="OnePilot, by topic"></div>
 
-  <p class="hint">Hover a topic to <span class="k">draw it in</span>, click to <span class="k">open it</span></p>
   <p class="honesty">OnePilot is the surface and framework. TreasuryCentral is its one shipped edition, live on SAP. Coverage figures are illustrative of category scope, not measured benchmarks; Gartner and other figures are attributed where they appear.</p>
 </section>
 
@@ -579,6 +626,15 @@
         <span class="live">Live on SAP</span>
       </a>
     </div>
+    <div class="app-more">
+      <p>TreasuryCentral is the finance edition. <b>The same platform runs other teams' work on the same governed surface</b>, and the value is having it in one place: one login, one permission model, one audit trail, instead of ten tabs and ten passwords.</p>
+      <div class="more-chips">
+        <span>Finance and controlling <i>Illustration</i></span>
+        <span>Sales and account desk <i>Illustration</i></span>
+        <span>Operations and shared services <i>Illustration</i></span>
+        <span>Executive cockpit <i>Illustration</i></span>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -603,7 +659,8 @@
     <div class="sec-head">
       <span class="eyebrow">The problem</span>
       <h2>Why does a treasurer's day become tab management?</h2>
-      <p class="sec-intro">Because the work is scattered across systems that do not talk to each other: SAP, two bank portals, a trading screen, market data, email and a spreadsheet. The numbers get re-keyed between them, and the day goes to moving data instead of using it.</p>
+      <p class="sec-intro">Because the work is scattered across systems that do not talk to each other: SAP, two bank portals, a trading screen, market data, email and a spreadsheet.</p>
+      <p class="point">So the numbers get re-keyed between them, and the day goes to <b>moving data instead of using it</b>. OnePilot puts the data in one governed place, so the day shifts back to using it: deciding, not re-typing.</p>
     </div>
     <div class="pstats">
       <div class="pstat"><div class="v">~1,200</div><div class="t">app and site switches the average worker makes in a day.</div><div class="src">Harvard Business Review, 2022</div></div>
@@ -622,16 +679,16 @@
     </div>
     <div class="qa">
       <div class="qa-group">What it is</div>
-      <div class="q"><h3>What is OnePilot?</h3><p class="a">OnePilot is Brisken's governed, no-code platform for running financial data in SAP. It is one surface where a user composes the apps and data their work needs, and permissioned AI agents do the repetitive work across all of it.</p><p class="d">It is a framework in three layers: the framework IT sets up once, the spaces a user builds in plain language, and the agents that act within that user's permissions. TreasuryCentral is its first scoped edition, live on SAP.</p></div>
-      <div class="q"><h3>What is TreasuryCentral?</h3><p class="a">TreasuryCentral is the one shipped edition of OnePilot, live on SAP today. It puts the treasurer's whole day on one surface: cash, FX, market data, trades, bank files and remittances, governed end to end.</p><p class="d">Each task moves from a string of logins to one glance: cash reconciled overnight by exception, payment runs staged for four-eye release, the board pack drafted to your template.</p></div>
+      <div class="q"><button class="q-head" aria-expanded="false"><h3>What is OnePilot?</h3><span class="q-chev" aria-hidden="true"></span></button><div class="q-body"><div class="q-body-inner"><p class="a">OnePilot is Brisken's governed, no-code platform for running financial data in SAP. It is one surface where a user composes the apps and data their work needs, and permissioned AI agents do the repetitive work across all of it.</p><p class="d">It is a framework in three layers: the framework IT sets up once, the spaces a user builds in plain language, and the agents that act within that user's permissions. TreasuryCentral is its first scoped edition, live on SAP.</p></div></div></div>
+      <div class="q"><button class="q-head" aria-expanded="false"><h3>What is TreasuryCentral?</h3><span class="q-chev" aria-hidden="true"></span></button><div class="q-body"><div class="q-body-inner"><p class="a">TreasuryCentral is the one shipped edition of OnePilot, live on SAP today. It puts the treasurer's whole day on one surface: cash, FX, market data, trades, bank files and remittances, governed end to end.</p><p class="d">Each task moves from a string of logins to one glance: cash reconciled overnight by exception, payment runs staged for four-eye release, the board pack drafted to your template.</p></div></div></div>
       <div class="qa-group">The applications</div>
-      <div class="q"><h3>What is BST, Brisken Smart Trading?</h3><p class="a">BST is OnePilot's FX and trade-execution application, and the live flagship. It brings exposure, market data and execution onto one surface and logs every action back into SAP under four-eye control.</p></div>
-      <div class="q"><h3>How do you get market data into SAP?</h3><p class="a">The Market Data Hub brings live market data into SAP in the context where it is used, so a rate sits next to the position it affects rather than in a separate terminal.</p></div>
-      <div class="q"><h3>How do you automate remittance advice in SAP?</h3><p class="a">The Remittance Advice Gate has an agent read incoming remittances and structure them into SAP cash application, removing the manual re-keying. The agent prepares the entries; a person approves them.</p></div>
+      <div class="q"><button class="q-head" aria-expanded="false"><h3>What is BST, Brisken Smart Trading?</h3><span class="q-chev" aria-hidden="true"></span></button><div class="q-body"><div class="q-body-inner"><p class="a">BST is OnePilot's FX and trade-execution application, and the live flagship. It brings exposure, market data and execution onto one surface and logs every action back into SAP under four-eye control.</p></div></div></div>
+      <div class="q"><button class="q-head" aria-expanded="false"><h3>How do you get market data into SAP?</h3><span class="q-chev" aria-hidden="true"></span></button><div class="q-body"><div class="q-body-inner"><p class="a">The Market Data Hub brings live market data into SAP in the context where it is used, so a rate sits next to the position it affects rather than in a separate terminal.</p></div></div></div>
+      <div class="q"><button class="q-head" aria-expanded="false"><h3>How do you automate remittance advice in SAP?</h3><span class="q-chev" aria-hidden="true"></span></button><div class="q-body"><div class="q-body-inner"><p class="a">The Remittance Advice Gate has an agent read incoming remittances and structure them into SAP cash application, removing the manual re-keying. The agent prepares the entries; a person approves them.</p></div></div></div>
       <div class="qa-group">SAP, governance and how it compares</div>
-      <div class="q"><h3>Does OnePilot replace SAP?</h3><p class="a">No. OnePilot orchestrates on top of SAP. The book of record stays in SAP, execution on the trading platform, and market data through the hub.</p></div>
-      <div class="q"><h3>How is this different from Glean, Microsoft Copilot or Agentforce?</h3><p class="a">Each of those covers a slice: search finds across tools, suite assistants help inside one suite, and agent platforms act beside the old tools. OnePilot is the surface the user actually works from, reaching into ERP, banking and market data, with agents carrying the user's exact permissions across every source.</p><p class="d">It orchestrates rather than becoming the system of record, and it can consume what point tools build rather than adding another tab to the estate.</p></div>
-      <div class="q"><h3>How do you get started?</h3><p class="a">Start with TreasuryCentral on SAP, scoped to the treasury team, then add applications and spaces as the work needs them.</p><p class="d">Book a demo to see the surface run a money-critical job end to end.</p></div>
+      <div class="q"><button class="q-head" aria-expanded="false"><h3>Does OnePilot replace SAP?</h3><span class="q-chev" aria-hidden="true"></span></button><div class="q-body"><div class="q-body-inner"><p class="a">No. OnePilot orchestrates on top of SAP. The book of record stays in SAP, execution on the trading platform, and market data through the hub.</p></div></div></div>
+      <div class="q"><button class="q-head" aria-expanded="false"><h3>How is this different from Glean, Microsoft Copilot or Agentforce?</h3><span class="q-chev" aria-hidden="true"></span></button><div class="q-body"><div class="q-body-inner"><p class="a">Each of those covers a slice: search finds across tools, suite assistants help inside one suite, and agent platforms act beside the old tools. OnePilot is the surface the user actually works from, reaching into ERP, banking and market data, with agents carrying the user's exact permissions across every source.</p><p class="d">It orchestrates rather than becoming the system of record, and it can consume what point tools build rather than adding another tab to the estate.</p></div></div></div>
+      <div class="q"><button class="q-head" aria-expanded="false"><h3>How do you get started?</h3><span class="q-chev" aria-hidden="true"></span></button><div class="q-body"><div class="q-body-inner"><p class="a">Start with TreasuryCentral on SAP, scoped to the treasury team, then add applications and spaces as the work needs them.</p><p class="d">Book a demo to see the surface run a money-critical job end to end.</p></div></div></div>
     </div>
   </div>
 </section>
@@ -984,6 +1041,20 @@
     el.addEventListener('focus', function(){ if(openIndex<0) hoverIndex=i; });
     el.addEventListener('blur', function(){ if(hoverIndex===i) hoverIndex=-1; });
     el.addEventListener('click', function(){ openIndex===i ? closeTopic() : openTopic(i); });
+  });
+
+  /* hover-peek: the overlapping title fades and the orbit eases in a touch (pointer devices only) */
+  if(window.matchMedia('(hover:hover) and (pointer:fine)').matches){
+    stage.addEventListener('pointermove', function(){ if(openIndex<0) stage.classList.add('peek'); });
+    stage.addEventListener('pointerleave', function(){ stage.classList.remove('peek'); });
+  }
+
+  /* answers: click a question to reveal its answer (the answer text stays in the DOM either way) */
+  [].slice.call(document.querySelectorAll('.q-head')).forEach(function(h){
+    h.addEventListener('click', function(){
+      var open = h.parentNode.classList.toggle('open');
+      h.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
   });
 
   /* ---------- render loop ---------- */
