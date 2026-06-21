@@ -119,8 +119,8 @@
       radial-gradient(closest-side at 50% 78%, color-mix(in srgb,var(--h-treasury) 18%,transparent) 0%, transparent 60%);
     filter:blur(6px);animation:breathe 7s ease-in-out infinite;}
   .core .cube{position:relative;width:78px;height:78px;transform-style:preserve-3d;
-    animation:wobble 16s ease-in-out infinite, bob 8s ease-in-out infinite;
-    filter:drop-shadow(0 8px 24px color-mix(in srgb,var(--brand-cyan) 50%,transparent));}
+    animation:bob 8s ease-in-out infinite;
+    filter:drop-shadow(0 8px 26px color-mix(in srgb,var(--brand-cyan) 55%,transparent));}
   .core .cube svg{width:100%;height:100%;display:block;}
   .core .ring0{position:absolute;inset:8px;border-radius:50%;border:1px solid color-mix(in srgb,var(--brand-cyan) 32%,transparent);
     opacity:.5;animation:breathe 7s ease-in-out infinite;}
@@ -561,21 +561,23 @@
     <h1>Your whole working day, <span class="grad">in orbit around one surface.</span></h1>
   </div>
 
-  <button class="core" id="core" aria-label="OnePilot, the surface. Close any open topic.">
+  <button class="core" id="core" aria-label="OnePilot, the platform. Open the overview." aria-expanded="false">
     <span class="halo" aria-hidden="true"></span>
     <span class="ring0" aria-hidden="true"></span>
     <span class="cube" aria-hidden="true"><svg viewBox="0 0 32 32">
       <defs>
-        <linearGradient id="cubeTop" x1="0.1" y1="0" x2="0.7" y2="1"><stop offset="0" stop-color="#bdf2f8"/><stop offset="1" stop-color="#49c8d6"/></linearGradient>
-        <linearGradient id="cubeL" x1="0" y1="0.1" x2="0.5" y2="1"><stop offset="0" stop-color="#1aa6b8"/><stop offset="1" stop-color="#085661"/></linearGradient>
-        <linearGradient id="cubeR" x1="1" y1="0.1" x2="0.6" y2="1"><stop offset="0" stop-color="#0c818f"/><stop offset="1" stop-color="#053b43"/></linearGradient>
+        <radialGradient id="opBody" cx="38%" cy="32%" r="76%">
+          <stop offset="0" stop-color="#eafdff"/>
+          <stop offset="20%" stop-color="#7fe2ee"/>
+          <stop offset="58%" stop-color="#19a6b8"/>
+          <stop offset="100%" stop-color="#063038"/>
+        </radialGradient>
       </defs>
-      <polygon points="16,3 28,10 16,17 4,10" fill="url(#cubeTop)"/>
-      <polygon points="4,10 16,17 16,31 4,24" fill="url(#cubeL)"/>
-      <polygon points="28,10 16,17 16,31 28,24" fill="url(#cubeR)"/>
-      <polyline points="4,10 16,3 28,10" fill="none" stroke="#d7f8fc" stroke-width="0.55" stroke-linejoin="round" opacity="0.7"/>
-      <line x1="4" y1="10" x2="16" y2="17" stroke="#cdf6fb" stroke-width="0.4" opacity="0.35"/>
-      <line x1="16" y1="17" x2="16" y2="31" stroke="#02161b" stroke-width="0.45" opacity="0.28"/>
+      <circle cx="16" cy="16" r="13.5" fill="url(#opBody)"/>
+      <ellipse cx="16" cy="16.6" rx="13" ry="4.3" fill="none" stroke="#d7f8fc" stroke-width="0.6" opacity="0.34"/>
+      <ellipse cx="16" cy="16" rx="4.9" ry="13" fill="none" stroke="#06222a" stroke-width="0.6" opacity="0.22"/>
+      <ellipse cx="11.4" cy="11" rx="4" ry="2.6" fill="#eafdff" opacity="0.5"/>
+      <circle cx="16" cy="16" r="13.5" fill="none" stroke="#bdf2f8" stroke-width="0.7" opacity="0.4"/>
     </svg></span>
     <span class="label"><b>OnePilot</b><span>one surface</span></span>
   </button>
@@ -862,6 +864,20 @@
     </div>
   </article>
 
+  <article data-key="onepilot">
+    <p class="lead"><b>OnePilot is Brisken's governed, no-code platform for running your work in SAP.</b> One surface where you compose the apps and data your work needs, and permissioned AI agents do the repetitive work across all of it. Everything on this map orbits it.</p>
+    <div class="sub">One surface, not ten tabs</div>
+    <p class="lead">Instead of moving between SAP, two bank portals, a trading screen, market data, email and a spreadsheet, the work lives on one surface you assemble yourself. The numbers stop being re-keyed between systems, and the day shifts from moving data to using it.</p>
+    <div class="sub">Framework, spaces, agents</div>
+    <div class="layers">
+      <div class="layer"><span class="ln">1</span><div><span class="lwho">Brisken and IT, once</span><h4>The framework</h4><p>Connectivity, permissions, security and boundaries, set up once. Every space stays inside the same governed perimeter.</p></div></div>
+      <div class="layer"><span class="ln">2</span><div><span class="lwho">You, in plain language</span><h4>Your spaces</h4><p>Compose the widgets and data your work needs, as many spaces as the work needs. No build queue, no ticket.</p></div></div>
+      <div class="layer"><span class="ln">3</span><div><span class="lwho">You direct; the framework constrains</span><h4>The agents</h4><p>Agents act across your spaces, strictly within your permissions, doing the busywork by exception.</p></div></div>
+    </div>
+    <div class="sub">Live today</div>
+    <p class="lead" style="margin-bottom:0">OnePilot is the framework. <b>TreasuryCentral</b> is its one shipped edition, live on SAP with customers now: the treasurer's whole day, cash, FX, market data, trades, bank files and remittances, on one governed surface. The other editions on this map are illustrations of the same pattern.</p>
+  </article>
+
 </div>
 
 <script>
@@ -890,7 +906,8 @@
     govern:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>',
     diff:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>',
     treasury:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V10M19 21V10M3 10l9-6 9 6M9 21v-6h6v6"/></svg>',
-    adopt:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="3"/><path d="M2 20a6 6 0 0 1 12 0"/><path d="M16 11l2.5 2.5L22 9"/></svg>'
+    adopt:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="3"/><path d="M2 20a6 6 0 0 1 12 0"/><path d="M16 11l2.5 2.5L22 9"/></svg>',
+    onepilot:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="9" ry="3.4"/><path d="M12 3v18"/></svg>'
   };
   var NODES = [
     {key:'problem', eyebrow:'The problem',      short:'The ten-tab day',    title:'The ten-tab day',                tip:'Ten tabs, the same numbers re-keyed.',          hue:'var(--h-problem)'},
@@ -900,6 +917,7 @@
     {key:'treasury',eyebrow:'Live on SAP',       short:'TreasuryCentral',    title:'TreasuryCentral, live on SAP',   tip:"The treasurer's whole day, shipped today.",     hue:'var(--h-treasury)'},
     {key:'adopt',   eyebrow:'Why it gets used',  short:'Built to be used',   title:'Adoption, not just capability',  tip:'It gets used because people want to use it.', hue:'var(--h-adopt)'}
   ];
+  var ONEPILOT = {key:'onepilot', eyebrow:'The platform', title:'OnePilot, the universal UI', hue:'var(--brand-cyan)'};
 
   var orbit = document.getElementById('orbit');
   var els = NODES.map(function(n, i){
@@ -920,6 +938,15 @@
   // mobile fallback: the same topics as a stacked list (opens the same panels)
   var CHEV = '<svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
   var stack = document.getElementById('stack');
+  (function(){
+    var b = document.createElement('button');
+    b.className = 'srow'; b.style.setProperty('--hue', ONEPILOT.hue);
+    b.setAttribute('aria-label', ONEPILOT.title + '. The platform overview.');
+    b.innerHTML = '<span class="ic" aria-hidden="true">'+ICONS.onepilot+'</span>'+
+      '<span class="tx"><em>'+ONEPILOT.eyebrow+'</em><b>OnePilot</b><span>The one surface everything else orbits.</span></span>'+CHEV;
+    b.addEventListener('click', function(){ openCore(); });
+    stack.appendChild(b);
+  })();
   NODES.forEach(function(n, i){
     var b = document.createElement('button');
     b.className = 'srow'; b.style.setProperty('--hue', n.hue);
@@ -986,10 +1013,10 @@
       panelBody=document.getElementById('panelBody'), panelTitle=document.getElementById('panelTitle'),
       panelEyebrow=document.getElementById('panelEyebrow'), panelIc=document.getElementById('panelIc'),
       panelX=document.getElementById('panelX');
-  var openIndex=-1, hoverIndex=-1, lastFocus=null;
+  var openIndex=-1, hoverIndex=-1, lastFocus=null, coreOpen=false;
+  var coreBtn = document.getElementById('core');
 
-  function openTopic(i){
-    var n = NODES[i];
+  function showPanel(n, idx){
     var src = contentRoot.querySelector('[data-key="'+n.key+'"]');
     panel.style.setProperty('--hue', n.hue);
     panelIc.innerHTML = ICONS[n.key];
@@ -997,24 +1024,28 @@
     panelTitle.textContent = n.title;
     panelBody.innerHTML = src ? src.innerHTML : '';
     wirePersona(panelBody);
-    openIndex = i;
+    openIndex = idx; coreOpen = (idx === -1);
     scrim.classList.add('open'); panel.classList.add('open'); stage.classList.add('has-open');
-    els.forEach(function(e,k){ e.setAttribute('aria-expanded', k===i?'true':'false'); });
+    els.forEach(function(e,k){ e.setAttribute('aria-expanded', k===idx?'true':'false'); });
+    coreBtn.setAttribute('aria-expanded', coreOpen?'true':'false');
     lastFocus = document.activeElement;
     panelX.focus();
     panelBody.scrollTop = 0;
   }
+  function openTopic(i){ showPanel(NODES[i], i); }
+  function openCore(){ showPanel(ONEPILOT, -1); }
   function closeTopic(){
-    if(openIndex<0) return;
-    openIndex=-1;
+    if(openIndex<0 && !coreOpen) return;
+    openIndex=-1; coreOpen=false;
     scrim.classList.remove('open'); panel.classList.remove('open'); stage.classList.remove('has-open');
     els.forEach(function(e){ e.setAttribute('aria-expanded','false'); });
+    coreBtn.setAttribute('aria-expanded','false');
     if(lastFocus && lastFocus.focus){ try{lastFocus.focus();}catch(e){} }
   }
   panelX.addEventListener('click', closeTopic);
   scrim.addEventListener('click', closeTopic);
   document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeTopic(); });
-  document.getElementById('core').addEventListener('click', closeTopic);
+  coreBtn.addEventListener('click', function(){ (openIndex>=0||coreOpen) ? closeTopic() : openCore(); });
 
   // persona sub-tabs inside the treasury/adopt panels
   function wirePersona(root){
@@ -1045,7 +1076,7 @@
 
   /* hover-peek: the overlapping title fades and the orbit eases in a touch (pointer devices only) */
   if(window.matchMedia('(hover:hover) and (pointer:fine)').matches){
-    stage.addEventListener('pointermove', function(){ if(openIndex<0) stage.classList.add('peek'); });
+    stage.addEventListener('pointermove', function(){ if(openIndex<0 && !coreOpen) stage.classList.add('peek'); });
     stage.addEventListener('pointerleave', function(){ stage.classList.remove('peek'); });
   }
 
@@ -1070,7 +1101,7 @@
     var t = now/1000;
 
     // the ring keeps turning while a node is held; it only halts when a panel is open
-    var targetSpeed = reduce ? 0 : (openIndex>=0 ? 0.0 : 0.13);
+    var targetSpeed = reduce ? 0 : ((openIndex>=0 || coreOpen) ? 0.0 : 0.13);
     speed += (targetSpeed - speed) * Math.min(1, dt*6);
     baseA += speed * dt;
 
