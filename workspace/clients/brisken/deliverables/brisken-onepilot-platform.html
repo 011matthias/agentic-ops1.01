@@ -205,20 +205,23 @@
   .tab-chip {
     position: absolute; font-family: var(--font-mono); font-size: 12.5px; padding: 8px 13px;
     background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius);
-    color: var(--muted); box-shadow: var(--shadow); white-space: nowrap;
-    transition: transform .6s cubic-bezier(.4,0,.2,1), opacity .5s ease;
+    color: var(--muted); box-shadow: var(--shadow); white-space: nowrap; pointer-events: none;
+    opacity: 0; transform: translate(var(--cx,0), var(--cy,0)) scale(.5);
+    transition: transform .55s cubic-bezier(.4,0,.2,1), opacity .45s ease;
   }
   .tab-chip .dot { display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin-right: 7px; vertical-align: middle; background: var(--amber); }
   .tab-surface {
-    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%) scale(.7); opacity: 0;
-    width: 196px; padding: 18px; background: var(--surface); border: 1.5px solid var(--teal);
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    width: 208px; padding: 18px; background: var(--surface); border: 1.5px solid var(--teal);
     border-radius: var(--radius-lg); box-shadow: var(--shadow-lift); text-align: center;
-    transition: transform .55s cubic-bezier(.4,0,.2,1) .15s, opacity .5s ease .15s;
+    cursor: pointer; z-index: 3; font-family: var(--font-body); color: inherit;
+    transition: box-shadow .16s ease, border-color .16s ease;
   }
+  .tab-surface:hover { box-shadow: 0 8px 26px color-mix(in srgb, var(--teal) 32%, transparent); }
   .tab-surface .mono { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--teal-strong); }
   .tab-surface b { display: block; font-family: var(--font-display); font-size: 17px; color: var(--heading); margin-top: 4px; }
-  .tentab.collapsed .tab-chip { opacity: 0; transform: translate(var(--cx,0), var(--cy,0)) scale(.5); }
-  .tentab.collapsed .tab-surface { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+  .tab-hint { display: block; margin-top: 9px; font-family: var(--font-mono); font-size: 10px; letter-spacing: .04em; color: var(--teal-strong); line-height: 1.4; }
+  .tentab.expanded .tab-chip { opacity: 1; transform: none; }
   .tab-stats .big { font-family: var(--font-display); font-size: clamp(40px,5vw,56px); color: var(--heading); font-weight: 700; line-height: 1; letter-spacing: -.03em; }
   .tab-stat { padding: 16px 0; border-bottom: 1px solid var(--border); }
   .tab-stat:last-of-type { border-bottom: none; }
@@ -226,30 +229,28 @@
   .tab-stat .src { font-family: var(--font-mono); font-size: 11px; color: var(--muted); opacity: .8; letter-spacing: .04em; }
   .tab-toggle { margin-top: 8px; }
 
-  /* ===== Three layers ===== */
-  .layers { display: flex; flex-direction: column; gap: 12px; max-width: 940px; }
+  /* ===== Three layers (infographic) ===== */
+  .layers { display: flex; flex-direction: column; gap: 18px; max-width: 760px; margin: 0 auto; }
   .layer {
-    border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface);
-    box-shadow: var(--shadow); overflow: hidden; transition: border-color .15s ease, box-shadow .15s ease;
-  }
-  .layer-btn {
-    width: 100%; display: grid; grid-template-columns: 54px 1fr auto; gap: 18px; align-items: center;
-    padding: 20px 22px; background: none; border: none; cursor: pointer; text-align: left; font-family: inherit; color: inherit;
+    position: relative; display: grid; grid-template-columns: 60px 1fr; gap: 22px; align-items: start;
+    background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-lg);
+    padding: 24px 26px; box-shadow: var(--shadow); text-align: left;
   }
   .layer-num {
-    width: 54px; height: 54px; border-radius: var(--radius); display: flex; align-items: center; justify-content: center;
-    font-family: var(--font-display); font-weight: 700; font-size: 22px; color: var(--teal-strong);
-    background: var(--accent-bg); border: 1px solid color-mix(in srgb, var(--teal) 24%, transparent); transition: all .18s ease;
+    width: 60px; height: 60px; border-radius: var(--radius); display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-display); font-weight: 700; font-size: 25px; color: #fff;
+    background: var(--teal); box-shadow: 0 6px 16px color-mix(in srgb, var(--teal) 30%, transparent);
   }
-  .layer-head h3 { margin: 0 0 2px; font-size: 19px; }
-  .layer-head .who { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); letter-spacing: .03em; }
-  .layer-chev { color: var(--muted); transition: transform .2s ease; flex: none; }
-  .layer-body { max-height: 0; overflow: hidden; transition: max-height .28s ease; }
-  .layer-body-inner { padding: 0 22px 22px 94px; color: var(--muted); font-size: 16px; line-height: 1.6; }
-  .layer.open { border-color: var(--teal); box-shadow: var(--shadow-lift); }
-  .layer.open .layer-body { max-height: 260px; }
-  .layer.open .layer-chev { transform: rotate(180deg); }
-  .layer.open .layer-num { background: var(--teal); color: #fff; border-color: var(--teal); }
+  .layer:nth-of-type(1) .layer-num { background: var(--navy); box-shadow: 0 6px 16px color-mix(in srgb, var(--navy) 28%, transparent); }
+  .layer:nth-of-type(3) .layer-num { background: var(--brand-cyan-hi); }
+  .layer-head h3 { margin: 0 0 5px; font-size: 20px; }
+  .layer-who {
+    display: inline-block; font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em;
+    color: var(--teal-strong); background: var(--accent-bg); border: 1px solid color-mix(in srgb, var(--teal) 22%, transparent);
+    padding: 3px 10px; border-radius: var(--radius-pill); margin-bottom: 11px;
+  }
+  .layer-desc { font-size: 15.5px; color: var(--muted); line-height: 1.55; margin: 0; }
+  .layer:not(:last-child)::after { content: ""; position: absolute; left: 56px; bottom: -18px; width: 2px; height: 18px; background: var(--border-strong); }
 
   /* ===== Composable space ===== */
   .composer { border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-2); box-shadow: var(--shadow-lift); overflow: hidden; }
@@ -469,6 +470,20 @@
   .fbhint .cursor { color: var(--teal-strong); font-weight: 600; }
   .fbhint-actions { display: flex; gap: 12px; margin-top: 20px; }
 
+  /* ===== Centered layout (owner note: centralize the entire site) ===== */
+  .section-head { margin-left: auto; margin-right: auto; text-align: center; }
+  .section-head h2, .section-head .section-sub { margin-left: auto; margin-right: auto; }
+  .hero-center { display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .hero-center .hero-sub { max-width: 54ch; }
+  .hero-center .hero-actions { justify-content: center; }
+  .hero-center .hero-art { width: 100%; max-width: 560px; margin: 16px auto 32px; }
+  .hero-center .stats-row { max-width: 900px; justify-content: center; }
+  .flip-switch { display: flex; width: max-content; max-width: 100%; margin-left: auto; margin-right: auto; }
+  .persona-tabs { justify-content: center; }
+  .motion h3, .motion .lead-line { text-align: center; }
+  .adopt-lead { margin-left: auto; margin-right: auto; text-align: center; }
+  .ed-note { text-align: center; }
+
   /* ===== Responsive ===== */
   @media (max-width: 980px) {
     .nav-links, .navhint { display: none; }
@@ -523,8 +538,8 @@
     <a href="#problem">The problem</a>
     <a href="#layers">How it works</a>
     <a href="#different">Why different</a>
-    <a href="#treasury">In treasury</a>
-    <a href="#editions">Where it goes</a>
+    <a href="#treasury">TreasuryCentral</a>
+    <a href="#editions">Editions</a>
   </div>
   <div class="nav-right">
     <span class="navhint" aria-hidden="true">Double-click to comment</span>
@@ -535,20 +550,13 @@
 
 <!-- ============ HERO: the paradigm shift as thesis (signature) ============ -->
 <header class="hero" id="top">
-  <div class="wrap hero-grid">
-    <div class="hero-copy">
-      <span class="hero-badge">The Universal UI from Brisken</span>
-      <h1>One surface. As many workspaces as your work needs. <span class="grad">Assembled by you, run with AI.</span></h1>
-      <p class="hero-sub">OnePilot is Brisken's governed, no-code platform. Each user composes the spaces, apps and data a job needs on one surface, and AI agents do the repetitive work across all of it, inside that user's exact permissions.</p>
-      <div class="hero-actions">
-        <a href="#problem" class="btn btn-primary">See how it works</a>
-        <a href="/brisken-onepilot-website-prototype.html" class="linkcta">TreasuryCentral, live on SAP <span class="arr">&rarr;</span></a>
-      </div>
-      <div class="stats-row">
-        <div class="stat"><span class="v">One surface</span><span class="t">the apps, the data and the agents in one place, not ten tabs.</span></div>
-        <div class="stat"><span class="v">Your permissions</span><span class="t">agents reach exactly what you can, no more.</span></div>
-        <div class="stat"><span class="v">Live on SAP</span><span class="t">TreasuryCentral runs a money-critical job end to end today.</span></div>
-      </div>
+  <div class="wrap hero-center">
+    <span class="hero-badge">The Universal UI from Brisken</span>
+    <h1>One surface for your whole working day. <span class="grad">Assembled by you, run with AI.</span></h1>
+    <p class="hero-sub">Compose the spaces, apps and data your work needs on one surface; AI agents do the repetitive work across it, inside your permissions.</p>
+    <div class="hero-actions">
+      <a href="#problem" class="btn btn-primary">See how it works</a>
+      <a href="/brisken-onepilot-website-prototype.html" class="linkcta">TreasuryCentral, live on SAP <span class="arr">&rarr;</span></a>
     </div>
     <div class="hero-art" aria-hidden="true">
       <svg viewBox="0 0 560 440" role="img" aria-label="Disparate systems flowing into one surface, with an AI agent working across it">
@@ -561,6 +569,7 @@
           <g transform="translate(456,205)"><rect width="92" height="30" rx="4"/><text x="46" y="20" text-anchor="middle">Banks</text></g>
           <g transform="translate(36,392)"><rect width="96" height="30" rx="4"/><text x="48" y="20" text-anchor="middle">Trading</text></g>
           <g transform="translate(420,392)"><rect width="116" height="30" rx="4"/><text x="58" y="20" text-anchor="middle">Market data</text></g>
+          <g transform="translate(232,392)"><rect width="96" height="30" rx="4"/><text x="48" y="20" text-anchor="middle">Treasury</text></g>
         </g>
         <path class="surf-line" d="M68,58 C90,120 150,140 180,160"/>
         <path class="surf-flow" d="M68,58 C90,120 150,140 180,160"/>
@@ -576,6 +585,8 @@
         <path class="surf-flow" d="M84,392 C110,330 150,310 184,288"/>
         <path class="surf-line" d="M478,392 C452,330 410,310 376,288"/>
         <path class="surf-flow" d="M478,392 C452,330 410,310 376,288"/>
+        <path class="surf-line" d="M280,392 C280,352 280,330 280,304"/>
+        <path class="surf-flow" d="M280,392 C280,352 280,330 280,304"/>
         <rect class="surf-panel" x="180" y="138" width="200" height="164" rx="8"/>
         <text class="surf-cap" x="196" y="158">ONE SURFACE</text>
         <rect class="surf-tile" x="196" y="166" width="78" height="58" rx="4"/>
@@ -595,8 +606,12 @@
         <rect class="surf-tile-bar lo" x="324" y="246" width="10" height="36" rx="1"/>
         <g class="surf-agent-ring"><circle cx="235" cy="195" r="13"/></g>
         <g class="surf-agent"><circle cx="235" cy="195" r="7"/></g>
-        <text class="surf-cap" x="196" y="322" style="font-size:8px">AI AGENT, INSIDE YOUR PERMISSIONS</text>
       </svg>
+    </div>
+    <div class="stats-row">
+      <div class="stat"><span class="v">One surface</span><span class="t">the apps, the data and the agents in one place, not ten tabs.</span></div>
+      <div class="stat"><span class="v">Your permissions</span><span class="t">agents reach exactly what you can, no more.</span></div>
+      <div class="stat"><span class="v">Live on SAP</span><span class="t">TreasuryCentral runs a money-critical job end to end today.</span></div>
     </div>
   </div>
 </header>
@@ -606,12 +621,12 @@
   <div class="wrap">
     <div class="section-head">
       <span class="eyebrow">The problem</span>
-      <h2>Knowledge work became a tab-management job</h2>
+      <h2>Knowledge work becomes a tab-management job</h2>
       <p class="section-sub">The day is spent moving between disconnected apps, re-keying the same numbers, and losing the thread. The market's two answers, faster search and one more point tool, leave the other ten apps exactly where they were.</p>
     </div>
     <!-- B4: figures sourced from the OnePilot vision Sources section (APA, HBR 2022, Productiv 2024). Confirm exact citation/wording before any public publish; never present as a Brisken-measured number. -->
     <div class="tentab" id="tentab">
-      <div class="tab-scatter" id="tabScatter" aria-hidden="true">
+      <div class="tab-scatter" id="tabScatter">
         <span class="tab-chip" style="left:2%;top:6%;--cx:130px;--cy:90px"><span class="dot"></span>SAP</span>
         <span class="tab-chip" style="left:54%;top:0%;--cx:-60px;--cy:110px"><span class="dot"></span>Outlook</span>
         <span class="tab-chip" style="left:30%;top:20%;--cx:30px;--cy:70px"><span class="dot"></span>Teams</span>
@@ -622,7 +637,7 @@
         <span class="tab-chip" style="left:14%;top:66%;--cx:90px;--cy:-70px"><span class="dot"></span>Reuters</span>
         <span class="tab-chip" style="left:50%;top:74%;--cx:-20px;--cy:-100px"><span class="dot"></span>Files</span>
         <span class="tab-chip" style="left:74%;top:70%;--cx:-110px;--cy:-80px"><span class="dot"></span>Browser</span>
-        <div class="tab-surface"><span class="mono">OnePilot</span><b>One surface</b></div>
+        <button type="button" class="tab-surface" id="tabSurface" aria-expanded="false" aria-controls="tabScatter"><span class="mono">OnePilot</span><b>One surface</b><span class="tab-hint">Click to reveal the estate it replaces</span></button>
       </div>
       <div class="tab-stats">
         <div class="tab-stat">
@@ -640,7 +655,6 @@
           <div class="lbl">SaaS apps running in a large enterprise; any single-suite answer is partial.</div>
           <div class="src">Productiv, State of SaaS, 2024</div>
         </div>
-        <button type="button" class="btn btn-ghost tab-toggle" id="tabToggle" aria-pressed="false">Collapse the estate &rarr;</button>
       </div>
     </div>
   </div>
@@ -652,32 +666,32 @@
     <div class="section-head">
       <span class="eyebrow">What it is</span>
       <h2>One framework, your spaces, agents inside your permissions</h2>
-      <p class="section-sub">OnePilot is not a fixed product; it is a framework in three layers. The framework is set up once; the spaces and the agents are yours, changed in plain language. Open a layer to see who controls it.</p>
+      <p class="section-sub">OnePilot is not a fixed product; it is a framework in three layers. The framework is set up once; the spaces and the agents are yours, changed in plain language.</p>
     </div>
-    <div class="layers" id="layers-acc">
+    <div class="layers">
       <div class="layer">
-        <button type="button" class="layer-btn" aria-expanded="false" aria-controls="layer-1">
-          <span class="layer-num">1</span>
-          <span class="layer-head"><h3>The framework</h3><span class="who">Controlled by Brisken and IT, once</span></span>
-          <svg class="layer-chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
-        </button>
-        <div class="layer-body" id="layer-1"><div class="layer-body-inner">Connectivity, permissions, security and boundaries. Set up once, it makes the surface safe to build on and keeps every space inside the same governed perimeter. This is the part IT owns; nothing else needs a ticket.</div></div>
+        <span class="layer-num">1</span>
+        <div class="layer-head">
+          <span class="layer-who">Brisken and IT, once</span>
+          <h3>The framework</h3>
+          <p class="layer-desc">Connectivity, permissions, security and boundaries. Set up once, it makes the surface safe to build on and keeps every space inside the same governed perimeter.</p>
+        </div>
       </div>
       <div class="layer">
-        <button type="button" class="layer-btn" aria-expanded="false" aria-controls="layer-2">
-          <span class="layer-num">2</span>
-          <span class="layer-head"><h3>Your spaces</h3><span class="who">Controlled by the user, continuously, in plain language</span></span>
-          <svg class="layer-chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
-        </button>
-        <div class="layer-body" id="layer-2"><div class="layer-body-inner">A space is a canvas of widgets that pull in whatever you work with, from wherever you have access. You build as many as the work needs: one for the day's flow, one for a recurring job, one for the task that comes up now and then. No build queue, no IT ticket.</div></div>
+        <span class="layer-num">2</span>
+        <div class="layer-head">
+          <span class="layer-who">You, continuously, in plain language</span>
+          <h3>Your spaces</h3>
+          <p class="layer-desc">A canvas of widgets that pull in whatever you work with, from wherever you have access. Build as many as the work needs: a day's flow, a recurring job, an occasional task. No build queue, no IT ticket.</p>
+        </div>
       </div>
       <div class="layer">
-        <button type="button" class="layer-btn" aria-expanded="false" aria-controls="layer-3">
-          <span class="layer-num">3</span>
-          <span class="layer-head"><h3>The agents</h3><span class="who">The user directs; the framework constrains</span></span>
-          <svg class="layer-chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
-        </button>
-        <div class="layer-body" id="layer-3"><div class="layer-body-inner">AI agents see and act across everything in your spaces, strictly within your permissions. You set the rules and approve the exceptions; the agents do the busywork: ingesting, validating, posting and reconciling, by exception, underneath.</div></div>
+        <span class="layer-num">3</span>
+        <div class="layer-head">
+          <span class="layer-who">You direct; the framework constrains</span>
+          <h3>The agents</h3>
+          <p class="layer-desc">AI agents see and act across everything in your spaces, strictly within your permissions. You set the rules and approve the exceptions; the agents do the busywork, by exception, underneath.</p>
+        </div>
       </div>
     </div>
   </div>
@@ -1029,27 +1043,17 @@
 (function(){
   var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // Three-layer accordion
-  Array.prototype.forEach.call(document.querySelectorAll('#layers-acc .layer'), function(layer){
-    var btn = layer.querySelector('.layer-btn');
-    btn.addEventListener('click', function(){
-      var open = layer.classList.toggle('open');
-      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-    });
-  });
-  var first = document.querySelector('#layers-acc .layer');
-  if (first) { first.classList.add('open'); first.querySelector('.layer-btn').setAttribute('aria-expanded','true'); }
+  // Three layers are a static infographic now (no accordion).
 
-  // Ten-tab collapse
+  // Ten-tab: default shows the One surface button; click it to reveal the estate around it
   var tentab = document.getElementById('tentab');
-  var tabToggle = document.getElementById('tabToggle');
-  if (tentab && tabToggle){
-    var collapsed = false;
-    tabToggle.addEventListener('click', function(){
-      collapsed = !collapsed;
-      tentab.classList.toggle('collapsed', collapsed);
-      tabToggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
-      tabToggle.innerHTML = collapsed ? 'Show the estate again' : 'Collapse the estate &rarr;';
+  var tabSurface = document.getElementById('tabSurface');
+  if (tentab && tabSurface){
+    var tabHint = tabSurface.querySelector('.tab-hint');
+    tabSurface.addEventListener('click', function(){
+      var on = tentab.classList.toggle('expanded');
+      tabSurface.setAttribute('aria-expanded', on ? 'true' : 'false');
+      if (tabHint) tabHint.textContent = on ? 'Click to collapse back to one surface' : 'Click to reveal the estate it replaces';
     });
   }
 
