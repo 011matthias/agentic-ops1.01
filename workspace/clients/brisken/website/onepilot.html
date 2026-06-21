@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- deliverable-allow: copy-clipboard | reason: vision page, no code/command blocks; copy applies to code blocks only -->
+<!-- deliverable-allow: keyboard-search | reason: short single-purpose vision page (6 anchored sections), not a searchable doc site or tool -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OnePilot, the platform behind TreasuryCentral</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHBvbHlnb24gcG9pbnRzPSIxNiwzIDI4LDEwIDE2LDE3IDQsMTAiIGZpbGw9IiM1ZmQzZGYiLz48cG9seWdvbiBwb2ludHM9IjQsMTAgMTYsMTcgMTYsMzEgNCwyNCIgZmlsbD0iIzAwYjhjZSIvPjxwb2x5Z29uIHBvaW50cz0iMjgsMTAgMTYsMTcgMTYsMzEgMjgsMjQiIGZpbGw9IiMwYjZmN2EiLz48L3N2Zz4=">
+<meta name="description" content="OnePilot is Brisken's governed, no-code platform: one surface, your permissions, AI inside your controls. TreasuryCentral is its first edition, live on SAP.">
+<meta name="author" content="Brisken">
+<link rel="canonical" href="https://onepilot.brisken.com/">
+<meta name="robots" content="index, follow">
+<meta property="og:url" content="https://onepilot.brisken.com/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Brisken">
+<meta property="og:title" content="OnePilot, the platform behind TreasuryCentral">
+<meta property="og:description" content="Brisken's governed, no-code platform. One surface, composed by you, run with AI inside your permissions. TreasuryCentral is its first scoped edition on SAP.">
+<meta property="og:image" content="https://onepilot.brisken.com/og-op.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Brisken OnePilot: one surface, composed by you, run with AI">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://onepilot.brisken.com/og-op.png">
+<meta name="twitter:title" content="OnePilot, the platform behind TreasuryCentral">
+<meta name="twitter:description" content="Brisken's governed, no-code platform. TreasuryCentral is its first scoped edition, live on SAP today.">
+<!-- Boot script: set theme before paint to avoid a flash. -->
+<script>(function(){var t=localStorage.getItem('theme');
+  var d=document.documentElement;
+  d.setAttribute('data-theme',
+    t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');
+})();</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+  :root, [data-theme="light"] {
+    --teal: #0e7c86; --teal-strong: #0b626a; --teal-bg: #e4f3f4;
+    --paper: #f4f7fb; --surface: #ffffff; --surface-2: #eef3fa;
+    --mist: #e2e9f2; --mist-strong: #c8d5e5;
+    --text: #0a1a2f; --muted: #56657c; --heading: #00396f;
+    --bg: var(--paper); --border: var(--mist); --border-strong: var(--mist-strong);
+    --accent: var(--teal); --accent-strong: var(--teal-strong); --accent-bg: var(--teal-bg);
+    --brand-ink: #003a96;
+    --radius: 2px; --radius-pill: 999px;
+    --shadow: 0 1px 2px rgba(10,26,47,.05), 0 10px 30px rgba(10,26,47,.06);
+    --font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+    --font-body: "IBM Plex Sans", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  [data-theme="dark"] {
+    --teal: #3fb9c4; --teal-strong: #6ad3dc; --teal-bg: #0c2e36;
+    --paper: #081320; --surface: #0e2036; --surface-2: #0b1a2e;
+    --mist: #1e3550; --mist-strong: #2e4865;
+    --text: #e8eef6; --muted: #9db0c8; --heading: #dbe8fa;
+    --bg: var(--paper); --border: var(--mist); --border-strong: var(--mist-strong);
+    --accent: var(--teal); --accent-strong: var(--teal-strong); --accent-bg: var(--teal-bg);
+    --brand-ink: #e9f1fb;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 30px rgba(0,0,0,.34);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { font-family: var(--font-body); font-size: 17.5px; background: var(--bg); color: var(--text); line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  section { scroll-margin-top: 76px; }
+  a { color: inherit; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+  h1, h2, h3 { font-family: var(--font-display); color: var(--heading); line-height: 1.18; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 30px; }
+  .eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-strong); display: block; margin-bottom: 12px; }
+
+  /* Nav */
+  .site-nav { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between; padding: 14px 30px; background: color-mix(in srgb, var(--surface) 86%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
+  .nav-left { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .brand-cube { width: 25px; height: 25px; flex: none; display: block; }
+  .nav-logo { font-family: var(--font-display); font-weight: 700; font-size: 21px; letter-spacing: -.018em; color: var(--brand-ink); line-height: 1; }
+  .nav-product { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); font-weight: 500; padding-left: 10px; margin-left: 1px; border-left: 1px solid var(--border-strong); }
+  .nav-links { display: flex; gap: 24px; }
+  .nav-links a { color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500; transition: color .12s ease; }
+  .nav-links a:hover { color: var(--teal-strong); }
+  .nav-right { display: flex; align-items: center; gap: 12px; }
+  .nav-status { font-family: var(--font-mono); font-size: 10.5px; padding: 5px 11px; border-radius: var(--radius-pill); letter-spacing: .12em; text-transform: uppercase; background: var(--teal-bg); color: var(--teal-strong); font-weight: 500; border: 1px solid color-mix(in srgb, var(--teal) 28%, transparent); }
+  .nav-theme { background: none; border: 1px solid var(--border-strong); color: var(--muted); border-radius: var(--radius-pill); width: 34px; height: 30px; cursor: pointer; font-size: 13px; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-body); font-weight: 600; font-size: 14.5px; text-decoration: none; padding: 11px 20px; border-radius: var(--radius-pill); border: 1px solid var(--border-strong); color: var(--text); transition: all .14s ease; cursor: pointer; }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-strong); }
+  .btn:hover { transform: translateY(-1px); }
+
+  /* Hero */
+  .hero { padding: 86px 0 60px; border-bottom: 1px solid var(--border); }
+  .hero-badge { font-family: var(--font-mono); font-size: 13px; letter-spacing: .04em; color: var(--accent-strong); display: inline-block; margin-bottom: 18px; padding: 6px 13px; border: 1px solid color-mix(in srgb, var(--teal) 28%, transparent); border-radius: var(--radius-pill); background: var(--teal-bg); }
+  .hero h1 { font-size: clamp(34px, 5vw, 52px); letter-spacing: -.02em; margin-bottom: 18px; }
+  .hero-sub { font-size: 20px; color: var(--muted); max-width: 720px; }
+  .stats-row { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 34px; }
+  .stat { flex: 1; min-width: 180px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow); }
+  .stat .v { font-family: var(--font-display); font-size: 26px; color: var(--heading); display: block; }
+  .stat .t { font-size: 14px; color: var(--muted); }
+
+  /* Sections */
+  .section { padding: 64px 0; border-bottom: 1px solid var(--border); }
+  .section h2 { font-size: clamp(24px, 3.2vw, 32px); letter-spacing: -.015em; margin-bottom: 16px; max-width: 760px; }
+  .section-sub { font-size: 18px; color: var(--muted); max-width: 760px; margin-bottom: 8px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 30px; }
+  .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin-top: 30px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow); }
+  .card h3 { font-size: 18px; margin-bottom: 8px; }
+  .card p { font-size: 15.5px; color: var(--muted); }
+  .card .step { font-family: var(--font-mono); font-size: 12px; color: var(--accent-strong); display: block; margin-bottom: 10px; letter-spacing: .1em; }
+  .tags { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+  .tag { font-family: var(--font-mono); font-size: 13px; padding: 7px 13px; border: 1px solid var(--border-strong); border-radius: var(--radius-pill); color: var(--muted); background: var(--surface); }
+
+  /* CTA + footer */
+  .cta-section { padding: 60px 0; text-align: center; }
+  .cta-section h2 { font-size: 26px; margin-bottom: 10px; }
+  .cta-section p { color: var(--muted); margin-bottom: 24px; }
+  .footer { border-top: 1px solid var(--border); padding: 40px 0; background: var(--surface-2); }
+  .footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 20px; align-items: baseline; }
+  .footer p { font-size: 14px; color: var(--muted); }
+  .footer a { color: var(--accent-strong); text-decoration: none; }
+  .footer .updated { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); }
+
+  @media (max-width: 760px) {
+    .grid-3, .grid-2 { grid-template-columns: 1fr; }
+    .nav-links { display: none; }
+  }
+  @media print {
+    .site-nav, .cta-section { display: none !important; }
+    body { font-size: 11pt; }
+    .section, .hero { page-break-inside: avoid; border: none; }
+    h2 { page-break-before: always; }
+    h2:first-of-type { page-break-before: avoid; }
+  }
+  [data-theme="dark"] .btn-primary { background: #0b626a; color: #fff; border-color: #0b626a; }
+</style>
+</head>
+<body data-updated="2026-06-21">
+
+<nav class="site-nav">
+  <a class="nav-left" href="#top" aria-label="Brisken OnePilot, back to top">
+    <svg class="brand-cube" viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,3 28,10 16,17 4,10" fill="#5fd3df"/><polygon points="4,10 16,17 16,31 4,24" fill="#00b8ce"/><polygon points="28,10 16,17 16,31 28,24" fill="#0b6f7a"/></svg>
+    <span class="nav-logo">brisken</span>
+    <span class="nav-product">OnePilot</span>
+  </a>
+  <div class="nav-links">
+    <a href="#what">The platform</a>
+    <a href="#reach">Beyond SAP</a>
+    <a href="#editions">Where this goes</a>
+    <a href="#governance">Governance</a>
+    <a href="https://brisken.com/">TreasuryCentral</a>
+  </div>
+  <div class="nav-right">
+    <span class="nav-status">Platform</span>
+    <a href="https://brisken.com/" class="btn btn-primary">TreasuryCentral, live on SAP</a>
+    <button class="nav-theme" onclick="(function(){var d=document.documentElement;var c=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',c);localStorage.setItem('theme',c);})()" aria-label="Toggle theme">&#9788;/&#9790;</button>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <span class="hero-badge">The platform behind TreasuryCentral</span>
+    <h1>OnePilot: one surface, composed by you, run with AI</h1>
+    <p class="hero-sub">OnePilot is Brisken's governed, no-code platform. Each team composes the spaces, apps and data its work needs on one surface, and AI agents do the repetitive work across all of it, inside that team's exact permissions. TreasuryCentral is its first scoped edition, live on SAP today.</p>
+    <div class="stats-row">
+      <div class="stat"><span class="v">1 surface</span><span class="t">the apps, the data and the agents in one place, not ten tabs.</span></div>
+      <div class="stat"><span class="v">Your permissions</span><span class="t">agents reach exactly what the user can, no more.</span></div>
+      <div class="stat"><span class="v">On SAP first</span><span class="t">TreasuryCentral is the proof it runs a money-critical job end to end.</span></div>
+    </div>
+  </div>
+</header>
+
+<section class="section" id="what">
+  <div class="wrap">
+    <span class="eyebrow">What it is</span>
+    <h2>One framework, your spaces, agents inside your permissions</h2>
+    <p class="section-sub">OnePilot is not a fixed product. It is a framework you build on, in three layers.</p>
+    <div class="grid-3">
+      <div class="card"><span class="step">Layer 1</span><h3>The framework</h3><p>Connectivity, permissions, security and boundaries. Set up once by Brisken and your IT, it makes the surface safe to build on.</p></div>
+      <div class="card"><span class="step">Layer 2</span><h3>Your spaces</h3><p>Each user composes the widgets, apps and data a job needs, as many spaces as the work takes, changed in plain language, no IT ticket.</p></div>
+      <div class="card"><span class="step">Layer 3</span><h3>The agents</h3><p>AI agents see and act across everything in your spaces, strictly within your permissions. You set the rules and approve exceptions; the agents do the busywork.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="reach">
+  <div class="wrap">
+    <span class="eyebrow">Beyond SAP</span>
+    <h2>OnePilot is not an SAP-only platform</h2>
+    <p class="section-sub">It composes whatever a role works in. SAP is where Brisken is strongest and where we land first, not the limit of where OnePilot runs.</p>
+    <div class="tags">
+      <span class="tag">SAP and other ERPs</span>
+      <span class="tag">Banks and trading platforms</span>
+      <span class="tag">Market data providers</span>
+      <span class="tag">Email and Teams</span>
+      <span class="tag">Office and files</span>
+      <span class="tag">Web and internal apps</span>
+    </div>
+    <div class="grid-2">
+      <div class="card"><h3>Orchestrate, don't replace</h3><p>The book of record stays in SAP, execution stays on the trading platform, market data flows through the Market Data Hub. OnePilot orchestrates across them; it does not try to become the system that does everything.</p></div>
+      <div class="card"><h3>Composed to fit your company</h3><p>Processes are built in plain language to match how your team actually works, then run the same way every time, governed and auditable. You stay in command of how the work runs.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="editions">
+  <div class="wrap">
+    <span class="eyebrow">Where this goes</span>
+    <h2>Scope it to a role, not rebuild it</h2>
+    <p class="section-sub">TreasuryCentral is OnePilot scoped to the treasurer's day. The same surface scopes to other roles by composition, not by a new build. These are illustrations of the pattern, not a launch list.</p>
+    <div class="grid-2">
+      <div class="card"><h3>TreasuryCentral, the first edition</h3><p>The treasurer's day in one cockpit: cash, FX, market data, trades, bank files and remittances, on SAP, governed end to end. Live with customers today.</p></div>
+      <div class="card"><h3>The same surface, other roles</h3><p>Finance and controlling, sales and account management, operations and shared services, the executive's one morning surface. Each is the same OnePilot, scoped to that day's work.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="why">
+  <div class="wrap">
+    <span class="eyebrow">Why a platform, not another tool</span>
+    <h2>Software gets bought and not used. Adoption follows relief.</h2>
+    <p class="section-sub">The constraint on enterprise AI is not capability, it is adoption: licences get signed and then sit unused. OnePilot sells relief, the mundane work taken off people and put in one governed place, which is what makes a platform get used, renew and expand.</p>
+    <!-- B4: figures sourced from the OnePilot vision Sources section (Gartner 2024-2026). Confirm exact citation and wording before any public publish; never present as a Brisken-measured number. -->
+    <div class="grid-3">
+      <div class="card"><span class="step">Gartner</span><h3>$2.5T</h3><p>forecast worldwide AI spending in 2026.</p></div>
+      <div class="card"><span class="step">Gartner</span><h3>30%+</h3><p>of generative-AI projects abandoned after the proof-of-concept stage.</p></div>
+      <div class="card"><span class="step">Gartner</span><h3>40%+</h3><p>of agentic-AI projects expected to be cancelled by 2027.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="governance">
+  <div class="wrap">
+    <span class="eyebrow">Governance</span>
+    <h2>Agents reach exactly what the user can, no more</h2>
+    <p class="section-sub">The framework constrains; the user directs. Every action carries the same access limits as the person it works for, with the controls a regulated finance team needs to standardize on it.</p>
+    <div class="grid-3">
+      <div class="card"><h3>Permission-bound agents</h3><p>An agent sees and acts only on what the user is allowed to, never more.</p></div>
+      <div class="card"><h3>Four-eye and segregation of duties</h3><p>Approvals and separation of duties on the actions that need them.</p></div>
+      <div class="card"><h3>Full audit trail</h3><p>Every record traceable, manage-by-exception, nothing moves outside the rules you set.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="cta-section">
+  <div class="wrap">
+    <h2>See it running on SAP</h2>
+    <p>TreasuryCentral is OnePilot's first scoped edition, live with customers on SAP today.</p>
+    <a href="https://brisken.com/" class="btn btn-primary">Open TreasuryCentral &rarr;</a>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="wrap">
+    <p>Brisken &middot; OnePilot, the governed no-code platform &middot; <a href="https://brisken.com">brisken.com</a></p>
+    <p class="updated">Last updated: 2026-06-21</p>
+  </div>
+</footer>
+
+</body>
+</html>
