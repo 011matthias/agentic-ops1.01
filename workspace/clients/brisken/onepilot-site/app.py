@@ -45,6 +45,11 @@ from fastapi.responses import (
 # ---- configuration -------------------------------------------------------
 APP_DIR = Path(__file__).resolve().parent
 SITE_HTML = Path(os.environ.get("BRISKEN_SITE_HTML", str(APP_DIR / "site" / "index.html")))
+SITE_PLATFORM_HTML = Path(os.environ.get("BRISKEN_SITE_PLATFORM_HTML", str(APP_DIR / "site" / "brisken-onepilot-platform.html")))
+# Which page the root path "/" serves. Default is the TreasuryCentral prototype
+# (index.html); set BRISKEN_SITE_ROOT=platform to land "/" on the OnePilot
+# platform page (the standalone platform container that becomes onepilot.brisken.com).
+SITE_ROOT_HTML = SITE_PLATFORM_HTML if os.environ.get("BRISKEN_SITE_ROOT") == "platform" else SITE_HTML
 DATA_DIR = Path(os.environ.get("BRISKEN_SITE_DATA", str(APP_DIR / "data")))
 FEEDBACK_FILE = DATA_DIR / "feedback.jsonl"
 
@@ -176,19 +181,38 @@ async def logout() -> RedirectResponse:
     return resp
 
 
-@app.get("/", response_class=HTMLResponse)
-async def index(request: Request) -> HTMLResponse:
+def _render_page(html_path: Path, request: Request) -> HTMLResponse:
+    """Read a gated page and inject the reviewer name for the feedback popover.
+
+    Expose the reviewer's name to the page so the feedback popover can show
+    "leaving feedback as ...". The authoritative name for storage is the
+    cookie, read server-side in /feedback. Escape "<" so a crafted name can
+    not break out of the <script>.
+    """
     reviewer = read_name(request.cookies.get(COOKIE_NAME)) or ""
     try:
-        text = SITE_HTML.read_text(encoding="utf-8")
+        text = html_path.read_text(encoding="utf-8")
     except FileNotFoundError:
-        return HTMLResponse("<h1>Prototype HTML not found.</h1>", status_code=500)
-    # Expose the reviewer's name to the page so the feedback popover can show
-    # "leaving feedback as ...". The authoritative name for storage is the
-    # cookie, read server-side in /feedback. Escape "<" so a crafted name can
-    # not break out of the <script>.
+        return HTMLResponse("<h1>Page HTML not found.</h1>", status_code=500)
     inject = "<script>window.__fbReviewer=" + json.dumps(reviewer).replace("<", "\\u003c") + ";</script>"
     return HTMLResponse(text.replace("</head>", inject + "</head>", 1))
+
+
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request) -> HTMLResponse:
+    return _render_page(SITE_ROOT_HTML, request)
+
+
+# Both pages are also served by their file name so the absolute cross-links in
+# the HTML (TreasuryCentral <-> the OnePilot platform page) resolve on Fly.
+@app.get("/brisken-onepilot-website-prototype.html", response_class=HTMLResponse)
+async def prototype_page(request: Request) -> HTMLResponse:
+    return _render_page(SITE_HTML, request)
+
+
+@app.get("/brisken-onepilot-platform.html", response_class=HTMLResponse)
+async def platform_page(request: Request) -> HTMLResponse:
+    return _render_page(SITE_PLATFORM_HTML, request)
 
 
 @app.post("/feedback")

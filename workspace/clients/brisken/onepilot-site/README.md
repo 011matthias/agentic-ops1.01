@@ -1,7 +1,7 @@
 # Brisken OnePilot prototype host
 
 Gated host + feedback collector for the OnePilot marketing-site prototype
-(`../deliverables/brisken-onepilot-website-prototype.html`). Tiny FastAPI app:
+(`../deliverables/lead-generation/onepilot/brisken-onepilot-website-prototype.html`). Tiny FastAPI app:
 serves the prototype behind a shared access code and appends reviewer feedback
 to JSONL on a Fly volume. Internal pre-Dirk review only; nothing published to
 brisken.com.
@@ -36,3 +36,19 @@ flyctl deploy ./ --remote-only --ha=false
 App `brisken-onepilot-proto`, region `fra`, volume `onepilot_data` at `/data`,
 scale-to-zero. Secrets (`flyctl secrets set ...`): `BRISKEN_SITE_ACCESS_CODE`,
 `BRISKEN_SITE_AUTH_SECRET`. `./site/index.html` and `./data` are gitignored.
+
+## Standalone OnePilot platform app (second Fly app)
+
+The same app code also backs a separate Fly app, `brisken-onepilot`
+(`brisken-onepilot.fly.dev`), for reviewing the OnePilot platform page on its
+own host (intended to become `onepilot.brisken.com`). It is fully isolated from
+the proto host: its own app, its own `onepilot_data` volume, its own
+`BRISKEN_SITE_AUTH_SECRET`. The only behavioural difference is
+`BRISKEN_SITE_ROOT=platform` (set in `fly.onepilot.toml` `[env]`), which makes
+`/` serve `brisken-onepilot-platform.html`; the TreasuryCentral prototype stays
+reachable at `/brisken-onepilot-website-prototype.html` so the cross-links work.
+
+```
+uv run sync-site.py
+flyctl deploy ./ --config fly.onepilot.toml --remote-only --ha=false
+```
