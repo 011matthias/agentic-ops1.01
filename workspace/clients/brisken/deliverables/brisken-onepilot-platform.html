@@ -109,7 +109,7 @@
 
   /* hover-peek: the title sits over a softly blurred orbit; hovering fades the title (quick) and brings the orbit forward, sharp + eased-in; leaving settles back slowly (~3.4s) */
   .orbit,.guides,.core{filter:blur(5px);transition:transform 3.4s cubic-bezier(.2,.8,.2,1), filter 3.4s ease;}
-  .orbit,.guides{transform-origin:50% 58%;}
+  .orbit,.guides{transform-origin:50% 50%;}
   .stage.peek .thesis{opacity:0;transform:scale(.97);transition:opacity 1.3s ease, transform 1.3s ease;}
   .stage.peek .orbit,.stage.peek .guides,.stage.peek .core{filter:blur(0);transition:transform .6s cubic-bezier(.2,.8,.2,1), filter .55s ease;}
   .stage.peek .orbit{transform:scale(1.05);}
@@ -117,7 +117,7 @@
   .stage.peek .core{transform:translate(-50%,-50%) scale(1.05);}
 
   /* ---- core ---- */
-  .core{position:absolute;left:50%;top:58%;z-index:90;transform:translate(-50%,-50%);perspective:640px;
+  .core{position:absolute;left:50%;top:50%;z-index:90;transform:translate(-50%,-50%);perspective:640px;
     width:138px;height:138px;display:flex;align-items:center;justify-content:center;cursor:pointer;
     background:none;border:none;}
   .core .halo{position:absolute;inset:-90px;border-radius:50%;pointer-events:none;
@@ -1012,7 +1012,7 @@
   var gFar=document.getElementById('gFar'), gNear=document.getElementById('gNear');
   function layout(){
     var r = stage.getBoundingClientRect();
-    W=r.width; H=r.height; cx=W/2; cy=H*0.58;
+    W=r.width; H=r.height; cx=W/2; cy=H*0.50;
     // wider orbit; ry stays flat and cy sits low so the back of the ring still clears the thesis
     Rx = Math.max(200, Math.min(W*0.42, H*0.66, 680));
     Ry = Rx*0.26;
