@@ -1496,24 +1496,25 @@
 })();
 </script>
 
-<div class="dm-overlay" id="demoModal" role="dialog" aria-modal="true" aria-labelledby="dmTitle" hidden>
+<div class="dm-overlay" id="demoModal" role="dialog" aria-modal="true" aria-labelledby="dmTitle" aria-describedby="dmSub" hidden>
   <div class="dm-dialog">
     <button type="button" class="dm-x" id="dmClose" aria-label="Close">&#215;</button>
     <div id="dmFormWrap">
       <span class="dm-eyebrow">Book a demo</span>
       <h2 id="dmTitle">See TreasuryCentral running on SAP</h2>
-      <p class="dm-sub">Fifteen to twenty minutes on Brisken's own SAP environment. Leave your details and a few times that suit you; we reply to confirm.</p>
+      <p class="dm-sub" id="dmSub">Fifteen to twenty minutes on Brisken's own SAP environment. Leave your details and a few times that suit you; we reply to confirm.</p>
       <form id="dmForm" novalidate>
         <div class="dm-hp" aria-hidden="true"><label>Leave this field empty<input type="text" name="company_website" tabindex="-1" autocomplete="off"></label></div>
+        <p style="font-size:12px;color:var(--muted);margin:0 0 14px">Fields marked * are required.</p>
         <div class="dm-row two">
-          <div><label for="dmName">Full name <span class="req">*</span></label><input class="dm-field" id="dmName" name="name" type="text" required autocomplete="name"></div>
-          <div><label for="dmEmail">Work email <span class="req">*</span></label><input class="dm-field" id="dmEmail" name="email" type="email" required autocomplete="email"></div>
+          <div><label for="dmName">Full name <span class="req" aria-hidden="true">*</span></label><input class="dm-field" id="dmName" name="name" type="text" required aria-required="true" autocomplete="name"></div>
+          <div><label for="dmEmail">Work email <span class="req" aria-hidden="true">*</span></label><input class="dm-field" id="dmEmail" name="email" type="email" required aria-required="true" autocomplete="email"></div>
         </div>
         <div class="dm-row two">
-          <div><label for="dmCompany">Company <span class="req">*</span></label><input class="dm-field" id="dmCompany" name="company" type="text" required autocomplete="organization"></div>
-          <div><label for="dmDate">Preferred date / availability <span class="req">*</span></label><input class="dm-field" id="dmDate" name="preferred_date" type="text" required placeholder="e.g. Tue/Thu afternoons next week"></div>
+          <div><label for="dmCompany">Company <span class="req" aria-hidden="true">*</span></label><input class="dm-field" id="dmCompany" name="company" type="text" required aria-required="true" autocomplete="organization"></div>
+          <div><label for="dmDate">Preferred date / availability <span class="req" aria-hidden="true">*</span></label><input class="dm-field" id="dmDate" name="preferred_date" type="text" required aria-required="true" placeholder="e.g. Tue/Thu afternoons next week"></div>
         </div>
-        <label class="dm-consent"><input type="checkbox" id="dmConsent" name="consent" required> I agree Brisken may store these details to contact me about a demo.</label>
+        <label class="dm-consent"><input type="checkbox" id="dmConsent" name="consent" required aria-required="true"> I agree Brisken may store these details to contact me about a demo.</label>
         <div class="dm-actions">
           <button type="submit" class="dm-submit" id="dmSubmit">Request a demo</button>
           <span class="dm-status" id="dmStatus" role="status" aria-live="polite"></span>

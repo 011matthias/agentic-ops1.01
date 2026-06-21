@@ -147,30 +147,31 @@
 
     <form id="demoForm" class="form-card" novalidate>
       <div class="hp" aria-hidden="true"><label>Leave this field empty<input type="text" name="company_website" tabindex="-1" autocomplete="off"></label></div>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 16px">Fields marked * are required.</p>
 
       <div class="form-row two">
         <div>
-          <label class="fl" for="name">Full name <span class="req">*</span></label>
-          <input class="fi" id="name" name="name" type="text" required autocomplete="name">
+          <label class="fl" for="name">Full name <span class="req" aria-hidden="true">*</span></label>
+          <input class="fi" id="name" name="name" type="text" required aria-required="true" autocomplete="name">
         </div>
         <div>
-          <label class="fl" for="email">Work email <span class="req">*</span></label>
-          <input class="fi" id="email" name="email" type="email" required autocomplete="email">
+          <label class="fl" for="email">Work email <span class="req" aria-hidden="true">*</span></label>
+          <input class="fi" id="email" name="email" type="email" required aria-required="true" autocomplete="email">
         </div>
       </div>
 
       <div class="form-row two">
         <div>
-          <label class="fl" for="company">Company <span class="req">*</span></label>
-          <input class="fi" id="company" name="company" type="text" required autocomplete="organization">
+          <label class="fl" for="company">Company <span class="req" aria-hidden="true">*</span></label>
+          <input class="fi" id="company" name="company" type="text" required aria-required="true" autocomplete="organization">
         </div>
         <div>
-          <label class="fl" for="preferred_date">Preferred date / availability <span class="req">*</span></label>
-          <input class="fi" id="preferred_date" name="preferred_date" type="text" required placeholder="e.g. weekday afternoons next week">
+          <label class="fl" for="preferred_date">Preferred date / availability <span class="req" aria-hidden="true">*</span></label>
+          <input class="fi" id="preferred_date" name="preferred_date" type="text" required aria-required="true" placeholder="e.g. weekday afternoons next week">
         </div>
       </div>
 
-      <label class="consent"><input type="checkbox" id="consent" name="consent" required> I agree Brisken may store these details to contact me about a demo.</label>
+      <label class="consent"><input type="checkbox" id="consent" name="consent" required aria-required="true"> I agree Brisken may store these details to contact me about a demo.</label>
 
       <div class="form-actions">
         <button type="submit" class="submit-btn" id="submitBtn">Request a demo</button>

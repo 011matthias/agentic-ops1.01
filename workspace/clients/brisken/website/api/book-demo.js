@@ -1,17 +1,22 @@
 // Book-a-demo capture: validate -> spam-check -> persist to Neon Postgres -> notify.
-// Node serverless function (not Edge: the Neon HTTP driver runs here fine, and we
-// want a plain Node handler). Persist FIRST, notify after, so a webhook failure
-// never loses a saved lead.
+// Node serverless function (not Edge: plain Node handler; the Neon HTTP driver runs
+// here fine). Persist FIRST, notify after, so a webhook failure never loses a lead.
+//
+// Hardening note: this is an unauthenticated public insert endpoint. Honeypot +
+// time-to-fill are first-line bot filters only; before heavy promotion add a real
+// per-IP rate limit (Vercel WAF / Upstash KV) or a Turnstile/hCaptcha token.
 
 import { neon } from '@neondatabase/serverless';
 
 const sql = neon(process.env.DATABASE_URL);
 
 const MIN_FILL_MS = 3000; // submissions faster than this are almost always bots
+const MAX_BODY = 16384; // reject oversized raw bodies early (defense in depth)
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Ensure the table exists once per warm instance (idempotent; the canonical
-// schema also lives in migrations/0001_create_leads.sql).
+// Ensure the table exists once per warm instance (idempotent; canonical schema
+// also lives in migrations/0001_create_leads.sql). For a hardened setup, run the
+// migration once and point DATABASE_URL at an INSERT-only role, then this is a no-op.
 let tableReady = false;
 async function ensureTable() {
   if (tableReady) return;
@@ -23,8 +28,7 @@ async function ensureTable() {
     company        text,
     preferred_date text,
     consent        boolean     not null,
-    source_page    text,
-    user_agent     text
+    source_page    text
   )`;
   tableReady = true;
 }
@@ -60,11 +64,31 @@ export default async function handler(req, res) {
     return;
   }
 
+  // Only accept JSON, and bound the raw body before parsing.
+  const ct = String(req.headers['content-type'] || '');
+  if (!ct.includes('application/json')) {
+    res.status(415).json({ ok: false, error: 'unsupported_media_type' });
+    return;
+  }
+
   try {
-    const body =
-      req.body && typeof req.body === 'object'
-        ? req.body
-        : JSON.parse(req.body || '{}');
+    let body = req.body;
+    if (typeof body === 'string') {
+      if (body.length > MAX_BODY) {
+        res.status(413).json({ ok: false, error: 'too_large' });
+        return;
+      }
+      try {
+        body = JSON.parse(body || '{}');
+      } catch {
+        res.status(400).json({ ok: false, error: 'invalid' });
+        return;
+      }
+    }
+    if (!body || typeof body !== 'object') {
+      res.status(400).json({ ok: false, error: 'invalid' });
+      return;
+    }
 
     // Spam 1: honeypot. A real user never fills this hidden field; if it is set,
     // accept silently so the bot believes it succeeded, but persist nothing.
@@ -94,15 +118,14 @@ export default async function handler(req, res) {
     }
 
     const sourcePage = String(body.source_page || '').slice(0, 300);
-    const userAgent = String(req.headers['user-agent'] || '').slice(0, 400);
 
     // Persist FIRST (durable record). Parameterized via the tagged template, so
     // user input is bound, never interpolated.
     await ensureTable();
     const rows = await sql`
-      insert into leads (name, email, company, preferred_date, consent, source_page, user_agent)
+      insert into leads (name, email, company, preferred_date, consent, source_page)
       values (${name}, ${email}, ${company || null}, ${preferredDate || null},
-              ${consent}, ${sourcePage || null}, ${userAgent || null})
+              ${consent}, ${sourcePage || null})
       returning id`;
 
     // Notify only after the insert succeeded.
