@@ -8,10 +8,16 @@ lives in a group general-reference file, never duplicated into each
 workstream file. This rule is the source of truth for the convention; the
 step-by-step is in [[skil_project-status]].
 
-This is a convention that fires at decision time (when you start/wrap work
-on a workstream), not a hook-enforced gate. There is deliberately no
-blocking hook; the recurrence-kill if it drifts is to strengthen the
-`/comd_checkpoint` step and the staleness tool, not to add a tripwire.
+Two halves, kept separate on purpose: **updating** a status file is
+agent discipline (fires at decision time when you start/wrap work; no
+blocking hook, by design); **detecting** that one has gone stale is
+automated, so currency does not depend on recall. A SessionStart sweep
+(`project_status.py --sweep-stale`, wired in `wire-hooks.py`) surfaces
+stale/malformed files every session, fail-open. A stale file that
+misleads with confidence is the failure mode this convention most has to
+avoid; the sweep is the recurrence-kill, and the right response to a
+flagged file is to update it in place or delete it (W1 §4), never nurse a
+rotting one.
 
 ## The home
 
@@ -71,6 +77,10 @@ copy: link the detail, do not restate it.
 - `/comd_new-client` scaffolds an empty `status/` for new clients.
 - `tools/project_status.py --client X --check` flags stale + malformed
   files; `--scaffold` writes a template. See `tools/INDEX.md`.
+- `tools/project_status.py --sweep-stale --once-per-day` runs at
+  SessionStart (wired in `wire-hooks.py`) and advises on any stale or
+  malformed file across all clients, fail-open. This is what makes
+  detection recall-independent.
 
 ## Relationship to existing state
 
