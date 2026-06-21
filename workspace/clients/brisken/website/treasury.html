@@ -716,18 +716,23 @@
     .hero-grid { padding: 40px 0 30px; gap: 18px; }
     .hero-split { gap: 30px; margin-top: 8px; }
     .hero-research .big-stat { font-size: 54px; }
-    .mm-graph { height: auto; display: flex; flex-direction: column; gap: 11px; align-items: stretch; margin-top: 18px; }
+    /* phone: the platform map becomes a tiered infographic (platform -> edition -> apps) */
+    .mm-graph { height: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: stretch; margin-top: 18px; }
     .mm-edges { display: none; }
-    .mm-node { position: static; transform: none; width: 100%; max-width: none; flex-direction: row; justify-content: flex-start; gap: 14px; text-align: left; padding: 15px 16px; }
+    .mm-node { position: static; transform: none; width: 100%; max-width: none; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 14px 12px; }
     .mm-node:hover { transform: none; }
-    .mm-node.is-hub, .mm-node.is-tc { border-radius: 16px; padding: 16px; }
+    .mm-node.is-hub { grid-column: 1 / -1; order: 1; position: relative; left: auto; top: auto; max-width: none; justify-self: stretch; border-radius: 18px; padding: 18px 16px; }
+    .mm-node.is-hub .mm-node-name { font-size: 20px; }
+    .mm-node.is-tc { grid-column: 1 / -1; order: 2; position: relative; left: auto; top: auto; max-width: none; justify-self: stretch; border-radius: 16px; padding: 15px 16px; }
+    .mm-node.is-tc .mm-node-name { font-size: 16px; }
+    .mm-node.is-hub::after, .mm-node.is-tc::after { content: ""; position: absolute; left: 50%; bottom: -10px; width: 2px; height: 10px; background: var(--border-strong); transform: translateX(-50%); }
     .float-demo { right: 14px; bottom: 70px; }
     .hero-split .hero-research .mini-stats { width: 100%; max-width: 100%; }
     .hero-split .hero-research .mini { grid-template-columns: 76px minmax(0, 1fr); }
     .faq-section table { display: block; overflow-x: auto; max-width: 100%; }
-    .mm-node.is-why { width: 100%; max-width: none; border-radius: 16px; justify-content: flex-start; }
-    .mm-why-wrap { margin-top: 0; }
-    .mm-graph .mm-node:not(.is-hub):not(.is-tc) { width: 100%; max-width: none; min-height: 0; justify-content: flex-start; }
+    .mm-node.is-why { width: 100%; max-width: none; border-radius: 16px; justify-content: center; }
+    .mm-why-wrap { margin-top: 10px; }
+    .mm-graph .mm-node:not(.is-hub):not(.is-tc) { order: 3; width: 100%; max-width: none; min-height: 96px; }
     .mm-read table { display: block; overflow-x: auto; max-width: 100%; }
   }
   @media (prefers-reduced-motion: reduce) {

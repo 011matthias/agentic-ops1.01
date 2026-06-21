@@ -30,17 +30,31 @@ function rateLimited(ip) {
 
 async function notify(lead) {
   const url = process.env.NOTIFY_WEBHOOK_URL;
-  if (!url) return; // notifications optional until the webhook is configured
-  const text = [
-    'New TreasuryCentral demo request',
-    `Name: ${lead.name}`,
-    `Email: ${lead.email}`,
-    `Company: ${lead.company || '-'}`,
-    `Availability: ${lead.preferred_date || '-'}`,
-    `Source: ${lead.source_page || '-'}`,
-    `Time: ${new Date().toISOString()}`,
-  ].join('\n');
+  if (!url) return; // notifications optional until a destination is configured
   try {
+    if (url.includes('ntfy.sh')) {
+      // ntfy topic is technically public, so the push is PII-minimal: the
+      // company and preferred date only. The name/email live in Postgres,
+      // never in the alert. Plain-text body + ntfy header controls.
+      const company = lead.company || 'company n/a';
+      const when = lead.preferred_date || 'no date given';
+      await fetch(url, {
+        method: 'POST',
+        headers: { Title: 'New TreasuryCentral demo request', Tags: 'calendar', Priority: 'high' },
+        body: `${company}\nPreferred: ${when}\nFull details in the leads database.`,
+      });
+      return;
+    }
+    // Slack / Teams / generic JSON webhook (private channel): full detail.
+    const text = [
+      'New TreasuryCentral demo request',
+      `Name: ${lead.name}`,
+      `Email: ${lead.email}`,
+      `Company: ${lead.company || '-'}`,
+      `Availability: ${lead.preferred_date || '-'}`,
+      `Source: ${lead.source_page || '-'}`,
+      `Time: ${new Date().toISOString()}`,
+    ].join('\n');
     await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

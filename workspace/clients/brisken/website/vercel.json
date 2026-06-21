@@ -7,7 +7,11 @@
     {
       "source": "/",
       "has": [{ "type": "host", "value": "onepilot.brisken.com" }],
-      "destination": "/onepilot.html"
+      "destination": "/onepilot"
+    },
+    {
+      "source": "/",
+      "destination": "/treasury"
     }
   ],
   "headers": [
