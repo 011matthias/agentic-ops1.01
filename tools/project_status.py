@@ -1,0 +1,300 @@
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
+"""Per-project status-file tooling: scaffold new ones, flag stale/malformed ones.
+
+Backs the project-status convention (rule_project_status.md + skil_project-status).
+Each discrete workstream inside a client gets ONE maintained status file under
+`workspace/clients/{client}/status/`, a roll-up of the important elements inside
+it. Shared context (a group's vision / marketing plan) lives in a group general
+reference file in the same folder. This tool does the mechanical parts the
+convention needs:
+
+  - `--scaffold WORKSTREAM`  write a template status file (refuses to overwrite)
+  - `--check`                list the status files, flag stale + malformed ones
+
+WHY THIS EXISTS
+---------------
+There was no maintained per-project root file describing the status of the
+individual elements inside a project; status was scattered across
+PROJECT-BOUNDARIES.md (cross-project index), infrastructure.yaml (platform
+state), spec frontmatter (spec lifecycle), and comms-log.md (the client
+conversation). None roll up into "what are the moving parts of this workstream
+and where does each stand." These files fill that gap as canonical operational
+state (rule_no_file_bloat W1 §1), tracked outside the gitignored context/
+(rule_file_placement W2). The tool keeps them honest: a status file that has
+not been touched in N days is the thing the convention exists to prevent.
+
+DESIGN
+------
+- Staleness is DATE-based (frontmatter `updated:` vs a reference date), not
+  mtime-based: git checkouts reset mtimes, so an mtime rule would false-flag on
+  every fresh clone. Date-based is deterministic and testable.
+- Read-only `--check` never mutates; `--scaffold` writes one file and refuses to
+  clobber an existing one (supersession is a human/agent edit, per W1 §4).
+- Pure functions (`parse_frontmatter`, `compute_age_days`, `evaluate_file`) take
+  their inputs explicitly so the test suite can pin "today" and avoid disk.
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as _dt
+import json
+import re
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CLIENTS_DIR = REPO_ROOT / "workspace" / "clients"
+
+# Core frontmatter keys every status file (workstream or general-ref) must carry.
+REQUIRED_KEYS = ("project", "workstream", "state", "updated")
+# States the convention recognizes; `--check` warns on anything else.
+KNOWN_STATES = ("active", "blocked", "paused", "done", "live", "dormant", "not-started")
+DEFAULT_MAX_AGE_DAYS = 21
+# A status file does not need a daily heartbeat once its workstream is settled.
+NON_DECAYING_STATES = ("done", "paused", "dormant")
+
+
+def parse_frontmatter(content: str) -> dict:
+    """Extract the leading `---` block and parse its flat `key: value` lines.
+
+    Dependency-free on purpose (the bare pytest/CI env has no pyyaml, and the
+    repo's tools lean zero-dep). Status-file frontmatter is intentionally flat —
+    no nested structures — so a first-colon split is sufficient. Returns {} if
+    the block is absent. Empty-key and comment lines are skipped, so malformed
+    blocks degrade to {} rather than raising.
+    """
+    match = re.match(r"^---\s*\n(.*?)\n---\s*\n", content, re.DOTALL)
+    if not match:
+        return {}
+    out: dict = {}
+    for line in match.group(1).splitlines():
+        line = line.rstrip()
+        if not line or line.lstrip().startswith("#") or ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            continue
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        out[key] = value
+    return out
+
+
+def compute_age_days(updated, today: _dt.date) -> int | None:
+    """Days between an `updated:` value and `today`. None if unparseable.
+
+    Accepts a date object (PyYAML parses bare YYYY-MM-DD to a date) or a string.
+    """
+    if isinstance(updated, _dt.datetime):
+        updated = updated.date()
+    if isinstance(updated, _dt.date):
+        return (today - updated).days
+    if isinstance(updated, str):
+        m = re.search(r"\d{4}-\d{2}-\d{2}", updated)
+        if not m:
+            return None
+        try:
+            d = _dt.date.fromisoformat(m.group(0))
+        except ValueError:
+            return None
+        return (today - d).days
+    return None
+
+
+def evaluate_file(path: Path, today: _dt.date, max_age_days: int) -> dict:
+    """Inspect one status file: state, age, staleness, and structural problems."""
+    fm = parse_frontmatter(path.read_text(encoding="utf-8"))
+    problems: list[str] = []
+
+    missing = [k for k in REQUIRED_KEYS if k not in fm or fm.get(k) in (None, "")]
+    if missing:
+        problems.append("missing keys: " + ", ".join(missing))
+
+    state = fm.get("state")
+    if state is not None and state not in KNOWN_STATES:
+        problems.append(f"unknown state: {state!r}")
+
+    age = compute_age_days(fm.get("updated"), today)
+    if "updated" in fm and age is None:
+        problems.append("unparseable updated date")
+
+    stale = (
+        age is not None
+        and age > max_age_days
+        and state not in NON_DECAYING_STATES
+    )
+
+    return {
+        "file": path.name,
+        "workstream": fm.get("workstream"),
+        "group": fm.get("group") or "",
+        "state": state,
+        "updated": str(fm.get("updated")) if fm.get("updated") is not None else None,
+        "age_days": age,
+        "stale": stale,
+        "problems": problems,
+    }
+
+
+def status_dir(client: str) -> Path:
+    return CLIENTS_DIR / client / "status"
+
+
+def list_status_files(client: str) -> list[Path]:
+    d = status_dir(client)
+    if not d.is_dir():
+        return []
+    return sorted(p for p in d.glob("*.md") if p.name.lower() != "readme.md")
+
+
+def check(client: str, today: _dt.date, max_age_days: int) -> tuple[list[dict], int]:
+    """Evaluate every status file. Returns (rows, exit_code). Non-zero if any
+    file is stale or malformed."""
+    d = status_dir(client)
+    if not d.is_dir():
+        return ([], 3)  # no status/ folder at all
+    rows = [evaluate_file(p, today, max_age_days) for p in list_status_files(client)]
+    bad = any(r["stale"] or r["problems"] for r in rows)
+    return (rows, 1 if bad else 0)
+
+
+TEMPLATE = """\
+---
+project: {client}
+workstream: {workstream}
+group: {group}
+spec: {spec}
+state: {state}
+updated: {updated}{general_ref_line}
+---
+
+# {client} / {workstream}
+
+One-line purpose of this workstream (replace this).
+
+## Elements
+
+| Element | State | Status | Next action | Blocker | Detail |
+|---|---|---|---|---|---|
+| (element) | not-started | (one line) | (next action) | (blocker or —) | (link) |
+
+States: not-started · in-progress · blocked · done · live · paused
+
+## Open decisions / gates
+
+- (gate or decision this workstream waits on; link to the source doc)
+
+## Pointers
+
+- Spec: (link)
+- Deliverables: (link)
+- Context: (link)
+"""
+
+
+def scaffold(
+    client: str,
+    workstream: str,
+    *,
+    group: str = "",
+    spec: str = "",
+    state: str = "active",
+    today: _dt.date,
+    general_ref: str = "",
+) -> Path:
+    d = status_dir(client)
+    if not (CLIENTS_DIR / client).is_dir():
+        raise SystemExit(f"client folder not found: {CLIENTS_DIR / client}")
+    d.mkdir(parents=True, exist_ok=True)
+    dest = d / f"{workstream}.md"
+    if dest.exists():
+        raise SystemExit(f"refusing to overwrite existing file: {dest}")
+    general_ref_line = f"\ngeneral_ref: {general_ref}" if general_ref else ""
+    dest.write_text(
+        TEMPLATE.format(
+            client=client,
+            workstream=workstream,
+            group=group,
+            spec=spec,
+            state=state,
+            updated=today.isoformat(),
+            general_ref_line=general_ref_line,
+        ),
+        encoding="utf-8",
+    )
+    return dest
+
+
+def _print_check(client: str, rows: list[dict], code: int, max_age_days: int) -> None:
+    if code == 3:
+        print(f"no status/ folder for client '{client}' ({status_dir(client)})")
+        return
+    if not rows:
+        print(f"status/ exists for '{client}' but holds no status files")
+        return
+    print(f"project status - {client}  (stale threshold: {max_age_days}d)\n")
+    for r in rows:
+        flags = []
+        if r["stale"]:
+            flags.append(f"STALE ({r['age_days']}d)")
+        if r["problems"]:
+            flags.extend(r["problems"])
+        tag = "  <-- " + "; ".join(flags) if flags else ""
+        age = f"{r['age_days']}d" if r["age_days"] is not None else "?"
+        print(f"  [{(r['state'] or '?'):<11}] {r['file']:<32} updated {r['updated'] or '?'} ({age}){tag}")
+    print()
+    print("OK" if code == 0 else "ISSUES FOUND (stale or malformed status files above)")
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description="Per-project status-file tooling.")
+    ap.add_argument("--client", help="client slug under workspace/clients/")
+    ap.add_argument("--check", action="store_true", help="report status files, flag stale/malformed")
+    ap.add_argument("--scaffold", metavar="WORKSTREAM", help="write a template status file")
+    ap.add_argument("--group", default="", help="parent group for the scaffolded file")
+    ap.add_argument("--spec", default="", help="related spec id(s) for the scaffolded file")
+    ap.add_argument("--general-ref", default="", help="path to the group general-reference file")
+    ap.add_argument("--state", default="active", help="initial state for the scaffolded file")
+    ap.add_argument("--days", type=int, default=DEFAULT_MAX_AGE_DAYS, help="staleness threshold in days")
+    ap.add_argument("--json", action="store_true", help="machine-readable output for --check")
+    args = ap.parse_args(argv)
+
+    today = _dt.date.today()
+
+    if args.scaffold:
+        if not args.client:
+            ap.error("--scaffold requires --client")
+        dest = scaffold(
+            args.client,
+            args.scaffold,
+            group=args.group,
+            spec=args.spec,
+            state=args.state,
+            today=today,
+            general_ref=args.general_ref,
+        )
+        print(f"wrote {dest}")
+        return 0
+
+    if args.check:
+        if not args.client:
+            ap.error("--check requires --client")
+        rows, code = check(args.client, today, args.days)
+        if args.json:
+            print(json.dumps({"client": args.client, "rows": rows, "exit": code}, indent=2))
+        else:
+            _print_check(args.client, rows, code, args.days)
+        return code
+
+    ap.print_help()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

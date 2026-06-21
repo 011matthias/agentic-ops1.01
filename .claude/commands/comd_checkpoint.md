@@ -308,6 +308,25 @@ After the ops status line, for each client in `clients_touched` that uses Make.c
 
 This is a lightweight reconciliation. It only checks `ship: true` scenarios (not UTIL/test).
 
+## Project Status Update (status-of-elements)
+
+For each client in `clients_touched` that has a `status/` folder, update the
+status files for the workstreams touched this session before closing out (see
+`rule_project_status.md` / `skil_project-status`):
+
+1. For each workstream worked on, edit its `status/{spec-id}-{slug}.md` in place:
+   bump element states, `Next action`, and blockers; bump the `updated:` field to
+   today. Update in place — never write a dated snapshot.
+2. If work started a NEW workstream, scaffold it:
+   `uv run tools/project_status.py --client {client} --scaffold {slug} --group {group} --spec {id}`, then fill the elements.
+3. If a workstream shipped or was abandoned, delete its status file (supersession,
+   rule_no_file_bloat W1 §4).
+4. Run `uv run tools/project_status.py --client {client} --check`; resolve any
+   stale/malformed flags. Include changed status files under **Files Modified**.
+
+If the client has no `status/` folder, skip silently (back-fill is per-touch, not
+forced).
+
 ## Comms Staleness Check
 
 After writing the YAML, for each client in `clients_touched`:
