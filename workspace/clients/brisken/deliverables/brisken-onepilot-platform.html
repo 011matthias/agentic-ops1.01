@@ -91,7 +91,7 @@
 
   /* thesis (large, overlapping the orbit; fades on hover to reveal + zoom the orbit) */
   .thesis{position:absolute;left:0;right:0;top:clamp(108px,28vh,290px);z-index:95;text-align:center;
-    padding:0 24px;pointer-events:none;transition:opacity .55s ease, transform .55s ease;}
+    padding:0 24px;pointer-events:none;transition:opacity 3.4s ease, transform 3.4s ease;}
   .thesis .eyebrow{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;
     color:var(--brand-cyan-lo);display:inline-flex;align-items:center;gap:8px;margin-bottom:16px;}
   .thesis .eyebrow::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--brand-cyan);
@@ -101,10 +101,11 @@
   .thesis h1 .grad{background:linear-gradient(96deg,var(--brand-cyan-lo),var(--h-adopt));
     -webkit-background-clip:text;background-clip:text;color:transparent;}
 
-  /* hover-peek: title fades, orbit eases in a touch */
-  .orbit,.guides,.core{transition:transform .6s cubic-bezier(.2,.8,.2,1);}
+  /* hover-peek: the title sits over a softly blurred orbit; hovering fades the title (quick) and brings the orbit forward, sharp + eased-in; leaving settles back slowly (~3.4s) */
+  .orbit,.guides,.core{filter:blur(5px);transition:transform 3.4s cubic-bezier(.2,.8,.2,1), filter 3.4s ease;}
   .orbit,.guides{transform-origin:50% 58%;}
-  .stage.peek .thesis{opacity:0;transform:scale(.97);}
+  .stage.peek .thesis{opacity:0;transform:scale(.97);transition:opacity .5s ease, transform .5s ease;}
+  .stage.peek .orbit,.stage.peek .guides,.stage.peek .core{filter:blur(0);transition:transform .6s cubic-bezier(.2,.8,.2,1), filter .55s ease;}
   .stage.peek .orbit{transform:scale(1.05);}
   .stage.peek .guides{transform:scale(1.05);}
   .stage.peek .core{transform:translate(-50%,-50%) scale(1.05);}
