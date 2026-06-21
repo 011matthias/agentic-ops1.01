@@ -44,6 +44,7 @@ import datetime as _dt
 import json
 import re
 import sys
+import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -252,6 +253,61 @@ def _print_check(client: str, rows: list[dict], code: int, max_age_days: int) ->
     print("OK" if code == 0 else "ISSUES FOUND (stale or malformed status files above)")
 
 
+def sweep_stale(today: _dt.date, max_age_days: int = DEFAULT_MAX_AGE_DAYS) -> list[dict]:
+    """Across every client with a status/ folder, return the files that are stale
+    or malformed (each row carries its client). Empty list = everything fresh.
+
+    This is what makes currency NOT depend on someone remembering to run --check:
+    it is wired into SessionStart (see tools/wire-hooks.py) so rot surfaces on its
+    own every session.
+    """
+    findings: list[dict] = []
+    if not CLIENTS_DIR.is_dir():
+        return findings
+    for client_dir in sorted(p for p in CLIENTS_DIR.iterdir() if p.is_dir()):
+        if not (client_dir / "status").is_dir():
+            continue
+        for row in (evaluate_file(p, today, max_age_days) for p in list_status_files(client_dir.name)):
+            if row["stale"] or row["problems"]:
+                findings.append({"client": client_dir.name, **row})
+    return findings
+
+
+# Once-per-day stamp so the SessionStart sweep advises at most once per calendar
+# day instead of on every session (mirrors friction-watch.py --once-per-day).
+_SWEEP_STAMP = Path(tempfile.gettempdir()) / "agentic-ops-project-status-sweep.json"
+
+
+def _already_swept_today(today: _dt.date) -> bool:
+    """True if the once-per-day sweep already ran today. Fail-open: any error =>
+    False (run the sweep) rather than silently skipping it."""
+    try:
+        return json.loads(_SWEEP_STAMP.read_text(encoding="utf-8")).get("last_sweep") == today.isoformat()
+    except (OSError, ValueError):
+        return False
+
+
+def _mark_swept_today(today: _dt.date) -> None:
+    try:
+        _SWEEP_STAMP.write_text(json.dumps({"last_sweep": today.isoformat()}), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _print_sweep(findings: list[dict]) -> None:
+    n = len(findings)
+    print(f"[project-status] {n} status file(s) stale or malformed. "
+          "Update in place, or delete if the workstream is done (rule_no_file_bloat W1).")
+    for f in findings:
+        bits = []
+        if f["stale"]:
+            bits.append(f"stale {f['age_days']}d")
+        if f["problems"]:
+            bits.extend(f["problems"])
+        print(f"  {f['client']}/{f['file']}: {'; '.join(bits)}")
+    print("  (run: uv run tools/project_status.py --client <X> --check)")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Per-project status-file tooling.")
     ap.add_argument("--client", help="client slug under workspace/clients/")
@@ -263,9 +319,27 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--state", default="active", help="initial state for the scaffolded file")
     ap.add_argument("--days", type=int, default=DEFAULT_MAX_AGE_DAYS, help="staleness threshold in days")
     ap.add_argument("--json", action="store_true", help="machine-readable output for --check")
+    ap.add_argument("--sweep-stale", action="store_true",
+                    help="scan ALL clients; advise on stale/malformed status files (exit 0 always)")
+    ap.add_argument("--once-per-day", action="store_true",
+                    help="with --sweep-stale: run at most once per calendar day (SessionStart use)")
     args = ap.parse_args(argv)
 
     today = _dt.date.today()
+
+    if args.sweep_stale:
+        # SessionStart-wired: never block a session. Fail-open, always exit 0.
+        try:
+            if args.once_per_day and _already_swept_today(today):
+                return 0
+            findings = sweep_stale(today, args.days)
+            if args.once_per_day:
+                _mark_swept_today(today)
+            if findings:
+                _print_sweep(findings)
+        except Exception:
+            pass
+        return 0
 
     if args.scaffold:
         if not args.client:

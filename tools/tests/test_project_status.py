@@ -185,3 +185,70 @@ def test_scaffold_refuses_overwrite(tmp_path, monkeypatch):
         assert "refusing to overwrite" in str(e)
     else:
         raise AssertionError("expected SystemExit on overwrite")
+
+
+# --- sweep-stale (the SessionStart auto-surface) ---------------------------
+
+def _seed(clients, client, name, updated, state="active"):
+    d = clients / client / "status"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / name).write_text(
+        f"---\nproject: {client}\nworkstream: w\nstate: {state}\nupdated: {updated}\n---\n",
+        encoding="utf-8")
+
+
+def test_sweep_finds_stale_across_clients(tmp_path, monkeypatch):
+    clients = _client_tree(tmp_path, monkeypatch)
+    _seed(clients, "brisken", "p2-rome.md", "2026-04-01")      # stale
+    _seed(clients, "brisken", "p1.md", "2026-06-19")           # fresh
+    _seed(clients, "meji", "a0.md", "2026-06-18")              # fresh, other client
+    (clients / "wimmer").mkdir(parents=True)                   # no status/ -> skipped
+    findings = ps.sweep_stale(TODAY, ps.DEFAULT_MAX_AGE_DAYS)
+    assert [(f["client"], f["file"]) for f in findings] == [("brisken", "p2-rome.md")]
+
+
+def test_sweep_empty_when_all_fresh(tmp_path, monkeypatch):
+    clients = _client_tree(tmp_path, monkeypatch)
+    _seed(clients, "brisken", "p2-rome.md", "2026-06-19")
+    assert ps.sweep_stale(TODAY, ps.DEFAULT_MAX_AGE_DAYS) == []
+
+
+def test_sweep_catches_malformed(tmp_path, monkeypatch):
+    clients = _client_tree(tmp_path, monkeypatch)
+    d = clients / "brisken" / "status"
+    d.mkdir(parents=True)
+    (d / "bad.md").write_text("---\nproject: brisken\n---\n", encoding="utf-8")  # missing keys
+    findings = ps.sweep_stale(TODAY, ps.DEFAULT_MAX_AGE_DAYS)
+    assert len(findings) == 1 and findings[0]["problems"]
+
+
+def test_sweep_no_clients_dir_is_empty(tmp_path, monkeypatch):
+    monkeypatch.setattr(ps, "CLIENTS_DIR", tmp_path / "nope")
+    assert ps.sweep_stale(TODAY, ps.DEFAULT_MAX_AGE_DAYS) == []
+
+
+def test_main_sweep_always_exit0(tmp_path, monkeypatch, capsys):
+    clients = _client_tree(tmp_path, monkeypatch)
+    monkeypatch.setattr(ps, "_SWEEP_STAMP", tmp_path / "stamp.json")
+    _seed(clients, "brisken", "p2-rome.md", "2026-04-01")  # stale -> findings printed
+    assert ps.main(["--sweep-stale"]) == 0
+    assert "stale" in capsys.readouterr().out
+
+
+def test_once_per_day_stamp(tmp_path, monkeypatch):
+    monkeypatch.setattr(ps, "_SWEEP_STAMP", tmp_path / "stamp.json")
+    assert ps._already_swept_today(TODAY) is False   # no stamp yet
+    ps._mark_swept_today(TODAY)
+    assert ps._already_swept_today(TODAY) is True     # stamped today
+    assert ps._already_swept_today(dt.date(2026, 6, 22)) is False  # different day
+
+
+def test_once_per_day_skips_second_run(tmp_path, monkeypatch, capsys):
+    clients = _client_tree(tmp_path, monkeypatch)
+    monkeypatch.setattr(ps, "_SWEEP_STAMP", tmp_path / "stamp.json")
+    _seed(clients, "brisken", "p2-rome.md", "2026-04-01")  # stale
+    ps.main(["--sweep-stale", "--once-per-day"])
+    first = capsys.readouterr().out
+    ps.main(["--sweep-stale", "--once-per-day"])           # same day -> skipped
+    second = capsys.readouterr().out
+    assert "stale" in first and second == ""

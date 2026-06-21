@@ -129,6 +129,10 @@ malformed frontmatter. Green before you consider the status current.
   the at-a-glance state it reads.
 - `/comd_checkpoint` updates the touched workstreams' files before saving.
 - `/comd_new-client` scaffolds an empty `status/` so a new client starts here.
+- A SessionStart sweep (`project_status.py --sweep-stale`, wired in
+  `wire-hooks.py`) auto-surfaces stale/malformed files every session, fail-open,
+  so you do not have to remember to run `--check`. When it flags one, update it in
+  place or delete it (W1 §4); do not nurse a rotting file.
 - `PROJECT-BOUNDARIES.md` stays the cross-project active/paused index; status
   files are the level of detail beneath it. `infrastructure.yaml`, the specs, and
   `comms-log.md` are referenced by pointer, never duplicated.
