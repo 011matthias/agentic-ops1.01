@@ -4,7 +4,7 @@ workstream: p2-onepilot-site
 group: lead-generation
 spec: p2
 state: active
-updated: 2026-06-20
+updated: 2026-06-21
 general_ref: status/p2-lead-gen-general.md
 ---
 
@@ -34,7 +34,9 @@ URL); feedback writes to JSONL on the Fly volume
 
 - TreasuryCentral / OnePilot hierarchy (umbrella with OnePilot as the AI layer
   inside, or peers). Gates the site re-cut. Copy is built to the nested model and
-  is one-edit reversible. Do NOT re-skin the OnePilot-as-platform assets until answered.
+  is one-edit reversible. Do NOT re-skin the OnePilot-as-platform assets until
+  answered. (Group product-shape decision; current state in
+  `context/lead-generation/dirk-go-live-sheet.md`, not restated here.)
 
 ## Pointers
 
