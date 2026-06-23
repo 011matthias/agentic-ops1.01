@@ -732,7 +732,7 @@
       <div class="qa-group">SAP, governance and how it compares</div>
       <div class="q"><button class="q-head" aria-expanded="false"><h3>Does OnePilot replace SAP?</h3><span class="q-chev" aria-hidden="true"></span></button><div class="q-body"><div class="q-body-inner"><p class="a">No. OnePilot orchestrates on top of SAP. The book of record stays in SAP, execution on the trading platform, and market data through the hub.</p></div></div></div>
       <div class="q"><button class="q-head" aria-expanded="false"><h3>How is this different from Glean, Microsoft Copilot or Agentforce?</h3><span class="q-chev" aria-hidden="true"></span></button><div class="q-body"><div class="q-body-inner"><p class="a">Each of those covers a slice: search finds across tools, suite assistants help inside one suite, and agent platforms act beside the old tools. OnePilot is the surface the user actually works from, reaching into ERP, banking and market data, with agents carrying the user's exact permissions across every source.</p><p class="d">It orchestrates rather than becoming the system of record, and it can consume what point tools build rather than adding another tab to the estate.</p></div></div></div>
-      <div class="q"><button class="q-head" aria-expanded="false"><h3>How do you get started?</h3><span class="q-chev" aria-hidden="true"></span></button><div class="q-body"><div class="q-body-inner"><p class="a">Start with TreasuryCentral on SAP, scoped to the treasury team, then add applications and spaces as the work needs them.</p><p class="d">Book a demo to see the surface run a money-critical job end to end.</p></div></div></div>
+      <div class="q"><button class="q-head" aria-expanded="false"><h3>How do you get started?</h3><span class="q-chev" aria-hidden="true"></span></button><div class="q-body"><div class="q-body-inner"><p class="a">Start with TreasuryCentral on SAP, scoped to the treasury team, then add applications and spaces as the work needs them.</p><p class="d">Contact the team to see the surface run a money-critical job end to end.</p></div></div></div>
     </div>
   </div>
 </section>
@@ -743,7 +743,7 @@
     <p>TreasuryCentral is live with customers on SAP today. Watch the surface run a money-critical job end to end, or reach the team to arrange a walkthrough.</p>
     <div class="row">
       <a class="btn btn-primary" href="https://www.brisken.com">Open TreasuryCentral</a>
-      <a class="btn btn-ghost" href="https://www.brisken.com">Book a demo</a>
+      <button class="btn btn-ghost" type="button" data-contact>Contact us</button>
     </div>
   </div>
 </section>
@@ -771,7 +771,7 @@
       <a href="#applications">Applications</a>
       <a href="#stage">The OnePilot platform</a>
       <a href="#answers">Answers</a>
-      <a href="https://www.brisken.com">Book a demo</a>
+      <a href="#contact" data-contact>Contact us</a>
     </div>
   </div>
   <div class="foot-legal">
@@ -781,7 +781,7 @@
   </div>
 </footer>
 
-<a class="demo-fab" href="https://www.brisken.com">Contact us</a>
+<button class="demo-fab" type="button" data-contact>Contact us</button>
 
 <div class="scrim" id="scrim"></div>
 <aside class="panel" id="panel" role="dialog" aria-modal="false" aria-labelledby="panelTitle">
@@ -1274,11 +1274,87 @@
         { "@type": "Question", "name": "How do you automate remittance advice in SAP?", "acceptedAnswer": { "@type": "Answer", "text": "The Remittance Advice Gate has an agent read incoming remittances and structure them into SAP cash application, removing the manual re-keying. The agent prepares the entries; a person approves them." } },
         { "@type": "Question", "name": "Does OnePilot replace SAP?", "acceptedAnswer": { "@type": "Answer", "text": "No. OnePilot orchestrates on top of SAP. The book of record stays in SAP, execution on the trading platform, and market data through the hub." } },
         { "@type": "Question", "name": "How is this different from Glean, Microsoft Copilot or Agentforce?", "acceptedAnswer": { "@type": "Answer", "text": "Each of those covers a slice: search finds across tools, suite assistants help inside one suite, and agent platforms act beside the old tools. OnePilot is the surface the user actually works from, reaching into ERP, banking and market data, with agents carrying the user's exact permissions across every source. It orchestrates rather than becoming the system of record." } },
-        { "@type": "Question", "name": "How do you get started?", "acceptedAnswer": { "@type": "Answer", "text": "Start with TreasuryCentral on SAP, scoped to the treasury team, then add applications and spaces as the work needs them. Book a demo to see the surface run a money-critical job end to end." } }
+        { "@type": "Question", "name": "How do you get started?", "acceptedAnswer": { "@type": "Answer", "text": "Start with TreasuryCentral on SAP, scoped to the treasury team, then add applications and spaces as the work needs them. Contact the team to see the surface run a money-critical job end to end." } }
       ]
     }
   ]
 }
+</script>
+<style>
+  button.btn{font-family:inherit;cursor:pointer;}
+  button.demo-fab{font-family:inherit;border:none;cursor:pointer;}
+  .cmodal[hidden]{display:none;}
+  .cmodal{position:fixed;inset:0;z-index:1200;display:flex;align-items:center;justify-content:center;padding:20px;}
+  .cmodal-scrim{position:absolute;inset:0;background:rgba(2,18,43,.62);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);}
+  .cmodal-card{position:relative;z-index:1;width:100%;max-width:440px;background:var(--glass-2);border:1px solid var(--line-2);
+    border-radius:18px;padding:26px 26px 24px;box-shadow:0 30px 80px rgba(0,0,0,.5);max-height:90vh;overflow:auto;}
+  .cmodal-x{position:absolute;top:12px;right:14px;background:none;border:none;color:var(--muted);font-size:26px;line-height:1;cursor:pointer;padding:4px;}
+  .cmodal-x:hover{color:var(--ink);}
+  .cmodal-card h2{font-family:var(--font-display);font-size:22px;color:var(--heading);letter-spacing:-.01em;margin-bottom:6px;}
+  .cmodal-sub{font-size:14px;color:var(--muted);line-height:1.5;margin-bottom:18px;}
+  .cf{display:block;margin-bottom:13px;}
+  .cf>span{display:block;font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+  .cf input,.cf textarea{width:100%;box-sizing:border-box;background:color-mix(in srgb,var(--ink) 5%,transparent);
+    border:1px solid var(--line-2);border-radius:10px;padding:11px 13px;color:var(--ink);font:inherit;font-size:14.5px;}
+  .cf textarea{resize:vertical;}
+  .cf input:focus,.cf textarea:focus{outline:none;border-color:var(--brand-cyan);}
+  .cconsent{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:var(--muted);line-height:1.45;margin:4px 0 16px;cursor:pointer;}
+  .cconsent input{margin-top:2px;flex:none;}
+  .cf-submit{width:100%;justify-content:center;}
+  .cf-msg{font-size:13.5px;margin-top:12px;min-height:1em;}
+  .cf-msg.ok{color:var(--approved);}
+  .cf-msg.err{color:#e0795c;}
+  .cmodal .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;}
+</style>
+<div class="cmodal" id="cmodal" hidden>
+  <div class="cmodal-scrim" data-contact-close></div>
+  <div class="cmodal-card" role="dialog" aria-modal="true" aria-labelledby="cmodal-title">
+    <button class="cmodal-x" type="button" aria-label="Close" data-contact-close>&times;</button>
+    <h2 id="cmodal-title">Contact the team</h2>
+    <p class="cmodal-sub">Tell us a little about your setup and we will be in touch. TreasuryCentral is live on SAP today.</p>
+    <form id="cform" novalidate>
+      <div class="hp" aria-hidden="true"><label>Leave this field empty<input type="text" name="company_website" tabindex="-1" autocomplete="off"></label></div>
+      <label class="cf"><span>Name</span><input name="name" type="text" required autocomplete="name"></label>
+      <label class="cf"><span>Work email</span><input name="email" type="email" required autocomplete="email"></label>
+      <label class="cf"><span>Company</span><input name="company" type="text" autocomplete="organization"></label>
+      <label class="cf"><span>How can we help?</span><textarea name="message" rows="3" placeholder="What you would like to see, or a few times that suit you"></textarea></label>
+      <label class="cconsent"><input type="checkbox" name="consent" required> I agree Brisken may store these details to contact me about my enquiry.</label>
+      <button class="btn btn-primary cf-submit" type="submit">Send</button>
+      <p class="cf-msg" role="status" aria-live="polite"></p>
+    </form>
+  </div>
+</div>
+<script>
+(function(){
+  var modal=document.getElementById('cmodal'); if(!modal) return;
+  var form=document.getElementById('cform'), msg=modal.querySelector('.cf-msg'), submit=modal.querySelector('.cf-submit');
+  var openedAt=0, lastFocus=null;
+  function open(e){ if(e){e.preventDefault();} lastFocus=document.activeElement; openedAt=Date.now();
+    modal.hidden=false; document.body.style.overflow='hidden';
+    var f=modal.querySelector('input[name=name]'); if(f){f.focus();} }
+  function close(){ modal.hidden=true; document.body.style.overflow='';
+    if(lastFocus&&lastFocus.focus){lastFocus.focus();} }
+  [].forEach.call(document.querySelectorAll('[data-contact]'),function(b){ b.addEventListener('click',open); });
+  [].forEach.call(modal.querySelectorAll('[data-contact-close]'),function(b){ b.addEventListener('click',close); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&!modal.hidden){close();} });
+  form.addEventListener('submit',function(e){ e.preventDefault();
+    msg.textContent=''; msg.className='cf-msg';
+    var fd=new FormData(form), email=(fd.get('email')||'').toString().trim();
+    if(!(fd.get('name')||'').toString().trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !form.elements.consent.checked){
+      msg.textContent='Please add your name, a valid work email, and tick the box.'; msg.classList.add('err'); return; }
+    var data={ name:(fd.get('name')||'').toString(), email:email, company:(fd.get('company')||'').toString(),
+      preferred_date:(fd.get('message')||'').toString(), consent:form.elements.consent.checked,
+      company_website:(fd.get('company_website')||'').toString(), elapsed_ms:Date.now()-openedAt,
+      source_page:'onepilot.brisken.com contact' };
+    submit.disabled=true; msg.textContent='Sending...';
+    fetch('/api/book-demo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})
+      .then(function(r){ return r.json().catch(function(){return {ok:r.ok};}); })
+      .then(function(j){ submit.disabled=false;
+        if(j&&j.ok){ form.reset(); msg.textContent='Thanks. The team will be in touch shortly.'; msg.classList.add('ok'); }
+        else { msg.textContent='Could not send just now. Please try again in a moment.'; msg.classList.add('err'); } })
+      .catch(function(){ submit.disabled=false; msg.textContent='Could not send just now. Please try again in a moment.'; msg.classList.add('err'); });
+  });
+})();
 </script>
 </body>
 </html>
