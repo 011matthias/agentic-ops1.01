@@ -3,6 +3,13 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "regions": ["fra1"],
+  "redirects": [
+    { "source": "/_files/ugd/db7a0c_c6e1ea73bfdb407f85e1aefc8b90a933.pdf", "destination": "/docs/brisken-accenture-case-study.pdf", "permanent": true },
+    { "source": "/_files/ugd/db7a0c_d83597b9e8e34c93892deb5c2c83abcb.pdf", "destination": "/docs/brisken-cloud-services-gtc.pdf", "permanent": true },
+    { "source": "/_files/ugd/db7a0c_ba893b307c894386b6be74db1a04b015.pdf", "destination": "/docs/brisken-privacy-statement-2018.pdf", "permanent": true },
+    { "source": "/assets/pdfs/BRISKEN-Privacy-Statement-20211101.pdf", "destination": "/docs/brisken-privacy-statement-2021.pdf", "permanent": true },
+    { "source": "/wp-content/uploads/2019/10/Brisken-Schedule-A-C-Market-Data-Hub-Terms-and-Conditions-V09-2019-10.pdf", "destination": "/docs/brisken-market-data-hub-terms.pdf", "permanent": true }
+  ],
   "rewrites": [
     {
       "source": "/",
