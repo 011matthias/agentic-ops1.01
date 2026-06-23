@@ -457,13 +457,13 @@
   /* CTA band (the one dark conversion moment) */
   .cta-band {
     background: linear-gradient(135deg, var(--navy-deep), var(--navy)); border-radius: var(--radius);
-    padding: 56px 40px; text-align: center; color: #fff; box-shadow: var(--shadow);
+    padding: 64px 40px; text-align: center; color: #fff; box-shadow: var(--shadow);
   }
   .cta-band h2 { margin-bottom: 12px; color: #fff; max-width: none; }
   .cta-band p { color: #c5d8f3; max-width: 540px; margin: 0 auto 26px; font-size: 16px; }
   .cta-band .btn-primary { background: #fff; color: var(--navy); box-shadow: 0 6px 20px rgba(0,0,0,.25); }
   .cta-band .btn-primary:hover { background: var(--teal-bg); color: var(--navy-deep); }
-  .cta-fine { margin-top: 18px; font-size: 12px; color: #9fc1ee; letter-spacing: .04em; }
+  .cta-band .cta-fine { margin-top: 32px; line-height: 1.7; letter-spacing: .04em; }
 
   /* Footer */
   .footer { background: var(--navy-deep); color: #c5d8f3; padding: 52px 0 0; }
@@ -1434,7 +1434,7 @@
   }
 
   map.querySelectorAll('.mm-node').forEach(function(b){
-    b.addEventListener('click', function(){ var t=b.getAttribute('data-tier'); if (S.view==='open' && S.tier===t) closeTier(); else openTier(t,'panel', b); });
+    b.addEventListener('click', function(){ var t=b.getAttribute('data-tier'); if (t==='onepilot'){ window.location.href='https://onepilot.brisken.com/'; return; } if (S.view==='open' && S.tier===t) closeTier(); else openTier(t,'panel', b); });
   });
   map.querySelectorAll('.mm-loc').forEach(function(b){
     b.addEventListener('click', function(){ openTier(b.getAttribute('data-tier'),'panel'); });
