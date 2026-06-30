@@ -10,6 +10,46 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-06-30 | Brisken LinkedIn Repositioning | client-dev | [Checkpoint](docs/2026-06-30%20-%20Brisken%20LinkedIn%20Repositioning/Checkpoint.md) |
+| 2026-06-30 | Brisken Ken.ai Cold-Email Review | comms | [Checkpoint](docs/2026-06-30%20-%20Brisken%20Ken.ai%20Cold-Email%20Review/Checkpoint.md) |
+| 2026-06-29 | Rome 2026 Sales Nav List | client-dev | [Mini-Checkpoint-1](docs/2026-06-29%20-%20Rome%202026%20Sales%20Nav%20List/Mini-Checkpoint-1.md) |
+| 2026-06-26 | Brisken Post-Event Contacts and Zoho CRM | client-dev | [Checkpoint](docs/2026-06-26%20-%20Brisken%20Post-Event%20Contacts%20and%20Zoho%20CRM/Checkpoint.md) |
+| 2026-06-23 | Brisken Rome - Doc Redirects, E2 Send, Booth Prep | client-dev | [→](docs/2026-06-23%20-%20Brisken%20Rome%20-%20Doc%20Redirects%2C%20E2%20Send%2C%20Booth%20Prep/Checkpoint.md) |
+| 2026-06-23 | Brisken OnePilot Launch + Site Polish | client-dev | [→](docs/2026-06-23%20-%20Brisken%20OnePilot%20Launch%20%2B%20Site%20Polish/Checkpoint.md) |
+| 2026-06-22 | Brisken OnePilot Orbit Review | client-dev | [Checkpoint](docs/2026-06-22%20-%20Brisken%20OnePilot%20Orbit%20Review/Checkpoint.md) |
+| 2026-06-21 | Brisken OnePilot Orbit Review Round 1 | client-dev | [Mini-Checkpoint-1](docs/2026-06-21%20-%20Brisken%20OnePilot%20Orbit%20Review%20Round%201/Mini-Checkpoint-1.md) |
+| 2026-06-21 | Brisken brisken.com Launch | client-dev | [Checkpoint](docs/2026-06-21%20-%20Brisken%20brisken.com%20Launch/Checkpoint.md) |
+| 2026-06-21 | Brisken OnePilot Gravity-Well Viz | client-dev | [Checkpoint](docs/2026-06-21%20-%20Brisken%20OnePilot%20Gravity-Well%20Viz/Checkpoint.md) |
+| 2026-06-21 | Brisken Hours Logger Command | system-infra | [Checkpoint](docs/2026-06-21%20-%20Brisken%20Hours%20Logger%20Command/Checkpoint.md) |
+| 2026-06-21 | Brisken OnePilot Hero + Card Polish | client-dev | [Checkpoint](docs/2026-06-21%20-%20Brisken%20OnePilot%20Hero%20+%20Card%20Polish/Mini-Checkpoint-1.md) |
+| 2026-06-21 | Brisken OnePilot Review Batch + Real Logos | client-dev | [Checkpoint](docs/2026-06-21%20-%20Brisken%20OnePilot%20Review%20Batch%20+%20Real%20Logos/Checkpoint.md) |
+| 2026-06-20 | Brisken OnePilot Vision Reconciliation | client-dev | [Checkpoint](docs/2026-06-20%20-%20Brisken%20OnePilot%20Vision%20Reconciliation/Checkpoint.md) |
+| 2026-06-20 | Brisken Lead-Gen Scrub + Project-Sort Reorg | client-dev | [Checkpoint](docs/2026-06-20%20-%20Brisken%20Lead-Gen%20Scrub%20+%20Project-Sort%20Reorg/Checkpoint.md) |
+| 2026-06-20 | Brisken Rome Pre-Event Send + E1 | client-dev | [Checkpoint](docs/2026-06-20%20-%20Brisken%20Rome%20Pre-Event%20Send%20+%20E1/Checkpoint.md) |
+| 2026-06-19 | Brisken Rome Booth Pack + Landing Publish | client-dev | [Checkpoint](docs/2026-06-19%20-%20Brisken%20Rome%20Booth%20Pack%20+%20Landing%20Publish/Checkpoint.md) |
+| 2026-06-19 | Brisken Rome Booking Funnel + Cluster C | client-dev | [Checkpoint](docs/2026-06-19%20-%20Brisken%20Rome%20Booking%20Funnel%20+%20Cluster%20C/Checkpoint.md) |
+| 2026-06-19 | Brisken Lead-Gen Q&A Cluster + Rome Pre-Event Send | client-dev | [Checkpoint](docs/2026-06-19%20-%20Brisken%20Lead-Gen%20Q&A%20Cluster%20+%20Rome%20Pre-Event%20Send/Checkpoint.md) |
+| 2026-06-18 | Brisken SAP Partner Portal Onboarding + Vault Decrypt | misc | [Checkpoint](docs/2026-06-18%20-%20Brisken%20SAP%20Partner%20Portal%20Onboarding%20+%20Vault%20Decrypt/Checkpoint.md) |
+| 2026-06-18 | Brisken Rome Deliverables + Hours Rebuild | client-dev | [Checkpoint](docs/2026-06-18%20-%20Brisken%20Rome%20Deliverables%20+%20Hours%20Rebuild/Checkpoint.md) |
+| 2026-06-18 | Brisken OnePilot Map Polish + Hours Log | client-dev | [Checkpoint](docs/2026-06-18%20-%20Brisken%20OnePilot%20Map%20Polish%20+%20Hours%20Log/Checkpoint.md) |
+| 2026-06-18 | Brisken Rome Pre-Event Lists + Campaign | client-dev | [Mini-Checkpoint-1](docs/2026-06-18%20-%20Brisken%20Rome%20Pre-Event%20Lists%20+%20Campaign/Mini-Checkpoint-1.md) |
+| 2026-06-18 | Brisken Lead-Gen Research Channel + Go-Live Prep | client-dev | [Checkpoint](docs/2026-06-18%20-%20Brisken%20Lead-Gen%20Research%20Channel%20+%20Go-Live%20Prep/Checkpoint.md) |
+| 2026-06-18 | Brisken OnePilot Review Notes + Conference Prep | client-dev | [Checkpoint](docs/2026-06-18%20-%20Brisken%20OnePilot%20Review%20Notes%20+%20Conference%20Prep/Checkpoint.md) |
+| 2026-06-17 | Brisken Lead-Gen SAP Audit + Benchmark + Research Channel | client-dev | [Checkpoint](docs/2026-06-17%20-%20Brisken%20Lead-Gen%20SAP%20Audit%20+%20Benchmark%20+%20Research%20Channel/Checkpoint.md) |
+| 2026-06-17 | Brisken Messaging Spine + TreasuryCentral Blueprint | client-dev | [Checkpoint](docs/2026-06-17%20-%20Brisken%20Messaging%20Spine%20+%20TreasuryCentral%20Blueprint/Checkpoint.md) |
+| 2026-06-17 | Brisken Recon Guide-Nav Same-Window Fix | client-dev | [Checkpoint](docs/2026-06-17%20-%20Brisken%20Recon%20Guide-Nav%20Same-Window%20Fix/Checkpoint.md) |
+| 2026-06-17 | Brisken Website Aesthetic Elevation | client-dev | [Mini-Checkpoint-1](docs/2026-06-17%20-%20Brisken%20Website%20Aesthetic%20Elevation/Mini-Checkpoint-1.md) |
+| 2026-06-16 | Brisken Recon Strategy Removal + Doc Refresh | client-dev | [Checkpoint](docs/2026-06-16%20-%20Brisken%20Recon%20Strategy%20Removal%20+%20Doc%20Refresh/Checkpoint.md) |
+| 2026-06-16 | Brisken OnePilot Website Restyle + AI Repositioning | client-dev | [Checkpoint](docs/2026-06-16%20-%20Brisken%20OnePilot%20Website%20Restyle%20+%20AI%20Repositioning/Checkpoint.md) |
+| 2026-06-16 | Brisken Recon Output Slices + Tool-UI Tabs | client-dev | [Checkpoint](docs/2026-06-16%20-%20Brisken%20Recon%20Output%20Slices%20+%20Tool-UI%20Tabs/Checkpoint.md) |
+| 2026-06-16 | Brisken Marketing Website Prototype | client-dev | [Checkpoint](docs/2026-06-16%20-%20Brisken%20Marketing%20Website%20Prototype/Checkpoint.md) |
+| 2026-06-16 | Brisken Lead-Gen Architecture + Colgate Wedge | client-dev | [Checkpoint](docs/2026-06-16%20-%20Brisken%20Lead-Gen%20Architecture%20+%20Colgate%20Wedge/Checkpoint.md) |
+| 2026-06-16 | Brisken Recon Dirk-Feedback + Statement PDF | client-dev | [Checkpoint](docs/2026-06-16%20-%20Brisken%20Recon%20Dirk-Feedback%20+%20Statement%20PDF/Checkpoint.md) |
+| 2026-06-16 | Brisken Hours Tracker Rebuild | misc | [Checkpoint](docs/2026-06-16%20-%20Brisken%20Hours%20Tracker%20Rebuild/Checkpoint.md) |
+| 2026-06-16 | Brisken Recon Hosting + Deliverables | client-dev | [Checkpoint](docs/2026-06-16%20-%20Brisken%20Recon%20Hosting%20+%20Deliverables/Checkpoint.md) |
+| 2026-06-16 | Brisken Recon Workbench UI Improvements | client-dev | [Checkpoint](docs/2026-06-16%20-%20Brisken%20Recon%20Workbench%20UI%20Improvements/Checkpoint.md) |
+| 2026-06-12 | Brisken Lead-Gen Red-Team Review | misc | [Checkpoint](docs/2026-06-12%20-%20Brisken%20Lead-Gen%20Red-Team%20Review/Checkpoint.md) |
+| 2026-06-12 | Brisken Lead-Gen Strategy Pivot | client-dev | [Checkpoint](docs/2026-06-12%20-%20Brisken%20Lead-Gen%20Strategy%20Pivot/Checkpoint.md) |
 | 2026-06-12 | Brisken Standalone Realignment | client-dev | [Checkpoint](docs/2026-06-12%20-%20Brisken%20Standalone%20Realignment/Checkpoint.md) |
 | 2026-06-12 | Brisken Reconciliation Parameters | client-dev | [Checkpoint](docs/2026-06-12%20-%20Brisken%20Reconciliation%20Parameters/Checkpoint.md) |
 | 2026-06-11 | Brisken Calibration + Architecture Redirect | client-dev | [Checkpoint](docs/2026-06-11%20-%20Brisken%20Calibration%20+%20Architecture%20Redirect/Checkpoint.md) |
@@ -24,6 +64,11 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-06-21 | Project Status Convention | system-infra | [Checkpoint](docs/2026-06-21%20-%20Project%20Status%20Convention/Checkpoint.md) |
+| 2026-06-18 | Deep Self-Anneal Convergence Cycle | system-infra | [Checkpoint](docs/2026-06-18%20-%20Deep%20Self-Anneal%20Convergence%20Cycle/Checkpoint.md) |
+| 2026-06-18 | File-Placement System + Self-Anneal Extension | system-infra | [Checkpoint](docs/2026-06-18%20-%20File-Placement%20System%20+%20Self-Anneal%20Extension/Checkpoint.md) |
+| 2026-06-17 | Content-Adaptive Prototype Skill | system-infra | [Checkpoint](docs/2026-06-17%20-%20Content-Adaptive%20Prototype%20Skill/Checkpoint.md) |
+| 2026-06-12 | Prompt Queue Skill and Mini UI | system-infra | [Checkpoint](docs/2026-06-12%20-%20Prompt%20Queue%20Skill%20and%20Mini%20UI/Checkpoint.md) |
 | 2026-06-12 | CI Flaky Smoke Test + Spell Fixer | system-infra | [Checkpoint](docs/2026-06-12%20-%20CI%20Flaky%20Smoke%20Test%20+%20Spell%20Fixer/Checkpoint.md) |
 | 2026-06-11 | Web Build Quality Gates | system-infra | [Mini-Checkpoint-1](docs/2026-06-11%20-%20Web%20Build%20Quality%20Gates/Mini-Checkpoint-1.md) |
 | 2026-06-09 | n8n Ops Proposal + Video Blueprint | system-infra | [Checkpoint](docs/2026-06-09%20-%20n8n%20Ops%20Proposal%20+%20Video%20Blueprint/Checkpoint.md) |
@@ -54,6 +99,10 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## meji-media
 | Date | Topic | Link |
 |------|-------|------|
+| 2026-06-27 | Meji P3 Go-Live + Weekly Review System | [Checkpoint](docs/2026-06-27%20-%20Meji%20P3%20Go-Live%20+%20Weekly%20Review%20System/Checkpoint.md) |
+| 2026-06-19 | Meji Corporate Replenish + Campaign Analysis | [Checkpoint](docs/2026-06-19%20-%20Meji%20Corporate%20Replenish%20+%20Campaign%20Analysis/Checkpoint.md) |
+| 2026-06-18 | Meji Corporate-Cold Replenish + Hours ROI | [Checkpoint](docs/2026-06-18%20-%20Meji%20Corporate-Cold%20Replenish%20+%20Hours%20ROI/Checkpoint.md) |
+| 2026-06-16 | Meji Media Corporate Inbound Reply | [Checkpoint](docs/2026-06-16%20-%20Meji%20Media%20Corporate%20Inbound%20Reply/Checkpoint.md) |
 | 2026-06-09 | Meji Double-Send Fix + Inbound Email Scope | [Checkpoint](docs/2026-06-09%20-%20Meji%20Double-Send%20Fix%20+%20Inbound%20Email%20Scope/Checkpoint.md) |
 | 2026-06-08 | Meji Piece 1 Christmas Warm Live | [Checkpoint](docs/2026-06-08%20-%20Meji%20Piece%201%20Christmas%20Warm%20Live/Checkpoint.md) |
 | 2026-06-07 | Meji Piece 2 Corporate Cold Live | [Checkpoint](docs/2026-06-07%20-%20Meji%20Piece%202%20Corporate%20Cold%20Live/Checkpoint.md) |
