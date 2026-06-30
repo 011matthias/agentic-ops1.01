@@ -1,7 +1,7 @@
 # LinkedIn repositioning handoff bundle
 
 Everything needed to update Dirk's personal profile and Brisken's company page,
-in one folder. Approved by Dirk 2026-06-29.
+in one folder. Approved by Dirk 2026-06-29; About refreshed 2026-06-30.
 
 ## What's here
 
@@ -11,9 +11,10 @@ in one folder. Approved by Dirk 2026-06-29.
   limits and the reasoning behind each choice.
 - **li-banner-a.png**: profile background option A (tagline)
 - **li-banner-b.png**: profile background option B (the stack)
-- **li-banner-c.png**: profile background option C (trust / credentials)
+- **li-banner-c.png**: profile background option C (trust / dark)
 
-The banners are 1584 x 396, the LinkedIn profile background size.
+The banners are 1584 x 396. The logo and text sit on the RIGHT half so the LinkedIn
+profile photo (which overlaps the lower-left) does not cover them.
 
 ## Who does what
 

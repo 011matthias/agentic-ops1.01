@@ -30,15 +30,15 @@ Alternatives:
 
 ### About (2,600-char field)
 
-> I used to consult on treasury systems. Now I build them.
+> I spent years as a consultant, telling treasury teams how to fix their systems. The advice was usually right. Watching it sit unbuilt in slide decks got old, so I stopped advising and started building. Brisken is what came of that.
 >
-> For years I told treasury teams how to fix their systems, then got tired of slide decks and went and built the software instead. Brisken is what came next: AI-powered treasury applications that run on your SAP data, cash, trading, market data, remittances, with OnePilot doing the work humans shouldn't have to. Not a roadmap. Customers run it in production today.
+> We make AI-powered software that runs treasury operations directly on your SAP data: cash, trading, market data, remittances. It isn't another dashboard, and it isn't a roadmap of someday features. It runs in production, with real customers, today.
 >
-> TreasuryCentral is the single screen treasury works in. Underneath it, OnePilot is the AI layer that operates the applications, Market Data Hub, Brisken Smart Trading and the Remittance Advice Gate, governed end to end, on your SAP data. You set the rules and approve the exceptions; the agents fly the operation.
+> How it fits together is simple. TreasuryCentral is the single screen your team works in. Underneath it, OnePilot, our AI layer, does the actual work, operating Market Data Hub, Brisken Smart Trading and the Remittance Advice Gate across your SAP data, governed from end to end. Your people set the rules and approve the exceptions; the agents handle the rest. The manual handoffs disappear; the audit trail doesn't.
 >
-> Brisken is an SAP Co-Innovation Partner, on the SAP Store and SAP BTP, ISO 27001 and SOC 1 Type II. Live today: an agricultural-sector customer posts remittances into S/4HANA on a governed AI gate; a financial-services group governs several data domains from one OnePilot deployment.
+> Some proof, because it matters more than claims: a customer in agriculture now posts remittances into S/4HANA through a governed AI gate, with nobody retyping anything; a financial-services group runs several data domains from one OnePilot deployment. Brisken is an SAP Co-Innovation Partner, listed on the SAP Store, built on SAP BTP, ISO 27001 and SOC 1 Type II.
 >
-> Builder, AI-obsessed, allergic to buzzwords. If your treasury still runs on manual handoffs and hope, I'm happy to have an honest conversation. brisken.com
+> I'm a builder at heart, deep in AI, and genuinely allergic to buzzwords. If your treasury still runs on manual handoffs and good intentions, I'd enjoy an honest conversation about it. You'll find me at brisken.com.
 
 Tighter alternative opener (if the punchier version is preferred):
 
