@@ -1,0 +1,84 @@
+BRISKEN LINKEDIN REPOSITIONING — COPY TO PASTE
+Approved by Dirk 2026-06-29. Paste each block into the matching LinkedIn field.
+No em-dashes, within LinkedIn field limits.
+
+====================================================================
+1) DIRK NEUMANN — PERSONAL PROFILE   (do this from Dirk's phone)
+====================================================================
+
+--- HEADLINE ---  (Edit profile > Headline, 220 char max)
+
+Founder & CEO at Brisken | I used to consult on treasury systems; now I build them. AI-powered treasury software on your SAP data, governed, live in production.
+
+
+--- ABOUT ---  (Edit profile > About, 2,600 char max)
+
+I used to consult on treasury systems. Now I build them.
+
+For years I told treasury teams how to fix their systems, then got tired of slide decks and went and built the software instead. Brisken is what came next: AI-powered treasury applications that run on your SAP data, cash, trading, market data, remittances, with OnePilot doing the work humans shouldn't have to. Not a roadmap. Customers run it in production today.
+
+TreasuryCentral is the single screen treasury works in. Underneath it, OnePilot is the AI layer that operates the applications, Market Data Hub, Brisken Smart Trading and the Remittance Advice Gate, governed end to end, on your SAP data. You set the rules and approve the exceptions; the agents fly the operation.
+
+Brisken is an SAP Co-Innovation Partner, on the SAP Store and SAP BTP, ISO 27001 and SOC 1 Type II. Live today: an agricultural-sector customer posts remittances into S/4HANA on a governed AI gate; a financial-services group governs several data domains from one OnePilot deployment.
+
+Builder, AI-obsessed, allergic to buzzwords. If your treasury still runs on manual handoffs and hope, I'm happy to have an honest conversation. brisken.com
+
+
+--- BACKGROUND IMAGE ---  (Edit intro > camera icon on the banner area)
+
+Pick one: li-banner-a.png (tagline) / li-banner-b.png (stack) / li-banner-c.png (trust)
+These are sized 1584 x 396, the LinkedIn profile background size.
+
+
+====================================================================
+2) BRISKEN — COMPANY PAGE   (Matthias can do this directly: he is a page admin)
+====================================================================
+
+--- TAGLINE ---  (Edit page > Tagline, 120 char max)
+
+Treasury, run by AI. Governed SAP financial data, live with customers today, not on a roadmap.
+
+
+--- ABOUT / OVERVIEW ---  (Edit page > Description, 2,000 char max)
+
+Brisken builds AI-powered treasury applications that run on your SAP data, live with customers today, not on a roadmap.
+
+Most SAP finance teams move market data, trades, bank files and remittances in and out of SAP with brittle point-to-point scripts. They break when a provider changes a field or the person who built them leaves, with no audit trail and no owner. Brisken removes that.
+
+TreasuryCentral is the single screen treasury works in: cash, investments, debt, FX, market data and governance on one cockpit, on your SAP data. Underneath it, OnePilot is the AI layer that operates the applications and keeps every step governed:
+
+- Market Data Hub: market data into SAP from Bloomberg, Refinitiv, CME Group, 360T, Deutsche Boerse and OANDA.
+- Brisken Smart Trading (BST): trade automation on your SAP data.
+- Remittance Advice Gate: AI reads remittance emails and posts them into SAP S/4HANA, so the team stops retyping.
+
+It does not replace your stack; it sits on top of it and runs it. You set the rules and approve the exceptions; OnePilot does the work humans shouldn't have to.
+
+SAP Co-Innovation Partner and PartnerEdge member, part of SAP Industry Cloud for Financial Services and Commodities, listed on the SAP Store, on SAP BTP, ISO 27001 and SOC 1 Type II.
+
+See it live: brisken.com
+
+
+--- SPECIALTIES ---  (Edit page > Specialties)
+
+SAP treasury, treasury automation, market data integration, S/4HANA, financial data governance, AI agents for finance, trade automation, remittance automation, SAP BTP
+
+
+--- COVER IMAGE ---
+
+The company cover is a different shape (1128 x 191, much shorter than the profile
+banner), so it needs its own crop. Once you pick a banner concept I will render the
+matching company cover at that size.
+
+
+====================================================================
+ALTERNATES (if a field above is not preferred)
+====================================================================
+
+Headline, alt 1:
+Founder & CEO, Brisken | Treasury, run by AI. Governed SAP financial data, live with customers today, not on a roadmap.
+
+Headline, alt 2:
+Founder & CEO, Brisken | AI-powered treasury applications on your SAP data: cash, trading, market data, remittances. Governed, no code, live today.
+
+Company tagline, alt (matches the brisken.com hero):
+Financial-data platform for SAP. Governed, no code. Treasury applications live with customers today.
