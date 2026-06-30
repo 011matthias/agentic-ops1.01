@@ -513,6 +513,11 @@ def run(
     # (8.4) + report reference (8.3). Journal POSTING to Zoho (4b) stays gated.
     if chart_of_accounts is not None and zoho_cfg.get("export_path"):
         export_path = (config_dir / zoho_cfg["export_path"]).resolve()
+        # Pre-write COA validation gate (opt-in `coa_validation:` block).
+        # When present, any posting account that is not postable in the
+        # target legal entity's chart is diverted to review before the
+        # Books export is written. Absent block => unguarded (no change).
+        coa_gate = _build_coa_gate(cfg, config_dir)
         write_zoho_export(
             outcome,
             transactions,
@@ -522,6 +527,7 @@ def run(
             card_accounts=zoho_cfg.get("card_accounts"),
             receipt_urls=receipt_urls,
             report_for=report_lookup,
+            coa_gate=coa_gate,
         )
         logger.info("wrote Zoho journal export: %s", export_path)
         print(f"Wrote Zoho export: {export_path}")
@@ -851,6 +857,67 @@ def _build_chart_of_accounts(
             f"config.zoho.coa_source {source!r} not supported (use 'api' or 'csv')"
         )
     return coa, z
+
+
+def _build_coa_gate(cfg: dict, config_dir: Path):
+    """Read the `coa_validation:` block and build the pre-write COA gate.
+
+    Returns `None` when there is no `coa_validation:` block (or it is
+    disabled) — the Zoho export then runs unguarded, preserving prior
+    behaviour byte for byte.
+
+    The gate validates every posting account against ONE legal entity's
+    chart of accounts (a run targets one entity) and diverts any
+    non-postable line to review before it reaches the Books export.
+
+    Shape:
+        {
+          "coa_validation": {
+            "enabled": true,                    // optional, default true
+            "chart_path": "books-coa.json",     // path to the Books COA JSON
+            "org_id": "822741658",              // which entity's chart
+            "scope_groups": [ "Travel Expense", ... ],  // optional; restrict
+            "types": [ "expense", ... ],        // optional; account-type set
+            "entity_label": "Corporate Services" // optional; for review notes
+          }
+        }
+
+    The Books COA JSON has the shape
+    `{ "<org_id>": { "org": {...}, "accounts": [...] }, ... }`; it is
+    sensitive client data and is never committed to this repo.
+    """
+    block = cfg.get("coa_validation")
+    if not isinstance(block, dict) or not block.get("enabled", True):
+        return None
+
+    from .coa_gate import CoaGate, load_entity_chart
+    from .ingest.chart_of_accounts import EXPENSE_ACCOUNT_TYPES
+
+    chart_path = block.get("chart_path")
+    if not chart_path:
+        raise ConfigError("config.coa_validation.chart_path is required")
+    org_id = block.get("org_id")
+    if not org_id:
+        raise ConfigError("config.coa_validation.org_id is required")
+
+    path = (config_dir / chart_path).resolve()
+    if not path.exists():
+        raise ConfigError(f"COA validation chart_path not found: {path}")
+
+    try:
+        chart = load_entity_chart(path, org_id)
+    except (KeyError, FileNotFoundError, ValueError) as exc:
+        raise ConfigError(f"COA validation: {exc}") from exc
+
+    scope_groups = block.get("scope_groups")
+    types = block.get("types") or EXPENSE_ACCOUNT_TYPES
+    entity = block.get("entity_label") or str(org_id)
+    return CoaGate(
+        chart=chart,
+        scope_groups=tuple(scope_groups) if scope_groups else None,
+        types=tuple(types),
+        entity=entity,
+    )
 
 
 def _print_dry_run_summary(

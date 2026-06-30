@@ -70,6 +70,7 @@ from ..matching.types import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
+    from ..coa_gate import CoaGate
     from ..ingest.chart_of_accounts import ChartOfAccounts
 
 ZOHO_COLUMNS = (
@@ -179,6 +180,7 @@ def build_journal_rows(
     card_accounts: "Mapping[str, str] | None" = None,
     receipt_urls: "Mapping[str, str | None] | None" = None,
     report_for: "Callable[[str], str | None] | None" = None,
+    coa_gate: "CoaGate | None" = None,
 ) -> list[list[str]]:
     """Build the Zoho journal rows for the matched transactions.
 
@@ -191,6 +193,14 @@ def build_journal_rows(
     optional: without them the legacy category-name / placeholder
     behaviour applies.
 
+    `coa_gate` (opt-in; None = no change) is the pre-write
+    chart-of-accounts validation gate. When present, every categorized
+    line's posting account is validated against the target legal entity's
+    chart BEFORE rows are built; any line whose account is missing /
+    unknown / inactive / DO-NOT-USE / non-leaf / out-of-scope is diverted
+    to review (account blanked, source set REVIEW), so a bad account can
+    never resolve into the export. See `coa_gate.CoaGate`.
+
     `receipt_urls` (8.4 `resolve_receipt_urls` output, document_id → URL)
     and `report_for` (8.3 `ReportStore.report_for`, document_id →
     report_number) fill the two trailing reference columns. Both
@@ -198,6 +208,14 @@ def build_journal_rows(
     `report_number` (8.1) is used, so the existing CLI path carries the
     references with no extra wiring. Unknown → blank, never fabricated.
     """
+    # Pre-write COA validation: divert any line with a non-postable
+    # account to review before it can resolve into a debit row. Rebuilds
+    # rec_by_id from the gated receipts so the loop below sees the diverted
+    # categorizations.
+    if coa_gate is not None:
+        gated, _report = coa_gate.run(list(rec_by_id.values()))
+        rec_by_id = {r.document_id: r for r in gated}
+
     rows: list[list[str]] = []
 
     for match in outcome.matches:
@@ -271,8 +289,15 @@ def write_zoho_export(
     card_accounts: "Mapping[str, str] | None" = None,
     receipt_urls: "Mapping[str, str | None] | None" = None,
     report_for: "Callable[[str], str | None] | None" = None,
+    coa_gate: "CoaGate | None" = None,
 ) -> Path:
-    """Write the Zoho Books journal-entry CSV. Returns the path."""
+    """Write the Zoho Books journal-entry CSV. Returns the path.
+
+    `coa_gate` (opt-in; None = no change) validates each posting account
+    against the target legal entity's chart and diverts any non-postable
+    line to review before it can reach the file. See
+    `build_journal_rows` / `coa_gate.CoaGate`.
+    """
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -284,6 +309,7 @@ def write_zoho_export(
         card_accounts=card_accounts,
         receipt_urls=receipt_urls,
         report_for=report_for,
+        coa_gate=coa_gate,
     )
 
     with out_path.open("w", encoding="utf-8", newline="") as fh:

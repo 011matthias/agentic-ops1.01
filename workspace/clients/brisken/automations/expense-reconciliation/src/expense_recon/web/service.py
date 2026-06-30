@@ -1056,6 +1056,30 @@ def regenerate_report(
     return out_path
 
 
+def _coa_gate_from_config(config: dict | None, work_dir: str):
+    """Build the pre-write COA validation gate from a run's stored config
+    when it carries a `coa_validation:` block, else None.
+
+    The gate validates each posting account against the target legal
+    entity's chart and diverts any non-postable line to review before the
+    Zoho export is written. Absent / disabled block => None (unguarded,
+    the prior web behaviour). A misconfigured block (missing chart /
+    org_id / file) degrades to None rather than failing the download —
+    the export still writes, with the lines flagged for the reviewer.
+    """
+    if not isinstance(config, dict):
+        return None
+    block = config.get("coa_validation")
+    if not isinstance(block, dict) or not block.get("enabled", True):
+        return None
+    try:
+        from ..cli import _build_coa_gate
+
+        return _build_coa_gate(config, Path(work_dir))
+    except Exception:  # noqa: BLE001 - never let a config slip break the download
+        return None
+
+
 def regenerate_zoho(
     run: RunRow, decisions: dict[str, Decision], overrides: dict
 ) -> Path:
@@ -1068,12 +1092,18 @@ def regenerate_zoho(
     carry no chart of accounts, so the writer's legacy path applies:
     category label on the debit side, `Card: {account_id}` on the credit
     side, both flagged for the reviewer to map in Zoho.
+
+    When the stored run config carries a `coa_validation:` block, the
+    pre-write COA gate validates each posting account against the target
+    legal entity's chart and diverts any non-postable line to review, so
+    the web export gets the same protection as the CLI path.
     """
     transactions, receipts, outcome, _ = snapshot_from_dict(run.snapshot)
     receipts = apply_overrides(receipts, overrides)
     effective = apply_decisions(outcome, transactions, receipts, decisions)
     out_path = Path(run.work_dir) / "zoho_journal.csv"
-    write_zoho_export(effective, transactions, receipts, out_path)
+    coa_gate = _coa_gate_from_config(run.config, run.work_dir)
+    write_zoho_export(effective, transactions, receipts, out_path, coa_gate=coa_gate)
     return out_path
 
 
