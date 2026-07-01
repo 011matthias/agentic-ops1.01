@@ -1,0 +1,26 @@
+{
+  "_comment_": "COA-gate provisioning file for the HOSTED web workbench (coa_provision.py). Web runs are built from an upload form and carry no hand-written coa_validation block, so this file supplies one per legal entity: the server injects it into each run's config keyed on the run's resolved legal entity (the paying account -> entity map), so the Phase-5 gate fires on the hosted review surface. This file and the Books COA JSON it points at are sensitive client config: they live on the Fly /data volume (NOT committed, NOT baked into the image), pointed at by the EXPENSE_RECON_COA_PROVISION env var. Env unset => no injection (existing behaviour). The org_ids below are placeholders; the real file lives in the gitignored brisken context/ and is uploaded to /data at deploy time.",
+
+  "chart_path": "/data/zoho-books-coa.json",
+
+  "entities": {
+    "Corporate Services": {
+      "org_id": "CORP_SERVICES_ORG_ID",
+      "scope_groups": [
+        "MS | OpeEx",
+        "Bank Fees and Charges"
+      ]
+    },
+    "Cloud Services": {
+      "org_id": "CLOUD_SERVICES_ORG_ID",
+      "scope_groups": [
+        "Travel Expense",
+        "Marketing & Selling Expenses",
+        "Professional Fees",
+        "Office Infra and Admin",
+        "IT: Computer and Internet Expenses",
+        "Bank Fees and Charges"
+      ]
+    }
+  }
+}
