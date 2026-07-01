@@ -4,7 +4,7 @@ workstream: p1-expense-reconciliation
 group: ""
 spec: p1
 state: active
-updated: 2026-06-21
+updated: 2026-07-01
 ---
 
 # Brisken / Expense Reconciliation (p1)
@@ -36,10 +36,15 @@ this table is the index, not a second record.
 | Review workbench (web, Fly-hosted) | live | BLUEPRINT; brisken-expense-recon.fly.dev |
 | Zoho journal CSV export | in-progress | BLUEPRINT slice 4 |
 | Run history + doctor pre-flight | done | BLUEPRINT slice 5/5b |
-| COA pre-write gate + export idempotency | not-started | BLUEPRINT Phase 5 (gap) |
+| COA pre-write validation gate | built, pending Fly deploy | BLUEPRINT 4.11 (PR #202/#203) |
+| Export idempotency (4.8) | not-started | BLUEPRINT Phase 5 (gap) |
 
 ## Open decisions / gates
 
+- COA gate go-live (deploy step, gated floor): upload `context/coa-provision.json` +
+  `zoho-books-coa.json` to the Fly `/data` volume, set `EXPENSE_RECON_COA_PROVISION=/data/coa-provision.json`,
+  then `flyctl deploy`. Until then the gate is inert on the hosted app (env unset => no-op).
+  Target entities Corporate Services (822741658) + Cloud Services (697686691); scope_groups in BLUEPRINT 4.11.
 - Joint call with Chris (Brisken finance manager) not yet scheduled (Dirk to brief her).
 - Legal retention period to confirm (Dirk's guess ~7 yrs US, unconfirmed).
 - No further client data coming: the ER PDFs + Chase export in hand are illustrative
