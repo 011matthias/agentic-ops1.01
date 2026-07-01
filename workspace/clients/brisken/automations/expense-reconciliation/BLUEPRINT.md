@@ -712,6 +712,7 @@ loop into the posting system.
 | 4.8 | Idempotency: don't double-post same line item (run-log integration, slice 5) | `src/expense_recon/zoho/idempotent.py` |
 | 4.9 | Config extension: `zoho:` block (export path OR API creds) | `cli.py` |
 | 4.10 | End-to-end tests on Zoho export format | `tests/test_zoho_export.py` |
+| 4.11 | Pre-write COA validation gate + provisioning | `src/expense_recon/coa_gate.py`, `coa_provision.py` |
 
 **Categorization strategy (per LD-2):**
 
@@ -750,6 +751,42 @@ setup. v2 spec §21.2 aligned path.
 **Decision point:** start with 4a (file export — works today, no API
 dependency), add 4b only if Chris finds the upload step painful after
 month 2.
+
+**Pre-write COA validation gate (4.11, BUILT 2026-07-01):** before the
+journal export is written, every posting account is validated against the
+TARGET legal entity's live Zoho Books chart. A missing / unknown / inactive
+/ DO-NOT-USE / non-leaf / out-of-scope account is diverted to review
+(account blanked, source forced REVIEW), so a bad account can never resolve
+into the export. Pure gate in `coa_gate.py` (`CoaGate`, opt-in on the
+`write_zoho_export` seam; `None` = prior behaviour byte for byte); driven by
+a `coa_validation:` block (`enabled`, `chart_path`, `org_id`, `scope_groups`,
+`entity_label`). One entity per run. Target entities + derived card-expense
+`scope_groups` (Payroll/tax, COGS, depreciation, R&D excluded):
+
+| Entity | org_id | scope_groups |
+|---|---|---|
+| Corporate Services | 822741658 | `MS \| OpeEx`, `Bank Fees and Charges` |
+| Cloud Services | 697686691 | `Travel Expense`, `Marketing & Selling Expenses`, `Professional Fees`, `Office Infra and Admin`, `IT: Computer and Internet Expenses`, `Bank Fees and Charges` |
+
+**Chart provisioning (extends 5.3, decided 2026-07-01).** The Books COA JSON
+(`{ "<org_id>": { "org", "accounts" }, ... }`, 8 orgs, 1,252 accounts) is
+sensitive client financial data: it is never committed and never baked into
+the public image. Two runtime homes:
+
+- **CLI / local (brisken-config).** The JSON ships in the private
+  brisken-config repo beside the run configs (5.3/5.4 model, extended from
+  the CSV to the multi-entity JSON); a run config references it by relative
+  `chart_path`. Wired via `cli._build_coa_gate`. Example:
+  `examples/run.with-coa-validation.example.json`.
+- **Hosted web (Fly `/data`).** The JSON lives on the `recon_data` volume
+  (same private home as the run DB + receipts, `fra` residency), NOT the
+  image. Web runs carry no hand-written config, so `coa_provision.py` injects
+  a per-entity `coa_validation` block into each run keyed on the paying
+  entity, read from a provisioning file at `EXPENSE_RECON_COA_PROVISION`
+  (`/data/coa-provision.json`). Env unset => no injection (fail-open).
+  Example shape: `examples/coa-provision.example.json`; the real file (real
+  org_ids) lives in gitignored `context/coa-provision.json`, uploaded to
+  `/data` at deploy time.
 
 **Acceptance criteria:**
 

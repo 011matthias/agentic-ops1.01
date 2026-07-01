@@ -27,6 +27,7 @@ from pathlib import Path
 
 from .. import inspect as stmt_inspect
 from ..cli import ConfigError, reconcile
+from ..coa_provision import apply_to_config as apply_coa_provisioning
 from ..duplicates import find_duplicate_charges, find_duplicate_receipts
 from ..matching.types import (
     Categorization,
@@ -222,6 +223,12 @@ def prepare_run(
     cfg = _build_config(
         stmt_name, rcpt_name, column_map, form, use_llm=use_llm_effective
     )
+    # Phase-5 COA gate on the hosted surface: inject a per-entity
+    # `coa_validation` block from the /data provisioning file (env
+    # EXPENSE_RECON_COA_PROVISION) keyed on the run's legal entity, so the
+    # export is validated against the paying entity's chart. Env unset /
+    # entity not provisioned => cfg unchanged (fail-open). See coa_provision.
+    cfg = apply_coa_provisioning(cfg, form.resolve_legal_entity())
 
     learned = match_memory = None
     if learning_db_path is not None:
