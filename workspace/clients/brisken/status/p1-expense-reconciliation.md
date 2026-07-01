@@ -36,15 +36,16 @@ this table is the index, not a second record.
 | Review workbench (web, Fly-hosted) | live | BLUEPRINT; brisken-expense-recon.fly.dev |
 | Zoho journal CSV export | in-progress | BLUEPRINT slice 4 |
 | Run history + doctor pre-flight | done | BLUEPRINT slice 5/5b |
-| COA pre-write validation gate | built, pending Fly deploy | BLUEPRINT 4.11 (PR #202/#203) |
+| COA pre-write validation gate | live (Fly, per-entity) | BLUEPRINT 4.11 (PR #202/#203/#205) |
 | Export idempotency (4.8) | not-started | BLUEPRINT Phase 5 (gap) |
 
 ## Open decisions / gates
 
-- COA gate go-live (deploy step, gated floor): upload `context/coa-provision.json` +
-  `zoho-books-coa.json` to the Fly `/data` volume, set `EXPENSE_RECON_COA_PROVISION=/data/coa-provision.json`,
-  then `flyctl deploy`. Until then the gate is inert on the hosted app (env unset => no-op).
-  Target entities Corporate Services (822741658) + Cloud Services (697686691); scope_groups in BLUEPRINT 4.11.
+- COA gate DEPLOYED 2026-07-01: `coa-provision.json` + `zoho-books-coa.json` on the Fly `/data`
+  volume, `EXPENSE_RECON_COA_PROVISION` set, deployed (v10). Verified in-container on the real
+  files: Corporate Services (822741658, 177 accts) + Cloud Services (697686691, 199 accts) resolve;
+  a `(DO NOT USE)` account diverts. Remaining: authenticated end-to-end confirm with Chris on a real
+  statement (the app is password-gated, so only a logged-in run exercises the full upload->review path).
 - Joint call with Chris (Brisken finance manager) not yet scheduled (Dirk to brief her).
 - Legal retention period to confirm (Dirk's guess ~7 yrs US, unconfirmed).
 - No further client data coming: the ER PDFs + Chase export in hand are illustrative
