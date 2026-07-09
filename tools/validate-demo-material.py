@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["pypdf"]
+# dependencies = ["pypdf", "cryptography"]
 # ///
 """Banned-content scan for client-facing demo material.
 
@@ -152,7 +152,13 @@ def scan(path: Path, terms: list[dict], exemptions: list[dict]) -> tuple[list[Hi
                     ctx = " ".join(text[lo:hi].split())
                     hits.append(Hit(path, where, term, ctx))
     except Exception as exc:  # unreadable/corrupt file is a finding, not a crash
-        hits.append(Hit(path, "read", "<unreadable>", f"{type(exc).__name__}: {exc}"))
+        # A file exempted for every term ("*") is out of scope entirely, so an
+        # unreadable one is noise, not a finding. Term-specific exemptions still fail.
+        reason = is_exempt(path, "*", exemptions)
+        if reason:
+            skipped.append(f"{path.name} [read] unreadable, exempt: {reason}")
+        else:
+            hits.append(Hit(path, "read", "<unreadable>", f"{type(exc).__name__}: {exc}"))
     return hits, skipped
 
 
