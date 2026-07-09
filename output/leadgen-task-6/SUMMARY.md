@@ -5,20 +5,35 @@
 task from the top of the Board). **Branch:** `leadgen/task-6`. **Date:** 2026-07-09.
 
 The task existed because the p2 spec named three Lane-1 forwardables and only two had
-build evidence. This closes the third: the brief is written, the clip is not yet
-recorded, and recording is a manual step that needs Brisken's demo tenant.
+build evidence. This closes the third: the brief is written, and the clip itself is
+built, encoded, and on SharePoint as the Path-B illustration. Path A, a screen
+recording of the live demo, still needs Brisken's demo tenant and replaces this file
+when it exists.
 
 ## Created
 
 | File | What it is |
 |---|---|
-| `calvin-clip-brief.md` | The deliverable. Nine-shot, 90-second spec with on-screen text, the end card, an accuracy ledger tracing every claim to a source, and four questions for Dirk. |
+| `calvin-clip-brief.md` | The spec. Nine-shot, 90-second brief with on-screen text, the end card, an accuracy ledger tracing every claim to a source, and four questions for Dirk. |
 | `production-runbook.md` | The manual-execution file. Pre-record checklist, masking checklist, recording and edit steps, export matrix, hosting, and the five-item gate before it is sent to anyone. |
+| `clip/clip.html` + `clip/render.py` | The clip source. A deterministic timeline (`__seek(t)`) driven frame by frame through headless Chrome and piped into ffmpeg. Re-renders both cuts from scratch. |
+| `video/calvin-clip-16x9-1080p.mp4` | The master. 90.00s, 1920x1080, H.264, 2.4 MB, no audio track. |
+| `video/calvin-clip-1x1-1080.mp4` | The LinkedIn feed cut. 90.00s, 1080x1080, 2.0 MB, captions re-placed rather than centre-cropped. |
+| `video/README.txt` | Ships beside the files on SharePoint: what the clip is, what it deliberately does not claim. |
+| `email-to-dirk.md` | Draft, not sent. |
 | `shared-file-proposals.md` | Four edits to shared files, written out rather than applied. |
 | `notes-for-other-tasks.md` | Six findings that belong to other Board tasks. |
 
-Nothing outside `output/leadgen-task-6/` was created, modified, moved, or deleted.
-No Planner task was completed or edited.
+## Delivered to SharePoint
+
+Both cuts and the README are in a new folder beside the PPTX assets, uploaded and
+verified by comparing server byte-length against local, not by trusting a 200:
+
+`.../20_Assets/BRISKEN PRESENTATIONS/OnePilot - Cloud Solutions Presentations/2026_VIDEO/`
+
+Nothing else on SharePoint was touched; the folder is new and overwrote nothing.
+Nothing outside `output/leadgen-task-6/` was created, modified, moved, or deleted in
+the repo. No Planner task was completed or edited.
 
 ## What the brief decides, and why it took reading rather than writing
 
@@ -49,19 +64,27 @@ logo-to-use-case mapping was not). No ISO 27001 or SOC 1 line until Dirk confirm
 certificate scope, because the catalog records it as a posture Brisken states about
 itself.
 
-## Still manual, with instructions
+## What shipped, and what is still manual
 
-1. **Record the clip.** `production-runbook.md` Path A. Needs a Brisken person who can
-   drive the live Calvin demo, about 40 minutes of recording, and the approval prompt
-   switched on in the demo tenant. Path B, a labelled schematic built from the existing
-   deck design system, exists only so the asset is not blocked on a calendar.
-2. **Host it.** `resources.brisken.com` is live and already serves the SAP brochure
-   PDFs from an isolated Vercel project. Upload, wrap in a minimal landing page, give
-   each outreach tier a tracked link.
+The clip that exists is **Path B**, the labelled schematic, animated from slide 8 in
+the deck's own dark-cockpit palette. Every frame carries an "ILLUSTRATION" chip and
+the end card names it as one. It was never meant to be the final asset.
+
+Still manual:
+
+1. **Re-cut it from the live demo (Path A).** Needs a Brisken person who can drive the
+   real Calvin flow, about 40 minutes of recording, and the four-eye approval prompt
+   switched on in the demo tenant. A recording of the product beats an animation of it
+   for the skeptical second viewer, who reads an animation as marketing.
+2. **Host it first-party.** `resources.brisken.com` is live (200) and already serves
+   the SAP brochure PDFs from an isolated Vercel project. Upload, wrap in a minimal
+   landing page so the end-card URL has a destination, and give each outreach tier a
+   tracked link. The forward count is the only metric that says whether it worked.
 3. **Apply the four shared-file edits** in `shared-file-proposals.md`.
 
-The carrier emails and Sales Navigator messages that would deliver the clip were not
-drafted. That is the comms-draft class and it waits for an explicit ask plus Dirk's
+`email-to-dirk.md` is a draft and was not sent. The carrier emails and Sales Navigator
+messages that would deliver the clip to prospects were not drafted at all. That is the
+comms-draft class and it waits for an explicit ask plus Dirk's
 sending-identity gate.
 
 ## Open questions
