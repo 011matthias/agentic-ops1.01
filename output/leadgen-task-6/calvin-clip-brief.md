@@ -117,7 +117,7 @@ Three lines, in this order:
 > **A bank transfer, from an email.**
 > You stayed in the chat. Every step was logged.
 >
-> Calvin is an agent on OnePilot, running on SAP Business Technology Platform.
+> Calvin is an agent on OnePilot, running inside your SAP landscape.
 > Brisken is an SAP Co-Innovation Partner.
 >
 > `brisken.com/onepilot`
@@ -125,6 +125,13 @@ Three lines, in this order:
 No booking link, no calendar, no "request a demo". One first-party URL.
 
 **What must not appear on this end card:**
+
+- **SAP Business Technology Platform, or BTP.** Dirk's standing directive, on the
+  board as "Exclude BTP from all demos": leave BTP out of all demo material. The
+  deck's own "runs on SAP's own cloud, BTP, so it sits inside your landscape, not
+  beside it" carries the trust signal without the name, so the card says "inside your
+  SAP landscape". The first cut of this clip shipped with the BTP line and had to be
+  re-rendered; the directive lives in Planner, not in any file the write gates read.
 
 - **"Listed on the SAP Store."** False for this product. The 2026-06-17 Store audit
   found exactly two buyable Brisken listings, Market Data Hub and Trade Automation.
@@ -200,7 +207,7 @@ plus Dirk's sending-identity gate.
 | The agent is named Calvin | Same slide; "Calvin" labels the chat participant |
 | Cash position comes from S/4HANA Cash Management | Same slide, node labels |
 | Checked, logged, person-in-the-loop | `.scratch/deckgen/build-digital-coworker.js`, slide 5 footer |
-| Runs on SAP Business Technology Platform | Digital Co-Worker deck, slide 7 |
+| Runs inside your SAP landscape | Digital Co-Worker deck, slide 7 (BTP named there; the name is withheld per Dirk's exclude-BTP directive, the placement claim is not) |
 | SAP Co-Innovation Partner | Digital Co-Worker deck, slide 4 (About / Partnerships) |
 | Chemicals customer, AI funding-request process, anonymized | `context/lead-generation/evidence/brisken-product-catalog.md`, customer proof section |
 | Not on the SAP Store | Store audit 2026-06-17, recorded in the catalog and `aeo-substrate.md` §8 |
