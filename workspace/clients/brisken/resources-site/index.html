@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brisken Resources</title>
+<meta name="robots" content="noindex">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  :root{--bg0:#081320;--text:#e8eef6;--muted:#9db0c8;--heading:#dbe8fa;--line:#1e3550;--cyan:#2fc6d6;--cyan-hi:#8fe6ef;--cyan-lo:#3f96a3;}
+  html,body{min-height:100%;}
+  body{font-family:"Segoe UI",system-ui,-apple-system,sans-serif;color:var(--text);
+    background:radial-gradient(1100px 520px at 50% -8%,rgba(47,198,214,.16),transparent 60%),
+      radial-gradient(900px 600px at 108% 120%,rgba(45,111,208,.14),transparent 55%),
+      linear-gradient(160deg,#0a1728 0%,var(--bg0) 55%,#060f1c 100%);
+    -webkit-font-smoothing:antialiased;padding:48px 24px 64px;}
+  .wrap{max-width:860px;margin:0 auto;}
+  header{display:flex;align-items:center;gap:12px;margin-bottom:8px;}
+  .logo{font-size:28px;font-weight:700;letter-spacing:-.5px;color:#eef4fb;}
+  .dia{width:14px;height:14px;background:linear-gradient(135deg,var(--cyan-hi),var(--cyan));transform:rotate(45deg);border-radius:3px;box-shadow:0 0 18px rgba(47,198,214,.55);}
+  .eyebrow{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--cyan-lo);font-weight:700;margin:22px 0 6px;}
+  h1{font-size:30px;font-weight:700;letter-spacing:-.6px;color:#f2f7fd;}
+  .sub{font-size:15px;color:var(--muted);margin-top:8px;max-width:60ch;line-height:1.5;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-top:32px;}
+  a.card{display:block;text-decoration:none;color:inherit;border:1px solid var(--line);border-radius:14px;
+    background:linear-gradient(180deg,rgba(20,40,66,.72),rgba(12,26,45,.72));padding:18px 18px 16px;
+    transition:transform .15s ease,border-color .15s ease,box-shadow .15s ease;}
+  a.card:hover{transform:translateY(-2px);border-color:rgba(47,198,214,.5);box-shadow:0 12px 30px rgba(0,0,0,.35);}
+  .card .t{font-size:16px;font-weight:700;color:var(--heading);}
+  .card .d{font-size:12.5px;color:var(--muted);margin-top:6px;line-height:1.45;}
+  .card .pdf{display:inline-block;margin-top:12px;font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--cyan);}
+  footer{margin-top:40px;border-top:1px solid var(--line);padding-top:16px;font-size:12px;color:var(--muted);}
+  footer a{color:var(--cyan-lo);text-decoration:none;font-weight:700;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><span class="logo">brisken</span><span class="dia"></span></header>
+  <div class="eyebrow">Resources</div>
+  <h1>Product one-pagers</h1>
+  <p class="sub">AI-powered treasury applications that run on your SAP data, live with customers today. One page each.</p>
+  <div class="grid">
+    <a class="card" href="/market-data-hub.pdf"><div class="t">Market Data Hub</div><div class="d">One governed market-data feed into SAP, no code.</div><span class="pdf">PDF &rarr;</span></a>
+    <a class="card" href="/smart-trading.pdf"><div class="t">Brisken Smart Trading</div><div class="d">Straight-through trade capture into SAP TRM, no re-key.</div><span class="pdf">PDF &rarr;</span></a>
+    <a class="card" href="/remittance-advice-gate.pdf"><div class="t">Remittance Advice Gate</div><div class="d">Remittances read by AI, straight into SAP S/4HANA.</div><span class="pdf">PDF &rarr;</span></a>
+    <a class="card" href="/bank-fee-portal.pdf"><div class="t">Bank Fee Portal</div><div class="d">Validate bank fees against your agreements, inside SAP.</div><span class="pdf">PDF &rarr;</span></a>
+    <a class="card" href="/treasurycentral.pdf"><div class="t">TreasuryCentral</div><div class="d">The single screen treasury works in, on your SAP data.</div><span class="pdf">PDF &rarr;</span></a>
+    <a class="card" href="/onepilot.pdf"><div class="t">OnePilot</div><div class="d">The governed AI layer that operates your SAP treasury apps.</div><span class="pdf">PDF &rarr;</span></a>
+  </div>
+
+  <div class="eyebrow">Full decks</div>
+  <h1>Product decks</h1>
+  <p class="sub">The long form, for a buyer who wants the whole picture: the problem, the architecture, the controls, and what it runs on.</p>
+  <div class="grid">
+    <a class="card" href="/market-data-hub-deck.pdf"><div class="t">Market Data Hub</div><div class="d">Twelve pages: every feed in, one governed layer, six steps from source to system.</div><span class="pdf">PDF &rarr;</span></a>
+    <a class="card" href="/smart-trading-deck.pdf"><div class="t">Brisken Smart Trading</div><div class="d">Ten pages: from the trade decision to the booked deal in SAP, with the manual middle gone.</div><span class="pdf">PDF &rarr;</span></a>
+  </div>
+
+  <footer>Brisken, an SAP Co-Innovation Partner. <a href="https://www.brisken.com">www.brisken.com</a></footer>
+</div>
+</body>
+</html>

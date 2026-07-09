@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SAP PartnerFinder: Resources shelf walk-in pack</title>
+<meta name="robots" content="noindex">
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;
+d.setAttribute('data-theme',t==='light'?'light':(t==='dark'||window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  :root[data-theme="dark"]{--bg:#081320;--panel:#0e1e33;--panel2:#132844;--text:#e8eef6;--muted:#9db0c8;--head:#f2f7fd;--line:#1e3550;--cyan:#2fc6d6;--cyan-lo:#3f96a3;--ok:#37c07a;--warn:#e0a33e;--danger:#e2685f;}
+  :root[data-theme="light"]{--bg:#f4f7fb;--panel:#ffffff;--panel2:#eef3f9;--text:#1d2b3d;--muted:#5a6b81;--head:#0d1a2b;--line:#d6e0ec;--cyan:#0f7d8c;--cyan-lo:#0f7d8c;--ok:#1d8a53;--warn:#9a6714;--danger:#b23a30;}
+  body{font-family:"Segoe UI",system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);
+    -webkit-font-smoothing:antialiased;padding:40px 20px 72px;line-height:1.5;}
+  .wrap{max-width:1000px;margin:0 auto;}
+  header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:6px;}
+  .brand{display:flex;align-items:center;gap:10px;font-size:24px;font-weight:700;color:var(--head);letter-spacing:-.4px;}
+  .dia{width:12px;height:12px;background:var(--cyan);transform:rotate(45deg);border-radius:2px;}
+  .btn{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:999px;
+    padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer;}
+  .btn:hover{border-color:var(--cyan);}
+  .eyebrow{font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--cyan-lo);font-weight:700;margin:26px 0 6px;}
+  h1{font-size:27px;font-weight:700;color:var(--head);letter-spacing:-.5px;}
+  h2{font-size:17px;font-weight:700;color:var(--head);margin:34px 0 10px;}
+  p.sub{color:var(--muted);margin-top:8px;max-width:74ch;}
+  .search{width:100%;margin:22px 0 4px;padding:11px 14px;border-radius:10px;border:1px solid var(--line);
+    background:var(--panel);color:var(--text);font-size:14px;}
+  .hint{font-size:11.5px;color:var(--muted);margin-bottom:8px;}
+  .note{border:1px solid var(--line);border-left:3px solid var(--cyan);background:var(--panel);
+    border-radius:10px;padding:14px 16px;margin:16px 0;font-size:13.5px;}
+  .note.warn{border-left-color:var(--warn);}
+  .note b{color:var(--head);}
+  ul{margin:8px 0 0 20px;}
+  li{margin:5px 0;font-size:13.5px;}
+  .card{border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:0;margin:14px 0;overflow:hidden;}
+  .card > .top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 16px;
+    background:var(--panel2);border-bottom:1px solid var(--line);flex-wrap:wrap;}
+  .card .num{font-weight:700;color:var(--head);font-size:14.5px;}
+  .tag{font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted);}
+  .tag.add{color:var(--ok);border-color:var(--ok);}
+  .tag.edit{color:var(--warn);border-color:var(--warn);}
+  .tag.keep{color:var(--muted);}
+  .field{display:grid;grid-template-columns:150px 1fr auto;gap:12px;align-items:start;padding:11px 16px;border-top:1px solid var(--line);}
+  .field:first-of-type{border-top:none;}
+  .flabel{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding-top:3px;}
+  .fval{font-size:13.5px;color:var(--text);word-break:break-word;font-family:"Segoe UI",system-ui,sans-serif;}
+  .fval.mono{font-family:ui-monospace,"Cascadia Code",Consolas,monospace;font-size:12.5px;color:var(--cyan);}
+  .fval.ph{color:var(--muted);font-style:italic;}
+  .count{font-size:11px;color:var(--muted);margin-top:4px;}
+  .copy{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:7px;
+    padding:4px 10px;font-size:11.5px;font-weight:600;cursor:pointer;opacity:0;transition:opacity .12s;}
+  .field:hover .copy{opacity:1;}
+  .copy:hover{color:var(--cyan);border-color:var(--cyan);}
+  .copy.done{color:var(--ok);border-color:var(--ok);opacity:1;}
+  .remove{border:1px solid var(--danger);border-radius:12px;padding:14px 16px;margin:12px 0;background:var(--panel);}
+  .remove li{color:var(--text);}
+  table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px;}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);}
+  footer{margin-top:44px;border-top:1px solid var(--line);padding-top:16px;font-size:12px;color:var(--muted);}
+  .hidden{display:none;}
+  @media print{.btn,.search,.hint,.copy{display:none !important;}body{padding:0;}
+    h2{page-break-before:always;} h2:first-of-type{page-break-before:avoid;}}
+</style>
+</head>
+<body data-updated="2026-07-09">
+<div class="wrap">
+  <header>
+    <div class="brand"><span>brisken</span><span class="dia"></span></div>
+    <button class="btn" onclick="(function(){var d=document.documentElement;var c=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',c);localStorage.setItem('theme',c);})()" aria-label="Toggle theme">&#9788; / &#9790;</button>
+  </header>
+
+  <div class="eyebrow">SAP PartnerFinder &middot; editor 0001663611</div>
+  <h1>Resources shelf: walk-in pack</h1>
+  <p class="sub">Every field of every card, in the order the SAP <b>Add / Edit Resource</b> dialog asks for them. Hover a field to copy it. The shelf is capped at ten cards and is currently full, so four come off before six go on.</p>
+
+  <input id="q" class="search" type="search" placeholder="Filter cards by name, type or product...">
+  <div class="hint">Ctrl / Cmd + K to focus the filter. Theme and filter persist.</div>
+
+  <div class="note">
+    <b>Where the files live.</b> The six brochure links point at <span class="fval mono">resources.brisken.com</span>, a
+    dedicated host isolated from the live site. Market Data Hub and Smart Trading point at the full decks, taken from the
+    latest SharePoint versions; the other four point at the one-page sheets.
+  </div>
+
+  <div class="note">
+    <b>All ten links are live.</b> Verified against the deployed origin on 2026-07-09, not against a local copy.
+    The hosted Smart Trading deck carried three em-dashes in slides 3 and 6; the hosted copy was corrected and
+    now reads zero. The SharePoint original was left untouched, so the two differ by that punctuation alone.
+  </div>
+
+  <h2 id="remove">Step 1: remove these four cards</h2>
+  <p class="sub">Removing a card takes it off this shelf only. Nothing is deleted from the SAP Store.</p>
+  <div class="remove">
+    <ul>
+      <li><b>02 - Market Data Hub: Briefing</b> &middot; redundant with the MDH Overview</li>
+      <li><b>05 - SAP Insider Webinar: Market Data Governance</b> &middot; dated event, MDH-heavy</li>
+      <li><b>08 - SAP Store: MDH for European Central Bank (ECB)</b> &middot; niche MDH Store variant</li>
+      <li><b>09 - SAP Store: MDH for Commodities</b> &middot; niche MDH Store variant</li>
+    </ul>
+  </div>
+  <p class="sub">Six of the ten cards were Market Data Hub and no card carried TreasuryCentral, OnePilot, Remittance Advice Gate or Bank Fee Portal. After the rebalance: MDH keeps three, Smart Trading two, and each remaining product gets one.</p>
+
+  <h2 id="cards">Step 2: the final ten cards</h2>
+  <div id="cardlist"></div>
+
+  <h2 id="map">Field map</h2>
+  <table>
+    <tr><th>Dialog field</th><th>Rule</th></tr>
+    <tr><td>Link to Resource</td><td>A working URL. A brochure card points at the hosted PDF; a Store card points at its SAP Store listing. No file upload, no size limit.</td></tr>
+    <tr><td>Resource Name</td><td>The number prefix is cosmetic ordering only.</td></tr>
+    <tr><td>Short Description</td><td>Hard cap 155 characters. Every description below is validated under it.</td></tr>
+    <tr><td>Resource Type</td><td>Brochure, SAP Reference, Event or Packages.</td></tr>
+  </table>
+
+  <footer>
+    Prepared by UnpauseAI for Brisken. Last updated: 2026-07-09.
+    Card copy validated against the 155-character cap; zero em-dashes in our own text.
+  </footer>
+</div>
+
+<script>
+const CARDS = [
+ {n:"01",name:"01 - TreasuryCentral: The Cockpit",desc:"One screen for cash, investments, debt, FX, market data and governance, on your SAP data, with every move logged.",type:"Brochure",link:"https://resources.brisken.com/treasurycentral.pdf",do:"ADD",cls:"add"},
+ {n:"02",name:"02 - OnePilot: The Governed AI Layer",desc:"The AI layer that operates your SAP treasury apps on SAP BTP, governed and audited, in production today. Build your own, no code.",type:"Brochure",link:"https://resources.brisken.com/onepilot.pdf",do:"ADD",cls:"add"},
+ {n:"03",name:"03 - Market Data Hub: Overview",desc:"One governed market-data feed into SAP, no code. Bloomberg, Refinitiv, 360T, CME and more, governed and distributed to SAP and non-SAP.",type:"Brochure",link:"https://resources.brisken.com/market-data-hub-deck.pdf",do:"EDIT · was card 01 Infographic",cls:"edit"},
+ {n:"04",name:"04 - Brisken Smart Trading: Overview",desc:"Straight-through trade capture from FXall, Bloomberg FX GO, 360T and BidFX into SAP TRM and FAM. Governed, no manual re-key.",type:"Brochure",link:"https://resources.brisken.com/smart-trading-deck.pdf",do:"EDIT + RENAME · was card 04 TraderPlus, drop “SAP TPI”",cls:"edit"},
+ {n:"05",name:"05 - Remittance Advice Gate: Overview",desc:"AI reads unstructured remittance emails and attachments and posts them into SAP S/4HANA, matched and governed, no manual keying.",type:"Brochure",link:"https://resources.brisken.com/remittance-advice-gate.pdf",do:"ADD",cls:"add"},
+ {n:"06",name:"06 - Bank Fee Portal: Overview",desc:"Analyze and validate bank fees against your agreements inside SAP, with variance flags and a full audit trail.",type:"Brochure",link:"https://resources.brisken.com/bank-fee-portal.pdf",do:"ADD · eyeball the sheet first",cls:"add"},
+ {n:"07",name:"07 - SAP Blueprint: Brisken Market Data Hub",desc:"[keep the existing SAP-authored text]",type:"SAP Reference",link:"[keep the existing link]",do:"KEEP · was card 03",cls:"keep"},
+ {n:"08",name:"08 - SAP Store: Market Data Hub",desc:"[keep the existing text]",type:"Packages",link:"[keep the existing link]",do:"KEEP · was card 06",cls:"keep"},
+ {n:"09",name:"09 - SAP Store: Brisken Smart Trading",desc:"Straight-through processing for FX trading into SAP TRM. Integrate venues such as FXall, Bloomberg FX GO and bank sites, governed end to end.",type:"Packages",link:"[keep the existing SAP Store link]",do:"RENAME · was card 07 TraderPlus",cls:"edit"},
+ {n:"10",name:"10 - BRISKEN RapSoDy: Rapid Solution Deployment",desc:"[keep the existing text]",type:"Packages",link:"[keep the existing link]",do:"KEEP",cls:"keep"}
+];
+
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const ph  = s => s.startsWith('[');
+
+function field(label, val, mono){
+  const isPh = ph(val);
+  const cls = 'fval' + (mono && !isPh ? ' mono' : '') + (isPh ? ' ph' : '');
+  const count = label === 'Short Description' && !isPh
+    ? `<div class="count">${val.length} / 155 characters</div>` : '';
+  const btn = isPh ? '' : `<button class="copy" data-v="${esc(val)}">Copy</button>`;
+  return `<div class="field"><div class="flabel">${label}</div>
+    <div><div class="${cls}">${esc(val)}</div>${count}</div>${btn}</div>`;
+}
+
+function render(filter){
+  const f = (filter||'').toLowerCase();
+  const rows = CARDS.filter(c => !f || (c.name+' '+c.type+' '+c.desc).toLowerCase().includes(f));
+  document.getElementById('cardlist').innerHTML = rows.map(c => `
+    <div class="card">
+      <div class="top">
+        <span class="num">${esc(c.name)}</span>
+        <span class="tag ${c.cls}">${esc(c.do)}</span>
+      </div>
+      ${field('Link to Resource', c.link, true)}
+      ${field('Resource Name', c.name, false)}
+      ${field('Short Description', c.desc, false)}
+      ${field('Resource Type', c.type, false)}
+    </div>`).join('') || '<p class="sub">No cards match that filter.</p>';
+}
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('.copy'); if(!b) return;
+  navigator.clipboard.writeText(b.dataset.v).then(() => {
+    b.textContent = 'Copied'; b.classList.add('done');
+    setTimeout(() => { b.textContent = 'Copy'; b.classList.remove('done'); }, 1200);
+  });
+});
+
+const q = document.getElementById('q');
+q.value = localStorage.getItem('cardFilter') || '';
+q.addEventListener('input', () => { localStorage.setItem('cardFilter', q.value); render(q.value); });
+document.addEventListener('keydown', e => {
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); q.focus(); q.select(); }
+});
+render(q.value);
+</script>
+</body>
+</html>
