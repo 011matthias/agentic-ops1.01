@@ -5,6 +5,10 @@ Held as a draft. Sending is Matthias's call.
 **To:** dirk.neumann@brisken.com
 **Subject:** A 90-second OnePilot clip, on SharePoint next to the decks
 
+The SharePoint folder is embedded as a hyperlink on the words "a new folder called
+2026_VIDEO". Send from `email-to-dirk.html`, which carries the live anchor; pasting
+the markdown below into Outlook gives a bare URL instead.
+
 ---
 
 Hi Dirk,
@@ -16,10 +20,7 @@ S/4HANA, a person approves, the memo record is booked, and every step lands in
 the audit trail. The approval is the beat it lingers on, because control is the
 objection a finance lead raises when a treasurer forwards them an AI video.
 
-It is in SharePoint beside the decks, in a new folder called 2026_VIDEO:
-
-https://brisken.sharepoint.com/sites/MARKETING/Shared%20Documents/20_Assets/BRISKEN%20PRESENTATIONS/OnePilot%20-%20Cloud%20Solutions%20Presentations/2026_VIDEO
-
+It is in SharePoint beside the decks, in [a new folder called 2026_VIDEO](https://brisken.sharepoint.com/sites/MARKETING/Shared%20Documents/20_Assets/BRISKEN%20PRESENTATIONS/OnePilot%20-%20Cloud%20Solutions%20Presentations/2026_VIDEO).
 Two cuts, 16:9 for email and the site, 1:1 for LinkedIn. Both are silent with the
 captions burned in, since it gets watched muted.
 
