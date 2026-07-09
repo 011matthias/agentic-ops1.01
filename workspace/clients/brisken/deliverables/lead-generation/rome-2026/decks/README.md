@@ -23,9 +23,11 @@ disambiguates nothing; whatever sits in `2026_PPTX` is current.
 
 ## Do not regenerate these
 
-`.scratch/deckgen/build-mdh.js` and its three siblings produced the first
-version of these decks and were retired on 2026-07-09. Re-running them
-overwrites Dirk's edits, and his edits are not cosmetic:
+`build-mdh.js`, `build-smart-trading.js`, `build-digital-coworker.js` and
+`build-mdh-commodities.js` produced the first version of these decks and were
+**deleted on 2026-07-09**. There is no generator for a product deck any more,
+by design. Regenerating would overwrite Dirk's edits, and his edits are not
+cosmetic:
 
 - **Smart Trading:** slide 10, `PARTNERS AND CUSTOMERS`, is hidden.
 - **Market Data Hub:** slide 12, `Brisken`, is hidden.
@@ -39,10 +41,10 @@ To update a deck, edit the `.pptx` in SharePoint (or ask Dirk to), then pull
 it back down here and re-export the PDF. Never push a generated deck over one
 of his.
 
-`build-treasurycentral.js` is the exception and stays live. It generates the
+`build-treasurycentral.js` is the exception and survives. It generates the
 per-prospect call collateral in `../call-collateral/`, which Dirk presents but
-does not edit, and it carries the shared visual primitives if a new deck is
-ever needed.
+does not edit, and it carries the shared visual primitives (copied verbatim
+from the deleted builders) if a new deck is ever needed.
 
 ## No SAP BTP
 
