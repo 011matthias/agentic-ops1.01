@@ -47,6 +47,36 @@ Brisken to re-cut a deck. Worth recording so the next asset does not re-litigate
 Line 107 hedges: *"the 90-second Calvin/remittance clip if available"*. Once the clip
 is recorded, drop the hedge and link it. Until then, leave it; the hedge is accurate.
 
+## 5. `workspace/clients/brisken/context/comms-log.md`
+
+The email below was **sent** on 2026-07-09 20:41 CET, from Matthias.Silva@brisken.com
+to dirk.neumann@brisken.com, on the owner's explicit go. House rule is that sent
+messages live verbatim in the comms log; that file is outside this task's directory,
+so the entry is staged here for whoever merges.
+
+> **Subject:** A 90-second OnePilot clip, on SharePoint next to the decks
+>
+> Hi Dirk,
+>
+> I made the 90-second clip we had on the list. It follows the funding-request flow
+> from slide 8 of the Digital Co-Worker deck: an email arrives, Calvin reads it and
+> proposes the action, checks the cash position in S/4HANA, a person approves, and the
+> memo record is booked, with every step logged.
+>
+> It is in SharePoint beside the decks, in a new folder called 2026_VIDEO (hyperlinked
+> to `.../OnePilot - Cloud Solutions Presentations/2026_VIDEO`). There is a version for
+> email and one for LinkedIn.
+>
+> It is an illustration rather than a recording of the product, and it says so on
+> screen. If you can get me 40 minutes with someone who can drive the live Calvin demo,
+> I'll re-cut it from the real thing.
+>
+> Matthias
+
+Open with Dirk, tracked here because the email deliberately does not carry them: the
+ISO 27001 / SOC 1 certificate scope, and whether the chemicals customer clears a named
+reference for this flow.
+
 ---
 
 ## Not proposed, deliberately
