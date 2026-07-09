@@ -6,11 +6,16 @@ argument-hint: "[--tab lead|time] [--since YYYY-MM-DD] [--dry-run] [--yes]"
 # Brisken Hours Log
 
 Append the Brisken **hourly-agreement** work done since the last logged entry
-into `workspace/hours-tracker.xlsx`. This command is specific to the Brisken
-EUR 14/hr engagement and its two billing tabs:
+into the current month's workbook under `workspace/hours-tracker/` (one dated
+file per month, `hours-tracker-YYYY-MM-<month>.xlsx`; the tool auto-resolves the
+latest month). This command is specific to the Brisken EUR 14/hr engagement and
+its two billing tabs:
 
 - **Lead Generation** (table `LeadGenLog`) -> p2 lead-gen / OnePilot / Rome
-- **Timesheet** (table `HoursLog`) -> p1 Brisken Expense Reconciliation Tool
+- the expense-recon tab (table `HoursLog`) -> p1 Brisken Expense Reconciliation
+  Tool. Its sheet title varies by month (June `Timesheet`, July
+  `Expense Reconciliation`); the tool resolves it by table name, so pass the
+  `--tab time` alias rather than a literal title.
 
 The mechanical, gotcha-safe write is done by `tools/log-brisken-hours.py`. THIS
 command is the judgment layer: find the boundary, gather the evidence since it,
@@ -43,7 +48,8 @@ If the status reports `LOCKED`, the workbook is open in Excel. Close just that
 workbook without disturbing the user's other windows, then re-run:
 
 ```powershell
-[Runtime.InteropServices.Marshal]::BindToMoniker("C:\Users\neuma_p1qrsic\Repo\agentic-ops1\workspace\hours-tracker.xlsx").Close($false)
+$p=(Get-ChildItem "C:\Users\neuma_p1qrsic\Repo\agentic-ops1\workspace\hours-tracker\hours-tracker-20*.xlsx" | Sort-Object Name | Select-Object -Last 1).FullName
+[Runtime.InteropServices.Marshal]::BindToMoniker($p).Close($false)
 ```
 
 ## Step 2 — Gather the evidence since the boundary
@@ -118,22 +124,25 @@ openpyxl leaves the formula cache blank (normal resting state); confirm the
 numbers actually compute by reopening through Excel and checking the totals tie:
 
 ```powershell
-$p="C:\Users\neuma_p1qrsic\Repo\agentic-ops1\workspace\hours-tracker.xlsx"
+$p=(Get-ChildItem "C:\Users\neuma_p1qrsic\Repo\agentic-ops1\workspace\hours-tracker\hours-tracker-20*.xlsx" | Sort-Object Name | Select-Object -Last 1).FullName
 $xl=New-Object -ComObject Excel.Application; $xl.Visible=$false; $xl.DisplayAlerts=$false
 $wb=$xl.Workbooks.Open($p,$false,$true); $xl.CalculateFull()
-foreach($s in @("Lead Generation","Timesheet")){$ws=$wb.Sheets.Item($s);
- "[$s] "+$ws.Range("B4").Text+" | "+$ws.Range("K3").Value2+"h / EUR "+$ws.Range("L3").Value2+" | "+$ws.Range("K13").Value2}
+foreach($ws in $wb.Sheets){$s=$ws.Name; if($s -notin @("_meta")){
+ "[$s] "+$ws.Range("B4").Text+" | "+$ws.Range("K3").Value2+"h / EUR "+$ws.Range("L3").Value2+" | "+$ws.Range("K14").Value2}}
 $wb.Close($false); $xl.Quit()
 ```
 
-`K13` must read `ties to table` on every tab written. Report the new
+`K14` (the Control check cell) must read `ties to table` on every tab
+written. `K13` is the week-of SUMPRODUCT for the last pre-anchored Monday
+and reads `0` when that week has no work, so don't probe it. Report the new
 per-tab total and the EUR figure logged this run.
 
 ## Notes
 
 - Scope is the Brisken hourly agreement only. Other clients/projects are out of
   scope (the abandoned `tools/sync-hours.py` git-clustering approach is not used).
-- The workbook is local and gitignored; it lives only in the main clone.
+- The workbooks are local and gitignored (`workspace/hours-tracker/`, one dated
+  file per month); they live only in the main clone.
 - Safe to re-run: idempotency means a second run with overlapping rows is a
   no-op, so running it again after adding a forgotten session just adds the new one.
 - If the user only says "log my lead-gen hours", run with `--tab lead`.

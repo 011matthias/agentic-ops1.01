@@ -27,9 +27,9 @@ encapsulates, from feedback_hours_tracker_format):
 
 Modes:
   --status                 print last-logged date/time + computed totals per tab
-  --add  <rows.json>       append rows (idempotent), verify, refresh CSV mirrors
+  --add  <rows.json>       append rows (idempotent), verify (no CSV mirror)
   --add  -                 read the rows JSON from stdin
-  --export-csv             just refresh the gitignored CSV mirrors from the xlsx
+  --export-csv             opt-in: write the gitignored CSV mirrors from the xlsx
   --dry-run                with --add: print what WOULD be written, do not save
 
 rows.json schema (a JSON list):
@@ -45,29 +45,72 @@ import argparse
 import csv
 import datetime as dt
 import json
+import re
 import sys
 from copy import copy
 from pathlib import Path
 
 from openpyxl import load_workbook
 
-XLSX = Path("workspace/hours-tracker.xlsx")
+# Monthly workbooks live in this folder, one dated file per month
+# (hours-tracker-YYYY-MM-<name>.xlsx). The tool auto-resolves the latest month,
+# so a new month's rollover needs no code change.
+FOLDER = Path("workspace/hours-tracker")
+_DATED = re.compile(r"hours-tracker-(\d{4})-(\d{2})")
+
+
+def current_xlsx() -> "Path | None":
+    """Latest dated month workbook in FOLDER, keyed on the YYYY-MM in its name."""
+    cands = []
+    for p in FOLDER.glob("hours-tracker-*.xlsx"):
+        m = _DATED.search(p.name)
+        if m:
+            cands.append((m.group(1) + m.group(2), p))
+    return max(cands)[1] if cands else None
+
+
+XLSX = current_xlsx()
 RATE_CELL = "B5"
 HEADER_ROW = 7          # the column-header row; data starts at 8
 FIRST_DATA_ROW = 8
 
-TABS = {
-    "Lead Generation": {
-        "table": "LeadGenLog",
-        "csv": Path("workspace/hours-lead-generation.csv"),
-        "aliases": {"lead", "leadgen", "lead-gen", "lg", "p2"},
+# The engagement is identified by its Excel TABLE name, not the sheet title:
+# the sheet gets renamed between months (July renamed "Timesheet" ->
+# "Expense Reconciliation") while the table name is stable because the KPI
+# structured refs depend on it. TABS is bound to the live sheet titles by
+# bind_tabs() right after the workbook loads.
+_TAB_SPECS = {
+    "LeadGenLog": {
+        "csv_base": "hours-lead-generation",
+        "aliases": {"lead", "leadgen", "lead-gen", "lg", "p2", "lead generation"},
     },
-    "Timesheet": {
-        "table": "HoursLog",
-        "csv": Path("workspace/hours-timesheet.csv"),
-        "aliases": {"time", "timesheet", "recon", "expense", "expense-recon", "p1"},
+    "HoursLog": {
+        "csv_base": "hours-timesheet",
+        "aliases": {"time", "timesheet", "recon", "expense", "expense-recon", "p1",
+                    "expense reconciliation"},
     },
 }
+
+TABS: dict = {}          # live sheet title -> {"table", "csv_base", "aliases"}
+
+
+def bind_tabs(wb) -> None:
+    """Map each engagement table to whatever sheet currently holds it."""
+    TABS.clear()
+    for ws in wb.worksheets:
+        for tname in ws.tables:
+            if tname in _TAB_SPECS:
+                TABS[ws.title] = {**_TAB_SPECS[tname], "table": tname}
+    missing = {t for t in _TAB_SPECS} - {m["table"] for m in TABS.values()}
+    if missing:
+        raise SystemExit(f"{XLSX.name}: no sheet carries table(s) {sorted(missing)}")
+
+
+def csv_path(sheet: str) -> Path:
+    """Per-month CSV mirror path, derived from the resolved workbook name:
+    hours-tracker-2026-07-july.xlsx -> hours-lead-generation-2026-07-july.csv"""
+    token = XLSX.stem[len("hours-tracker"):]   # e.g. "-2026-07-july"
+    return XLSX.parent / f'{TABS[sheet]["csv_base"]}{token}.csv'
 
 
 def resolve_tab(name: str) -> str:
@@ -164,8 +207,8 @@ def fmt_hours(h: float) -> str:
 # ----------------------------------------------------------------------------- status
 
 def cmd_status(wb) -> int:
-    rate = wb["Lead Generation"][RATE_CELL].value
-    print(f"hours-tracker.xlsx  (rate {RATE_CELL} = EUR {rate}/hr)\n")
+    rate = wb[next(iter(TABS))][RATE_CELL].value
+    print(f"{XLSX.name}  (rate {RATE_CELL} = EUR {rate}/hr)\n")
     for sheet in TABS:
         ws = wb[sheet]
         rows = read_rows(ws)
@@ -204,9 +247,14 @@ def cmd_add(wb, specs: list, dry_run: bool) -> int:
         keys = existing_keys(ws)
         src = last_data_row(ws)              # style donor (an existing data row)
         if src < FIRST_DATA_ROW:
-            print(f"[{sheet}] empty table; style donor missing", file=sys.stderr)
-            return 1
-        cursor = src
+            # Fresh/empty table (a new month's tracker): no data row to donate
+            # style/position. Use the first table-body row (kept as a formatted
+            # blank buffer) as the style donor and start writing there.
+            donor_row = FIRST_DATA_ROW
+            cursor = FIRST_DATA_ROW - 1
+        else:
+            donor_row = src
+            cursor = src
 
         for s in items:
             date = parse_date(s["date"])
@@ -228,7 +276,7 @@ def cmd_add(wb, specs: list, dry_run: bool) -> int:
             if dry_run:
                 continue
             for c in range(1, 9):
-                donor = ws.cell(row=src, column=c)
+                donor = ws.cell(row=donor_row, column=c)
                 cell = ws.cell(row=r, column=c)
                 cell._style = copy(donor._style)
                 cell.value = vals[c]
@@ -240,11 +288,12 @@ def cmd_add(wb, specs: list, dry_run: bool) -> int:
             # keep the B4 period stamp live off the table (was a static string
             # that silently drifted; make it a formula so it self-updates)
             ws["B4"] = period_formula(TABS[sheet]["table"])
-            # keep the Billable dropdown covering the new rows (cosmetic, best-effort)
+            # keep the Billable dropdown covering the new rows (cosmetic, best-effort).
+            # Billable is column F (E=Hours, F=Billable, G=Earnings); never G.
             try:
                 for dv in ws.data_validations.dataValidation:
                     if dv.type == "list" and dv.formula1 and "Yes" in dv.formula1:
-                        dv.sqref = f"G{FIRST_DATA_ROW}:G{cursor}"
+                        dv.sqref = f"F{FIRST_DATA_ROW}:F{cursor}"
             except Exception:
                 pass
 
@@ -258,7 +307,7 @@ def cmd_add(wb, specs: list, dry_run: bool) -> int:
     try:
         wb.save(XLSX)
     except PermissionError:
-        print("LOCKED: hours-tracker.xlsx is open in Excel. Close it and retry.",
+        print(f"LOCKED: {XLSX.name} is open in Excel. Close it and retry.",
               file=sys.stderr)
         return 2
     print(f"\nwrote {wrote} row(s) to {XLSX}")
@@ -269,6 +318,7 @@ def cmd_add(wb, specs: list, dry_run: bool) -> int:
 
 def verify(specs: list) -> bool:
     wb = load_workbook(XLSX)
+    bind_tabs(wb)
     ok = True
     by_tab: dict[str, list] = {}
     for s in specs:
@@ -299,7 +349,7 @@ def verify(specs: list) -> bool:
 
 
 def export_csv(wb) -> None:
-    for sheet, meta in TABS.items():
+    for sheet in TABS:
         ws = wb[sheet]
         rate = ws[RATE_CELL].value or 0
         rows = read_rows(ws)
@@ -315,12 +365,13 @@ def export_csv(wb) -> None:
             out.append([str(date)[:10], task,
                         start.strftime("%H:%M"), end.strftime("%H:%M"),
                         fmt_hours(h), billable, f"{e:.2f}"])
-        with meta["csv"].open("w", newline="", encoding="utf-8") as fh:
+        out_csv = csv_path(sheet)
+        with out_csv.open("w", newline="", encoding="utf-8") as fh:
             w = csv.writer(fh)
             w.writerows(out)
             w.writerow([])
             w.writerow(["", "TOTAL", "", "", fmt_hours(tot_h), "", f"{tot_e:.2f}"])
-        print(f"refreshed {meta['csv']} ({len(rows)} rows, {fmt_hours(tot_h)}h)")
+        print(f"refreshed {out_csv} ({len(rows)} rows, {fmt_hours(tot_h)}h)")
 
 
 # ----------------------------------------------------------------------------- main
@@ -335,16 +386,18 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
-    if not XLSX.exists():
-        print(f"missing {XLSX}", file=sys.stderr)
+    if XLSX is None or not XLSX.exists():
+        print(f"no dated hours-tracker workbook found in {FOLDER}/", file=sys.stderr)
         return 1
 
     try:
         wb = load_workbook(XLSX)
     except PermissionError:
-        print("LOCKED: hours-tracker.xlsx is open in Excel. Close it and retry.",
+        print(f"LOCKED: {XLSX.name} is open in Excel. Close it and retry.",
               file=sys.stderr)
         return 2
+
+    bind_tabs(wb)
 
     if args.status:
         return cmd_status(wb)
@@ -370,7 +423,8 @@ def main() -> int:
     if not verify(specs):
         print("WROTE BUT VERIFY MISMATCH", file=sys.stderr)
         return 1
-    export_csv(load_workbook(XLSX))
+    # CSV mirrors are opt-in via --export-csv; --add no longer regenerates them
+    # (owner 2026-07-08: the mirrors are unwanted, deleting them must stick).
     print("verified.")
     return 0
 
