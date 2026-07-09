@@ -336,7 +336,7 @@ one customer at a time, never a blast.
 > It takes about two minutes. Each page has a spot to leave a rating and a short comment:
 >
 > - Discovery Center: https://discovery-center.cloud.sap/missiondetail/3904/
-> - SAP Store: [your SAP Store listing link]
+> - SAP Store: https://store.sap.com/dcp/en/product/display-2001008447_live_v1/brisken-onepilot-market-data-hub
 >
 > A sentence or two on what it changed for you, less manual re-keying, one governed feed, whatever stood out, is plenty. No pressure at all if now is not the moment.
 >

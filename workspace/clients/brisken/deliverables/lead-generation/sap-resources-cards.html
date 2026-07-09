@@ -79,28 +79,57 @@ d.setAttribute('data-theme',t==='light'?'light':(t==='dark'||window.matchMedia('
   <div class="hint">Ctrl / Cmd + K to focus the filter. Theme and filter persist.</div>
 
   <div class="note">
-    <b>Where the files live.</b> The six brochure links point at <span class="fval mono">resources.brisken.com</span>, a
-    dedicated host isolated from the live site. Market Data Hub and Smart Trading point at the full decks, taken from the
-    latest SharePoint versions; the other four point at the one-page sheets.
+    <b>Where the files live.</b> Cards 04 to 09 point at <span class="fval mono">resources.brisken.com</span>, a dedicated
+    host isolated from the live site. Cards 01, 02 and 03 stay on <span class="fval mono">brisken.io</span>, the legacy
+    WordPress site, which is where SAP currently links them.
   </div>
 
-  <div class="note">
-    <b>All ten links are live.</b> Verified against the deployed origin on 2026-07-09, not against a local copy.
-    The hosted Smart Trading deck carried three em-dashes in slides 3 and 6; the hosted copy was corrected and
-    now reads zero. The SharePoint original was left untouched, so the two differ by that punctuation alone.
+  <div class="note warn">
+    <b>Link status, checked against the deployed origin on 2026-07-09.</b> Cards 04 to 08 are live and return 200.
+    Card 09 (Digital Co-Worker) is staged but <b>not yet deployed</b>; that link 404s until
+    <span class="fval mono">resources.brisken.com</span> is redeployed. The hosted Smart Trading deck arrived with three
+    em-dashes; the hosted copy was corrected and now reads zero, while the SharePoint original was left untouched.
   </div>
 
-  <h2 id="remove">Step 1: remove these four cards</h2>
+  <h2 id="remove">Step 1: remove the bottom six</h2>
   <p class="sub">Removing a card takes it off this shelf only. Nothing is deleted from the SAP Store.</p>
   <div class="remove">
     <ul>
-      <li><b>02 - Market Data Hub: Briefing</b> &middot; redundant with the MDH Overview</li>
-      <li><b>05 - SAP Insider Webinar: Market Data Governance</b> &middot; dated event, MDH-heavy</li>
-      <li><b>08 - SAP Store: MDH for European Central Bank (ECB)</b> &middot; niche MDH Store variant</li>
-      <li><b>09 - SAP Store: MDH for Commodities</b> &middot; niche MDH Store variant</li>
+      <li><b>05 - SAP Insider Webinar: Market Data Governance</b> &middot; dated event</li>
+      <li><b>06 - SAP Store: Market Data Hub</b> &middot; see the note below, this one comes back as card 10</li>
+      <li><b>07 - SAP Store: TraderPlus</b> &middot; retired name</li>
+      <li><b>08 - SAP Store: MDH for European Central Bank (ECB)</b> &middot; niche variant</li>
+      <li><b>09 - SAP Store: MDH for Commodities</b> &middot; niche variant</li>
+      <li><b>10 - BRISKEN RapSoDy: Rapid Solution Deployment</b> &middot; turnkey projects</li>
     </ul>
   </div>
-  <p class="sub">Six of the ten cards were Market Data Hub and no card carried TreasuryCentral, OnePilot, Remittance Advice Gate or Bank Fee Portal. After the rebalance: MDH keeps three, Smart Trading two, and each remaining product gets one.</p>
+
+  <div class="note warn">
+    <b>Two consequences of that cut.</b> It deletes every SAP Store card, so the profile is left with no route to
+    buy anything; card 10 below reinstates one. And the four survivors are all Market Data Hub or TraderPlus,
+    which is why the six replacements deliberately avoid both subjects.
+  </div>
+
+  <div class="note warn">
+    <b>Card 04 is a swap, not an addition.</b> The 2019 TraderPlus flyer that survives the cut still says
+    "TraderPlus", "SAP Trading Platform Integration" and "SAP ECC" throughout, which is exactly the naming the
+    repositioning set out to purge. While it stands, the 2026 Smart Trading deck cannot be added as a new card
+    without duplicating it. Repointing card 04 retires the flyer and duplicates nothing.
+  </div>
+
+  <div class="note warn">
+    <b>Why the old SAP Store card was broken.</b> It pointed at product id <span class="fval mono">0000004063</span>,
+    which is retired. That URL still answers 200 and then silently bounces to an empty SAP Store search page, so it
+    looks alive to any link checker. The live listing is product id <span class="fval mono">2001008447</span>, verified
+    by rendering it: "Market Data Hub by BRISKEN LLC", and it shows "(0) Write a review". Card 10 carries the working link.
+  </div>
+
+  <div class="note">
+    <b>Why these six and no others.</b> The four surviving brochures cover Market Data Hub from three angles
+    (problem, overview, SAP implementation blueprint) and trade straight-through processing once. Every
+    replacement below is a subject none of them touch. Our own MDH deck and Smart Trading one-pager were
+    excluded on exactly that test.
+  </div>
 
   <h2 id="cards">Step 2: the final ten cards</h2>
   <div id="cardlist"></div>
@@ -121,17 +150,21 @@ d.setAttribute('data-theme',t==='light'?'light':(t==='dark'||window.matchMedia('
 </div>
 
 <script>
+// Cards 01-03 stay exactly as they are. Card 04 is a SWAP, not an addition: the
+// 2019 TraderPlus flyer leaves the shelf and the 2026 Smart Trading deck takes its
+// slot, so nothing duplicates. Cards 05-10 are the six replacements, each chosen
+// because no incumbent brochure covers its subject.
 const CARDS = [
- {n:"01",name:"01 - TreasuryCentral: The Cockpit",desc:"One screen for cash, investments, debt, FX, market data and governance, on your SAP data, with every move logged.",type:"Brochure",link:"https://resources.brisken.com/treasurycentral.pdf",do:"ADD",cls:"add"},
- {n:"02",name:"02 - OnePilot: The Governed AI Layer",desc:"The AI layer that operates your SAP treasury apps on SAP BTP, governed and audited, in production today. Build your own, no code.",type:"Brochure",link:"https://resources.brisken.com/onepilot.pdf",do:"ADD",cls:"add"},
- {n:"03",name:"03 - Market Data Hub: Overview",desc:"One governed market-data feed into SAP, no code. Bloomberg, Refinitiv, 360T, CME and more, governed and distributed to SAP and non-SAP.",type:"Brochure",link:"https://resources.brisken.com/market-data-hub-deck.pdf",do:"EDIT · was card 01 Infographic",cls:"edit"},
- {n:"04",name:"04 - Brisken Smart Trading: Overview",desc:"Straight-through trade capture from FXall, Bloomberg FX GO, 360T and BidFX into SAP TRM and FAM. Governed, no manual re-key.",type:"Brochure",link:"https://resources.brisken.com/smart-trading-deck.pdf",do:"EDIT + RENAME · was card 04 TraderPlus, drop “SAP TPI”",cls:"edit"},
- {n:"05",name:"05 - Remittance Advice Gate: Overview",desc:"AI reads unstructured remittance emails and attachments and posts them into SAP S/4HANA, matched and governed, no manual keying.",type:"Brochure",link:"https://resources.brisken.com/remittance-advice-gate.pdf",do:"ADD",cls:"add"},
- {n:"06",name:"06 - Bank Fee Portal: Overview",desc:"Analyze and validate bank fees against your agreements inside SAP, with variance flags and a full audit trail.",type:"Brochure",link:"https://resources.brisken.com/bank-fee-portal.pdf",do:"ADD · eyeball the sheet first",cls:"add"},
- {n:"07",name:"07 - SAP Blueprint: Brisken Market Data Hub",desc:"[keep the existing SAP-authored text]",type:"SAP Reference",link:"[keep the existing link]",do:"KEEP · was card 03",cls:"keep"},
- {n:"08",name:"08 - SAP Store: Market Data Hub",desc:"[keep the existing text]",type:"Packages",link:"[keep the existing link]",do:"KEEP · was card 06",cls:"keep"},
- {n:"09",name:"09 - SAP Store: Brisken Smart Trading",desc:"Straight-through processing for FX trading into SAP TRM. Integrate venues such as FXall, Bloomberg FX GO and bank sites, governed end to end.",type:"Packages",link:"[keep the existing SAP Store link]",do:"RENAME · was card 07 TraderPlus",cls:"edit"},
- {n:"10",name:"10 - BRISKEN RapSoDy: Rapid Solution Deployment",desc:"[keep the existing text]",type:"Packages",link:"[keep the existing link]",do:"KEEP",cls:"keep"}
+ {n:"01",name:"01 - Market Data Hub: Infographic",desc:"[keep the existing text]",type:"Brochure",link:"[keep: brisken.io ...InfoGraphics-210816.pdf]",do:"KEEP",cls:"keep"},
+ {n:"02",name:"02 - Market Data Hub: Briefing",desc:"[keep the existing text]",type:"Brochure",link:"[keep: brisken.io ...SAP-Briefing-V004.pdf]",do:"KEEP · names Thomson Reuters + Quandl, both retired brands",cls:"keep"},
+ {n:"03",name:"03 - SAP BLUEPRINT: BRISKEN MARKET DATA HUB",desc:"[keep the existing SAP-authored text]",type:"SAP Reference",link:"[keep: brisken.io ...SAP-Blueprints-Brisken-Finalv3.pdf]",do:"KEEP",cls:"keep"},
+ {n:"04",name:"04 - Brisken Smart Trading: Overview",desc:"Straight-through trade capture from FXall, Bloomberg FX GO, 360T and BidFX into SAP TRM and FAM. Governed, no manual re-key.",type:"Brochure",link:"https://resources.brisken.com/smart-trading-deck.pdf",do:"SWAP · retires the 2019 TraderPlus flyer",cls:"edit"},
+ {n:"05",name:"05 - TreasuryCentral: The Cockpit",desc:"One screen for cash, investments, debt, FX, market data and governance, on your SAP data, with every move logged.",type:"Brochure",link:"https://resources.brisken.com/treasurycentral.pdf",do:"ADD · no incumbent covers TreasuryCentral",cls:"add"},
+ {n:"06",name:"06 - OnePilot: The Governed AI Layer",desc:"The AI layer that operates your SAP treasury apps on SAP BTP, governed and audited, in production today. Build your own, no code.",type:"Brochure",link:"https://resources.brisken.com/onepilot.pdf",do:"ADD · no incumbent covers OnePilot",cls:"add"},
+ {n:"07",name:"07 - Remittance Advice Gate: Overview",desc:"AI reads unstructured remittance emails and attachments and posts them into SAP S/4HANA, matched and governed, no manual keying.",type:"Brochure",link:"https://resources.brisken.com/remittance-advice-gate.pdf",do:"ADD · different product",cls:"add"},
+ {n:"08",name:"08 - Bank Fee Portal: Overview",desc:"Analyze and validate bank fees against your agreements inside SAP, with variance flags and a full audit trail.",type:"Brochure",link:"https://resources.brisken.com/bank-fee-portal.pdf",do:"ADD · eyeball the sheet first",cls:"add"},
+ {n:"09",name:"09 - Digital Co-Worker",desc:"An AI co-worker that takes the repetitive steps across your systems. You ask in plain language; it does the work, governed and logged.",type:"Brochure",link:"https://resources.brisken.com/digital-co-worker.pdf",do:"ADD · staged, needs the deploy",cls:"add"},
+ {n:"10",name:"10 - SAP Store: Market Data Hub",desc:"Centralize market data governance for Bloomberg, Refinitiv, 360T, OANDA, central banks and CME, and distribute it across your SAP landscape.",type:"Packages",link:"https://store.sap.com/dcp/en/product/display-2001008447_live_v1/brisken-onepilot-market-data-hub",do:"REINSTATE · NEW link, the old product id was dead",cls:"edit"}
 ];
 
 const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));

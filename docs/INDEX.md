@@ -10,6 +10,28 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-09 | Brisken SAP PartnerFinder Profile Completion | client-dev | [Checkpoint](docs/2026-07-09%20-%20Brisken%20SAP%20PartnerFinder%20Profile%20Completion/Checkpoint.md) |
+| 2026-07-09 | Brisken BTP Removal Audit | client-dev | [Checkpoint](docs/2026-07-09%20-%20Brisken%20BTP%20Removal%20Audit/Checkpoint.md) |
+| 2026-07-09 | Brisken Lead-Gen Task 3 Sanofi Collateral | client-dev | [Checkpoint](docs/2026-07-09%20-%20Brisken%20Lead-Gen%20Task%203%20Sanofi%20Collateral/Checkpoint.md) |
+| 2026-07-09 | Brisken Rome Sales Nav List Add-Run | client-dev | [Checkpoint](docs/2026-07-09%20-%20Brisken%20Rome%20Sales%20Nav%20List%20Add-Run/Checkpoint.md) |
+| 2026-07-09 | Brisken Rome Lead Classification (Lead-Gen Task 4) | client-dev | [Checkpoint](docs/2026-07-09%20-%20Brisken%20Rome%20Lead%20Classification%20(Lead-Gen%20Task%204)/Checkpoint.md) |
+| 2026-07-09 | Brisken Calvin Clip (Lead-Gen Task 6) | client-dev | [Checkpoint](docs/2026-07-09%20-%20Brisken%20Calvin%20Clip%20(Lead-Gen%20Task%206)/Checkpoint.md) |
+| 2026-07-09 | Brisken Lead-Gen Task 2 Zalando Collateral | client-dev | [Checkpoint](docs/2026-07-09%20-%20Brisken%20Lead-Gen%20Task%202%20Zalando%20Collateral/Checkpoint.md) |
+| 2026-07-09 | Brisken Rome LinkedIn Outreach + Sheet Enrichment | client-dev | [Checkpoint](docs/2026-07-09%20-%20Brisken%20Rome%20LinkedIn%20Outreach%20+%20Sheet%20Enrichment/Checkpoint.md) |
+| 2026-07-09 | Brisken Rome Tier-1 Demo Collateral | client-dev | [Checkpoint](docs/2026-07-09%20-%20Brisken%20Rome%20Tier-1%20Demo%20Collateral/Checkpoint.md) |
+| 2026-07-09 | Brisken SAP Resources Brochures + DNS Cleanup | client-dev | [Checkpoint](docs/2026-07-09%20-%20Brisken%20SAP%20Resources%20Brochures%20+%20DNS%20Cleanup/Checkpoint.md) |
+| 2026-07-09 | Brisken Commodities Deck Debrief to Dirk | comms | [Checkpoint](docs/2026-07-09%20-%20Brisken%20Commodities%20Deck%20Debrief%20to%20Dirk/Checkpoint.md) |
+| 2026-07-09 | Brisken Planner Task Backlog + Naming Standard | client-dev | [Checkpoint](docs/2026-07-09%20-%20Brisken%20Planner%20Task%20Backlog%20+%20Naming%20Standard/Checkpoint.md) |
+| 2026-07-09 | Brisken Product Deck Elevation | client-dev | [Checkpoint](docs/2026-07-09%20-%20Brisken%20Product%20Deck%20Elevation/Checkpoint.md) |
+| 2026-07-09 | Brisken Rome Booth-Network Send | client-dev | [Checkpoint](docs/2026-07-09%20-%20Brisken%20Rome%20Booth-Network%20Send/Checkpoint.md) |
+| 2026-07-08 | Brisken Marketing Planner Prompt | client-dev | [Checkpoint](docs/2026-07-08%20-%20Brisken%20Marketing%20Planner%20Prompt/Checkpoint.md) |
+| 2026-07-08 | Brisken SAP Surfaces + Planner Lead-Gen Bucket | client-dev | [Mini-Checkpoint-1](docs/2026-07-08%20-%20Brisken%20P2%20SAP%20Surfaces%20+%20Leads%20Export%20+%20Form%20Fix/Mini-Checkpoint-1.md) |
+| 2026-07-08 | Brisken OnePilot Deck Restructure | client-dev | [Checkpoint](docs/2026-07-08%20-%20Brisken%20OnePilot%20Deck%20Restructure/Checkpoint.md) |
+| 2026-07-08 | Brisken P2 SAP Surfaces + Leads Export + Form Fix | client-dev | [Checkpoint](docs/2026-07-08%20-%20Brisken%20P2%20SAP%20Surfaces%20+%20Leads%20Export%20+%20Form%20Fix/Checkpoint.md) |
+| 2026-07-08 | Brisken Rome Booth Outreach + Shell Inbound | client-dev | [Checkpoint](docs/2026-07-08%20-%20Brisken%20Rome%20Booth%20Outreach%20+%20Shell%20Inbound/Checkpoint.md) |
+| 2026-07-08 | Brisken Hours Tracker Monthly Rollover | system-infra | [Checkpoint](docs/2026-07-08%20-%20Brisken%20Hours%20Tracker%20Monthly%20Rollover/Checkpoint.md) |
+| 2026-07-07 | Brisken Rome Post-Event + Website Leads | client-dev | [Checkpoint](docs/2026-07-07%20-%20Brisken%20Rome%20Post-Event%20+%20Website%20Leads/Checkpoint.md) |
+| 2026-07-01 | Brisken Expense-Recon Zoho + COA Gate | client-dev | [Mini-Checkpoint-1](docs/2026-07-01%20-%20Brisken%20Expense-Recon%20Zoho%20+%20COA%20Gate/Mini-Checkpoint-1.md) |
 | 2026-06-30 | Brisken LinkedIn Repositioning | client-dev | [Checkpoint](docs/2026-06-30%20-%20Brisken%20LinkedIn%20Repositioning/Checkpoint.md) |
 | 2026-06-30 | Brisken Ken.ai Cold-Email Review | comms | [Checkpoint](docs/2026-06-30%20-%20Brisken%20Ken.ai%20Cold-Email%20Review/Checkpoint.md) |
 | 2026-06-29 | Rome 2026 Sales Nav List | client-dev | [Mini-Checkpoint-1](docs/2026-06-29%20-%20Rome%202026%20Sales%20Nav%20List/Mini-Checkpoint-1.md) |
@@ -99,6 +121,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## meji-media
 | Date | Topic | Link |
 |------|-------|------|
+| 2026-07-07 | Meji Media Ops (P2 Send, Referral, Report, P1 Ramp) | [Checkpoint](docs/2026-07-07%20-%20Meji%20Media%20Ops/Checkpoint.md) |
+| 2026-07-01 | Meji P2 Retarget + P3 Ramp | [Checkpoint](docs/2026-07-01%20-%20Meji%20P2%20Retarget%20+%20P3%20Ramp/Checkpoint.md) |
 | 2026-06-27 | Meji P3 Go-Live + Weekly Review System | [Checkpoint](docs/2026-06-27%20-%20Meji%20P3%20Go-Live%20+%20Weekly%20Review%20System/Checkpoint.md) |
 | 2026-06-19 | Meji Corporate Replenish + Campaign Analysis | [Checkpoint](docs/2026-06-19%20-%20Meji%20Corporate%20Replenish%20+%20Campaign%20Analysis/Checkpoint.md) |
 | 2026-06-18 | Meji Corporate-Cold Replenish + Hours ROI | [Checkpoint](docs/2026-06-18%20-%20Meji%20Corporate-Cold%20Replenish%20+%20Hours%20ROI/Checkpoint.md) |
