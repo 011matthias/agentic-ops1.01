@@ -122,9 +122,11 @@ def segments(path: Path):
 
 
 def is_exempt(path: Path, term: str, exemptions: list[dict]) -> str | None:
+    """An exemption matches on path glob plus term. term "*" exempts every term."""
     rel = path.as_posix()
     for ex in exemptions:
-        if ex["term"].lower() != term.lower():
+        want = ex["term"]
+        if want != "*" and want.lower() != term.lower():
             continue
         if fnmatch.fnmatch(rel, ex["path"]) or fnmatch.fnmatch(path.name, ex["path"]):
             return ex.get("reason", "exempt")

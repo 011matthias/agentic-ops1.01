@@ -46,9 +46,17 @@ ever needed.
 
 ## No SAP BTP
 
-Dirk's directive, on the Planner task "Exclude BTP from all demos". All four
-decks and both TreasuryCentral decks were verified clean on 2026-07-09 by
-extracting the text of every render and every `ppt/slides/slideN.xml`.
+Dirk's directive, on the Planner task "Exclude BTP from all demos". Check with:
+
+```
+uv run tools/validate-demo-material.py --client brisken --dir decks dirk-send-pack call-collateral
+```
+
+Do not hand-grep for "BTP". It appears spelled out too: the MDH Commodities
+credentials chip read "built on SAP Business Technology Platform" until
+2026-07-09, and four separate hand-audits that day missed it. The validator reads
+PDF page text and `ppt/slides/slideN.xml`, so it catches hidden slides and terms
+split across text runs, and it knows both spellings.
 
 One deliberate exception, his call and not ours:
 `BRISKEN MDH WALKTHROUGH DEMO SLIDES 250710.*` (46 slides) names BTP on a

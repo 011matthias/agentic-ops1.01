@@ -32,24 +32,14 @@
           "reason": "Dirk's own 46-slide deck; slide 46 Technical Architecture names 'BTP, Azure, AWS, Google Cloud' as a deployment target, not a positioning claim. Removing it would make the diagram wrong. His call, not ours."
         },
         {
-          "path": "*/README.md",
-          "term": "BTP",
-          "reason": "internal docs record the directive itself; not shipped to the client"
-        },
-        {
           "path": "README.md",
-          "term": "BTP",
-          "reason": "internal docs record the directive itself; not shipped to the client"
+          "term": "*",
+          "reason": "internal doc; it records the directive and quotes the banned phrasing on purpose. Not shipped to the client."
         },
         {
           "path": "comms-log.md",
-          "term": "BTP",
-          "reason": "internal comms record; not shipped to the client"
-        },
-        {
-          "path": "*/comms-log.md",
-          "term": "BTP",
-          "reason": "internal comms record; not shipped to the client"
+          "term": "*",
+          "reason": "internal comms record; quotes the banned phrasing when logging a leak. Not shipped to the client."
         }
       ]
     }
