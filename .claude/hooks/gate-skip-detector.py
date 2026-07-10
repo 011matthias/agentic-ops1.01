@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PostToolUse(Bash) hook: detect skipped gates from recent command history.
+"""PostToolUse(Bash|PowerShell) hook: detect skipped gates from recent command history.
 
 Maintains a small ring buffer of recent Bash commands in a temp file.
 Fires advisories when patterns suggest a gate was skipped:
@@ -36,6 +36,13 @@ try:
     import session_state  # noqa: E402
 except Exception:
     session_state = None
+
+# Shared PowerShell/.cmd normalizer (matching view only; fail-open identity).
+try:
+    from _shell import normalize_command
+except Exception:
+    def normalize_command(c: str) -> str:
+        return c
 
 
 def _capture(signal: str, context: str) -> None:
@@ -88,7 +95,9 @@ MCP_UPDATE_PATTERNS = [
 # harness invocations) are not a fix loop -- firing iteration-3x on them was
 # the documented misfire. These are excluded from the 3x count.
 READONLY_PATTERNS = [
-    r"^\s*(git\s+(status|log|diff|show|branch|fetch|cat-file|rev-parse)|ls|cat|head|tail|grep|rg|find|echo|pwd|wc|stat)\b",
+    # (?:^|[;\n]) instead of a bare ^ anchor: a PowerShell statement prefix
+    # (`$x = ...; git status`) must not defeat the read-only classification.
+    r"(?:^|[;\n])\s*(git\s+(status|log|diff|show|branch|fetch|cat-file|rev-parse)|ls|cat|head|tail|grep|rg|find|echo|pwd|wc|stat)\b",
     r"--check\b", r"--dry-run\b", r"--list\b",
     r"\.claude/hooks/[\w.-]+\.py",           # hook test harness re-runs
     r"\b(validate-|py_compile)\b",
@@ -177,17 +186,23 @@ def main() -> int:
         return 0
 
     cmd = ""
-    if event.get("tool_name") == "Bash":
+    if event.get("tool_name") in ("Bash", "PowerShell"):
         cmd = (event.get("tool_input") or {}).get("command", "") or ""
     if not cmd:
         return 0
 
+    # Normalized matching view (PowerShell call-operator / .cmd stems /
+    # backslash paths). The buffer stores the VIEW so VALIDATE_PATTERNS
+    # recognize normalized Windows validation runs; the fingerprint stays on
+    # the ORIGINAL so streak identity is unchanged.
+    view = normalize_command(cmd)
+
     fp = fingerprint(cmd)
-    buf = append_buffer(f"{fp}\t{cmd[:300]}")
+    buf = append_buffer(f"{fp}\t{view[:300]}")
 
     advisories = []
 
-    pub_scan = publish_residue(cmd)
+    pub_scan = publish_residue(view)
     if pub_scan and any(re.search(p, pub_scan) for p in PUBLISH_PATTERNS):
         recent_text = "\n".join(buf[-BUFFER_MAX:])
         had_validate = any(re.search(vp, recent_text) for vp in VALIDATE_PATTERNS)
@@ -202,7 +217,7 @@ def main() -> int:
             )
 
     for update_pat, get_pat in MCP_UPDATE_PATTERNS:
-        if re.search(update_pat, cmd):
+        if re.search(update_pat, view):
             recent_text = "\n".join(buf[-BUFFER_MAX:])
             if not re.search(get_pat, recent_text):
                 log_fire(f"friction-event:gate-skip-live-system pattern={update_pat}")
@@ -214,7 +229,7 @@ def main() -> int:
                 )
 
     fp_count = sum(1 for ln in buf[-15:] if ln.startswith(fp + "\t"))
-    if fp_count >= 3 and not is_readonly(cmd):
+    if fp_count >= 3 and not is_readonly(view):
         log_fire(f"friction-event:gate-skip-iteration-3x fp={fp}")
         _capture("gate-skip-iteration-3x", cmd[:300])
         advisories.append(

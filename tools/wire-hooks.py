@@ -110,7 +110,7 @@ CANONICAL_HOOKS = {
             ],
         },
         {
-            "matcher": "Bash",
+            "matcher": "Bash|PowerShell",
             "hooks": [
                 {
                     "type": "command",
@@ -147,7 +147,7 @@ CANONICAL_HOOKS = {
             ],
         },
         {
-            "matcher": "Bash",
+            "matcher": "Bash|PowerShell",
             "hooks": [
                 {
                     "type": "command",
