@@ -42,3 +42,7 @@ Persistent fixtures for re-running the proposal-research agent's smoke tests acr
 - The fixture's "GREENHOUSE" code-word requirement is a real Upwork pattern — the requirement coverage matrix should list it explicitly so the cover letter writer doesn't drop it.
 - The agent does external research where possible (Dimension C). For this fixture, the company name "Atlas Greenhouses GmbH" is synthetic — WebFetch results will be empty / irrelevant; the agent should note this in Coverage notes rather than fabricate company details.
 - If `agnt_proposal-research` evolves, update the fixture's "Test invocation should pass" line and re-document the expected shape changes here.
+
+## Runnable via the eval harness
+
+The BLOCKED fixture is re-runnable via `uv run tools/eval-agents.py run --fixture research-blocked` (WebFetch deliberately not allowlisted); grading contract pinned in `tools/tests/test_agnt_evals.py`.
