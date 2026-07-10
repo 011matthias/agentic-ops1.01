@@ -23,6 +23,12 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    import _scope  # canonical path->category scope predicates (shared)
+except Exception:  # never let a missing shared lib brick the hook
+    _scope = None
+
 REPO = Path(__file__).resolve().parent.parent.parent
 TOOLS_DIR = REPO / "tools"
 HOOK_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hook-log.txt")
@@ -49,31 +55,13 @@ def normalize_for_match(file_path: str) -> str:
 
 
 def in_deliverable_scope(file_path: str) -> bool:
-    if not file_path:
-        return False
-    p = normalize_for_match(file_path)
-    if not p.endswith((".html", ".htm", ".md", ".markdown", ".mdx")):
-        return False
-    return any(m in p for m in (
-        "/platform/public/",
-        "/deliverables/",
-        "/hero-exports/",
-        "/notion-pages/",
-        "/doc-site/",
-    ))
+    # Canonical predicate in _scope.py (shared with em-dash-strip / reference-anchor).
+    return bool(_scope) and _scope.in_deliverable_scope(file_path)
 
 
 def in_comms_scope(file_path: str) -> bool:
-    if not file_path:
-        return False
-    p = normalize_for_match(file_path)
-    if not p.endswith((".md", ".markdown", ".mdx")):
-        return False
-    if "/context/drafts/" in p or "/proposals/" in p:
-        return True
-    if p.endswith("/comms-log.md"):
-        return True
-    return False
+    # md-gated drafts/proposals + comms-log.md; advisory linter scope.
+    return bool(_scope) and _scope.in_comms_scope(file_path)
 
 
 def in_output_scope(file_path: str) -> bool:
@@ -128,6 +116,39 @@ def in_skill_scope(file_path: str) -> bool:
     if not p.endswith((".md", ".markdown")):
         return False
     return "/.claude/skills/" in p
+
+
+def in_demo_material_scope(file_path: str) -> bool:
+    """Banned-CONTENT gate scope (client directives, e.g. Brisken 'no SAP BTP').
+
+    Client deliverable trees plus the resources-site payload dir. Text-authored
+    suffixes only: PDFs/pptx/mp4 are produced by scripts (Bash), which this
+    Write/Edit dispatcher never sees; those paths rely on the render tools
+    running the gate themselves (e.g. tools/brisken-sap-onepagers.py)."""
+    if not file_path:
+        return False
+    p = normalize_for_match(file_path)
+    if not p.endswith((".html", ".htm", ".md", ".markdown", ".txt", ".srt", ".vtt")):
+        return False
+    if "workspace/clients/" not in p:
+        return False
+    return "/deliverables/" in p or "/resources-site/" in p
+
+
+def demo_client_for(file_path: str) -> str | None:
+    """Client slug from the path, but only when the banned-terms fixture has
+    directives for it; a client with no entry has nothing to scan against."""
+    p = normalize_for_match(file_path)
+    if "workspace/clients/" not in p:
+        return None
+    client = p.split("workspace/clients/")[1].split("/")[0]
+    try:
+        cfg = json.loads(
+            (TOOLS_DIR / "fixtures" / "demo-banned-terms.json").read_text(encoding="utf-8")
+        )
+    except Exception:
+        return None
+    return client if client in cfg.get("clients", {}) else None
 
 
 def in_spec_scope(file_path: str) -> bool:
@@ -233,6 +254,11 @@ def main() -> None:
         planned.append(("OUTPUT GATE", "validate-output.py", [file_path], 15))
     if in_cell_scope(file_path):
         planned.append(("CELL VOICE GATE", "validate-output.py", [file_path], 20))
+    if in_demo_material_scope(file_path):
+        demo_client = demo_client_for(file_path)
+        if demo_client:
+            planned.append(("DEMO CONTENT GATE", "validate-demo-material.py",
+                            [file_path, "--client", demo_client], 20))
     if in_spec_scope(file_path):
         planned.append(("SPEC GATE", "validate-spec.py", [file_path], 10))
     if in_skill_scope(file_path):

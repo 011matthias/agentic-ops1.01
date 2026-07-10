@@ -61,6 +61,7 @@ class Hit:
     where: str
     term: str
     context: str
+    line: int = 0  # 1-based for text files; 0 when only page/slide is known
 
 
 def load_config() -> dict:
@@ -150,7 +151,8 @@ def scan(path: Path, terms: list[dict], exemptions: list[dict]) -> tuple[list[Hi
                         continue
                     lo, hi = max(0, m.start() - 45), min(len(text), m.end() + 45)
                     ctx = " ".join(text[lo:hi].split())
-                    hits.append(Hit(path, where, term, ctx))
+                    line = text.count("\n", 0, m.start()) + 1 if where == "text" else 0
+                    hits.append(Hit(path, where, term, ctx, line))
     except Exception as exc:  # unreadable/corrupt file is a finding, not a crash
         # A file exempted for every term ("*") is out of scope entirely, so an
         # unreadable one is noise, not a finding. Term-specific exemptions still fail.
@@ -182,6 +184,8 @@ def main() -> int:
     ap.add_argument("--client", help="restrict to one client's directives (default: all)")
     ap.add_argument("--list-terms", action="store_true", help="print the active banned terms and exit")
     ap.add_argument("--quiet", action="store_true", help="only print failures")
+    ap.add_argument("--format", choices=("text", "json"), default="text",
+                    help="json emits the post-write-gate dispatcher contract (see tools/INDEX.md)")
     args = ap.parse_args()
 
     cfg = load_config()
@@ -206,6 +210,26 @@ def main() -> int:
         hits, skipped = scan(f, terms, exemptions)
         all_hits += hits
         all_skipped += skipped
+
+    if args.format == "json":
+        payload = {
+            "total": len(all_hits),
+            "hits": [
+                {
+                    "line": h.line,
+                    "category": "banned-content",
+                    "severity": "HIGH",
+                    "message": f"banned term '{h.term}' ({h.where}); client directive, "
+                               "see tools/fixtures/demo-banned-terms.json",
+                    "snippet": h.context,
+                }
+                for h in all_hits
+            ],
+            "by_category": {"banned-content": len(all_hits)} if all_hits else {},
+            "by_severity": {"HIGH": len(all_hits)} if all_hits else {},
+        }
+        print(json.dumps(payload))
+        return 1 if all_hits else 0
 
     if not args.quiet:
         print(f"scanned {len(files)} file(s) against {len(terms)} banned term(s)")
