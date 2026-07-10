@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PostToolUse(Bash) hook: inject ship-gate / B2 / hard-limit advisories.
+"""PostToolUse(Bash|PowerShell) hook: inject ship-gate / B2 / hard-limit advisories.
 
 Pattern-matches the executed command:
   git push|commit / gh pr ...        -> [SHIP GATE] reminder
@@ -25,6 +25,13 @@ import os
 import re
 import sys
 import tempfile
+
+# Shared PowerShell/.cmd normalizer (matching view only; fail-open identity).
+try:
+    from _shell import normalize_command
+except Exception:
+    def normalize_command(c: str) -> str:
+        return c
 
 HOOK_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hook-log.txt")
 COUNTER_FILE = os.path.join(tempfile.gettempdir(), "agentic-ops-build-counter.txt")
@@ -126,14 +133,17 @@ def main() -> int:
     except Exception:
         return 0
 
-    if event.get("tool_name") != "Bash":
+    if event.get("tool_name") not in ("Bash", "PowerShell"):
         return 0
     cmd = (event.get("tool_input") or {}).get("command", "") or ""
     if not cmd:
         return 0
 
-    is_ship = matches_any(cmd, SHIP_PATTERNS)
-    is_build = matches_any(cmd, BUILD_TEST_PATTERNS)
+    # Match on the normalized view (PowerShell call-operator / .cmd stems /
+    # backslash paths); keep the ORIGINAL for fingerprints + logging.
+    view = normalize_command(cmd)
+    is_ship = matches_any(view, SHIP_PATTERNS)
+    is_build = matches_any(view, BUILD_TEST_PATTERNS)
 
     advisories = []
 
@@ -149,7 +159,7 @@ def main() -> int:
         )
 
     if is_build:
-        if is_exempt(cmd):
+        if is_exempt(view):
             # A hook test or read-only verification: emit the B2 nudge but
             # do NOT advance the streak (would false-fire HARD LIMIT during
             # behavioral test sweeps). Reset to zero so a real loop after
