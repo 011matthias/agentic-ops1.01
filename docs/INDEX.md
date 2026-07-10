@@ -10,6 +10,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-10 | Brisken BTP Removal H2-H4 | client-dev | [Checkpoint](docs/2026-07-10%20-%20Brisken%20BTP%20Removal%20H2-H4/Checkpoint.md) |
 | 2026-07-09 | Brisken SAP PartnerFinder Profile Completion | client-dev | [Checkpoint](docs/2026-07-09%20-%20Brisken%20SAP%20PartnerFinder%20Profile%20Completion/Checkpoint.md) |
 | 2026-07-09 | Brisken BTP Removal Audit | client-dev | [Checkpoint](docs/2026-07-09%20-%20Brisken%20BTP%20Removal%20Audit/Checkpoint.md) |
 | 2026-07-09 | Brisken Lead-Gen Task 3 Sanofi Collateral | client-dev | [Checkpoint](docs/2026-07-09%20-%20Brisken%20Lead-Gen%20Task%203%20Sanofi%20Collateral/Checkpoint.md) |
