@@ -158,9 +158,11 @@ That leaves **11 notes to send** below.
 
 - **To:** christos.kiosses@nagarro.com
 - **Subject:** Good to meet in Rome
-- **Basis:** at the booth. His title is blank on the sheet (TBD). Note that
-  he and Meyerhoff are colleagues and may compare notes; the two notes are
-  deliberately different.
+- **Basis:** at the booth. The sheet had his title as TBD; his LinkedIn
+  (linkedin.com/in/christos-kiosses-a5b1b54, verified 2026-07-10) reads
+  Program Manager, Greater Hamburg Area. Note that he and Meyerhoff are
+  colleagues and may compare notes; the two notes are deliberately
+  different.
 
 **The note**
 > Christos,
