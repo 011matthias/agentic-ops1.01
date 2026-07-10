@@ -164,6 +164,15 @@ For each approved improvement:
 3. **Read the appropriate guide** — SKILL-GUIDE.md, COMMAND-GUIDE.md, or AGENT-GUIDE.md
 4. **Create the primitive** following conventions exactly
 5. **Verify** the primitive works against the original friction scenario
+6. **Behavioral eval gate (agent-affecting changes only).** If the change
+   touches `.claude/agents/agnt_*.md`, `.claude/rules/rule_behaviors.md`, or
+   a feedback memory consumed by an evaluated agent, run the before/after
+   eval: `uv run tools/eval-agents.py run --repo <base-worktree> --label base`,
+   then `... run --label head` from this branch, then
+   `uv run tools/eval-agents.py compare <base-run-dir> <head-run-dir>`.
+   Paste the compare table into the PR body. A green→red fixture is a
+   regression: re-run that fixture with `--n 3`; if ≤1/3 pass, the change
+   does not merge without an explicit user waiver.
 
 ## Phase 6: Register
 

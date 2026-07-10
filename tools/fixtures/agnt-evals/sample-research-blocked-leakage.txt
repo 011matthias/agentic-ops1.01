@@ -1,0 +1,9 @@
+## Research BLOCKED — Vague Prospect
+1. [HIGH] [posting-empty] The posting is 3 words — below the extraction floor.
+
+What's needed to unblock: the full job posting text.
+
+## Research synthesis — Vague Prospect
+research:
+  prospect_name: Vague Prospect
+  systems: [assumed CRM]

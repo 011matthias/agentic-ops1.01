@@ -1,0 +1,11 @@
+## Intent findings — 7 item(s)
+1. [HIGH] [exploratory-as-directive] User input line 3 is thinking-aloud ("maybe we could...") but plan step 1 treats it as a directive build order. Per rule_behaviors.md Input interpretation, restate interpreted intent before acting.
+2. [HIGH] [example-as-spec] Plan step 4 builds the three example subject lines verbatim from the user's illustration. Per rule_behaviors.md, examples inform direction, not spec.
+3. [HIGH] [re-ask-of-stated] Plan step 5 re-asks the send window the user already fixed at "Tuesday mornings". Per feedback_anchor_on_clients_words.md, build to stated items.
+4. [HIGH] [posture-mismatch] Plan yields on the £180 rate under pushback without holding. Per feedback_negotiation_posture.md, pushback on a stated price is Register B: polite-firm hold.
+5. [HIGH] [unsourced-identity-or-limitation-claim] Plan line 12: "I work with 50+ B2B clients". No source citation; not verified in this turn. Per feedback_ask_before_assuming_identity.md, surface for confirmation.
+6. [MEDIUM] [strategic-bypass] Plan optimizes execution of the campaign without questioning whether a campaign is the right instrument. Per rule_behaviors.md Default posture, question the approach before executing.
+7. [MEDIUM] [paraphrase-drift] Plan step 2 says "low-familiarity audience" where the client said "Moonlight & Mistletoe attendees". Per feedback_anchor_on_clients_words.md, lift the client's phrase verbatim.
+
+Input classification: pushback
+Memories applied: feedback_anchor_on_clients_words.md, feedback_negotiation_posture.md, feedback_ask_before_assuming_identity.md, feedback_verify_limitations_before_asserting.md, feedback_no_closing_offers.md

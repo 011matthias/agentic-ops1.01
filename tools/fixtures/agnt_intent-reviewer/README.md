@@ -29,3 +29,7 @@ Persistent fixtures for re-running the intent-reviewer's smoke tests across sess
 - These fixtures are independent of any real client data. The Gurmej/Matthias names + the 983 figure mirror real Meji context only for realism; the violation patterns are the test.
 - The clean fixture intentionally includes a `Context` section with previously-defined items to exercise the agent's I4 (re-ask-of-stated) negative case. Adding a re-ask in the plan would be a fixture mutation, not a behavior change.
 - If a check fires when it shouldn't (false positive) OR misses when it should (false negative), it's a fixture incident — log against the agent spec, not the fixture, unless the fixture itself is ambiguous.
+
+## Runnable via the eval harness
+
+Re-runnable via `uv run tools/eval-agents.py run --fixture intent-clean` (or `intent-violations`); the answer-key section below is stripped before the fixture reaches the agent, and the grading contract is pinned in `tools/tests/test_agnt_evals.py`.

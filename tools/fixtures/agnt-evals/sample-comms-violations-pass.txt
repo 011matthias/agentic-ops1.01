@@ -1,0 +1,8 @@
+## Critic findings — 4 item(s)
+1. [HIGH] [imperative-tone] Line 9: "Send me the access to the Mailforge account by tomorrow" — imperative aimed at the client. Per feedback_client_comms_tone.md, rewrite as a soft optional request.
+2. [HIGH] [pre-concession] Line 11: "happy to drop the rate from £180 to £120" — bidding against ourselves; the client did not request a discount. Per feedback_negotiation_posture.md, hold the stated price.
+3. [HIGH] [unsourced-identity-claim] Line 13: "I work with 50+ B2B clients and my standard rate is $200/hour USD" — identity/experience claim not traced to profile-copy.md. Per feedback_ask_before_assuming_identity.md, surface for confirmation.
+4. [MEDIUM] [closing-offer] Line 17: "Let me know if you want me to draft the next message" — deferral dressed as helpfulness. Per feedback_no_closing_offers.md, either do the bounded next step or close cleanly.
+
+Structural hits already flagged by validate-output.py: 2
+Memories applied: feedback_client_comms_tone.md, feedback_negotiation_posture.md, feedback_ask_before_assuming_identity.md, feedback_no_closing_offers.md, feedback_anchor_on_clients_words.md
