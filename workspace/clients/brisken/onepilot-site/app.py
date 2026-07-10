@@ -20,6 +20,13 @@ Env vars:
     BRISKEN_SITE_HTML          path to the prototype HTML (default ./site/index.html)
     BRISKEN_SITE_INSECURE_COOKIE  set "1" to drop the cookie Secure flag for
                                local http testing (never in prod)
+    BRISKEN_INQUIRY_RESEND_KEY  Resend API key for inquiry notification mail
+                               (unset: inquiries are stored on the volume,
+                               no email goes out)
+    BRISKEN_INQUIRY_FROM       verified sender address for the notification
+                               (required for sending; unset skips email)
+    BRISKEN_INQUIRY_TO         notification recipient (default
+                               dirk.neumann@brisken.com)
 """
 from __future__ import annotations
 
@@ -29,8 +36,10 @@ import hmac
 import html
 import json
 import os
+import re
 import secrets
 import time
+import urllib.request
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -52,10 +61,14 @@ SITE_PLATFORM_HTML = Path(os.environ.get("BRISKEN_SITE_PLATFORM_HTML", str(APP_D
 SITE_ROOT_HTML = SITE_PLATFORM_HTML if os.environ.get("BRISKEN_SITE_ROOT") == "platform" else SITE_HTML
 DATA_DIR = Path(os.environ.get("BRISKEN_SITE_DATA", str(APP_DIR / "data")))
 FEEDBACK_FILE = DATA_DIR / "feedback.jsonl"
+INQUIRY_FILE = DATA_DIR / "inquiries.jsonl"
+INQUIRY_TO_DEFAULT = "dirk.neumann@brisken.com"
 
 COOKIE_NAME = "brisken_reviewer"
 SESSION_MAX_AGE = 60 * 60 * 12  # 12 hours
-OPEN_PATHS = frozenset({"/welcome", "/logout", "/healthz", "/favicon.ico"})
+# /inquiry is the public contact form; /api/book-demo is the platform page's
+# contact-modal endpoint. Prospects must reach both without the reviewer gate.
+OPEN_PATHS = frozenset({"/welcome", "/logout", "/healthz", "/favicon.ico", "/inquiry", "/api/book-demo"})
 NAME_MAX_LEN = 80
 _PROCESS_SECRET = secrets.token_hex(32)
 
@@ -333,6 +346,203 @@ async def feedback_raw() -> PlainTextResponse:
     return PlainTextResponse("", media_type="application/x-ndjson")
 
 
+# ---- public inquiry form ---------------------------------------------------
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _notify_inquiry(entry: dict) -> str:
+    """Email a readable summary of a new inquiry via Resend.
+
+    Returns a short status string stored with the entry. Without the API key
+    and a verified sender the inquiry is volume-only (stored, no mail)."""
+    key = os.environ.get("BRISKEN_INQUIRY_RESEND_KEY")
+    sender = os.environ.get("BRISKEN_INQUIRY_FROM")
+    if not key or not sender:
+        return "skipped: no mail transport configured"
+    to = os.environ.get("BRISKEN_INQUIRY_TO", INQUIRY_TO_DEFAULT)
+    company = entry["company"] or "no company given"
+    body = (
+        "New inquiry through the OnePilot site.\n\n"
+        f"Who:      {entry['name']}\n"
+        f"Company:  {company}\n"
+        f"Email:    {entry['email']}\n"
+        f"When:     {entry['ts']} UTC\n\n"
+        "Message:\n"
+        f"{entry['message']}\n\n"
+        "Replying to this email answers the sender directly (reply-to is set).\n"
+        "All inquiries: /inquiry-log on the site."
+    )
+    payload = json.dumps({
+        "from": sender,
+        "to": [to],
+        "reply_to": [entry["email"]],
+        "subject": f"New OnePilot inquiry: {entry['name']} ({company})",
+        "text": body,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={
+            "Authorization": "Bearer " + key,
+            "Content-Type": "application/json",
+            # Resend sits behind Cloudflare, which 403s urllib's default UA.
+            "User-Agent": "brisken-onepilot-site/1.0",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return f"sent: http {resp.status}"
+    except Exception as exc:  # a failed mail must never lose the inquiry
+        return f"error: {exc}"
+
+
+def render_inquiry(error: str = "", sent: bool = False) -> str:
+    err_block = f'<p class="err">{html.escape(error)}</p>' if error else ""
+    ok_block = (
+        '<p class="ok">Thank you. Your message is on its way; we will come back to you shortly.</p>'
+        if sent else ""
+    )
+    return INQUIRY_TEMPLATE.replace("%%ERROR%%", err_block).replace("%%OK%%", ok_block)
+
+
+@app.get("/inquiry", response_class=HTMLResponse)
+async def inquiry_form() -> HTMLResponse:
+    return HTMLResponse(render_inquiry())
+
+
+@app.post("/inquiry")
+async def inquiry_submit(request: Request) -> HTMLResponse:
+    form = await request.form()
+    name = str(form.get("name", "")).strip()[:120]
+    company = str(form.get("company", "")).strip()[:160]
+    email = str(form.get("email", "")).strip()[:200]
+    message = str(form.get("message", "")).strip()[:4000]
+    honeypot = str(form.get("website", "")).strip()
+    if honeypot:
+        # A bot filled the hidden field: pretend success, store nothing.
+        return HTMLResponse(render_inquiry(sent=True))
+    if not name or not message:
+        return HTMLResponse(render_inquiry("Please give us your name and a short message."), status_code=400)
+    if not _EMAIL_RE.match(email):
+        return HTMLResponse(render_inquiry("That email address does not look complete."), status_code=400)
+    entry = {
+        "ts": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
+        "name": name,
+        "company": company,
+        "email": email,
+        "message": message,
+        "source": "/inquiry form",
+        "ua": request.headers.get("user-agent", "")[:300],
+    }
+    _store_inquiry(entry)
+    return HTMLResponse(render_inquiry(sent=True))
+
+
+def _read_inquiries() -> list:
+    rows = []
+    if INQUIRY_FILE.exists():
+        for line in INQUIRY_FILE.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rows.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    return rows
+
+
+@app.get("/inquiries.xlsx")
+async def inquiries_xlsx() -> Response:
+    """The submissions log as a real spreadsheet (gated, like /inquiry-log)."""
+    import io
+
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Inquiries"
+    header = ["When (UTC)", "Name", "Company", "Email", "Message", "Source", "Mail status"]
+    ws.append(header)
+    for cell in ws[1]:
+        cell.font = cell.font.copy(bold=True)
+    for r in _read_inquiries():
+        ws.append([
+            str(r.get("ts", "")), str(r.get("name", "")), str(r.get("company", "")),
+            str(r.get("email", "")), str(r.get("message", "")), str(r.get("source", "")),
+            str(r.get("notify", "")),
+        ])
+    widths = [19, 22, 24, 30, 60, 26, 30]
+    for i, w in enumerate(widths, start=1):
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
+    buf = io.BytesIO()
+    wb.save(buf)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="brisken-website-inquiries.xlsx"'},
+    )
+
+
+def _store_inquiry(entry: dict) -> None:
+    entry["notify"] = _notify_inquiry(entry)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    with INQUIRY_FILE.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+@app.post("/api/book-demo")
+async def book_demo(request: Request) -> JSONResponse:
+    """JSON endpoint the platform page's contact modal posts to."""
+    try:
+        data = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "invalid json"}, status_code=400)
+    if not isinstance(data, dict):
+        return JSONResponse({"ok": False, "error": "invalid payload"}, status_code=400)
+    name = str(data.get("name", "")).strip()[:120]
+    company = str(data.get("company", "")).strip()[:160]
+    email = str(data.get("email", "")).strip()[:200]
+    message = str(data.get("preferred_date", "") or data.get("message", "")).strip()[:4000]
+    honeypot = str(data.get("company_website", "")).strip()
+    if honeypot:
+        return JSONResponse({"ok": True})  # pretend success, store nothing
+    if not name or not _EMAIL_RE.match(email):
+        return JSONResponse({"ok": False, "error": "name and a valid email are required"}, status_code=400)
+    entry = {
+        "ts": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
+        "name": name,
+        "company": company,
+        "email": email,
+        "message": message,
+        "source": str(data.get("source_page", "contact modal"))[:120],
+        "ua": request.headers.get("user-agent", "")[:300],
+    }
+    _store_inquiry(entry)
+    return JSONResponse({"ok": True})
+
+
+@app.get("/inquiry-log", response_class=HTMLResponse)
+async def inquiry_log() -> HTMLResponse:
+    rows = _read_inquiries()
+    rows.reverse()
+    cells = []
+    for r in rows:
+        addr = html.escape(str(r.get("email", "")), quote=True)
+        cells.append(
+            "<tr><td class=ts>" + html.escape(str(r.get("ts", ""))) + "</td>"
+            "<td>" + html.escape(str(r.get("name", ""))) + "</td>"
+            "<td>" + html.escape(str(r.get("company", ""))) + "</td>"
+            "<td><a href='mailto:" + addr + "'>" + addr + "</a></td>"
+            "<td class=comment>" + html.escape(str(r.get("message", ""))) + "</td>"
+            "<td class=ts>" + html.escape(str(r.get("notify", ""))) + "</td></tr>"
+        )
+    body = "".join(cells) or '<tr><td colspan="6" class="empty">No inquiries yet.</td></tr>'
+    page = INQUIRY_LOG_TEMPLATE.replace("%%COUNT%%", str(len(rows))).replace("%%ROWS%%", body)
+    return HTMLResponse(page)
+
+
 # ---- inline templates ----------------------------------------------------
 _BRAND_CUBE = (
     '<svg viewBox="0 0 32 32" width="30" height="30" role="img" aria-label="Brisken">'
@@ -425,6 +635,95 @@ LOG_TEMPLATE = (
     "<h1>Reviewer feedback</h1>"
     "<p class=meta>%%COUNT%% entr&#105;es &middot; newest first &middot; <a href='/feedback.jsonl'>download JSONL</a></p>"
     "<table><thead><tr><th>When (UTC)</th><th>Where</th><th>Comment</th><th>Who</th></tr></thead>"
+    "<tbody>%%ROWS%%</tbody></table>"
+    "</div></body></html>"
+)
+
+INQUIRY_TEMPLATE = (
+    "<!DOCTYPE html><html lang=en><head><meta charset=UTF-8>"
+    "<meta name=viewport content='width=device-width, initial-scale=1'>"
+    "<title>Contact Brisken, OnePilot</title>"
+    "<style>"
+    ":root{--navy:#00396f;--teal:#0e7c86;--teal-strong:#0a5f68;--paper:#f4f7fb;--surface:#fff;"
+    "--text:#0a1a2f;--muted:#56657c;--border:#dfe7f1}"
+    "*{box-sizing:border-box;margin:0;padding:0}"
+    "body{font-family:'IBM Plex Sans',system-ui,-apple-system,Segoe UI,sans-serif;background:var(--paper);"
+    "color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}"
+    ".card{background:var(--surface);border:1px solid var(--border);border-radius:2px;"
+    "padding:34px 36px;width:100%;max-width:460px;box-shadow:0 10px 30px rgba(10,26,47,.06)}"
+    ".brand{display:flex;align-items:center;gap:10px;margin-bottom:22px}"
+    ".brand .wm{font-weight:700;font-size:21px;letter-spacing:-.02em;color:var(--navy)}"
+    ".brand .pr{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;"
+    "text-transform:uppercase;color:var(--muted);padding-left:9px;border-left:1px solid var(--border)}"
+    "h1{font-size:19px;color:var(--navy);margin-bottom:6px}"
+    "p.sub{color:var(--muted);font-size:14px;margin-bottom:22px;line-height:1.5}"
+    "label{display:block;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.1em;"
+    "text-transform:uppercase;color:var(--muted);margin:14px 0 7px}"
+    "input,textarea{width:100%;font-size:15px;padding:12px 13px;border:1px solid var(--border);"
+    "border-radius:2px;background:var(--paper);color:var(--text);font-family:inherit}"
+    "textarea{min-height:120px;resize:vertical}"
+    "input:focus,textarea:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(14,124,134,.18)}"
+    "button{width:100%;margin-top:18px;background:var(--teal);color:#fff;border:none;border-radius:2px;"
+    "padding:13px;font-size:15px;font-weight:600;cursor:pointer}"
+    "button:hover{background:var(--teal-strong)}"
+    "p.err{background:#fdecea;color:#b3261e;border-radius:2px;padding:9px 12px;font-size:13px;margin-bottom:16px}"
+    "p.ok{background:#e8f6ee;color:#1c6b3c;border-radius:2px;padding:9px 12px;font-size:13px;margin-bottom:16px}"
+    ".hp{position:absolute;left:-9999px;top:-9999px;height:1px;width:1px;overflow:hidden}"
+    "p.foot{margin-top:20px;font-size:12px;color:var(--muted);text-align:center}"
+    "</style></head><body>"
+    "<form class=card method=post action=/inquiry>"
+    "<div class=brand>" + _BRAND_CUBE + "<span class=wm>brisken</span><span class=pr>OnePilot</span></div>"
+    "<h1>Talk to us about OnePilot</h1>"
+    "<p class=sub>Tell us who you are and what you are looking at. Your message goes straight to a person, not a queue.</p>"
+    "%%OK%%%%ERROR%%"
+    "<label for=name>Your name</label>"
+    "<input id=name name=name type=text autocomplete=name maxlength=120 required>"
+    "<label for=company>Company</label>"
+    "<input id=company name=company type=text autocomplete=organization maxlength=160>"
+    "<label for=email>Work email</label>"
+    "<input id=email name=email type=email autocomplete=email maxlength=200 required>"
+    "<label for=message>Your message</label>"
+    "<textarea id=message name=message maxlength=4000 required></textarea>"
+    "<div class=hp aria-hidden=true><label for=website>Website</label>"
+    "<input id=website name=website type=text tabindex=-1 autocomplete=off></div>"
+    "<button type=submit>Send message</button>"
+    "<p class=foot>Brisken OnePilot &middot; we answer personally</p>"
+    "</form></body></html>"
+)
+
+INQUIRY_LOG_TEMPLATE = (
+    "<!DOCTYPE html><html lang=en><head><meta charset=UTF-8>"
+    "<meta name=viewport content='width=device-width, initial-scale=1'>"
+    "<title>Inquiries, Brisken OnePilot</title>"
+    "<style>"
+    ":root{--navy:#00396f;--teal:#0e7c86;--paper:#f4f7fb;--surface:#fff;--text:#0a1a2f;"
+    "--muted:#56657c;--border:#dfe7f1;}"
+    "*{box-sizing:border-box;margin:0;padding:0}"
+    "body{font-family:'IBM Plex Sans',system-ui,-apple-system,Segoe UI,sans-serif;background:var(--paper);"
+    "color:var(--text);padding:32px 24px}"
+    ".wrap{max-width:1100px;margin:0 auto}"
+    ".head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;flex-wrap:wrap}"
+    ".brand{display:flex;align-items:center;gap:10px}"
+    ".brand .wm{font-weight:700;font-size:21px;letter-spacing:-.02em;color:var(--navy)}"
+    ".brand .pr{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.16em;"
+    "text-transform:uppercase;color:var(--muted);padding-left:9px;border-left:1px solid var(--border)}"
+    "h1{font-size:16px;color:var(--navy);font-weight:600;margin:18px 0 4px}"
+    "p.meta{color:var(--muted);font-size:13px;margin-bottom:18px}"
+    "table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);"
+    "border-radius:2px;overflow:hidden;font-size:14px}"
+    "th{text-align:left;padding:11px 13px;background:#eef3fa;border-bottom:2px solid var(--border);"
+    "font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}"
+    "td{padding:11px 13px;border-bottom:1px solid var(--border);vertical-align:top}"
+    "td.ts{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);white-space:nowrap}"
+    "td.comment{line-height:1.5;max-width:420px}"
+    "td a{color:var(--teal)}"
+    "td.empty{text-align:center;color:var(--muted);padding:28px}"
+    "</style></head><body><div class=wrap>"
+    "<div class=head><div class=brand>" + _BRAND_CUBE + "<span class=wm>brisken</span><span class=pr>OnePilot</span></div>"
+    "<a href='/' style='color:var(--teal);font-size:13px;text-decoration:none'>&larr; Back to the site</a></div>"
+    "<h1>Website inquiries</h1>"
+    "<p class=meta>%%COUNT%% entr&#105;es &middot; newest first</p>"
+    "<table><thead><tr><th>When (UTC)</th><th>Name</th><th>Company</th><th>Email</th><th>Message</th><th>Mail</th></tr></thead>"
     "<tbody>%%ROWS%%</tbody></table>"
     "</div></body></html>"
 )

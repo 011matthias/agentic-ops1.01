@@ -10,9 +10,18 @@ from pathlib import Path
 import shutil
 
 APP = Path(__file__).resolve().parent
-SRC = APP.parent / "deliverables" / "brisken-onepilot-website-prototype.html"
-DST = APP / "site" / "index.html"
+DELIVERABLES = APP.parent / "deliverables"
+SITE = APP / "site"
+SITE.mkdir(parents=True, exist_ok=True)
 
-DST.parent.mkdir(parents=True, exist_ok=True)
-shutil.copyfile(SRC, DST)
-print(f"synced {SRC.name} -> site/index.html ({DST.stat().st_size} bytes)")
+# (source deliverable, served file name)
+PAGES = [
+    ("brisken-onepilot-website-prototype.html", "index.html"),
+    ("brisken-onepilot-website-prototype.html", "brisken-onepilot-website-prototype.html"),
+    ("brisken-onepilot-platform.html", "brisken-onepilot-platform.html"),
+]
+for src_name, dst_name in PAGES:
+    src = DELIVERABLES / src_name
+    dst = SITE / dst_name
+    shutil.copyfile(src, dst)
+    print(f"synced {src_name} -> site/{dst_name} ({dst.stat().st_size} bytes)")

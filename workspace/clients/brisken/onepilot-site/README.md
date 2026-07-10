@@ -12,6 +12,14 @@ brisken.com.
 - `POST /feedback` `{name, role, section, comment, path, title}` -> JSONL on `/data`
 - `GET /feedback-log` reviewer feedback table (gated)
 - `GET /feedback.jsonl` raw log (gated)
+- `GET/POST /inquiry` public contact form (open, honeypot-filtered) ->
+  `inquiries.jsonl` on `/data` + notification email to Dirk when the
+  Resend env vars are set (reply-to = submitter)
+- `POST /api/book-demo` (open) JSON endpoint the platform page's contact
+  modal posts to; same store + notification pipeline as `/inquiry`
+- `GET /inquiry-log` inquiries table (gated)
+- `GET /inquiries.xlsx` the submissions log as a downloadable Excel
+  workbook (gated)
 - `GET /healthz` liveness (open)
 
 ## Env
@@ -20,6 +28,10 @@ brisken.com.
 - `BRISKEN_SITE_DATA` feedback dir (default `./data`; `/data` on Fly)
 - `BRISKEN_SITE_HTML` prototype path (default `./site/index.html`)
 - `BRISKEN_SITE_INSECURE_COOKIE=1` drop cookie Secure flag for local http only
+- `BRISKEN_INQUIRY_RESEND_KEY` Resend API key for inquiry notifications
+  (unset: inquiries stored on the volume only, no email)
+- `BRISKEN_INQUIRY_FROM` verified Resend sender (required for sending)
+- `BRISKEN_INQUIRY_TO` recipient (default `dirk.neumann@brisken.com`)
 
 ## Run locally
 ```
