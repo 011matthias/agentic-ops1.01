@@ -97,3 +97,73 @@ def test_block_reason_shows_original_quoted_path():
     p = _run('cd "$WT" && git commit -m x')
     reason = json.loads(p.stdout.strip().splitlines()[-1])["reason"]
     assert 'cd "$WT"' in reason
+
+
+# --- 2026-07-10: PowerShell arm ---------------------------------------------
+# The PowerShell tool persists cwd exactly like Bash, but Set-Location ran
+# unguarded (recorded live bypass). These pin the PS block/allow boundary.
+
+def _run_ps(cmd):
+    return run_hook(
+        "cd-guard.py", {"tool_name": "PowerShell", "tool_input": {"command": cmd}}
+    )
+
+
+def test_ps_blocks_set_location():
+    # Recorded live-bypass shape, verbatim.
+    assert _is_block(_run_ps("Set-Location platform"))
+
+
+def test_ps_blocks_set_location_chained_semicolon():
+    assert _is_block(_run_ps(
+        '$env:Path = "$nodeDir;$env:Path"; Set-Location platform; '
+        '& "$nodeDir\\vercel.cmd" deploy --yes'
+    ))
+
+
+def test_ps_blocks_sl_alias():
+    assert _is_block(_run_ps("sl platform"))
+
+
+def test_ps_blocks_chdir_alias():
+    assert _is_block(_run_ps("chdir platform"))
+
+
+def test_ps_blocks_cd():
+    assert _is_block(_run_ps("cd platform; npm run build"))
+
+
+def test_ps_blocks_set_location_path_param():
+    assert _is_block(_run_ps("Set-Location -Path platform"))
+
+
+def test_ps_allows_home_tilde():
+    assert _run_ps("Set-Location ~").returncode == 0
+
+
+def test_ps_allows_home_var():
+    assert _run_ps("Set-Location $HOME").returncode == 0
+
+
+def test_ps_allows_env_userprofile():
+    assert _run_ps("Set-Location $env:USERPROFILE").returncode == 0
+
+
+def test_ps_allows_push_location_stack():
+    # Push-Location is the recommended remediation -- must never block.
+    assert _run_ps("Push-Location platform; npm run build; Pop-Location").returncode == 0
+
+
+def test_ps_allows_set_location_inside_herestring():
+    body = "git commit -m @'\nnotes: run Set-Location platform later\n'@"
+    assert _run_ps(body).returncode == 0
+
+
+def test_ps_allows_plain_cmdlets():
+    assert _run_ps("Get-ChildItem -Recurse platform").returncode == 0
+
+
+def test_ps_block_reason_recommends_push_location():
+    p = _run_ps("Set-Location platform")
+    reason = json.loads(p.stdout.strip().splitlines()[-1])["reason"]
+    assert "Push-Location" in reason

@@ -28,15 +28,25 @@ enforcement layer, which had zero automated coverage before this suite:
 
 | Target | Test file | Kind |
 |--------|-----------|------|
-| Registry: all 12 hooks exist, compile, disk set == `wire-hooks` registry | `test_hooks_registry.py` | structural |
-| `no-auto-commit-gate` (B6) | `test_no_auto_commit_gate.py` | behavioral (documented 5-test matrix) |
-| `cd-guard` | `test_cd_guard.py` | behavioral |
-| `instantly-invasive-gate` (B5) | `test_instantly_invasive_gate.py` | behavioral |
+| Registry: every registered hook exists, compiles, disk set == `wire-hooks` registry (`tools/wire-hooks.py` `HOOK_COUNT` is the count's source of truth) | `test_hooks_registry.py` | structural |
+| `no-auto-commit-gate` (B6) | `test_no_auto_commit_gate.py` | behavioral (documented 5-test matrix + PowerShell/.cmd spellings) |
+| `cd-guard` | `test_cd_guard.py` | behavioral (Bash arm + PowerShell Set-Location arm) |
+| `instantly-invasive-gate` (B5) | `test_instantly_invasive_gate.py` | behavioral (incl. -Method + compound read-then-mutate pin) |
+| `_shell.normalize_command` | `test_shell_normalize.py` | unit (PowerShell/.cmd matching-view normalizer) |
+| `post-action-gate` | `test_post_action_gate.py` | behavioral (ship/B2/streak boundaries, TMP-isolated counter) |
+| `gate-skip-detector` | `test_gate_skip_detector.py` | behavioral (pre-publish / iteration-3x / residue boundaries) |
 | `em-dash-strip-gate` | `test_em_dash_strip_gate.py` | scope unit + end-to-end |
 | `session-pressure-meter` + nac capture | `test_session_state_smoke.py` | wraps existing smoke |
+| `stop-b1-gate` | `test_stop_b1_gate.py` | behavioral |
 
-**Not yet behaviorally covered** (registry/compile only): `stop-b1-gate`,
-`gate-skip-detector`, `post-action-gate`, `post-write-gate`, `input-classifier`,
-`reference-anchor-gate`, `auto-approve-protected`. `stop-b1-gate` already has a
-documented 10/10 manual smoke worth porting next. Listed here so the suite's
-coverage is never mistaken for complete.
+**Not yet behaviorally covered** (registry/compile only): `post-write-gate`
+(the dispatcher — a regression here silently kills all post-write content
+validation), `input-classifier`, `reference-anchor-gate`,
+`auto-approve-protected`. Listed here so the suite's coverage is never
+mistaken for complete.
+
+**Tracked gaps (out of scope for this suite):** PowerShell
+`Set-Content`/`Out-File` file writes bypass the `Write|Edit`-matched hooks
+(they arrive as commands, not Write payloads); the B6 authorization scan is
+negation-blind ("don't push yet" matches `\bpush\b`) and verb-agnostic over
+its 30-turn lookback.
