@@ -1,0 +1,10 @@
+## Intent findings — 6 item(s)
+1. [HIGH] [exploratory-as-directive] User input line 3 is thinking-aloud but plan step 1 treats it as a directive build order.
+2. [HIGH] [example-as-spec] Plan step 4 builds the three example subject lines verbatim from the user's illustration.
+3. [HIGH] [re-ask-of-stated] Plan step 5 re-asks the send window the user already fixed.
+4. [HIGH] [unsourced-identity-or-limitation-claim] Plan line 12: "I work with 50+ B2B clients". No source citation.
+5. [MEDIUM] [strategic-bypass] Plan optimizes execution without questioning the instrument.
+6. [MEDIUM] [paraphrase-drift] Plan step 2 paraphrases the client's phrase.
+
+Input classification: pushback
+Memories applied: feedback_anchor_on_clients_words.md, feedback_negotiation_posture.md, feedback_ask_before_assuming_identity.md

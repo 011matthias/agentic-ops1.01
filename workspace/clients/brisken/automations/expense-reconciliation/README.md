@@ -205,6 +205,43 @@ uv run expense-recon doctor --config run.json                  # pre-flight conf
 uv run expense-recon calibrate --config run.json               # matcher metrics, no xlsx
 ```
 
+## Browser UI (review workbench)
+
+Chris does not have to hand-edit a JSON config or read the xlsx. The
+same pipeline is wrapped in a local web app she runs on her own machine:
+
+```bash
+cd workspace/clients/brisken/automations/expense-reconciliation
+uv sync --extra web                     # installs the web dependencies
+uv run expense-recon-web                # opens http://127.0.0.1:8000
+uv run expense-recon-web --port 9000 --data ./runs   # alternate port + data dir
+```
+
+It binds to loopback (127.0.0.1) only, so it is reachable from the
+browser on that machine and nowhere else; every statement, receipt, and
+generated report stays on the machine running the server. To turn on AI
+categorization and FX judgment, set `OPENAI_API_KEY` in the server's
+environment before launching (the keyword fallback runs without it).
+
+What it does:
+
+1. Upload one card statement (`.csv` / `.xlsx`) and the receipts CSV.
+   The statement column map is auto-detected (the `inspect` heuristic);
+   override a field only if the guess is wrong.
+2. The run goes through the exact CLI pipeline (`cli.reconcile`): ingest,
+   categorize, deterministic match, LLM judgment for FX / ambiguous.
+3. The review workbench shows every transaction with its candidate
+   receipt(s), match type, confidence, and per-line category. Chris can
+   confirm a match, reject it, pick the right receipt among candidates,
+   and reclassify a line's category. Each edit persists (SQLite) and the
+   summary updates live.
+4. Download the xlsx report with her decisions and reclassifications
+   applied.
+
+Runs persist under the data dir (`recon-web-data/` by default): the
+SQLite db plus a per-run folder with the uploads and the generated
+report. Journal POSTING to Zoho (4b) stays gated, same as the CLI.
+
 `calibrate` runs the matcher and prints calibration metrics — the
 distinct-transaction outcome split, the reconciliation invariant, the
 receipt double-binding check, the FX-pair-vs-foreign-receipt

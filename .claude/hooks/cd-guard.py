@@ -2,8 +2,8 @@
 # /// script
 # requires-python = ">=3.11"
 # ///
-"""PreToolUse(Bash) hook: detect and block `cd <subdir> && ...` patterns
-that leak the cwd change to subsequent Bash calls and to hooks.
+"""PreToolUse(Bash|PowerShell) hook: detect and block `cd <subdir> && ...`
+patterns that leak the cwd change to subsequent shell calls and to hooks.
 
 WHY THIS EXISTS
 ---------------
@@ -37,6 +37,19 @@ EXEMPTIONS
 - `pushd / popd` -- allow (explicit caller manages the stack).
 - Commands inside heredocs / quoted strings / comments -- allow (not a real
   cd invocation; matches gate-skip-detector's publish_residue logic).
+
+POWERSHELL ARM (2026-07-10)
+---------------------------
+The PowerShell tool persists cwd across calls exactly like Bash, but the
+original hook only matched tool_name == "Bash" and the literal `cd ` token.
+`Set-Location platform` ran unguarded (recorded live bypass, settings
+allowlist history). The PS arm detects `Set-Location | chdir | sl | cd`
+(+ `-Path`/`-LiteralPath`), masks PS here-strings (`@'...'@` / @"..."@)
+and `<#...#>` block comments before scanning, and exempts `Push-Location`
+(pushd parity: reversible via Pop-Location, and it IS the recommended
+remediation). PS parentheses do NOT scope a location change, so the
+subshell exemption stays Bash-only. Accepted gaps, documented: the
+no-space cmd-isms `cd..` / `cd\\`, and backtick line continuation.
 """
 from __future__ import annotations
 
@@ -72,6 +85,29 @@ _QUOTED = re.compile(r"\"[^\"\n]*\"|'[^'\n]*'")
 _HEREDOC = re.compile(r"<<-?\s*'?\w+'?.*?^\s*\w+\s*$", re.DOTALL | re.MULTILINE)
 # Comment lines (treat `# ...` to end-of-line as comment; ok for bash too).
 _COMMENT = re.compile(r"#[^\n]*")
+
+# --- PowerShell arm ---------------------------------------------------------
+# Location-changing verbs. `Push-Location` is deliberately absent (pushd
+# parity; it is the remediation the block message recommends). The trailing
+# boundary is a LOOKAHEAD, not a consuming group: `Set-Location platform;`
+# has no space before `;` (the recorded live-bypass shape).
+PS_CD_RX = re.compile(
+    r"""
+    (?:^|[;&|]|\n)                       # statement boundary
+    \s*
+    (?:set-location|chdir|sl|cd)\b       # location-changing verb
+    (?:\s+-(?:literalpath|path))?        # optional -Path / -LiteralPath
+    \s+
+    (?!-(?:[\s;&|]|$))                   # NOT `cd -`
+    (?P<path>[^\s;&|]+)                  # the path argument
+    (?=[\s;&|]|$)                        # statement boundary (non-consuming)
+    """,
+    re.VERBOSE | re.IGNORECASE,
+)
+# PS here-strings: @' ... '@ / @" ... "@ (closing delimiter at line start).
+_PS_HERESTRING = re.compile(r"@(['\"])\r?\n.*?\r?\n\1@", re.DOTALL)
+# PS block comments: <# ... #>
+_PS_BLOCK_COMMENT = re.compile(r"<#.*?#>", re.DOTALL)
 
 
 def log_fire(msg: str) -> None:
@@ -110,6 +146,17 @@ def residue(cmd: str) -> str:
     return r
 
 
+def ps_residue(cmd: str) -> str:
+    """Length-preserving residue for the PowerShell arm. Here-string bodies
+    and block comments become spaces FIRST (they may span lines and contain
+    quotes), then the shared quote-mask / line-comment passes apply."""
+    r = _PS_HERESTRING.sub(_space_len, cmd)
+    r = _PS_BLOCK_COMMENT.sub(_space_len, r)
+    r = _QUOTED.sub(_mask_len, r)
+    r = _COMMENT.sub(_space_len, r)
+    return r
+
+
 def already_subshelled(cmd: str, match_start: int) -> bool:
     """True if the cd at `match_start` is already inside `(...)` on the
     same logical statement."""
@@ -143,6 +190,18 @@ REASON_TEMPLATE = (
     "Then resubmit the corrected command."
 )
 
+PS_REASON_TEMPLATE = (
+    "[cd-guard] Refused: changing the location to `{path}` persists the "
+    "PowerShell cwd across subsequent PowerShell calls AND across hooks that "
+    "resolve relative `.claude/hooks/*.py` paths (same drift class as the "
+    "4 documented Bash incidents). Pick ONE fix:\n"
+    "  (1) Scoped stack:  Push-Location {path}; <command>; Pop-Location\n"
+    "  (2) Tool flag:     git -C {path} <cmd>  |  npm --prefix {path} <cmd>  "
+    "|  uv run --directory {path} <cmd>  |  vercel --cwd {path} <cmd>\n"
+    "  (3) Absolute paths: invoke with the full path, no location change.\n"
+    "Then resubmit the corrected command."
+)
+
 
 def main() -> int:
     try:
@@ -151,35 +210,51 @@ def main() -> int:
     except Exception:
         return 0
 
-    if event.get("tool_name") != "Bash":
+    tool = event.get("tool_name")
+    if tool not in ("Bash", "PowerShell"):
         return 0
 
     cmd = (event.get("tool_input") or {}).get("command", "") or ""
-    if not cmd or "cd " not in cmd:
+    if not cmd:
         return 0
 
-    scan = residue(cmd)
+    if tool == "Bash":
+        if "cd " not in cmd:
+            return 0
+        scan = residue(cmd)
+        rx, reason_tpl, subshell_exempt = CD_RX, REASON_TEMPLATE, True
+    else:
+        scan = ps_residue(cmd)
+        rx, reason_tpl, subshell_exempt = PS_CD_RX, PS_REASON_TEMPLATE, False
+
     # residue is length-preserving, so match offsets index straight into `cmd`.
-    for m in CD_RX.finditer(scan):
+    for m in rx.finditer(scan):
         # Use the ORIGINAL text for the exemption test + reason -- the matched
         # `path` group may be the masked 'X' filler of a quoted span.
         path = cmd[m.start("path"):m.end("path")]
         bare = path.strip("\"'")
         # Home / previous-dir navigation is a stable absolute target, not
         # relative drift -- exempt it (covers quoted forms like `cd "$HOME"`,
-        # `cd ~/Repo`). This is the authoritative exemption; the inline CD_RX
-        # lookaheads only cover the bare unquoted forms.
-        if bare in ("~", "-", "$HOME") or bare.startswith(("~/", "$HOME/")):
+        # `cd ~/Repo`, and the PowerShell `$env:USERPROFILE` spellings). This
+        # is the authoritative exemption; the inline regex lookaheads only
+        # cover the bare unquoted forms.
+        bl = bare.lower()
+        if bl in ("~", "-", "$home", "$env:userprofile") or bl.startswith(
+            ("~/", "~\\", "$home/", "$home\\",
+             "$env:userprofile/", "$env:userprofile\\")
+        ):
             continue
-        if already_subshelled(scan, m.start()):
+        # PS parentheses do NOT scope Set-Location -- subshell exemption is
+        # a Bash-only semantic.
+        if subshell_exempt and already_subshelled(scan, m.start()):
             continue
         # A bare `cd <path>` (whole command, nothing chained after) is blocked
-        # too: it persists the cwd into the NEXT Bash call and every hook
+        # too: it persists the cwd into the NEXT shell call and every hook
         # resolved against it, which is the same drift. The safe escapes
         # (`cd -`, `cd ~`, `cd $HOME`, absolute paths, `( cd .. && .. )`
-        # subshells) are all exempted above or by CD_RX.
-        log_fire(f"BLOCK path={path[:40]} cmd={cmd[:80]!r}")
-        decision = {"decision": "block", "reason": REASON_TEMPLATE.format(path=path)}
+        # subshells, `Push-Location`) are all exempted above or by the regex.
+        log_fire(f"BLOCK tool={tool} path={path[:40]} cmd={cmd[:80]!r}")
+        decision = {"decision": "block", "reason": reason_tpl.format(path=path)}
         # Claude Code reads JSON decisions from stdout for newer hook APIs
         # and from stderr for older; emit on both to be safe.
         print(json.dumps(decision), file=sys.stderr)

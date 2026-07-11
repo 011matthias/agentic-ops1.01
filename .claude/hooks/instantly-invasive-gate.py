@@ -46,19 +46,36 @@ try:
 except Exception:
     session_state = None
 
+# Shared PowerShell/.cmd normalizer (matching view only; fail-open identity).
+try:
+    from _shell import normalize_command
+except Exception:
+    def normalize_command(c: str) -> str:
+        return c
+
 HOOK_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hook-log.txt")
 READ_PATHS = ("/leads/list", "/campaigns/analytics", "/analytics")
+# Instantly API URLs inside a command string (for the per-URL read-path test).
+INSTANTLY_URL = re.compile(r"api\.instantly\.ai[^\s\"')]+")
 
 # Mutating-method signal. Covers curl (-X/--request), requests/httpx/aiohttp
-# client idioms, and the urllib `Request(..., method="POST")` kwarg. Does NOT
-# include the loaders' internal `api("POST", "/leads/list")` helper idiom: that
-# would false-fire on read-only census scripts that POST to /leads/list, and
-# loaders are judged by --stage (layer B) not by content anyway.
+# client idioms, and the urllib `Request(..., method="POST")` kwarg. Also covers
+# a curl body flag (-d/--data*/-F/--form) with no explicit -X: curl sends those
+# as an implicit POST, so `curl --data '{}' .../pause` was slipping through
+# unguarded (register #11/#177 follow-up 2026-06-18, the highest-blast-radius
+# gate). Does NOT include the loaders' internal `api("POST", "/leads/list")`
+# helper idiom: that would false-fire on read-only census scripts that POST to
+# /leads/list, and loaders are judged by --stage (layer B) not by content anyway.
 MUTATING_METHOD = re.compile(
     r"""(?ix)
     (?:-X\s*|--request\s+)(?:POST|PUT|PATCH|DELETE)\b
     | \b(?:requests|httpx|session|client|aiohttp)\s*\.\s*(?:post|put|patch|delete)\b
     | \bmethod\s*=\s*["'](?:POST|PUT|PATCH|DELETE)["']
+    | (?:^|\s)(?:-d|--data(?:-raw|-binary|-urlencode)?|-F|--form)\b
+    # PowerShell Invoke-RestMethod / Invoke-WebRequest / irm / iwr. `-Body`
+    # alone is deliberately NOT mutating: unlike curl -d, -Body does not
+    # imply POST in PowerShell.
+    | (?:^|\s)-Method\s*:?\s*["']?(?:POST|PUT|PATCH|DELETE)\b
     """
 )
 MUTATING_STAGES = {
@@ -153,17 +170,31 @@ def main() -> None:
     if not cmd:
         sys.exit(0)
 
+    # Normalized matching view for layers B/C/D (PowerShell call operator,
+    # .cmd/.exe stems, backslash paths -> forward slashes). Layer A keys on
+    # the raw string (URLs and method flags survive normalization anyway).
+    view = normalize_command(cmd)
+
     # --- Layer A: api.instantly.ai literally in the command string ---
     if "api.instantly.ai" in cmd:
-        is_read_path = any(p in cmd for p in READ_PATHS)
-        if is_read_path or not MUTATING_METHOD.search(cmd):
+        # Order matters (2026-07-10 audit): the old form
+        # `if is_read_path or not MUTATING` allowed a compound one-liner
+        # (`curl .../analytics && curl -X POST .../activate`) because a
+        # read path ANYWHERE in the command short-circuited the gate.
+        # Now: no mutating method -> allow; with a mutating method, EVERY
+        # Instantly URL must be a read path, else ask.
+        if not MUTATING_METHOD.search(cmd):
             log("allow:read")
+            sys.exit(0)
+        urls = INSTANTLY_URL.findall(cmd)
+        if urls and all(any(rp in u for rp in READ_PATHS) for u in urls):
+            log("allow:read-path-mutating")
             sys.exit(0)
         _ask(cmd, "inline state-changing api.instantly.ai request")
 
     # --- Layer B: known invasive loader script, classified by --stage ---
-    if LOADER_RE.search(cmd):
-        sm = STAGE_RE.search(cmd)
+    if LOADER_RE.search(view):
+        sm = STAGE_RE.search(view)
         stage = sm.group(1).lower() if sm else None
         if stage in MUTATING_STAGES:
             _ask(cmd, f"Instantly loader mutating stage --stage {stage}")
@@ -175,8 +206,8 @@ def main() -> None:
         _ask(cmd, f"Instantly loader with unclassified stage ({stage!r})")
 
     # --- Layer C: python/uv running a non-loader .py that touches the API ---
-    if PY_INVOKE.search(cmd):
-        targets = _py_targets(cmd)
+    if PY_INVOKE.search(view):
+        targets = _py_targets(view)
         inspected_any = False
         for t in targets:
             rp = _resolve(t)

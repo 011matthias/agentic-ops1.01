@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Reconciling - {{ label }}{% endblock %}
+{% block content %}
+<style>
+  .spinner {
+    width: 20px; height: 20px; border: 3px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+<div class="card" data-job-id="{{ job_id }}">
+  <h1>Reconciling {{ label }}</h1>
+  <p class="muted">Matching charges to receipts and categorizing line items. This can take a moment when AI categorization is on; you do not need to keep this tab focused.</p>
+  <div style="display:flex; align-items:center; gap:12px; margin-top:14px;">
+    <div class="spinner" id="run-spinner"></div>
+    <span class="muted" id="run-stage">Working...</span>
+  </div>
+  <div id="run-error" class="alert" style="display:none; margin-top:16px;"></div>
+  <p style="margin-top:18px;"><a class="btn btn-secondary" href="/">Cancel and start over</a></p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const JOB_ID = "{{ job_id }}";
+  async function poll() {
+    try {
+      const res = await fetch(`/jobs/${JOB_ID}`);
+      if (res.ok) {
+        const job = await res.json();
+        if (job.status === "done" && job.run_id) {
+          window.location = `/runs/${job.run_id}`;
+          return;
+        }
+        if (job.status === "error") {
+          const box = document.getElementById("run-error");
+          box.style.display = "";
+          box.textContent = "Reconciliation failed: " + (job.error || "unknown error");
+          document.getElementById("run-stage").textContent = "Failed.";
+          document.getElementById("run-spinner").style.display = "none";
+          return;
+        }
+      }
+    } catch (e) { /* transient network error; keep polling */ }
+    setTimeout(poll, 1000);
+  }
+  poll();
+</script>
+{% endblock %}

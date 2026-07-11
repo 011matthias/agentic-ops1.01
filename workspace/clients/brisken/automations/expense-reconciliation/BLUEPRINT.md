@@ -295,9 +295,9 @@ doctor pre-flight. Path A is an edge redirect, not a matcher rewrite.
 |---|---|---|---|
 | 8.1 | Zoho Expense CSV ingest adapter — a column-map over the existing receipts-CSV path, adding the report-number and receipt-URL fields | `src/expense_recon/ingest/expense_csv.py` | **BUILT 2026-06-12.** `parse_expense_csv` / `_tolerant`: config-driven column map (required `expense_date`/`amount`/`vendor`; optional `currency`/`document_id`/`reference`/`report_number`/`receipt_url`/`receipt_name`) → `Receipt` objects, mirroring `statement_csv.py`. `Receipt` extended with `report_number`/`receipt_url`/`receipt_name` (8.3/8.5 carriers). Receipt-URL design fork supported both ways (URL column if present, else `receipt_name` filename for 8.4 to resolve). `document_id` synthesized `<report>:<row>` when unmapped. Wired into the CLI as `receipts.source: "expense_csv"`. Header errors raise, row errors → tolerant issues. 14 tests (`tests/test_expense_csv.py`), incl. an end-to-end `match_month` pairing. Built against the documented Zoho export format + ER PDF sample shapes; exact headers stay in `run.json` (no live export header shared, owner 2026-06-12). Examples: `run.with-expense-csv.example.json` + `expense.example.csv`. |
 | 8.2 | Bank-statement table + dedup + statement-number validation; one table for all banks/cards | `src/expense_recon/store/statements.py` | **BUILT 2026-06-12.** `StatementStore`: content-fingerprint dedup (global, order-independent), statement-number validation (same id + changed content raises `StatementConflictError` unless `replace=True`), `transactions()` reconstruction with a stable fingerprint-derived id, multi-account batch support (the 6-card file). 12 tests (`tests/test_statement_store.py`). Standalone value: persists + dedups the statements already in hand, independent of the Zoho gate. CLI `store:` opt-in wiring is the follow-up. |
-| 8.3 | Reports table (4–5 fields) + per-expense report cross-reference, carried into the Books export | `src/expense_recon/store/reports.py` | SCHEMA buildable now (ER-00214/215/216 fix the field set: report no., period, submitter, currency totals, status); VALUE gated on 8.1 — nothing references a report until expenses are ingested, so building the table now would be rows nothing populates. Design-locked; build when 8.1 lands. |
-| 8.4 | Receipt-URL hosting — receipt pictures live in the tool, addressable by a stable URL the Books export carries | `src/expense_recon/hosting/` | DESIGN + minimal local scheme now (content-addressed file store + URL template); the run-target decision (Chris-local vs small host) is the same open question as 5c deployment. |
-| 8.5 | Journal-entry export to Books = the one write boundary, carrying the receipt URL + report reference | `src/expense_recon/output/zoho_export.py` | EXISTS (4a file export). 4b API + 4.8 line-item idempotency stay gated on Zoho access. Path A adds the receipt-URL + report-reference columns to the existing export. |
+| 8.3 | Reports table (4–5 fields) + per-expense report cross-reference, carried into the Books export | `src/expense_recon/store/reports.py` | **BUILT 2026-06-12.** `ReportStore`: a `reports` table (header fields fixed by the ER-00214/215/216 samples — report no., name, description, submitter, period, status, ic_allocation, per-currency totals, optional header-stated base total) + a `report_expenses` cross-reference keyed by `document_id` (one expense → one report, DB-enforced). `ingest_report(expenses, *, report_number, …)` derives period / currency-totals / count from the expense set, takes the header-only fields from the caller (None over fabricated, B4), and validates: same report_number + changed content raises `ReportConflictError` unless `replace=True`; an expense naming another report is always rejected (mis-link); an expense already linked elsewhere needs `replace=True` to move. Read API: `report_for(document_id)` (the lookup 8.5 carries), `expenses_for(report_number)`, `reports`/`get_report`, `count`/`expense_count`; module-level `group_by_report` splits a flat receipt list per report. 15 tests (`tests/test_report_store.py`). Live-verified on the 8.1 example export (ER-00220 ×4 USD + ER-00221 ×1 EUR). |
+| 8.4 | Receipt-URL hosting — receipt pictures live in the tool, addressable by a stable URL the Books export carries | `src/expense_recon/hosting/` | **BUILT 2026-06-12.** `ReceiptStore`: a content-addressed local file store (`root/<hash[:2]>/<sha256><ext>`, idempotent + deduplicated, the receipt-side parallel of the 8.2 fingerprint) + a `url_template` decoupling the address from where it is served (default host-agnostic `/receipts/<relpath>`; the Chris-local-vs-small-host run-target stays the deferred 5c decision, only the template base changes). `resolve(receipt_name, search_dir)` finds a filename-only receipt (flat then recursive) and hosts it; a missing file returns None (surfaced, never a fabricated URL, B4). Module-level `resolve_receipt_urls(receipts, store, search_dir)` covers the full 8.1 fork: `receipt_url` carried through as-is, `receipt_name` hosted, neither/absent → None — this is the mapping 8.5 carries. 14 tests (`tests/test_receipt_hosting.py`). Live-verified on the 8.1 example export (2 URLs passed through, 3 filenames hosted, idempotent re-host). |
+| 8.5 | Journal-entry export to Books = the one write boundary, carrying the receipt URL + report reference | `src/expense_recon/output/zoho_export.py` | **BUILT 2026-06-12.** Two trailing columns added to the journal export: `Receipt URL` + `Report Reference`, repeating per row of an entry like `Date`/`Reference#`. `build_journal_rows` / `write_zoho_export` take optional `receipt_urls` (8.4 `resolve_receipt_urls` mapping) and `report_for` (8.3 `ReportStore.report_for`); when not wired, each receipt's own 8.1 `receipt_url` / `report_number` is the fallback, so the existing CLI path carries the references with no extra wiring. Unknown → blank, never fabricated (B4). Appended after `Credit` so the seven-column shape + positions are unchanged (existing tests green). 5 new tests; 20 in `tests/test_zoho_export.py`. Live-verified: 8.1 expenses → 8.3 reports + 8.4 hosting → export CSV with both columns populated. 4b API POST + 4.8 line-item idempotency stay gated on Zoho access. |
 
 **Slice-map effect.** Zoho's role shrinks to one import surface (8.5).
 The Expense CSV (8.1) becomes the primary receipt source in place of
@@ -306,10 +306,27 @@ own-scanner and for receipts that bypass Expense. The tool's own tables
 (8.2/8.3) become the source of truth that survives the Zoho switch-off;
 the run-log (5b) already persists decisions, these persist the inputs.
 
-**Build order under Path A:** 8.2 (done) → 8.1 (done) → 8.3 → 8.4 →
-8.5 column-add, all follow the run-log pattern. 8.1 was promoted ahead
-of 8.3/8.4 once the data ask was retired: 8.3/8.4 only carry value once
-expenses are ingested, so the ingest adapter is their precondition.
+**Build order under Path A:** 8.2 (done) → 8.1 (done) → 8.3 (done) →
+8.4 (done) → 8.5 (done) → CLI wiring (done), all follow the run-log
+pattern. 8.1 was promoted ahead of 8.3/8.4 once the data ask was retired:
+8.3/8.4 only carry value once expenses are ingested, so the ingest
+adapter is their precondition.
+
+**CLI `store:` / `hosting:` opt-in (BUILT 2026-06-12).** `cli.py` `run()`
+now, on a real (non-dry-run) run: persists the statement (8.2,
+`statement_id` defaulting to `{account_id}:{period}`) and the reports
+(8.3, `group_by_report` + `ingest_report`, derived totals/period + None
+headers per B4) when a `store:` block is present; content-addresses
+filename-only receipts (8.4, `resolve_receipt_urls`) when a `hosting:`
+block is present; and passes the URL map + `report_for` into the export
+(8.5). Both blocks are opt-in like `run_log:` — absent = no file, no
+behaviour change; the export then falls back to each receipt's own 8.1
+fields. Re-ingest conflicts (a revised statement / report under the same
+id) are surfaced as warnings, never silently replaced. 6 tests
+(`tests/test_cli_store_wiring.py`); `examples/run.with-expense-csv.example.json`
+carries the two blocks. **All five Path-A build items (8.1–8.5) plus the
+CLI wiring are now BUILT; the standalone pipeline is end-to-end on a
+single run config.**
 
 **No further client data is coming (owner-clarified 2026-06-12).** The
 ER PDFs + Chase export already in hand are illustrative SAMPLES, the
@@ -322,6 +339,73 @@ the column exists, else filename-match via `receipt_name`). The earlier
 "parked data ask" and "coverage→accuracy tuning once Chris's reconciled
 month lands" framing is retired. Accuracy gets validated in production
 by Chris's monthly runs, not by a pre-shared ground-truth month.
+
+---
+
+## Slice 9 — Cross-run learning (Phase 2, COMPLETE)
+
+**Goal.** Next month's pile is smaller because the tool remembers the
+reviewer's confirmed decisions instead of re-deriving them. Built on the
+web review-workbench (the sanctioned review surface), not the Excel
+round-trip — owner confirmed 2026-06-15.
+
+**Store** (`src/expense_recon/learning/`, opt-in SQLite `learning.sqlite`
+under the web data dir, all keys scoped by `legal_entity_id`, vendor keys
+normalized via the matcher's own `_normalize` so consult keys can't drift):
+
+| Table | Teaches | Consulted by |
+|---|---|---|
+| `merchant_category` | confirmed vendor → category (+ Zoho account) | Sort (2b) — promote to Tier-1 `LEARNED`, skip the LLM call |
+| `vendor_alias` | confirmed (statement-vendor, receipt-vendor) equivalence | Match (2c) — strengthen the token-similarity tie-break |
+| `merchant_fx` | observed implied FX rates per merchant + ccy pair (raw samples) | Judge (2c) — refine the band score, never widen the LD-5 bands |
+
+Conflict policy is latest-wins with a `decision_count` / `confirmed_count`
+audit trail (single-user tool, no quorum at n=1).
+
+**PR order: 2a → 2d → 2b → 2c** — the inspect/forget/reset escape hatch
+(2d) lands before any consult path, since the correction tool must exist
+before learned data can influence output.
+
+- **2a — capture (BUILT 2026-06-15, this PR).** `LearningStore` +
+  `learn_from_run` harvester + a "Commit to memory" action on the
+  workbench (`POST /runs/{id}/commit-memory`). EXPLICIT finalize gate
+  (owner decision #2): alias + FX from CONFIRMED matches only; merchant
+  category from explicit reclassifications only (a confirmed match does
+  not by itself confirm the LLM's category guess); a vendor whose
+  overrides disagree is skipped, never taught a wrong single mapping.
+  Capture-only — nothing reads the store yet. 15 tests
+  (`test_learning_store.py`, `test_learning_capture.py`,
+  `test_web_commit.py`); suite 288 green; `calibrate` exit 0.
+- **2d — `expense-recon memory` CLI (SHIPPED PR #161):** list / forget /
+  reset (reset is preview-unless-`--yes`), mirroring `runlog_cli`. Landed
+  before consult, by design.
+- **2b — consult in Sort (BUILT, this PR; two commits, gate first).**
+  Commit 1: a segmented categorization-accuracy gate in `calibrate`
+  (labeled fixture; overall floor at baseline + a changed-subset floor that
+  ratchets to 1.0 once consult lands, so a regression in the auto-applied
+  population trips on its own) — landed BEFORE the consult, per the redline.
+  Commit 2: a learned merchant->category auto-applies as Tier-1 `LEARNED`
+  with a provenance label, but ONLY on the vendor-fallback path — a
+  confident line read always wins (fallback, not override). The
+  override-retrains loop bumps `decision_count`/`last_confirmed`. Cross-run
+  round-trip proven end-to-end; suite 310 green; `calibrate` overall 7/7,
+  subset 4/4, exit 0.
+- **2c — consult in Match (BUILT, last consult piece).** `MatchingConfig`
+  gains optional `vendor_aliases` (a confirmed alias pins `_vendor_score`
+  to 1.0, so a truncated bank string wins the tie-break over a fuzzy decoy)
+  + `merchant_fx` (a per-merchant FX mean re-centers the FX amount
+  sub-score WITHIN the LD-5 band, never widening it). Both feed
+  scoring/tie-break only, never band membership or buckets, so the
+  reconciliation guarantee is untouched; defaults empty => matcher is
+  byte-for-byte its old self. Populated in `reconcile()` from a `MatchMemory`
+  (web passes it; CLI via the `learning:` block). 5 tests; suite 315 green;
+  `calibrate` exit 0.
+
+**Phase 2 is complete:** capture (2a) + escape hatch (2d) + Sort consult
+with the categorization gate (2b) + Match consult (2c). Memory now flows
+end-to-end: a confirmed decision in one month upgrades categorization and
+sharpens matching the next, always with visible provenance and a correction
+path, and never at the cost of the reconciliation guarantee.
 
 ---
 
@@ -628,6 +712,7 @@ loop into the posting system.
 | 4.8 | Idempotency: don't double-post same line item (run-log integration, slice 5) | `src/expense_recon/zoho/idempotent.py` |
 | 4.9 | Config extension: `zoho:` block (export path OR API creds) | `cli.py` |
 | 4.10 | End-to-end tests on Zoho export format | `tests/test_zoho_export.py` |
+| 4.11 | Pre-write COA validation gate + provisioning | `src/expense_recon/coa_gate.py`, `coa_provision.py` |
 
 **Categorization strategy (per LD-2):**
 
@@ -666,6 +751,42 @@ setup. v2 spec §21.2 aligned path.
 **Decision point:** start with 4a (file export — works today, no API
 dependency), add 4b only if Chris finds the upload step painful after
 month 2.
+
+**Pre-write COA validation gate (4.11, BUILT 2026-07-01):** before the
+journal export is written, every posting account is validated against the
+TARGET legal entity's live Zoho Books chart. A missing / unknown / inactive
+/ DO-NOT-USE / non-leaf / out-of-scope account is diverted to review
+(account blanked, source forced REVIEW), so a bad account can never resolve
+into the export. Pure gate in `coa_gate.py` (`CoaGate`, opt-in on the
+`write_zoho_export` seam; `None` = prior behaviour byte for byte); driven by
+a `coa_validation:` block (`enabled`, `chart_path`, `org_id`, `scope_groups`,
+`entity_label`). One entity per run. Target entities + derived card-expense
+`scope_groups` (Payroll/tax, COGS, depreciation, R&D excluded):
+
+| Entity | org_id | scope_groups |
+|---|---|---|
+| Corporate Services | 822741658 | `MS \| OpeEx`, `Bank Fees and Charges` |
+| Cloud Services | 697686691 | `Travel Expense`, `Marketing & Selling Expenses`, `Professional Fees`, `Office Infra and Admin`, `IT: Computer and Internet Expenses`, `Bank Fees and Charges` |
+
+**Chart provisioning (extends 5.3, decided 2026-07-01).** The Books COA JSON
+(`{ "<org_id>": { "org", "accounts" }, ... }`, 8 orgs, 1,252 accounts) is
+sensitive client financial data: it is never committed and never baked into
+the public image. Two runtime homes:
+
+- **CLI / local (brisken-config).** The JSON ships in the private
+  brisken-config repo beside the run configs (5.3/5.4 model, extended from
+  the CSV to the multi-entity JSON); a run config references it by relative
+  `chart_path`. Wired via `cli._build_coa_gate`. Example:
+  `examples/run.with-coa-validation.example.json`.
+- **Hosted web (Fly `/data`).** The JSON lives on the `recon_data` volume
+  (same private home as the run DB + receipts, `fra` residency), NOT the
+  image. Web runs carry no hand-written config, so `coa_provision.py` injects
+  a per-entity `coa_validation` block into each run keyed on the paying
+  entity, read from a provisioning file at `EXPENSE_RECON_COA_PROVISION`
+  (`/data/coa-provision.json`). Env unset => no injection (fail-open).
+  Example shape: `examples/coa-provision.example.json`; the real file (real
+  org_ids) lives in gitignored `context/coa-provision.json`, uploaded to
+  `/data` at deploy time.
 
 **Acceptance criteria:**
 

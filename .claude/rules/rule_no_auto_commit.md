@@ -190,10 +190,14 @@ memory (depends on agent recall).
 ## Enforcement
 
 Honored at decision time as a B-gate (B6). The structural backstop
-is `.claude/hooks/no-auto-commit-gate.py` (PreToolUse:Bash, wired
-in `tools/wire-hooks.py` as one of the canonical hooks). It:
+is `.claude/hooks/no-auto-commit-gate.py` (PreToolUse:Bash|PowerShell,
+wired in `tools/wire-hooks.py` as one of the canonical hooks). It:
 
-1. Detects ship-class commands.
+1. Detects ship-class commands on a normalized view of the command
+   (`.claude/hooks/_shell.py`: PowerShell call operator stripped,
+   `.cmd`/`.exe` program paths reduced to their stem, backslashes
+   normalized) so Windows spellings like
+   `& "$dir\vercel.cmd" deploy --prod` cannot evade the patterns.
 2. Allows the prototype carve-out (100% local-web) silently.
 3. Classifies the band from the command + live current branch
    (`git rev-parse --abbrev-ref HEAD`). Band 1 (feature-branch

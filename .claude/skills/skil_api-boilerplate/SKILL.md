@@ -59,7 +59,7 @@ class Customer(BaseModel):
 
 ### Step 3: Generate Client
 
-Use `.claude/skills/api-boilerplate/templates/api-client-template.py` as base:
+Use `.claude/skills/skil_api-boilerplate/templates/api-client-template.py` as base:
 - Configure auth method
 - Add typed methods for each endpoint
 - Include error handling
@@ -133,7 +133,7 @@ This pattern keeps files manageable (~100-200 lines each) while providing a unif
 
 ## Template Reference
 
-See `.claude/skills/api-boilerplate/templates/api-client-template.py` for the base structure.
+See `.claude/skills/skil_api-boilerplate/templates/api-client-template.py` for the base structure.
 
 ## Example Output
 

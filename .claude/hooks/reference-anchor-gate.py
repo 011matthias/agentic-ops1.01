@@ -16,18 +16,13 @@ import json
 import os
 import sys
 
-HOOK_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hook-log.txt")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    import _scope  # canonical path->category scope predicates (shared)
+except Exception:  # never let a missing shared lib brick the hook
+    _scope = None
 
-DELIVERABLE_SEGMENTS = [
-    "/deliverables/",
-    "/hero-exports/",
-    "/notion-pages/",
-    "/platform/public/",
-    "/platform/src/content/proposals/",
-    "/doc-site/",
-    "/comms-log",
-    "/proposals/",
-]
+HOOK_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hook-log.txt")
 
 
 def log_fire(msg: str) -> None:
@@ -36,19 +31,6 @@ def log_fire(msg: str) -> None:
             f.write(f"{datetime.datetime.now().isoformat()} reference-anchor-gate {msg}\n")
     except Exception:
         pass
-
-
-def normalize(path: str) -> str:
-    return (path or "").replace("\\", "/").lower()
-
-
-def in_deliverable_scope(path: str) -> bool:
-    p = normalize(path)
-    if not p:
-        return False
-    if "workspace/clients/" in p and "/automations/" not in p and "/specs/" not in p and "/context/" not in p:
-        return True
-    return any(seg in p for seg in DELIVERABLE_SEGMENTS)
 
 
 def emit(text: str) -> None:
@@ -70,7 +52,7 @@ def main() -> int:
     if event.get("tool_name") not in ("Write", "Edit"):
         return 0
     file_path = (event.get("tool_input") or {}).get("file_path", "")
-    if not in_deliverable_scope(file_path):
+    if not _scope or not _scope.in_reference_anchor_scope(file_path):
         return 0
 
     log_fire(f"FIRE path={file_path}")

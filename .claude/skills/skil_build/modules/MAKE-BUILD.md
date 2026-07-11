@@ -139,7 +139,7 @@ If the scenario has an external trigger (webhook from a form, API, or third-part
 ## Step 6: Test
 
 ### Pre-Test: Check Fixture Registry
-Before testing, check `workspace/clients/{client}/context/test-fixtures.md` for existing observability and control fixtures (Sheet Readers, Cell Writers, etc.). Use these instead of creating disposable utilities. See `.claude/rules/behaviors.md` for outcome verification and test fixture conventions.
+Before testing, check `workspace/clients/{client}/context/test-fixtures.md` for existing observability and control fixtures (Sheet Readers, Cell Writers, etc.). Use these instead of creating disposable utilities. See `.claude/rules/rule_behaviors.md` for outcome verification and test fixture conventions.
 
 ### Run Once
 1. Ensure scheduling is **OFF** (toggle in bottom-left)
@@ -248,7 +248,7 @@ If MCP tools are unavailable (no API token, free plan, etc.), build directly in 
 5. **Configure Settings** -- Max cycles, sequential processing, data confidentiality
 6. **Test & Activate** -- Follow Steps 6-8 above
 
-Reference: `.claude/rules/make/project-setup.md` for detailed UI building guidelines.
+Reference: `../../skil_make-mcp-tools-expert/modules/PROJECT-SETUP.md` for detailed UI building guidelines.
 
 ---
 

@@ -12,9 +12,10 @@ Tier 2 (VENDOR ⚠).
 
 Row coloring per LD-4:
 
-    LINE   → green   (Tier 1, trusted)
-    VENDOR → yellow  (Tier 2, confirm)
-    REVIEW → orange  (Tier 3, must touch)
+    LINE    → green   (Tier 1, trusted)
+    LEARNED → blue    (Tier 1, recalled from a prior confirmed decision)
+    VENDOR  → yellow  (Tier 2, confirm)
+    REVIEW  → orange  (Tier 3, must touch)
     Unmatched tx / receipt → red-ish
 """
 from __future__ import annotations
@@ -41,6 +42,7 @@ from ..matching.types import (
 
 
 FILL_LINE = PatternFill("solid", fgColor="FFC6EFCE")       # green
+FILL_LEARNED = PatternFill("solid", fgColor="FFBDD7EE")    # blue (Tier 1, recalled)
 FILL_VENDOR = PatternFill("solid", fgColor="FFFFEB9C")     # yellow
 FILL_REVIEW = PatternFill("solid", fgColor="FFFCD5B4")     # orange
 FILL_UNMATCHED = PatternFill("solid", fgColor="FFF8CBAD")  # red-ish
@@ -93,6 +95,8 @@ class _Row:
 def _fill_for_source(source: ClassificationSource) -> PatternFill:
     if source is ClassificationSource.LINE:
         return FILL_LINE
+    if source is ClassificationSource.LEARNED:
+        return FILL_LEARNED
     if source is ClassificationSource.VENDOR:
         return FILL_VENDOR
     return FILL_REVIEW

@@ -1,0 +1,558 @@
+{% extends "base.html" %}
+{% block title %}{{ view.label }} - Reconciliation{% endblock %}
+{% block content %}
+{% set s = view.summary %}
+<style>
+  .txn.selected { box-shadow: 0 0 0 2px var(--accent); }
+  .btn.disabled { opacity: .45; pointer-events: none; cursor: not-allowed; }
+  #ready-bar .pill { font-weight: 600; }
+  #ready-bar.ready .pill { color: var(--green); }
+  #ready-bar.notready .pill { color: var(--orange); }
+  .kbd-hint kbd {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px;
+  }
+</style>
+{% if s.ai_unavailable %}
+<div style="background:var(--orange-bg); color:var(--orange); border:1px solid var(--orange); border-radius:8px; padding:12px 14px; margin-bottom:16px;">
+  <strong>AI categorization was requested, but no API key is set on the server.</strong>
+  This run used the keyword classifier instead, so the reconciliation is complete. To turn on AI categorization, restart the server with OPENAI_API_KEY set in its environment.
+</div>
+{% endif %}
+{% if s.n_unknown_currency %}
+<div style="background:var(--orange-bg); color:var(--orange); border:1px solid var(--orange); border-radius:8px; padding:12px 14px; margin-bottom:16px;">
+  <strong>{{ s.n_unknown_currency }} receipt(s) have an unknown currency.</strong>
+  The currency was not in the data and was not assumed, so these receipts were not matched. They are listed under "Receipts with no matching transaction" below. Set each one's currency in the source export (or the receipts file) and re-run so they can reconcile.
+</div>
+{% endif %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
+    <div>
+      <h1>{{ view.label }}</h1>
+      <p class="muted">Run {{ view.run_id }} &middot; {{ view.created_at }}
+        &middot; AI categorization {{ "on" if view.llm_enabled else "off" }}
+        {% if s.llm_cost_usd and s.llm_cost_usd not in ("0", "0.0") %}&middot; est. ${{ s.llm_cost_usd }}{% endif %}
+      </p>
+    </div>
+    <div>
+      <button class="btn btn-secondary" onclick="commitMemory()" title="Teach the tool from the matches you confirmed and the categories you reclassified, so next month is less work.">Commit to memory</button>
+      <a class="btn btn-secondary" href="/">New run</a>
+    </div>
+  </div>
+  <p id="memory-status" class="muted" style="margin-top:10px; display:none;"></p>
+
+  <div class="stats" style="margin-top:16px;">
+    <div class="stat"><div class="stat-value">{{ s.n_transactions }}</div><div class="stat-label">Transactions</div></div>
+    <div class="stat"><div class="stat-value" id="stat-reconciled">{{ s.n_reconciled }}</div><div class="stat-label">Reconciled</div></div>
+    <div class="stat"><div class="stat-value" id="stat-review">{{ s.n_review }}</div><div class="stat-label">Needs review</div></div>
+    <div class="stat"><div class="stat-value" id="stat-unmatched">{{ s.n_unmatched_tx }}</div><div class="stat-label">Unmatched</div></div>
+    <div class="stat"><div class="stat-value" id="stat-rate">{{ s.match_rate }}%</div><div class="stat-label">Match rate</div></div>
+    <div class="stat"><div class="stat-value">{{ "yes" if s.invariant_ok else "NO" }}</div><div class="stat-label">All accounted for</div></div>
+    <div class="stat"><div class="stat-value">{{ s.n_duplicate_groups }}</div><div class="stat-label">Dup groups</div></div>
+    <div class="stat"><div class="stat-value">{{ s.n_learned_lines }}</div><div class="stat-label">Auto-filled (memory)</div></div>
+    {% if s.n_unknown_currency %}<div class="stat"><div class="stat-value" style="color:var(--orange);">{{ s.n_unknown_currency }}</div><div class="stat-label">Unknown currency</div></div>{% endif %}
+  </div>
+  {% if s.n_parse_errors %}
+  <p class="muted" style="margin-top:10px;">{{ s.n_parse_errors }} row(s) could not be parsed (see foot of page).</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Transactions</h2>
+  <input type="text" id="filter" placeholder="Filter by vendor..." style="margin-bottom:6px;" oninput="filterRows()">
+  <p class="muted kbd-hint" style="margin:0 0 8px; font-size:12px;">
+    Keyboard: <kbd>j</kbd>/<kbd>k</kbd> move &middot; <kbd>c</kbd> confirm &middot; <kbd>r</kbd> reject &middot; <kbd>e</kbd> edit category &middot; <kbd>Ctrl/&#8984;+K</kbd> filter
+  </p>
+  {% if s.n_learned_lines %}
+  <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text); margin:0 0 14px;">
+    <input type="checkbox" id="only-learned" style="width:auto;" onchange="filterRows()">
+    Show only rows auto-filled from memory ({{ s.n_learned_lines }})
+  </label>
+  {% endif %}
+
+  {% for row in view.rows %}
+  <div class="txn" data-vendor="{{ row.vendor | lower }}" data-txid="{{ row.transaction_id }}" data-learned="{{ '1' if row.has_learned else '0' }}" style="border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:12px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+      <div>
+        <span class="badge {{ row.effective_bucket }}" id="status-{{ row.transaction_id }}">{{ row.effective_bucket }}</span>
+        {% if row.triage_score is not none %}<span class="muted mono" style="font-size:12px;">{{ row.triage_score }}/100</span>{% endif %}
+        <strong style="margin-left:8px;">{{ row.vendor }}</strong>
+        <span class="muted">&middot; {{ row.date }} &middot; {{ row.account_id }}</span>
+      </div>
+      <div class="mono">{{ row.amount }} {{ row.currency }}</div>
+    </div>
+
+    {% if row.candidates %}
+    <div style="margin-top:10px;">
+      {% for c in row.candidates %}
+      <div style="border-top:1px solid var(--border); padding-top:10px; margin-top:10px;">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          {% if row.candidates | length > 1 %}
+          <input type="radio" name="pick-{{ row.transaction_id }}" value="{{ c.document_id }}"
+                 {% if c.is_chosen %}checked{% endif %} style="width:auto;">
+          {% endif %}
+          <span class="badge {{ 'review' if c.requires_review else 'matched' }}">{{ c.match_type }}</span>
+          {% if c.receipt %}
+          <strong>{{ c.receipt.vendor }}</strong>
+          <span class="muted">&middot; {{ c.receipt.date }} &middot; {{ c.receipt.total }} {{ c.receipt.currency }}</span>
+          {% if c.receipt.report_number %}<span class="muted mono">&middot; {{ c.receipt.report_number }}</span>{% endif %}
+          {% if c.receipt.payment_mode or c.receipt.zoho_category or c.receipt.reimbursable is sameas true %}
+          <div class="muted" style="font-size:12px; margin-top:2px;">
+            {% if c.receipt.payment_mode %}Paid via: {{ c.receipt.payment_mode }}{% endif %}
+            {% if c.receipt.zoho_category %} &middot; Zoho: {{ c.receipt.zoho_category }}{% endif %}
+            {% if c.receipt.reimbursable is sameas true %} &middot; <span style="color:var(--orange); font-weight:600;">Reimbursable</span>{% endif %}
+          </div>
+          {% endif %}
+          {% endif %}
+          {% if c.amount_pct is not none %}
+          <details style="font-size:12px;">
+            <summary class="muted" style="cursor:pointer; list-style:revert;">score {{ c.score }}/100 &middot; conf {{ "%.2f"|format(c.confidence) }}</summary>
+            <div class="muted" style="margin-top:4px; padding-left:4px;">
+              amount <span class="mono">{{ c.amount_pct }}/100</span> &middot;
+              date <span class="mono">{{ c.date_pct }}/100</span> &middot;
+              vendor <span class="mono">{{ c.vendor_pct }}/100</span><br>
+              {{ c.reason }}
+            </div>
+          </details>
+          {% else %}
+          <span class="muted" style="font-size:12px;">conf {{ "%.2f"|format(c.confidence) }} &middot; {{ c.reason }}</span>
+          {% endif %}
+        </div>
+
+        {% if c.receipt and c.receipt.line_items %}
+        <table style="margin-top:8px;">
+          <thead><tr><th>Line item</th><th class="right">Amount</th><th>Category</th><th>Source</th></tr></thead>
+          <tbody>
+            {% for li in c.receipt.line_items %}
+            <tr>
+              <td>{{ li.description }}</td>
+              <td class="right mono">{{ li.line_total }}</td>
+              <td>
+                <select data-doc="{{ c.receipt.document_id }}" data-line="{{ li.index }}" onchange="setCategory(this)">
+                  <option value="">(unset)</option>
+                  {% for opt in view.category_options %}
+                  <option value="{{ opt }}" {% if li.category == opt %}selected{% endif %}>{{ opt }}</option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td class="muted">{{ li.source }}{% if li.provenance %}<br><span style="font-size:11px;">{{ li.provenance }}</span>{% endif %}
+                {% if li.is_learned %}
+                <br><button class="btn btn-secondary btn-small" style="margin-top:4px;"
+                    data-entity="{{ c.receipt.legal_entity_id }}" data-vendor="{{ c.receipt.vendor }}"
+                    data-doc="{{ c.receipt.document_id }}" data-line="{{ li.index }}"
+                    onclick="forgetAndReclassify(this)">This was wrong</button>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="muted" style="margin-top:8px;">No candidate receipt.</div>
+    {% endif %}
+
+    {% if row.near_miss %}
+    <div class="muted" style="margin-top:8px; font-size:12px;">
+      Nearest free receipt: <strong>{{ row.near_miss.vendor }}</strong>
+      {{ row.near_miss.total }} {{ row.near_miss.currency }}
+      ({{ row.near_miss.amount_diff }} off{% if row.near_miss.date_diff_days is not none %}, {{ row.near_miss.date_diff_days }} day(s) off{% endif %})
+    </div>
+    {% endif %}
+
+    <div style="margin-top:12px; display:flex; gap:8px;">
+      <button class="btn btn-small" onclick="confirmRow('{{ row.transaction_id }}')">Confirm</button>
+      <button class="btn btn-secondary btn-small" onclick="setDecision('{{ row.transaction_id }}','rejected',null)">Reject</button>
+      <button class="btn btn-secondary btn-small" onclick="setDecision('{{ row.transaction_id }}','pending',null)">Reset</button>
+    </div>
+
+    {% if row.effective_bucket == "unmatched" %}
+    <div style="margin-top:10px; padding-top:10px; border-top:1px dashed var(--border); display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <span class="muted" style="font-size:12px;">Match a receipt by hand:</span>
+      <select id="mm-{{ row.transaction_id }}" style="max-width:420px; width:auto;">
+        <option value="">Pick a receipt...</option>
+        {% for ar in view.assignable_receipts %}{% if ar.legal_entity_id == row.legal_entity_id %}
+        <option value="{{ ar.document_id }}">{{ ar.vendor }} &middot; {{ ar.total }} {{ ar.currency }}{% if ar.held_by %} &middot; (steal from {{ ar.held_by }}){% else %} &middot; free{% endif %}</option>
+        {% endif %}{% endfor %}
+      </select>
+      <button class="btn btn-small" onclick="manualMatch('{{ row.transaction_id }}', this)">Assign</button>
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+{% if view.unmatched_transactions %}
+<div class="card">
+  <h2>Transactions with no matching receipt ({{ view.unmatched_transactions | length }})</h2>
+  <table>
+    <thead><tr><th>Vendor</th><th>Date</th><th>Account</th><th class="right">Amount</th></tr></thead>
+    <tbody>
+      {% for t in view.unmatched_transactions %}
+      <tr>
+        <td>{{ t.vendor }} <span class="muted mono">{{ t.transaction_id }}</span></td>
+        <td>{{ t.date }}</td>
+        <td class="muted">{{ t.account_id }}</td>
+        <td class="right mono">{{ t.amount }} {{ t.currency }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if view.duplicate_charges or view.duplicate_receipts %}
+<div class="card">
+  <h2>Possible duplicates ({{ (view.duplicate_charges | length) + (view.duplicate_receipts | length) }})</h2>
+  <p class="muted" style="margin-top:0;">Flagged for review only; nothing is removed. Confirm whether each group is a genuine double-charge or a re-uploaded receipt.</p>
+  {% if view.duplicate_charges %}
+  <h3 style="font-size:14px; margin:14px 0 6px;">Charges billed more than once</h3>
+  {% for grp in view.duplicate_charges %}
+  <table style="margin-bottom:10px;">
+    <thead><tr><th>Vendor</th><th>Date</th><th>Account</th><th class="right">Amount</th></tr></thead>
+    <tbody>
+      {% for t in grp %}
+      <tr>
+        <td>{{ t.vendor }} <span class="muted mono">{{ t.transaction_id }}</span></td>
+        <td>{{ t.date }}</td>
+        <td class="muted">{{ t.account_id }}</td>
+        <td class="right mono">{{ t.amount }} {{ t.currency }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endfor %}
+  {% endif %}
+  {% if view.duplicate_receipts %}
+  <h3 style="font-size:14px; margin:14px 0 6px;">Receipts uploaded more than once</h3>
+  {% for grp in view.duplicate_receipts %}
+  <table style="margin-bottom:10px;">
+    <thead><tr><th>Receipt</th><th>Date</th><th class="right">Total</th><th>Reference</th></tr></thead>
+    <tbody>
+      {% for r in grp %}
+      <tr>
+        <td>{{ r.vendor }} <span class="muted mono">{{ r.document_id }}</span></td>
+        <td>{{ r.date }}</td>
+        <td class="right mono">{{ r.total }} {{ r.currency }}</td>
+        <td class="muted">{{ r.reference }}{% if r.report_number %} &middot; {{ r.report_number }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endfor %}
+  {% endif %}
+</div>
+{% endif %}
+
+{% if view.unmatched_receipts %}
+<div class="card">
+  <h2>Receipts with no matching transaction ({{ view.unmatched_receipts | length }})</h2>
+  <table>
+    <thead><tr><th>Receipt</th><th>Date</th><th class="right">Total</th><th>Reference</th></tr></thead>
+    <tbody>
+      {% for r in view.unmatched_receipts %}
+      <tr>
+        <td>{{ r.vendor }} <span class="muted mono">{{ r.document_id }}</span></td>
+        <td>{{ r.date }}</td>
+        <td class="right mono">{{ r.total }} {% if r.currency_unknown %}<span style="color:var(--orange); font-weight:600;" title="Currency unknown; set it so this receipt can reconcile.">currency unknown</span>{% else %}{{ r.currency }}{% endif %}</td>
+        <td class="muted">{{ r.reference }}{% if r.report_number %} &middot; {{ r.report_number }}{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if view.parse_errors %}
+<div class="card">
+  <h2>Parse errors ({{ view.parse_errors | length }})</h2>
+  <table>
+    <thead><tr><th>File</th><th>Row</th><th>Message</th></tr></thead>
+    <tbody>
+      {% for e in view.parse_errors %}
+      <tr><td class="mono">{{ e[0] }}</td><td class="mono">{{ e[1] }}</td><td>{{ e[2] }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<div style="height:64px"></div>
+<div id="ready-bar" class="{{ 'ready' if s.ready_to_post else 'notready' }}"
+     style="position:fixed; left:0; right:0; bottom:0; z-index:20; background:var(--surface); border-top:1px solid var(--border); box-shadow:0 -2px 8px rgba(0,0,0,.10);">
+  <div style="max-width:1100px; margin:0 auto; padding:10px 24px; display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;">
+    <div style="font-size:13px;">
+      <span class="pill" id="rb-headline">{{ "Ready to post" if s.ready_to_post else "Not ready to post" }}</span>
+      <span class="muted">&middot; <span id="rb-undecided">{{ s.n_undecided }}</span> undecided</span>
+      <span class="muted">&middot; unreconciled <span id="rb-unreconciled" class="mono">{% for ccy, amt in s.unreconciled_by_ccy.items() %}{{ amt }} {{ ccy }}{% if not loop.last %} &middot; {% endif %}{% else %}none{% endfor %}</span></span>
+      <span class="muted">&middot; <span id="rb-unmapped">{{ s.n_unmapped_accounts }}</span> line(s) need a category</span>
+    </div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button id="confirm-all-btn" class="btn btn-secondary btn-small" onclick="confirmAllMatched()">Confirm all matched</button>
+      <a id="download-zoho" class="btn btn-secondary btn-small {{ '' if s.ready_to_post else 'disabled' }}"
+         title="{{ 'Download the Zoho Books journal import' if s.ready_to_post else 'Clear the undecided rows first' }}"
+         {% if s.ready_to_post %}href="/runs/{{ view.run_id }}/zoho.csv"{% endif %}>Zoho journal (.csv)</a>
+      <a id="download-reconciled" class="btn btn-secondary btn-small {{ '' if s.ready_to_post else 'disabled' }}"
+         title="{{ 'Download the flat reconciled data' if s.ready_to_post else 'Clear the undecided rows first' }}"
+         {% if s.ready_to_post %}href="/runs/{{ view.run_id }}/reconciled.csv"{% endif %}>Reconciled data (.csv)</a>
+      <a id="download-report" class="btn btn-small {{ '' if s.ready_to_post else 'disabled' }}"
+         title="{{ 'Download the review report' if s.ready_to_post else 'Clear the undecided rows first' }}"
+         {% if s.ready_to_post %}href="/runs/{{ view.run_id }}/report.xlsx"{% endif %}>Download report (.xlsx)</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const RUN_ID = "{{ view.run_id }}";
+
+  // Take over scroll handling so runFlash's scrollIntoView wins: the browser's
+  // own scroll restoration on reload otherwise fires afterwards and snaps back
+  // to the pre-reload offset, hiding the row we just changed.
+  if ("scrollRestoration" in history) { history.scrollRestoration = "manual"; }
+
+  function badgeFor(bucket) { return bucket; }
+
+  // Single-row reload feedback. A manual match / reset triggers a full reload
+  // (needed because the change can also free a "stolen-from" charge), but the
+  // affected row re-sorts into a different group, often far out of view. Without
+  // a cue the reload reads as "nothing happened" and the button feels dead.
+  // flashAfterReload stashes the txid; runFlash (called at end of load) scrolls
+  // it back into view and flashes it.
+  function flashAfterReload(txId) {
+    try { sessionStorage.setItem("erc-flash", txId); } catch (_) {}
+  }
+  function runFlash() {
+    let id = null;
+    try { id = sessionStorage.getItem("erc-flash"); sessionStorage.removeItem("erc-flash"); } catch (_) {}
+    if (!id) return;
+    const row = document.querySelector('.txn[data-txid="' + id + '"]');
+    if (!row) return;
+    row.scrollIntoView({ block: "center" });
+    row.style.transition = "box-shadow .25s ease";
+    row.style.boxShadow = "0 0 0 3px var(--green)";
+    setTimeout(function () { row.style.boxShadow = ""; }, 1800);
+  }
+
+  async function setDecision(txId, status, chosenDocId) {
+    const res = await fetch(`/runs/${RUN_ID}/decisions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transaction_id: txId, status: status, chosen_document_id: chosenDocId })
+    });
+    if (!res.ok) { alert("Could not save that decision."); return; }
+    const data = await res.json();
+    const effective = status === "confirmed" ? "reconciled" : (status === "rejected" ? "unmatched" : null);
+    const badge = document.getElementById("status-" + txId);
+    if (badge && effective) { badge.className = "badge " + effective; badge.textContent = effective; }
+    if (status === "pending") {
+      // Reload to recompute the original bucket for this row, then flash it.
+      flashAfterReload(txId);
+      window.location.reload(); return;
+    }
+    if (data.summary) {
+      document.getElementById("stat-reconciled").textContent = data.summary.n_reconciled;
+      document.getElementById("stat-review").textContent = data.summary.n_review;
+      document.getElementById("stat-unmatched").textContent = data.summary.n_unmatched_tx;
+      document.getElementById("stat-rate").textContent = data.summary.match_rate + "%";
+      updateReadyBar(data.summary);
+    }
+  }
+
+  function updateReadyBar(s) {
+    if (!s) return;
+    const bar = document.getElementById("ready-bar");
+    document.getElementById("rb-undecided").textContent = s.n_undecided;
+    document.getElementById("rb-unmapped").textContent = s.n_unmapped_accounts;
+    const ccy = s.unreconciled_by_ccy || {};
+    const parts = Object.keys(ccy).map(function (c) { return ccy[c] + " " + c; });
+    document.getElementById("rb-unreconciled").textContent = parts.length ? parts.join(" · ") : "none";
+    const dl = document.getElementById("download-report");
+    const zoho = document.getElementById("download-zoho");
+    const recon = document.getElementById("download-reconciled");
+    const head = document.getElementById("rb-headline");
+    if (s.ready_to_post) {
+      bar.className = "ready";
+      head.textContent = "Ready to post";
+      dl.classList.remove("disabled");
+      dl.setAttribute("href", `/runs/${RUN_ID}/report.xlsx`);
+      dl.setAttribute("title", "Download the review report");
+      zoho.classList.remove("disabled");
+      zoho.setAttribute("href", `/runs/${RUN_ID}/zoho.csv`);
+      zoho.setAttribute("title", "Download the Zoho Books journal import");
+      recon.classList.remove("disabled");
+      recon.setAttribute("href", `/runs/${RUN_ID}/reconciled.csv`);
+      recon.setAttribute("title", "Download the flat reconciled data");
+    } else {
+      bar.className = "notready";
+      head.textContent = "Not ready to post";
+      dl.classList.add("disabled");
+      dl.removeAttribute("href");
+      dl.setAttribute("title", "Clear the undecided rows first");
+      zoho.classList.add("disabled");
+      zoho.removeAttribute("href");
+      zoho.setAttribute("title", "Clear the undecided rows first");
+      recon.classList.add("disabled");
+      recon.removeAttribute("href");
+      recon.setAttribute("title", "Clear the undecided rows first");
+    }
+  }
+
+  async function confirmAllMatched() {
+    const btn = document.getElementById("confirm-all-btn");
+    btn.disabled = true;
+    const original = btn.textContent;
+    btn.textContent = "Confirming...";
+    const res = await fetch(`/runs/${RUN_ID}/decisions/confirm-matched`, { method: "POST" });
+    if (!res.ok) {
+      alert("Could not confirm the matched rows.");
+      btn.disabled = false; btn.textContent = original; return;
+    }
+    // Many rows change bucket at once; reload to re-render them all.
+    window.location.reload();
+  }
+
+  async function manualMatch(txId, btn) {
+    const sel = document.getElementById("mm-" + txId);
+    const doc = sel ? sel.value : "";
+    if (!doc) { alert("Pick a receipt first."); return; }
+    if (btn) { btn.disabled = true; btn.textContent = "Assigning..."; }
+    const res = await fetch(`/runs/${RUN_ID}/manual-match`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transaction_id: txId, document_id: doc })
+    });
+    if (!res.ok) {
+      let msg = "Could not assign that receipt.";
+      try { const e = await res.json(); if (e.error) msg = e.error; } catch (_) {}
+      if (btn) { btn.disabled = false; btn.textContent = "Assign"; }
+      alert(msg); return;
+    }
+    // The assignment can also free a stolen-from charge; reload to re-render,
+    // then scroll the now-reconciled row back into view and flash it.
+    flashAfterReload(txId);
+    window.location.reload();
+  }
+
+  function confirmRow(txId) {
+    const picked = document.querySelector(`input[name="pick-${txId}"]:checked`);
+    setDecision(txId, "confirmed", picked ? picked.value : null);
+  }
+
+  async function setCategory(sel) {
+    const res = await fetch(`/runs/${RUN_ID}/categories`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        document_id: sel.getAttribute("data-doc"),
+        line_index: parseInt(sel.getAttribute("data-line"), 10),
+        category: sel.value || null
+      })
+    });
+    if (!res.ok) { alert("Could not save that category."); return; }
+    sel.style.borderColor = "var(--green)";
+  }
+
+  async function commitMemory() {
+    const note = document.getElementById("memory-status");
+    note.style.display = "";
+    note.style.color = "var(--muted)";
+    note.textContent = "Saving what you confirmed...";
+    const res = await fetch(`/runs/${RUN_ID}/commit-memory`, { method: "POST" });
+    if (!res.ok) {
+      note.style.color = "var(--orange)";
+      note.textContent = "Could not commit to memory.";
+      return;
+    }
+    const data = await res.json();
+    const l = data.learned || {};
+    note.style.color = "var(--green)";
+    note.textContent =
+      `Learned: ${l.merchant_categories || 0} merchant categories, ` +
+      `${l.vendor_aliases || 0} vendor aliases, ${l.merchant_fx || 0} FX samples ` +
+      `(from ${l.confirmed_pairs || 0} confirmed matches` +
+      (l.skipped_mixed_category ? `; ${l.skipped_mixed_category} mixed-category vendor(s) skipped` : "") +
+      `). Next month's run will use these.`;
+  }
+
+  function filterRows() {
+    const q = document.getElementById("filter").value.toLowerCase();
+    const onlyLearned = document.getElementById("only-learned");
+    const learnedOnly = onlyLearned && onlyLearned.checked;
+    document.querySelectorAll(".txn").forEach(function (el) {
+      const matchText = el.getAttribute("data-vendor").includes(q);
+      const matchLearned = !learnedOnly || el.getAttribute("data-learned") === "1";
+      el.style.display = (matchText && matchLearned) ? "" : "none";
+    });
+    selIdx = -1;
+    document.querySelectorAll(".txn.selected").forEach(function (el) { el.classList.remove("selected"); });
+  }
+
+  async function forgetAndReclassify(btn) {
+    // PR C — "this was wrong": forget the merchant (future runs stop
+    // auto-filling it) and open the reclassify dropdown for this line.
+    const res = await fetch(`/runs/${RUN_ID}/forget`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        legal_entity_id: btn.dataset.entity,
+        vendor: btn.dataset.vendor
+      })
+    });
+    if (!res.ok) { alert("Could not forget that merchant."); return; }
+    btn.disabled = true;
+    btn.textContent = "Forgotten - pick a category";
+    const sel = document.querySelector(
+      `select[data-doc="${CSS.escape(btn.dataset.doc)}"][data-line="${btn.dataset.line}"]`
+    );
+    if (sel) { sel.focus(); sel.style.borderColor = "var(--orange)"; }
+  }
+
+  // ── Keyboard triage (j/k move, c confirm, r reject, e edit category) ──
+  let selIdx = -1;
+  function visibleTxns() {
+    return Array.from(document.querySelectorAll(".txn")).filter(function (el) {
+      return el.style.display !== "none";
+    });
+  }
+  function selectRow(idx) {
+    const rows = visibleTxns();
+    if (!rows.length) return;
+    selIdx = Math.max(0, Math.min(idx, rows.length - 1));
+    rows.forEach(function (r) { r.classList.remove("selected"); });
+    const el = rows[selIdx];
+    el.classList.add("selected");
+    el.scrollIntoView({ block: "nearest" });
+  }
+  function selectedTxn() {
+    const rows = visibleTxns();
+    return selIdx >= 0 && selIdx < rows.length ? rows[selIdx] : null;
+  }
+
+  document.addEventListener("keydown", function (e) {
+    if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+      e.preventDefault(); document.getElementById("filter").focus(); return;
+    }
+    // Don't hijack typing or any modified chord.
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const tag = (e.target.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "select" || tag === "textarea") return;
+
+    if (e.key === "j") { e.preventDefault(); selectRow(selIdx < 0 ? 0 : selIdx + 1); }
+    else if (e.key === "k") { e.preventDefault(); selectRow(selIdx < 0 ? 0 : selIdx - 1); }
+    else if (e.key === "c") { const r = selectedTxn(); if (r) { e.preventDefault(); confirmRow(r.dataset.txid); } }
+    else if (e.key === "r") { const r = selectedTxn(); if (r) { e.preventDefault(); setDecision(r.dataset.txid, "rejected", null); } }
+    else if (e.key === "e") {
+      const r = selectedTxn();
+      if (r) { const sel = r.querySelector("select"); if (sel) { e.preventDefault(); sel.focus(); } }
+    }
+  });
+
+  // After a single-row reload (manual match, reset), bring the row back and flash it.
+  runFlash();
+</script>
+{% endblock %}

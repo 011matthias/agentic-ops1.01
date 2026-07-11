@@ -1,0 +1,51 @@
+{
+  "_comment_": "Run config with the Phase-5 pre-write chart-of-accounts (COA) gate. The `coa_validation` block validates every posting account against ONE legal entity's Zoho Books chart before the journal export is written; any missing / unknown / inactive / DO-NOT-USE / non-leaf / out-of-scope account is diverted to review instead of posting. One entity per run. Paths resolve relative to THIS file's directory. Real org_ids + the Books COA JSON are sensitive client config: they live in the private brisken-config repo (BLUEPRINT 5.3/5.4), never in the public repo.",
+
+  "statement": {
+    "path": "statement.example.csv",
+    "account_id": "chase-2838",
+    "legal_entity_id": "corporate-services",
+    "account_card_currency": "USD",
+    "column_map": {
+      "transaction_date": "Date",
+      "amount": "Amount",
+      "vendor": "Description"
+    }
+  },
+
+  "receipts": {
+    "source": "expense_csv",
+    "path": "expense.example.csv",
+    "column_map": {
+      "expense_date": "Expense Date",
+      "amount": "Amount",
+      "vendor": "Merchant",
+      "currency": "Currency",
+      "category": "Category",
+      "report_number": "Report Number"
+    },
+    "default_currency": "USD"
+  },
+
+  "zoho": {
+    "_": "Chart source for the categorizer + export account resolution. 'api' pulls live (creds from env); 'csv' reads a local export. Separate from coa_validation below, which is the pre-write postability gate.",
+    "coa_source": "api",
+    "export_path": "zoho-journal.csv"
+  },
+
+  "coa_validation": {
+    "_": "Pre-write COA postability gate. chart_path -> the multi-entity Books COA JSON; org_id -> which entity's chart to validate against; scope_groups -> the approved card-expense root groups (accounts outside them are diverted to review). Real values live in brisken-config; the placeholders below show the shape only.",
+    "enabled": true,
+    "chart_path": "zoho-books-coa.json",
+    "org_id": "ORG_ID_HERE",
+    "entity_label": "Corporate Services",
+    "scope_groups": [
+      "MS | OpeEx",
+      "Bank Fees and Charges"
+    ]
+  },
+
+  "output": {
+    "path": "report.xlsx"
+  }
+}

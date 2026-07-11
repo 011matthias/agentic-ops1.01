@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Brisken Expense Reconciliation{% endblock %}</title>
+  <script>
+    (function () {
+      var t = localStorage.getItem('theme');
+      var d = document.documentElement;
+      d.setAttribute(
+        'data-theme',
+        t === 'dark' || (t !== 'light' && window.matchMedia('(prefers-color-scheme:dark)').matches)
+          ? 'dark' : 'light'
+      );
+    })();
+  </script>
+  <style>
+    :root {
+      --bg: #f6f7f9; --surface: #ffffff; --border: #e2e5ea; --border-strong: #94a3b8; --text: #1a1d23;
+      --muted: #6b7280; --accent: #2563eb; --accent-light: #3b82f6;
+      --green: #059669; --green-bg: #ecfdf5; --orange: #d97706; --orange-bg: #fffbeb;
+      --red: #dc2626; --red-bg: #fef2f2; --shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+    [data-theme="dark"] {
+      --bg: #0f1115; --surface: #181b21; --border: #2a2f3a; --border-strong: #4a5d80; --text: #e6e8ec;
+      --muted: #9aa3b2; --accent: #3b82f6; --accent-light: #60a5fa;
+      --green: #34d399; --green-bg: #06281f; --orange: #fbbf24; --orange-bg: #2a2008;
+      --red: #f87171; --red-bg: #2a1212; --shadow: 0 1px 3px rgba(0,0,0,.4);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      font-size: 14px; line-height: 1.5;
+    }
+    a { color: var(--accent); }
+    .site-nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 24px; background: var(--surface);
+      border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10;
+    }
+    .nav-left { font-weight: 600; }
+    .nav-client { color: var(--muted); font-weight: 400; }
+    .nav-theme {
+      background: transparent; border: 1px solid var(--border); border-radius: 999px;
+      color: var(--text); cursor: pointer; padding: 6px 12px; font-size: 13px;
+    }
+    .nav-tabs { display: flex; align-items: center; gap: 6px; }
+    .nav-tab {
+      text-decoration: none; color: var(--muted); font-weight: 600; font-size: 13px;
+      padding: 6px 13px; border-radius: 7px;
+      border: 1px solid transparent; background: transparent;
+      transition: color .15s ease, border-color .15s ease;
+    }
+    .nav-tab:hover { color: var(--text); }
+    .nav-tab.active { color: var(--accent); font-weight: 700; border-color: var(--border-strong); }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px; box-shadow: var(--shadow); margin-bottom: 20px;
+    }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    h2 { font-size: 16px; margin: 0 0 12px; }
+    label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+    input[type=text], input[type=file], select, textarea {
+      width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+      border-radius: 8px; background: var(--bg); color: var(--text); font-size: 14px;
+      font-family: inherit;
+    }
+    textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .btn {
+      display: inline-block; background: var(--accent); color: #fff; border: none;
+      border-radius: 999px; padding: 9px 18px; font-size: 14px; font-weight: 500;
+      cursor: pointer; text-decoration: none;
+    }
+    .btn:hover { background: var(--accent-light); }
+    .btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .btn-small { padding: 4px 10px; font-size: 12px; }
+    .stats { display: flex; flex-wrap: wrap; gap: 12px; }
+    .stat {
+      flex: 1; min-width: 120px; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px 14px;
+    }
+    .stat-value { font-size: 22px; font-weight: 600; }
+    .stat-label { font-size: 12px; color: var(--muted); }
+    .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 500; }
+    .badge.reconciled, .badge.matched { background: var(--green-bg); color: var(--green); }
+    .badge.review { background: var(--orange-bg); color: var(--orange); }
+    .badge.unmatched { background: var(--red-bg); color: var(--red); }
+    .badge.pending { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { font-size: 12px; color: var(--muted); font-weight: 600; }
+    .muted { color: var(--muted); }
+    .right { text-align: right; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .alert { background: var(--red-bg); color: var(--red); border: 1px solid var(--red); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; }
+    .footer { color: var(--muted); font-size: 12px; padding: 16px 24px; text-align: center; }
+  </style>
+</head>
+<body>
+  <nav class="site-nav">
+    <div class="nav-left">Brisken <span class="nav-client">&middot; Expense Reconciliation</span></div>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <div class="nav-tabs" role="tablist">
+        <a class="nav-tab" href="/">Runs</a>
+        <a class="nav-tab" href="/compare">Compare</a>
+        <a class="nav-tab" href="/memory">Memory</a>
+        <a class="nav-tab" href="/guide">Guide</a>
+        <a class="nav-tab" href="/how-it-works">How it works</a>
+      </div>
+      <button class="nav-theme" onclick="(function(){var d=document.documentElement;var c=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',c);localStorage.setItem('theme',c);})()" aria-label="Toggle theme">Theme</button>
+    </div>
+  </nav>
+  <div class="wrap">
+    {% block content %}{% endblock %}
+  </div>
+  <div class="footer">Brisken expense reconciliation, local tool. Runs on this machine; financial data stays here.</div>
+  <script>
+    (function () {
+      // Mark the current page's nav tab active (the boxed/highlighted state).
+      var path = (location.pathname || '/').replace(/\/+$/, '') || '/';
+      var tabs = Array.prototype.slice.call(document.querySelectorAll('.nav-tab'));
+      tabs.forEach(function (t) {
+        var href = (t.getAttribute('href') || '').replace(/\/+$/, '') || '/';
+        if (href === path) t.classList.add('active');
+      });
+      // Jump back and forth between tabs with [ and ] (clicks still work).
+      document.addEventListener('keydown', function (e) {
+        var el = e.target;
+        if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        if (e.key !== '[' && e.key !== ']') return;
+        if (!tabs.length) return;
+        var i = 0;
+        for (var k = 0; k < tabs.length; k++) { if (tabs[k].classList.contains('active')) { i = k; break; } }
+        var next = e.key === ']' ? (i + 1) % tabs.length : (i - 1 + tabs.length) % tabs.length;
+        e.preventDefault();
+        location.href = tabs[next].getAttribute('href');
+      });
+    })();
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

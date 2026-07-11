@@ -89,8 +89,32 @@ workspace/clients/{name}/
 │   └── README.md         # Index of all work items
 ├── context/
 │   └── README.md         # Client-specific notes
+├── status/               # Per-workstream status-of-elements files (tracked)
+│   └── README.md         # What this folder is + the convention pointer
 ├── reference/            # Will link to The Crucible
 └── automations/          # Copy from template
+```
+
+The `status/` folder holds the per-workstream status files (the status of the
+individual elements inside each project/workstream), kept current as context for
+further work. It starts empty except for a README; a status file is scaffolded
+per workstream as work begins:
+
+```bash
+uv run tools/project_status.py --client {name} --scaffold {slug} --spec {id}
+```
+
+Create `workspace/clients/{name}/status/README.md`:
+
+```markdown
+# Status
+
+Per-workstream status-of-elements files for this client (tracked, NOT in the
+gitignored context/). One file per discrete workstream; one `{group}-general.md`
+per group that has shared context (a vision, a marketing plan). Loaded by
+`/comd_resume`, updated at `/comd_checkpoint`. Convention:
+`.claude/rules/rule_project_status.md` + `skil_project-status`. Scaffold + check:
+`uv run tools/project_status.py --client {name} --check`.
 ```
 
 ## Step 4: Copy Automation Template

@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brisken Expense Reconciliation, User Guide</title>
+<script>
+  (function () {
+    var t = localStorage.getItem('theme');
+    var d = document.documentElement;
+    d.setAttribute('data-theme',
+      t === 'dark' || (t !== 'light' && window.matchMedia('(prefers-color-scheme:dark)').matches) ? 'dark' : 'light');
+  })();
+</script>
+<style>
+  :root {
+    --bg: #f6f7f9; --surface: #ffffff; --text: #1b1f24; --muted: #5b6470;
+    --border: #e2e6eb; --accent: #2563eb; --accent-soft: #e8efff;
+    --green: #059669; --green-bg: #e7f6f0; --orange: #d97706; --orange-bg: #fdf2e3;
+    --code-bg: #f0f2f5; --shadow: 0 1px 3px rgba(0,0,0,.06);
+  }
+  [data-theme="dark"] {
+    --bg: #0f1318; --surface: #171c23; --text: #e6e9ee; --muted: #9aa4b1;
+    --border: #2a323c; --accent: #5b8cff; --accent-soft: #1d2735;
+    --green: #34d399; --green-bg: #102a22; --orange: #fbbf24; --orange-bg: #2c2310;
+    --code-bg: #11161c; --shadow: 0 1px 3px rgba(0,0,0,.4);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6; font-size: 16px;
+  }
+  header.topbar {
+    position: sticky; top: 0; z-index: 50; background: var(--surface);
+    border-bottom: 1px solid var(--border); box-shadow: var(--shadow);
+  }
+  .topbar-inner {
+    max-width: 960px; margin: 0 auto; padding: 10px 24px;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  }
+  .brand { font-weight: 700; font-size: 15px; letter-spacing: .2px; }
+  .brand span { color: var(--muted); font-weight: 500; }
+  .spacer { flex: 1 1 auto; }
+  .search-wrap { position: relative; }
+  #search {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 10px; font-size: 13px; width: 190px;
+  }
+  #search::placeholder { color: var(--muted); }
+  .kbd {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px;
+    color: var(--muted);
+  }
+  .langset { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .langset button {
+    background: var(--surface); color: var(--muted); border: 0; padding: 6px 11px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .langset button + button { border-left: 1px solid var(--border); }
+  .langset button.active { background: var(--accent); color: #fff; }
+  /* App tab bar, mirrors base.html so every tab stays in the same window. */
+  .nav-tabs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .nav-tab {
+    text-decoration: none; color: var(--muted); font-weight: 600; font-size: 13px;
+    padding: 5px 11px; border-radius: 7px; border: 1px solid transparent;
+  }
+  .nav-tab:hover { color: var(--text); }
+  .nav-tab.active { color: var(--accent); border-color: var(--border); }
+  .theme-btn {
+    background: var(--surface); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; width: 34px; height: 32px; cursor: pointer; font-size: 15px; line-height: 1;
+  }
+  main { max-width: 960px; margin: 0 auto; padding: 28px 24px 80px; }
+  h1.doc-title { font-size: 28px; margin: 8px 0 2px; }
+  .lead { color: var(--muted); margin: 0 0 22px; font-size: 16px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 20px 22px; margin-bottom: 16px; box-shadow: var(--shadow);
+  }
+  .card h2 { font-size: 19px; margin: 0 0 4px; }
+  .card h3 { font-size: 15px; margin: 18px 0 6px; }
+  .card .sub { color: var(--muted); margin: 0 0 14px; }
+  ol, ul { margin: 8px 0 0; padding-left: 22px; }
+  li { margin: 6px 0; }
+  li strong { color: var(--text); }
+  .toc { columns: 2; column-gap: 28px; }
+  .toc a { display: block; padding: 3px 0; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; }
+  .pill.green { background: var(--green-bg); color: var(--green); }
+  .pill.orange { background: var(--orange-bg); color: var(--orange); }
+  .pill.blue { background: var(--accent-soft); color: var(--accent); }
+  .note {
+    border-left: 3px solid var(--accent); background: var(--accent-soft);
+    border-radius: 0 8px 8px 0; padding: 10px 14px; margin: 14px 0 0; font-size: 14.5px;
+  }
+  .note.warn { border-left-color: var(--orange); background: var(--orange-bg); }
+  .cmd {
+    position: relative; background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 44px 12px 14px; margin: 12px 0 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13.5px;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .cmd .copy {
+    position: absolute; top: 7px; right: 7px; opacity: 0; transition: opacity .15s;
+    background: var(--surface); color: var(--muted); border: 1px solid var(--border);
+    border-radius: 6px; font-size: 11px; padding: 3px 7px; cursor: pointer;
+  }
+  .cmd:hover .copy { opacity: 1; }
+  .cmd .copy.done { color: var(--green); border-color: var(--green); }
+  code.inl {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 5px;
+    padding: 1px 5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px;
+  }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 14.5px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; }
+  .lang-block { display: none; }
+  .lang-block.active { display: block; }
+  .no-results { display: none; color: var(--muted); padding: 20px; text-align: center; }
+  footer { max-width: 960px; margin: 0 auto; padding: 0 24px 50px; color: var(--muted); font-size: 13px; }
+  @media (max-width: 640px) {
+    .toc { columns: 1; }
+    #search { width: 130px; }
+    .brand span { display: none; }
+  }
+  @media print {
+    header.topbar, .langset, .theme-btn, .search-wrap { display: none !important; }
+    .lang-block { display: none !important; }
+    .lang-block.active { display: block !important; }
+    .card { break-inside: avoid; box-shadow: none; }
+    h2 { page-break-after: avoid; }
+  }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">Brisken <span>&middot; Expense Reconciliation</span></div>
+    <div class="nav-tabs" role="tablist">
+      <a class="nav-tab" href="/">Runs</a>
+      <a class="nav-tab" href="/compare">Compare</a>
+      <a class="nav-tab" href="/memory">Memory</a>
+      <a class="nav-tab active" href="/guide">Guide</a>
+      <a class="nav-tab" href="/how-it-works">How it works</a>
+    </div>
+    <div class="spacer"></div>
+    <div class="search-wrap">
+      <input type="text" id="search" placeholder="Search / Suchen / Buscar" autocomplete="off" aria-label="Search the guide">
+    </div>
+    <div class="langset" role="group" aria-label="Language">
+      <button data-lang="en" class="active">EN</button>
+      <button data-lang="de">DE</button>
+      <button data-lang="pt">PT</button>
+    </div>
+    <button class="theme-btn" id="theme-toggle" aria-label="Toggle dark mode" title="Light / Dark">&#9788;</button>
+  </div>
+</header>
+
+<main>
+  <p class="no-results" id="no-results">No matching sections.</p>
+
+  <!-- ============================ ENGLISH ============================ -->
+  <section class="lang-block active" data-lang="en">
+    <h1 class="doc-title">Expense Reconciliation, User Guide</h1>
+    <p class="lead">How to match a month of card charges against receipts, review them, and produce the Zoho Books import.</p>
+
+    <div class="card" data-search="overview what it does">
+      <h2>What this tool does</h2>
+      <p class="sub" style="margin-bottom:0;">It takes one card statement and its receipts, matches each charge to a receipt, suggests a category for every line, and gives you a review screen where you confirm or correct each charge. Once every charge is decided, it produces a Zoho Books journal import, a flat reconciled CSV, and an Excel review report. Everything runs on your own computer; no financial data leaves the machine.</p>
+    </div>
+
+    <div class="card" data-search="contents table">
+      <h2>On this page</h2>
+      <nav class="toc">
+        <a href="#en-start">1. Start the tool</a>
+        <a href="#en-screens">2. The three screens</a>
+        <a href="#en-run">3. Reconcile a month</a>
+        <a href="#en-review">4. The review screen</a>
+        <a href="#en-keyboard">5. Keyboard shortcuts</a>
+        <a href="#en-finish">6. Finish and download</a>
+        <a href="#en-memory">7. Teach it for next month</a>
+        <a href="#en-memscreen">8. The Memory screen</a>
+        <a href="#en-compare">9. Compare two runs</a>
+        <a href="#en-know">10. Good to know</a>
+      </nav>
+    </div>
+
+    <div class="card" id="en-start" data-search="start launch open server terminal address">
+      <h2>1. Start the tool</h2>
+      <ol>
+        <li>Open a terminal in the tool folder and run the command below.</li>
+        <li>Your browser opens at <code class="inl">http://127.0.0.1:8000</code>. If it does not open on its own, type that address into the browser yourself.</li>
+        <li>The address begins with <code class="inl">127.0.0.1</code>, which means the tool is reachable only on this computer. Closing the terminal stops it.</li>
+      </ol>
+      <div class="cmd">expense-recon-web</div>
+      <div class="note">First time only, if the command is not found, install the browser parts once from the project folder: <code class="inl">uv sync --extra web</code></div>
+    </div>
+
+    <div class="card" id="en-screens" data-search="screens navigation runs compare memory">
+      <h2>2. The three screens</h2>
+      <p class="sub">The top bar of the tool has three links:</p>
+      <ul>
+        <li><strong>Runs</strong>: start a new reconciliation and reopen past ones.</li>
+        <li><strong>Compare</strong>: put two runs side by side.</li>
+        <li><strong>Memory</strong>: see and edit what the tool has learned.</li>
+      </ul>
+    </div>
+
+    <div class="card" id="en-run" data-search="reconcile month upload statement receipts form currency entity ai">
+      <h2>3. Reconcile a month</h2>
+      <ol>
+        <li>On <strong>Runs</strong> you need two files: the <strong>card statement</strong> (.csv, .xlsx, or a Chase PDF) and the <strong>receipts file</strong> (.csv).</li>
+        <li><strong>Card / account name</strong> and <strong>Account to legal entity</strong>: the legal entity is taken from the account that paid, so you map each card or account to its company, for example <code class="inl">amex-9001</code> to <code class="inl">brisken-llc</code>; an unmapped account uses its own name. A Chase PDF needs no card name; the cards are read from the statement itself.</li>
+        <li><strong>Card currency</strong>: the currency the card is billed in (USD by default).</li>
+        <li><strong>Receipts source</strong>: choose <em>Extracted-fields CSV</em> for the standard receipt export, or <em>Zoho Expense export CSV</em> if your receipts come straight from Zoho Expense. For the Zoho option a column map appears; leave it as is unless a header name differs in your file.</li>
+        <li><strong>Receipts currency</strong>: the currency to assume when a receipt does not state one. Leave it blank to flag those receipts as unknown rather than assume dollars.</li>
+        <li><strong>Statement column overrides</strong>: the tool auto-detects the statement columns; a Chase PDF needs no column map. Open this section only if a column was read wrongly.</li>
+        <li><strong>AI categorization</strong>: tick this to let the AI suggest categories and judge foreign-currency charges. It needs an OpenAI key set on the server. Without a key the tool uses its keyword classifier and still finishes the run.</li>
+        <li>Click <strong>Run reconciliation</strong>. A progress screen appears; you can leave the tab, the work continues in the background.</li>
+      </ol>
+    </div>
+
+    <div class="card" id="en-review" data-search="review workbench counters badge candidate confirm reject manual match category duplicate">
+      <h2>4. The review screen</h2>
+      <h3>The counters at the top</h3>
+      <table>
+        <thead><tr><th>Counter</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td>Transactions</td><td>Charges on the statement.</td></tr>
+          <tr><td>Reconciled</td><td>Confirmed against a receipt.</td></tr>
+          <tr><td>Needs review</td><td>Matched, but the tool wants your eyes on it.</td></tr>
+          <tr><td>Unmatched</td><td>No receipt found yet.</td></tr>
+          <tr><td>Unknown currency</td><td>Receipts whose currency could not be read; set it so they can reconcile.</td></tr>
+          <tr><td>Match rate</td><td>Share of charges already matched.</td></tr>
+          <tr><td>All accounted for</td><td><span class="pill green">yes</span> means no charge was silently dropped.</td></tr>
+          <tr><td>Dup groups</td><td>Possible double charges or re-uploaded receipts.</td></tr>
+          <tr><td>Auto-filled (memory)</td><td>Lines the tool filled from what it learned on earlier runs.</td></tr>
+        </tbody>
+      </table>
+      <h3>Working through each charge</h3>
+      <ul>
+        <li>A colored badge shows the state of the charge. Below it are the candidate receipts, each with a match score (amount, date, vendor) and the reason for the score.</li>
+        <li>If several receipts could fit, pick the right one with its radio button.</li>
+        <li><strong>Confirm</strong> accepts the match; <strong>Reject</strong> says none of them fit; <strong>Reset</strong> clears your decision.</li>
+        <li>For an unmatched charge, use <strong>Match a receipt by hand</strong> to assign one yourself. You can take a receipt currently held by another charge; that other charge is freed.</li>
+        <li>Each receipt line has a <strong>category</strong> dropdown; change it if the suggestion is wrong.</li>
+        <li>If a line was auto-filled from memory and is wrong, click <strong>This was wrong</strong>. The tool forgets that merchant and lets you choose a category again.</li>
+      </ul>
+      <h3>The lists further down</h3>
+      <p class="sub" style="margin-bottom:0;">Below the charges you will find: charges with no receipt, possible duplicates (nothing is removed, they are only flagged), receipts with no charge, and any rows that could not be read. Use them as a checklist before you finish.</p>
+    </div>
+
+    <div class="card" id="en-keyboard" data-search="keyboard shortcuts speed j k confirm reject edit filter">
+      <h2>5. Keyboard shortcuts</h2>
+      <p class="sub">For faster review without the mouse:</p>
+      <ul>
+        <li><span class="kbd">j</span> and <span class="kbd">k</span>: move between charges.</li>
+        <li><span class="kbd">c</span>: confirm the selected charge.</li>
+        <li><span class="kbd">r</span>: reject the selected charge.</li>
+        <li><span class="kbd">e</span>: edit the category of the selected charge.</li>
+        <li><span class="kbd">Ctrl</span> or <span class="kbd">Cmd</span> + <span class="kbd">K</span>: jump to the filter box.</li>
+      </ul>
+    </div>
+
+    <div class="card" id="en-finish" data-search="finish download zoho csv excel report ready to post confirm all">
+      <h2>6. Finish and download</h2>
+      <ul>
+        <li>The bar at the bottom tells you whether you are <span class="pill orange">Not ready to post</span> or <span class="pill green">Ready to post</span>. It also shows how many charges are still undecided, any amount still unreconciled, and how many lines still need a category.</li>
+        <li><strong>Confirm all matched</strong> accepts every clean match in one click.</li>
+        <li>When the bar turns to <strong>Ready to post</strong>, three downloads unlock: <strong>Zoho journal (.csv)</strong> for import into Zoho Books, <strong>Reconciled data (.csv)</strong> the flat file with one row per charge and its match status, and <strong>Download report (.xlsx)</strong> as the review record.</li>
+      </ul>
+      <div class="note">The downloads stay locked until every charge is decided, so an incomplete month cannot be posted by accident.</div>
+    </div>
+
+    <div class="card" id="en-memory" data-search="commit memory teach learn next month categories aliases fx">
+      <h2>7. Teach it for next month</h2>
+      <p class="sub" style="margin-bottom:0;"><strong>Commit to memory</strong> saves what you confirmed: merchant categories, vendor name aliases, and foreign-exchange samples. Next month the tool auto-fills these, so each run is less work. Use it once you are happy with a run.</p>
+    </div>
+
+    <div class="card" id="en-memscreen" data-search="memory screen forget merchant aliases fx history">
+      <h2>8. The Memory screen</h2>
+      <p class="sub" style="margin-bottom:0;">Open <strong>Memory</strong> to see the merchant categories, vendor aliases, and FX histories the tool has stored. <strong>Forget</strong> on a row removes everything learned for that merchant, so the next run treats it as new.</p>
+    </div>
+
+    <div class="card" id="en-compare" data-search="compare two runs re-run same month delta">
+      <h2>9. Compare two runs</h2>
+      <p class="sub" style="margin-bottom:0;">On <strong>Compare</strong>, pick two runs to see how the counts and each charge changed. This is most useful after you re-run the same month with a fixed receipt; across different months every charge simply shows as new on one side.</p>
+    </div>
+
+    <div class="card" id="en-know" data-search="good to know notes nothing deleted ai key">
+      <h2>10. Good to know</h2>
+      <ul>
+        <li>Nothing is ever deleted automatically; duplicates and mismatches are only flagged for you to judge.</li>
+        <li>The downloads stay locked until every charge is decided, which prevents posting a half-finished month.</li>
+        <li>If a banner says no AI key is set, the run still completed using the keyword classifier. Set the key on the server only if you want AI categories.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============================ DEUTSCH ============================ -->
+  <section class="lang-block" data-lang="de">
+    <h1 class="doc-title">Spesenabgleich, Benutzerhandbuch</h1>
+    <p class="lead">So gleichen Sie einen Monat Kartenbuchungen mit den Belegen ab, prufen sie und erzeugen den Import fur Zoho Books.</p>
+
+    <div class="card" data-search="ueberblick was das werkzeug macht">
+      <h2>Was dieses Werkzeug macht</h2>
+      <p class="sub" style="margin-bottom:0;">Es nimmt einen Kartenauszug und die zugehorigen Belege, ordnet jede Buchung einem Beleg zu, schlagt fur jede Zeile eine Kategorie vor und zeigt Ihnen eine Prufansicht, in der Sie jede Buchung bestatigen oder korrigieren. Sobald alle Buchungen entschieden sind, erzeugt es einen Journal-Import fur Zoho Books, eine flache abgeglichene CSV-Datei und einen Prufbericht als Excel-Datei. Alles lauft auf Ihrem eigenen Rechner; keine Finanzdaten verlassen das Gerat.</p>
+    </div>
+
+    <div class="card" data-search="inhalt">
+      <h2>Auf dieser Seite</h2>
+      <nav class="toc">
+        <a href="#de-start">1. Werkzeug starten</a>
+        <a href="#de-screens">2. Die drei Ansichten</a>
+        <a href="#de-run">3. Einen Monat abgleichen</a>
+        <a href="#de-review">4. Die Prufansicht</a>
+        <a href="#de-keyboard">5. Tastenkurzel</a>
+        <a href="#de-finish">6. Abschliessen und herunterladen</a>
+        <a href="#de-memory">7. Fur den nachsten Monat anlernen</a>
+        <a href="#de-memscreen">8. Die Ansicht Memory</a>
+        <a href="#de-compare">9. Zwei Laufe vergleichen</a>
+        <a href="#de-know">10. Gut zu wissen</a>
+      </nav>
+    </div>
+
+    <div class="card" id="de-start" data-search="starten server terminal adresse oeffnen">
+      <h2>1. Werkzeug starten</h2>
+      <ol>
+        <li>Offnen Sie ein Terminal im Werkzeug-Ordner und fuhren Sie den folgenden Befehl aus.</li>
+        <li>Ihr Browser offnet sich unter <code class="inl">http://127.0.0.1:8000</code>. Falls er sich nicht von selbst offnet, geben Sie diese Adresse selbst im Browser ein.</li>
+        <li>Die Adresse beginnt mit <code class="inl">127.0.0.1</code>; das bedeutet, das Werkzeug ist nur auf diesem Rechner erreichbar. Wenn Sie das Terminal schliessen, wird es beendet.</li>
+      </ol>
+      <div class="cmd">expense-recon-web</div>
+      <div class="note">Nur beim ersten Mal, falls der Befehl nicht gefunden wird, installieren Sie die Browser-Teile einmalig aus dem Projektordner: <code class="inl">uv sync --extra web</code></div>
+    </div>
+
+    <div class="card" id="de-screens" data-search="ansichten navigation runs compare memory">
+      <h2>2. Die drei Ansichten</h2>
+      <p class="sub">Die obere Leiste des Werkzeugs hat drei Links:</p>
+      <ul>
+        <li><strong>Runs</strong>: einen neuen Abgleich starten und fruhere wieder offnen.</li>
+        <li><strong>Compare</strong>: zwei Laufe nebeneinander stellen.</li>
+        <li><strong>Memory</strong>: ansehen und bearbeiten, was das Werkzeug gelernt hat.</li>
+      </ul>
+    </div>
+
+    <div class="card" id="de-run" data-search="abgleichen monat hochladen auszug belege formular waehrung einheit ki">
+      <h2>3. Einen Monat abgleichen</h2>
+      <ol>
+        <li>In <strong>Runs</strong> brauchen Sie zwei Dateien: den <strong>Kartenauszug</strong> (.csv, .xlsx oder ein Chase-PDF) und die <strong>Belegdatei</strong> (.csv).</li>
+        <li><strong>Karten- / Kontoname</strong> und <strong>Konto zu Rechtstrager</strong>: der Rechtstrager wird aus dem Konto ubernommen, das gezahlt hat; ordnen Sie also jede Karte oder jedes Konto seiner Gesellschaft zu, zum Beispiel <code class="inl">amex-9001</code> zu <code class="inl">brisken-llc</code>; ein nicht zugeordnetes Konto verwendet seinen eigenen Namen. Ein Chase-PDF braucht keinen Kartennamen; die Karten werden aus dem Auszug selbst gelesen.</li>
+        <li><strong>Kartenwahrung</strong>: die Wahrung, in der die Karte abgerechnet wird (Standard ist USD).</li>
+        <li><strong>Belegquelle</strong>: wahlen Sie <em>Extracted-fields CSV</em> fur den ublichen Beleg-Export oder <em>Zoho Expense export CSV</em>, wenn Ihre Belege direkt aus Zoho Expense kommen. Bei der Zoho-Option erscheint eine Spaltenzuordnung; lassen Sie sie unverandert, ausser ein Spaltenname weicht in Ihrer Datei ab.</li>
+        <li><strong>Belegwahrung</strong>: die Wahrung, die angenommen wird, wenn ein Beleg keine angibt. Lassen Sie das Feld leer, um solche Belege als unbekannt zu markieren, statt Dollar anzunehmen.</li>
+        <li><strong>Spalten des Auszugs uberschreiben</strong>: das Werkzeug erkennt die Spalten automatisch; ein Chase-PDF braucht keine Spaltenzuordnung. Offnen Sie diesen Abschnitt nur, wenn eine Spalte falsch gelesen wurde.</li>
+        <li><strong>KI-Kategorisierung</strong>: aktivieren Sie dies, damit die KI Kategorien vorschlagt und Fremdwahrungsbuchungen beurteilt. Dafur muss ein OpenAI-Schlussel auf dem Server gesetzt sein. Ohne Schlussel nutzt das Werkzeug den Stichwort-Klassifizierer und schliesst den Lauf trotzdem ab.</li>
+        <li>Klicken Sie auf <strong>Run reconciliation</strong>. Eine Fortschrittsansicht erscheint; Sie konnen den Tab verlassen, die Arbeit lauft im Hintergrund weiter.</li>
+      </ol>
+    </div>
+
+    <div class="card" id="de-review" data-search="pruefen zaehler abzeichen kandidat bestaetigen ablehnen manuell kategorie duplikat">
+      <h2>4. Die Prufansicht</h2>
+      <h3>Die Zahler oben</h3>
+      <table>
+        <thead><tr><th>Zahler</th><th>Bedeutung</th></tr></thead>
+        <tbody>
+          <tr><td>Transactions</td><td>Buchungen auf dem Auszug.</td></tr>
+          <tr><td>Reconciled</td><td>Gegen einen Beleg bestatigt.</td></tr>
+          <tr><td>Needs review</td><td>Zugeordnet, aber das Werkzeug bittet um Ihren Blick.</td></tr>
+          <tr><td>Unmatched</td><td>Noch kein Beleg gefunden.</td></tr>
+          <tr><td>Unknown currency</td><td>Belege, deren Wahrung nicht gelesen werden konnte; setzen Sie sie, damit sie abgeglichen werden konnen.</td></tr>
+          <tr><td>Match rate</td><td>Anteil der bereits zugeordneten Buchungen.</td></tr>
+          <tr><td>All accounted for</td><td><span class="pill green">yes</span> bedeutet, keine Buchung ging stillschweigend verloren.</td></tr>
+          <tr><td>Dup groups</td><td>Mogliche Doppelbuchungen oder erneut hochgeladene Belege.</td></tr>
+          <tr><td>Auto-filled (memory)</td><td>Zeilen, die das Werkzeug aus fruher Gelerntem gefullt hat.</td></tr>
+        </tbody>
+      </table>
+      <h3>Jede Buchung durchgehen</h3>
+      <ul>
+        <li>Ein farbiges Abzeichen zeigt den Zustand der Buchung. Darunter stehen die Kandidaten-Belege, jeder mit einem Trefferwert (Betrag, Datum, Handler) und der Begrundung.</li>
+        <li>Wenn mehrere Belege passen konnten, wahlen Sie den richtigen uber den Auswahlknopf.</li>
+        <li><strong>Confirm</strong> nimmt die Zuordnung an; <strong>Reject</strong> sagt, keiner passt; <strong>Reset</strong> loscht Ihre Entscheidung.</li>
+        <li>Bei einer nicht zugeordneten Buchung nutzen Sie <strong>Match a receipt by hand</strong>, um selbst einen Beleg zuzuweisen. Sie konnen einen Beleg nehmen, der gerade einer anderen Buchung zugeordnet ist; diese andere Buchung wird dann frei.</li>
+        <li>Jede Belegzeile hat ein <strong>Kategorie</strong>-Auswahlfeld; andern Sie es, wenn der Vorschlag falsch ist.</li>
+        <li>Wenn eine Zeile aus dem Speicher gefullt wurde und falsch ist, klicken Sie auf <strong>This was wrong</strong>. Das Werkzeug vergisst diesen Handler und lasst Sie die Kategorie erneut wahlen.</li>
+      </ul>
+      <h3>Die Listen weiter unten</h3>
+      <p class="sub" style="margin-bottom:0;">Unter den Buchungen finden Sie: Buchungen ohne Beleg, mogliche Duplikate (nichts wird entfernt, sie werden nur markiert), Belege ohne Buchung und alle Zeilen, die nicht gelesen werden konnten. Nutzen Sie sie als Checkliste, bevor Sie abschliessen.</p>
+    </div>
+
+    <div class="card" id="de-keyboard" data-search="tastatur kuerzel tempo j k bestaetigen ablehnen bearbeiten filter">
+      <h2>5. Tastenkurzel</h2>
+      <p class="sub">Fur schnelleres Prufen ohne Maus:</p>
+      <ul>
+        <li><span class="kbd">j</span> und <span class="kbd">k</span>: zwischen Buchungen wechseln.</li>
+        <li><span class="kbd">c</span>: die ausgewahlte Buchung bestatigen.</li>
+        <li><span class="kbd">r</span>: die ausgewahlte Buchung ablehnen.</li>
+        <li><span class="kbd">e</span>: die Kategorie der ausgewahlten Buchung bearbeiten.</li>
+        <li><span class="kbd">Strg</span> oder <span class="kbd">Cmd</span> + <span class="kbd">K</span>: zum Filterfeld springen.</li>
+      </ul>
+    </div>
+
+    <div class="card" id="de-finish" data-search="abschliessen herunterladen zoho csv excel bericht bereit alle bestaetigen">
+      <h2>6. Abschliessen und herunterladen</h2>
+      <ul>
+        <li>Die Leiste unten zeigt, ob Sie <span class="pill orange">Not ready to post</span> oder <span class="pill green">Ready to post</span> sind. Sie zeigt auch, wie viele Buchungen noch offen sind, welcher Betrag noch nicht abgeglichen ist und wie viele Zeilen noch eine Kategorie brauchen.</li>
+        <li><strong>Confirm all matched</strong> nimmt jede saubere Zuordnung mit einem Klick an.</li>
+        <li>Wenn die Leiste auf <strong>Ready to post</strong> wechselt, werden drei Downloads frei: <strong>Zoho journal (.csv)</strong> fur den Import in Zoho Books, <strong>Reconciled data (.csv)</strong> die flache Datei mit einer Zeile je Buchung und ihrem Abgleichstatus und <strong>Download report (.xlsx)</strong> als Prufnachweis.</li>
+      </ul>
+      <div class="note">Die Downloads bleiben gesperrt, bis jede Buchung entschieden ist; so kann ein unvollstandiger Monat nicht versehentlich gebucht werden.</div>
+    </div>
+
+    <div class="card" id="de-memory" data-search="speicher anlernen lernen naechster monat kategorien aliase fx">
+      <h2>7. Fur den nachsten Monat anlernen</h2>
+      <p class="sub" style="margin-bottom:0;"><strong>Commit to memory</strong> speichert, was Sie bestatigt haben: Handler-Kategorien, Namensvarianten von Handlern und Fremdwahrungs-Beispiele. Im nachsten Monat fullt das Werkzeug diese automatisch, sodass jeder Lauf weniger Arbeit macht. Nutzen Sie es, wenn Sie mit einem Lauf zufrieden sind.</p>
+    </div>
+
+    <div class="card" id="de-memscreen" data-search="memory ansicht vergessen handler aliase fx verlauf">
+      <h2>8. Die Ansicht Memory</h2>
+      <p class="sub" style="margin-bottom:0;">Offnen Sie <strong>Memory</strong>, um die gespeicherten Handler-Kategorien, Namensvarianten und FX-Verlaufe zu sehen. <strong>Forget</strong> in einer Zeile entfernt alles Gelernte zu diesem Handler, sodass der nachste Lauf ihn als neu behandelt.</p>
+    </div>
+
+    <div class="card" id="de-compare" data-search="vergleichen zwei laeufe gleicher monat erneut delta">
+      <h2>9. Zwei Laufe vergleichen</h2>
+      <p class="sub" style="margin-bottom:0;">Wahlen Sie unter <strong>Compare</strong> zwei Laufe, um zu sehen, wie sich die Zahler und jede Buchung verandert haben. Das ist am nutzlichsten, nachdem Sie denselben Monat mit einem korrigierten Beleg erneut laufen lassen; uber verschiedene Monate hinweg erscheint jede Buchung auf einer Seite einfach als neu.</p>
+    </div>
+
+    <div class="card" id="de-know" data-search="gut zu wissen hinweise nichts geloescht ki schluessel">
+      <h2>10. Gut zu wissen</h2>
+      <ul>
+        <li>Es wird nie etwas automatisch geloscht; Duplikate und Abweichungen werden nur zur Beurteilung markiert.</li>
+        <li>Die Downloads bleiben gesperrt, bis jede Buchung entschieden ist; das verhindert das Buchen eines halb fertigen Monats.</li>
+        <li>Wenn ein Hinweis sagt, dass kein KI-Schlussel gesetzt ist, wurde der Lauf trotzdem mit dem Stichwort-Klassifizierer abgeschlossen. Setzen Sie den Schlussel auf dem Server nur, wenn Sie KI-Kategorien wunschen.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============================ PORTUGUES ============================ -->
+  <section class="lang-block" data-lang="pt">
+    <h1 class="doc-title">Conciliacao de Despesas, Guia do Usuario</h1>
+    <p class="lead">Como conciliar um mes de lancamentos do cartao com os recibos, revisa-los e gerar a importacao para o Zoho Books.</p>
+
+    <div class="card" data-search="visao geral o que a ferramenta faz">
+      <h2>O que esta ferramenta faz</h2>
+      <p class="sub" style="margin-bottom:0;">Ela recebe um extrato do cartao e seus recibos, associa cada lancamento a um recibo, sugere uma categoria para cada linha e mostra uma tela de revisao onde voce confirma ou corrige cada lancamento. Quando todos os lancamentos estao decididos, ela gera uma importacao de lancamentos contabeis para o Zoho Books, um CSV conciliado simples e um relatorio de revisao em Excel. Tudo roda no seu proprio computador; nenhum dado financeiro sai da maquina.</p>
+    </div>
+
+    <div class="card" data-search="conteudo indice">
+      <h2>Nesta pagina</h2>
+      <nav class="toc">
+        <a href="#pt-start">1. Iniciar a ferramenta</a>
+        <a href="#pt-screens">2. As tres telas</a>
+        <a href="#pt-run">3. Conciliar um mes</a>
+        <a href="#pt-review">4. A tela de revisao</a>
+        <a href="#pt-keyboard">5. Atalhos de teclado</a>
+        <a href="#pt-finish">6. Finalizar e baixar</a>
+        <a href="#pt-memory">7. Ensinar para o proximo mes</a>
+        <a href="#pt-memscreen">8. A tela Memory</a>
+        <a href="#pt-compare">9. Comparar duas execucoes</a>
+        <a href="#pt-know">10. Bom saber</a>
+      </nav>
+    </div>
+
+    <div class="card" id="pt-start" data-search="iniciar servidor terminal endereco abrir">
+      <h2>1. Iniciar a ferramenta</h2>
+      <ol>
+        <li>Abra um terminal na pasta da ferramenta e execute o comando abaixo.</li>
+        <li>Seu navegador abre em <code class="inl">http://127.0.0.1:8000</code>. Se nao abrir sozinho, digite esse endereco no navegador.</li>
+        <li>O endereco comeca com <code class="inl">127.0.0.1</code>, o que significa que a ferramenta so e acessivel neste computador. Fechar o terminal encerra a ferramenta.</li>
+      </ol>
+      <div class="cmd">expense-recon-web</div>
+      <div class="note">Apenas na primeira vez, se o comando nao for encontrado, instale a parte do navegador uma vez a partir da pasta do projeto: <code class="inl">uv sync --extra web</code></div>
+    </div>
+
+    <div class="card" id="pt-screens" data-search="telas navegacao runs compare memory">
+      <h2>2. As tres telas</h2>
+      <p class="sub">A barra superior da ferramenta tem tres links:</p>
+      <ul>
+        <li><strong>Runs</strong>: iniciar uma nova conciliacao e reabrir as anteriores.</li>
+        <li><strong>Compare</strong>: colocar duas execucoes lado a lado.</li>
+        <li><strong>Memory</strong>: ver e editar o que a ferramenta aprendeu.</li>
+      </ul>
+    </div>
+
+    <div class="card" id="pt-run" data-search="conciliar mes enviar extrato recibos formulario moeda entidade ia">
+      <h2>3. Conciliar um mes</h2>
+      <ol>
+        <li>Em <strong>Runs</strong> voce precisa de dois arquivos: o <strong>extrato do cartao</strong> (.csv, .xlsx ou um PDF da Chase) e o <strong>arquivo de recibos</strong> (.csv).</li>
+        <li><strong>Nome do cartao / conta</strong> e <strong>Conta para entidade legal</strong>: a entidade legal vem da conta que pagou, entao mapeie cada cartao ou conta a sua empresa, por exemplo <code class="inl">amex-9001</code> para <code class="inl">brisken-llc</code>; uma conta nao mapeada usa o proprio nome. Um PDF da Chase nao precisa de nome de cartao; os cartoes sao lidos do proprio extrato.</li>
+        <li><strong>Moeda do cartao</strong>: a moeda em que o cartao e cobrado (USD por padrao).</li>
+        <li><strong>Origem dos recibos</strong>: escolha <em>Extracted-fields CSV</em> para o export padrao de recibos, ou <em>Zoho Expense export CSV</em> se seus recibos vierem direto do Zoho Expense. Na opcao Zoho aparece um mapa de colunas; deixe como esta, a menos que o nome de uma coluna seja diferente no seu arquivo.</li>
+        <li><strong>Moeda dos recibos</strong>: a moeda a assumir quando um recibo nao informa nenhuma. Deixe em branco para sinalizar esses recibos como desconhecidos, em vez de assumir dolares.</li>
+        <li><strong>Substituir colunas do extrato</strong>: a ferramenta detecta as colunas automaticamente; um PDF da Chase nao precisa de mapa de colunas. Abra esta secao apenas se uma coluna tiver sido lida de forma errada.</li>
+        <li><strong>Categorizacao por IA</strong>: marque para a IA sugerir categorias e avaliar lancamentos em moeda estrangeira. Ela precisa de uma chave OpenAI configurada no servidor. Sem chave, a ferramenta usa o classificador por palavras-chave e ainda assim conclui a execucao.</li>
+        <li>Clique em <strong>Run reconciliation</strong>. Uma tela de progresso aparece; voce pode sair da aba, o trabalho continua em segundo plano.</li>
+      </ol>
+    </div>
+
+    <div class="card" id="pt-review" data-search="revisao contadores selo candidato confirmar rejeitar manual categoria duplicata">
+      <h2>4. A tela de revisao</h2>
+      <h3>Os contadores no topo</h3>
+      <table>
+        <thead><tr><th>Contador</th><th>Significado</th></tr></thead>
+        <tbody>
+          <tr><td>Transactions</td><td>Lancamentos no extrato.</td></tr>
+          <tr><td>Reconciled</td><td>Confirmados contra um recibo.</td></tr>
+          <tr><td>Needs review</td><td>Associados, mas a ferramenta quer sua atencao.</td></tr>
+          <tr><td>Unmatched</td><td>Nenhum recibo encontrado ainda.</td></tr>
+          <tr><td>Unknown currency</td><td>Recibos cuja moeda nao pode ser lida; defina-a para que possam ser conciliados.</td></tr>
+          <tr><td>Match rate</td><td>Proporcao de lancamentos ja associados.</td></tr>
+          <tr><td>All accounted for</td><td><span class="pill green">yes</span> significa que nenhum lancamento foi descartado em silencio.</td></tr>
+          <tr><td>Dup groups</td><td>Possiveis cobrancas em duplicidade ou recibos reenviados.</td></tr>
+          <tr><td>Auto-filled (memory)</td><td>Linhas que a ferramenta preencheu com o que aprendeu antes.</td></tr>
+        </tbody>
+      </table>
+      <h3>Tratando cada lancamento</h3>
+      <ul>
+        <li>Um selo colorido mostra o estado do lancamento. Abaixo dele ficam os recibos candidatos, cada um com uma pontuacao de correspondencia (valor, data, fornecedor) e o motivo.</li>
+        <li>Se varios recibos puderem servir, escolha o certo pelo botao de selecao.</li>
+        <li><strong>Confirm</strong> aceita a associacao; <strong>Reject</strong> diz que nenhum serve; <strong>Reset</strong> apaga sua decisao.</li>
+        <li>Para um lancamento sem associacao, use <strong>Match a receipt by hand</strong> para atribuir um recibo voce mesmo. Voce pode pegar um recibo que esta atribuido a outro lancamento; esse outro lancamento fica livre.</li>
+        <li>Cada linha do recibo tem um seletor de <strong>categoria</strong>; altere-o se a sugestao estiver errada.</li>
+        <li>Se uma linha foi preenchida pela memoria e esta errada, clique em <strong>This was wrong</strong>. A ferramenta esquece esse fornecedor e deixa voce escolher a categoria de novo.</li>
+      </ul>
+      <h3>As listas mais abaixo</h3>
+      <p class="sub" style="margin-bottom:0;">Abaixo dos lancamentos voce encontra: lancamentos sem recibo, possiveis duplicatas (nada e removido, apenas sinalizado), recibos sem lancamento e quaisquer linhas que nao puderam ser lidas. Use-as como lista de verificacao antes de finalizar.</p>
+    </div>
+
+    <div class="card" id="pt-keyboard" data-search="teclado atalhos velocidade j k confirmar rejeitar editar filtro">
+      <h2>5. Atalhos de teclado</h2>
+      <p class="sub">Para revisar mais rapido sem o mouse:</p>
+      <ul>
+        <li><span class="kbd">j</span> e <span class="kbd">k</span>: mover entre os lancamentos.</li>
+        <li><span class="kbd">c</span>: confirmar o lancamento selecionado.</li>
+        <li><span class="kbd">r</span>: rejeitar o lancamento selecionado.</li>
+        <li><span class="kbd">e</span>: editar a categoria do lancamento selecionado.</li>
+        <li><span class="kbd">Ctrl</span> ou <span class="kbd">Cmd</span> + <span class="kbd">K</span>: ir para o campo de filtro.</li>
+      </ul>
+    </div>
+
+    <div class="card" id="pt-finish" data-search="finalizar baixar zoho csv excel relatorio pronto confirmar todos">
+      <h2>6. Finalizar e baixar</h2>
+      <ul>
+        <li>A barra na parte de baixo informa se voce esta <span class="pill orange">Not ready to post</span> ou <span class="pill green">Ready to post</span>. Ela tambem mostra quantos lancamentos ainda estao indecisos, qual valor ainda nao foi conciliado e quantas linhas ainda precisam de categoria.</li>
+        <li><strong>Confirm all matched</strong> aceita toda associacao limpa com um clique.</li>
+        <li>Quando a barra muda para <strong>Ready to post</strong>, tres downloads sao liberados: <strong>Zoho journal (.csv)</strong> para importar no Zoho Books, <strong>Reconciled data (.csv)</strong> o arquivo simples com uma linha por lancamento e seu status de conciliacao e <strong>Download report (.xlsx)</strong> como registro da revisao.</li>
+      </ul>
+      <div class="note">Os downloads ficam bloqueados ate que todo lancamento esteja decidido, para que um mes incompleto nao seja lancado por engano.</div>
+    </div>
+
+    <div class="card" id="pt-memory" data-search="memoria ensinar aprender proximo mes categorias aliases fx">
+      <h2>7. Ensinar para o proximo mes</h2>
+      <p class="sub" style="margin-bottom:0;"><strong>Commit to memory</strong> salva o que voce confirmou: categorias de fornecedores, variacoes de nome de fornecedores e amostras de cambio. No mes seguinte a ferramenta preenche isso automaticamente, deixando cada execucao com menos trabalho. Use quando estiver satisfeito com uma execucao.</p>
+    </div>
+
+    <div class="card" id="pt-memscreen" data-search="memory tela esquecer fornecedor aliases fx historico">
+      <h2>8. A tela Memory</h2>
+      <p class="sub" style="margin-bottom:0;">Abra <strong>Memory</strong> para ver as categorias de fornecedores, as variacoes de nome e os historicos de cambio armazenados. <strong>Forget</strong> em uma linha remove tudo o que foi aprendido sobre aquele fornecedor, de modo que a proxima execucao o trate como novo.</p>
+    </div>
+
+    <div class="card" id="pt-compare" data-search="comparar duas execucoes mesmo mes refazer delta">
+      <h2>9. Comparar duas execucoes</h2>
+      <p class="sub" style="margin-bottom:0;">Em <strong>Compare</strong>, escolha duas execucoes para ver como os contadores e cada lancamento mudaram. E mais util depois de refazer o mesmo mes com um recibo corrigido; entre meses diferentes, cada lancamento simplesmente aparece como novo de um lado.</p>
+    </div>
+
+    <div class="card" id="pt-know" data-search="bom saber notas nada apagado chave ia">
+      <h2>10. Bom saber</h2>
+      <ul>
+        <li>Nada e apagado automaticamente; duplicatas e divergencias sao apenas sinalizadas para voce julgar.</li>
+        <li>Os downloads ficam bloqueados ate que todo lancamento esteja decidido, o que evita lancar um mes pela metade.</li>
+        <li>Se um aviso disser que nenhuma chave de IA esta configurada, a execucao ainda foi concluida com o classificador por palavras-chave. Configure a chave no servidor apenas se quiser categorias por IA.</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<footer>
+  Brisken Expense Reconciliation, internal tool guide. Prepared by UnpauseAI. Last updated: 2026-06-16.
+</footer>
+
+<script>
+  // ---- Theme toggle ----
+  var themeBtn = document.getElementById('theme-toggle');
+  function syncThemeIcon() {
+    themeBtn.innerHTML = document.documentElement.getAttribute('data-theme') === 'dark' ? '&#9790;' : '&#9788;';
+  }
+  syncThemeIcon();
+  themeBtn.addEventListener('click', function () {
+    var d = document.documentElement;
+    var c = d.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    d.setAttribute('data-theme', c);
+    localStorage.setItem('theme', c);
+    syncThemeIcon();
+  });
+
+  // ---- Language switch ----
+  var langButtons = document.querySelectorAll('.langset button');
+  function setLang(lang) {
+    document.querySelectorAll('.lang-block').forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-lang') === lang);
+    });
+    langButtons.forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-lang') === lang);
+    });
+    document.documentElement.setAttribute('lang', lang);
+    localStorage.setItem('erg-lang', lang);
+    applyFilter();
+  }
+  langButtons.forEach(function (b) {
+    b.addEventListener('click', function () { setLang(b.getAttribute('data-lang')); });
+  });
+
+  // ---- Copy buttons on command blocks ----
+  document.querySelectorAll('.cmd').forEach(function (block) {
+    var btn = document.createElement('button');
+    btn.className = 'copy';
+    btn.type = 'button';
+    btn.textContent = 'Copy';
+    btn.addEventListener('click', function () {
+      var text = block.childNodes[0].nodeValue.trim();
+      navigator.clipboard.writeText(text).then(function () {
+        btn.textContent = 'Copied'; btn.classList.add('done');
+        setTimeout(function () { btn.textContent = 'Copy'; btn.classList.remove('done'); }, 1400);
+      });
+    });
+    block.appendChild(btn);
+  });
+
+  // ---- Search / filter (Ctrl/Cmd+K, persisted) ----
+  var search = document.getElementById('search');
+  var noResults = document.getElementById('no-results');
+  function applyFilter() {
+    var q = search.value.trim().toLowerCase();
+    var active = document.querySelector('.lang-block.active');
+    if (!active) return;
+    var cards = active.querySelectorAll('.card');
+    var anyShown = false;
+    cards.forEach(function (card) {
+      var hay = (card.textContent + ' ' + (card.getAttribute('data-search') || '')).toLowerCase();
+      var show = q === '' || hay.indexOf(q) !== -1;
+      card.style.display = show ? '' : 'none';
+      if (show) anyShown = true;
+    });
+    noResults.style.display = (q !== '' && !anyShown) ? 'block' : 'none';
+  }
+  search.addEventListener('input', function () {
+    localStorage.setItem('erg-search', search.value);
+    applyFilter();
+  });
+  document.addEventListener('keydown', function (e) {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault(); search.focus(); search.select();
+    }
+  });
+
+  // ---- Restore persisted state ----
+  (function init() {
+    var savedLang = localStorage.getItem('erg-lang');
+    var browser = (navigator.language || 'en').slice(0, 2);
+    var lang = savedLang || (['en', 'de', 'pt'].indexOf(browser) !== -1 ? browser : 'en');
+    var savedSearch = localStorage.getItem('erg-search') || '';
+    search.value = savedSearch;
+    setLang(lang);
+  })();
+</script>
+</body>
+</html>

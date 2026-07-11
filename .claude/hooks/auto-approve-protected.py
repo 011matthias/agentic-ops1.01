@@ -19,15 +19,13 @@ import json
 import os
 import sys
 
-HOOK_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hook-log.txt")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    import _scope  # canonical path->category scope predicates (shared)
+except Exception:  # never let a missing shared lib brick the hook
+    _scope = None
 
-ALLOWED_SEGMENTS = [
-    "/.claude/",
-    "/tools/",
-    "/workspace/",
-    "/docs/",
-    "/platform/",
-]
+HOOK_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hook-log.txt")
 
 
 def log_fire(msg: str) -> None:
@@ -48,17 +46,13 @@ def is_protected(file_path: str) -> bool:
     p = normalize(file_path)
     p_lower = p.lower()
 
+    # Memory-dir special case (auto-approve-specific): ~/.claude/projects/**/memory/**
     home = os.path.expanduser("~").replace("\\", "/").lower()
     if home and home in p_lower and "/.claude/projects/" in p_lower and "/memory/" in p_lower:
         return True
 
-    for seg in ALLOWED_SEGMENTS:
-        if seg in p:
-            return True
-    if p.startswith(".claude/") or p.startswith("tools/") or p.startswith("workspace/") \
-            or p.startswith("docs/") or p.startswith("platform/"):
-        return True
-    return False
+    # Protected-tree membership (.claude / tools / workspace / docs / platform).
+    return bool(_scope) and _scope.in_protected_segment(p)
 
 
 def main() -> int:

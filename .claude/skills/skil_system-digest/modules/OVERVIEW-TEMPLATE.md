@@ -66,7 +66,7 @@ build or fix the operationalization loop asks "should this become a new primitiv
 
 | Type | Count | Details |
 |------|-------|---------|
-| Rules | {RULE_COUNT} | {RULE_LINES}/{250} line budget used |
+| Rules | {RULE_COUNT} | {RULE_LINES} LOC; per-file soft ceiling 250 |
 | Skills | {SKILL_COUNT} | {MODULE_COUNT} total modules |
 | Agents | {AGENT_COUNT} | {USER_AGENT_COUNT} user-invokable, {INTERNAL_AGENT_COUNT} internal |
 | Commands | {COMMAND_COUNT} | User-triggered via /command |
@@ -119,7 +119,7 @@ User types /command
 
 ## System Health
 
-- Rules budget: {RULE_LINES}/250 lines ({PERCENT}% used)
+- Rules: {RULE_LINES} LOC total; per-file soft ceiling 250 (split candidates flagged by anneal-metrics)
 - Skill coverage: {domains covered}
 - Total modules: {MODULE_COUNT}
 ```

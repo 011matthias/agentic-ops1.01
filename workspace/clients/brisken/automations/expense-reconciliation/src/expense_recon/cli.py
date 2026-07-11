@@ -32,11 +32,20 @@ The config is a JSON file (stdlib only — no YAML dep) of the shape:
         "default_currency": "USD"
       },
       "output": {
-        "path": "report-may.xlsx"
-      },
+        "path": "report-may.xlsx",
+        "reconciled_csv": "reconciled-may.csv"  # optional flat reconciled
+      },                                         #   CSV; omit to skip
       "run_log": {                             # optional (slice 5b)
         "path": "history.sqlite",              # opt-in run history; omit
         "operator": "chris"                    #   the block to disable
+      },
+      "store": {                               # optional (8.2/8.3) — persist
+        "statements_path": "statements.sqlite",#   the tool's own tables so the
+        "reports_path": "reports.sqlite"       #   run survives the Zoho exit
+      },
+      "hosting": {                             # optional (8.4) — content-address
+        "root": "receipt-store",               #   filename-only receipts and
+        "receipts_dir": "receipts"             #   carry a stable URL into 8.5
       }
     }
 
@@ -61,6 +70,7 @@ import json
 import logging
 import sys
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -74,15 +84,25 @@ from .ingest.expense_csv import parse_expense_csv_tolerant
 from .ingest.receipts_csv import parse_receipts_csv_tolerant
 from .ingest.receipts_folder import parse_receipts_folder
 from .ingest.statement_csv import parse_statement_csv_tolerant
+from .ingest.statement_pdf import parse_statement_pdf_tolerant
 from .ingest.statement_xlsx import parse_statement_xlsx_tolerant
 from .llm.client import LLMClient, OpenAIClient
 from .llm.cost import CostTracker
 from .matching.deterministic import match_month
 from .matching.judgment import judge_ambiguous, judge_fx_match
 from .matching.types import Match, MatchOutcome, Receipt, Transaction
+from .output.reconciled_csv import write_reconciled_csv
 from .output.report_xlsx import write_report
 from .runlog import RunLog, decisions_from_outcome
 from .output.zoho_export import write_zoho_export
+from .store import (
+    ReportConflictError,
+    ReportStore,
+    StatementConflictError,
+    StatementStore,
+    group_by_report,
+)
+from .hosting import DEFAULT_URL_TEMPLATE, ReceiptStore, resolve_receipt_urls
 from .zoho.client import ZohoClient, ZohoConfig
 
 
@@ -100,20 +120,36 @@ def _load_statement(
     if not isinstance(s, dict):
         raise ConfigError("config.statement is missing or not an object")
 
-    required = ("path", "account_id", "legal_entity_id", "account_card_currency", "column_map")
-    missing = [k for k in required if k not in s]
-    if missing:
-        raise ConfigError(f"config.statement missing: {', '.join(missing)}")
+    if "path" not in s:
+        raise ConfigError("config.statement missing: path")
+    if "legal_entity_id" not in s:
+        raise ConfigError("config.statement missing: legal_entity_id")
 
     path = (config_dir / s["path"]).resolve()
     if not path.exists():
         raise ConfigError(f"statement file not found: {path}")
 
     suffix = path.suffix.lower()
-    column_map = s["column_map"]
+
+    # Chase statement PDF (2026-06-16): account_id comes from the per-card
+    # markers in the statement, and there is no column map. Only the path +
+    # legal entity (and an optional card currency) are needed.
+    if suffix == ".pdf":
+        return parse_statement_pdf_tolerant(
+            path=path,
+            legal_entity_id=s["legal_entity_id"],
+            account_card_currency=s.get("account_card_currency", "USD"),
+        )
+
+    # Tabular sources (CSV / Excel) carry one account and need a column map.
+    required = ("account_id", "account_card_currency", "column_map")
+    missing = [k for k in required if k not in s]
+    if missing:
+        raise ConfigError(f"config.statement missing: {', '.join(missing)}")
+
     kwargs = dict(
         path=path,
-        column_map=column_map,
+        column_map=s["column_map"],
         account_id=s["account_id"],
         legal_entity_id=s["legal_entity_id"],
         account_card_currency=s["account_card_currency"],
@@ -125,7 +161,7 @@ def _load_statement(
         sheet_name = s.get("sheet_name")
         return parse_statement_xlsx_tolerant(**kwargs, sheet_name=sheet_name)
     raise ConfigError(
-        f"statement.path must end in .csv / .xlsx / .xlsm, got {suffix!r}"
+        f"statement.path must end in .csv / .xlsx / .xlsm / .pdf, got {suffix!r}"
     )
 
 
@@ -257,27 +293,67 @@ def _apply_ambiguous_judgment(
     outcome.ambiguous[:] = rebuilt
 
 
-def run(
-    config_path: Path,
-    out_override: Path | None = None,
-    *,
-    dry_run: bool = False,
-    explain: bool = False,
-) -> Path | None:
-    """Execute the reconciliation pipeline.
+@dataclass
+class ReconcileResult:
+    """The in-memory result of the reconciliation pipeline, before any
+    file is written.
 
-    Returns the report path on a normal run. Returns None on
-    `dry_run=True` (Summary is printed to stdout, no xlsx written —
-    ANNEALING B4).
+    Produced by `reconcile()` and consumed by both the CLI `run()` (which
+    writes the xlsx / Zoho export / run-log) and the web app (which
+    persists a snapshot and renders the review workbench). Keeping the
+    pipeline output as data, separate from the writers, is what lets the
+    browser UI reuse the exact same matching/judgment path as the CLI.
     """
-    config_path = config_path.resolve()
-    if not config_path.exists():
-        raise ConfigError(f"config file not found: {config_path}")
 
-    cfg = json.loads(config_path.read_text(encoding="utf-8"))
-    config_dir = config_path.parent
-    logger.info("run started: config=%s", config_path)
+    outcome: MatchOutcome
+    transactions: list[Transaction]
+    receipts: list[Receipt]
+    parse_errors: list[tuple[str, int, str]]
+    cost_tracker: CostTracker | None
+    chart_of_accounts: ChartOfAccounts | None
+    zoho_cfg: dict
 
+
+def _load_learned(cfg: dict, config_dir: Path):
+    """Build the Phase-2 learned-category lookup from a `learning:` config
+    block (`{"path": "learning.sqlite"}`), opt-in like `store:`/`run_log:`.
+    Absent block, or absent file, => None (no consult, no behaviour change)."""
+    block = cfg.get("learning")
+    if not isinstance(block, dict) or not block.get("path"):
+        return None
+    from .learning import MerchantCategoryLookup
+
+    return MerchantCategoryLookup.from_db_path((config_dir / block["path"]).resolve())
+
+
+def _load_match_memory(cfg: dict, config_dir: Path):
+    """Build the Phase-2 (PR 2c) Match memory (vendor aliases + per-merchant
+    FX) from the same `learning:` config block. Absent => None."""
+    block = cfg.get("learning")
+    if not isinstance(block, dict) or not block.get("path"):
+        return None
+    from .learning import MatchMemory
+
+    return MatchMemory.from_db_path((config_dir / block["path"]).resolve())
+
+
+def reconcile(
+    cfg: dict, config_dir: Path, *, learned=None, match_memory=None
+) -> ReconcileResult:
+    """Run ingest -> categorize -> match -> judgment and return the
+    in-memory result, writing nothing to disk.
+
+    `cfg` is the parsed run config (same shape `run()` loads from a JSON
+    file); `config_dir` is the base for resolving the config's relative
+    paths. This is the side-effect-free core shared by the CLI and the
+    web UI.
+
+    `learned` (Phase 2) is a `MerchantCategoryLookup` consulted on the
+    weak vendor-fallback path of categorization. `match_memory` (PR 2c)
+    is a `MatchMemory` (vendor aliases + per-merchant FX) feeding match
+    scoring/tie-break. The web UI passes both directly; the CLI falls back
+    to a `learning:` config block. None => no memory consult.
+    """
     # LLM client first: folder-mode receipt ingest (slice 2.2 OCR)
     # needs it before any receipt is read.
     llm_client, cost_tracker = _build_llm_client(cfg)
@@ -320,11 +396,27 @@ def run(
 
     # BLUEPRINT LD-2: categorize per line item BEFORE matching so the
     # report writer sees Tier 1/2/3 sources on every receipt's items.
+    # Phase 2: a learned merchant->category (memory) upgrades the weak
+    # vendor-fallback path to Tier-1 LEARNED; a good line read still wins.
+    if learned is None:
+        learned = _load_learned(cfg, config_dir)
     receipts = categorize_receipts(
-        receipts, client=llm_client, chart_of_accounts=account_labels
+        receipts, client=llm_client, chart_of_accounts=account_labels, learned=learned
     )
 
-    outcome = match_month(transactions, receipts)
+    # PR 2c: learned vendor aliases + per-merchant FX feed match scoring /
+    # tie-break (never bucket membership). Empty memory => default config.
+    if match_memory is None:
+        match_memory = _load_match_memory(cfg, config_dir)
+    match_cfg = None
+    if match_memory:
+        from .matching.deterministic import MatchingConfig
+
+        match_cfg = MatchingConfig(
+            vendor_aliases=match_memory.vendor_aliases,
+            merchant_fx=dict(match_memory.merchant_fx),
+        )
+    outcome = match_month(transactions, receipts, match_cfg)
     logger.info(
         "matched=%d, judgment=%d, ambiguous=%d, unmatched_tx=%d, unmatched_rec=%d",
         len(outcome.matches),
@@ -345,6 +437,47 @@ def run(
             cost_tracker.total_cost_usd,
         )
 
+    return ReconcileResult(
+        outcome=outcome,
+        transactions=transactions,
+        receipts=receipts,
+        parse_errors=parse_errors,
+        cost_tracker=cost_tracker,
+        chart_of_accounts=chart_of_accounts,
+        zoho_cfg=zoho_cfg,
+    )
+
+
+def run(
+    config_path: Path,
+    out_override: Path | None = None,
+    *,
+    dry_run: bool = False,
+    explain: bool = False,
+) -> Path | None:
+    """Execute the reconciliation pipeline.
+
+    Returns the report path on a normal run. Returns None on
+    `dry_run=True` (Summary is printed to stdout, no xlsx written —
+    ANNEALING B4).
+    """
+    config_path = config_path.resolve()
+    if not config_path.exists():
+        raise ConfigError(f"config file not found: {config_path}")
+
+    cfg = json.loads(config_path.read_text(encoding="utf-8"))
+    config_dir = config_path.parent
+    logger.info("run started: config=%s", config_path)
+
+    result = reconcile(cfg, config_dir)
+    outcome = result.outcome
+    transactions = result.transactions
+    receipts = result.receipts
+    parse_errors = result.parse_errors
+    cost_tracker = result.cost_tracker
+    chart_of_accounts = result.chart_of_accounts
+    zoho_cfg = result.zoho_cfg
+
     if dry_run:
         _print_dry_run_summary(
             outcome, transactions, receipts, parse_errors, cost_tracker
@@ -364,12 +497,27 @@ def run(
         explain=explain,
     )
 
-    # BLUEPRINT 4.6 + 4.9: write the Zoho journal-entry import CSV when a
-    # chart of accounts is loaded and an export path is configured. The
-    # CoA resolves the debit accounts; `card_accounts` resolves the
-    # balancing credit. Journal POSTING to Zoho (4b) stays gated.
+    # BLUEPRINT 8.2/8.3: persist the tool's own tables (opt-in `store:`
+    # block) so the run's statement + reports survive the Zoho switch-off.
+    # Returns a document_id -> report_number lookup for the export.
+    report_lookup = _persist_store(cfg, config_dir, transactions, receipts)
+
+    # BLUEPRINT 8.4: content-address filename-only receipts (opt-in
+    # `hosting:` block) and resolve every receipt to a stable URL.
+    receipt_urls = _host_receipts(cfg, config_dir, receipts)
+
+    # BLUEPRINT 4.6 + 4.9 + 8.5: write the Zoho journal-entry import CSV
+    # when a chart of accounts is loaded and an export path is configured.
+    # The CoA resolves the debit accounts; `card_accounts` resolves the
+    # balancing credit; the 8.5 reference columns carry the receipt URL
+    # (8.4) + report reference (8.3). Journal POSTING to Zoho (4b) stays gated.
     if chart_of_accounts is not None and zoho_cfg.get("export_path"):
         export_path = (config_dir / zoho_cfg["export_path"]).resolve()
+        # Pre-write COA validation gate (opt-in `coa_validation:` block).
+        # When present, any posting account that is not postable in the
+        # target legal entity's chart is diverted to review before the
+        # Books export is written. Absent block => unguarded (no change).
+        coa_gate = _build_coa_gate(cfg, config_dir)
         write_zoho_export(
             outcome,
             transactions,
@@ -377,9 +525,32 @@ def run(
             export_path,
             chart_of_accounts=chart_of_accounts,
             card_accounts=zoho_cfg.get("card_accounts"),
+            receipt_urls=receipt_urls,
+            report_for=report_lookup,
+            coa_gate=coa_gate,
         )
         logger.info("wrote Zoho journal export: %s", export_path)
         print(f"Wrote Zoho export: {export_path}")
+
+    # Flat reconciled CSV (2026-06-16): the CSV twin of the xlsx report —
+    # one row per statement line, enriched with its matched expense. Written
+    # when `output.reconciled_csv` is set; reuses the same 8.4 receipt-URL /
+    # 8.3 report-reference lookups as the Zoho export so the references match,
+    # and needs no chart of accounts (it's the reconciliation view, not a
+    # posting file).
+    recon_csv = out_cfg.get("reconciled_csv")
+    if recon_csv:
+        recon_csv_path = (config_dir / recon_csv).resolve()
+        write_reconciled_csv(
+            outcome,
+            transactions,
+            receipts,
+            recon_csv_path,
+            receipt_urls=receipt_urls,
+            report_for=report_lookup,
+        )
+        logger.info("wrote reconciled CSV: %s", recon_csv_path)
+        print(f"Wrote reconciled CSV: {recon_csv_path}")
 
     # BLUEPRINT 5.7-5.10: append this run to the SQLite run-log when a
     # `run_log:` block is configured (opt-in; no block = no file, no
@@ -391,6 +562,134 @@ def run(
     )
 
     return report_path
+
+
+def _persist_store(
+    cfg: dict,
+    config_dir: Path,
+    transactions: list[Transaction],
+    receipts: list[Receipt],
+) -> "Callable[[str], str | None] | None":
+    """Persist the tool's own tables when a `store:` block is configured
+    (opt-in; no block = no file, no behaviour change — the `run_log:`
+    precedent). Returns a `document_id -> report_number` lookup (8.3 cross-
+    reference) for the export's report-reference column, or None when
+    reports are not persisted.
+
+    Shape:
+        {
+          "store": {
+            "statements_path": "statements.sqlite",  # 8.2; omit to skip
+            "reports_path": "reports.sqlite",         # 8.3; omit to skip
+            "statement_id": "chase-2838-2026-04"      # optional; default
+          }                                           #   "{account_id}:{period}"
+        }
+    """
+    s = cfg.get("store")
+    if not isinstance(s, dict):
+        return None
+
+    stmt = cfg.get("statement") or {}
+
+    # 8.2 — bank-statement table. Dedup is global by content fingerprint;
+    # statement_id is the batch identity for statement-number validation,
+    # defaulting to account + the statement's date span so a re-run of the
+    # same month matches (and a revised charge surfaces as a conflict).
+    sp = s.get("statements_path")
+    if sp:
+        db_path = (config_dir / sp).resolve()
+        account_id = stmt.get("account_id", "")
+        statement_id = s.get("statement_id") or f"{account_id}:{_period_label(transactions)}"
+        source_path = str((config_dir / stmt["path"]).resolve()) if stmt.get("path") else None
+        try:
+            with StatementStore(db_path) as store:
+                res = store.ingest_transactions(
+                    transactions, statement_id=statement_id, source_path=source_path
+                )
+            logger.info(
+                "persisted statement %s: +%d new, %d duplicate(s)",
+                statement_id, res.inserted, res.duplicates,
+            )
+            print(
+                f"Statement persisted: {statement_id} "
+                f"(+{res.inserted} new, {res.duplicates} dup)"
+            )
+        except StatementConflictError as exc:
+            # A re-download with a revised charge under the same id. Surface
+            # it rather than silently replacing the stored batch.
+            logger.warning("statement not persisted (content changed): %s", exc)
+            print(
+                f"WARNING: statement {statement_id} changed since last run; "
+                f"not persisted ({exc})"
+            )
+
+    # 8.3 — report table + per-expense cross-reference. Header fields the
+    # expense lines don't carry (submitter, status) stay None (B4); period,
+    # currency totals, and the count are derived from the expense group.
+    report_lookup: "Callable[[str], str | None] | None" = None
+    rp = s.get("reports_path")
+    if rp:
+        db_path = (config_dir / rp).resolve()
+        with ReportStore(db_path) as store:
+            for report_number, group in group_by_report(receipts).items():
+                if report_number is None:
+                    continue
+                try:
+                    store.ingest_report(group, report_number=report_number)
+                except ReportConflictError as exc:
+                    logger.warning("report %s not persisted: %s", report_number, exc)
+                    print(
+                        f"WARNING: report {report_number} changed since last run; "
+                        f"not persisted ({exc})"
+                    )
+            # Materialize the lookup so it outlives the store handle.
+            report_map = {r.document_id: store.report_for(r.document_id) for r in receipts}
+        n_linked = sum(1 for v in report_map.values() if v)
+        n_reports = len({v for v in report_map.values() if v})
+        logger.info("persisted %d report(s), %d expense(s) cross-referenced", n_reports, n_linked)
+        print(f"Reports persisted: {n_reports} report(s), {n_linked} expense(s) linked")
+        report_lookup = report_map.get
+
+    return report_lookup
+
+
+def _host_receipts(
+    cfg: dict, config_dir: Path, receipts: list[Receipt]
+) -> "dict[str, str | None] | None":
+    """Host filename-only receipts content-addressed when a `hosting:`
+    block is configured (opt-in). Returns a `document_id -> URL` map for
+    the export's receipt-URL column, or None when not configured.
+
+    Shape:
+        {
+          "hosting": {
+            "root": "receipt-store",               # content-addressed store dir
+            "url_template": "/receipts/{relpath}", # optional; host-agnostic default
+            "receipts_dir": "receipts"             # folder to resolve receipt_name
+          }
+        }
+    """
+    h = cfg.get("hosting")
+    if not isinstance(h, dict):
+        return None
+    root = (config_dir / h.get("root", "receipt-store")).resolve()
+    store = ReceiptStore(root, url_template=h.get("url_template", DEFAULT_URL_TEMPLATE))
+    receipts_dir = h.get("receipts_dir")
+    search_dir = (config_dir / receipts_dir).resolve() if receipts_dir else None
+    urls = resolve_receipt_urls(receipts, store=store, search_dir=search_dir)
+    n_hosted = sum(1 for v in urls.values() if v)
+    logger.info("hosted/linked %d of %d receipt URL(s)", n_hosted, len(urls))
+    print(f"Receipts hosted: {n_hosted} of {len(urls)} addressed")
+    return urls
+
+
+def _period_label(transactions: list[Transaction]) -> str:
+    """A stable batch label from the statement's date span, the default
+    `statement_id` when the config supplies none."""
+    dates = [t.transaction_date for t in transactions if t.transaction_date]
+    if not dates:
+        return "all"
+    return f"{min(dates).isoformat()}..{max(dates).isoformat()}"
 
 
 def _record_run_log(
@@ -560,6 +859,67 @@ def _build_chart_of_accounts(
     return coa, z
 
 
+def _build_coa_gate(cfg: dict, config_dir: Path):
+    """Read the `coa_validation:` block and build the pre-write COA gate.
+
+    Returns `None` when there is no `coa_validation:` block (or it is
+    disabled) — the Zoho export then runs unguarded, preserving prior
+    behaviour byte for byte.
+
+    The gate validates every posting account against ONE legal entity's
+    chart of accounts (a run targets one entity) and diverts any
+    non-postable line to review before it reaches the Books export.
+
+    Shape:
+        {
+          "coa_validation": {
+            "enabled": true,                    // optional, default true
+            "chart_path": "books-coa.json",     // path to the Books COA JSON
+            "org_id": "822741658",              // which entity's chart
+            "scope_groups": [ "Travel Expense", ... ],  // optional; restrict
+            "types": [ "expense", ... ],        // optional; account-type set
+            "entity_label": "Corporate Services" // optional; for review notes
+          }
+        }
+
+    The Books COA JSON has the shape
+    `{ "<org_id>": { "org": {...}, "accounts": [...] }, ... }`; it is
+    sensitive client data and is never committed to this repo.
+    """
+    block = cfg.get("coa_validation")
+    if not isinstance(block, dict) or not block.get("enabled", True):
+        return None
+
+    from .coa_gate import CoaGate, load_entity_chart
+    from .ingest.chart_of_accounts import EXPENSE_ACCOUNT_TYPES
+
+    chart_path = block.get("chart_path")
+    if not chart_path:
+        raise ConfigError("config.coa_validation.chart_path is required")
+    org_id = block.get("org_id")
+    if not org_id:
+        raise ConfigError("config.coa_validation.org_id is required")
+
+    path = (config_dir / chart_path).resolve()
+    if not path.exists():
+        raise ConfigError(f"COA validation chart_path not found: {path}")
+
+    try:
+        chart = load_entity_chart(path, org_id)
+    except (KeyError, FileNotFoundError, ValueError) as exc:
+        raise ConfigError(f"COA validation: {exc}") from exc
+
+    scope_groups = block.get("scope_groups")
+    types = block.get("types") or EXPENSE_ACCOUNT_TYPES
+    entity = block.get("entity_label") or str(org_id)
+    return CoaGate(
+        chart=chart,
+        scope_groups=tuple(scope_groups) if scope_groups else None,
+        types=tuple(types),
+        entity=entity,
+    )
+
+
 def _print_dry_run_summary(
     outcome: MatchOutcome,
     transactions: list[Transaction],
@@ -623,6 +983,13 @@ def main(argv: list[str] | None = None) -> int:
         from .calibrate import main as calibrate_main
 
         return calibrate_main(argv[1:])
+
+    # `expense-recon memory list|forget|reset` — inspect / correct the
+    # cross-run learning store (Phase 2 escape hatch, 2d).
+    if argv and argv[0] == "memory":
+        from .learning_cli import main as memory_main
+
+        return memory_main(argv[1:])
 
     parser = argparse.ArgumentParser(
         prog="expense-recon",

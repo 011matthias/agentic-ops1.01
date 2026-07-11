@@ -102,10 +102,15 @@ CANONICAL_HOOKS = {
                     "command": _cmd(".claude/hooks/reference-anchor-gate.py"),
                     "timeout": 10000,
                 },
+                {
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/file-placement-gate.py"),
+                    "timeout": 10000,
+                },
             ],
         },
         {
-            "matcher": "Bash",
+            "matcher": "Bash|PowerShell",
             "hooks": [
                 {
                     "type": "command",
@@ -142,7 +147,7 @@ CANONICAL_HOOKS = {
             ],
         },
         {
-            "matcher": "Bash",
+            "matcher": "Bash|PowerShell",
             "hooks": [
                 {
                     "type": "command",
@@ -191,7 +196,17 @@ CANONICAL_HOOKS = {
                     "type": "command",
                     "command": _cmd("tools/friction-watch.py", "--once-per-day --quiet"),
                     "timeout": 10000,
-                }
+                },
+                {
+                    # Auto-surface stale/malformed per-project status files so
+                    # currency does not depend on remembering to run --check.
+                    # Fail-open, exit 0 always; advises at most once per day.
+                    # tools/ script (not a .claude/hooks gate), like friction-watch
+                    # -- not part of EXPECTED_HOOK_SCRIPTS. See rule_project_status.md.
+                    "type": "command",
+                    "command": _cmd("tools/project_status.py", "--sweep-stale --once-per-day"),
+                    "timeout": 10000,
+                },
             ],
         }
     ],
@@ -202,6 +217,7 @@ EXPECTED_HOOK_SCRIPTS = {
     "input-classifier.py",
     "auto-approve-protected.py",
     "reference-anchor-gate.py",
+    "file-placement-gate.py",
     "instantly-invasive-gate.py",
     "no-auto-commit-gate.py",
     "cd-guard.py",
