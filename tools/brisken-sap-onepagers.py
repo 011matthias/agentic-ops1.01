@@ -70,37 +70,38 @@ header{display:flex;align-items:center;justify-content:space-between;
 .content{flex:1;display:flex;flex-direction:column;justify-content:space-between;
   gap:4mm;padding:5mm 0 5.5mm;}
 
+.hero{text-align:center;}
 .eyebrow{font-size:9pt;letter-spacing:.26em;text-transform:uppercase;color:var(--cyan);font-weight:700;margin-bottom:2.8mm;}
 h1{font-size:33pt;font-weight:700;letter-spacing:-1px;color:#f2f7fd;line-height:1.04;}
 h1 .ac{color:var(--cyan);}
-.promise{font-size:14pt;color:var(--heading);margin-top:2.8mm;font-weight:400;line-height:1.35;max-width:168mm;}
+.promise{font-size:14pt;color:var(--heading);margin-top:2.8mm;font-weight:400;line-height:1.35;max-width:150mm;margin-left:auto;margin-right:auto;}
 .rename{font-size:9pt;color:var(--muted);margin-top:2.2mm;font-weight:500;}
 
 .kicker{font-size:7.8pt;letter-spacing:.22em;text-transform:uppercase;color:var(--cyan-lo);font-weight:700;}
-.sec-label{display:block;margin-bottom:2.6mm;}
+.sec-label{display:block;margin-bottom:2.6mm;text-align:center;}
 
-.problem{padding:4mm 4.5mm;border-left:2.5px solid var(--cyan);
-  background:linear-gradient(90deg, rgba(47,198,214,.09), rgba(47,198,214,.025));
-  border-radius:0 2.5mm 2.5mm 0;}
+.problem{padding:3.8mm 10mm 4.2mm;border:1px solid rgba(47,198,214,.25);border-top:2.5px solid var(--cyan);
+  background:linear-gradient(180deg, rgba(47,198,214,.09), rgba(47,198,214,.02));
+  border-radius:2.5mm;text-align:center;}
 .problem .kicker{display:block;margin-bottom:1.6mm;}
-.problem p{font-size:11pt;color:#d5e0ef;line-height:1.45;}
+.problem p{font-size:11pt;color:#d5e0ef;line-height:1.45;max-width:150mm;margin:0 auto;}
 
 .flow{display:flex;flex-direction:column;align-items:stretch;}
 .tier{border:1px solid var(--line-strong);border-radius:3mm;
   background:linear-gradient(180deg, rgba(20,40,66,.78), rgba(12,26,45,.78));
   box-shadow:inset 0 1px 0 rgba(255,255,255,.05);padding:4mm 4.5mm;}
 .tier.named{border-color:rgba(47,198,214,.45);}
-.tier-head{display:flex;align-items:baseline;gap:3.5mm;margin-bottom:3mm;}
+.tier-head{display:flex;align-items:baseline;justify-content:center;gap:3.5mm;margin-bottom:3mm;}
 .tier-name{font-size:15.5pt;font-weight:700;color:var(--heading);letter-spacing:-.2px;}
 .tier-name .ac{color:var(--cyan);}
-.chips{display:flex;flex-wrap:wrap;gap:2.4mm;}
+.chips{display:flex;flex-wrap:wrap;justify-content:center;gap:2.4mm;}
 .chip{padding:2.3mm 3.4mm;border-radius:2mm;background:rgba(9,20,34,.7);border:1px solid var(--line-strong);
   font-size:10.5pt;font-weight:600;color:#e2ecf8;}
 .band{border:1px solid var(--line-strong);border-radius:3mm;padding:3.4mm 4mm;text-align:center;
   background:rgba(9,20,34,.55);font-size:11.5pt;font-weight:600;color:#cfe0f3;letter-spacing:.4px;}
 .target{border:1px solid rgba(47,198,214,.5);border-radius:3mm;padding:4mm 4.5mm;
   background:linear-gradient(160deg, rgba(47,198,214,.14), rgba(12,26,45,.45));
-  box-shadow:0 0 6mm rgba(47,198,214,.10);display:flex;align-items:center;gap:3.5mm;}
+  box-shadow:0 0 6mm rgba(47,198,214,.10);display:flex;align-items:center;justify-content:center;gap:3.5mm;}
 .target .tb{font-size:14pt;font-weight:700;color:#eaf5f8;}
 .target .ts{font-size:10pt;color:var(--muted);}
 .conn{display:flex;justify-content:center;align-items:center;height:7mm;}
@@ -108,8 +109,8 @@ h1 .ac{color:var(--cyan);}
 .conn .cv{position:absolute;color:var(--cyan);font-size:11pt;line-height:1;margin-top:5mm;}
 
 .points{list-style:none;display:flex;flex-direction:column;gap:3.2mm;}
-.points li{position:relative;padding-left:6.5mm;font-size:11pt;color:#d8e2f0;line-height:1.45;}
-.points li::before{content:"";position:absolute;left:1mm;top:2.4mm;width:2.4mm;height:2.4mm;
+.points li{font-size:11pt;color:#d8e2f0;line-height:1.45;text-align:center;max-width:158mm;margin:0 auto;}
+.points li::before{content:"";display:inline-block;width:2.2mm;height:2.2mm;margin-right:2.6mm;
   background:linear-gradient(135deg,var(--cyan-hi),var(--cyan));transform:rotate(45deg);border-radius:.5mm;}
 
 .caps{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid rgba(47,198,214,.3);
