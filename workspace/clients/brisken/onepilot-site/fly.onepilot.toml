@@ -1,0 +1,37 @@
+# Fly.io config for the STANDALONE OnePilot platform site (separate app from
+# the brisken-onepilot-proto review host). Frankfurt (EU), scales to zero.
+# Root "/" serves the OnePilot platform page (BRISKEN_SITE_ROOT=platform); the
+# TreasuryCentral prototype stays reachable at its own path so cross-links work.
+# Reviewer feedback lives on this app's own onepilot_data volume at /data.
+# Intended to become onepilot.brisken.com after review sign-off.
+app = "brisken-onepilot"
+primary_region = "fra"
+
+[build]
+
+[env]
+  BRISKEN_SITE_DATA = "/data"
+  BRISKEN_SITE_ROOT = "platform"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "get"
+    path = "/healthz"
+
+[mounts]
+  source = "onepilot_data"
+  destination = "/data"
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1

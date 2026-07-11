@@ -1,0 +1,10 @@
+{
+  "name": "brisken-onepilot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Brisken TreasuryCentral / OnePilot site + book-a-demo capture",
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.0"
+  }
+}

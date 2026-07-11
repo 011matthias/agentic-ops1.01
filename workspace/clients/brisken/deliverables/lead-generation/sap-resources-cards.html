@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SAP PartnerFinder: Resources shelf walk-in pack</title>
+<meta name="robots" content="noindex">
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;
+d.setAttribute('data-theme',t==='light'?'light':(t==='dark'||window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  :root[data-theme="dark"]{--bg:#081320;--panel:#0e1e33;--panel2:#132844;--text:#e8eef6;--muted:#9db0c8;--head:#f2f7fd;--line:#1e3550;--cyan:#2fc6d6;--cyan-lo:#3f96a3;--ok:#37c07a;--warn:#e0a33e;--danger:#e2685f;}
+  :root[data-theme="light"]{--bg:#f4f7fb;--panel:#ffffff;--panel2:#eef3f9;--text:#1d2b3d;--muted:#5a6b81;--head:#0d1a2b;--line:#d6e0ec;--cyan:#0f7d8c;--cyan-lo:#0f7d8c;--ok:#1d8a53;--warn:#9a6714;--danger:#b23a30;}
+  body{font-family:"Segoe UI",system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);
+    -webkit-font-smoothing:antialiased;padding:40px 20px 72px;line-height:1.5;}
+  .wrap{max-width:1000px;margin:0 auto;}
+  header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:6px;}
+  .brand{display:flex;align-items:center;gap:10px;font-size:24px;font-weight:700;color:var(--head);letter-spacing:-.4px;}
+  .dia{width:12px;height:12px;background:var(--cyan);transform:rotate(45deg);border-radius:2px;}
+  .btn{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:999px;
+    padding:7px 14px;font-size:12.5px;font-weight:600;cursor:pointer;}
+  .btn:hover{border-color:var(--cyan);}
+  .eyebrow{font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--cyan-lo);font-weight:700;margin:26px 0 6px;}
+  h1{font-size:27px;font-weight:700;color:var(--head);letter-spacing:-.5px;}
+  h2{font-size:17px;font-weight:700;color:var(--head);margin:34px 0 10px;}
+  p.sub{color:var(--muted);margin-top:8px;max-width:74ch;}
+  .search{width:100%;margin:22px 0 4px;padding:11px 14px;border-radius:10px;border:1px solid var(--line);
+    background:var(--panel);color:var(--text);font-size:14px;}
+  .hint{font-size:11.5px;color:var(--muted);margin-bottom:8px;}
+  .note{border:1px solid var(--line);border-left:3px solid var(--cyan);background:var(--panel);
+    border-radius:10px;padding:14px 16px;margin:16px 0;font-size:13.5px;}
+  .note.warn{border-left-color:var(--warn);}
+  .note b{color:var(--head);}
+  ul{margin:8px 0 0 20px;}
+  li{margin:5px 0;font-size:13.5px;}
+  .card{border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:0;margin:14px 0;overflow:hidden;}
+  .card > .top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 16px;
+    background:var(--panel2);border-bottom:1px solid var(--line);flex-wrap:wrap;}
+  .card .num{font-weight:700;color:var(--head);font-size:14.5px;}
+  .tag{font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted);}
+  .tag.add{color:var(--ok);border-color:var(--ok);}
+  .tag.edit{color:var(--warn);border-color:var(--warn);}
+  .tag.keep{color:var(--muted);}
+  .field{display:grid;grid-template-columns:150px 1fr auto;gap:12px;align-items:start;padding:11px 16px;border-top:1px solid var(--line);}
+  .field:first-of-type{border-top:none;}
+  .flabel{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding-top:3px;}
+  .fval{font-size:13.5px;color:var(--text);word-break:break-word;font-family:"Segoe UI",system-ui,sans-serif;}
+  .fval.mono{font-family:ui-monospace,"Cascadia Code",Consolas,monospace;font-size:12.5px;color:var(--cyan);}
+  .fval.ph{color:var(--muted);font-style:italic;}
+  .count{font-size:11px;color:var(--muted);margin-top:4px;}
+  .copy{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:7px;
+    padding:4px 10px;font-size:11.5px;font-weight:600;cursor:pointer;opacity:0;transition:opacity .12s;}
+  .field:hover .copy{opacity:1;}
+  .copy:hover{color:var(--cyan);border-color:var(--cyan);}
+  .copy.done{color:var(--ok);border-color:var(--ok);opacity:1;}
+  .remove{border:1px solid var(--danger);border-radius:12px;padding:14px 16px;margin:12px 0;background:var(--panel);}
+  .remove li{color:var(--text);}
+  table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px;}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
+  th{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);}
+  footer{margin-top:44px;border-top:1px solid var(--line);padding-top:16px;font-size:12px;color:var(--muted);}
+  .hidden{display:none;}
+  @media print{.btn,.search,.hint,.copy{display:none !important;}body{padding:0;}
+    h2{page-break-before:always;} h2:first-of-type{page-break-before:avoid;}}
+</style>
+</head>
+<body data-updated="2026-07-09">
+<div class="wrap">
+  <header>
+    <div class="brand"><span>brisken</span><span class="dia"></span></div>
+    <button class="btn" onclick="(function(){var d=document.documentElement;var c=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',c);localStorage.setItem('theme',c);})()" aria-label="Toggle theme">&#9788; / &#9790;</button>
+  </header>
+
+  <div class="eyebrow">SAP PartnerFinder &middot; editor 0001663611</div>
+  <h1>Resources shelf: walk-in pack</h1>
+  <p class="sub">Every field of every card, in the order the SAP <b>Add / Edit Resource</b> dialog asks for them. Hover a field to copy it. The shelf is capped at ten cards and is currently full, so four come off before six go on.</p>
+
+  <input id="q" class="search" type="search" placeholder="Filter cards by name, type or product...">
+  <div class="hint">Ctrl / Cmd + K to focus the filter. Theme and filter persist.</div>
+
+  <div class="note">
+    <b>Where the files live.</b> Cards 04 to 09 point at <span class="fval mono">resources.brisken.com</span>, a dedicated
+    host isolated from the live site. Cards 01, 02 and 03 stay on <span class="fval mono">brisken.io</span>, the legacy
+    WordPress site, which is where SAP currently links them.
+  </div>
+
+  <div class="note warn">
+    <b>Link status, checked against the deployed origin on 2026-07-09.</b> Cards 04 to 08 are live and return 200.
+    Card 09 (Digital Co-Worker) is staged but <b>not yet deployed</b>; that link 404s until
+    <span class="fval mono">resources.brisken.com</span> is redeployed. The hosted Smart Trading deck arrived with three
+    em-dashes; the hosted copy was corrected and now reads zero, while the SharePoint original was left untouched.
+  </div>
+
+  <h2 id="remove">Step 1: remove the bottom six</h2>
+  <p class="sub">Removing a card takes it off this shelf only. Nothing is deleted from the SAP Store.</p>
+  <div class="remove">
+    <ul>
+      <li><b>05 - SAP Insider Webinar: Market Data Governance</b> &middot; dated event</li>
+      <li><b>06 - SAP Store: Market Data Hub</b> &middot; see the note below, this one comes back as card 10</li>
+      <li><b>07 - SAP Store: TraderPlus</b> &middot; retired name</li>
+      <li><b>08 - SAP Store: MDH for European Central Bank (ECB)</b> &middot; niche variant</li>
+      <li><b>09 - SAP Store: MDH for Commodities</b> &middot; niche variant</li>
+      <li><b>10 - BRISKEN RapSoDy: Rapid Solution Deployment</b> &middot; turnkey projects</li>
+    </ul>
+  </div>
+
+  <div class="note warn">
+    <b>Two consequences of that cut.</b> It deletes every SAP Store card, so the profile is left with no route to
+    buy anything; card 10 below reinstates one. And the four survivors are all Market Data Hub or TraderPlus,
+    which is why the six replacements deliberately avoid both subjects.
+  </div>
+
+  <div class="note warn">
+    <b>Card 04 is a swap, not an addition.</b> The 2019 TraderPlus flyer that survives the cut still says
+    "TraderPlus", "SAP Trading Platform Integration" and "SAP ECC" throughout, which is exactly the naming the
+    repositioning set out to purge. While it stands, the 2026 Smart Trading deck cannot be added as a new card
+    without duplicating it. Repointing card 04 retires the flyer and duplicates nothing.
+  </div>
+
+  <div class="note warn">
+    <b>Why the old SAP Store card was broken.</b> It pointed at product id <span class="fval mono">0000004063</span>,
+    which is retired. That URL still answers 200 and then silently bounces to an empty SAP Store search page, so it
+    looks alive to any link checker. The live listing is product id <span class="fval mono">2001008447</span>, verified
+    by rendering it: "Market Data Hub by BRISKEN LLC", and it shows "(0) Write a review". Card 10 carries the working link.
+  </div>
+
+  <div class="note">
+    <b>Why these six and no others.</b> The four surviving brochures cover Market Data Hub from three angles
+    (problem, overview, SAP implementation blueprint) and trade straight-through processing once. Every
+    replacement below is a subject none of them touch. Our own MDH deck and Smart Trading one-pager were
+    excluded on exactly that test.
+  </div>
+
+  <h2 id="cards">Step 2: the final ten cards</h2>
+  <div id="cardlist"></div>
+
+  <h2 id="map">Field map</h2>
+  <table>
+    <tr><th>Dialog field</th><th>Rule</th></tr>
+    <tr><td>Link to Resource</td><td>A working URL. A brochure card points at the hosted PDF; a Store card points at its SAP Store listing. No file upload, no size limit.</td></tr>
+    <tr><td>Resource Name</td><td>The number prefix is cosmetic ordering only.</td></tr>
+    <tr><td>Short Description</td><td>Hard cap 155 characters. Every description below is validated under it.</td></tr>
+    <tr><td>Resource Type</td><td>Brochure, SAP Reference, Event or Packages.</td></tr>
+  </table>
+
+  <footer>
+    Prepared by UnpauseAI for Brisken. Last updated: 2026-07-09.
+    Card copy validated against the 155-character cap; zero em-dashes in our own text.
+  </footer>
+</div>
+
+<script>
+// Cards 01-03 stay exactly as they are. Card 04 is a SWAP, not an addition: the
+// 2019 TraderPlus flyer leaves the shelf and the 2026 Smart Trading deck takes its
+// slot, so nothing duplicates. Cards 05-10 are the six replacements, each chosen
+// because no incumbent brochure covers its subject.
+const CARDS = [
+ {n:"01",name:"01 - Market Data Hub: Infographic",desc:"[keep the existing text]",type:"Brochure",link:"[keep: brisken.io ...InfoGraphics-210816.pdf]",do:"KEEP",cls:"keep"},
+ {n:"02",name:"02 - Market Data Hub: Briefing",desc:"[keep the existing text]",type:"Brochure",link:"[keep: brisken.io ...SAP-Briefing-V004.pdf]",do:"KEEP · names Thomson Reuters + Quandl, both retired brands",cls:"keep"},
+ {n:"03",name:"03 - SAP BLUEPRINT: BRISKEN MARKET DATA HUB",desc:"[keep the existing SAP-authored text]",type:"SAP Reference",link:"[keep: brisken.io ...SAP-Blueprints-Brisken-Finalv3.pdf]",do:"KEEP",cls:"keep"},
+ {n:"04",name:"04 - Brisken Smart Trading: Overview",desc:"Straight-through trade capture from FXall, Bloomberg FX GO, 360T and BidFX into SAP TRM and FAM. Governed, no manual re-key.",type:"Brochure",link:"https://resources.brisken.com/smart-trading-deck.pdf",do:"SWAP · retires the 2019 TraderPlus flyer",cls:"edit"},
+ {n:"05",name:"05 - TreasuryCentral: The Cockpit",desc:"One screen for cash, investments, debt, FX, market data and governance, on your SAP data, with every move logged.",type:"Brochure",link:"https://resources.brisken.com/treasurycentral.pdf",do:"ADD · no incumbent covers TreasuryCentral",cls:"add"},
+ {n:"06",name:"06 - OnePilot: The Governed AI Layer",desc:"The AI layer that operates your SAP treasury apps on SAP BTP, governed and audited, in production today. Build your own, no code.",type:"Brochure",link:"https://resources.brisken.com/onepilot.pdf",do:"ADD · no incumbent covers OnePilot",cls:"add"},
+ {n:"07",name:"07 - Remittance Advice Gate: Overview",desc:"AI reads unstructured remittance emails and attachments and posts them into SAP S/4HANA, matched and governed, no manual keying.",type:"Brochure",link:"https://resources.brisken.com/remittance-advice-gate.pdf",do:"ADD · different product",cls:"add"},
+ {n:"08",name:"08 - Bank Fee Portal: Overview",desc:"Analyze and validate bank fees against your agreements inside SAP, with variance flags and a full audit trail.",type:"Brochure",link:"https://resources.brisken.com/bank-fee-portal.pdf",do:"ADD · eyeball the sheet first",cls:"add"},
+ {n:"09",name:"09 - Digital Co-Worker",desc:"An AI co-worker that takes the repetitive steps across your systems. You ask in plain language; it does the work, governed and logged.",type:"Brochure",link:"https://resources.brisken.com/digital-co-worker.pdf",do:"ADD · staged, needs the deploy",cls:"add"},
+ {n:"10",name:"10 - SAP Store: Market Data Hub",desc:"Centralize market data governance for Bloomberg, Refinitiv, 360T, OANDA, central banks and CME, and distribute it across your SAP landscape.",type:"Packages",link:"https://store.sap.com/dcp/en/product/display-2001008447_live_v1/brisken-onepilot-market-data-hub",do:"REINSTATE · NEW link, the old product id was dead",cls:"edit"}
+];
+
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const ph  = s => s.startsWith('[');
+
+function field(label, val, mono){
+  const isPh = ph(val);
+  const cls = 'fval' + (mono && !isPh ? ' mono' : '') + (isPh ? ' ph' : '');
+  const count = label === 'Short Description' && !isPh
+    ? `<div class="count">${val.length} / 155 characters</div>` : '';
+  const btn = isPh ? '' : `<button class="copy" data-v="${esc(val)}">Copy</button>`;
+  return `<div class="field"><div class="flabel">${label}</div>
+    <div><div class="${cls}">${esc(val)}</div>${count}</div>${btn}</div>`;
+}
+
+function render(filter){
+  const f = (filter||'').toLowerCase();
+  const rows = CARDS.filter(c => !f || (c.name+' '+c.type+' '+c.desc).toLowerCase().includes(f));
+  document.getElementById('cardlist').innerHTML = rows.map(c => `
+    <div class="card">
+      <div class="top">
+        <span class="num">${esc(c.name)}</span>
+        <span class="tag ${c.cls}">${esc(c.do)}</span>
+      </div>
+      ${field('Link to Resource', c.link, true)}
+      ${field('Resource Name', c.name, false)}
+      ${field('Short Description', c.desc, false)}
+      ${field('Resource Type', c.type, false)}
+    </div>`).join('') || '<p class="sub">No cards match that filter.</p>';
+}
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('.copy'); if(!b) return;
+  navigator.clipboard.writeText(b.dataset.v).then(() => {
+    b.textContent = 'Copied'; b.classList.add('done');
+    setTimeout(() => { b.textContent = 'Copy'; b.classList.remove('done'); }, 1200);
+  });
+});
+
+const q = document.getElementById('q');
+q.value = localStorage.getItem('cardFilter') || '';
+q.addEventListener('input', () => { localStorage.setItem('cardFilter', q.value); render(q.value); });
+document.addEventListener('keydown', e => {
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); q.focus(); q.select(); }
+});
+render(q.value);
+</script>
+</body>
+</html>

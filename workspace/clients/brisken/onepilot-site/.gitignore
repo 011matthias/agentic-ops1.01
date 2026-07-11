@@ -1,0 +1,7 @@
+# The served HTML is synced from the canonical deliverable at deploy time.
+site/
+# Local feedback data (the real log lives on the Fly volume).
+data/
+__pycache__/
+*.pyc
+.venv/

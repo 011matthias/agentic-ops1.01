@@ -118,6 +118,39 @@ def in_skill_scope(file_path: str) -> bool:
     return "/.claude/skills/" in p
 
 
+def in_demo_material_scope(file_path: str) -> bool:
+    """Banned-CONTENT gate scope (client directives, e.g. Brisken 'no SAP BTP').
+
+    Client deliverable trees plus the resources-site payload dir. Text-authored
+    suffixes only: PDFs/pptx/mp4 are produced by scripts (Bash), which this
+    Write/Edit dispatcher never sees; those paths rely on the render tools
+    running the gate themselves (e.g. tools/brisken-sap-onepagers.py)."""
+    if not file_path:
+        return False
+    p = normalize_for_match(file_path)
+    if not p.endswith((".html", ".htm", ".md", ".markdown", ".txt", ".srt", ".vtt")):
+        return False
+    if "workspace/clients/" not in p:
+        return False
+    return "/deliverables/" in p or "/resources-site/" in p
+
+
+def demo_client_for(file_path: str) -> str | None:
+    """Client slug from the path, but only when the banned-terms fixture has
+    directives for it; a client with no entry has nothing to scan against."""
+    p = normalize_for_match(file_path)
+    if "workspace/clients/" not in p:
+        return None
+    client = p.split("workspace/clients/")[1].split("/")[0]
+    try:
+        cfg = json.loads(
+            (TOOLS_DIR / "fixtures" / "demo-banned-terms.json").read_text(encoding="utf-8")
+        )
+    except Exception:
+        return None
+    return client if client in cfg.get("clients", {}) else None
+
+
 def in_spec_scope(file_path: str) -> bool:
     """Spec frontmatter validator scope: any .md file written under a client's
     specs/ tree. Catches malformed-spec drift at write-time so it doesn't
@@ -221,6 +254,11 @@ def main() -> None:
         planned.append(("OUTPUT GATE", "validate-output.py", [file_path], 15))
     if in_cell_scope(file_path):
         planned.append(("CELL VOICE GATE", "validate-output.py", [file_path], 20))
+    if in_demo_material_scope(file_path):
+        demo_client = demo_client_for(file_path)
+        if demo_client:
+            planned.append(("DEMO CONTENT GATE", "validate-demo-material.py",
+                            [file_path, "--client", demo_client], 20))
     if in_spec_scope(file_path):
         planned.append(("SPEC GATE", "validate-spec.py", [file_path], 10))
     if in_skill_scope(file_path):

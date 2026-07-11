@@ -1,7 +1,7 @@
 # Checkpoint: Brisken BTP Removal H2-H4
 
 **Date:** 2026-07-10
-**Status:** H3 and H4 executed and origin-verified. H2 handed to a human (paste-ready pack). Gate wiring + generator promotion shipped.
+**Status:** ALL THREE held actions closed and origin-verified (H2 completed later the same day via Lovable + resources.brisken.com PDF re-host). Planner task "Exclude BTP from all demos" marked 100%. Gate wiring + generator promotion shipped.
 
 ---
 
@@ -85,7 +85,7 @@ Platform: brisken `infrastructure.yaml` declares `tier: "unknown"` (custom SaaS 
 
 **Clean and origin-verified today:** repo (gate exit 0), SharePoint `2026_VIDEO` (both clips byte-match the clean renders), brisken-onepilot-proto.fly.dev (0 hits through the gate).
 
-**Still carries BTP:** `rome2026.brisken.com` only. One credentials-strip span + the hosted pre-fix onepager PDF. Awaiting a human with Lovable access; paste-ready pack delivered.
+**H2 closed same day.** The clean onepager PDF was re-hosted at `https://resources.brisken.com/brisken-rome-2026-onepager.pdf` (deployed with Matthias's Vercel token; 200, 145,421 B, gate exit 0 on served bytes). Matthias applied a Lovable prompt to project `43ba7ecd-d250-48d5-9c6f-b34ea82f3be4` (rome2026.brisken.com): SAP BTP span deleted from `brk-creds`, onepager link repointed to the resources URL, stale local PDF removed. Origin-verified after publish: page 0 hits both patterns, old `/brisken-rome-2026-onepager.pdf` returns 404, new link serves the clean file. **Every surface from the 07-09 audit is now clean.** Planner task `mJrjdoY1yUKp0gNxDld7LWUAAL_e` ("Exclude BTP from all demos") PATCHed to 100% with readback verification. Future PDF updates redeploy resources-site directly; Lovable is no longer in the loop for collateral.
 
 **Open on GitHub:** PR #207 (clean Calvin render, CI green) unmerged; the harness permission layer denied the agent-run merge (both raw `gh pr merge` and `tools/gh-merge.sh`), so it needs a user-approved run. PR #201 is CONFLICTING with zero CI runs and needs a rebase/conflict resolution before anything on it can land.
 
@@ -93,7 +93,7 @@ Platform: brisken `infrastructure.yaml` declares `tier: "unknown"` (custom SaaS 
 
 ## Next Steps
 
-1. **H2:** apply the rome2026 Lovable edit + PDF swap (human), then verify: fetch the origin page + PDF, run the gate on both, expect 0 hits.
+1. ~~H2~~ DONE same day (see Current Status).
 2. **Merge PR #207** (user action; CI green): `bash tools/gh-merge.sh 207` or approve the prompt when the agent runs it.
 3. **Proto migration:** plan the move of the OnePilot demo to a brisken.com-controlled home (Brisken's Lovable cluster or their own infra), then take `brisken-onepilot-proto` down. Owner directive 2026-07-10.
 4. **PR #201:** resolve the conflict with main (99 commits, CONFLICTING) so CI can finally run on this branch's work.

@@ -1,0 +1,121 @@
+{
+  "_comment": [
+    "Banned CONTENT in client-facing demo material, sourced from client directives.",
+    "Distinct from banned LANGUAGE (rule_anti_slop, rule_deliverables), which the",
+    "text validators already enforce. A directive that lives in a client's Planner",
+    "board or an email is invisible to the write gates until it lands here.",
+    "Adding a directive is a data change. Adding an exemption needs a reason."
+  ],
+
+  "shared": {
+    "terms": [],
+    "exempt": []
+  },
+
+  "clients": {
+    "brisken": {
+      "terms": [
+        {
+          "term": "BTP",
+          "pattern": "\\bBTP\\b",
+          "source": "Dirk directive, Planner 'Exclude BTP from all demos': leave SAP BTP out of all demo materials"
+        },
+        {
+          "term": "Business Technology Platform",
+          "source": "same directive, spelled out; caught on a video end card 2026-07-09"
+        }
+      ],
+      "exempt": [
+        {
+          "path": "BRISKEN MDH WALKTHROUGH DEMO SLIDES 250710.*",
+          "term": "BTP",
+          "reason": "Dirk's own 46-slide deck; slide 46 Technical Architecture names 'BTP, Azure, AWS, Google Cloud' as a deployment target, not a positioning claim. Removing it would make the diagram wrong. His call, not ours."
+        },
+        {
+          "path": "README.md",
+          "term": "*",
+          "reason": "internal doc; it records the directive and quotes the banned phrasing on purpose. Not shipped to the client."
+        },
+        {
+          "path": "comms-log.md",
+          "term": "*",
+          "reason": "internal comms record; quotes the banned phrasing when logging a leak. Not shipped to the client."
+        },
+
+        {
+          "path": "*/context/*",
+          "term": "*",
+          "reason": "internal working context: Brisken's own source decks, evidence notes, signed contracts, CRM export. Never shipped by us, and several files are Brisken-authored originals we must not edit."
+        },
+        {
+          "path": "*/specs/*",
+          "term": "*",
+          "reason": "internal build specs. They describe the product architecture, where BTP is a true fact; they are not demo material."
+        },
+
+        {
+          "path": "*brisken-onepilot-review-signoff.md",
+          "term": "*",
+          "reason": "internal decision doc; it ASKS Dirk whether to keep stating BTP. Stripping the term deletes the question his directive answered."
+        },
+        {
+          "path": "*brisken-onepilot-revision-blueprint.md",
+          "term": "*",
+          "reason": "internal analysis of where BTP should sit in the positioning. The term is the subject, not a claim."
+        },
+        {
+          "path": "*brisken-onepilot-vision-strategy-fit.md",
+          "term": "*",
+          "reason": "internal strategy analysis; discusses the BTP positioning rather than asserting it to a prospect."
+        },
+        {
+          "path": "*brisken-onepilot-website-blueprint.md",
+          "term": "*",
+          "reason": "internal blueprint quoting the existing site copy it proposes to change."
+        },
+        {
+          "path": "*brisken-treasurycentral-restyle-blueprint.md",
+          "term": "*",
+          "reason": "internal blueprint quoting existing copy under review."
+        },
+        {
+          "path": "*lead-gen-strategy-*",
+          "term": "*",
+          "reason": "internal strategy deliverable describing the product architecture to us, not a demo shown to a prospect."
+        },
+
+        {
+          "path": "*sap-surfaces-repositioning.md",
+          "term": "*",
+          "reason": "copy written FOR SAP's own PartnerFinder / SAP Store listing, where 'built on SAP BTP' is a partner credential SAP expects. Owner decision 2026-07-09: Dirk's directive is scoped to demo material and brisken.com subdomains, not SAP's surfaces."
+        },
+        {
+          "path": "*sap-resources-cards.html",
+          "term": "*",
+          "reason": "SAP PartnerFinder resources-shelf walk-in pack; same SAP-surface carve-out as sap-surfaces-repositioning.md. Owner decision 2026-07-09."
+        },
+
+        {
+          "path": "*qa-cluster.html",
+          "term": "*",
+          "reason": "AEO outreach page, not deployed and not a demo. Owner decision 2026-07-09 scoped the directive to demos + brisken.com subdomains. Revisit before publishing these."
+        },
+        {
+          "path": "*shadow-integration-report.html",
+          "term": "*",
+          "reason": "AEO outreach page, not deployed and not a demo. Same carve-out; revisit before publishing."
+        },
+        {
+          "path": "*mdh-forwardable-colgate.html",
+          "term": "*",
+          "reason": "AEO outreach page, not deployed and not a demo. Same carve-out; revisit before publishing."
+        },
+        {
+          "path": "*linkedin*",
+          "term": "*",
+          "reason": "LinkedIn repositioning copy; outbound social, not a demo. Owner decision 2026-07-09. Revisit before posting."
+        }
+      ]
+    }
+  }
+}
