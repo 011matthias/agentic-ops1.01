@@ -164,6 +164,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+capture = [
+    { name = "httpx" },
+]
 dev = [
     { name = "httpx" },
     { name = "pytest" },
@@ -178,6 +181,7 @@ web = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", marker = "extra == 'web'", specifier = ">=0.110" },
+    { name = "httpx", marker = "extra == 'capture'", specifier = ">=0.27" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
     { name = "jinja2", marker = "extra == 'web'", specifier = ">=3.1" },
     { name = "openpyxl", specifier = ">=3.1" },
@@ -185,7 +189,7 @@ requires-dist = [
     { name = "python-multipart", marker = "extra == 'web'", specifier = ">=0.0.9" },
     { name = "uvicorn", marker = "extra == 'web'", specifier = ">=0.30" },
 ]
-provides-extras = ["dev", "web"]
+provides-extras = ["dev", "web", "capture"]
 
 [[package]]
 name = "markupsafe"
