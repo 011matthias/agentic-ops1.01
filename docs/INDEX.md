@@ -217,6 +217,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-12 | System-Dev Sibling-Session Guard | system-infra | [Checkpoint](docs/2026-07-12%20-%20System-Dev%20Sibling-Session%20Guard/Checkpoint.md) |
 | 2026-07-10 | Harness Hardening Audit + Execution | system-infra | [Checkpoint](docs/2026-07-10%20-%20Harness%20Hardening%20Audit%20+%20Execution/Checkpoint.md) |
 | 2026-06-29 | Rome 2026 Sales Nav List | client-dev | [Mini-Checkpoint-1](docs/2026-06-29%20-%20Rome%202026%20Sales%20Nav%20List/Mini-Checkpoint-1.md) |
 | 2026-06-21 | Project Status Convention | system-infra | [Checkpoint](docs/2026-06-21%20-%20Project%20Status%20Convention/Checkpoint.md) |
