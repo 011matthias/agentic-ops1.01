@@ -25,6 +25,15 @@ try:
 except Exception:
     sys.exit(0)
 
+# Optional: refresh this session's sibling-session heartbeat on every tool call
+# (keeps a live session fresh so sibling-session-gate can detect it). Best-effort
+# and independent of the pressure logic -- if it's unavailable, the meter still
+# runs. See tools/session_registry.py.
+try:
+    import session_registry  # noqa: E402
+except Exception:
+    session_registry = None
+
 _ADVISORY = {
     "moderate": (
         "[PRESSURE: MODERATE] {calls} tool calls, {files} distinct files this "
@@ -59,6 +68,14 @@ def main() -> int:
     file_path = None
     if isinstance(ti, dict):
         file_path = ti.get("file_path") or ti.get("notebook_path")
+
+    # Refresh the sibling-session heartbeat (independent of pressure; never lets
+    # a failure here break the meter or the tool call).
+    if session_registry is not None and session_id:
+        try:
+            session_registry.heartbeat(session_id, cwd=payload.get("cwd"))
+        except Exception:
+            pass
 
     try:
         session_state.ensure_session(session_id)

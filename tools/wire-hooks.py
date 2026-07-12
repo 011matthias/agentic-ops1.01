@@ -193,6 +193,17 @@ CANONICAL_HOOKS = {
             "matcher": "",
             "hooks": [
                 {
+                    # Warn when a live sibling session shares THIS working tree
+                    # (shared HEAD/index/stash -> concurrent-commit collisions).
+                    # Silent unless a sibling is detected. A .claude/hooks gate
+                    # (unlike the two tools/ scripts below), so it IS part of
+                    # EXPECTED_HOOK_SCRIPTS. See rule/memory
+                    # feedback_worktree_for_concurrent_sessions.
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/sibling-session-gate.py"),
+                    "timeout": 10000,
+                },
+                {
                     "type": "command",
                     "command": _cmd("tools/friction-watch.py", "--once-per-day --quiet"),
                     "timeout": 10000,
@@ -227,6 +238,7 @@ EXPECTED_HOOK_SCRIPTS = {
     "gate-skip-detector.py",
     "session-pressure-meter.py",
     "stop-b1-gate.py",
+    "sibling-session-gate.py",
 }
 
 # Canonical hook count, derived so the assertion strings can never drift out
