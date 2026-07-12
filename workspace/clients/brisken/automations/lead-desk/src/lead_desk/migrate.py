@@ -47,6 +47,64 @@ TIER_SUPPRESS = {
     "UNREACHABLE": "unreachable", "ANON": "anon",
 }
 
+# --- Iteration 2 classifiers: real status the raw log misses -----------------
+
+# Dirk personally reached the contact (relationship touch, not a campaign send).
+# From dirk_notes markers, OR an if_we_know_them note that names Dirk with an
+# engagement verb ("Met at TAC Brussels 2024 (Dirk personally engaged)").
+_DIRK_NOTE_RE = re.compile(
+    r"personal.*(?:outreach|dn)|individual outreach|dn[\s:]*personal|personally engaged",
+    re.I,
+)
+_DIRK_IWK_RE = re.compile(r"dirk", re.I)
+_DIRK_IWK_VERB_RE = re.compile(
+    r"know|knew|met|meet|spoke|speak|talk|contact|reach|engag|relationship|introduc|connect",
+    re.I,
+)
+
+# Deliberate, revisitable holds (GA general-awareness cohort, or an explicit
+# next_step hold) -> off the active board but distinct from consent-suppressed.
+_HELD_NEXT_RE = re.compile(r"on hold|do not send|excluded|covered by", re.I)
+# Transient holds stay ACTIVE (surfaced via the next_step / dangling bucket).
+_TRANSIENT_NEXT_RE = re.compile(
+    r"ooo until|ooo auto|awaiting.*decision|scheduling in progress", re.I
+)
+
+
+def is_held(row: dict) -> bool:
+    """A deliberate, revisitable hold: the GA cohort or an explicit next_step
+    hold. Transient holds (OOO, awaiting-decision, scheduling) stay active."""
+    tier = (str(row.get("Tier") or "")).strip().upper()
+    dn = (str(row.get("dirk_notes") or "")).strip().upper()
+    ns = str(row.get("next_step") or "").strip()
+    if tier == "GA" or dn == "GA":
+        return True
+    if _HELD_NEXT_RE.search(ns) and not _TRANSIENT_NEXT_RE.search(ns):
+        return True
+    return False
+
+
+def dirk_touch(row: dict) -> tuple[str, str] | None:
+    """If Dirk personally reached this contact, return (channel, detail).
+    Channel is inferred from the note (linkedin / meeting / email)."""
+    dn = _s(row.get("dirk_notes"))
+    iwk = _s(row.get("if_we_know_them"))
+    note = None
+    if dn and _DIRK_NOTE_RE.search(dn):
+        note = dn
+    elif iwk and _DIRK_IWK_RE.search(iwk) and _DIRK_IWK_VERB_RE.search(iwk):
+        note = iwk
+    if not note:
+        return None
+    low = note.lower()
+    if "linkedin" in low:
+        channel = "linkedin"
+    elif any(w in low for w in ("met ", "meet", "meeting", "call", "spoke", "conversation")):
+        channel = "meeting"
+    else:
+        channel = "email"
+    return channel, note
+
 
 def _s(v) -> str | None:
     if v is None:
@@ -104,6 +162,10 @@ def suppression(row: dict) -> tuple[int, str | None]:
         return 1, "do_not_contact"
     if tier in TIER_SUPPRESS:
         return 1, TIER_SUPPRESS[tier]
+    # Held ranks below consent + the exclusion tiers (those are stronger and
+    # permanent); a GA / next_step hold is a revisitable off-board reason.
+    if is_held(row):
+        return 1, "held"
     return 0, None
 
 
@@ -224,6 +286,17 @@ def import_workbook(store: ContactStore, xlsx: Path, campaign: str, report: dict
                                campaign=campaign, now=now):
                 events_added += 1
 
+        # Dirk personal touch -> one outbound 'touch' event (reaches >= 'sent').
+        # Stable ext_key so a re-run is a no-op even if the note text changes.
+        touch = dirk_touch(rowdict)
+        if touch:
+            ch, detail = touch
+            if store.add_event(contact_id=cid, ts=_ts(last_out) or EVENT_WEEK_TS,
+                               channel=ch, direction="outbound", type="touch",
+                               detail=detail, source="import",
+                               ext_key=f"dirk-touch-{cid}", campaign=campaign, now=now):
+                events_added += 1
+
     report["contacts"] = contacts
     report["events_from_sheet"] = events_added
     report["fuzzy_dups"] = {k: v for k, v in name_groups.items() if len(set(v)) > 1}
@@ -286,14 +359,20 @@ def main(argv: list[str] | None = None) -> int:
         rows = store.board_rows(args.campaign)
         stages = Counter(r["stage"] for r in rows)
         supp = sum(1 for r in rows if r["suppressed"])
+        supp_reasons = Counter(r["suppress_reason"] for r in rows if r["suppressed"])
+        reached_dirk = sum(
+            1 for r in rows if not r["suppressed"] and r["stage"] == "sent"
+            and r["has_touch"] and not r["has_campaign_send"]
+        )
         total_events = store.count_events()
 
     print(f"DB: {db}")
     print(f"contacts upserted: {report.get('contacts')}")
-    print(f"suppressed: {supp}")
+    print(f"suppressed: {supp}  ({dict(supp_reasons)})")
     print(f"events (sheet): {report.get('events_from_sheet')} | "
           f"(send-logs): {report.get('events_from_send_logs', 0)} | total in db: {total_events}")
     print(f"stage distribution: {dict(stages)}")
+    print(f"reached (Dirk personal touch, no campaign send): {reached_dirk}")
     dups = report.get("fuzzy_dups") or {}
     if dups:
         print(f"POSSIBLE DUPLICATES (same name, different key), {len(dups)}:")

@@ -1,9 +1,33 @@
 # Lead Desk, Blueprint
 
-Status: Phase 1 built (app + migration), local verification in progress.
-Owner decisions 2026-07-12: bespoke app, Rome-first, gated for Matthias/Dirk/
-Chris, cloud-only auto-capture. This file is the record of state for the
-automation (in place of a separate spec, per the expense-recon convention).
+Status: Phase 1 LIVE (brisken-lead-desk.fly.dev). Iteration 2 shipped
+2026-07-12 (stage reflects real status). Owner decisions 2026-07-12: bespoke
+app, Rome-first, gated for Matthias/Dirk/Chris, cloud-only auto-capture. This
+file is the record of state for the automation (in place of a separate spec,
+per the expense-recon convention).
+
+## Iteration 2, stage reflects real status (shipped 2026-07-12)
+
+The raw log missed two real-status signals the master sheet already carried,
+so the board mis-showed two groups as active "sourced" to-dos. Fixed:
+
+- **Dirk personal touch -> "Reached (Dirk)".** A `dirk_notes` personal-outreach
+  marker, or an `if_we_know_them` note naming Dirk with an engagement verb,
+  emits one outbound `touch` event (new event type; channel inferred from the
+  note). The `contact_stage` view now treats an outbound `touch` as `sent`, and
+  `status_label` shows "Reached (Dirk)" when a touch (and no campaign send) put
+  the contact at `sent`, so a relationship touch reads distinctly from a
+  campaign send. 8 contacts move sourced -> reached.
+- **GA + deliberate holds -> "Held".** A new `suppress_reason='held'`
+  (revisitable, ranked below the consent reasons + exclusion tiers) covers the
+  GA general-awareness cohort (`tier='GA'` / `dirk_notes='GA'`) and explicit
+  `next_step` holds (`on hold|do not send|excluded|covered by`). Transient holds
+  (OOO, awaiting-decision, scheduling) stay active. 44 contacts move off the
+  active board (active 124 -> 80), filterable via the "Held" chip and shown as
+  "Held", visibly distinct from consent-suppressed ("Do not contact") and
+  excluded tiers ("Excluded").
+- Board gains "Reached (Dirk)" and "Held" filter chips + buckets. Migration
+  stays idempotent (touch keyed by a stable `dirk-touch-{cid}` ext_key).
 
 ## Problem
 

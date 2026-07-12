@@ -24,9 +24,15 @@ STAGE_LABELS = {
 }
 
 SUPPRESS_REASONS = (
-    "do_not_contact", "no_consent", "stop", "duplicate", "test",
+    "held", "do_not_contact", "no_consent", "stop", "duplicate", "test",
     "organiser", "own_team", "unreachable", "bounced", "anon",
 )
+
+# Off-board reasons split three ways so the board can show WHY, not just that a
+# contact is off it: a deliberate (revisitable) hold, a consent block, or an
+# exclusion tier.
+CONSENT_REASONS = ("do_not_contact", "no_consent", "stop")
+HELD_REASONS = ("held",)
 
 
 def now_iso() -> str:
@@ -47,15 +53,30 @@ def _row(r) -> dict:
     return dict(r) if r is not None else {}
 
 
+def is_reached_dirk(row: dict) -> bool:
+    """A relationship touch from Dirk carried the contact to 'sent' with no
+    campaign send behind it: show it as a personal reach, not a campaign send."""
+    return (not row.get("suppressed") and row.get("stage") == "sent"
+            and bool(row.get("has_touch")) and not row.get("has_campaign_send"))
+
+
 def status_label(row: dict) -> str:
-    """The human status shown on the board: suppression + wait-state on stage."""
+    """The human status shown on the board: suppression + wait-state on stage.
+    Off-board contacts read WHY (held / do-not-contact / excluded), not a flat
+    'Suppressed'."""
     if row.get("suppressed"):
         reason = row.get("suppress_reason") or "suppressed"
-        return f"Suppressed ({reason})"
+        if reason in HELD_REASONS:
+            return "Held"
+        if reason in CONSENT_REASONS:
+            return f"Do not contact ({reason})"
+        return f"Excluded ({reason})"
     stage = row.get("stage", "sourced")
     last_in = _d(row.get("last_in"))
     last_out = _d(row.get("last_out"))
     if stage == "sent":
+        if is_reached_dirk(row):
+            return "Reached (Dirk)"
         if last_in is None or (last_out and last_in < last_out):
             return "Awaiting reply"
         return "Contacted"
@@ -102,6 +123,8 @@ def build_board(store: ContactStore, filters: dict | None = None,
         r["awaiting"] = is_awaiting_reply(r)
         r["dangling"] = is_dangling(r, today)
         r["aging"] = is_aging_hot(r, today)
+        r["reached"] = is_reached_dirk(r)
+        r["held"] = bool(r.get("suppressed")) and r.get("suppress_reason") in HELD_REASONS
 
     active = [r for r in rows if not r.get("suppressed")]
     stage_counts = {s: 0 for s in STAGES}
@@ -112,6 +135,9 @@ def build_board(store: ContactStore, filters: dict | None = None,
         "awaiting_reply": sum(1 for r in active if r["awaiting"]),
         "dangling": sum(1 for r in active if r["dangling"]),
         "aging_hot": sum(1 for r in active if r["aging"]),
+        "reached_dirk": sum(1 for r in active if r["reached"]),
+        # Held is an off-board bucket, so it is counted over ALL rows, not active.
+        "held": sum(1 for r in rows if r["held"]),
     }
 
     tiers = sorted({r.get("tier") for r in rows if r.get("tier")})
@@ -125,7 +151,12 @@ def build_board(store: ContactStore, filters: dict | None = None,
     q = (filters.get("q") or "").strip().lower()
     show_suppressed = str(filters.get("show_suppressed") or "").strip() in ("1", "true", "on")
 
-    shown = rows if show_suppressed else active
+    # The "held" bucket is off-board, so it seeds from all rows; every other
+    # view starts from active (or all, when show_suppressed is on).
+    if fbucket == "held":
+        shown = [r for r in rows if r["held"]]
+    else:
+        shown = rows if show_suppressed else active
     if ftier:
         shown = [r for r in shown if r.get("tier") == ftier]
     if fstage:
@@ -138,6 +169,8 @@ def build_board(store: ContactStore, filters: dict | None = None,
         shown = [r for r in shown if r["dangling"]]
     elif fbucket == "aging":
         shown = [r for r in shown if r["aging"]]
+    elif fbucket == "reached":
+        shown = [r for r in shown if r["reached"]]
     if q:
         def hit(r):
             hay = " ".join(str(r.get(k) or "") for k in

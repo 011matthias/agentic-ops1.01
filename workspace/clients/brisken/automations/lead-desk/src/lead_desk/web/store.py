@@ -29,7 +29,7 @@ from pathlib import Path
 CHANNELS = ("email", "linkedin", "meeting", "call")
 DIRECTIONS = ("outbound", "inbound")
 EVENT_TYPES = (
-    "sent", "reply", "invite", "bounce", "note", "booked", "held", "accepted"
+    "sent", "touch", "reply", "invite", "bounce", "note", "booked", "held", "accepted"
 )
 SOURCES = ("graph-auto", "manual", "import")
 
@@ -162,7 +162,7 @@ SELECT c.contact_id,
                  WHERE e.contact_id = c.contact_id AND e.direction = 'inbound' AND e.type = 'reply')
       THEN 'replied'
     WHEN EXISTS (SELECT 1 FROM outreach_events e
-                 WHERE e.contact_id = c.contact_id AND e.direction = 'outbound' AND e.type IN ('sent', 'invite'))
+                 WHERE e.contact_id = c.contact_id AND e.direction = 'outbound' AND e.type IN ('sent', 'invite', 'touch'))
       THEN 'sent'
     ELSE 'sourced'
   END AS stage
@@ -271,7 +271,11 @@ class ContactStore:
         return self.conn.execute(
             """
             SELECT c.*, s.stage AS stage, a.last_out AS last_out, a.last_in AS last_in,
-                   (SELECT COUNT(*) FROM outreach_events e WHERE e.contact_id = c.contact_id) AS event_count
+                   (SELECT COUNT(*) FROM outreach_events e WHERE e.contact_id = c.contact_id) AS event_count,
+                   EXISTS (SELECT 1 FROM outreach_events e WHERE e.contact_id = c.contact_id
+                           AND e.direction = 'outbound' AND e.type = 'touch') AS has_touch,
+                   EXISTS (SELECT 1 FROM outreach_events e WHERE e.contact_id = c.contact_id
+                           AND e.direction = 'outbound' AND e.type IN ('sent', 'invite')) AS has_campaign_send
             FROM contacts c
             JOIN contact_stage s ON s.contact_id = c.contact_id
             LEFT JOIN contact_activity a ON a.contact_id = c.contact_id

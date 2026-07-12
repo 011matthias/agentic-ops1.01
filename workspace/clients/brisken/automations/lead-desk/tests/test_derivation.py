@@ -61,6 +61,52 @@ def test_accepted_verdict_makes_accepted(tmp_path):
         assert _stage(s, "c1") == "accepted"
 
 
+def test_outbound_touch_makes_sent(tmp_path):
+    """A Dirk personal touch carries the contact to at least 'sent'."""
+    with ContactStore(tmp_path / "db.sqlite") as s:
+        _contact(s)
+        s.add_event(contact_id="c1", ts="2026-06-19T00:00:00+00:00", channel="meeting",
+                    direction="outbound", type="touch", now=now_iso())
+        assert _stage(s, "c1") == "sent"
+
+
+def _board_row(store, cid):
+    return {r["contact_id"]: dict(r) for r in store.board_rows()}[cid]
+
+
+def test_reached_dirk_status_label(tmp_path):
+    from lead_desk.web.service import status_label
+    with ContactStore(tmp_path / "db.sqlite") as s:
+        _contact(s)
+        s.add_event(contact_id="c1", ts="2026-06-19T00:00:00+00:00", channel="meeting",
+                    direction="outbound", type="touch", now=now_iso())
+        assert status_label(_board_row(s, "c1")) == "Reached (Dirk)"
+
+
+def test_campaign_send_overrides_reached_label(tmp_path):
+    """A touch behind a real campaign send reads as a normal send, not 'Reached'."""
+    from lead_desk.web.service import status_label
+    with ContactStore(tmp_path / "db.sqlite") as s:
+        _contact(s)
+        s.add_event(contact_id="c1", ts="2026-06-19T00:00:00+00:00", channel="email",
+                    direction="outbound", type="sent", now=now_iso())
+        s.add_event(contact_id="c1", ts="2026-06-20T00:00:00+00:00", channel="meeting",
+                    direction="outbound", type="touch", now=now_iso())
+        assert status_label(_board_row(s, "c1")) == "Awaiting reply"
+
+
+def test_reached_dirk_bucket(tmp_path):
+    with ContactStore(tmp_path / "db.sqlite") as s:
+        _contact(s, "c1")
+        s.add_event(contact_id="c1", ts="2026-06-19T00:00:00+00:00", channel="meeting",
+                    direction="outbound", type="touch", now=now_iso())
+        _contact(s, "c2")  # untouched, stays sourced
+        view = build_board(s)
+        assert view["buckets"]["reached_dirk"] == 1
+        filtered = build_board(s, {"bucket": "reached"})
+        assert [r["contact_id"] for r in filtered["rows"]] == ["c1"]
+
+
 def test_idempotent_event_insert(tmp_path):
     with ContactStore(tmp_path / "db.sqlite") as s:
         _contact(s)
@@ -78,6 +124,19 @@ def test_suppressed_excluded_from_active(tmp_path):
         view = build_board(s)
         assert view["total_active"] == 1
         assert view["total_suppressed"] == 1
+
+
+def test_held_bucket_off_board_but_filterable(tmp_path):
+    with ContactStore(tmp_path / "db.sqlite") as s:
+        _contact(s, "c1")  # active
+        _contact(s, "c2", suppressed=1, suppress_reason="held")
+        _contact(s, "c3", suppressed=1, suppress_reason="stop")
+        view = build_board(s)
+        assert view["total_active"] == 1               # held + stop are off-board
+        assert view["buckets"]["held"] == 1            # only c2
+        held = build_board(s, {"bucket": "held"})
+        assert [r["contact_id"] for r in held["rows"]] == ["c2"]
+        assert held["rows"][0]["status"] == "Held"
 
 
 def test_awaiting_and_ingest_by_email(tmp_path):
