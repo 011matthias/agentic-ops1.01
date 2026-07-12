@@ -1,0 +1,35 @@
+# Fly.io config for the hosted Brisken Lead Desk.
+# Frankfurt (EU) for data residency (lead PII). Scales to zero when idle;
+# a request cold-starts it. The SQLite database lives on the lead_desk_data
+# volume mounted at /data. Access is gated by per-user codes in
+# LEAD_DESK_ACCESS_CODES (set as a Fly secret, never committed).
+app = "brisken-lead-desk"
+primary_region = "fra"
+
+[build]
+
+[env]
+  LEAD_DESK_DATA = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "15s"
+    method = "get"
+    path = "/healthz"
+
+[mounts]
+  source = "lead_desk_data"
+  destination = "/data"
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1
