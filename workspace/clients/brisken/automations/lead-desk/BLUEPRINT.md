@@ -86,19 +86,36 @@ duplicate review list. Once verified and adopted, the duplicate spreadsheet
 copies are deleted (supersession discipline); the master xlsx becomes a
 generated `/export.xlsx`.
 
-## Phase 2, cloud auto-capture (built next, gated on Brisken IT)
+## Phase 2, cloud auto-capture (worker built; gated on Brisken IT creds)
 
 A Fly scheduled Machine reads Dirk's mailbox app-only via Microsoft Graph
 (`Mail.Read` + `Calendars.Read`, scoped to his mailbox only via Exchange RBAC
-for Applications), delta-polls SentItems/Inbox/Calendar, matches recipients to
-contacts, and posts `sent`/`reply`/`meeting` events to `POST /events` keyed by
-`internetMessageId` (idempotent). Planner app-only writes are tenant-wide, so
-the Lead Desk is the board of record and Planner writes are dropped.
+for Applications), polls SentItems/Inbox/Calendar, matches recipients to
+contacts, and posts `sent`/`reply`/`booked` events to `POST /events` keyed by
+`internetMessageId` (calendar: `iCalUId`) so re-polling is a no-op. Planner
+app-only writes are tenant-wide, so the Lead Desk is the board of record and
+Planner writes are dropped.
 
-Hard client dependency (nothing in Phase 2 runs until done): Brisken IT creates
-the Entra app registration in tenant `aa3bd2bf-...`, grants admin consent for
-the two read scopes, applies the RBAC scope to Dirk's mailbox, and issues the
-credential (stored as Fly secrets).
+**Built (2026-07-12):** `src/lead_desk/capture.py` + console script
+`lead-desk-capture` (`capture` extra: httpx). Pure Graph->sink mapping is
+unit-tested (`tests/test_capture.py`); idempotency comes from the sink, so a
+fixed lookback window each run is safe (no durable delta cursor needed). Runs
+with `--dry-run` to inspect before posting.
+
+**Deploy (once creds land)** as a scheduled Machine on the same image:
+
+```bash
+# secrets: LEAD_DESK_TENANT_ID, LEAD_DESK_CLIENT_ID, LEAD_DESK_CLIENT_SECRET,
+#          LEAD_DESK_MAILBOX (=dirk.neumann@brisken.com); LEAD_DESK_URL + INGEST_SECRET already set
+flyctl machine run . -a brisken-lead-desk --schedule hourly \
+  --entrypoint "lead-desk-capture" --region fra
+```
+
+**Hard client dependency** (nothing in Phase 2 runs until done): Brisken IT
+creates the Entra app registration in tenant `aa3bd2bf-...`, grants admin
+consent for the two read scopes, applies the mailbox-scoped Application Access
+Policy, and issues the credential (stored as Fly secrets). The forwardable
+request is `PHASE2-IT-REQUEST.md`.
 
 ## Open items (recommended defaults applied)
 
