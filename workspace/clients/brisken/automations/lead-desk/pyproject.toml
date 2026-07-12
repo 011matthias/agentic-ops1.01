@@ -1,0 +1,33 @@
+[project]
+name = "lead-desk"
+version = "0.1.0"
+description = "Brisken Lead Desk: single-source-of-truth lead-generation tracker (event-logged)"
+requires-python = ">=3.12"
+dependencies = [
+    "openpyxl>=3.1",   # xlsx migration import + xlsx export
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "httpx>=0.27"]   # httpx backs fastapi's TestClient
+web = [
+    "fastapi>=0.110",          # gated review app (browser UI over the event log)
+    "uvicorn>=0.30",           # ASGI server
+    "python-multipart>=0.0.9", # multipart/form-data for the touch/suppress forms
+    "jinja2>=3.1",             # server-rendered templates
+]
+
+[project.scripts]
+lead-desk-web = "lead_desk.web.serve:main"
+lead-desk-migrate = "lead_desk.migrate:main"
+lead-desk-export = "lead_desk.export:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lead_desk"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

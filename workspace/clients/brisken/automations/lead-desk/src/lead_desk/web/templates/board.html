@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Board - Brisken Lead Desk{% endblock %}
+{% block content %}
+{% set v = view %}
+{% set f = v.filters %}
+
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1>Rome 2026 pipeline</h1>
+      <div class="muted">{{ v.total_active }} active contacts, {{ v.total_suppressed }} suppressed. Stage is derived from the outreach log.</div>
+    </div>
+    <div class="inline">
+      <a class="btn btn-secondary btn-small" href="/export.csv">Export CSV</a>
+      <a class="btn btn-secondary btn-small" href="/export.xlsx">Export XLSX</a>
+    </div>
+  </div>
+
+  <div class="stats" style="margin-top:14px;">
+    <a class="stat {% if not f.stage %}active{% endif %}" href="/"><div class="stat-value">{{ v.total_active }}</div><div class="stat-label">Active</div></a>
+    {% for s in v.stages %}
+    <a class="stat {% if f.stage == s %}active{% endif %}" href="/?stage={{ s }}">
+      <div class="stat-value">{{ v.stage_counts[s] }}</div>
+      <div class="stat-label">{{ s }}</div>
+    </a>
+    {% endfor %}
+  </div>
+
+  <div class="inline" style="margin-top:14px; flex-wrap:wrap;">
+    <a class="chip" href="/?bucket=awaiting">Awaiting reply <span class="n">{{ v.buckets.awaiting_reply }}</span></a>
+    <a class="chip warn" href="/?bucket=dangling">Follow-up due <span class="n">{{ v.buckets.dangling }}</span></a>
+    <a class="chip hot" href="/?bucket=aging">Aging replies <span class="n">{{ v.buckets.aging_hot }}</span></a>
+    <span class="muted" style="margin-left:auto;">Search <span class="kbd">Ctrl</span> <span class="kbd">K</span></span>
+  </div>
+</div>
+
+<div class="card">
+  <form method="get" action="/" class="row-actions">
+    <div style="flex:2; min-width:180px;">
+      <label for="board-search">Search</label>
+      <input type="search" id="board-search" name="q" value="{{ f.q }}" placeholder="name, company, email, title">
+    </div>
+    <div style="min-width:120px;">
+      <label>Tier</label>
+      <select name="tier"><option value="">All</option>
+        {% for t in v.tiers %}<option value="{{ t }}" {% if f.tier==t %}selected{% endif %}>{{ t }}</option>{% endfor %}
+      </select>
+    </div>
+    <div style="min-width:130px;">
+      <label>Stage</label>
+      <select name="stage"><option value="">All</option>
+        {% for s in v.stages %}<option value="{{ s }}" {% if f.stage==s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+      </select>
+    </div>
+    <div style="min-width:150px;">
+      <label>CRM owner</label>
+      <select name="owner"><option value="">All</option>
+        {% for o in v.owners %}<option value="{{ o }}" {% if f.owner==o %}selected{% endif %}>{{ o }}</option>{% endfor %}
+      </select>
+    </div>
+    <div style="min-width:130px;">
+      <label>Suppressed</label>
+      <label class="inline" style="margin:0; color:var(--text);"><input type="checkbox" name="show_suppressed" value="1" {% if f.show_suppressed %}checked{% endif %} style="width:auto;"> show</label>
+    </div>
+    <div class="inline">
+      <button class="btn btn-small" type="submit">Apply</button>
+      <a class="btn btn-secondary btn-small" href="/">Clear</a>
+    </div>
+  </form>
+</div>
+
+<div class="card scroll-x">
+  <div class="muted" style="margin-bottom:8px;">{{ v.rows|length }} shown</div>
+  <table>
+    <thead><tr>
+      <th>Name</th><th>Company</th><th>Tier</th><th>Stage</th><th>Status</th><th>Last out / in</th><th>Next step</th>
+    </tr></thead>
+    <tbody>
+    {% for r in v.rows %}
+      <tr class="{% if r.suppressed %}suppressed{% endif %}">
+        <td><a href="/contacts/{{ r.contact_id }}">{{ r.first_name }} {{ r.last_name }}</a>
+            {% if r.job_title %}<div class="muted" style="font-size:12px;">{{ r.job_title }}</div>{% endif %}</td>
+        <td>{{ r.company or '' }}</td>
+        <td>{% if r.tier %}<span class="badge tier">{{ r.tier }}</span>{% endif %}</td>
+        <td><span class="badge stage-{{ r.stage }}">{{ r.stage }}</span></td>
+        <td>{{ r.status }}
+            {% if r.dangling %}<span class="badge stage-replied" title="follow-up past due">due</span>{% endif %}
+            {% if r.aging %}<span class="badge suppressed" title="unanswered reply">aging</span>{% endif %}</td>
+        <td class="mono" style="font-size:11.5px;">{{ (r.last_out or '')[:10] or '-' }}{% if r.last_in %} / {{ r.last_in[:10] }}{% endif %}</td>
+        <td>{{ r.next_step or '' }}{% if r.next_step_due %} <span class="muted">({{ r.next_step_due[:10] }})</span>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="muted">No contacts match.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Filter-state persistence: restore the last filter on a bare visit to "/".
+  (function () {
+    var KEY = 'ld_filter';
+    try {
+      if (location.search) { localStorage.setItem(KEY, location.search); }
+      else { var s = localStorage.getItem(KEY); if (s && s.length > 1) { location.replace('/' + s); } }
+    } catch (e) {}
+  })();
+</script>
+{% endblock %}

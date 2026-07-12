@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Brisken Lead Desk{% endblock %}</title>
+  <script>
+    (function () {
+      var t = localStorage.getItem('theme');
+      var d = document.documentElement;
+      d.setAttribute(
+        'data-theme',
+        t === 'dark' || (t !== 'light' && window.matchMedia('(prefers-color-scheme:dark)').matches)
+          ? 'dark' : 'light'
+      );
+    })();
+  </script>
+  <style>
+    :root {
+      --bg: #f6f7f9; --surface: #ffffff; --border: #e2e5ea; --border-strong: #94a3b8; --text: #1a1d23;
+      --muted: #6b7280; --accent: #2563eb; --accent-light: #3b82f6;
+      --green: #059669; --green-bg: #ecfdf5; --orange: #d97706; --orange-bg: #fffbeb;
+      --red: #dc2626; --red-bg: #fef2f2; --blue-bg: #eff6ff; --shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+    [data-theme="dark"] {
+      --bg: #0f1115; --surface: #181b21; --border: #2a2f3a; --border-strong: #4a5d80; --text: #e6e8ec;
+      --muted: #9aa3b2; --accent: #3b82f6; --accent-light: #60a5fa;
+      --green: #34d399; --green-bg: #06281f; --orange: #fbbf24; --orange-bg: #2a2008;
+      --red: #f87171; --red-bg: #2a1212; --blue-bg: #0c1b33; --shadow: 0 1px 3px rgba(0,0,0,.4);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      font-size: 14px; line-height: 1.5;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .site-nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 24px; background: var(--surface);
+      border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10;
+    }
+    .nav-left { font-weight: 600; }
+    .nav-client { color: var(--muted); font-weight: 400; }
+    .nav-right { display: flex; align-items: center; gap: 12px; }
+    .nav-tab { color: var(--muted); font-weight: 600; font-size: 13px; padding: 6px 11px;
+      border-radius: 7px; border: 1px solid transparent; }
+    .nav-tab:hover { color: var(--text); text-decoration: none; }
+    .nav-user { color: var(--muted); font-size: 12px; }
+    .nav-theme {
+      background: transparent; border: 1px solid var(--border); border-radius: 999px;
+      color: var(--text); cursor: pointer; padding: 6px 12px; font-size: 13px;
+    }
+    .wrap { max-width: 1240px; margin: 0 auto; padding: 20px 24px; }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 18px; box-shadow: var(--shadow); margin-bottom: 18px;
+    }
+    h1 { font-size: 21px; margin: 0 0 4px; }
+    h2 { font-size: 15px; margin: 0 0 12px; }
+    label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+    input[type=text], input[type=date], input[type=datetime-local], input[type=search],
+    select, textarea {
+      width: 100%; padding: 7px 9px; border: 1px solid var(--border);
+      border-radius: 8px; background: var(--bg); color: var(--text); font-size: 14px; font-family: inherit;
+    }
+    textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    .btn {
+      display: inline-block; background: var(--accent); color: #fff; border: none;
+      border-radius: 999px; padding: 8px 16px; font-size: 13px; font-weight: 500; cursor: pointer;
+    }
+    .btn:hover { background: var(--accent-light); text-decoration: none; }
+    .btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .btn-small { padding: 4px 11px; font-size: 12px; }
+    .stats { display: flex; flex-wrap: wrap; gap: 10px; }
+    .stat {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+      padding: 9px 13px; min-width: 96px; text-decoration: none; color: var(--text);
+    }
+    .stat:hover { border-color: var(--border-strong); text-decoration: none; }
+    .stat.active { border-color: var(--accent); }
+    .stat-value { font-size: 20px; font-weight: 600; }
+    .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+      border: 1px solid var(--border); font-size: 12px; font-weight: 600; text-decoration: none; color: var(--text); }
+    .chip:hover { border-color: var(--border-strong); text-decoration: none; }
+    .chip .n { font-weight: 700; }
+    .chip.warn { background: var(--orange-bg); color: var(--orange); border-color: var(--orange); }
+    .chip.hot { background: var(--red-bg); color: var(--red); border-color: var(--red); }
+    .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+    .stage-sourced { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
+    .stage-sent { background: var(--blue-bg); color: var(--accent); }
+    .stage-replied, .stage-qualifying { background: var(--orange-bg); color: var(--orange); }
+    .stage-booked, .stage-held, .stage-accepted { background: var(--green-bg); color: var(--green); }
+    .badge.tier { background: var(--bg); color: var(--text); border: 1px solid var(--border-strong); }
+    .badge.suppressed { background: var(--red-bg); color: var(--red); }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { font-size: 11.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .02em; }
+    tr.suppressed td { opacity: .55; }
+    .muted { color: var(--muted); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    .row-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .inline { display: flex; gap: 8px; align-items: center; }
+    .kbd { font-family: ui-monospace, monospace; font-size: 11px; border: 1px solid var(--border);
+      border-radius: 4px; padding: 1px 5px; color: var(--muted); }
+    .footer { color: var(--muted); font-size: 12px; padding: 14px 24px; text-align: center; }
+    .scroll-x { overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <nav class="site-nav">
+    <div class="nav-left">Brisken <span class="nav-client">&middot; Lead Desk</span></div>
+    <div class="nav-right">
+      <a class="nav-tab" href="/">Board</a>
+      <span class="nav-user">{{ user }}</span>
+      <button class="nav-theme" onclick="(function(){var d=document.documentElement;var c=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',c);localStorage.setItem('theme',c);})()" aria-label="Toggle theme">Theme</button>
+      <form method="post" action="/logout" style="margin:0"><button class="nav-theme" type="submit">Sign out</button></form>
+    </div>
+  </nav>
+  <div class="wrap">
+    {% block content %}{% endblock %}
+  </div>
+  <div class="footer">Brisken lead generation. UnpauseAI. Internal tracker, gated.</div>
+  <script>
+    // Ctrl/Cmd+K focuses the board search when present.
+    document.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        var s = document.getElementById('board-search');
+        if (s) { e.preventDefault(); s.focus(); s.select(); }
+      }
+    });
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
