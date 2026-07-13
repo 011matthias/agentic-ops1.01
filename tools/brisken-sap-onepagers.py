@@ -2,33 +2,39 @@
 # requires-python = ">=3.11"
 # dependencies = ["pypdf"]
 # ///
-# Source of truth for the 6 Brisken SAP Resources one-pagers (visual,
-# dark-cockpit brand). Renders each HTML -> A4-portrait single-page PDF via
-# Chrome headless (Edge headless silently fails while Edge is open, so Chrome
-# + isolated profile is the working engine), verifies each PDF is exactly
-# 1 page, then runs the banned-content gate (validate-demo-material.py,
-# --client brisken) on the rendered PDFs. Dirk's "Exclude BTP from all demos"
-# directive was fixed HERE on 2026-07-09; regenerating from any older copy of
-# this file would silently reintroduce the term, which is why the gate run is
-# part of the render, not a separate step.
+# Source of truth for the 6 Brisken SAP Resources one-pagers (visual brand).
+# Renders each HTML -> A4-portrait single-page PDF via Chrome headless (Edge
+# headless silently fails while Edge is open, so Chrome + isolated profile is
+# the working engine), verifies each PDF is exactly 1 page, then runs the
+# banned-content gate (validate-demo-material.py, --client brisken) on the
+# rendered PDFs. Dirk's "Exclude BTP from all demos" directive was fixed HERE
+# on 2026-07-09; regenerating from any older copy of this file would silently
+# reintroduce the term, which is why the gate run is part of the render.
 #
 # Promoted from gitignored .scratch/brisken-sap-assets/gen_onepagers.py on
 # 2026-07-10 so the BTP fix is versioned.
 #
-# 2026-07-11 redesign after "bad quality, spacing and aesthetic" feedback:
-# real Brisken logo, vertical rhythm distributed over the full sheet.
-#
-# 2026-07-12 redesign after "too repetitive / same structure / overuse of
-# boxes is deterring" feedback:
-#   - Real on-navy Brisken logo (white wordmark + white/cyan mark on the dark
-#     ground), replacing the mark-half-missing colorway.
-#   - Per-product ACCENT colour so the six are distinct at a glance.
-#   - Each product gets its OWN "how it works" visual and its OWN section
-#     spine; no two sheets share the same structure (funnel / horizontal
-#     pipeline / before-after split / compare / hub / layer-stack).
-#   - Boxes-inside-boxes retired: accent lives on rules, marks and type, not
-#     on nested filled panels. Copy de-duplicated so the SAP / full-audit /
-#     governed refrains appear once, not 3-4x per sheet and on every sheet.
+# 2026-07-13 STRUCTURAL redesign after "they need to vary in their structure,
+# be more creative" feedback. The prior set shared one macro-skeleton (centred
+# eyebrow -> centred title -> one swapped middle diagram -> centred delivers ->
+# identical caps -> identical footer); only the small middle graphic and the
+# accent colour changed, so the six read as the same sheet six times. This
+# rewrite gives each product its OWN composition, not just its own diagram:
+#   1. Market Data Hub    -- asymmetric LEFT-RAIL + convergence, full-width
+#                            delivers strip along the foot.
+#   2. Smart Trading      -- left-aligned EDITORIAL, full-width 01/02/03
+#                            timeline band, two-column why | delivers.
+#   3. Remittance Gate    -- before -> after DIPTYCH bridged by an AI node.
+#   4. Bank Fee Portal    -- DASHBOARD: narrative left, variance bar chart right.
+#   5. TreasuryCentral    -- true RADIAL cockpit (centre hub + six spokes); the
+#                            one sheet that is symmetric by concept.
+#   6. OnePilot           -- DARK architecture panel (flagship): governing layer
+#                            over four app pillars over the SAP foundation, 2x2
+#                            delivers grid.
+# The header (logo + SAP partner), the footer trust bar, the font pairing and
+# the per-product accent stay constant: this is a product FAMILY, so the frame
+# is shared and the body composition is what varies. Copy is unchanged from the
+# gated 2026-07-12 set (same claims -> same banned-content result).
 import argparse
 import os, subprocess, tempfile, sys
 from pathlib import Path
@@ -52,354 +58,510 @@ html{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 body{
   font-family:"IBM Plex Sans","Segoe UI",system-ui,-apple-system,sans-serif;
   background:
-    radial-gradient(150mm 68mm at 50% -8%, var(--glow), transparent 62%),
+    radial-gradient(150mm 66mm at 50% -10%, var(--glow), transparent 60%),
     linear-gradient(180deg,#ffffff 0%, #f4f7fb 100%);
-  color:#334155;-webkit-font-smoothing:antialiased;
-  padding:11mm 16mm 9mm;position:relative;overflow:hidden;
+  color:#334155;-webkit-font-smoothing:antialiased;position:relative;overflow:hidden;
 }
 .topline{position:absolute;top:0;left:0;right:0;height:1.1mm;
-  background:linear-gradient(90deg,var(--ac),var(--ac) 30%,transparent 82%);}
-.wrap{position:relative;z-index:1;display:flex;flex-direction:column;height:100%;}
+  background:linear-gradient(90deg,var(--ac),var(--ac) 28%,transparent 78%);z-index:2;}
+.sheet{position:relative;z-index:1;display:flex;flex-direction:column;height:100%;
+  padding:11mm 15mm 8.5mm;}
 
+/* shared header ------------------------------------------------------- */
 header{display:flex;align-items:center;justify-content:space-between;
-  padding-bottom:4mm;border-bottom:1px solid #e2e8f0;}
+  padding-bottom:4mm;border-bottom:1px solid #e2e8f0;flex:0 0 auto;}
 .logo-img{height:7.4mm;display:block;}
 .partner{font-size:9pt;color:#64748b;font-weight:600;letter-spacing:.02em;
   display:flex;align-items:center;gap:2mm;}
 .sapbadge{background:#0a66c2;color:#fff;font-size:7.6pt;font-weight:800;letter-spacing:.05em;
   padding:.7mm 1.6mm;border-radius:1mm;}
 
-.body{flex:1;display:flex;flex-direction:column;justify-content:space-evenly;padding:3mm 0 1mm;}
-.sec{text-align:center;}
-
-/* hero ---------------------------------------------------------------- */
-.hero{text-align:center;}
+/* shared type --------------------------------------------------------- */
+main{flex:1;display:flex;flex-direction:column;min-height:0;padding:5mm 0 3mm;justify-content:space-between;gap:6mm;}
 .eyebrow{font-family:"Space Grotesk","Segoe UI",sans-serif;font-size:9pt;letter-spacing:.26em;
   text-transform:uppercase;color:var(--ac);font-weight:600;}
-h1{font-family:"Space Grotesk","Segoe UI",sans-serif;font-size:34pt;font-weight:600;
-  letter-spacing:-.8px;color:#0f172a;line-height:1.03;margin-top:2.6mm;}
+h1{font-family:"Space Grotesk","Segoe UI",sans-serif;font-weight:600;
+  letter-spacing:-.7px;color:#0f172a;line-height:1.02;}
 h1 .ac{color:var(--ac);}
-.promise{font-size:13.5pt;color:#475569;margin-top:3mm;font-weight:400;line-height:1.36;
-  max-width:150mm;margin-left:auto;margin-right:auto;}
-.rename{font-size:8.6pt;color:#94a3b8;margin-top:2.4mm;font-weight:500;letter-spacing:.01em;}
-
-/* section kicker (thin, accent, no box) ------------------------------- */
+.promise{color:#475569;font-weight:400;line-height:1.34;}
+.rename{font-size:8.6pt;color:#94a3b8;font-weight:500;letter-spacing:.01em;}
 .kick{font-family:"Space Grotesk","Segoe UI",sans-serif;font-size:8pt;letter-spacing:.22em;
-  text-transform:uppercase;color:var(--ac);font-weight:600;text-align:center;}
-.kick::after{content:"";display:block;width:9mm;height:1.6px;background:var(--ac);
+  text-transform:uppercase;color:var(--ac);font-weight:600;}
+.kick.u::after{content:"";display:block;width:9mm;height:1.6px;background:var(--ac);
   opacity:.55;margin:1.8mm auto 0;border-radius:1px;}
 
-/* problem lead: prose, no panel -------------------------------------- */
-.lead{font-size:11.5pt;color:#475569;line-height:1.5;text-align:center;
-  max-width:154mm;margin:2.8mm auto 0;}
-
-/* delivers: plain list, accent diamond, no panel --------------------- */
-.dots{list-style:none;max-width:150mm;margin:2.8mm auto 0;display:flex;flex-direction:column;gap:2.7mm;text-align:left;}
-.dots li{font-size:10.8pt;color:#334155;line-height:1.42;padding-left:6mm;position:relative;}
-.dots li::before{content:"";position:absolute;left:0;top:1.7mm;width:2.1mm;height:2.1mm;
+/* delivers list (accent diamond) ------------------------------------- */
+.dots{list-style:none;display:flex;flex-direction:column;gap:2.5mm;}
+.dots li{font-size:10.4pt;color:#334155;line-height:1.4;padding-left:5.6mm;position:relative;}
+.dots li::before{content:"";position:absolute;left:0;top:1.6mm;width:2mm;height:2mm;
   background:var(--ac);transform:rotate(45deg);border-radius:.4mm;}
 
-/* caps: one borderless row, thin dividers ---------------------------- */
-.caps{display:flex;justify-content:center;align-items:stretch;margin-top:4.6mm;}
-.cap{font-size:9.2pt;font-weight:600;color:#0f172a;letter-spacing:.01em;padding:0 5mm;
+/* caps row ------------------------------------------------------------ */
+.caps{display:flex;justify-content:center;align-items:stretch;flex-wrap:wrap;margin-top:0;}
+
+/* how-it-works step strip (fills thinner sheets with real process) ---- */
+.steps-sec{width:100%;}
+.steps-sec .kick{margin-bottom:4.4mm;}
+.steps{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8mm;}
+.step{position:relative;padding-left:8.5mm;}
+.step .sn{position:absolute;left:0;top:-.4mm;font-family:"Space Grotesk","Segoe UI",sans-serif;
+  font-size:13pt;font-weight:700;color:var(--ac);}
+.step .st{font-size:10.2pt;font-weight:700;color:#0f172a;line-height:1.18;}
+.step .sd{font-size:8.8pt;color:#64748b;margin-top:1.6mm;line-height:1.4;}
+.cap{font-size:9pt;font-weight:600;color:#0f172a;letter-spacing:.01em;padding:1mm 4.6mm;
   display:flex;align-items:center;gap:2mm;}
 .cap+.cap{border-left:1px solid #e2e8f0;}
 .cap::before{content:"";width:1.9mm;height:1.9mm;background:var(--ac);
   transform:rotate(45deg);border-radius:.4mm;flex:0 0 auto;}
 
-/* footer ------------------------------------------------------------- */
-footer{border-top:1px solid #e2e8f0;padding-top:3.4mm;}
+/* shared footer ------------------------------------------------------- */
+footer{border-top:1px solid #e2e8f0;padding-top:3.2mm;flex:0 0 auto;}
 .trust{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;}
 .tm{font-size:8.4pt;color:#64748b;font-weight:500;padding:0 3mm;position:relative;}
 .tm:not(:last-child)::after{content:"";position:absolute;right:0;top:50%;transform:translateY(-50%);
   width:1mm;height:1mm;border-radius:50%;background:var(--ac);opacity:.5;}
 .tm b{color:#334155;font-weight:700;}
 .foot-url{text-align:center;margin-top:2.2mm;font-size:8.8pt;color:var(--ac);font-weight:600;letter-spacing:.03em;}
+.foot-line{text-align:center;font-size:8.6pt;color:#64748b;font-weight:500;}
+.foot-line b{color:#334155;font-weight:700;}
 
-/* ==== per-visual primitives (light: lines + type, not filled boxes) === */
+/* proof / credentials band (bottom of every sheet) -------------------- */
+.proof{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:2.6mm;
+  border-top:1px solid #e6ebf2;padding-top:6mm;margin-top:3mm;}
+.pchip{display:flex;align-items:center;gap:1.8mm;font-size:8.6pt;font-weight:600;color:#334155;
+  border:1px solid #dbe3ee;border-radius:6mm;padding:1.8mm 4.2mm;background:#fff;
+  box-shadow:0 1px 3px rgba(15,23,42,.04);}
+.pchip .sapbadge{background:#0a66c2;}
 
-/* funnel (MDH): many names gather down to one node, out to two targets */
-.fn-src{display:flex;flex-wrap:wrap;justify-content:center;gap:1.4mm 4mm;max-width:148mm;margin:0 auto;}
-.fn-src span{font-size:9.8pt;color:#334155;font-weight:600;}
-.fn-src span:not(:last-child)::after{content:"\00B7";color:var(--ac);margin-left:4mm;opacity:.7;}
-.fn-svg{display:block;margin:2.6mm auto 1mm;}
-.fn-node{text-align:center;font-size:13pt;font-weight:700;color:var(--ac);letter-spacing:.01em;}
-.fn-out{text-align:center;font-size:10pt;color:#475569;margin-top:3.4mm;font-weight:600;position:relative;}
-.fn-out::before{content:"";display:block;width:1px;height:5mm;background:var(--ac);opacity:.5;margin:0 auto 2.4mm;}
-.fn-out b{color:#0f172a;}
+/* =======================================================================
+   1. MARKET DATA HUB -- asymmetric left rail + convergence
+   ===================================================================== */
+.l-rail{justify-content:space-between;}
+.rail-grid{display:grid;grid-template-columns:64mm 1fr;gap:12mm;align-items:start;}
+.rail-left h1{font-size:37pt;margin-top:3mm;}
+.rail-left .promise{font-size:12.5pt;margin-top:4mm;}
+.rail-proof{list-style:none;margin-top:9mm;display:flex;flex-direction:column;gap:2.6mm;}
+.rail-proof li{font-size:9.6pt;font-weight:600;color:#0f172a;padding-left:5.6mm;position:relative;}
+.rail-proof li::before{content:"";position:absolute;left:0;top:1.4mm;width:1.9mm;height:1.9mm;
+  background:var(--ac);transform:rotate(45deg);border-radius:.4mm;}
+.rail-left{border-right:1px solid #e6ebf2;padding-right:11mm;}
+.conv{display:flex;flex-direction:column;align-items:center;}
+.conv .kick{align-self:center;margin-bottom:4mm;}
+.conv-src{display:grid;grid-template-columns:1fr 1fr;gap:4mm 6mm;width:100%;max-width:98mm;}
+.conv-src span{font-size:9.8pt;font-weight:600;color:#334155;text-align:center;padding-bottom:1.6mm;
+  border-bottom:1px solid #e6ebf2;}
+.conv-node{margin-top:11mm;font-size:15pt;font-weight:700;color:#fff;background:var(--ac);
+  padding:3.4mm 9mm;border-radius:8mm;letter-spacing:.01em;position:relative;}
+.conv-node::before{content:"";position:absolute;top:-11mm;left:50%;width:1px;height:11mm;
+  background:var(--ac);opacity:.5;}
+.conv-out{display:flex;gap:3mm;margin-top:5mm;position:relative;}
+.conv-out::before{content:"";position:absolute;top:-5mm;left:50%;width:1px;height:5mm;
+  background:var(--ac);opacity:.5;}
+.conv-out span{font-size:9.6pt;font-weight:700;color:#0f172a;border:1px solid var(--ac);
+  border-radius:2mm;padding:1.6mm 5mm;}
+.conv-cap{margin-top:3mm;font-size:9pt;color:#64748b;font-weight:600;}
+.rail-delivers{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8mm;
+  border-top:1px solid #e6ebf2;padding-top:5mm;flex:0 0 auto;}
+.rail-delivers .rd{font-size:9.8pt;color:#475569;line-height:1.42;padding-left:5mm;position:relative;}
+.rail-delivers .rd::before{content:"";position:absolute;left:0;top:1.4mm;width:1.9mm;height:1.9mm;
+  background:var(--ac);transform:rotate(45deg);border-radius:.4mm;}
+.rail-delivers .rd b{color:#0f172a;font-weight:700;display:block;margin-bottom:1mm;}
 
-/* horizontal numbered pipeline (BST) */
-.pipe{display:flex;align-items:stretch;justify-content:center;gap:0;margin:1mm auto 0;max-width:172mm;}
-.pstage{flex:1;text-align:center;padding:0 3mm;}
-.pnum{font-family:"Space Grotesk",sans-serif;font-size:11pt;font-weight:700;color:var(--ac);}
-.ptitle{font-size:10.5pt;font-weight:700;color:#0f172a;margin-top:1.4mm;line-height:1.2;}
-.psub{font-size:8.6pt;color:#64748b;margin-top:1.4mm;line-height:1.35;}
-.parrow{display:flex;align-items:center;color:var(--ac);font-size:13pt;font-weight:700;flex:0 0 auto;}
+/* =======================================================================
+   2. SMART TRADING -- left editorial + full-width timeline band
+   ===================================================================== */
+.l-editorial{justify-content:space-between;text-align:left;}
+.ed-head h1{font-size:36pt;margin-top:2.6mm;}
+.ed-head .promise{font-size:12.5pt;margin-top:3.4mm;max-width:150mm;}
+.ed-head .rename{margin-top:2.6mm;}
+.ed-rail{position:relative;display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;
+  padding:2mm 0;}
+.ed-rail .tl-line{position:absolute;left:8mm;right:8mm;top:9.5mm;height:1.4px;
+  background:linear-gradient(90deg,var(--ac),var(--ac));opacity:.4;}
+.tl-stage{position:relative;padding-right:8mm;}
+.tl-num{font-family:"Space Grotesk",sans-serif;font-size:19pt;font-weight:700;color:var(--ac);
+  display:inline-block;background:#f4f7fb;padding-right:3mm;position:relative;z-index:1;}
+.tl-t{font-size:11pt;font-weight:700;color:#0f172a;margin-top:2.4mm;}
+.tl-s{font-size:8.8pt;color:#64748b;margin-top:1.4mm;line-height:1.34;}
+.ed-cols{display:grid;grid-template-columns:78mm 1fr;gap:12mm;align-items:start;}
+.ed-why{border-left:2.4px solid var(--ac);padding-left:6mm;}
+.ed-why .kick{margin-bottom:2.6mm;}
+.ed-why p{font-size:11.4pt;color:#334155;line-height:1.5;font-weight:500;}
+.ed-delivers .kick{margin-bottom:3mm;}
+.l-editorial .caps{justify-content:flex-start;margin-top:0;}
+.l-editorial .cap:first-child{padding-left:0;}
 
-/* before/after split (RAG) */
-.split{display:flex;align-items:flex-start;justify-content:center;gap:0;margin:2mm auto 0;max-width:170mm;}
-.scol{flex:1;text-align:center;}
-.scap{font-size:7.8pt;letter-spacing:.18em;text-transform:uppercase;color:#64748b;font-weight:700;}
-.sbody{font-size:10.2pt;color:#0f172a;font-weight:600;margin-top:2.4mm;line-height:1.4;}
-.sbody .dim{color:#64748b;font-weight:500;}
-.smid{flex:0 0 auto;padding:5.4mm 6mm 0;text-align:center;}
-.smid .sar{color:var(--ac);font-size:15pt;font-weight:700;}
-.smid .sml{font-size:8pt;color:var(--ac);font-weight:700;margin-top:1.2mm;letter-spacing:.02em;}
+/* =======================================================================
+   3. REMITTANCE ADVICE GATE -- before -> after diptych
+   ===================================================================== */
+.l-diptych{align-items:center;}
+.dp-head{text-align:center;}
+.dp-head h1{font-size:35pt;margin-top:2.4mm;}
+.dp-head .promise{font-size:12.5pt;margin-top:3mm;}
+.dp-panels{display:grid;grid-template-columns:1fr 34mm 1fr;align-items:center;gap:0;
+  width:100%;}
+.dp-panel{border-radius:3mm;padding:7mm 7mm 6.4mm;min-height:56mm;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}
+.dp-panel.before{background:#f1f5f9;border:1px solid #e2e8f0;}
+.dp-panel.after{background:color-mix(in srgb,var(--ac) 8%,#ffffff);border:1px solid var(--ac);}
+.dp-cap{font-size:7.8pt;letter-spacing:.18em;text-transform:uppercase;color:#64748b;font-weight:700;}
+.dp-cards{display:flex;flex-direction:column;gap:2mm;margin:4mm 0 3.4mm;width:38mm;}
+.dp-cards .card{background:#fff;border:1px solid #cbd5e1;border-radius:1.6mm;padding:2mm 3mm;
+  font-size:8.6pt;font-weight:600;color:#64748b;text-align:left;box-shadow:0 1px 2px rgba(15,23,42,.05);}
+.dp-cards .card::before{content:"";display:inline-block;width:2mm;height:2mm;border-radius:50%;
+  background:#cbd5e1;margin-right:2.4mm;vertical-align:middle;}
+.dp-lab{font-size:9.6pt;font-weight:600;color:#0f172a;line-height:1.34;}
+.dp-badge{background:var(--ac);color:#fff;font-weight:700;font-size:12pt;letter-spacing:.01em;
+  padding:3mm 6mm;border-radius:2mm;margin:4mm 0 3.4mm;box-shadow:0 2px 8px color-mix(in srgb,var(--ac) 30%,transparent);}
+.dp-bridge{display:flex;flex-direction:column;align-items:center;gap:2mm;}
+.dp-arrow{color:var(--ac);font-size:20pt;font-weight:700;line-height:1;}
+.dp-ai{font-size:8.4pt;font-weight:700;color:var(--ac);text-align:center;line-height:1.4;letter-spacing:.02em;}
+.dp-proof{width:100%;background:#0f172a;color:#e2e8f0;border-radius:2.4mm;
+  padding:4mm 7mm;font-size:10pt;line-height:1.4;text-align:center;font-weight:500;margin:0;}
+.dp-proof b{color:#fff;font-weight:700;}
+.dp-delivers{display:grid;grid-template-columns:1fr 1fr;gap:3mm 12mm;width:100%;max-width:158mm;}
+.dp-delivers li{list-style:none;font-size:9.8pt;color:#475569;line-height:1.4;padding-left:5mm;position:relative;}
+.dp-delivers li::before{content:"";position:absolute;left:0;top:1.4mm;width:1.9mm;height:1.9mm;
+  background:var(--ac);transform:rotate(45deg);border-radius:.4mm;}
 
-/* compare columns + variance (BFP): a slim two-bar chart, not blocks */
-.cmp{display:flex;align-items:flex-end;justify-content:center;gap:16mm;margin:2mm auto 0;
-  padding-bottom:2mm;border-bottom:1px solid #e2e8f0;width:96mm;}
-.cbar{text-align:center;}
-.cbar .clab{font-size:9pt;color:#475569;font-weight:600;margin-bottom:1.8mm;}
-.cbar .col{margin:0 auto;border-radius:1mm 1mm 0 0;}
-.cmp-flag{text-align:center;margin-top:3mm;font-size:10.5pt;font-weight:700;color:var(--ac);}
+/* =======================================================================
+   4. BANK FEE PORTAL -- dashboard: narrative left, bar chart right
+   ===================================================================== */
+.l-dash{justify-content:space-between;}
+.dash-grid{display:grid;grid-template-columns:1fr 74mm;gap:13mm;align-items:start;}
+.dash-left h1{font-size:36pt;margin-top:3mm;}
+.dash-left .promise{font-size:12pt;margin-top:3.4mm;}
+.dash-left .problem{font-size:10.6pt;color:#475569;line-height:1.5;margin-top:6mm;
+  padding-top:5mm;border-top:1px solid #e6ebf2;}
+.dash-left .dots{margin-top:6mm;}
+.dash-panel{display:flex;flex-direction:column;justify-content:center;
+  background:#fff;border:1px solid #e6ebf2;border-radius:3mm;padding:7mm 8mm 6.5mm;
+  box-shadow:0 2px 10px rgba(15,23,42,.05);}
+.dash-panel .kick{text-align:center;margin-bottom:7mm;}
+.chart{position:relative;display:flex;align-items:flex-end;justify-content:center;gap:24mm;height:60mm;
+  border-bottom:1.4px solid #cbd5e1;}
+.chart::after{content:"";position:absolute;left:0;right:0;bottom:31mm;border-top:1px dashed #cbd5e1;}
+.cbar{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;}
+.cbar .col{width:16mm;border-radius:1.4mm 1.4mm 0 0;}
+.cbar .col.charged{position:relative;overflow:hidden;}
+.over{position:absolute;left:0;right:0;top:0;height:21mm;
+  background:repeating-linear-gradient(45deg,color-mix(in srgb,var(--ac) 26%,transparent) 0 1.6mm,transparent 1.6mm 3.4mm);}
+.cbar .clab{margin-top:2.6mm;font-size:8.4pt;color:#64748b;font-weight:600;line-height:1.3;text-align:center;}
+.cbar .clab b{display:block;font-size:9.6pt;color:#0f172a;font-weight:700;margin-bottom:.6mm;}
+.dash-delta{text-align:center;margin-top:5mm;font-size:10.6pt;font-weight:700;color:var(--ac);}
+.dash-delta::before{content:"\25C6";margin-right:2mm;font-size:8pt;}
+.ledger{margin-top:6mm;border-top:1px solid #eef2f7;padding-top:4.4mm;display:flex;flex-direction:column;gap:2.6mm;}
+.lhead{font-family:"Space Grotesk",sans-serif;font-size:8pt;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--ac);font-weight:600;text-align:center;margin-bottom:1.4mm;}
+.lrow{display:flex;align-items:center;justify-content:space-between;font-size:9.4pt;}
+.lname{color:#334155;font-weight:600;}
+.ltag{font-size:7.6pt;font-weight:700;letter-spacing:.02em;padding:.9mm 2.8mm;border-radius:4mm;}
+.ltag.ok{color:#16a34a;background:rgba(22,163,74,.10);}
+.ltag.flag{color:var(--ac);background:color-mix(in srgb,var(--ac) 13%,transparent);}
 
-/* hub (TC): centre node, six domain satellites, one base */
-.hub{position:relative;width:142mm;height:50mm;margin:2mm auto 0;}
-.hub-ring{position:absolute;inset:0;width:100%;height:100%;}
-.hub-core{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;}
-.hub-core .hc1{font-family:"Space Grotesk",sans-serif;font-size:13pt;font-weight:700;color:#0f172a;}
-.hub-core .hc1 .ac{color:var(--ac);}
-.hub-core .hc2{font-size:7.6pt;letter-spacing:.2em;text-transform:uppercase;color:var(--ac);font-weight:700;margin-top:.8mm;}
-.sat{position:absolute;transform:translate(-50%,-50%);font-size:9.8pt;font-weight:700;color:#1e293b;white-space:nowrap;}
-.hub-base{text-align:center;font-size:9.6pt;color:#475569;font-weight:600;margin-top:1mm;}
-.hub-base b{color:#0f172a;}
+/* =======================================================================
+   5. TREASURYCENTRAL -- radial cockpit
+   ===================================================================== */
+.l-radial{align-items:center;text-align:center;justify-content:space-between;}
+.rad-head h1{font-size:38pt;margin-top:2.6mm;}
+.rad-head .promise{font-size:12.5pt;margin-top:3mm;}
+.radial{position:relative;width:164mm;height:98mm;margin:0 auto;}
+.radial svg{position:absolute;inset:0;width:100%;height:100%;}
+.rad-core{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:46mm;height:46mm;border-radius:50%;background:#fff;border:1.6px solid var(--ac);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  box-shadow:0 3px 14px color-mix(in srgb,var(--ac) 22%,transparent);}
+.rad-core .c1{font-family:"Space Grotesk",sans-serif;font-size:11.5pt;font-weight:700;color:#0f172a;line-height:1.05;}
+.rad-core .c1 .ac{color:var(--ac);}
+.rad-core .c2{font-size:7pt;letter-spacing:.18em;text-transform:uppercase;color:var(--ac);font-weight:700;margin-top:1.4mm;}
+.rad-node{position:absolute;transform:translate(-50%,-50%);font-size:9.6pt;font-weight:700;
+  color:#1e293b;background:#fff;border:1px solid #dbe3ee;border-radius:5mm;padding:1.6mm 4mm;
+  white-space:nowrap;box-shadow:0 1px 4px rgba(15,23,42,.06);}
+.rad-base{font-size:9.8pt;color:#475569;font-weight:600;}
+.rad-base b{color:#0f172a;}
+.l-radial .dots{max-width:150mm;text-align:left;margin:0 auto;}
 
-/* layer stack (OP) */
-.stack{max-width:150mm;margin:1mm auto 0;display:flex;flex-direction:column;gap:2.4mm;}
-.layer{text-align:center;padding:3mm 4mm;border-radius:2mm;}
-.layer.top{border:1px solid var(--ac);color:#0f172a;font-weight:700;font-size:11.5pt;
-  background:#ffffff;box-shadow:0 1px 4px rgba(15,23,42,.06);}
-.layer.top .ac{color:var(--ac);}
-.layer.mid{font-size:9.6pt;color:#334155;font-weight:600;}
-.layer.mid span:not(:last-child)::after{content:"\00B7";color:var(--ac);margin:0 2.6mm;opacity:.7;}
-.layer.base{font-size:9.6pt;color:#64748b;font-weight:600;letter-spacing:.02em;}
-.stk-div{height:4mm;display:flex;align-items:center;justify-content:center;color:var(--ac);font-size:9pt;}
+/* =======================================================================
+   6. ONEPILOT -- dark architecture panel (flagship)
+   ===================================================================== */
+.l-arch{align-items:center;text-align:center;justify-content:space-between;}
+.arch-head h1{font-size:36pt;margin-top:2.4mm;}
+.arch-head .promise{font-size:12.5pt;margin-top:3mm;}
+.arch{width:100%;background:
+    radial-gradient(70mm 40mm at 50% 0%, color-mix(in srgb,var(--ac) 28%,transparent), transparent 70%),
+    linear-gradient(160deg,#0b1220,#101c33 60%,#0b1220);
+  border-radius:3.4mm;padding:7mm 9mm 7.4mm;margin:0;
+  box-shadow:0 4px 18px rgba(15,23,42,.18);}
+.arch-top{font-family:"Space Grotesk",sans-serif;color:#fff;font-weight:700;font-size:12.5pt;
+  border:1.4px solid var(--ac);border-radius:2.2mm;padding:3.2mm 6mm;display:inline-block;
+  background:color-mix(in srgb,var(--ac) 16%,transparent);}
+.arch-top .lab{display:block;font-family:"IBM Plex Sans",sans-serif;font-size:8pt;font-weight:600;
+  letter-spacing:.16em;text-transform:uppercase;color:color-mix(in srgb,var(--ac) 60%,#ffffff);margin-top:1mm;}
+.arch-conn{height:5mm;position:relative;}
+.arch-conn::before{content:"";position:absolute;left:50%;top:0;width:1px;height:100%;
+  background:color-mix(in srgb,var(--ac) 55%,transparent);}
+.arch-pillars{display:grid;grid-template-columns:repeat(4,1fr);gap:4mm;}
+.arch-pillars .pil{background:rgba(255,255,255,.05);border:1px solid rgba(148,163,184,.28);
+  border-top:2px solid var(--ac);border-radius:1.8mm;padding:4mm 2mm;font-size:9pt;font-weight:600;
+  color:#e2e8f0;line-height:1.25;display:flex;align-items:center;justify-content:center;min-height:24mm;}
+.arch-base{margin-top:5mm;font-size:9pt;font-weight:600;letter-spacing:.02em;
+  color:#93a4bd;border-top:1px solid rgba(148,163,184,.24);padding-top:4mm;}
+.arch-base b{color:#e2e8f0;font-weight:700;}
+.arch-delivers{display:grid;grid-template-columns:1fr 1fr;gap:3mm 12mm;width:100%;max-width:162mm;
+  text-align:left;}
+.arch-delivers li{list-style:none;font-size:9.8pt;color:#334155;line-height:1.38;padding-left:5mm;position:relative;}
+.arch-delivers li::before{content:"";position:absolute;left:0;top:1.4mm;width:1.9mm;height:1.9mm;
+  background:var(--ac);transform:rotate(45deg);border-radius:.4mm;}
 """
 
 
-# ---- shared light helpers -------------------------------------------------
-def dots(points):
-    return '<ul class="dots">' + "".join(f"<li>{p}</li>" for p in points) + "</ul>"
+# ---- shared helpers -------------------------------------------------------
+def dots(points, cls="dots"):
+    return f'<ul class="{cls}">' + "".join(f"<li>{p}</li>" for p in points) + "</ul>"
 
 def caps(items):
     return '<div class="caps">' + "".join(f'<span class="cap">{c}</span>' for c in items) + "</div>"
 
-def kick(t):
-    return f'<div class="kick">{t}</div>'
+def steps_sec(label, items):
+    cells = "".join(
+        f'<div class="step"><div class="sn">{i}</div><div class="st">{t}</div><div class="sd">{d}</div></div>'
+        for i, (t, d) in enumerate(items, 1))
+    return f'<div class="steps-sec"><div class="kick">{label}</div><div class="steps">{cells}</div></div>'
 
-def lead(t):
-    return f'<p class="lead">{t}</p>'
-
-def sec(label, content):
-    """One grouped section: kicker tight above its content. Grouping lets
-    .body space-evenly distribute whole sections, not loose elements."""
-    return f'<div class="sec">{kick(label)}{content}</div>'
-
-
-# ---- per-product "how it works" visuals (each structurally different) -----
-def viz_funnel(sources, node, out_html):
-    src = "".join(f"<span>{s}</span>" for s in sources)
-    svg = ('<svg class="fn-svg" width="150" height="34" viewBox="0 0 150 34" fill="none">'
-           '<path d="M6 4 L144 4 L92 30 L58 30 Z" stroke="var(--ac)" stroke-width="1" '
-           'stroke-opacity=".55" stroke-linejoin="round"/>'
-           '<path d="M75 30 L75 34" stroke="var(--ac)" stroke-width="1" stroke-opacity=".55"/></svg>')
-    return (f'<div class="fn-src">{src}</div>{svg}'
-            f'<div class="fn-node">{node}</div>'
-            f'<div class="fn-out">{out_html}</div>')
-
-def viz_pipeline(stages):
-    parts = []
-    for i, (title, sub) in enumerate(stages, 1):
-        parts.append(f'<div class="pstage"><div class="pnum">{i}</div>'
-                     f'<div class="ptitle">{title}</div><div class="psub">{sub}</div></div>')
-        if i < len(stages):
-            parts.append('<div class="parrow">&#8594;</div>')
-    return '<div class="pipe">' + "".join(parts) + "</div>"
-
-def viz_split(left_cap, left, mid_label, right_cap, right):
-    return (f'<div class="split">'
-            f'<div class="scol"><div class="scap">{left_cap}</div><div class="sbody">{left}</div></div>'
-            f'<div class="smid"><div class="sar">&#8594;</div><div class="sml">{mid_label}</div></div>'
-            f'<div class="scol"><div class="scap">{right_cap}</div><div class="sbody">{right}</div></div>'
-            f'</div>')
-
-def viz_compare(charged_h, agreed_h, flag):
-    # two columns sized by relative height; charged taller than agreed = overcharge
-    def col(label, h, shade):
-        return (f'<div class="cbar"><div class="clab">{label}</div>'
-                f'<div class="col" style="height:{h}mm;width:14mm;background:{shade};"></div></div>')
-    charged = col("Charged", charged_h, "linear-gradient(180deg,#cbd5e1,#94a3b8)")
-    agreed = col("Agreed", agreed_h, "var(--ac)")
-    return (f'<div class="cmp">{charged}{agreed}</div>'
-            f'<div class="cmp-flag">&#9670;&nbsp; {flag}</div>')
-
-def viz_hub(core_html, core_label, satellites, base_html):
-    # six satellites around a centre core on an elliptical ring
-    import math
-    ring = ('<svg class="hub-ring" width="100%" height="100%" viewBox="0 0 150 58" '
-            'preserveAspectRatio="none" fill="none">'
-            '<ellipse cx="75" cy="29" rx="60" ry="22" stroke="var(--ac)" stroke-width="1" '
-            'stroke-opacity=".35" vector-effect="non-scaling-stroke"/></svg>')
-    pos = [(-90), (-30), (30), (90), (150), (210)]  # degrees, 6 around
-    sats = ""
-    cx, cy, rx, ry = 75, 29, 60, 22
-    for deg, name in zip(pos, satellites):
-        rad = math.radians(deg)
-        x = cx + rx * math.cos(rad)
-        y = cy + ry * math.sin(rad)
-        px = x / 150 * 100
-        py = y / 58 * 100
-        sats += f'<div class="sat" style="left:{px:.1f}%;top:{py:.1f}%;">{name}</div>'
-    core = (f'<div class="hub-core"><div class="hc1">{core_html}</div>'
-            f'<div class="hc2">{core_label}</div></div>')
-    return f'<div class="hub">{ring}{core}{sats}</div><div class="hub-base">{base_html}</div>'
-
-def viz_stack(top_html, mid_items, base_html):
-    mid = "".join(f"<span>{m}</span>" for m in mid_items)
-    return ('<div class="stack">'
-            f'<div class="layer top">{top_html}</div>'
-            '<div class="stk-div">&#9660;</div>'
-            f'<div class="layer mid">{mid}</div>'
-            '<div class="stk-div">&#9660;</div>'
-            f'<div class="layer base">{base_html}</div></div>')
-
-
-# ---- page frame -----------------------------------------------------------
 TRUST = ["<b>SAP</b> Co-Innovation Partner", "SAP Store", "<b>ISO 27001</b>",
          "<b>SOC 1 Type II</b>", "live with customers today"]
 
+# Credentials band shown at the foot of every sheet (all true; formerly the
+# footer micro-strip, promoted to a visible proof section).
+PROOF = ('<div class="proof">'
+         '<span class="pchip"><span class="sapbadge">SAP</span> Co-Innovation Partner</span>'
+         '<span class="pchip">SAP Store</span>'
+         '<span class="pchip">ISO 27001</span>'
+         '<span class="pchip">SOC 1 Type II</span>'
+         '<span class="pchip">Live with customers today</span>'
+         '</div>')
+
+
+# ---- per-product body builders (each a distinct composition) --------------
+def body_market_data_hub():
+    providers = ["Bloomberg", "Refinitiv", "CME Group", "360T", "Deutsche Boerse", "OANDA"]
+    src = "".join(f"<span>{p}</span>" for p in providers)
+    return f'''<main class="l-rail">
+  <div class="rail-grid">
+    <div class="rail-left">
+      <div class="eyebrow">Market data</div>
+      <h1>Market<br>Data Hub</h1>
+      <p class="promise">Every rate, curve and price through one managed feed. No hand-keyed uploads.</p>
+      <ul class="rail-proof"><li>one managed feed</li><li>every provider</li><li>SAP + non-SAP</li><li>no hand-keying</li></ul>
+    </div>
+    <div class="rail-right">
+      <div class="conv">
+        <div class="kick">Every provider, one feed</div>
+        <div class="conv-src">{src}</div>
+        <div class="conv-node">one governed feed</div>
+        <div class="conv-out"><span>SAP</span><span>non-SAP</span></div>
+        <div class="conv-cap">both directions, no code. central banks included.</div>
+      </div>
+    </div>
+  </div>
+  {steps_sec("How it works", [
+      ("Ingest", "every provider's rates, curves and prices, each in its own format"),
+      ("Govern", "one managed feed controls entitlements and usage"),
+      ("Distribute", "the same number to SAP and non-SAP, both ways")])}
+  <div class="rail-delivers">
+    <div class="rd"><b>One control point</b>Every provider's entitlements and usage governed in a single place.</div>
+    <div class="rd"><b>Same number everywhere</b>It reaches every system that needs it, SAP and non-SAP, both ways.</div>
+    <div class="rd"><b>Scripts retire</b>Point-to-point uploads collapse behind one source of truth.</div>
+  </div>
+</main>'''
+
+
+def body_smart_trading():
+    return f'''<main class="l-editorial">
+  <div class="ed-head">
+    <div class="eyebrow">Trade capture</div>
+    <h1>Brisken Smart Trading</h1>
+    <p class="promise">The trade lifecycle from venue to booked deal, straight through. No re-keying.</p>
+    <p class="rename">Formerly Trade Automation / TraderPlus, now Brisken Smart Trading (BST).</p>
+  </div>
+  <div class="ed-rail">
+    <div class="tl-line"></div>
+    <div class="tl-stage"><span class="tl-num">01</span><div class="tl-t">Decide &amp; approve</div><div class="tl-s">decision, approval, execution</div></div>
+    <div class="tl-stage"><span class="tl-num">02</span><div class="tl-t">Execution venues</div><div class="tl-s">FXall, Bloomberg FX GO, 360T, BidFX</div></div>
+    <div class="tl-stage"><span class="tl-num">03</span><div class="tl-t">SAP TRM</div><div class="tl-s">deal created straight through</div></div>
+  </div>
+  <div class="ed-cols">
+    <div class="ed-why">
+      <div class="kick">Why it matters</div>
+      <p>Treasury desks still re-key trades from the venue into SAP TRM by hand: slow, a control risk, and it breaks the moment a venue changes a field.</p>
+    </div>
+    <div class="ed-delivers">
+      <div class="kick">What it delivers</div>
+      {dots(["Captured at the venue and created in SAP TRM straight through, validated on the way in.",
+             "Venue and TMS agnostic, so a new venue is a configuration change, not a rebuild.",
+             "Four-eye approval and segregation of duties built in, with no ABAP and no per-venue interface."])}
+    </div>
+  </div>
+  {caps(["no re-key", "venue + TMS agnostic", "four-eye + SoD", "straight-through"])}
+</main>'''
+
+
+def body_remittance():
+    cards = "".join(f'<span class="card">{c}</span>' for c in ["Email body", "PDF attachment", "Scanned advice"])
+    return f'''<main class="l-diptych">
+  <div class="dp-head">
+    <div class="eyebrow">Remittance processing</div>
+    <h1>Remittance Advice Gate</h1>
+    <p class="promise">AI reads the remittance and posts it. No one retypes anything.</p>
+  </div>
+  <div class="dp-panels">
+    <div class="dp-panel before">
+      <div class="dp-cap">Comes in as</div>
+      <div class="dp-cards">{cards}</div>
+      <div class="dp-lab">Unstructured emails and attachments</div>
+    </div>
+    <div class="dp-bridge">
+      <div class="dp-arrow">&#8594;</div>
+      <div class="dp-ai">AI reads<br>structures<br>matches</div>
+    </div>
+    <div class="dp-panel after">
+      <div class="dp-cap">Ends up in</div>
+      <div class="dp-badge">SAP S/4HANA</div>
+      <div class="dp-lab">Posted, matched, exceptions surfaced</div>
+    </div>
+  </div>
+  <div class="dp-proof">Already in production: <b>one S/4HANA customer removed the manual step entirely.</b></div>
+  <ul class="dp-delivers">
+    <li>An LLM reads the unstructured email or attachment, structures it, and posts to S/4HANA.</li>
+    <li>Matches happen on the way in, so clean items flow through and only exceptions surface.</li>
+  </ul>
+  {caps(["LLM-read", "auto-matched", "exception-only", "live today"])}
+</main>'''
+
+
+def body_bank_fee_portal():
+    return f'''<main class="l-dash">
+  <div class="dash-grid">
+    <div class="dash-left">
+      <div class="eyebrow">Bank fee control</div>
+      <h1>Bank Fee Portal</h1>
+      <p class="promise">Check every bank charge against what you actually agreed, line by line.</p>
+      <p class="problem">Bank fees are hard to check against what was actually agreed, and overcharges slip through because nobody reconciles them line by line.</p>
+      {dots(["Charged fees are compared to your negotiated agreements, and every variance is flagged.",
+             "The whole reconciliation stays in one place, with a line-level trail behind each flag."])}
+    </div>
+    <div class="dash-panel">
+      <div class="kick u">Charged vs agreed</div>
+      <div class="chart">
+        <div class="cbar"><div class="col charged" style="height:52mm;background:linear-gradient(180deg,#cbd5e1,#94a3b8);"><div class="over"></div></div><div class="clab"><b>Charged</b>what the bank billed</div></div>
+        <div class="cbar"><div class="col" style="height:31mm;background:var(--ac);"></div><div class="clab"><b>Agreed</b>what you negotiated</div></div>
+      </div>
+      <div class="ledger">
+        <div class="lhead">Line by line</div>
+        <div class="lrow"><span class="lname">Wire transfer fee</span><span class="ltag ok">matches</span></div>
+        <div class="lrow"><span class="lname">FX conversion margin</span><span class="ltag flag">flagged</span></div>
+        <div class="lrow"><span class="lname">Custody &amp; safekeeping</span><span class="ltag ok">matches</span></div>
+        <div class="lrow"><span class="lname">Cash management fee</span><span class="ltag ok">matches</span></div>
+        <div class="lrow"><span class="lname">Payment processing</span><span class="ltag flag">flagged</span></div>
+      </div>
+    </div>
+  </div>
+  {steps_sec("How it works", [
+      ("Load", "every bank statement and fee line"),
+      ("Match", "each charge against your negotiated agreement"),
+      ("Flag", "every variance, with a line-level trail")])}
+  {caps(["agreement-checked", "line by line", "variance flags", "recover overcharges"])}
+</main>'''
+
+
+def body_treasurycentral():
+    import math
+    nodes = ["Cash", "Investments", "Debt", "FX", "Market Data", "Governance"]
+    # six nodes around a circle; start at top, clockwise
+    cx, cy = 75.0, 37.0      # in a 150 x 74 field (mm-ish user units)
+    rx, ry = 58.0, 30.0
+    core_r = 20.0
+    node_html = ""
+    spokes = ""
+    for i, name in enumerate(nodes):
+        ang = -90 + i * 60
+        rad = math.radians(ang)
+        x = cx + rx * math.cos(rad)
+        y = cy + ry * math.sin(rad)
+        # spoke from core edge toward node
+        ex = cx + (core_r + 1) * math.cos(rad) * (rx / 58.0)
+        ey = cy + (core_r + 1) * math.sin(rad) * (ry / 30.0)
+        spokes += (f'<line x1="{cx:.1f}" y1="{cy:.1f}" x2="{x:.1f}" y2="{y:.1f}" '
+                   f'stroke="var(--ac)" stroke-width="0.5" stroke-opacity="0.35"/>')
+        node_html += (f'<div class="rad-node" style="left:{x/150*100:.1f}%;top:{y/74*100:.1f}%;">{name}</div>')
+    svg = (f'<svg viewBox="0 0 150 74" preserveAspectRatio="none" fill="none">{spokes}</svg>')
+    return f'''<main class="l-radial">
+  <div class="rad-head">
+    <div class="eyebrow">The treasury cockpit</div>
+    <h1>Treasury<span class="ac">Central</span></h1>
+    <p class="promise">Cash, investments, debt, FX and market data in one screen.</p>
+  </div>
+  <div class="radial">
+    {svg}
+    <div class="rad-core"><div class="c1">Treasury<span class="ac">Central</span></div><div class="c2">the cockpit</div></div>
+    {node_html}
+  </div>
+  <div class="rad-base">on your <b>SAP</b> data, every move logged</div>
+  {dots(["See the position and act on it in one place, across all six treasury domains.",
+         "Governance is built in, not bolted on, and there is no separate data store to reconcile."])}
+  {caps(["one screen", "six domains", "no data store", "governance built in"])}
+</main>'''
+
+
+def body_onepilot():
+    pillars = "".join(f'<div class="pil">{p}</div>'
+                      for p in ["Market Data Hub", "Smart Trading", "Remittance Gate", "Bank Fee Portal"])
+    return f'''<main class="l-arch">
+  <div class="arch-head">
+    <div class="eyebrow">The AI operating layer</div>
+    <h1>One<span class="ac">Pilot</span></h1>
+    <p class="promise">The governed AI layer that runs your treasury apps. In production now.</p>
+  </div>
+  <div class="arch">
+    <div class="arch-top">One<span class="ac" style="color:var(--ac);">Pilot</span><span class="lab">the governed AI layer</span></div>
+    <div class="arch-conn"></div>
+    <div class="arch-pillars">{pillars}</div>
+    <div class="arch-base">out to <b>SAP</b> and non-SAP, bi-directional, across your landscape</div>
+  </div>
+  <ul class="arch-delivers">
+    <li>It asks, automates and acts across the applications, always inside your controls.</li>
+    <li>Anomaly detection, segregation of duties and four-eye approval come as standard.</li>
+    <li>Build your own apps and automations without writing a line of code.</li>
+    <li>Run by exception; your team stays in command.</li>
+  </ul>
+  {caps(["codeless framework", "manage by exception", "controls built in", "acts across apps"])}
+</main>'''
+
+
+# ---- page frame -----------------------------------------------------------
 def page(p):
-    tms = "".join(f'<span class="tm">{t}</span>' for t in TRUST)
-    rn = f'<div class="rename">{p["rename"]}</div>' if p.get("rename") else ""
+    body = p["body"].replace("</main>", PROOF + "\n</main>")
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <style>:root{{--ac:{p['accent']};--glow:{p['glow']};}}{BASE_CSS}</style></head>
-<body><div class="topline"></div><div class="wrap">
+<body><div class="topline"></div><div class="sheet">
 <header><img class="logo-img" src="data:image/png;base64,{LOGO_B64}" alt="Brisken">
 <div class="partner"><span class="sapbadge">SAP</span> Co-Innovation Partner</div></header>
-<div class="body">
-<div class="hero"><div class="eyebrow">{p['eyebrow']}</div><h1>{p['name_html']}</h1>
-<div class="promise">{p['promise']}</div>{rn}</div>
-{p['body']}
-</div>
-<footer><div class="trust">{tms}</div><div class="foot-url">www.brisken.com</div></footer>
+{body}
+<footer><div class="foot-line"><b>Brisken</b> &middot; SAP Co-Innovation Partner &middot; www.brisken.com</div></footer>
 </div></body></html>"""
 
 
-# ---- the six products, each with its own spine and visual ------------------
 def build_products():
-    P = []
-
-    # 1. Market Data Hub -- FUNNEL. spine: problem -> funnel -> delivers
-    P.append(dict(
-        slug="brisken-market-data-hub-onepager", accent="#0891b2", glow="rgba(8,145,178,.09)",
-        eyebrow="Market data", name_html="Market Data Hub",
-        promise="Every rate, curve and price through one managed feed. No hand-keyed uploads.",
-        body=(
-            sec("The problem",
-                lead("Rates, curves and prices arrive from every provider in a different shape, "
-                     "and most of it still lands as a hand-keyed upload."))
-            + sec("How it works", viz_funnel(
-                ["Bloomberg", "Refinitiv", "CME Group", "360T", "Deutsche Boerse", "OANDA", "central banks"],
-                "one governed feed",
-                "out to <b>SAP</b> and non-SAP, both directions, no code"))
-            + sec("What it delivers",
-                  dots(["One feed controls every provider's entitlements and usage in a single place.",
-                        "The same number reaches every system that needs it, SAP and non-SAP, both ways.",
-                        "The point-to-point scripts and manual uploads retire behind one source of truth."])
-                  + caps(["one managed feed", "every provider", "SAP + non-SAP", "no hand-keying"]))
-        )))
-
-    # 2. Brisken Smart Trading -- HORIZONTAL PIPELINE. spine: pipeline -> problem -> delivers
-    P.append(dict(
-        slug="brisken-smart-trading-onepager", accent="#2563eb", glow="rgba(37,99,235,.08)",
-        eyebrow="Trade capture", name_html="Brisken Smart Trading",
-        promise="The trade lifecycle from venue to booked deal, straight through. No re-keying.",
-        rename="Formerly Trade Automation / TraderPlus, now Brisken Smart Trading (BST).",
-        body=(
-            sec("How it works", viz_pipeline([
-                ("Decide &amp; approve", "decision, approval, execution"),
-                ("Execution venues", "FXall, Bloomberg FX GO, 360T, BidFX"),
-                ("SAP TRM", "deal created straight through")]))
-            + sec("Why it matters",
-                  lead("Treasury desks still re-key trades from the venue into SAP TRM by hand: slow, a control "
-                       "risk, and it breaks the moment a venue changes a field."))
-            + sec("What it delivers",
-                  dots(["The deal is captured at the venue and created in SAP TRM straight through, validated on the way in.",
-                        "Venue and TMS agnostic, so a new venue is a configuration change, not a rebuild.",
-                        "Four-eye approval and segregation of duties are built in, with no ABAP and no per-venue interface."])
-                  + caps(["no re-key", "venue + TMS agnostic", "four-eye + SoD", "straight-through"]))
-        )))
-
-    # 3. Remittance Advice Gate -- BEFORE/AFTER SPLIT. spine: split -> delivers
-    P.append(dict(
-        slug="brisken-remittance-advice-gate-onepager", accent="#059669", glow="rgba(5,150,105,.08)",
-        eyebrow="Remittance processing", name_html="Remittance Advice Gate",
-        promise="AI reads the remittance and posts it. No one retypes anything.",
-        body=(
-            sec("How it works", viz_split(
-                "Comes in as", "Unstructured emails<br><span class=\"dim\">and attachments</span>",
-                "AI reads &middot; structures &middot; matches",
-                "Ends up in", "Posted in <b>SAP S/4HANA</b><br><span class=\"dim\">matched, exceptions surfaced</span>"))
-            + sec("What it delivers",
-                  dots(["An LLM reads the unstructured email or attachment, structures it, and posts to S/4HANA.",
-                        "Matches happen on the way in, so clean items flow through and only exceptions surface.",
-                        "Already in production: one S/4HANA customer removed the manual step entirely."])
-                  + caps(["LLM-read", "auto-matched", "exception-only", "live today"]))
-        )))
-
-    # 4. Bank Fee Portal -- COMPARE BARS. spine: problem -> compare -> delivers
-    P.append(dict(
-        slug="brisken-bank-fee-portal-onepager", accent="#ea580c", glow="rgba(234,88,12,.08)",
-        eyebrow="Bank fee control", name_html="Bank Fee Portal",
-        promise="Check every bank charge against what you actually agreed, line by line.",
-        body=(
-            sec("The problem",
-                lead("Bank fees are hard to check against what was actually agreed, and overcharges slip "
-                     "through because nobody reconciles them line by line."))
-            + sec("How it works", viz_compare(30, 18, "variance flagged, line by line"))
-            + sec("What it delivers",
-                  dots(["Charged fees are compared to your negotiated agreements, and every variance is flagged.",
-                        "The whole reconciliation stays in one place, with a line-level trail behind each flag."])
-                  + caps(["agreement-checked", "line by line", "variance flags", "recover overcharges"]))
-        )))
-
-    # 5. TreasuryCentral -- HUB. spine: hub -> delivers
-    P.append(dict(
-        slug="brisken-treasurycentral-onepager", accent="#4f46e5", glow="rgba(79,70,229,.07)",
-        eyebrow="The treasury cockpit", name_html="Treasury<span class='ac'>Central</span>",
-        promise="Cash, investments, debt, FX and market data in one screen.",
-        body=(
-            sec("One cockpit, six domains",
-                viz_hub("Treasury<span class='ac'>Central</span>", "the cockpit",
-                        ["Cash", "Investments", "Debt", "FX", "Market Data", "Governance"],
-                        "on your <b>SAP</b> data, every move logged"))
-            + sec("The problem it removes",
-                  dots(["See the position and act on it in one place, across all six treasury domains.",
-                        "Governance is built in, not bolted on, and there is no separate data store to reconcile."])
-                  + caps(["one screen", "six domains", "no data store", "governance built in"]))
-        )))
-
-    # 6. OnePilot -- LAYER STACK. spine: stack -> delivers
-    P.append(dict(
-        slug="brisken-onepilot-onepager", accent="#9333ea", glow="rgba(147,51,234,.07)",
-        eyebrow="The AI operating layer", name_html="One<span class='ac'>Pilot</span>",
-        promise="The governed AI layer that runs your treasury apps. In production now.",
-        body=(
-            sec("How it fits together", viz_stack(
-                "One<span class='ac'>Pilot</span> &nbsp;the governed AI layer",
-                ["Market Data Hub", "Smart Trading", "Remittance Gate", "Bank Fee Portal"],
-                "SAP and non-SAP, bi-directional, across your landscape"))
-            + sec("What it delivers",
-                  dots(["It asks, automates and acts across the applications, always inside your controls.",
-                        "Anomaly detection, segregation of duties and four-eye approval come as standard.",
-                        "Build your own apps and automations without writing a line of code.",
-                        "Run by exception; your team stays in command."])
-                  + caps(["codeless framework", "manage by exception", "controls built in", "acts across apps"]))
-        )))
-    return P
+    return [
+        dict(slug="brisken-market-data-hub-onepager",   accent="#0891b2", glow="rgba(8,145,178,.09)",  body=body_market_data_hub()),
+        dict(slug="brisken-smart-trading-onepager",     accent="#2563eb", glow="rgba(37,99,235,.08)",  body=body_smart_trading()),
+        dict(slug="brisken-remittance-advice-gate-onepager", accent="#059669", glow="rgba(5,150,105,.08)", body=body_remittance()),
+        dict(slug="brisken-bank-fee-portal-onepager",   accent="#ea580c", glow="rgba(234,88,12,.08)",  body=body_bank_fee_portal()),
+        dict(slug="brisken-treasurycentral-onepager",   accent="#4f46e5", glow="rgba(79,70,229,.07)",  body=body_treasurycentral()),
+        dict(slug="brisken-onepilot-onepager",          accent="#9333ea", glow="rgba(147,51,234,.07)", body=body_onepilot()),
+    ]
 
 
 PRODUCTS = build_products()
@@ -440,7 +602,7 @@ def main() -> int:
     if not CHROME.is_file():
         sys.exit(f"Chrome not found at {CHROME}; it is the only render engine that works while Edge is open")
 
-    out = args.out
+    out = args.out.resolve()  # Chrome --print-to-pdf needs an absolute target
     out.mkdir(parents=True, exist_ok=True)
     print("PRODUCT | pages | size KB")
     all_ok = True
