@@ -3,23 +3,46 @@
 {% block content %}
 {% set v = view %}
 {% set f = v.filters %}
+{% set cq = 'campaign=' ~ v.campaign %}
 
 <div class="card">
   <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
     <div>
-      <h1>Rome 2026 pipeline</h1>
+      <h1>{{ v.campaign_row.name if v.campaign_row else v.campaign }} pipeline</h1>
       <div class="muted">{{ v.total_active }} active contacts, {{ v.total_suppressed }} suppressed. Stage is derived from the outreach log.</div>
     </div>
     <div class="inline">
+      {% if v.campaigns|length > 0 %}
+      <form method="get" action="/" style="margin:0;">
+        <select name="campaign" onchange="this.form.submit()" style="width:auto;">
+          {% for c in v.campaigns %}
+          <option value="{{ c.campaign_id }}" {% if c.campaign_id == v.campaign %}selected{% endif %}>{{ c.name }} ({{ c.status }})</option>
+          {% endfor %}
+        </select>
+      </form>
+      {% endif %}
+      {% if v.campaign_row %}<a class="btn btn-secondary btn-small" href="/campaigns/{{ v.campaign }}">Manage</a>{% endif %}
       <a class="btn btn-secondary btn-small" href="/export.csv">Export CSV</a>
       <a class="btn btn-secondary btn-small" href="/export.xlsx">Export XLSX</a>
     </div>
   </div>
 
+  {% if v.campaign_row and v.campaign_row.status == 'draft' %}
+  <div style="margin-top:12px; padding:10px 14px; border:1px solid var(--orange); border-radius:10px; background:var(--orange-bg); color:var(--orange);">
+    Draft campaign: nothing sends until copy + contact list are approved.
+    <a href="/campaigns/{{ v.campaign }}">Review &amp; approve &rarr;</a>
+  </div>
+  {% elif v.campaign_row and v.campaign_row.status == 'paused' %}
+  <div style="margin-top:12px; padding:10px 14px; border:1px solid var(--red); border-radius:10px; background:var(--red-bg); color:var(--red);">
+    Campaign paused: the worker will not claim sends.
+    <a href="/campaigns/{{ v.campaign }}">Manage &rarr;</a>
+  </div>
+  {% endif %}
+
   <div class="stats" style="margin-top:14px;">
-    <a class="stat {% if not f.stage %}active{% endif %}" href="/"><div class="stat-value">{{ v.total_active }}</div><div class="stat-label">Active</div></a>
+    <a class="stat {% if not f.stage %}active{% endif %}" href="/?{{ cq }}"><div class="stat-value">{{ v.total_active }}</div><div class="stat-label">Active</div></a>
     {% for s in v.stages %}
-    <a class="stat {% if f.stage == s %}active{% endif %}" href="/?stage={{ s }}">
+    <a class="stat {% if f.stage == s %}active{% endif %}" href="/?{{ cq }}&stage={{ s }}">
       <div class="stat-value">{{ v.stage_counts[s] }}</div>
       <div class="stat-label">{{ s }}</div>
     </a>
@@ -27,17 +50,23 @@
   </div>
 
   <div class="inline" style="margin-top:14px; flex-wrap:wrap;">
-    <a class="chip" href="/?bucket=awaiting">Awaiting reply <span class="n">{{ v.buckets.awaiting_reply }}</span></a>
-    <a class="chip warn" href="/?bucket=dangling">Follow-up due <span class="n">{{ v.buckets.dangling }}</span></a>
-    <a class="chip hot" href="/?bucket=aging">Aging replies <span class="n">{{ v.buckets.aging_hot }}</span></a>
-    <a class="chip good" href="/?bucket=reached">Reached (Dirk) <span class="n">{{ v.buckets.reached_dirk }}</span></a>
-    <a class="chip hold" href="/?bucket=held">Held <span class="n">{{ v.buckets.held }}</span></a>
+    <a class="chip" href="/?{{ cq }}&bucket=due_today">Due today <span class="n">{{ v.buckets.due_today }}</span></a>
+    <a class="chip warn" href="/?{{ cq }}&bucket=manual_due">Manual touches <span class="n">{{ v.buckets.manual_due }}</span></a>
+    <a class="chip" href="/?{{ cq }}&bucket=awaiting">Awaiting reply <span class="n">{{ v.buckets.awaiting_reply }}</span></a>
+    <a class="chip warn" href="/?{{ cq }}&bucket=dangling">Follow-up due <span class="n">{{ v.buckets.dangling }}</span></a>
+    <a class="chip hot" href="/?{{ cq }}&bucket=aging">Aging replies <span class="n">{{ v.buckets.aging_hot }}</span></a>
+    <a class="chip good" href="/?{{ cq }}&bucket=reached">Reached (Dirk) <span class="n">{{ v.buckets.reached_dirk }}</span></a>
+    <a class="chip hold" href="/?{{ cq }}&bucket=held">Held <span class="n">{{ v.buckets.held }}</span></a>
+    {% if v.buckets.stalled %}
+    <a class="chip hot" href="/campaigns/{{ v.campaign }}#attempts" title="sends needing a human decision">Stalled sends <span class="n">{{ v.buckets.stalled }}</span></a>
+    {% endif %}
     <span class="muted" style="margin-left:auto;">Search <span class="kbd">Ctrl</span> <span class="kbd">K</span></span>
   </div>
 </div>
 
 <div class="card">
   <form method="get" action="/" class="row-actions">
+    <input type="hidden" name="campaign" value="{{ v.campaign }}">
     <div style="flex:2; min-width:180px;">
       <label for="board-search">Search</label>
       <input type="search" id="board-search" name="q" value="{{ f.q }}" placeholder="name, company, email, title">
@@ -48,6 +77,14 @@
         {% for t in v.tiers %}<option value="{{ t }}" {% if f.tier==t %}selected{% endif %}>{{ t }}</option>{% endfor %}
       </select>
     </div>
+    {% if v.degrees %}
+    <div style="min-width:120px;">
+      <label>Degree</label>
+      <select name="degree"><option value="">All</option>
+        {% for d in v.degrees %}<option value="{{ d }}" {% if f.degree==d %}selected{% endif %}>{{ d }}</option>{% endfor %}
+      </select>
+    </div>
+    {% endif %}
     <div style="min-width:130px;">
       <label>Stage</label>
       <select name="stage"><option value="">All</option>
@@ -66,7 +103,7 @@
     </div>
     <div class="inline">
       <button class="btn btn-small" type="submit">Apply</button>
-      <a class="btn btn-secondary btn-small" href="/">Clear</a>
+      <a class="btn btn-secondary btn-small" href="/?{{ cq }}">Clear</a>
     </div>
   </form>
 </div>
@@ -75,7 +112,7 @@
   <div class="muted" style="margin-bottom:8px;">{{ v.rows|length }} shown</div>
   <table>
     <thead><tr>
-      <th>Name</th><th>Company</th><th>Tier</th><th>Stage</th><th>Status</th><th>Last out / in</th><th>Next step</th>
+      <th>Name</th><th>Company</th><th>Tier</th><th>Degree</th><th>Stage</th><th>Status</th><th>Step</th><th>Next touch</th><th>Last out / in</th><th>Next step</th>
     </tr></thead>
     <tbody>
     {% for r in v.rows %}
@@ -84,15 +121,39 @@
             {% if r.job_title %}<div class="muted" style="font-size:12px;">{{ r.job_title }}</div>{% endif %}</td>
         <td>{{ r.company or '' }}</td>
         <td>{% if r.tier %}<span class="badge tier">{{ r.tier }}</span>{% endif %}</td>
+        <td>{% if r.degree %}<span class="badge {% if r.degree == 'warm' %}stage-booked{% elif r.degree == 'cold_touched' %}stage-replied{% else %}stage-sent{% endif %}">{{ r.degree }}</span>{% elif r.cadence %}<span class="muted">-</span>{% endif %}</td>
         <td><span class="badge stage-{{ r.stage }}">{{ r.stage }}</span></td>
         <td>{{ r.status }}
             {% if r.dangling %}<span class="badge stage-replied" title="follow-up past due">due</span>{% endif %}
             {% if r.aging %}<span class="badge suppressed" title="unanswered reply">aging</span>{% endif %}</td>
+        <td class="mono" style="font-size:11.5px;">
+          {%- if r.cadence and r.cadence.steps_total -%}
+            {{ r.cadence.steps_done }}/{{ r.cadence.steps_total }}
+          {%- else -%}-{%- endif -%}
+        </td>
+        <td class="mono" style="font-size:11.5px;">
+          {% if r.cadence %}
+            {% if r.cadence.state == 'active' and r.cadence.next_due %}
+              {{ r.cadence.next_due }}{% if r.cadence.next_step %} &middot; {{ 'LI task' if r.cadence.next_step.channel == 'linkedin' else 'email' }}{% endif %}
+              {% if r.manual_due and r.enrollment_id and r.cadence.next_step %}
+              <form method="post" action="/enrollments/{{ r.enrollment_id }}/steps/{{ r.cadence.next_step.step_no }}/done" style="margin:4px 0 0;">
+                <button class="btn btn-small btn-secondary" type="submit">Mark done</button>
+              </form>
+              {% endif %}
+            {% elif r.cadence.state == 'stopped:replied' %}replied &#10003;
+            {% elif r.cadence.state == 'stopped:bounced' %}bounced
+            {% elif r.cadence.state == 'stopped:suppressed' %}suppressed
+            {% elif r.cadence.state == 'done' %}done
+            {% elif r.cadence.state == 'pending_approval' %}<span class="muted">unapproved</span>
+            {% elif r.cadence.state == 'paused' %}<span class="muted">paused</span>
+            {% else %}<span class="muted">-</span>{% endif %}
+          {% else %}-{% endif %}
+        </td>
         <td class="mono" style="font-size:11.5px;">{{ (r.last_out or '')[:10] or '-' }}{% if r.last_in %} / {{ r.last_in[:10] }}{% endif %}</td>
         <td>{{ r.next_step or '' }}{% if r.next_step_due %} <span class="muted">({{ r.next_step_due[:10] }})</span>{% endif %}</td>
       </tr>
     {% else %}
-      <tr><td colspan="7" class="muted">No contacts match.</td></tr>
+      <tr><td colspan="10" class="muted">No contacts match.</td></tr>
     {% endfor %}
     </tbody>
   </table>

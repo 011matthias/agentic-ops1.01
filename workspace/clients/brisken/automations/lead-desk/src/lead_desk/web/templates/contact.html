@@ -96,6 +96,44 @@
   </form>
 </div>
 
+{% if view.cadences %}
+<div class="card">
+  <h2>Cadence</h2>
+  {% for cd in view.cadences %}
+  <div style="border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:8px;">
+    <div class="inline" style="flex-wrap:wrap;">
+      <strong>{{ cd.campaign.name }}</strong>
+      <span class="badge tier">{{ cd.enrollment.degree or 'unclassified' }}</span>
+      <span class="badge {% if cd.state.state == 'active' %}stage-sent{% elif cd.state.state.startswith('stopped') %}suppressed{% elif cd.state.state == 'done' %}stage-booked{% else %}stage-sourced{% endif %}">{{ cd.state.state }}</span>
+      {% if cd.state.steps_total %}<span class="mono" style="font-size:12px;">step {{ cd.state.steps_done }}/{{ cd.state.steps_total }}</span>{% endif %}
+      {% if cd.state.next_due %}<span class="muted">next touch {{ cd.state.next_due }}{% if cd.state.next_step %} ({{ cd.state.next_step.channel }}){% endif %}</span>{% endif %}
+    </div>
+    {% if cd.state.state == 'active' and cd.state.next_step and cd.state.next_step.channel == 'linkedin' %}
+    <form method="post" action="/enrollments/{{ cd.enrollment.enrollment_id }}/steps/{{ cd.state.next_step.step_no }}/done" style="margin-top:8px;">
+      <button class="btn btn-small btn-secondary" type="submit">Mark LinkedIn step done</button>
+    </form>
+    {% endif %}
+    {% if cd.attempts %}
+    <table style="margin-top:8px;">
+      <thead><tr><th>Step</th><th>Status</th><th>Template</th><th>Resolved</th><th>Failure</th></tr></thead>
+      <tbody>
+      {% for a in cd.attempts %}
+        <tr>
+          <td>{{ a.step_no }}</td>
+          <td><span class="badge {% if a.status == 'sent' %}stage-booked{% elif a.status in ('stalled', 'parked', 'failed') %}suppressed{% else %}stage-sent{% endif %}">{{ a.status }}</span></td>
+          <td class="mono" style="font-size:11.5px;">{{ a.template_key }} v{{ a.template_version }}</td>
+          <td class="mono" style="font-size:11.5px;">{{ (a.resolved_at or '')[:16] }}</td>
+          <td class="muted" style="font-size:12px;">{{ a.failure_reason or '' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
 <div class="card scroll-x">
   <h2>Timeline ({{ view.events|length }} events)</h2>
   <table>

@@ -16,12 +16,18 @@ web = [
     "jinja2>=3.1",             # server-rendered templates
 ]
 capture = ["httpx>=0.27"]      # Phase 2 Graph capture worker (app-only reads + POST /events)
+# Local Windows send worker (Outlook COM). Never in the Fly image: the
+# Dockerfile installs .[web] only, so pywin32 cannot break the Linux build.
+worker = ["httpx>=0.27", "pywin32>=306; sys_platform == 'win32'"]
 
 [project.scripts]
 lead-desk-web = "lead_desk.web.serve:main"
 lead-desk-migrate = "lead_desk.migrate:main"
 lead-desk-export = "lead_desk.export:main"
 lead-desk-capture = "lead_desk.capture:main"
+lead-desk-adopt = "lead_desk.adopt:main"
+lead-desk-reconcile = "lead_desk.reconcile_cli:main"
+lead-desk-worker = "lead_desk.worker.cli:main"
 
 [build-system]
 requires = ["hatchling"]
