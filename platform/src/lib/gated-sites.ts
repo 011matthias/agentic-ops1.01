@@ -43,6 +43,14 @@ export const GATED_SITES: GatedSite[] = [
     accessCodeEnv: "MEJI_ACCESS_CODE",
     label: "Meji Media Documentation",
   },
+  {
+    id: "assessment-demo",
+    pathRoot: "/docs/assessment-demo",
+    pathPrefix: "/docs/assessment-demo/",
+    cookie: "assessment-demo-auth",
+    accessCodeEnv: "ASSESSMENT_DEMO_ACCESS_CODE",
+    label: "One Assessment · Demo",
+  },
 ]
 
 /** Env var holding the master password that unlocks every gated site. */

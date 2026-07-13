@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Treasury Assessment: Musterkunde · One Assessment</title>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
+<style>
+:root{--bg:#f7f8fa;--surface:#fff;--text:#1a1d24;--muted:#5b6472;--border:#e3e7ee;--accent:#2563eb;--navy:#0f1b3d;}
+:root[data-theme=dark]{--bg:#0d1017;--surface:#161a22;--text:#e7ebf2;--muted:#9aa4b4;--border:#252b36;--accent:#5b8cff;--navy:#0a0e1a;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.55}
+a{color:var(--accent)}
+.site-nav{display:flex;align-items:center;justify-content:space-between;padding:.7rem 1.4rem;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10}
+.nav-left{display:flex;align-items:center;gap:.6rem;font-weight:700}
+.nav-logo{color:var(--accent)}
+.nav-client{color:var(--muted);font-weight:500}
+.nav-right{display:flex;align-items:center;gap:.8rem}
+.nav-status{font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:.15rem .6rem}
+.nav-theme{background:none;border:1px solid var(--border);color:var(--text);border-radius:8px;padding:.25rem .5rem;cursor:pointer;font-size:1rem}
+.wrap{max-width:1000px;margin:0 auto;padding:2rem 1.4rem 4rem}
+.hero-badge{display:inline-block;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:.4rem}
+h1{font-size:1.9rem;margin:.1rem 0 .3rem}
+.hero-sub{color:var(--muted);margin:0 0 1.4rem;max-width:60ch}
+.stats-row{display:flex;flex-wrap:wrap;gap:.9rem;margin-bottom:2.2rem}
+.stat-card{flex:1;min-width:140px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem 1.1rem}
+.stat-value{font-size:1.7rem;font-weight:700;color:var(--accent)}
+.stat-label{font-size:.8rem;color:var(--muted)}
+section{margin:2.4rem 0}
+h2{font-size:1.15rem;border-bottom:1px solid var(--border);padding-bottom:.4rem;margin-bottom:.3rem}
+.section-note{color:var(--muted);font-size:.86rem;margin:.2rem 0 1rem}
+.legend{display:flex;gap:1.3rem;flex-wrap:wrap;font-size:.8rem;color:var(--muted);margin-bottom:.8rem}
+.legend .dot{display:inline-block;width:.7rem;height:.7rem;border-radius:50%;margin-right:.3rem;vertical-align:middle}
+.legend .box{display:inline-block;width:.8rem;height:.8rem;border:2px solid var(--muted);border-radius:3px;margin-right:.3rem;vertical-align:middle}
+.heat{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.heat-row{display:grid;grid-template-columns:2.4fr 2fr .9fr 1.1fr 1fr;align-items:center;gap:.8rem;padding:.7rem 1rem;border-bottom:1px solid var(--border)}
+.heat-row:last-child{border-bottom:none}
+.heat-name{font-weight:600;font-size:.92rem}
+.heat-grp{display:block;font-weight:400;font-size:.72rem;color:var(--muted)}
+.heat-tile{position:relative;height:1.5rem;border:2px solid;border-radius:6px;background:var(--bg);overflow:hidden}
+.heat-fill{position:absolute;left:0;top:0;bottom:0;opacity:.35}
+.heat-pct{position:absolute;right:.4rem;top:0;line-height:1.5rem;font-size:.74rem;font-weight:600}
+.heat-rg{font-size:.82rem;font-weight:600}
+.heat-prio{font-size:.82rem}
+.heat-prio .dot{display:inline-block;width:.6rem;height:.6rem;border-radius:50%;margin-right:.35rem}
+.review-tag{font-size:.68rem;color:#b45309;background:#fef3c7;border-radius:6px;padding:.1rem .4rem;white-space:nowrap}
+:root[data-theme=dark] .review-tag{color:#fbbf24;background:#3a2f12}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:.9rem}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem}
+.card-tag{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--accent)}
+.card-fn{font-weight:600;margin:.2rem 0 .4rem}
+.card-benefit{font-size:.9rem}
+.card-init{font-size:.78rem;color:var(--muted);margin-top:.5rem;border-top:1px dashed var(--border);padding-top:.5rem}
+ul.focus{padding-left:1.1rem}
+ul.focus li{margin:.35rem 0}
+.callout{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:10px;padding:1.1rem 1.2rem}
+.meta-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.6rem;font-size:.86rem}
+.meta-grid div span{display:block;color:var(--muted);font-size:.74rem}
+.footer{margin-top:3rem;padding-top:1.2rem;border-top:1px solid var(--border);color:var(--muted);font-size:.82rem;display:flex;justify-content:space-between;flex-wrap:wrap;gap:.6rem}
+@media (max-width:720px){.heat-row{grid-template-columns:1.6fr 1.4fr 1fr;}.heat-rg,.heat-flag{display:none}}
+@media print{.site-nav{display:none}.wrap{max-width:none}h2{page-break-before:always}h2:first-of-type{page-break-before:avoid}.nav-theme{display:none}}
+</style>
+</head>
+<body>
+<nav class="site-nav">
+  <div class="nav-left"><span class="nav-logo">One&nbsp;Assessment</span><span class="nav-client">· Musterkunde</span></div>
+  <div class="nav-right"><span class="nav-status">Quick Assessment</span>
+    <button class="nav-theme" onclick="(function(){var d=document.documentElement;var c=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',c);localStorage.setItem('theme',c);})()" aria-label="Theme wechseln">&#9788;/&#9790;</button></div>
+</nav>
+<div class="wrap">
+  <div class="hero-badge">Quick Assessment · Treasury Component Framework</div>
+  <h1>Treasury Assessment: Musterkunde</h1>
+  <p class="hero-sub">Erste, nicht bindende Reifegrad-Einschätzung auf Basis des Light-Fragebogens.
+     Bewertete Bereiche: Cash &amp; Liquidity Management, Zahlungsverkehr. Umrandung zeigt den Reifegrad, der Punkt die Priorität.</p>
+  <div class="stats-row"><div class="stat-card"><div class="stat-value">44%</div><div class="stat-label">Reifegrad gesamt</div></div><div class="stat-card"><div class="stat-value">2</div><div class="stat-label">Funktionsbereiche</div></div><div class="stat-card"><div class="stat-value">4</div><div class="stat-label">von 6 Funktionen bewertet</div></div><div class="stat-card"><div class="stat-value">10</div><div class="stat-label">Bankpartner</div></div></div>
+
+  <section>
+    <h2 id="reifegrad">Reifegrad-Heatmap</h2>
+    <p class="section-note">Reifegrad vierstufig als Prozent (25 / 50 / 75 / 100). Wo der Light-Fragebogen
+       zu wenig hergibt, steht die Funktion bewusst auf "in Klärung" statt auf einer geratenen Bewertung.</p>
+    <div class="legend">
+      <span><span class="box" style="border-color:#059669"></span>Umrandung = Reifegrad</span>
+      <span><span class="dot" style="background:#dc2626"></span>Punkt = Priorität</span>
+    </div>
+    <div class="heat">
+      <div class="heat-row">
+        <div class="heat-name">Allgemein<span class="heat-grp">Cash &amp; Liquidity Management</span></div>
+        <div class="heat-tile" style="border-color:#dc2626">
+          <div class="heat-fill" style="width:25%;background:#dc2626"></div>
+          <span class="heat-pct">25%</span>
+        </div>
+        <div class="heat-rg" style="color:#dc2626">gering</div>
+        <div class="heat-prio"><span class="dot" style="background:#dc2626"></span>hoch</div>
+        <div class="heat-flag"></div>
+      </div>
+      <div class="heat-row">
+        <div class="heat-name">Group Liquidity &amp; Corp. Planning<span class="heat-grp">Cash &amp; Liquidity Management</span></div>
+        <div class="heat-tile" style="border-color:#d97706">
+          <div class="heat-fill" style="width:50%;background:#d97706"></div>
+          <span class="heat-pct">50%</span>
+        </div>
+        <div class="heat-rg" style="color:#d97706">mittel</div>
+        <div class="heat-prio"><span class="dot" style="background:#d97706"></span>mittel</div>
+        <div class="heat-flag"></div>
+      </div>
+      <div class="heat-row">
+        <div class="heat-name">Operatives Cash Mgmt.<span class="heat-grp">Cash &amp; Liquidity Management</span></div>
+        <div class="heat-tile" style="border-color:#d97706">
+          <div class="heat-fill" style="width:50%;background:#d97706"></div>
+          <span class="heat-pct">50%</span>
+        </div>
+        <div class="heat-rg" style="color:#d97706">mittel</div>
+        <div class="heat-prio"><span class="dot" style="background:#d97706"></span>mittel</div>
+        <div class="heat-flag"></div>
+      </div>
+      <div class="heat-row">
+        <div class="heat-name">IHB / Cash Centralisation<span class="heat-grp">Cash &amp; Liquidity Management</span></div>
+        <div class="heat-tile" style="border-color:#6b7280">
+          <div class="heat-fill" style="width:0%;background:#6b7280"></div>
+          <span class="heat-pct">n/a</span>
+        </div>
+        <div class="heat-rg" style="color:#6b7280">in Klärung</div>
+        <div class="heat-prio"><span class="dot" style="background:#9ca3af"></span>offen</div>
+        <div class="heat-flag"><span class="review-tag" title="Datenlage im Quick-Fragebogen zu dünn; im vertieften Assessment zu klären">in Klärung</span></div>
+      </div>
+      <div class="heat-row">
+        <div class="heat-name">Working Capital Management<span class="heat-grp">Cash &amp; Liquidity Management</span></div>
+        <div class="heat-tile" style="border-color:#6b7280">
+          <div class="heat-fill" style="width:0%;background:#6b7280"></div>
+          <span class="heat-pct">n/a</span>
+        </div>
+        <div class="heat-rg" style="color:#6b7280">in Klärung</div>
+        <div class="heat-prio"><span class="dot" style="background:#9ca3af"></span>offen</div>
+        <div class="heat-flag"><span class="review-tag" title="Datenlage im Quick-Fragebogen zu dünn; im vertieften Assessment zu klären">in Klärung</span></div>
+      </div>
+      <div class="heat-row">
+        <div class="heat-name">Zahlungen &amp; Transfers<span class="heat-grp">Zahlungsverkehr</span></div>
+        <div class="heat-tile" style="border-color:#d97706">
+          <div class="heat-fill" style="width:50%;background:#d97706"></div>
+          <span class="heat-pct">50%</span>
+        </div>
+        <div class="heat-rg" style="color:#d97706">mittel</div>
+        <div class="heat-prio"><span class="dot" style="background:#d97706"></span>mittel</div>
+        <div class="heat-flag"></div>
+      </div></div>
+  </section>
+
+  <section>
+    <h2 id="fokus">Fokusthemen</h2>
+    <p class="section-note">Funktionen mit hoher Priorität und belastbarer Datenlage.</p>
+    <ul class="focus"><li><strong>Allgemein</strong>: Erhöhung der Effizienz und Transparenz in der Liquiditätssteuerung.</li></ul>
+  </section>
+
+  <section>
+    <h2 id="empfehlungen">Empfehlungen und Nutzen</h2>
+    <p class="section-note">Je Funktion die empfohlene Standard-Initiative aus dem Component Framework,
+       als Kundennutzen formuliert.</p>
+    <div class="cards">
+      <div class="card">
+        <div class="card-tag">Empfehlung</div>
+        <div class="card-fn">Allgemein</div>
+        <div class="card-benefit">Erhöhung der Effizienz und Transparenz in der Liquiditätssteuerung.</div>
+        <div class="card-init">Implementierung eines zentralen Cash &amp; Liquidity Management Systems.</div>
+      </div>
+      <div class="card">
+        <div class="card-tag">Empfehlung</div>
+        <div class="card-fn">Group Liquidity &amp; Corp. Planning</div>
+        <div class="card-benefit">Erhöhung der Effizienz und Genauigkeit in der Liquiditätsplanung durch einheitliche Datenbasis.</div>
+        <div class="card-init">Integration der Treasury-Daten in die zentrale Budgetierungs- und Planungsplattform.</div>
+      </div>
+      <div class="card">
+        <div class="card-tag">Empfehlung</div>
+        <div class="card-fn">Operatives Cash Mgmt.</div>
+        <div class="card-benefit">Erhöhung der Effizienz, Reduzierung von Fehlerquellen und verbesserte Entscheidungsfindung durch verlässliche Daten.</div>
+        <div class="card-init">Implementierung eines zentralen Treasury Management Systems zur Automatisierung der Cash Management Prozesse.</div>
+      </div>
+      <div class="card">
+        <div class="card-tag">Potenzial</div>
+        <div class="card-fn">IHB / Cash Centralisation</div>
+        <div class="card-benefit">Erhöhung der Effizienz und Transparenz in der Liquiditätsbewirtschaftung durch automatisierte Prozesse.</div>
+        <div class="card-init">Implementierung eines zentralen Treasury Management Systems (TMS) zur Automatisierung des Cash Pooling.</div>
+      </div>
+      <div class="card">
+        <div class="card-tag">Potenzial</div>
+        <div class="card-fn">Working Capital Management</div>
+        <div class="card-benefit">Erhöhte Transparenz und Effizienz im Reporting, reduzierte Fehlerquellen und optimierte Liquiditätssteuerung.</div>
+        <div class="card-init">Einführung eines zentralen Reporting-Systems für Working Capital im SAP.</div>
+      </div>
+      <div class="card">
+        <div class="card-tag">Empfehlung</div>
+        <div class="card-fn">Zahlungen &amp; Transfers</div>
+        <div class="card-benefit">Erhöhung der Effizienz und Transparenz im Zahlungsverkehr durch automatisierte Prozesse und zentrale Steuerung.</div>
+        <div class="card-init">Implementierung eines zentralen Treasury-Management-Systems zur Automatisierung des Zahlungsverkehrs.</div>
+      </div></div>
+  </section>
+
+  <section>
+    <h2 id="naechste-schritte">Nächste Schritte</h2>
+    <div class="callout">
+      <p style="margin:0 0 .6rem">Dies ist die schnelle Einordnung. Für eine belastbare, bindende
+         Aufwandsschätzung folgt das vertiefte Assessment: detaillierter Fragebogen, gezielte Rückfragen
+         zu den offenen Punkten, vollständige Ist-Aufnahme und Auswertung.</p>
+      <p style="margin:0;color:var(--muted)">Empfohlener nächster Termin: 30 bis 60 Minuten, um die Fokusthemen
+         und die Empfehlungen gemeinsam durchzugehen.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2 id="grundlage">Grundlage und Umfang</h2>
+    <div class="meta-grid">
+      <div><span>Branche</span>Handel</div>
+      <div><span>SAP-Release</span>SAP S/4HANA (HANA 2.0 SPS76)</div>
+      <div><span>Quellsysteme</span>SAP, Litreca (TMS), MS Excel, Analysis for Office, Essbase, PAISY, SAP HANA</div>
+      <div><span>Bankpartner</span>10</div>
+      <div><span>Bewertete Bereiche</span>Cash &amp; Liquidity Management, Zahlungsverkehr</div>
+      <div><span>Methode</span>Light-Fragebogen, Quick-Tier</div>
+    </div>
+  </section>
+
+  <div class="footer">
+    <span>One Assessment · Treasury Component Framework · 2026</span>
+    <span>Zuletzt aktualisiert: 2026-07-13</span>
+  </div>
+</div>
+</body>
+</html>
