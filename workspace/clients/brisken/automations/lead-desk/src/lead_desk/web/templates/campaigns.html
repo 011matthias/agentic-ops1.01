@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Campaigns - Brisken Lead Desk{% endblock %}
+{% block content %}
+
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1>Campaigns</h1>
+      <div class="muted">Each campaign: upload contacts, classify by warmness, approve copy + list once, then the worker sends automatically until reply/bounce/suppress.</div>
+    </div>
+    <form method="post" action="/worker/kill" style="margin:0;">
+      {% if kill_switch %}
+      <input type="hidden" name="on" value="0">
+      <button class="btn btn-small" type="submit" style="background:var(--red);">KILL SWITCH ON - click to re-enable sending</button>
+      {% else %}
+      <input type="hidden" name="on" value="1">
+      <button class="btn btn-small btn-secondary" type="submit">Stop all sending (kill switch)</button>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<div class="card scroll-x">
+  <table>
+    <thead><tr><th>Campaign</th><th>Status</th><th>Enrolled</th><th>Cap/day</th><th>Approved</th><th></th></tr></thead>
+    <tbody>
+    {% for c in campaigns %}
+      <tr>
+        <td><a href="/campaigns/{{ c.campaign_id }}">{{ c.name }}</a> <span class="muted mono" style="font-size:11px;">{{ c.campaign_id }}</span></td>
+        <td><span class="badge {% if c.status == 'approved' %}stage-booked{% elif c.status == 'paused' %}suppressed{% elif c.status == 'done' %}stage-sourced{% else %}stage-sent{% endif %}">{{ c.status }}</span></td>
+        <td>{{ c.enrolled }}</td>
+        <td>{{ c.daily_cap }}</td>
+        <td class="mono" style="font-size:11.5px;">{{ (c.approved_at or '')[:10] or '-' }}{% if c.approved_by %} by {{ c.approved_by }}{% endif %}</td>
+        <td><a class="btn btn-secondary btn-small" href="/?campaign={{ c.campaign_id }}">Board</a></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="muted">No campaigns yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>New campaign</h2>
+  <form method="post" action="/campaigns" class="row-actions">
+    <div style="min-width:200px;"><label>Campaign id (slug)</label><input type="text" name="campaign_id" placeholder="mdh-2026" required></div>
+    <div style="min-width:240px;"><label>Name</label><input type="text" name="name" placeholder="MDH commodities outreach"></div>
+    <div style="min-width:110px;"><label>Daily cap</label><input type="text" name="daily_cap" value="40"></div>
+    <button class="btn btn-small" type="submit">Create</button>
+  </form>
+</div>
+{% endblock %}

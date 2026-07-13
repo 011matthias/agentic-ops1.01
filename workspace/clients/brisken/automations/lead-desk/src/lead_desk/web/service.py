@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from .store import STAGES, ContactStore
+from .store import CADENCE_PREFIX, STAGES, ContactStore
 
 # A reply we have not answered in this many days is an "aging hot reply".
 AGING_DAYS = 3
@@ -113,11 +113,55 @@ def is_aging_hot(row: dict, today: date) -> bool:
     return unanswered and (today - last_in).days >= AGING_DAYS
 
 
+def _attach_cadence(store: ContactStore, rows: list[dict], campaign_row) -> None:
+    """Per-row cadence state (degree, step x/y, next touch) for enrolled rows."""
+    from . import cadence  # local import: cadence imports store, not service
+
+    cdict = dict(campaign_row)
+    sequences = {s["degree"]: s for s in store.sequences_for_campaign(cdict["campaign_id"])}
+    today = cadence._campaign_today(cdict, cadence.now_utc()).isoformat()
+    for r in rows:
+        seq = sequences.get(r.get("degree") or "")
+        steps = seq["steps"] if seq else []
+        st = cadence.enrollment_state(
+            {"approved_at": r.get("enrollment_approved_at")},
+            {"steps_done": r.get("steps_done"), "last_step_ts": r.get("last_step_ts"),
+             "replied": r.get("cadence_replied"), "bounced": r.get("cadence_bounced")},
+            steps, r, cdict,
+        )
+        r["cadence"] = st
+        due = bool(st["next_due"]) and st["next_due"] <= today and st["state"] == "active"
+        ch = (st["next_step"] or {}).get("channel")
+        r["due_today"] = due and ch == "email"
+        r["manual_due"] = due and ch == "linkedin"
+
+
 def build_board(store: ContactStore, filters: dict | None = None,
                 campaign: str = "rome-2026") -> dict:
     filters = filters or {}
     today = datetime.now(timezone.utc).date()
-    rows = [_row(r) for r in store.board_rows(campaign)]
+
+    campaigns = [dict(c) for c in store.list_campaigns()]
+    campaign_row = store.get_campaign(campaign)
+    enrolled = store.enrollments_for_campaign(campaign) if campaign_row else []
+    if enrolled:
+        rows = [_row(r) for r in enrolled]
+        # Enrolled rows come without the touch-derivation flags; backfill them.
+        flags = {r["contact_id"]: r for r in
+                 (dict(x) for x in store.board_rows(campaign))}
+        for r in rows:
+            f = flags.get(r["contact_id"], {})
+            r["has_touch"] = f.get("has_touch", 0)
+            r["has_campaign_send"] = f.get("has_campaign_send", 0)
+            r["event_count"] = f.get("event_count", 0)
+        _attach_cadence(store, rows, campaign_row)
+    else:
+        # Legacy fallback: campaigns with no enrollments (pre-adopt state).
+        rows = [_row(r) for r in store.board_rows(campaign)]
+        for r in rows:
+            r["cadence"] = None
+            r["due_today"] = r["manual_due"] = False
+
     for r in rows:
         r["status"] = status_label(r)
         r["awaiting"] = is_awaiting_reply(r)
@@ -131,6 +175,10 @@ def build_board(store: ContactStore, filters: dict | None = None,
     for r in active:
         stage_counts[r.get("stage", "sourced")] = stage_counts.get(r.get("stage", "sourced"), 0) + 1
 
+    stalled_attempts = (
+        store.attempts_for_campaign(campaign, ("stalled", "parked"))
+        if campaign_row else []
+    )
     buckets = {
         "awaiting_reply": sum(1 for r in active if r["awaiting"]),
         "dangling": sum(1 for r in active if r["dangling"]),
@@ -138,16 +186,21 @@ def build_board(store: ContactStore, filters: dict | None = None,
         "reached_dirk": sum(1 for r in active if r["reached"]),
         # Held is an off-board bucket, so it is counted over ALL rows, not active.
         "held": sum(1 for r in rows if r["held"]),
+        "due_today": sum(1 for r in active if r["due_today"]),
+        "manual_due": sum(1 for r in active if r["manual_due"]),
+        "stalled": len(stalled_attempts),
     }
 
     tiers = sorted({r.get("tier") for r in rows if r.get("tier")})
     owners = sorted({r.get("crm_owner") for r in rows if r.get("crm_owner")})
+    degrees = sorted({r.get("degree") for r in rows if r.get("degree")})
 
     # Apply filters.
     ftier = (filters.get("tier") or "").strip()
     fstage = (filters.get("stage") or "").strip()
     fowner = (filters.get("owner") or "").strip()
     fbucket = (filters.get("bucket") or "").strip()
+    fdegree = (filters.get("degree") or "").strip()
     q = (filters.get("q") or "").strip().lower()
     show_suppressed = str(filters.get("show_suppressed") or "").strip() in ("1", "true", "on")
 
@@ -163,6 +216,8 @@ def build_board(store: ContactStore, filters: dict | None = None,
         shown = [r for r in shown if r.get("stage") == fstage]
     if fowner:
         shown = [r for r in shown if r.get("crm_owner") == fowner]
+    if fdegree:
+        shown = [r for r in shown if r.get("degree") == fdegree]
     if fbucket == "awaiting":
         shown = [r for r in shown if r["awaiting"]]
     elif fbucket == "dangling":
@@ -171,6 +226,10 @@ def build_board(store: ContactStore, filters: dict | None = None,
         shown = [r for r in shown if r["aging"]]
     elif fbucket == "reached":
         shown = [r for r in shown if r["reached"]]
+    elif fbucket == "due_today":
+        shown = [r for r in shown if r["due_today"]]
+    elif fbucket == "manual_due":
+        shown = [r for r in shown if r["manual_due"]]
     if q:
         def hit(r):
             hay = " ".join(str(r.get(k) or "") for k in
@@ -180,6 +239,8 @@ def build_board(store: ContactStore, filters: dict | None = None,
 
     return {
         "campaign": campaign,
+        "campaign_row": dict(campaign_row) if campaign_row else None,
+        "campaigns": campaigns,
         "stage_counts": stage_counts,
         "stages": list(STAGES),
         "total_active": len(active),
@@ -187,10 +248,12 @@ def build_board(store: ContactStore, filters: dict | None = None,
         "buckets": buckets,
         "tiers": tiers,
         "owners": owners,
+        "degrees": degrees,
+        "stalled_attempts": [dict(a) for a in stalled_attempts],
         "rows": shown,
         "filters": {
             "tier": ftier, "stage": fstage, "owner": fowner,
-            "bucket": fbucket, "q": filters.get("q") or "",
+            "bucket": fbucket, "degree": fdegree, "q": filters.get("q") or "",
             "show_suppressed": show_suppressed,
         },
     }
@@ -209,9 +272,39 @@ def build_contact_view(store: ContactStore, contact_id: str) -> dict | None:
     contact["last_out"] = enriched.get("last_out")
     contact["status"] = status_label({**contact, **enriched})
     events = [_row(e) for e in store.get_events(contact_id)]
+
+    # Cadence card: one entry per campaign this contact is enrolled in.
+    from . import cadence
+    cadences = []
+    enr_rows = store.conn.execute(
+        "SELECT * FROM enrollments WHERE contact_id = ?", (contact_id,)
+    ).fetchall()
+    for enr in enr_rows:
+        campaign_row = store.get_campaign(enr["campaign_id"])
+        if campaign_row is None:
+            continue
+        seq = store.get_sequence(enr["campaign_id"], enr["degree"] or "")
+        steps = seq["steps"] if seq else []
+        prog = store.conn.execute(
+            "SELECT * FROM enrollment_progress WHERE enrollment_id = ?",
+            (enr["enrollment_id"],),
+        ).fetchone()
+        st = cadence.enrollment_state(
+            dict(enr), dict(prog) if prog else {}, steps, contact, dict(campaign_row))
+        attempts = store.conn.execute(
+            "SELECT * FROM send_attempts WHERE enrollment_id = ? ORDER BY step_no",
+            (enr["enrollment_id"],),
+        ).fetchall()
+        cadences.append({
+            "enrollment": dict(enr), "campaign": dict(campaign_row),
+            "sequence": seq, "state": st,
+            "attempts": [dict(a) for a in attempts],
+        })
+
     return {
         "contact": contact,
         "events": events,
+        "cadences": cadences,
         "stage_labels": STAGE_LABELS,
         "suppress_reasons": SUPPRESS_REASONS,
     }
@@ -276,9 +369,20 @@ def apply_fields(store: ContactStore, contact_id: str, fields: dict,
 
 
 def ingest_event(store: ContactStore, payload: dict) -> dict:
-    """Sink for POST /events (the cloud capture worker). Resolves the contact by
-    id or email, appends the event idempotently. Returns a small result dict."""
+    """Sink for POST /events (capture workers). Resolves the contact by id or
+    email, appends the event idempotently. Returns a small result dict.
+
+    Cadence guards: the ``cadence:`` ext_key namespace is reserved for the
+    outbox (the step pointer counts those events - an external writer could
+    corrupt it); a captured 'sent' whose internetMessageId matches a worker
+    send is dropped (the outbox already logged it - Graph/COM capture seeing
+    the same mail must not double-log); a 'bounce' auto-suppresses the contact
+    so every campaign halts, not just the one that bounced."""
     now = now_iso()
+    ext_key = (payload.get("ext_key") or payload.get("internet_message_id") or "").strip() or None
+    if ext_key and ext_key.startswith(CADENCE_PREFIX):
+        return {"ok": False, "reason": "reserved ext_key namespace"}
+
     contact_id = (payload.get("contact_id") or "").strip()
     if not contact_id:
         addr = (payload.get("email") or "").strip()
@@ -290,17 +394,29 @@ def ingest_event(store: ContactStore, payload: dict) -> dict:
     elif store.get_contact(contact_id) is None:
         return {"ok": False, "reason": "unknown contact_id", "contact_id": contact_id}
 
+    type_ = payload.get("type") or "sent"
+    imid = (payload.get("internet_message_id") or "").strip()
+    if type_ == "sent" and imid:
+        known = store.find_attempt_by_imid(imid)
+        if known is not None:
+            return {"ok": True, "contact_id": contact_id, "inserted": False,
+                    "deduped": "worker send"}
+
     ts = (payload.get("occurred_at") or payload.get("ts") or "").strip() or now
     inserted = store.add_event(
         contact_id=contact_id,
         ts=ts,
         channel=payload.get("channel") or "email",
         direction=payload.get("direction") or "outbound",
-        type=payload.get("type") or "sent",
+        type=type_,
         subject=payload.get("subject"),
         detail=payload.get("detail"),
         source=payload.get("source") or "graph-auto",
-        ext_key=payload.get("ext_key") or payload.get("internet_message_id"),
+        ext_key=ext_key,
         now=now,
     )
+    if type_ == "bounce":
+        contact = store.get_contact(contact_id)
+        if contact is not None and not contact["suppressed"]:
+            store.set_suppressed(contact_id, True, "bounced", "auto", now)
     return {"ok": True, "contact_id": contact_id, "inserted": inserted}

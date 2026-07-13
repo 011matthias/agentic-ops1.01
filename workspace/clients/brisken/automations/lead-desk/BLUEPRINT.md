@@ -1,10 +1,63 @@
 # Lead Desk, Blueprint
 
 Status: Phase 1 LIVE (brisken-lead-desk.fly.dev). Iteration 2 shipped
-2026-07-12 (stage reflects real status). Owner decisions 2026-07-12: bespoke
-app, Rome-first, gated for Matthias/Dirk/Chris, cloud-only auto-capture. This
-file is the record of state for the automation (in place of a separate spec,
-per the expense-recon convention).
+2026-07-12 (stage reflects real status). Iteration 3 built 2026-07-13
+(campaign engine: upload -> warmness -> approved cadences -> auto-send).
+Owner decisions 2026-07-12: bespoke app, Rome-first, gated for
+Matthias/Dirk/Chris, cloud-only auto-capture. This file is the record of
+state for the automation (in place of a separate spec, per the expense-recon
+convention).
+
+## Iteration 3, campaign engine (built 2026-07-13)
+
+Owner decisions 2026-07-13: CRM target = Zoho CRM (BCC dropbox now, API
+write later); FULLY AUTOMATIC sending after a one-time approval of sequence
+copy + enrolled list; warmness = deterministic rules + manual override;
+front end = extend the board; sender = HYBRID (cold degrees auto-send from
+matthias.silva@ CC Dirk, warm degree staged as drafts in Dirk's mailbox -
+his click is the gate on his own name).
+
+Brain / hands split:
+
+- **Fly app (brain):** campaigns, versioned templates, sequences per
+  warmness degree (`cold`/`cold_touched`/`warm`), data-driven degree rules,
+  enrollments (`UNIQUE(contact_id, campaign_id)` over GLOBAL contacts - one
+  person, one timeline, consent everywhere), the approval object (pins
+  template versions + list hash + schedule), the outbox lock table
+  (`send_attempts`, at-most-once leases, no auto-re-lease), kill switch,
+  worker heartbeat. Never sends.
+- **Local Windows worker (hands, `lead-desk-worker`):** scheduled task every
+  15 min in the interactive session. Tick order IS the halt guarantee:
+  replay journal -> capture replies/bounces from matthias+dirk inboxes via
+  Outlook COM -> claim due sends -> execute (COM send / Dirk-draft load)
+  -> heartbeat. Machine off = sends queue server-side, drain at throttle
+  pace, never burst. Glue + runbook in `worker/` (dockerignored).
+
+Invariant extended: **cadence state is a pure function of the log.** Cadence
+events carry the reserved `ext_key='cadence:{enrollment_id}:{step_no}'`, so
+the event hash admits at most ONE sent event per step ever; the
+`enrollment_progress` view derives the step pointer; `send_attempts` is a
+lock table, never truth (`lead-desk-reconcile` repairs drift). Stops
+(re-checked at claim time): reply since enrollment, bounce (auto-suppresses
+`bounced`), suppression, pause, superseded approval. LinkedIn steps never
+auto-execute - they surface as "Manual touches" board tasks. Draft-dirk
+steps complete only when his ACTUAL send is observed in Sent Items (no
+follow-up fires while he sits on a draft).
+
+Zoho CRM injection: every auto-send BCCs the CRM dropbox
+(s9hitl_pv69mu@mails4.zohocrm.com) - verify once live that a Matthias-sent
+BCC files correctly. CRM API write module (contact upsert + inbound notes,
+scope minting on the existing self-client) is a later, separable phase.
+
+New secrets: `LEAD_DESK_WORKER_SECRET` (outbox API bearer, separate from
+ingest). New scripts: `lead-desk-adopt` (Rome 290 -> enrollments under a
+`status='done'` campaign that can never auto-send), `lead-desk-reconcile`,
+`lead-desk-worker` (`worker` extra: httpx + pywin32, Windows-only).
+
+Before the first real campaign: run the TEST-campaign gate (enroll
+ourselves + one external address, cap 10; verify reply-halt, NDR ->
+bounce -> suppress, Zoho dropbox filing, crash drill, kill switches,
+catch-up) per `worker/README.md`.
 
 ## Iteration 2, stage reflects real status (shipped 2026-07-12)
 

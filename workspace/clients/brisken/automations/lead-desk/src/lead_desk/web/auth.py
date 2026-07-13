@@ -11,10 +11,16 @@ The event-ingest endpoint (``POST /events``) sits outside the cookie gate but
 carries its own shared-secret check (``LEAD_DESK_INGEST_SECRET``) so the cloud
 capture worker can post events without a browser session.
 
+The outbox/worker API (``/api/outbox/*``, ``/api/worker/*``) also sits outside
+the cookie gate with its own bearer (``LEAD_DESK_WORKER_SECRET``) - separate
+from the ingest secret because claim responses carry lead PII and mutate queue
+state, so the two rotate independently.
+
 Env vars:
     LEAD_DESK_ACCESS_CODES    "matthias:code1,dirk:code2,chris:code3"; gate on iff set
     LEAD_DESK_AUTH_SECRET     HMAC key for cookies; set in prod so sessions survive restart
     LEAD_DESK_INGEST_SECRET   bearer secret required on POST /events
+    LEAD_DESK_WORKER_SECRET   bearer secret for the local send worker's outbox API
     LEAD_DESK_INSECURE_COOKIE set to "1" to drop the cookie Secure flag for local http
 """
 from __future__ import annotations
@@ -28,8 +34,13 @@ COOKIE_NAME = "lead_desk_session"
 SESSION_MAX_AGE = 60 * 60 * 12  # 12 hours
 
 # Reachable without a session cookie: the login flow, the health probe, the
-# favicon, and the ingest sink (which guards itself with its own secret).
-OPEN_PATHS = frozenset({"/login", "/logout", "/healthz", "/favicon.ico", "/events"})
+# favicon, the ingest sink, and the worker outbox API (each API guards itself
+# with its own secret).
+OPEN_PATHS = frozenset({
+    "/login", "/logout", "/healthz", "/favicon.ico", "/events",
+    "/api/outbox/claim", "/api/outbox/result", "/api/outbox/draft-sent",
+    "/api/worker/status", "/api/worker/watchlist", "/api/worker/heartbeat",
+})
 
 # Stable for the life of the process; used only when AUTH_SECRET is unset.
 _PROCESS_SECRET = secrets.token_hex(32)
@@ -100,12 +111,25 @@ def ingest_secret() -> str | None:
     return s or None
 
 
-def ingest_authorized(header_value: str | None) -> bool:
-    """Check the bearer secret on ``POST /events``. Closed unless a secret is set."""
-    secret = ingest_secret()
+def _bearer_matches(header_value: str | None, secret: str | None) -> bool:
     if secret is None or not header_value:
         return False
     token = header_value.strip()
     if token.lower().startswith("bearer "):
         token = token[7:].strip()
     return hmac.compare_digest(token, secret)
+
+
+def ingest_authorized(header_value: str | None) -> bool:
+    """Check the bearer secret on ``POST /events``. Closed unless a secret is set."""
+    return _bearer_matches(header_value, ingest_secret())
+
+
+def worker_secret() -> str | None:
+    s = os.environ.get("LEAD_DESK_WORKER_SECRET", "").strip()
+    return s or None
+
+
+def worker_authorized(header_value: str | None) -> bool:
+    """Check the bearer on the outbox/worker API. Closed unless a secret is set."""
+    return _bearer_matches(header_value, worker_secret())
