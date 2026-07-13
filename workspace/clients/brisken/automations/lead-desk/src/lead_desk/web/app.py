@@ -427,13 +427,28 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             store.set_state(f"approve-result:{cid}", json.dumps(result), now_iso())
         return RedirectResponse(url=f"/campaigns/{cid}", status_code=303)
 
+    @app.post("/campaigns/{cid}/start-sending")
+    def campaign_start_sending(request: Request, cid: str, confirm: str = Form("")):
+        """The second gate: an approved (frozen) campaign starts sending only
+        when a human presses this and re-types the id."""
+        with open_store() as store:
+            if store.get_campaign(cid) is None:
+                return HTMLResponse("Campaign not found", status_code=404)
+            result = cadence.start_sending(store, cid, current_user(request),
+                                           confirm)
+            store.set_state(f"start-result:{cid}", json.dumps(result), now_iso())
+        return RedirectResponse(url=f"/campaigns/{cid}", status_code=303)
+
     @app.post("/campaigns/{cid}/pause")
     def campaign_pause(request: Request, cid: str):
         with open_store() as store:
             campaign = store.get_campaign(cid)
             if campaign is None:
                 return HTMLResponse("Campaign not found", status_code=404)
-            store.update_campaign(cid, {"status": "paused"}, now_iso())
+            # Pausing only makes sense for a live 'sending' campaign; an
+            # 'approved' (not yet sending) one is already not sending.
+            if campaign["status"] == "sending":
+                store.update_campaign(cid, {"status": "paused"}, now_iso())
         return RedirectResponse(url=f"/campaigns/{cid}", status_code=303)
 
     @app.post("/campaigns/{cid}/resume")
@@ -442,10 +457,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             campaign = store.get_campaign(cid)
             if campaign is None:
                 return HTMLResponse("Campaign not found", status_code=404)
-            # Only a campaign that WAS approved (scope frozen) may resume.
+            if campaign["status"] != "paused":
+                return HTMLResponse("Only a paused campaign can resume.", status_code=400)
             if not campaign["approved_at"]:
                 return HTMLResponse("Never approved; run the approval.", status_code=400)
-            store.update_campaign(cid, {"status": "approved"}, now_iso())
+            # A paused campaign was sending before the pause, so resume goes
+            # straight back to 'sending'.
+            store.update_campaign(cid, {"status": "sending"}, now_iso())
         return RedirectResponse(url=f"/campaigns/{cid}", status_code=303)
 
     @app.post("/attempts/retry")
@@ -576,7 +594,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 SELECT DISTINCT c.contact_id, c.email, c.alt_email
                 FROM enrollments en JOIN contacts c ON c.contact_id = en.contact_id
                 JOIN campaigns cp ON cp.campaign_id = en.campaign_id
-                WHERE cp.status IN ('approved', 'paused')
+                WHERE cp.status IN ('approved', 'sending', 'paused')
                 """
             ).fetchall()
             drafted = store.conn.execute(

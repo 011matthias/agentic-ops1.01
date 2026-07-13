@@ -62,7 +62,10 @@ DEGREES = ("cold", "cold_touched", "warm")
 # ready draft loaded into Dirk's mailbox (his click is the gate on his name).
 SEND_MODES = ("auto-matthias", "draft-dirk")
 
-CAMPAIGN_STATUSES = ("draft", "approved", "paused", "done")
+# draft: editable, nothing sends. approved: copy+list FROZEN but still NOT
+# sending (the second gate). sending: a human pressed "Start sending" - the
+# worker claims only from here. paused: sending halted. done: finished.
+CAMPAIGN_STATUSES = ("draft", "approved", "sending", "paused", "done")
 
 # Reserved ext_key prefix for cadence-emitted events (see module docstring).
 CADENCE_PREFIX = "cadence:"

@@ -11,11 +11,21 @@ convention).
 ## Iteration 3, campaign engine (built 2026-07-13)
 
 Owner decisions 2026-07-13: CRM target = Zoho CRM (BCC dropbox now, API
-write later); FULLY AUTOMATIC sending after a one-time approval of sequence
-copy + enrolled list; warmness = deterministic rules + manual override;
-front end = extend the board; sender = HYBRID (cold degrees auto-send from
+write later); warmness = deterministic rules + manual override; front end =
+extend the board; sender = HYBRID (cold degrees auto-send from
 matthias.silva@ CC Dirk, warm degree staged as drafts in Dirk's mailbox -
 his click is the gate on his own name).
+
+**Sending is a TWO-gate confirm (owner add 2026-07-13, "gate the sending
+with at least a confirm button").** Status flow `draft -> approved ->
+sending -> (paused) -> done`. Gate 1 = **Approve** (type the id): freezes the
+copy (template version pins) + enrolled-list hash; the campaign is now
+`approved` but sends NOTHING. Gate 2 = **Start sending** (type the id again):
+`approved -> sending`. The worker claims ONLY from a `sending` campaign, so
+no email leaves until a human passes BOTH gates in the app. Pause halts
+(`sending -> paused`); resume goes back to `sending`. Any copy/sequence edit
+supersedes both and drops to `draft`. This is on top of the three kill
+switches (app flag, KILL file, schtasks disable).
 
 Brain / hands split:
 

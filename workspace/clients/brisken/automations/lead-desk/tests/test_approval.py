@@ -178,6 +178,8 @@ def test_approve_pins_latest_version_and_freezes_claims(tmp_path):
         assert res["ok"]
         assert res["pins"] == {"t1": 2}  # latest version at approval time
         assert s.get_pins(cid) == {"t1": 2}
+        # Approval froze the copy; the second gate turns sending on.
+        assert cadence.start_sending(s, cid, "tester", cid)["ok"]
         # Template edit AFTER approval must not change what the outbox renders.
         assert add_template(s, body="V3 body {{first_name}}") == 3
         out = cadence.claim_sends(s, "w1", 10, at=INSIDE)
@@ -196,6 +198,7 @@ def test_approve_pins_latest_version_and_freezes_claims(tmp_path):
 def test_late_enrollment_pending_until_second_approval(tmp_path):
     with ContactStore(tmp_path / "db.sqlite") as s:
         cid, c1 = make_engine_campaign(s)
+        assert cadence.start_sending(s, cid, "tester", cid)["ok"]
         c2 = make_contact(s, 2)
         eid2 = enroll(s, c2)
         assert s.get_enrollment(eid2)["approved_at"] is None
@@ -204,11 +207,13 @@ def test_late_enrollment_pending_until_second_approval(tmp_path):
         assert [i["enrollment"]["contact_id"] for i in due["emails"]] == [c1]
         out = cadence.claim_sends(s, "w1", 10, at=INSIDE)
         assert [cl["contact_id"] for cl in out["claims"]] == [c1]
-        # Second approval stamps the addition; it becomes claimable.
+        # Second approval stamps the addition (dropping back to the 'approved'
+        # holding state); start sending again to make the late add claimable.
         res2 = cadence.approve_campaign(s, cid, "tester", cid)
         assert res2["ok"]
         assert res2["approved_enrollments"] == 1
         assert s.get_enrollment(eid2)["approved_at"] is not None
+        assert cadence.start_sending(s, cid, "tester", cid)["ok"]
         out2 = cadence.claim_sends(s, "w2", 10, at=INSIDE)
         assert [cl["contact_id"] for cl in out2["claims"]] == [c2]
 
@@ -218,6 +223,9 @@ def test_late_enrollment_pending_until_second_approval(tmp_path):
 def test_supersede_drops_to_draft_and_stops_claims(tmp_path):
     with ContactStore(tmp_path / "db.sqlite") as s:
         cid, _c1 = make_engine_campaign(s)
+        # A live sending campaign is what supersede must catch and silence.
+        assert cadence.start_sending(s, cid, "tester", cid)["ok"]
+        assert len(cadence.claim_sends(s, "w0", 10, at=INSIDE)["claims"]) == 1
         # Sequence changed after approval -> the frozen scope is stale.
         s.upsert_sequence(cid, "cold", "cold seq v2", "auto-matthias", [
             {"step_no": 1, "channel": "email", "template_key": "t1", "day_offset": 2},
