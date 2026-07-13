@@ -51,8 +51,9 @@ def _backdate_approvals(store, campaign_id):
 
 
 def make_engine_campaign(store, contact_ids, campaign_id="engine-1"):
-    """A real, approved engine campaign: template + 1-step cold sequence +
-    enrollments, approved through the actual gate."""
+    """A real engine campaign taken all the way LIVE: template + 1-step cold
+    sequence + enrollments, through BOTH gates (approve freezes copy+list,
+    start_sending flips it to 'sending' so the worker can actually claim)."""
     now = now_iso()
     store.create_campaign(campaign_id, "Engine test", now)
     store.save_template("t-intro", "email", "Hello {{first_name}}",
@@ -66,6 +67,8 @@ def make_engine_campaign(store, contact_ids, campaign_id="engine-1"):
         store.set_degree(int(enr["enrollment_id"]), "cold", "manual", None)
     res = cadence.approve_campaign(store, campaign_id, "tester", campaign_id)
     assert res["ok"], res
+    started = cadence.start_sending(store, campaign_id, "tester", campaign_id)
+    assert started["ok"], started
     _backdate_approvals(store, campaign_id)
     return campaign_id
 

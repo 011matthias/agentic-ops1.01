@@ -32,6 +32,16 @@
     Draft campaign: nothing sends until copy + contact list are approved.
     <a href="/campaigns/{{ v.campaign }}">Review &amp; approve &rarr;</a>
   </div>
+  {% elif v.campaign_row and v.campaign_row.status == 'approved' %}
+  <div style="margin-top:12px; padding:10px 14px; border:1px solid var(--orange); border-radius:10px; background:var(--orange-bg); color:var(--orange);">
+    Approved and frozen, but sending is OFF: press Start sending to go live.
+    <a href="/campaigns/{{ v.campaign }}">Sending gate &rarr;</a>
+  </div>
+  {% elif v.campaign_row and v.campaign_row.status == 'sending' %}
+  <div style="margin-top:12px; padding:10px 14px; border:1px solid var(--green); border-radius:10px; background:var(--green-bg); color:var(--green);">
+    Sending is LIVE: the worker is claiming due steps.
+    <a href="/campaigns/{{ v.campaign }}">Manage / pause &rarr;</a>
+  </div>
   {% elif v.campaign_row and v.campaign_row.status == 'paused' %}
   <div style="margin-top:12px; padding:10px 14px; border:1px solid var(--red); border-radius:10px; background:var(--red-bg); color:var(--red);">
     Campaign paused: the worker will not claim sends.
@@ -145,6 +155,7 @@
             {% elif r.cadence.state == 'stopped:suppressed' %}suppressed
             {% elif r.cadence.state == 'done' %}done
             {% elif r.cadence.state == 'pending_approval' %}<span class="muted">unapproved</span>
+            {% elif r.cadence.state == 'ready' %}<span class="muted">ready (off)</span>
             {% elif r.cadence.state == 'paused' %}<span class="muted">paused</span>
             {% else %}<span class="muted">-</span>{% endif %}
           {% else %}-{% endif %}

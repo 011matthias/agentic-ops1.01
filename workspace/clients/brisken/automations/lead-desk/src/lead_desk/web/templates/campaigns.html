@@ -27,7 +27,7 @@
     {% for c in campaigns %}
       <tr>
         <td><a href="/campaigns/{{ c.campaign_id }}">{{ c.name }}</a> <span class="muted mono" style="font-size:11px;">{{ c.campaign_id }}</span></td>
-        <td><span class="badge {% if c.status == 'approved' %}stage-booked{% elif c.status == 'paused' %}suppressed{% elif c.status == 'done' %}stage-sourced{% else %}stage-sent{% endif %}">{{ c.status }}</span></td>
+        <td><span class="badge {% if c.status == 'sending' %}stage-booked{% elif c.status == 'approved' %}stage-sent{% elif c.status == 'paused' %}suppressed{% else %}stage-sourced{% endif %}">{{ 'sending (LIVE)' if c.status == 'sending' else c.status }}</span></td>
         <td>{{ c.enrolled }}</td>
         <td>{{ c.daily_cap }}</td>
         <td class="mono" style="font-size:11.5px;">{{ (c.approved_at or '')[:10] or '-' }}{% if c.approved_by %} by {{ c.approved_by }}{% endif %}</td>

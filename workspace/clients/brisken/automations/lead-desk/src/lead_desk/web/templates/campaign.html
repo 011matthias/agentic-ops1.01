@@ -6,21 +6,21 @@
 <div class="card">
   <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
     <div>
-      <h1>{{ campaign.name }} <span class="badge {% if campaign.status == 'approved' %}stage-booked{% elif campaign.status == 'paused' %}suppressed{% elif campaign.status == 'done' %}stage-sourced{% else %}stage-sent{% endif %}">{{ campaign.status }}</span></h1>
+      <h1>{{ campaign.name }} <span class="badge {% if campaign.status == 'sending' %}stage-booked{% elif campaign.status == 'approved' %}stage-sent{% elif campaign.status == 'paused' %}suppressed{% elif campaign.status == 'done' %}stage-sourced{% else %}stage-sourced{% endif %}">{{ 'sending (LIVE)' if campaign.status == 'sending' else campaign.status }}</span></h1>
       <div class="muted mono" style="font-size:12px;">{{ campaign.campaign_id }}</div>
       <div class="muted" style="margin-top:6px;">
-        From {{ campaign.from_address }} &middot; CC {{ campaign.cc_address }} &middot; BCC Zoho dropbox &middot;
+        From {{ campaign.from_address }}{% if campaign.cc_address %} &middot; CC {{ campaign.cc_address }}{% endif %} &middot; BCC Zoho dropbox &middot;
         cap {{ campaign.daily_cap }}/day &middot; throttle {{ campaign.throttle_seconds }}s+{{ campaign.jitter_seconds }}s
       </div>
     </div>
     <div class="inline">
-      {% if campaign.status == 'approved' %}
+      {% if campaign.status == 'sending' %}
       <form method="post" action="/campaigns/{{ campaign.campaign_id }}/pause" style="margin:0;">
-        <button class="btn btn-small" type="submit" style="background:var(--red);">Pause campaign</button>
+        <button class="btn btn-small" type="submit" style="background:var(--red);">Pause sending</button>
       </form>
       {% elif campaign.status == 'paused' %}
       <form method="post" action="/campaigns/{{ campaign.campaign_id }}/resume" style="margin:0;">
-        <button class="btn btn-small" type="submit">Resume</button>
+        <button class="btn btn-small" type="submit">Resume sending</button>
       </form>
       {% endif %}
     </div>
@@ -226,20 +226,21 @@
   {% endfor %}
   {% endif %}
 
-  {% if report.ok and campaign.status != 'approved' %}
+  {% if report.ok and campaign.status == 'draft' %}
   <div style="padding:12px 14px; border:1px solid var(--green); border-radius:10px; background:var(--green-bg); margin-top:10px;">
     <p style="margin:0 0 10px;">{{ report.scope_text }}</p>
+    <p style="margin:0 0 10px;" class="muted">Approving only FREEZES the copy + list. Sending stays OFF until you press Start sending in the next step.</p>
     <form method="post" action="/campaigns/{{ campaign.campaign_id }}/approve" class="row-actions">
       <div style="min-width:220px;"><label>Type the campaign id to confirm</label>
         <input type="text" name="confirm" placeholder="{{ campaign.campaign_id }}" autocomplete="off"></div>
-      <button class="btn btn-small" type="submit">Approve: freeze copy + list, start sending</button>
+      <button class="btn btn-small" type="submit">Approve: freeze copy + list</button>
     </form>
   </div>
-  {% elif campaign.status == 'approved' %}
-  <p class="muted">Scope is frozen. New uploads stay inert until you re-approve the additions (the button appears when pending rows exist).</p>
+  {% elif campaign.status in ('approved', 'sending', 'paused') %}
   {% set pending = enrollments | rejectattr('enrollment_approved_at') | list %}
+  <p class="muted">Copy + list frozen. New uploads stay inert until you approve the additions (button appears below when pending rows exist).</p>
   {% if pending %}
-  <form method="post" action="/campaigns/{{ campaign.campaign_id }}/approve" class="row-actions">
+  <form method="post" action="/campaigns/{{ campaign.campaign_id }}/approve" class="row-actions" style="margin-bottom:10px;">
     <div style="min-width:220px;"><label>{{ pending|length }} pending addition(s) - type the id to approve them</label>
       <input type="text" name="confirm" placeholder="{{ campaign.campaign_id }}" autocomplete="off"></div>
     <button class="btn btn-small" type="submit">Approve additions</button>
@@ -247,4 +248,35 @@
   {% endif %}
   {% endif %}
 </div>
+
+{% if campaign.status in ('approved', 'sending', 'paused') %}
+<div class="card">
+  <h2>7. Sending gate</h2>
+  {% if campaign.status == 'approved' %}
+  <div style="padding:12px 14px; border:1px solid var(--orange); border-radius:10px; background:var(--orange-bg);">
+    <p style="margin:0 0 6px;"><strong>Sending is OFF.</strong> The campaign is approved and frozen, but the worker will not send a single email until you confirm here.</p>
+    <p style="margin:0 0 10px;" class="muted">{{ report.scope_text }}</p>
+    <form method="post" action="/campaigns/{{ campaign.campaign_id }}/start-sending" class="row-actions">
+      <div style="min-width:220px;"><label>Type the campaign id to confirm sending</label>
+        <input type="text" name="confirm" placeholder="{{ campaign.campaign_id }}" autocomplete="off"></div>
+      <button class="btn btn-small" type="submit" style="background:var(--green);">Start sending</button>
+    </form>
+  </div>
+  {% elif campaign.status == 'sending' %}
+  <div style="padding:12px 14px; border:1px solid var(--green); border-radius:10px; background:var(--green-bg);">
+    <p style="margin:0 0 10px;"><strong>Sending is LIVE.</strong> The worker is claiming due steps for this campaign. Pause to stop, or use the global kill switch on the Campaigns page.</p>
+    <form method="post" action="/campaigns/{{ campaign.campaign_id }}/pause" style="margin:0;">
+      <button class="btn btn-small" type="submit" style="background:var(--red);">Pause sending</button>
+    </form>
+  </div>
+  {% elif campaign.status == 'paused' %}
+  <div style="padding:12px 14px; border:1px solid var(--red); border-radius:10px; background:var(--red-bg);">
+    <p style="margin:0 0 10px;"><strong>Paused.</strong> No sends until you resume.</p>
+    <form method="post" action="/campaigns/{{ campaign.campaign_id }}/resume" style="margin:0;">
+      <button class="btn btn-small" type="submit">Resume sending</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
 {% endblock %}

@@ -36,8 +36,13 @@ def make_contact(store, cid_suffix, email=None, **fields):
 
 def make_engine_campaign(store, contact_ids, cid="camp1", *, daily_cap=40,
                          degree="cold", send_mode="auto-matthias", n_steps=1,
-                         approve=True):
-    """Campaign + template + one sequence + enrollments, then the approval gate.
+                         approve=True, start=True):
+    """Campaign + template + one sequence + enrollments, then the two gates.
+
+    Two-gate flow: approve_campaign freezes copy + list (status 'approved',
+    which does NOT send), then start_sending flips it to 'sending' so the
+    worker can claim. ``start`` defaults True so the common case yields a
+    live 'sending' campaign; pass start=False to hold at 'approved'.
 
     Enrollment/approval timestamps use real now; the reply-stop tests rely on
     reply ts >= enrolled_at, so replies use later fixed 2026-07-15 timestamps.
@@ -56,6 +61,9 @@ def make_engine_campaign(store, contact_ids, cid="camp1", *, daily_cap=40,
     if approve:
         res = cadence.approve_campaign(store, cid, "tester", cid)
         assert res["ok"], res
+        if start:
+            sres = cadence.start_sending(store, cid, "tester", cid)
+            assert sres["ok"], sres
     return cid
 
 
@@ -79,14 +87,16 @@ def _steps_done(store, enrollment_id):
 
 # -- 1. draft vs approved + rendered claim payload ---------------------------
 
-def test_draft_campaign_zero_claims_then_approved_claim_renders(tmp_path):
+def test_draft_campaign_zero_claims_then_sending_claim_renders(tmp_path):
     with ContactStore(tmp_path / "db.sqlite") as s:
         c1 = make_contact(s, 1)
         make_engine_campaign(s, [c1], approve=False)
         res = cadence.claim_sends(s, "w1", 10, at=IN_WINDOW)
         assert res == {"paused": False, "claims": []}
 
+        # Two gates: approve freezes copy + list (no send), start turns it on.
         assert cadence.approve_campaign(s, "camp1", "tester", "camp1")["ok"]
+        assert cadence.start_sending(s, "camp1", "tester", "camp1")["ok"]
         res = cadence.claim_sends(s, "w1", 10, at=IN_WINDOW)
         assert len(res["claims"]) == 1
         claim = res["claims"][0]
@@ -346,3 +356,33 @@ def test_ingest_dedupes_captured_worker_send_by_imid(tmp_path):
         assert res["ok"] and res["inserted"] is False
         assert res["deduped"] == "worker send"
         assert sum(1 for e in s.get_events(c1) if e["type"] == "sent") == 1
+
+
+# -- 13. the two-gate contract: approve freezes, start turns sending on -------------------
+
+def test_approve_alone_is_gated_start_sending_opens_claims(tmp_path):
+    with ContactStore(tmp_path / "db.sqlite") as s:
+        c1 = make_contact(s, 1)
+        # approved but NOT started: frozen copy + list, but nothing sends yet
+        make_engine_campaign(s, [c1], start=False)
+        assert s.get_campaign("camp1")["status"] == "approved"
+        assert cadence.claim_sends(s, "w1", 10, at=IN_WINDOW)["claims"] == []
+
+        # the second gate flips 'approved' -> 'sending' and unblocks the outbox
+        assert cadence.start_sending(s, "camp1", "tester", "camp1")["ok"]
+        assert s.get_campaign("camp1")["status"] == "sending"
+        res = cadence.claim_sends(s, "w1", 10, at=IN_WINDOW)
+        assert len(res["claims"]) == 1
+
+
+# -- 14. supersede a live SENDING campaign drops it to draft and stops claims -------------
+
+def test_supersede_on_sending_drops_to_draft_and_stops_claims(tmp_path):
+    with ContactStore(tmp_path / "db.sqlite") as s:
+        c1 = make_contact(s, 1)
+        make_engine_campaign(s, [c1])                      # approved + started
+        assert s.get_campaign("camp1")["status"] == "sending"
+
+        cadence.supersede_approval(s, "camp1", "copy changed after go-live")
+        assert s.get_campaign("camp1")["status"] == "draft"
+        assert cadence.claim_sends(s, "w1", 10, at=IN_WINDOW)["claims"] == []

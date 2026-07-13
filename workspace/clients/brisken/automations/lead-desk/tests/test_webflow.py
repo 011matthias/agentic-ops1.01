@@ -72,6 +72,12 @@ def test_full_campaign_lifecycle_over_http(client):
     assert r.status_code == 200
     assert "0/1" in r.text  # step pointer column
 
+    # 5b. Second gate: 'approved' freezes but does not send; the human presses
+    # "Start sending" (status approved -> sending) before the worker can claim.
+    r = client.post("/campaigns/mdh-2026/start-sending",
+                    data={"confirm": "mdh-2026"}, follow_redirects=True)
+    assert r.status_code == 200 and "sending" in r.text
+
     # 6. Worker claims over HTTP with the bearer; send is rendered + leased.
     hdrs = {"Authorization": "Bearer wsecret"}
     with ContactStore(client.app_state_db) as store:
@@ -103,7 +109,7 @@ def test_full_campaign_lifecycle_over_http(client):
     r = client.get("/api/worker/status", headers=hdrs)
     body = r.json()
     camp = next(c for c in body["campaigns"] if c["campaign"] == "mdh-2026")
-    assert camp["status"] == "approved"
+    assert camp["status"] == "sending"
     assert camp["daily_sent"] >= 1  # the resolved send counts against the cap
 
 

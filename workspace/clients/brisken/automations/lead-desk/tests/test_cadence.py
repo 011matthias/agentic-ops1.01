@@ -108,6 +108,7 @@ def test_reply_before_enrollment_does_not_stop(tmp_path):
         # enrolled_at is real now (>= 2026-07-13); this reply predates it.
         s.add_event(contact_id=cid, ts="2026-07-01T00:00:00+00:00", channel="email",
                     direction="inbound", type="reply", now=now_iso())
+        cadence.start_sending(s, CAMPAIGN_ID, "tester", CAMPAIGN_ID)
         assert state_for(s, cid)["state"] == "active"
 
 
@@ -168,6 +169,7 @@ def test_next_due_anchors_on_approval_then_last_step(tmp_path):
     with ContactStore(tmp_path / "db.sqlite") as s:
         cid = make_contact(s, 1)
         make_engine_campaign(s, [cid])  # day offsets 0 / 3
+        cadence.start_sending(s, CAMPAIGN_ID, "tester", CAMPAIGN_ID)
         enr = s.find_enrollment(cid, CAMPAIGN_ID)
         st = state_for(s, cid)
         assert st["state"] == "active"
@@ -203,6 +205,7 @@ def test_linkedin_step_blocks_email_until_marked_done(tmp_path):
     with ContactStore(tmp_path / "db.sqlite") as s:
         cid = make_contact(s, 1)
         make_engine_campaign(s, [cid], steps=LI_THEN_EMAIL)
+        cadence.start_sending(s, CAMPAIGN_ID, "tester", CAMPAIGN_ID)
 
         due = cadence.due_items(s, CAMPAIGN_ID, IN_WINDOW)
         assert due["emails"] == []

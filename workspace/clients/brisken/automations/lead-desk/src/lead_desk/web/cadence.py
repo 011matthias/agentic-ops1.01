@@ -203,7 +203,12 @@ def enrollment_state(enrollment: dict, progress: dict, steps: list[dict],
         return {**base, "state": "pending_approval"}
     if status == "paused":
         return {**base, "state": "paused"}
-    if status != "approved":
+    # 'approved' = frozen + reviewed but sending NOT yet confirmed. It is a
+    # deliberate holding state: no due sends until a human presses "Start
+    # sending" (status -> 'sending'). This is the in-app confirm gate.
+    if status == "approved":
+        return {**base, "state": "ready"}
+    if status != "sending":
         return {**base, "state": "inactive"}
 
     next_step = steps[steps_done]  # 1-based step_no == steps_done + 1
@@ -313,7 +318,9 @@ def claim_sends(store: ContactStore, worker_id: str, max_items: int,
     claims: list[dict] = []
     for campaign_row in store.list_campaigns():
         campaign = dict(campaign_row)
-        if campaign["status"] != "approved":
+        # The gate: the worker sends ONLY from a campaign a human has
+        # explicitly switched to 'sending'. 'approved' (frozen) does not send.
+        if campaign["status"] != "sending":
             continue
         window = parse_window(campaign.get("send_window"))
         if not in_window(window, at):
@@ -627,7 +634,7 @@ def approve_campaign(store: ContactStore, campaign_id: str, user: str,
     # the original approval would silently upgrade the copy for the whole
     # cohort. New copy only applies through pause -> re-approve.
     existing = store.get_pins(campaign_id) \
-        if (report["campaign"].get("status") == "approved") else {}
+        if (report["campaign"].get("status") in ("approved", "sending")) else {}
     pins: dict[str, int] = {}
     for degree in report["degrees"]:
         for rs in report["samples"][degree]["steps"]:
@@ -648,11 +655,35 @@ def approve_campaign(store: ContactStore, campaign_id: str, user: str,
     return {"ok": True, "approved_enrollments": approved_n, "pins": pins}
 
 
+def start_sending(store: ContactStore, campaign_id: str, user: str,
+                  confirm_slug: str) -> dict:
+    """THE SECOND GATE. Approval froze the copy + list; this is the explicit
+    in-app confirm that actually turns sending ON (status approved -> sending).
+    The worker only ever claims from a 'sending' campaign, so nothing leaves
+    until a human presses this and re-types the campaign id."""
+    if confirm_slug.strip() != campaign_id:
+        return {"ok": False, "errors": ["type the campaign id to confirm"]}
+    campaign = store.get_campaign(campaign_id)
+    if campaign is None:
+        return {"ok": False, "errors": ["unknown campaign"]}
+    if campaign["status"] != "approved":
+        return {"ok": False, "errors": [
+            f"campaign is '{campaign['status']}'; it must be 'approved' "
+            "(copy + list frozen) before sending can start"]}
+    now = _iso(now_utc())
+    store.update_campaign(campaign_id, {"status": "sending"}, now)
+    store.set_state(f"sending-started:{campaign_id}",
+                    json.dumps({"at": now, "by": user}), now)
+    return {"ok": True}
+
+
 def supersede_approval(store: ContactStore, campaign_id: str, reason: str) -> None:
     """Copy or sequence changed after approval: the frozen scope no longer
-    matches reality, so the campaign drops back to draft until re-approved."""
+    matches reality, so the campaign drops back to draft until re-approved
+    (and re-confirmed for sending). Catches both the 'approved' holding state
+    and a live 'sending' campaign."""
     campaign = store.get_campaign(campaign_id)
-    if campaign is None or campaign["status"] != "approved":
+    if campaign is None or campaign["status"] not in ("approved", "sending"):
         return
     now = _iso(now_utc())
     store.update_campaign(campaign_id, {"status": "draft"}, now)
