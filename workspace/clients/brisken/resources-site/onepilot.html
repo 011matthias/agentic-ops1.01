@@ -148,10 +148,10 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
 .weyebrow{font-family:'Space Grotesk';font-size:13px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--ac);margin-bottom:14px;}
 .whero h1{font-family:'Space Grotesk';font-size:52px;line-height:1.03;letter-spacing:-1.2px;font-weight:700;color:#0f172a;margin:0 0 18px;}
 .whero h1 .ac{color:var(--ac);}
-.wpromise{font-size:20px;line-height:1.45;color:#475569;max-width:36ch;}
-.wrename{font-size:13.5px;color:#94a3b8;margin-top:12px;}
-.wpoints{list-style:none;margin:26px 0 0;padding:0;display:flex;flex-direction:column;gap:12px;}
-.wpoints li{position:relative;padding-left:26px;font-size:15px;line-height:1.5;color:#334155;}
+.wpromise{font-size:22px;line-height:1.5;color:#475569;max-width:40ch;}
+.wrename{font-size:14px;color:#94a3b8;margin-top:12px;}
+.wpoints{list-style:none;margin:28px 0 0;padding:0;display:flex;flex-direction:column;gap:14px;}
+.wpoints li{position:relative;padding-left:26px;font-size:16.5px;line-height:1.55;color:#334155;}
 .wpoints li::before{content:"";position:absolute;left:0;top:7px;width:9px;height:9px;background:var(--ac);border-radius:2px;transform:rotate(45deg);}
 .wcta{display:flex;flex-wrap:wrap;gap:12px;margin-top:32px;}
 .wbtn{display:inline-block;text-decoration:none;font-weight:600;font-size:14px;border-radius:99px;padding:12px 22px;transition:transform .15s ease,box-shadow .15s ease;}
@@ -166,19 +166,23 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
 .wband{border-bottom:1px solid #eef2f7;padding:58px 0;}
 .wband.alt{background:#ffffff;}
 .wlab{font-family:'Space Grotesk';font-size:12.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--ac);margin-bottom:10px;}
-.wh2{font-family:'Space Grotesk';font-size:27px;font-weight:700;color:#0f172a;letter-spacing:-.4px;margin-bottom:8px;}
-.wlede{font-size:16.5px;line-height:1.6;color:#475569;max-width:72ch;margin-bottom:26px;}
+.wh2{font-family:'Space Grotesk';font-size:28px;font-weight:700;color:#0f172a;letter-spacing:-.4px;margin-bottom:8px;}
+.wlede{font-size:17.5px;line-height:1.7;color:#475569;max-width:74ch;margin-bottom:26px;}
 .wband .steps{margin-top:6px;}
+.wband .steps .st{font-size:16.5px;}
+.wband .steps .sd{font-size:14.5px;line-height:1.6;}
 .wband .dark{margin-top:6px;}
+.wband .dark .ritem{font-size:15.5px;}
 .wcols2{display:grid;grid-template-columns:1fr 1fr;gap:44px;margin-top:6px;}
-.wcols2 .band-lab{font-family:'Space Grotesk';font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ac);margin-bottom:10px;}
-.wcols2 .p{font-size:15px;line-height:1.6;color:#475569;}
+.wcols2 .band-lab{font-family:'Space Grotesk';font-size:12.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ac);margin-bottom:10px;}
+.wcols2 .p{font-size:16.5px;line-height:1.65;color:#475569;}
+.wband .dots li{font-size:15.5px;line-height:1.6;}
 
 /* cards (capabilities / governance / proof) */
 .wcards{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:6px;}
-.wcard{background:#fff;border:1px solid #e6ebf2;border-radius:14px;padding:24px;border-top:3px solid var(--ac);box-shadow:0 1px 2px rgba(15,23,42,.04);}
-.wcard .ct{font-family:'Space Grotesk';font-size:16.5px;font-weight:600;color:#0f172a;margin-bottom:8px;}
-.wcard .cd{font-size:14px;line-height:1.55;color:#64748b;}
+.wcard{background:#fff;border:1px solid #e6ebf2;border-radius:14px;padding:26px;border-top:3px solid var(--ac);box-shadow:0 1px 2px rgba(15,23,42,.04);}
+.wcard .ct{font-family:'Space Grotesk';font-size:17.5px;font-weight:600;color:#0f172a;margin-bottom:9px;}
+.wcard .cd{font-size:15.5px;line-height:1.6;color:#64748b;}
 .wcard .cs{font-family:'Space Grotesk';font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ac);margin-bottom:12px;display:block;}
 
 /* faq */
@@ -186,23 +190,23 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
 .wfaq details{border-top:1px solid #e6ebf2;padding:18px 2px;}
 .wfaq details:last-child{border-bottom:1px solid #e6ebf2;}
 .wfaq summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:18px;
-  font-family:'Space Grotesk';font-weight:600;font-size:17px;color:#0f172a;}
+  font-family:'Space Grotesk';font-weight:600;font-size:18px;color:#0f172a;}
 .wfaq summary::-webkit-details-marker{display:none;}
 .wfaq summary::after{content:"+";color:var(--ac);font-size:24px;line-height:1;font-weight:700;flex:0 0 auto;transition:transform .18s ease;}
 .wfaq details[open] summary::after{transform:rotate(45deg);}
-.wfaq p{margin-top:12px;font-size:15.5px;line-height:1.65;color:#475569;max-width:88ch;}
+.wfaq p{margin-top:13px;font-size:16.5px;line-height:1.72;color:#475569;max-width:90ch;}
 
 /* works-with chips */
 .wchips{display:flex;flex-wrap:wrap;gap:12px;margin-top:6px;}
-.wchip{background:#fff;border:1px solid #e6ebf2;border-radius:10px;padding:11px 17px;font-size:14px;font-weight:600;
+.wchip{background:#fff;border:1px solid #e6ebf2;border-radius:10px;padding:12px 18px;font-size:15px;font-weight:600;
   color:#334155;box-shadow:0 1px 2px rgba(15,23,42,.04);display:flex;align-items:center;gap:9px;}
 .wchip img{height:19px;width:auto;display:block;}
 .wchip .arrow{color:#cbd5e1;font-weight:700;margin:0 2px;}
 
 /* accent callout */
 .wcallout{background:var(--glow);border-left:4px solid var(--ac);border-radius:0 12px 12px 0;padding:22px 26px;margin-top:6px;}
-.wcallout .ct{font-family:'Space Grotesk';font-size:19px;font-weight:700;color:#0f172a;letter-spacing:-.2px;margin-bottom:7px;}
-.wcallout p{font-size:15.5px;line-height:1.6;color:#475569;max-width:82ch;}
+.wcallout .ct{font-family:'Space Grotesk';font-size:20px;font-weight:700;color:#0f172a;letter-spacing:-.2px;margin-bottom:8px;}
+.wcallout p{font-size:17px;line-height:1.65;color:#475569;max-width:84ch;}
 
 /* horizontal process flow (wraps) */
 .wflow{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:6px;}
@@ -211,10 +215,30 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
 .wflow .farrow{color:#cbd5e1;font-weight:700;}
 
 /* two-column dots (delivers) */
-.wdots2{display:grid;grid-template-columns:1fr 1fr;gap:14px 40px;margin-top:6px;}
-.wdots2 .d{position:relative;padding-left:24px;font-size:15px;line-height:1.5;color:#334155;}
+.wdots2{display:grid;grid-template-columns:1fr 1fr;gap:16px 44px;margin-top:6px;}
+.wdots2 .d{position:relative;padding-left:24px;font-size:16.5px;line-height:1.6;color:#334155;}
 .wdots2 .d::before{content:"";position:absolute;left:0;top:7px;width:8px;height:8px;background:var(--ac);border-radius:2px;transform:rotate(45deg);}
 @media(max-width:900px){.wdots2{grid-template-columns:1fr;}}
+
+/* stat tiles (market-research benchmark) */
+.wstats{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:6px;}
+.wstat{background:#fff;border:1px solid #e6ebf2;border-radius:14px;padding:26px;box-shadow:0 1px 2px rgba(15,23,42,.04);border-top:3px solid var(--ac);}
+.wstat .n{font-family:'Space Grotesk';font-size:46px;font-weight:700;color:var(--ac);letter-spacing:-1.5px;line-height:1;}
+.wstat .l{font-size:15px;line-height:1.55;color:#475569;margin-top:13px;}
+.wstat-src{font-size:13.5px;color:#94a3b8;margin-top:18px;line-height:1.5;}
+@media(max-width:900px){.wstats{grid-template-columns:1fr;}}
+
+/* comparison table */
+.wtable-wrap{overflow-x:auto;margin-top:6px;border:1px solid #e6ebf2;border-radius:14px;}
+.wtable{width:100%;border-collapse:collapse;font-size:15px;min-width:660px;}
+.wtable th,.wtable td{text-align:left;padding:15px 18px;border-bottom:1px solid #eef2f7;vertical-align:top;line-height:1.5;}
+.wtable tr:last-child th,.wtable tr:last-child td{border-bottom:none;}
+.wtable thead th{background:#f6f9fc;font-family:'Space Grotesk';font-weight:600;font-size:14px;color:#0f172a;white-space:nowrap;}
+.wtable thead th:first-child{color:#64748b;}
+.wtable tbody th{font-weight:600;color:#0f172a;background:#fcfdfe;font-size:14.5px;}
+.wtable td{color:#475569;}
+.wtable td.hl{color:#0f172a;font-weight:500;background:var(--glow);}
+.wtable-note{font-size:14px;color:#94a3b8;margin-top:14px;line-height:1.55;}
 
 /* proof strip + closing CTA + footer */
 .wproof{padding:44px 0;text-align:center;}
@@ -249,11 +273,11 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
     <h1>One<span class="ac">Pilot</span></h1>
     <p class="wpromise">The governed AI layer that runs your treasury apps. In production now.</p>
     
-    <ul class="wpoints"><li>It asks, automates and acts across the applications, always inside your controls.</li><li>Build your own apps and automations without writing a line of code.</li><li>In production: a financial-services group governs several data domains from one deployment.</li></ul>
+    <ul class="wpoints"><li>It asks, automates and acts across the applications, always inside your controls.</li><li>Build your own apps and automations without writing a line of code.</li><li>The book of record stays in SAP; OnePilot orchestrates on top, SAP and non-SAP, both ways.</li><li>In production: a financial-services group governs several data domains from one deployment.</li></ul>
     <div class="wcta"><a class="wbtn primary" href="/onepilot.pdf" download>Download the one-pager</a><a class="wbtn ghost" href="/">All resources</a></div>
   </div>
   <div class="wvisual bare"><div class="arch"><div class="arch-top">One<span class="ac">Pilot</span><span class="lab">the governed AI layer</span></div><div class="arch-conn"></div><div class="arch-pillars"><div class="pil">Market Data Hub</div><div class="pil">Smart Trading</div><div class="pil">Remittance Gate</div><div class="pil">Bank Fee Portal</div></div><div class="arch-base">out to <b>SAP</b> and non-SAP, bi-directional, across your landscape</div></div></div>
-</div></section><section class="wband alt"><div class="inner"><div class="wlab">How it works</div><h2 class="wh2">From any source to governed SAP records</h2><div class="steps" style="grid-template-columns:repeat(4,1fr);"><div class="step"><div class="sn">1</div><div class="st">Ingest</div><div class="sd">Any source and format: Bloomberg, LSEG, 360T, OANDA, central banks, banks, files, email.</div></div><div class="step"><div class="sn">2</div><div class="st">Validate</div><div class="sd">Cleansing, mapping, calculations and anomaly detection, before anything reaches SAP.</div></div><div class="step"><div class="sn">3</div><div class="st">Govern</div><div class="sd">Audit trail, manage-by-exception, segregation of duties and four-eye on every record.</div></div><div class="step"><div class="sn">4</div><div class="st">Distribute</div><div class="sd">Straight into S/4HANA, TRM, Cash and Credit Management. No ABAP, no custom interface.</div></div></div></div></section><section class="wband"><div class="inner"><div class="wlab">Governed by design</div><div class="wcards"><div class="wcard"><span class="cs">Permission-bound</span><div class="ct">Agents act within access</div><div class="cd">An agent sees and acts only on what the user is allowed to. Access outside that boundary is not dimmed, it is absent.</div></div><div class="wcard"><span class="cs">Four-eye and SoD</span><div class="ct">The agent prepares, a person releases</div><div class="cd">Approvals and separation of duties on the actions that need them.</div></div><div class="wcard"><span class="cs">Full audit trail</span><div class="ct">Manage by exception</div><div class="cd">Every record is traceable, and nothing moves outside the rules you set.</div></div></div></div></section><section class="wband alt"><div class="inner"><div class="wlab">How it connects</div><h2 class="wh2">Connects to what you already run</h2><div class="wchips"><span class="wchip">RFC & OData</span><span class="wchip">SFTP</span><span class="wchip">SOAP & REST</span><span class="wchip">AMQP</span><span class="wchip">Email</span><span class="wchip">Excel add-in</span><span class="wchip">XLSX / CSV / TXT</span><span class="wchip">LLM & browser automation</span></div><p class="wlede" style="margin-top:22px;margin-bottom:0;">Push and pull, off-the-shelf and third-party-managed. A new feed is set up on a managed product, so it goes live in weeks rather than a multi-quarter integration project your team has to build and then own.</p></div></section><section class="wband"><div class="inner"><div class="wlab">In production</div><div class="wcards"><div class="wcard"><span class="cs">Financial services</span><div class="ct">S/4HANA Public Cloud</div><div class="cd">A financial-services group already governs several data domains from one OnePilot deployment.</div></div><div class="wcard"><span class="cs">Agricultural</span><div class="ct">S/4HANA</div><div class="cd">Posts remittances into S/4HANA on a governed AI gate, with the retype removed.</div></div><div class="wcard"><span class="cs">Chemicals</span><div class="ct">S/4HANA On-Prem</div><div class="cd">An AI funding-request process, a complex multi-integration with SAP, fully automated.</div></div></div></div></section><section class="wband alt"><div class="inner"><div class="wlab">Common questions</div><div class="wfaq"><details><summary>Does OnePilot replace SAP?</summary><p>No. OnePilot orchestrates on top of SAP. The book of record stays in SAP, execution on the trading platform, and market data through the hub.</p></details><details><summary>Can we deploy AI agents in treasury without consuming our IT budget?</summary><p>Yes. OnePilot is configured, not coded, and runs as a managed product on top of your SAP landscape, so there is no ABAP build and nothing new for your IT team to own. A new feed or agent goes live in weeks, which keeps the work off the IT backlog.</p></details><details><summary>Is AI automation in treasury safe?</summary><p>It is safe when the AI runs inside your controls rather than around them. Each process works to rules you set and approve, with four-eye release, segregation of duties and a full audit trail on every record. You keep command of policy and exceptions.</p></details><details><summary>Can AI improve liquidity forecasting?</summary><p>A forecast is only as good as the data feeding it. OnePilot keeps that data current and governed in SAP, so the forecast runs on a clean, reconciled base. Treasury still owns the assumptions and the call.</p></details></div></div></section>
+</div></section><section class="wband"><div class="inner"><div class="wlab">The problem</div><h2 class="wh2">Why a treasurer's day becomes tab management</h2><p class="wlede">A treasurer's day becomes tab management: the trading platform in one window, market data in another, bank portals and cash tools in others, and the numbers re-keyed between them. The day goes to moving data instead of using it. Around SAP, that shows up as shadow integrations, hand-keyed files and home-built scripts that move data in, fragile and unowned, plus a backlog of interfaces to build and maintain.</p><p class="wlede" style="margin-bottom:0;">OnePilot puts the data in one governed place, so the day shifts back to using it: deciding, not re-typing. It is a no-code layer over your SAP landscape where permissioned AI agents do the repetitive work, ingesting, validating, posting and reconciling, always inside your controls. The book of record stays in SAP; OnePilot orchestrates on top.</p></div></section><section class="wband alt"><div class="inner"><div class="wlab">The market</div><h2 class="wh2">The shadow integration is the default state, not the exception</h2><div class="wstats"><div class="wstat"><div class="n">71%</div><div class="l">of US SAP-treasury roles describe building or hand-running integrations into SAP, or manual data work (29 of 41).</div></div><div class="wstat"><div class="n">34%</div><div class="l">are tied to an active S/4HANA migration or SAP implementation, the moment feeds get re-plumbed (14 of 41).</div></div><div class="wstat"><div class="n">22%</div><div class="l">name a specific market-data or trading vendor whose feed has to reach SAP, and that is a floor (9 of 41).</div></div></div><p class="wstat-src">Source: Brisken Shadow Integration Report, N=41 US SAP-treasury job ads, read 2026-06-17. These are market-research figures, not an OnePilot performance metric.</p></div></section><section class="wband"><div class="inner"><div class="wlab">How it works</div><h2 class="wh2">From any source to governed SAP records</h2><p class="wlede">OnePilot Agents learn your systems and recommend each mapping; you approve it, and the feed runs governed end to end, SAP and non-SAP, both ways. Configured, not coded, so a new feed goes live in weeks rather than a multi-quarter build your team then owns.</p><div class="steps" style="grid-template-columns:repeat(4,1fr);"><div class="step"><div class="sn">1</div><div class="st">Ingest</div><div class="sd">Any source and format: Bloomberg, Refinitiv, 360T, OANDA, central banks, banks, files, email.</div></div><div class="step"><div class="sn">2</div><div class="st">Validate</div><div class="sd">Cleansing, mapping, calculations and anomaly detection, before anything reaches SAP.</div></div><div class="step"><div class="sn">3</div><div class="st">Govern</div><div class="sd">Audit trail, manage-by-exception, segregation of duties and four-eye on every record.</div></div><div class="step"><div class="sn">4</div><div class="st">Distribute</div><div class="sd">Straight into S/4HANA, TRM, Cash and Credit Management. No ABAP, no custom interface.</div></div></div></div></section><section class="wband"><div class="inner"><div class="wlab">Governed by design</div><div class="wcards"><div class="wcard"><span class="cs">Permission-bound agents</span><div class="ct">Agents act within access</div><div class="cd">An agent sees and acts only on what the user is allowed to. Access outside that boundary is not dimmed, it is absent, so an agent can never reach data or an action the person behind it could not.</div></div><div class="wcard"><span class="cs">Four-eye and segregation of duties</span><div class="ct">The agent prepares, a person releases</div><div class="cd">Approvals and separation of duties sit on the actions that need them. The agent prepares the work; a person releases it, so no payment or deal moves on the AI's say-so alone.</div></div><div class="wcard"><span class="cs">Full audit trail</span><div class="ct">Manage by exception</div><div class="cd">Every record is traceable, carrying where it came from, who approved it and when. You manage by exception, only the records that breach a rule surface for a person, and nothing moves outside the rules you set.</div></div></div></div></section><section class="wband alt"><div class="inner"><div class="wlab">How it connects</div><h2 class="wh2">Connects to what you already run</h2><div class="wchips"><span class="wchip">RFC & OData</span><span class="wchip">SFTP</span><span class="wchip">SOAP & REST</span><span class="wchip">AMQP</span><span class="wchip">Email</span><span class="wchip">Excel add-in</span><span class="wchip">XLSX / CSV / TXT</span><span class="wchip">Web scraping</span><span class="wchip">LLM & browser automation</span></div><p class="wlede" style="margin-top:22px;margin-bottom:0;">Push and pull, off-the-shelf, third-party-managed and low-maintenance. Sources on one side (Bloomberg, Refinitiv, 360T, OANDA, central banks, banks, files and email) and SAP on the other (S/4HANA, TRM, Cash and Credit Management), with non-SAP systems in the same governed perimeter. A new feed is set up on a managed product, so it goes live in weeks rather than a multi-quarter integration project your team has to build and then own.</p></div></section><section class="wband"><div class="inner"><div class="wlab">In production</div><div class="wcards"><div class="wcard"><span class="cs">Financial services</span><div class="ct">S/4HANA Public Cloud</div><div class="cd">A financial-services group already governs several data domains from one OnePilot deployment.</div></div><div class="wcard"><span class="cs">Agricultural</span><div class="ct">S/4HANA Private Cloud</div><div class="cd">Posts remittances into S/4HANA on a governed AI gate, a ChatGPT-powered deployment with the retype removed.</div></div><div class="wcard"><span class="cs">Chemicals</span><div class="ct">S/4HANA On-Prem</div><div class="cd">An AI funding-request process, a complex multi-integration with SAP, fully automated.</div></div></div></div></section><section class="wband"><div class="inner"><div class="wlab">Common questions</div><div class="wfaq"><details open><summary>Does OnePilot replace SAP?</summary><p>No. OnePilot orchestrates on top of SAP. The book of record stays in SAP, execution on the trading platform, and market data through the hub. It composes the apps and data your work needs on one surface, without moving the system of record.</p></details><details open><summary>Can we deploy AI agents in treasury without consuming our IT budget?</summary><p>Yes. OnePilot is configured, not coded, and runs as a managed product on top of your SAP landscape, so there is no ABAP build and nothing new for your IT team to own or maintain. A new feed or agent is set up on the product and goes live in weeks, which keeps the work off the IT backlog and the cost off the development budget.</p></details><details open><summary>Is AI automation in treasury safe?</summary><p>It is safe when the AI runs inside your controls rather than around them. Each OnePilot process works to rules you set and approve, with four-eye release, segregation of duties and a full audit trail on every record. You keep command of policy and exceptions; the AI handles the repetitive steps, and nothing moves outside the rules you define.</p></details><details open><summary>Can AI improve liquidity forecasting?</summary><p>Yes. A forecast is only as good as the data feeding it, and most of the delay is in collecting and cleaning cash, bank and exposure data by hand. OnePilot keeps that data current and governed in SAP, so the forecast runs on a clean, reconciled base. Treasury still owns the assumptions and the call; the AI removes the manual data work that slows the forecast down.</p></details><details open><summary>Can AI help the team focus the day on what matters?</summary><p>Yes. The repetitive work, ingesting feeds, validating, posting and reconciling, runs underneath by exception, so the team sees what needs a decision instead of working through every record. Their day shifts from re-keying and chasing data to judgment, review and the exceptions that actually need a person.</p></details></div></div></section><section class="wband alt"><div class="inner"><div class="wlab">Proof</div><p class="wlede" style="margin:0;">OnePilot is delivered by an SAP Co-Innovation Partner and PartnerEdge member, part of SAP Industry Cloud for Financial Services and Commodities, certified to ISO 27001 and SOC 1 Type II, with data partners including Bloomberg, Refinitiv, CME Group, 360T, Deutsche Boerse and OANDA. The Market Data Hub and Smart Trading are listed on the SAP Store.</p></div></section>
 <section class="wproof"><div class="inner"><div class="proof"><span class="pchip"><span class="sapbadge">SAP</span> Co-Innovation Partner</span><span class="pchip">SAP Store</span><span class="pchip">ISO 27001</span><span class="pchip">SOC 1 Type II</span><span class="pchip">Live with customers today</span></div></div></section>
 <section class="wcta-band"><div class="inner"><h2>Want the full picture?</h2><p>The one-pager is the summary. The full deck and the team go deeper.</p><div class="wcta" style="justify-content:center;"><a class="wbtn primary" href="/onepilot.pdf" download>Download the one-pager</a><a class="wbtn ghost" href="https://www.brisken.com">www.brisken.com</a></div></div></section>
 <footer class="wfoot"><b>Brisken</b>, an SAP Co-Innovation Partner &middot; <a href="https://www.brisken.com">www.brisken.com</a><br>Last updated: 2026-07-14</footer>

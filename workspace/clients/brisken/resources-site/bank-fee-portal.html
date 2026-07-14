@@ -148,10 +148,10 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
 .weyebrow{font-family:'Space Grotesk';font-size:13px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--ac);margin-bottom:14px;}
 .whero h1{font-family:'Space Grotesk';font-size:52px;line-height:1.03;letter-spacing:-1.2px;font-weight:700;color:#0f172a;margin:0 0 18px;}
 .whero h1 .ac{color:var(--ac);}
-.wpromise{font-size:20px;line-height:1.45;color:#475569;max-width:36ch;}
-.wrename{font-size:13.5px;color:#94a3b8;margin-top:12px;}
-.wpoints{list-style:none;margin:26px 0 0;padding:0;display:flex;flex-direction:column;gap:12px;}
-.wpoints li{position:relative;padding-left:26px;font-size:15px;line-height:1.5;color:#334155;}
+.wpromise{font-size:22px;line-height:1.5;color:#475569;max-width:40ch;}
+.wrename{font-size:14px;color:#94a3b8;margin-top:12px;}
+.wpoints{list-style:none;margin:28px 0 0;padding:0;display:flex;flex-direction:column;gap:14px;}
+.wpoints li{position:relative;padding-left:26px;font-size:16.5px;line-height:1.55;color:#334155;}
 .wpoints li::before{content:"";position:absolute;left:0;top:7px;width:9px;height:9px;background:var(--ac);border-radius:2px;transform:rotate(45deg);}
 .wcta{display:flex;flex-wrap:wrap;gap:12px;margin-top:32px;}
 .wbtn{display:inline-block;text-decoration:none;font-weight:600;font-size:14px;border-radius:99px;padding:12px 22px;transition:transform .15s ease,box-shadow .15s ease;}
@@ -166,19 +166,23 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
 .wband{border-bottom:1px solid #eef2f7;padding:58px 0;}
 .wband.alt{background:#ffffff;}
 .wlab{font-family:'Space Grotesk';font-size:12.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--ac);margin-bottom:10px;}
-.wh2{font-family:'Space Grotesk';font-size:27px;font-weight:700;color:#0f172a;letter-spacing:-.4px;margin-bottom:8px;}
-.wlede{font-size:16.5px;line-height:1.6;color:#475569;max-width:72ch;margin-bottom:26px;}
+.wh2{font-family:'Space Grotesk';font-size:28px;font-weight:700;color:#0f172a;letter-spacing:-.4px;margin-bottom:8px;}
+.wlede{font-size:17.5px;line-height:1.7;color:#475569;max-width:74ch;margin-bottom:26px;}
 .wband .steps{margin-top:6px;}
+.wband .steps .st{font-size:16.5px;}
+.wband .steps .sd{font-size:14.5px;line-height:1.6;}
 .wband .dark{margin-top:6px;}
+.wband .dark .ritem{font-size:15.5px;}
 .wcols2{display:grid;grid-template-columns:1fr 1fr;gap:44px;margin-top:6px;}
-.wcols2 .band-lab{font-family:'Space Grotesk';font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ac);margin-bottom:10px;}
-.wcols2 .p{font-size:15px;line-height:1.6;color:#475569;}
+.wcols2 .band-lab{font-family:'Space Grotesk';font-size:12.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ac);margin-bottom:10px;}
+.wcols2 .p{font-size:16.5px;line-height:1.65;color:#475569;}
+.wband .dots li{font-size:15.5px;line-height:1.6;}
 
 /* cards (capabilities / governance / proof) */
 .wcards{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:6px;}
-.wcard{background:#fff;border:1px solid #e6ebf2;border-radius:14px;padding:24px;border-top:3px solid var(--ac);box-shadow:0 1px 2px rgba(15,23,42,.04);}
-.wcard .ct{font-family:'Space Grotesk';font-size:16.5px;font-weight:600;color:#0f172a;margin-bottom:8px;}
-.wcard .cd{font-size:14px;line-height:1.55;color:#64748b;}
+.wcard{background:#fff;border:1px solid #e6ebf2;border-radius:14px;padding:26px;border-top:3px solid var(--ac);box-shadow:0 1px 2px rgba(15,23,42,.04);}
+.wcard .ct{font-family:'Space Grotesk';font-size:17.5px;font-weight:600;color:#0f172a;margin-bottom:9px;}
+.wcard .cd{font-size:15.5px;line-height:1.6;color:#64748b;}
 .wcard .cs{font-family:'Space Grotesk';font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ac);margin-bottom:12px;display:block;}
 
 /* faq */
@@ -186,23 +190,23 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
 .wfaq details{border-top:1px solid #e6ebf2;padding:18px 2px;}
 .wfaq details:last-child{border-bottom:1px solid #e6ebf2;}
 .wfaq summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:18px;
-  font-family:'Space Grotesk';font-weight:600;font-size:17px;color:#0f172a;}
+  font-family:'Space Grotesk';font-weight:600;font-size:18px;color:#0f172a;}
 .wfaq summary::-webkit-details-marker{display:none;}
 .wfaq summary::after{content:"+";color:var(--ac);font-size:24px;line-height:1;font-weight:700;flex:0 0 auto;transition:transform .18s ease;}
 .wfaq details[open] summary::after{transform:rotate(45deg);}
-.wfaq p{margin-top:12px;font-size:15.5px;line-height:1.65;color:#475569;max-width:88ch;}
+.wfaq p{margin-top:13px;font-size:16.5px;line-height:1.72;color:#475569;max-width:90ch;}
 
 /* works-with chips */
 .wchips{display:flex;flex-wrap:wrap;gap:12px;margin-top:6px;}
-.wchip{background:#fff;border:1px solid #e6ebf2;border-radius:10px;padding:11px 17px;font-size:14px;font-weight:600;
+.wchip{background:#fff;border:1px solid #e6ebf2;border-radius:10px;padding:12px 18px;font-size:15px;font-weight:600;
   color:#334155;box-shadow:0 1px 2px rgba(15,23,42,.04);display:flex;align-items:center;gap:9px;}
 .wchip img{height:19px;width:auto;display:block;}
 .wchip .arrow{color:#cbd5e1;font-weight:700;margin:0 2px;}
 
 /* accent callout */
 .wcallout{background:var(--glow);border-left:4px solid var(--ac);border-radius:0 12px 12px 0;padding:22px 26px;margin-top:6px;}
-.wcallout .ct{font-family:'Space Grotesk';font-size:19px;font-weight:700;color:#0f172a;letter-spacing:-.2px;margin-bottom:7px;}
-.wcallout p{font-size:15.5px;line-height:1.6;color:#475569;max-width:82ch;}
+.wcallout .ct{font-family:'Space Grotesk';font-size:20px;font-weight:700;color:#0f172a;letter-spacing:-.2px;margin-bottom:8px;}
+.wcallout p{font-size:17px;line-height:1.65;color:#475569;max-width:84ch;}
 
 /* horizontal process flow (wraps) */
 .wflow{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:6px;}
@@ -211,10 +215,30 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
 .wflow .farrow{color:#cbd5e1;font-weight:700;}
 
 /* two-column dots (delivers) */
-.wdots2{display:grid;grid-template-columns:1fr 1fr;gap:14px 40px;margin-top:6px;}
-.wdots2 .d{position:relative;padding-left:24px;font-size:15px;line-height:1.5;color:#334155;}
+.wdots2{display:grid;grid-template-columns:1fr 1fr;gap:16px 44px;margin-top:6px;}
+.wdots2 .d{position:relative;padding-left:24px;font-size:16.5px;line-height:1.6;color:#334155;}
 .wdots2 .d::before{content:"";position:absolute;left:0;top:7px;width:8px;height:8px;background:var(--ac);border-radius:2px;transform:rotate(45deg);}
 @media(max-width:900px){.wdots2{grid-template-columns:1fr;}}
+
+/* stat tiles (market-research benchmark) */
+.wstats{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:6px;}
+.wstat{background:#fff;border:1px solid #e6ebf2;border-radius:14px;padding:26px;box-shadow:0 1px 2px rgba(15,23,42,.04);border-top:3px solid var(--ac);}
+.wstat .n{font-family:'Space Grotesk';font-size:46px;font-weight:700;color:var(--ac);letter-spacing:-1.5px;line-height:1;}
+.wstat .l{font-size:15px;line-height:1.55;color:#475569;margin-top:13px;}
+.wstat-src{font-size:13.5px;color:#94a3b8;margin-top:18px;line-height:1.5;}
+@media(max-width:900px){.wstats{grid-template-columns:1fr;}}
+
+/* comparison table */
+.wtable-wrap{overflow-x:auto;margin-top:6px;border:1px solid #e6ebf2;border-radius:14px;}
+.wtable{width:100%;border-collapse:collapse;font-size:15px;min-width:660px;}
+.wtable th,.wtable td{text-align:left;padding:15px 18px;border-bottom:1px solid #eef2f7;vertical-align:top;line-height:1.5;}
+.wtable tr:last-child th,.wtable tr:last-child td{border-bottom:none;}
+.wtable thead th{background:#f6f9fc;font-family:'Space Grotesk';font-weight:600;font-size:14px;color:#0f172a;white-space:nowrap;}
+.wtable thead th:first-child{color:#64748b;}
+.wtable tbody th{font-weight:600;color:#0f172a;background:#fcfdfe;font-size:14.5px;}
+.wtable td{color:#475569;}
+.wtable td.hl{color:#0f172a;font-weight:500;background:var(--glow);}
+.wtable-note{font-size:14px;color:#94a3b8;margin-top:14px;line-height:1.55;}
 
 /* proof strip + closing CTA + footer */
 .wproof{padding:44px 0;text-align:center;}
@@ -249,11 +273,11 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
     <h1>Bank <span class="ac">Fee Portal</span></h1>
     <p class="wpromise">Check every bank charge against what you actually agreed, line by line.</p>
     
-    <ul class="wpoints"><li>Loads every bank fee statement in any format: CAMT.086, TWIST BSB and proprietary.</li><li>Matches each charge against your negotiated agreement and flags every variance.</li><li>A line-level audit trail behind every fee, in one place, not scattered across statements.</li></ul>
+    <ul class="wpoints"><li>Loads every bank fee statement in any format: CAMT.086, TWIST BSB and proprietary.</li><li>Matches each charge against your negotiated agreement and flags every variance.</li><li>A line-level audit trail behind every fee, in one place, not scattered across statements.</li><li>Sits in front of SAP's own bank-fee analysis, so every bank reaches the review.</li></ul>
     <div class="wcta"><a class="wbtn primary" href="/bank-fee-portal.pdf" download>Download the one-pager</a><a class="wbtn ghost" href="/">All resources</a></div>
   </div>
   <div class="wvisual"><div class="wvlab">Charged vs agreed</div><div class="chart" style="height:60mm;"><div class="cbar"><div class="col" style="height:40mm;background:linear-gradient(180deg,#cbd5e1,#94a3b8);"><div class="over"></div></div><div class="clab"><b>Charged</b>what the bank billed</div></div><div class="cbar"><div class="col" style="height:24mm;background:var(--ac);"></div><div class="clab"><b>Agreed</b>what you negotiated</div></div></div><div class="ledger" style="margin-top:16px;"><div class="lhead">Line by line</div><div class="lrow"><span>Wire transfer fee</span><span class="ltag ok">matches</span></div><div class="lrow"><span>FX conversion margin</span><span class="ltag flag">flagged</span></div><div class="lrow"><span>Custody fee</span><span class="ltag ok">matches</span></div><div class="lrow"><span>Cash management</span><span class="ltag ok">matches</span></div><div class="lrow"><span>Payment processing</span><span class="ltag flag">flagged</span></div></div></div>
-</div></section><section class="wband alt"><div class="inner"><div class="wlab">How it works</div><h2 class="wh2">Every statement in, every variance flagged</h2><p class="wlede">Fee leakage is rarely a single dramatic overcharge; it is the slow drift between a contracted rate and what the bank actually applies, on the statements nobody reviews because they came in the wrong format.</p><div class="steps" style="grid-template-columns:repeat(3,1fr);"><div class="step"><div class="sn">1</div><div class="st">Load</div><div class="sd">Every bank statement and fee line, from every account, in any format.</div></div><div class="step"><div class="sn">2</div><div class="st">Match</div><div class="sd">Each charge against your negotiated agreement.</div></div><div class="step"><div class="sn">3</div><div class="st">Flag</div><div class="sd">Every variance, with a line-level trail behind it.</div></div></div></div></section><section class="wband"><div class="inner"><div class="wlab">What it recovers</div><div class="dark"><h3>What it <span>recovers</span></h3><div class="rlist"><div class="ritem"><span class="rmk">+</span>Overcharges that would otherwise be paid without a second look</div><div class="ritem"><span class="rmk">+</span>The audit trail behind every fee, in one place, not scattered across statements</div></div></div></div></section><section class="wband alt"><div class="inner"><div class="wlab">What it delivers</div><div class="wdots2"><div class="d">Every fee line enriched for cost analytics and surfaced on a dashboard.</div><div class="d">Each charge matched against the negotiated agreement, with a line-level trail.</div><div class="d">Every variance flagged, so overcharges are seen before they are paid.</div><div class="d">One place for every account's fees, in every format, not scattered across statements.</div></div></div></section><section class="wband"><div class="inner"><div class="wlab">Why format matters</div><div class="wcallout"><div class="ct">Format coverage is overcharge coverage.</div><p>You cannot audit a fee statement you never managed to load. The portal sits in front and accepts every format, so no bank is left out of the review.</p></div></div></section><section class="wband alt"><div class="inner"><div class="wlab">Works with</div><h2 class="wh2">Any statement format in, one analysis out</h2><p class="wlede">SAP's native bank-fee analysis expects clean CAMT.086 in, but banks still send proprietary and TWIST BSB formats. A format-agnostic portal normalizes them all so the fee review is not gated on format.</p><div class="wchips"><span class="wchip">CAMT.086 (ISO 20022)</span><span class="wchip">TWIST BSB</span><span class="wchip">Proprietary formats</span><span class="arrow">&rarr;</span><span class="wchip">SAP bank-fee analysis</span><span class="wchip">Any Bank Fee Analyzer</span></div></div></section><section class="wband"><div class="inner"><div class="wlab">Common questions</div><div class="wfaq"><details><summary>How do I automate CAMT.086 bank fee statement analysis in SAP?</summary><p>CAMT.086 is the ISO 20022 bank-fee-statement format that replaces TWIST BSB. SAP added native bank-fee analysis in S/4HANA 1809 via a Fiori app, but it expects clean CAMT.086 in; banks still send proprietary and TWIST formats. A bank-fee portal ingests any format, enriches for analytics, and distributes to the analyzer, so the fee review is not gated on format.</p></details><details><summary>How do I detect bank overcharges or fee leakage with SAP treasury?</summary><p>Bank fee statements are rarely audited line by line, so contracted rates and applied charges drift apart unnoticed. Loading the statements as structured data lets the system compare charged against expected fees and flag discrepancies. The portal's job is getting every statement, in any format, into that analysis so the comparison can run at all.</p></details><details><summary>How do I process TWIST BSB or proprietary bank fee statements into SAP?</summary><p>A format-agnostic portal parses TWIST BSB and proprietary files, normalizes them to the structure SAP's analyzer reads, and delivers them in, so no bank is left out of the review.</p></details></div></div></section>
+</div></section><section class="wband"><div class="inner"><div class="wlab">The problem</div><h2 class="wh2">Getting every bank's statement into the fee review</h2><p class="wlede">Bank fee statements arrive in three shapes: the older TWIST BSB format, the ISO 20022 CAMT.086 that is replacing it, and each bank's own proprietary layout. SAP added native bank-fee analysis in S/4HANA 1809, but it expects clean CAMT.086 in. The statements that arrive in any other format never reach the analyzer, so the fees on them never get reviewed.</p><p class="wlede" style="margin-bottom:0;">Fee leakage is rarely a single dramatic overcharge; it is the slow drift between a contracted rate and what the bank actually applies, on exactly those statements nobody reviews. The Bank Fee Portal sits in front and accepts every format, normalizes it, and feeds the analysis, so the fee review covers every bank, not just the ones that happen to send clean files.</p></div></section><section class="wband alt"><div class="inner"><div class="wlab">How it works</div><h2 class="wh2">Every statement in, every variance flagged</h2><p class="wlede">The portal ingests the statements, enriches each fee line for cost analytics, and feeds SAP's analysis, so the comparison of charged against agreed can run on every account.</p><div class="steps" style="grid-template-columns:repeat(3,1fr);"><div class="step"><div class="sn">1</div><div class="st">Load</div><div class="sd">Every bank statement and fee line, from every account, in any format: CAMT.086, TWIST BSB or proprietary.</div></div><div class="step"><div class="sn">2</div><div class="st">Match</div><div class="sd">Each charge is compared against the fee you negotiated in the agreement.</div></div><div class="step"><div class="sn">3</div><div class="st">Flag</div><div class="sd">Every variance is surfaced, with a line-level trail behind it.</div></div></div></div></section><section class="wband"><div class="inner"><div class="wlab">How it compares</div><h2 class="wh2">The portal versus the two usual paths</h2><div class="wtable-wrap"><table class="wtable"><thead><tr><th></th><th>Bank Fee Portal in front of SAP</th><th>SAP-native analysis alone</th><th>Manual / spreadsheet</th></tr></thead><tbody><tr><th>Input formats accepted</th><td class="hl">TWIST BSB, CAMT.086, proprietary, normalized in</td><td>Clean CAMT.086</td><td>Whatever a person can open</td></tr><tr><th>Off-format statements</th><td class="hl">Parsed and delivered into the analysis</td><td>Stall outside the app</td><td>Re-keyed by hand, if at all</td></tr><tr><th>Overcharge detection</th><td class="hl">Every bank reaches the comparison</td><td>Only banks already on CAMT.086</td><td>Spot-checks, not line by line</td></tr><tr><th>Effort per cycle</th><td class="hl">Ingest is configured once, runs on its own</td><td>Manual conversion for off-format banks</td><td>Hours of clerical work each run</td></tr><tr><th>Audit trail</th><td class="hl">Logged ingest, exception alerts</td><td>Within the app for loaded data</td><td>None beyond the spreadsheet</td></tr></tbody></table></div><p class="wtable-note">The portal sits in front of SAP's own bank-fee analysis; it does not replace it. SAP's native analysis is capable once the data is in; the portal's job is getting every bank's statement, in any format, into it.</p></div></section><section class="wband alt"><div class="inner"><div class="wlab">What it recovers</div><div class="dark"><h3>What it <span>recovers</span></h3><div class="rlist"><div class="ritem"><span class="rmk">+</span>Overcharges that would otherwise be paid without a second look</div><div class="ritem"><span class="rmk">+</span>The audit trail behind every fee, in one place, not scattered across statements</div></div></div></div></section><section class="wband"><div class="inner"><div class="wlab">What it delivers</div><div class="wdots2"><div class="d">Every fee line enriched for cost analytics and surfaced on a dashboard.</div><div class="d">Each charge matched against the negotiated agreement, with a line-level trail.</div><div class="d">Every variance flagged, so overcharges are seen before they are paid.</div><div class="d">One place for every account's fees, in every format, not scattered across statements.</div></div></div></section><section class="wband alt"><div class="inner"><div class="wlab">Why format matters</div><div class="wcallout"><div class="ct">Format coverage is overcharge coverage.</div><p>You cannot audit a fee statement you never managed to load. The bank that sends a proprietary file is the bank whose fees go unchecked, so getting that statement into the analysis is what makes the discrepancy visible. The portal sits in front and accepts every format, so no bank is left out of the review.</p></div></div></section><section class="wband"><div class="inner"><div class="wlab">Built on the standard</div><h2 class="wh2">Where SAP's native analysis stops</h2><p class="wlede" style="margin-bottom:0;">CAMT.086 is the ISO 20022 bank-fee-statement format that replaces the older TWIST BSB. SAP added native bank-fee analysis in S/4HANA release 1809, delivered as a Fiori app that compares charged fees against expected ones, but it reads clean CAMT.086 only. Banks have not standardized on it; many still send TWIST BSB or a proprietary layout, and those are exactly the statements the portal exists to normalize and bring in.</p></div></section><section class="wband alt"><div class="inner"><div class="wlab">Works with</div><h2 class="wh2">Any statement format in, one analysis out</h2><div class="wchips"><span class="wchip">CAMT.086 (ISO 20022)</span><span class="wchip">TWIST BSB</span><span class="wchip">Proprietary formats</span><span class="arrow">&rarr;</span><span class="wchip">SAP bank-fee analysis</span><span class="wchip">Any Bank Fee Analyzer</span></div></div></section><section class="wband"><div class="inner"><div class="wlab">Common questions</div><div class="wfaq"><details open><summary>How do I automate CAMT.086 bank fee statement analysis in SAP?</summary><p>CAMT.086 is the ISO 20022 bank-fee-statement format that replaces TWIST BSB. SAP added native bank-fee analysis in S/4HANA 1809 via a Fiori app, but it expects clean CAMT.086 in; banks still send proprietary and TWIST formats. A bank-fee portal ingests any format, enriches for analytics, and distributes to the analyzer, so the fee review is not gated on format.</p></details><details open><summary>How do I detect bank overcharges or fee leakage with SAP treasury?</summary><p>Bank fee statements are rarely audited line by line, so contracted rates and applied charges drift apart unnoticed. Loading the statements as structured data lets the system compare charged against expected fees and flag discrepancies. The portal's job is getting every statement, in any format, into that analysis so the comparison can run at all.</p></details><details open><summary>How do I process TWIST BSB or proprietary bank fee statements into SAP?</summary><p>Banks issue fee statements in TWIST BSB, the older industry format, in CAMT.086, and in their own proprietary layouts. SAP's native analysis expects CAMT.086, so the off-format statements stall. A format-agnostic portal parses TWIST BSB and proprietary files, normalizes them to the structure SAP's analyzer reads, and delivers them in, so no bank is left out of the review.</p></details></div></div></section>
 <section class="wproof"><div class="inner"><div class="proof"><span class="pchip"><span class="sapbadge">SAP</span> Co-Innovation Partner</span><span class="pchip">SAP Store</span><span class="pchip">ISO 27001</span><span class="pchip">SOC 1 Type II</span><span class="pchip">Live with customers today</span></div></div></section>
 <section class="wcta-band"><div class="inner"><h2>Want the full picture?</h2><p>The one-pager is the summary. The full deck and the team go deeper.</p><div class="wcta" style="justify-content:center;"><a class="wbtn primary" href="/bank-fee-portal.pdf" download>Download the one-pager</a><a class="wbtn ghost" href="https://www.brisken.com">www.brisken.com</a></div></div></section>
 <footer class="wfoot"><b>Brisken</b>, an SAP Co-Innovation Partner &middot; <a href="https://www.brisken.com">www.brisken.com</a><br>Last updated: 2026-07-14</footer>

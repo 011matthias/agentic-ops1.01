@@ -148,10 +148,10 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
 .weyebrow{font-family:'Space Grotesk';font-size:13px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--ac);margin-bottom:14px;}
 .whero h1{font-family:'Space Grotesk';font-size:52px;line-height:1.03;letter-spacing:-1.2px;font-weight:700;color:#0f172a;margin:0 0 18px;}
 .whero h1 .ac{color:var(--ac);}
-.wpromise{font-size:20px;line-height:1.45;color:#475569;max-width:36ch;}
-.wrename{font-size:13.5px;color:#94a3b8;margin-top:12px;}
-.wpoints{list-style:none;margin:26px 0 0;padding:0;display:flex;flex-direction:column;gap:12px;}
-.wpoints li{position:relative;padding-left:26px;font-size:15px;line-height:1.5;color:#334155;}
+.wpromise{font-size:22px;line-height:1.5;color:#475569;max-width:40ch;}
+.wrename{font-size:14px;color:#94a3b8;margin-top:12px;}
+.wpoints{list-style:none;margin:28px 0 0;padding:0;display:flex;flex-direction:column;gap:14px;}
+.wpoints li{position:relative;padding-left:26px;font-size:16.5px;line-height:1.55;color:#334155;}
 .wpoints li::before{content:"";position:absolute;left:0;top:7px;width:9px;height:9px;background:var(--ac);border-radius:2px;transform:rotate(45deg);}
 .wcta{display:flex;flex-wrap:wrap;gap:12px;margin-top:32px;}
 .wbtn{display:inline-block;text-decoration:none;font-weight:600;font-size:14px;border-radius:99px;padding:12px 22px;transition:transform .15s ease,box-shadow .15s ease;}
@@ -166,19 +166,23 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
 .wband{border-bottom:1px solid #eef2f7;padding:58px 0;}
 .wband.alt{background:#ffffff;}
 .wlab{font-family:'Space Grotesk';font-size:12.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--ac);margin-bottom:10px;}
-.wh2{font-family:'Space Grotesk';font-size:27px;font-weight:700;color:#0f172a;letter-spacing:-.4px;margin-bottom:8px;}
-.wlede{font-size:16.5px;line-height:1.6;color:#475569;max-width:72ch;margin-bottom:26px;}
+.wh2{font-family:'Space Grotesk';font-size:28px;font-weight:700;color:#0f172a;letter-spacing:-.4px;margin-bottom:8px;}
+.wlede{font-size:17.5px;line-height:1.7;color:#475569;max-width:74ch;margin-bottom:26px;}
 .wband .steps{margin-top:6px;}
+.wband .steps .st{font-size:16.5px;}
+.wband .steps .sd{font-size:14.5px;line-height:1.6;}
 .wband .dark{margin-top:6px;}
+.wband .dark .ritem{font-size:15.5px;}
 .wcols2{display:grid;grid-template-columns:1fr 1fr;gap:44px;margin-top:6px;}
-.wcols2 .band-lab{font-family:'Space Grotesk';font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ac);margin-bottom:10px;}
-.wcols2 .p{font-size:15px;line-height:1.6;color:#475569;}
+.wcols2 .band-lab{font-family:'Space Grotesk';font-size:12.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ac);margin-bottom:10px;}
+.wcols2 .p{font-size:16.5px;line-height:1.65;color:#475569;}
+.wband .dots li{font-size:15.5px;line-height:1.6;}
 
 /* cards (capabilities / governance / proof) */
 .wcards{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:6px;}
-.wcard{background:#fff;border:1px solid #e6ebf2;border-radius:14px;padding:24px;border-top:3px solid var(--ac);box-shadow:0 1px 2px rgba(15,23,42,.04);}
-.wcard .ct{font-family:'Space Grotesk';font-size:16.5px;font-weight:600;color:#0f172a;margin-bottom:8px;}
-.wcard .cd{font-size:14px;line-height:1.55;color:#64748b;}
+.wcard{background:#fff;border:1px solid #e6ebf2;border-radius:14px;padding:26px;border-top:3px solid var(--ac);box-shadow:0 1px 2px rgba(15,23,42,.04);}
+.wcard .ct{font-family:'Space Grotesk';font-size:17.5px;font-weight:600;color:#0f172a;margin-bottom:9px;}
+.wcard .cd{font-size:15.5px;line-height:1.6;color:#64748b;}
 .wcard .cs{font-family:'Space Grotesk';font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ac);margin-bottom:12px;display:block;}
 
 /* faq */
@@ -186,23 +190,23 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
 .wfaq details{border-top:1px solid #e6ebf2;padding:18px 2px;}
 .wfaq details:last-child{border-bottom:1px solid #e6ebf2;}
 .wfaq summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:18px;
-  font-family:'Space Grotesk';font-weight:600;font-size:17px;color:#0f172a;}
+  font-family:'Space Grotesk';font-weight:600;font-size:18px;color:#0f172a;}
 .wfaq summary::-webkit-details-marker{display:none;}
 .wfaq summary::after{content:"+";color:var(--ac);font-size:24px;line-height:1;font-weight:700;flex:0 0 auto;transition:transform .18s ease;}
 .wfaq details[open] summary::after{transform:rotate(45deg);}
-.wfaq p{margin-top:12px;font-size:15.5px;line-height:1.65;color:#475569;max-width:88ch;}
+.wfaq p{margin-top:13px;font-size:16.5px;line-height:1.72;color:#475569;max-width:90ch;}
 
 /* works-with chips */
 .wchips{display:flex;flex-wrap:wrap;gap:12px;margin-top:6px;}
-.wchip{background:#fff;border:1px solid #e6ebf2;border-radius:10px;padding:11px 17px;font-size:14px;font-weight:600;
+.wchip{background:#fff;border:1px solid #e6ebf2;border-radius:10px;padding:12px 18px;font-size:15px;font-weight:600;
   color:#334155;box-shadow:0 1px 2px rgba(15,23,42,.04);display:flex;align-items:center;gap:9px;}
 .wchip img{height:19px;width:auto;display:block;}
 .wchip .arrow{color:#cbd5e1;font-weight:700;margin:0 2px;}
 
 /* accent callout */
 .wcallout{background:var(--glow);border-left:4px solid var(--ac);border-radius:0 12px 12px 0;padding:22px 26px;margin-top:6px;}
-.wcallout .ct{font-family:'Space Grotesk';font-size:19px;font-weight:700;color:#0f172a;letter-spacing:-.2px;margin-bottom:7px;}
-.wcallout p{font-size:15.5px;line-height:1.6;color:#475569;max-width:82ch;}
+.wcallout .ct{font-family:'Space Grotesk';font-size:20px;font-weight:700;color:#0f172a;letter-spacing:-.2px;margin-bottom:8px;}
+.wcallout p{font-size:17px;line-height:1.65;color:#475569;max-width:84ch;}
 
 /* horizontal process flow (wraps) */
 .wflow{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:6px;}
@@ -211,10 +215,30 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
 .wflow .farrow{color:#cbd5e1;font-weight:700;}
 
 /* two-column dots (delivers) */
-.wdots2{display:grid;grid-template-columns:1fr 1fr;gap:14px 40px;margin-top:6px;}
-.wdots2 .d{position:relative;padding-left:24px;font-size:15px;line-height:1.5;color:#334155;}
+.wdots2{display:grid;grid-template-columns:1fr 1fr;gap:16px 44px;margin-top:6px;}
+.wdots2 .d{position:relative;padding-left:24px;font-size:16.5px;line-height:1.6;color:#334155;}
 .wdots2 .d::before{content:"";position:absolute;left:0;top:7px;width:8px;height:8px;background:var(--ac);border-radius:2px;transform:rotate(45deg);}
 @media(max-width:900px){.wdots2{grid-template-columns:1fr;}}
+
+/* stat tiles (market-research benchmark) */
+.wstats{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:6px;}
+.wstat{background:#fff;border:1px solid #e6ebf2;border-radius:14px;padding:26px;box-shadow:0 1px 2px rgba(15,23,42,.04);border-top:3px solid var(--ac);}
+.wstat .n{font-family:'Space Grotesk';font-size:46px;font-weight:700;color:var(--ac);letter-spacing:-1.5px;line-height:1;}
+.wstat .l{font-size:15px;line-height:1.55;color:#475569;margin-top:13px;}
+.wstat-src{font-size:13.5px;color:#94a3b8;margin-top:18px;line-height:1.5;}
+@media(max-width:900px){.wstats{grid-template-columns:1fr;}}
+
+/* comparison table */
+.wtable-wrap{overflow-x:auto;margin-top:6px;border:1px solid #e6ebf2;border-radius:14px;}
+.wtable{width:100%;border-collapse:collapse;font-size:15px;min-width:660px;}
+.wtable th,.wtable td{text-align:left;padding:15px 18px;border-bottom:1px solid #eef2f7;vertical-align:top;line-height:1.5;}
+.wtable tr:last-child th,.wtable tr:last-child td{border-bottom:none;}
+.wtable thead th{background:#f6f9fc;font-family:'Space Grotesk';font-weight:600;font-size:14px;color:#0f172a;white-space:nowrap;}
+.wtable thead th:first-child{color:#64748b;}
+.wtable tbody th{font-weight:600;color:#0f172a;background:#fcfdfe;font-size:14.5px;}
+.wtable td{color:#475569;}
+.wtable td.hl{color:#0f172a;font-weight:500;background:var(--glow);}
+.wtable-note{font-size:14px;color:#94a3b8;margin-top:14px;line-height:1.55;}
 
 /* proof strip + closing CTA + footer */
 .wproof{padding:44px 0;text-align:center;}
@@ -253,7 +277,7 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
     <div class="wcta"><a class="wbtn primary" href="/treasurycentral.pdf" download>Download the one-pager</a><a class="wbtn ghost" href="/">All resources</a></div>
   </div>
   <div class="wvisual"><div class="wvlab">One cockpit &middot; six domains</div><div class="radial"><svg viewBox="0 0 150 74" preserveAspectRatio="none" fill="none"><line x1="75.0" y1="37.0" x2="75.0" y2="9.0" stroke="var(--ac)" stroke-width="0.5" stroke-opacity="0.35"/><line x1="75.0" y1="37.0" x2="123.5" y2="23.0" stroke="var(--ac)" stroke-width="0.5" stroke-opacity="0.35"/><line x1="75.0" y1="37.0" x2="123.5" y2="51.0" stroke="var(--ac)" stroke-width="0.5" stroke-opacity="0.35"/><line x1="75.0" y1="37.0" x2="75.0" y2="65.0" stroke="var(--ac)" stroke-width="0.5" stroke-opacity="0.35"/><line x1="75.0" y1="37.0" x2="26.5" y2="51.0" stroke="var(--ac)" stroke-width="0.5" stroke-opacity="0.35"/><line x1="75.0" y1="37.0" x2="26.5" y2="23.0" stroke="var(--ac)" stroke-width="0.5" stroke-opacity="0.35"/></svg><div class="rad-core"><div class="c1">Treasury<span class="ac">Central</span></div><div class="c2">the cockpit</div></div><div class="rad-node" style="left:50.0%;top:12.2%;">Cash</div><div class="rad-node" style="left:82.3%;top:31.1%;">Investments</div><div class="rad-node" style="left:82.3%;top:68.9%;">Debt</div><div class="rad-node" style="left:50.0%;top:87.8%;">FX</div><div class="rad-node" style="left:17.7%;top:68.9%;">Market Data</div><div class="rad-node" style="left:17.7%;top:31.1%;">Governance</div></div></div>
-</div></section><section class="wband alt"><div class="inner"><div class="wlab">What it is</div><h2 class="wh2">The treasurer's day on one surface</h2><p class="wlede" style="margin-bottom:0;">Most SAP finance teams run several brittle, hand-built feeds to move market data, trades, bank files and remittances in and out of SAP. They break when a field changes or the person who built them leaves. TreasuryCentral takes them off your team: the cockpit is what you see; OnePilot is the layer that moves the data in and out of SAP, governed end to end. The treasurer stays in command.</p></div></section><section class="wband"><div class="inner"><div class="wlab">What it takes off your team</div><h2 class="wh2">The brittle feeds it replaces</h2><p class="wlede">TreasuryCentral is OnePilot scoped to the treasurer. The apps that run underneath take the hand-built feeds off your team, each one governed end to end.</p><div class="wdots2"><div class="d">Market data: rates, curves and prices from every provider, governed into SAP.</div><div class="d">Trades: captured at the venue and booked in SAP TRM, straight through.</div><div class="d">Bank files: fee statements in any format, matched against the agreement.</div><div class="d">Remittances: unstructured advice read by AI and posted to S/4HANA.</div></div></div></section><section class="wband alt"><div class="inner"><div class="wlab">What you get</div><div class="wcards"><div class="wcard"><span class="cs">One view of the money</span><div class="ct">Cash, investments and debt</div><div class="cd">Across entities, current and reconciled to SAP, not stitched from spreadsheets.</div></div><div class="wcard"><span class="cs">Governed market data</span><div class="ct">FX and rates you can trust</div><div class="cd">Rates, curves and exposures from your providers, validated before they reach a decision.</div></div><div class="wcard"><span class="cs">Control built in</span><div class="ct">Governed by design</div><div class="cd">Audit trail, manage-by-exception, four-eye and segregation of duties on every record.</div></div></div></div></section><section class="wband"><div class="inner"><div class="wlab">Common questions</div><div class="wfaq"><details><summary>What is TreasuryCentral?</summary><p>TreasuryCentral is the treasury edition of OnePilot. It puts the treasurer's whole day on one surface: cash, FX, market data, trades, bank files and remittances, governed end to end, on your SAP data.</p></details><details><summary>What runs underneath TreasuryCentral?</summary><p>The treasury apps run on OnePilot, the governed AI layer that moves data in and out of SAP. TreasuryCentral is OnePilot scoped to the treasurer, so market data, trades, bank files and remittances all flow through one governed layer, on your SAP data.</p></details><details><summary>Does it need a separate data store?</summary><p>No. It works on the SAP data you already trust, so there is no separate store to reconcile. Every move is logged, and every action stays inside your controls.</p></details></div></div></section>
+</div></section><section class="wband"><div class="inner"><div class="wlab">The problem</div><h2 class="wh2">The treasurer's day on one surface</h2><p class="wlede">Most SAP finance teams run several brittle, hand-built feeds to move market data, trades, bank files and remittances in and out of SAP. They break when a field changes or the person who built them leaves: no audit trail, no owner, no monitoring. Between them, the treasurer's day goes to moving data between screens instead of using it.</p><p class="wlede" style="margin-bottom:0;">TreasuryCentral is OnePilot scoped to the treasurer: cash, investments, debt, FX, market data and governance on one screen, on your SAP data. The cockpit is what you see; OnePilot is the layer that moves the data in and out of SAP, governed end to end. It takes the brittle feeds off your team, and the treasurer stays in command.</p></div></section><section class="wband alt"><div class="inner"><div class="wlab">What you get</div><div class="wcards"><div class="wcard"><span class="cs">One view of the money</span><div class="ct">Cash, investments and debt</div><div class="cd">Cash positions roll up from every bank account and entity, reconciled to the statements already in SAP, so the group number is current instead of a Monday spreadsheet pull. Investments, debt and intercompany loans sit on the same screen with their maturities and interest, and every figure links back to the SAP record it came from.</div></div><div class="wcard"><span class="cs">FX and market data, governed</span><div class="ct">Numbers you can trace</div><div class="cd">Spot and forward rates, yield curves and prices arrive from Bloomberg, Refinitiv, 360T and central-bank feeds, normalized once and checked for gaps and outliers before anything posts. FX exposure by currency and entity updates as positions move, with the source and the validation recorded against each value, so a hedge decision rests on numbers you can trace.</div></div><div class="wcard"><span class="cs">Control built in</span><div class="ct">Governed by design</div><div class="cd">Every value carries where it came from, who approved it and when, so an audit follows the trail without a reconstruction project. Limits and tolerances are set once; only the records that breach them surface for a person, and a second approver signs off before a payment or a deal is released.</div></div></div></div></section><section class="wband"><div class="inner"><div class="wlab">What it takes off your team</div><h2 class="wh2">The brittle feeds it replaces</h2><p class="wlede">The apps that run underneath TreasuryCentral each take one hand-built feed off your team, governed end to end, so the cockpit shows a number you can act on rather than one you have to assemble.</p><div class="wdots2"><div class="d">Market data: rates, curves and prices from every provider, governed into SAP.</div><div class="d">Trades: captured at the venue and booked in SAP TRM, straight through.</div><div class="d">Bank files: fee statements in any format, matched against the agreement.</div><div class="d">Remittances: unstructured advice read by AI and posted to S/4HANA.</div></div></div></section><section class="wband alt"><div class="inner"><div class="wlab">Common questions</div><div class="wfaq"><details open><summary>What is TreasuryCentral?</summary><p>TreasuryCentral is the treasury edition of OnePilot. It puts the treasurer's whole day on one surface: cash, FX, market data, trades, bank files and remittances, governed end to end, on your SAP data.</p></details><details open><summary>What runs underneath TreasuryCentral?</summary><p>The treasury apps run on OnePilot, the governed AI layer that moves data in and out of SAP. TreasuryCentral is OnePilot scoped to the treasurer, so market data, trades, bank files and remittances all flow through one governed layer, on your SAP data.</p></details><details open><summary>Does it need a separate data store?</summary><p>No. It works on the SAP data you already trust, so there is no separate store to reconcile. Every move is logged, and every action stays inside your controls.</p></details></div></div></section>
 <section class="wproof"><div class="inner"><div class="proof"><span class="pchip"><span class="sapbadge">SAP</span> Co-Innovation Partner</span><span class="pchip">SAP Store</span><span class="pchip">ISO 27001</span><span class="pchip">SOC 1 Type II</span><span class="pchip">Live with customers today</span></div></div></section>
 <section class="wcta-band"><div class="inner"><h2>Want the full picture?</h2><p>The one-pager is the summary. The full deck and the team go deeper.</p><div class="wcta" style="justify-content:center;"><a class="wbtn primary" href="/treasurycentral.pdf" download>Download the one-pager</a><a class="wbtn ghost" href="https://www.brisken.com">www.brisken.com</a></div></div></section>
 <footer class="wfoot"><b>Brisken</b>, an SAP Co-Innovation Partner &middot; <a href="https://www.brisken.com">www.brisken.com</a><br>Last updated: 2026-07-14</footer>
