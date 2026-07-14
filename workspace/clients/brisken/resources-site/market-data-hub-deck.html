@@ -5,15 +5,16 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
-html,body{height:100%;background:#eef2f7;font-family:'IBM Plex Sans',sans-serif;color:#0f172a;}
-.topbar{position:sticky;top:0;z-index:20;display:flex;justify-content:space-between;align-items:center;
-  padding:14px 22px;background:#fff;border-bottom:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(15,23,42,.05);}
+html,body{height:100%;}
+body{height:100vh;margin:0;display:flex;flex-direction:column;background:#eef2f7;font-family:'IBM Plex Sans',sans-serif;color:#0f172a;overflow:hidden;}
+.topbar{flex:0 0 auto;display:flex;justify-content:space-between;align-items:center;
+  padding:12px 22px;background:#fff;border-bottom:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(15,23,42,.06);}
 .topbar .name{font-family:'Space Grotesk';font-weight:700;font-size:15px;color:#0f172a;}
 .topbar a{text-decoration:none;font-size:14px;font-weight:600;}
 .tb-back{color:#475569;}
 .tb-right{display:flex;align-items:center;gap:16px;}
 .tb-dl{background:#0891b2;color:#fff;padding:8px 18px;border-radius:99px;}
-.viewer{width:100%;height:calc(100vh - 59px);border:0;display:block;background:#eef2f7;}
+.viewer{flex:1 1 auto;width:100%;border:0;display:block;background:#eef2f7;}
 .fallback{display:none;}
 @media(max-width:620px){
   .viewer{display:none;}

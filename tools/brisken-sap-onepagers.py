@@ -432,20 +432,24 @@ def body_onepilot():
 # each one-pager is also served as a native page on resources.brisken.com, the
 # A4 sheet centred on a neutral stage with a back link + Download PDF button.
 WEB_CSS = r"""
-html,body{width:auto;height:auto;min-height:100vh;background:#eef2f7;}
-body{margin:0;}
-.topbar{position:sticky;top:0;z-index:20;display:flex;justify-content:space-between;align-items:center;
-  padding:14px 22px;background:#fff;border-bottom:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(15,23,42,.05);}
+html,body{width:auto;height:100%;}
+body{margin:0;height:100vh;display:flex;flex-direction:column;background:#e2e8f0;overflow:hidden;}
+.topbar{flex:0 0 auto;display:flex;justify-content:space-between;align-items:center;
+  padding:12px 22px;background:#fff;border-bottom:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(15,23,42,.06);}
 .topbar a{font-family:'IBM Plex Sans',sans-serif;text-decoration:none;font-size:14px;font-weight:600;}
 .tb-back{color:#475569;}
 .tb-dl{background:var(--ac);color:#fff;padding:8px 18px;border-radius:99px;}
-.stage{display:flex;justify-content:center;padding:26px 16px 56px;}
-.sheet-wrap{position:relative;width:210mm;background:#fff;border-radius:2.5mm;overflow:hidden;
-  box-shadow:0 12px 44px rgba(15,23,42,.16);}
+.stage{flex:1 1 auto;display:flex;align-items:center;justify-content:center;overflow:auto;padding:14px;}
+.sheet-wrap{flex:0 0 auto;position:relative;width:210mm;background:#fff;overflow:hidden;
+  box-shadow:0 10px 34px rgba(15,23,42,.18);}
 .sheet-wrap .sheet{height:auto;min-height:297mm;}
-@media(max-width:940px){.sheet-wrap{zoom:.66;}}
-@media(max-width:620px){.sheet-wrap{zoom:.44;}}
 """
+
+# fit-to-viewport: scale the A4 sheet to fill the stage (presentation full-screen)
+FIT_JS = ("<script>(function(){var w=document.querySelector('.sheet-wrap'),"
+          "s=document.querySelector('.stage'),W=210*96/25.4,H=297*96/25.4;"
+          "function f(){var z=Math.min((s.clientWidth-28)/W,(s.clientHeight-28)/H);"
+          "if(z>0)w.style.zoom=z;}addEventListener('resize',f);addEventListener('load',f);f();})();</script>")
 
 
 def _sheet(p):
@@ -471,12 +475,13 @@ def page(p):  # print / PDF: bare A4 sheet
     return f'{_head(p)}\n<body>{_sheet(p)}</body></html>'
 
 
-def page_web(p):  # native web page: chrome + centred sheet
+def page_web(p):  # native web page: chrome + sheet scaled to fill the screen
     return f'''{_head(p, WEB_CSS)}
 <body>
 <div class="topbar"><a class="tb-back" href="/">&larr; Brisken Resources</a>
 <a class="tb-dl" href="/{p['short']}.pdf">Download PDF</a></div>
 <div class="stage"><div class="sheet-wrap">{_sheet(p)}</div></div>
+{FIT_JS}
 </body></html>'''
 
 
