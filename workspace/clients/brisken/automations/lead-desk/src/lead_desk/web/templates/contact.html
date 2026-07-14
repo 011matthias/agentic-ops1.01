@@ -27,6 +27,35 @@
   </div>
 </div>
 
+<div class="card">
+  <h2>Outreach phases</h2>
+  <div class="muted" style="font-size:12.5px; margin-bottom:8px;">During-event and post-event outreach are tracked separately and never merged.</div>
+  <div class="grid2">
+    <div>
+      <div style="font-weight:600;">During-event (E1/E2/E3)</div>
+      <div class="muted" style="font-size:12px;">grounded in the mailbox (Sent Items)</div>
+      {% if view.phases.during_event.any %}
+      <div class="inline" style="margin-top:6px;">
+        {% for w in view.phases.during_event.waves %}<span class="badge tier">{{ w }}</span>{% endfor %}
+      </div>
+      <div class="muted" style="font-size:12px; margin-top:4px;">last sent {{ view.phases.during_event.last }}{% if view.phases.during_event.replied %} &middot; replied {{ view.phases.during_event.replied }}{% endif %}</div>
+      {% else %}
+      <div class="muted" style="margin-top:6px;">No E-wave send on record</div>
+      {% endif %}
+    </div>
+    <div>
+      <div style="font-weight:600;">Post-event follow-up</div>
+      <div class="muted" style="font-size:12px;">from the master sheet (booth follow-up)</div>
+      {% if view.phases.post_event.any %}
+      <div class="inline" style="margin-top:6px;"><span class="badge stage-sent">sent {{ view.phases.post_event.sent }}</span></div>
+      {% if view.phases.post_event.detail %}<div class="muted" style="font-size:12px; margin-top:4px;">{{ view.phases.post_event.detail }}</div>{% endif %}
+      {% else %}
+      <div class="muted" style="margin-top:6px;">No post-event follow-up on record</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
 <div class="grid2">
   <div class="card">
     <h2>Log a touch</h2>

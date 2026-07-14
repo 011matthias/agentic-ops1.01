@@ -40,6 +40,9 @@ _DATE_RE = re.compile(r"(\d{4}-\d{2}-\d{2})")
 # the event hash every run and break idempotency.
 EVENT_WEEK_TS = "2026-06-24T00:00:00+00:00"
 
+# The booth follow-up wave date, used when a post_event_outreach cell names no date.
+POST_EVENT_DATE = "2026-07-08"
+
 # Tier -> suppression reason for the exclusion tiers.
 TIER_SUPPRESS = {
     "STOP": "stop", "DUPLICATE": "duplicate", "TEST": "test",
@@ -287,6 +290,19 @@ def import_workbook(store: ContactStore, xlsx: Path, campaign: str, report: dict
                                channel=ch, direction="outbound", type="touch",
                                detail=detail, source="import",
                                ext_key=f"dirk-touch-{cid}", campaign=campaign, now=now):
+                events_added += 1
+
+        # Post-event follow-up phase: kept DISTINCT from during-event (E1/E2/E3),
+        # which is grounded from the mailbox (see ground.py). The sheet's
+        # post_event_outreach column is Dirk's tracking of the booth follow-up wave.
+        pe = _s(col(r, "post_event_outreach"))
+        if pe:
+            pe_date = _date(pe) or POST_EVENT_DATE
+            if store.add_event(contact_id=cid, ts=_ts(pe_date) or EVENT_WEEK_TS,
+                               channel="email", direction="outbound", type="sent",
+                               subject="Post-event follow-up", detail=f"Post-event: {pe}",
+                               source="sheet-postevent", ext_key=f"pe-{cid}",
+                               campaign=campaign, now=now):
                 events_added += 1
 
     report["contacts"] = contacts

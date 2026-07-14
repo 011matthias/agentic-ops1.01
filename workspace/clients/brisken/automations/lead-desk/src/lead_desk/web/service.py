@@ -166,6 +166,38 @@ def _attach_cadence(store: ContactStore, rows: list[dict], campaign_row) -> None
         r["manual_due"] = due and ch == "linkedin"
 
 
+def outreach_phases(events: list[dict]) -> dict:
+    """Split outreach into its two distinct phases so during-event (E1/E2/E3,
+    mailbox-grounded) and post-event (sheet booth follow-up) never conflate.
+    Reads the phase-labelled event subjects written by ground.py / migrate.py."""
+    waves: dict[str, str] = {}
+    replied: str | None = None
+    post_sent: str | None = None
+    post_detail: str | None = None
+    for e in events:
+        subj = (e.get("subject") or "").strip()
+        d = (e.get("ts") or "")[:10]
+        if subj == "During-event reply":
+            if replied is None or d < replied:
+                replied = d
+        elif subj.startswith("During-event "):
+            wave = subj[len("During-event "):].strip()
+            waves.setdefault(wave, d)
+        elif subj == "Post-event follow-up":
+            if post_sent is None or (d and d > post_sent):
+                post_sent = d
+                post_detail = e.get("detail")
+    return {
+        "during_event": {
+            "waves": sorted(waves),
+            "last": max(waves.values()) if waves else None,
+            "replied": replied,
+            "any": bool(waves),
+        },
+        "post_event": {"sent": post_sent, "detail": post_detail, "any": bool(post_sent)},
+    }
+
+
 def build_board(store: ContactStore, filters: dict | None = None,
                 campaign: str = "rome-2026") -> dict:
     filters = filters or {}
@@ -199,6 +231,18 @@ def build_board(store: ContactStore, filters: dict | None = None,
         r["aging"] = is_aging_hot(r, today)
         r["reached"] = is_reached_dirk(r)
         r["held"] = bool(r.get("suppressed")) and r.get("suppress_reason") in HELD_REASONS
+
+    # Outreach-phase summary per contact: during-event (E1/E2/E3) vs post-event,
+    # kept distinct. One query over the phase-labelled events, grouped in Python.
+    phase_by_contact: dict[str, list[dict]] = {}
+    for pr in store.conn.execute(
+        "SELECT contact_id, subject, ts, detail FROM outreach_events "
+        "WHERE campaign = ? AND (subject LIKE 'During-event%' "
+        "OR subject = 'Post-event follow-up')", (campaign,),
+    ).fetchall():
+        phase_by_contact.setdefault(pr["contact_id"], []).append(dict(pr))
+    for r in rows:
+        r["phases"] = outreach_phases(phase_by_contact.get(r["contact_id"], []))
 
     active = [r for r in rows if not r.get("suppressed")]
     stage_counts = {s: 0 for s in STAGES}
@@ -338,6 +382,7 @@ def build_contact_view(store: ContactStore, contact_id: str) -> dict | None:
         "stage_labels": STAGE_LABELS,
         "suppress_reasons": SUPPRESS_REASONS,
         "tier_vocab": list(TIER_VOCAB),
+        "phases": outreach_phases(events),
     }
 
 

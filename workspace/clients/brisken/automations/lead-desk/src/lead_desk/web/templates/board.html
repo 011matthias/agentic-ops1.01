@@ -136,7 +136,7 @@
   <div class="muted" style="margin-bottom:8px;">{{ v.rows|length }} shown</div>
   <table>
     <thead><tr>
-      <th>Name</th><th>Company</th><th>Tier</th><th>Degree</th><th>Stage</th><th>Status</th><th>Step</th><th>Next touch</th><th>Last out / in</th><th>Next step</th>
+      <th>Name</th><th>Company</th><th>Tier</th><th>Degree</th><th>Stage</th><th title="During-event E1/E2/E3 (mailbox) &middot; P = post-event follow-up (sheet)">Outreach</th><th>Status</th><th>Step</th><th>Next touch</th><th>Last out / in</th><th>Next step</th>
     </tr></thead>
     <tbody>
     {% for r in v.rows %}
@@ -147,6 +147,7 @@
         <td>{% if r.tier %}<span class="badge tier">{{ r.tier }}</span>{% endif %}</td>
         <td>{% if r.degree %}<span class="badge {% if r.degree == 'warm' %}stage-booked{% elif r.degree == 'cold_touched' %}stage-replied{% else %}stage-sent{% endif %}">{{ r.degree }}</span>{% elif r.cadence %}<span class="muted">-</span>{% endif %}</td>
         <td><span class="badge stage-{{ r.stage }}">{{ r.stage }}</span></td>
+        <td style="white-space:nowrap;">{% if r.phases.during_event.any %}{% for w in r.phases.during_event.waves %}<span class="badge tier" style="padding:0 4px;">{{ w }}</span>{% endfor %}{% if r.phases.during_event.replied %}<span class="badge stage-replied" style="padding:0 4px;" title="replied to E-wave">R</span>{% endif %}{% else %}<span class="muted">-</span>{% endif %}{% if r.phases.post_event.any %} <span class="badge stage-booked" style="padding:0 4px;" title="post-event follow-up {{ r.phases.post_event.sent }}">P</span>{% endif %}</td>
         <td>{{ r.status }}
             {% if r.dangling %}<span class="badge stage-replied" title="follow-up past due">due</span>{% endif %}
             {% if r.aging %}<span class="badge suppressed" title="unanswered reply">aging</span>{% endif %}</td>
@@ -178,7 +179,7 @@
         <td>{{ r.next_step or '' }}{% if r.next_step_due %} <span class="muted">({{ r.next_step_due[:10] }})</span>{% endif %}</td>
       </tr>
     {% else %}
-      <tr><td colspan="10" class="muted">No contacts match.</td></tr>
+      <tr><td colspan="11" class="muted">No contacts match.</td></tr>
     {% endfor %}
     </tbody>
   </table>
