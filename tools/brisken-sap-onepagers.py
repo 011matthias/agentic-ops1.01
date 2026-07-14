@@ -456,7 +456,7 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
   background:radial-gradient(1100px 480px at 82% -12%,var(--glow),transparent 60%),linear-gradient(180deg,#ffffff,#f4f7fb);}
 .whero::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--ac),var(--ac2));}
 .whero .inner{display:grid;grid-template-columns:1.04fr .96fr;gap:52px;align-items:center;
-  min-height:calc(100vh - 57px);padding-top:44px;padding-bottom:44px;}
+  padding-top:56px;padding-bottom:64px;}
 .weyebrow{font-family:'Space Grotesk';font-size:13px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--ac);margin-bottom:14px;}
 .whero h1{font-family:'Space Grotesk';font-size:52px;line-height:1.03;letter-spacing:-1.2px;font-weight:700;color:#0f172a;margin:0 0 18px;}
 .whero h1 .ac{color:var(--ac);}
@@ -563,11 +563,42 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
 .wfoot a{color:var(--ac);text-decoration:none;font-weight:600;}
 
 @media(max-width:900px){
-  .whero .inner{grid-template-columns:1fr;min-height:0;gap:34px;}
+  .whero .inner{grid-template-columns:1fr;gap:34px;}
   .whero h1{font-size:40px;}
   .wcards{grid-template-columns:1fr;}
   .wcols2{grid-template-columns:1fr;gap:26px;}
   .wnav .nback{display:none;}
+}
+
+/* print: the downloadable PDF is a render of this same page, identical content */
+@page{size:A4;margin:12mm 13mm;}
+@media print{
+  *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
+  html,body{background:#fff !important;}
+  .wnav,.wcta-band{display:none !important;}
+  .inner{max-width:none !important;padding:0 !important;}
+  section,.wband,.whero,.wproof{border-bottom:none !important;}
+  .whero{background:none !important;}
+  .whero::before{display:none;}
+  .whero .inner{grid-template-columns:1fr !important;gap:20px !important;padding:0 0 8mm !important;break-after:avoid;}
+  .whero h1{font-size:30px !important;}
+  .wpromise{font-size:16px !important;}
+  .wvisual{box-shadow:none !important;}
+  .wband{padding:7mm 0 5mm !important;break-inside:avoid;}
+  .wband.alt{background:#fff !important;}
+  .wh2{font-size:19px !important;}
+  .wlede{font-size:13px !important;max-width:none !important;}
+  .wcard,.wstat,.wcallout,.dark,.wfaq details,.wtable tr,.wchip,.step{break-inside:avoid;}
+  .wtable-wrap{overflow:visible !important;}
+  .wtable{min-width:0 !important;font-size:11px !important;}
+  .wtable th,.wtable td{padding:8px 10px !important;}
+  .wstat .n{font-size:34px !important;}
+  .wfaq p{font-size:12.5px !important;max-width:none !important;}
+  .wfaq details{padding:12px 0 !important;}
+  .wcard .cd{font-size:12px !important;}
+  .wproof{padding:6mm 0 !important;}
+  .wfoot{background:#fff !important;padding:6mm 0 0 !important;}
+  a{color:inherit !important;}
 }
 """
 
@@ -584,9 +615,9 @@ def _cta_buttons(p, hero=True):
     deck = p.get("deck")
     if deck:
         primary = f'<a class="wbtn primary" href="{deck}">See the full deck &rarr;</a>'
-        second = f'<a class="wbtn ghost" href="{pdf}" download>Download the one-pager</a>'
+        second = f'<a class="wbtn ghost" href="{pdf}" download>Download as PDF</a>'
     else:
-        primary = f'<a class="wbtn primary" href="{pdf}" download>Download the one-pager</a>'
+        primary = f'<a class="wbtn primary" href="{pdf}" download>Download as PDF</a>'
         second = '<a class="wbtn ghost" href="/">All resources</a>'
     return primary + second
 
@@ -692,8 +723,8 @@ def web_cta_band(p):
     btns = []
     if deck:
         btns.append(f'<a class="wbtn primary" href="{deck}">See the full deck &rarr;</a>')
-    btns.append(f'<a class="wbtn primary" href="/{p["short"]}.pdf" download>Download the one-pager</a>' if not deck
-                else f'<a class="wbtn ghost" href="/{p["short"]}.pdf" download>Download the one-pager</a>')
+    btns.append(f'<a class="wbtn primary" href="/{p["short"]}.pdf" download>Download as PDF</a>' if not deck
+                else f'<a class="wbtn ghost" href="/{p["short"]}.pdf" download>Download as PDF</a>')
     btns.append('<a class="wbtn ghost" href="https://www.brisken.com">www.brisken.com</a>')
     return (f'<section class="wcta-band"><div class="inner"><h2>{p.get("cta_h", "Want the full picture?")}</h2>'
             f'<p>{p.get("cta_p", "The one-pager is the summary. The full deck and the team go deeper.")}</p>'
@@ -1210,56 +1241,41 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Render the 6 Brisken SAP one-pagers (PDF + web pages) and gate them.")
     ap.add_argument("--out", type=Path, default=OUT_DEFAULT, help=f"PDF output dir (default: {OUT_DEFAULT})")
     ap.add_argument("--web-out", type=Path, default=WEB_OUT_DEFAULT, help=f"web-page HTML output dir (default: {WEB_OUT_DEFAULT})")
-    ap.add_argument("--no-web", action="store_true", help="skip writing the native web-page HTML")
     ap.add_argument("--web-only", action="store_true",
-                    help="write only the web-page HTML; skip Chrome/PDF rendering and the PDF gate (PDFs unchanged)")
+                    help="write only the web-page HTML; skip the Chrome PDF render and the gate")
     args = ap.parse_args()
 
+    # The downloadable PDF is a render of the SAME web page (via its @media print
+    # stylesheet), so the download and the site have identical content.
+    web = args.web_out.resolve()
+    web.mkdir(parents=True, exist_ok=True)
+    for p in PRODUCTS:
+        (web / f'{p["short"]}.html').write_text(page_web(p), encoding="utf-8")
+    print(f"web pages: {len(PRODUCTS)} written -> {web}")
+
     if args.web_only:
-        web = args.web_out.resolve()
-        web.mkdir(parents=True, exist_ok=True)
-        for p in PRODUCTS:
-            (web / f'{p["short"]}.html').write_text(page_web(p), encoding="utf-8")
-        print(f"web pages: {len(PRODUCTS)} written -> {web} (web-only; PDFs untouched)")
+        print("web-only: skipped PDF render")
         return 0
 
     if not CHROME.is_file():
         sys.exit(f"Chrome not found at {CHROME}; it is the only render engine that works while Edge is open")
 
-    out = args.out.resolve()  # Chrome --print-to-pdf needs an absolute target
-    out.mkdir(parents=True, exist_ok=True)
-    print("PRODUCT | pages | size KB")
-    all_ok = True
+    print("PRODUCT | PDF pages | size KB")
     pdfs: list[Path] = []
-    with tempfile.TemporaryDirectory(prefix="sap-onepager-html-") as html_dir:
-        for p in PRODUCTS:
-            html = page(p)
-            hp = Path(html_dir) / f'{p["slug"]}.html'
-            hp.write_text(html, encoding="utf-8")
-            pdf = out / f'{p["slug"]}.pdf'
-            render(hp, pdf)
-            pdfs.append(pdf)
-            pages = len(PdfReader(str(pdf)).pages)
-            kb = round(pdf.stat().st_size / 1024)
-            flag = "" if pages == 1 else "  <-- NOT 1 PAGE"
-            if pages != 1:
-                all_ok = False
-            print(f'{p["slug"]:42s} | {pages} | {kb}{flag}')
-    print("ALL SINGLE-PAGE" if all_ok else "PAGE-COUNT FAILURE")
+    for p in PRODUCTS:
+        hp = web / f'{p["short"]}.html'          # render the served page itself
+        pdf = web / f'{p["short"]}.pdf'
+        render(hp, pdf)
+        pdfs.append(pdf)
+        pages = len(PdfReader(str(pdf)).pages)
+        kb = round(pdf.stat().st_size / 1024)
+        print(f'{p["short"]:24s} | {pages} | {kb}')
 
     if not run_gate(pdfs):
         print("BANNED-CONTENT GATE FAILED on the rendered PDFs; do not ship them")
         return 1
     print("banned-content gate: PASS")
-
-    if not args.no_web:
-        web = args.web_out.resolve()
-        web.mkdir(parents=True, exist_ok=True)
-        for p in PRODUCTS:
-            (web / f'{p["short"]}.html').write_text(page_web(p), encoding="utf-8")
-        print(f"web pages: {len(PRODUCTS)} written -> {web}")
-
-    return 0 if all_ok else 1
+    return 0
 
 
 if __name__ == "__main__":

@@ -144,7 +144,7 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
   background:radial-gradient(1100px 480px at 82% -12%,var(--glow),transparent 60%),linear-gradient(180deg,#ffffff,#f4f7fb);}
 .whero::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--ac),var(--ac2));}
 .whero .inner{display:grid;grid-template-columns:1.04fr .96fr;gap:52px;align-items:center;
-  min-height:calc(100vh - 57px);padding-top:44px;padding-bottom:44px;}
+  padding-top:56px;padding-bottom:64px;}
 .weyebrow{font-family:'Space Grotesk';font-size:13px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--ac);margin-bottom:14px;}
 .whero h1{font-family:'Space Grotesk';font-size:52px;line-height:1.03;letter-spacing:-1.2px;font-weight:700;color:#0f172a;margin:0 0 18px;}
 .whero h1 .ac{color:var(--ac);}
@@ -251,11 +251,42 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
 .wfoot a{color:var(--ac);text-decoration:none;font-weight:600;}
 
 @media(max-width:900px){
-  .whero .inner{grid-template-columns:1fr;min-height:0;gap:34px;}
+  .whero .inner{grid-template-columns:1fr;gap:34px;}
   .whero h1{font-size:40px;}
   .wcards{grid-template-columns:1fr;}
   .wcols2{grid-template-columns:1fr;gap:26px;}
   .wnav .nback{display:none;}
+}
+
+/* print: the downloadable PDF is a render of this same page, identical content */
+@page{size:A4;margin:12mm 13mm;}
+@media print{
+  *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
+  html,body{background:#fff !important;}
+  .wnav,.wcta-band{display:none !important;}
+  .inner{max-width:none !important;padding:0 !important;}
+  section,.wband,.whero,.wproof{border-bottom:none !important;}
+  .whero{background:none !important;}
+  .whero::before{display:none;}
+  .whero .inner{grid-template-columns:1fr !important;gap:20px !important;padding:0 0 8mm !important;break-after:avoid;}
+  .whero h1{font-size:30px !important;}
+  .wpromise{font-size:16px !important;}
+  .wvisual{box-shadow:none !important;}
+  .wband{padding:7mm 0 5mm !important;break-inside:avoid;}
+  .wband.alt{background:#fff !important;}
+  .wh2{font-size:19px !important;}
+  .wlede{font-size:13px !important;max-width:none !important;}
+  .wcard,.wstat,.wcallout,.dark,.wfaq details,.wtable tr,.wchip,.step{break-inside:avoid;}
+  .wtable-wrap{overflow:visible !important;}
+  .wtable{min-width:0 !important;font-size:11px !important;}
+  .wtable th,.wtable td{padding:8px 10px !important;}
+  .wstat .n{font-size:34px !important;}
+  .wfaq p{font-size:12.5px !important;max-width:none !important;}
+  .wfaq details{padding:12px 0 !important;}
+  .wcard .cd{font-size:12px !important;}
+  .wproof{padding:6mm 0 !important;}
+  .wfoot{background:#fff !important;padding:6mm 0 0 !important;}
+  a{color:inherit !important;}
 }
 </style></head>
 <body>
@@ -274,11 +305,11 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
     <p class="wpromise">Cash, investments, debt, FX and market data in one screen, on your SAP data.</p>
     
     <ul class="wpoints"><li>One view of the money: cash, investments and debt across entities, reconciled to SAP.</li><li>FX and market data validated before they reach a decision.</li><li>Audit trail, manage-by-exception, four-eye and segregation of duties on every record.</li></ul>
-    <div class="wcta"><a class="wbtn primary" href="/treasurycentral.pdf" download>Download the one-pager</a><a class="wbtn ghost" href="/">All resources</a></div>
+    <div class="wcta"><a class="wbtn primary" href="/treasurycentral.pdf" download>Download as PDF</a><a class="wbtn ghost" href="/">All resources</a></div>
   </div>
   <div class="wvisual"><div class="wvlab">One cockpit &middot; six domains</div><div class="radial"><svg viewBox="0 0 150 74" preserveAspectRatio="none" fill="none"><line x1="75.0" y1="37.0" x2="75.0" y2="9.0" stroke="var(--ac)" stroke-width="0.5" stroke-opacity="0.35"/><line x1="75.0" y1="37.0" x2="123.5" y2="23.0" stroke="var(--ac)" stroke-width="0.5" stroke-opacity="0.35"/><line x1="75.0" y1="37.0" x2="123.5" y2="51.0" stroke="var(--ac)" stroke-width="0.5" stroke-opacity="0.35"/><line x1="75.0" y1="37.0" x2="75.0" y2="65.0" stroke="var(--ac)" stroke-width="0.5" stroke-opacity="0.35"/><line x1="75.0" y1="37.0" x2="26.5" y2="51.0" stroke="var(--ac)" stroke-width="0.5" stroke-opacity="0.35"/><line x1="75.0" y1="37.0" x2="26.5" y2="23.0" stroke="var(--ac)" stroke-width="0.5" stroke-opacity="0.35"/></svg><div class="rad-core"><div class="c1">Treasury<span class="ac">Central</span></div><div class="c2">the cockpit</div></div><div class="rad-node" style="left:50.0%;top:12.2%;">Cash</div><div class="rad-node" style="left:82.3%;top:31.1%;">Investments</div><div class="rad-node" style="left:82.3%;top:68.9%;">Debt</div><div class="rad-node" style="left:50.0%;top:87.8%;">FX</div><div class="rad-node" style="left:17.7%;top:68.9%;">Market Data</div><div class="rad-node" style="left:17.7%;top:31.1%;">Governance</div></div></div>
 </div></section><section class="wband"><div class="inner"><div class="wlab">The problem</div><h2 class="wh2">The treasurer's day on one surface</h2><p class="wlede">Most SAP finance teams run several brittle, hand-built feeds to move market data, trades, bank files and remittances in and out of SAP. They break when a field changes or the person who built them leaves: no audit trail, no owner, no monitoring. Between them, the treasurer's day goes to moving data between screens instead of using it.</p><p class="wlede" style="margin-bottom:0;">TreasuryCentral is OnePilot scoped to the treasurer: cash, investments, debt, FX, market data and governance on one screen, on your SAP data. The cockpit is what you see; OnePilot is the layer that moves the data in and out of SAP, governed end to end. It takes the brittle feeds off your team, and the treasurer stays in command.</p></div></section><section class="wband alt"><div class="inner"><div class="wlab">What you get</div><div class="wcards"><div class="wcard"><span class="cs">One view of the money</span><div class="ct">Cash, investments and debt</div><div class="cd">Cash positions roll up from every bank account and entity, reconciled to the statements already in SAP, so the group number is current instead of a Monday spreadsheet pull. Investments, debt and intercompany loans sit on the same screen with their maturities and interest, and every figure links back to the SAP record it came from.</div></div><div class="wcard"><span class="cs">FX and market data, governed</span><div class="ct">Numbers you can trace</div><div class="cd">Spot and forward rates, yield curves and prices arrive from Bloomberg, Refinitiv, 360T and central-bank feeds, normalized once and checked for gaps and outliers before anything posts. FX exposure by currency and entity updates as positions move, with the source and the validation recorded against each value, so a hedge decision rests on numbers you can trace.</div></div><div class="wcard"><span class="cs">Control built in</span><div class="ct">Governed by design</div><div class="cd">Every value carries where it came from, who approved it and when, so an audit follows the trail without a reconstruction project. Limits and tolerances are set once; only the records that breach them surface for a person, and a second approver signs off before a payment or a deal is released.</div></div></div></div></section><section class="wband"><div class="inner"><div class="wlab">What it takes off your team</div><h2 class="wh2">The brittle feeds it replaces</h2><p class="wlede">The apps that run underneath TreasuryCentral each take one hand-built feed off your team, governed end to end, so the cockpit shows a number you can act on rather than one you have to assemble.</p><div class="wdots2"><div class="d">Market data: rates, curves and prices from every provider, governed into SAP.</div><div class="d">Trades: captured at the venue and booked in SAP TRM, straight through.</div><div class="d">Bank files: fee statements in any format, matched against the agreement.</div><div class="d">Remittances: unstructured advice read by AI and posted to S/4HANA.</div></div></div></section><section class="wband alt"><div class="inner"><div class="wlab">Common questions</div><div class="wfaq"><details open><summary>What is TreasuryCentral?</summary><p>TreasuryCentral is the treasury edition of OnePilot. It puts the treasurer's whole day on one surface: cash, FX, market data, trades, bank files and remittances, governed end to end, on your SAP data.</p></details><details open><summary>What runs underneath TreasuryCentral?</summary><p>The treasury apps run on OnePilot, the governed AI layer that moves data in and out of SAP. TreasuryCentral is OnePilot scoped to the treasurer, so market data, trades, bank files and remittances all flow through one governed layer, on your SAP data.</p></details><details open><summary>Does it need a separate data store?</summary><p>No. It works on the SAP data you already trust, so there is no separate store to reconcile. Every move is logged, and every action stays inside your controls.</p></details></div></div></section>
 <section class="wproof"><div class="inner"><div class="proof"><span class="pchip"><span class="sapbadge">SAP</span> Co-Innovation Partner</span><span class="pchip">SAP Store</span><span class="pchip">ISO 27001</span><span class="pchip">SOC 1 Type II</span><span class="pchip">Live with customers today</span></div></div></section>
-<section class="wcta-band"><div class="inner"><h2>Want the full picture?</h2><p>The one-pager is the summary. The full deck and the team go deeper.</p><div class="wcta" style="justify-content:center;"><a class="wbtn primary" href="/treasurycentral.pdf" download>Download the one-pager</a><a class="wbtn ghost" href="https://www.brisken.com">www.brisken.com</a></div></div></section>
+<section class="wcta-band"><div class="inner"><h2>Want the full picture?</h2><p>The one-pager is the summary. The full deck and the team go deeper.</p><div class="wcta" style="justify-content:center;"><a class="wbtn primary" href="/treasurycentral.pdf" download>Download as PDF</a><a class="wbtn ghost" href="https://www.brisken.com">www.brisken.com</a></div></div></section>
 <footer class="wfoot"><b>Brisken</b>, an SAP Co-Innovation Partner &middot; <a href="https://www.brisken.com">www.brisken.com</a><br>Last updated: 2026-07-14</footer>
 </body></html>

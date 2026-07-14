@@ -144,7 +144,7 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
   background:radial-gradient(1100px 480px at 82% -12%,var(--glow),transparent 60%),linear-gradient(180deg,#ffffff,#f4f7fb);}
 .whero::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--ac),var(--ac2));}
 .whero .inner{display:grid;grid-template-columns:1.04fr .96fr;gap:52px;align-items:center;
-  min-height:calc(100vh - 57px);padding-top:44px;padding-bottom:44px;}
+  padding-top:56px;padding-bottom:64px;}
 .weyebrow{font-family:'Space Grotesk';font-size:13px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--ac);margin-bottom:14px;}
 .whero h1{font-family:'Space Grotesk';font-size:52px;line-height:1.03;letter-spacing:-1.2px;font-weight:700;color:#0f172a;margin:0 0 18px;}
 .whero h1 .ac{color:var(--ac);}
@@ -251,11 +251,42 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
 .wfoot a{color:var(--ac);text-decoration:none;font-weight:600;}
 
 @media(max-width:900px){
-  .whero .inner{grid-template-columns:1fr;min-height:0;gap:34px;}
+  .whero .inner{grid-template-columns:1fr;gap:34px;}
   .whero h1{font-size:40px;}
   .wcards{grid-template-columns:1fr;}
   .wcols2{grid-template-columns:1fr;gap:26px;}
   .wnav .nback{display:none;}
+}
+
+/* print: the downloadable PDF is a render of this same page, identical content */
+@page{size:A4;margin:12mm 13mm;}
+@media print{
+  *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
+  html,body{background:#fff !important;}
+  .wnav,.wcta-band{display:none !important;}
+  .inner{max-width:none !important;padding:0 !important;}
+  section,.wband,.whero,.wproof{border-bottom:none !important;}
+  .whero{background:none !important;}
+  .whero::before{display:none;}
+  .whero .inner{grid-template-columns:1fr !important;gap:20px !important;padding:0 0 8mm !important;break-after:avoid;}
+  .whero h1{font-size:30px !important;}
+  .wpromise{font-size:16px !important;}
+  .wvisual{box-shadow:none !important;}
+  .wband{padding:7mm 0 5mm !important;break-inside:avoid;}
+  .wband.alt{background:#fff !important;}
+  .wh2{font-size:19px !important;}
+  .wlede{font-size:13px !important;max-width:none !important;}
+  .wcard,.wstat,.wcallout,.dark,.wfaq details,.wtable tr,.wchip,.step{break-inside:avoid;}
+  .wtable-wrap{overflow:visible !important;}
+  .wtable{min-width:0 !important;font-size:11px !important;}
+  .wtable th,.wtable td{padding:8px 10px !important;}
+  .wstat .n{font-size:34px !important;}
+  .wfaq p{font-size:12.5px !important;max-width:none !important;}
+  .wfaq details{padding:12px 0 !important;}
+  .wcard .cd{font-size:12px !important;}
+  .wproof{padding:6mm 0 !important;}
+  .wfoot{background:#fff !important;padding:6mm 0 0 !important;}
+  a{color:inherit !important;}
 }
 </style></head>
 <body>
@@ -274,11 +305,11 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
     <p class="wpromise">The trade lifecycle from venue to booked deal, straight through. No re-keying.</p>
     <p class="wrename">Formerly Trade Automation / TraderPlus. Now Brisken Smart Trading (BST).</p>
     <ul class="wpoints"><li>Captured at the execution venue and created in SAP TRM straight through, validated on the way in.</li><li>Venue and TMS agnostic, so a new venue is a configuration change, not a rebuild.</li><li>Four-eye approval and segregation of duties, built in as standard.</li><li>Brings exposure, market data and execution onto one surface, logged back into SAP.</li></ul>
-    <div class="wcta"><a class="wbtn primary" href="/smart-trading-deck.html">See the full deck &rarr;</a><a class="wbtn ghost" href="/smart-trading.pdf" download>Download the one-pager</a></div>
+    <div class="wcta"><a class="wbtn primary" href="/smart-trading-deck.html">See the full deck &rarr;</a><a class="wbtn ghost" href="/smart-trading.pdf" download>Download as PDF</a></div>
   </div>
   <div class="wvisual"><div class="wvlab">Venue to SAP, straight through</div><div class="steps" style="grid-template-columns:1fr;gap:16px;"><div class="step"><div class="sn">01</div><div class="st">Decide &amp; approve</div><div class="sd">Decision, approval and execution, with the controls applied up front.</div></div><div class="step"><div class="sn">02</div><div class="st">Execution venues</div><div class="sd">Captured at the venue: Bloomberg FX GO, FXall, 360T, BidFX and more.</div></div><div class="step"><div class="sn">03</div><div class="st">SAP TRM</div><div class="sd">The deal is created in SAP TRM straight through, validated on the way in.</div></div></div></div>
 </div></section><section class="wband"><div class="inner"><div class="wlab">The problem</div><h2 class="wh2">From the trade decision to the booked deal, straight through</h2><p class="wlede">Treasury desks still re-key trades from the venue into SAP TRM by hand. Someone executes on the trading platform, switches tabs to check exposure, then types the deal back into SAP. It is slow, it is a control risk, and it breaks the moment a venue changes a field.</p><p class="wlede" style="margin-bottom:0;">Brisken Smart Trading captures the trade at the execution venue and creates the deal in SAP TRM straight through, validated on the way in. It brings exposure, market data and execution onto one surface and logs every action back into SAP under four-eye control. The manual middle is gone.</p></div></section><section class="wband alt"><div class="inner"><div class="wlab">The full trade lifecycle</div><h2 class="wh2">Decision to booked deal, in one flow</h2><div class="wflow"><span class="fstep"><span class="fnum">1</span>Decision</span><span class="farrow">&rarr;</span><span class="fstep"><span class="fnum">2</span>Request</span><span class="farrow">&rarr;</span><span class="fstep"><span class="fnum">3</span>Approval</span><span class="farrow">&rarr;</span><span class="fstep"><span class="fnum">4</span>Execution</span><span class="farrow">&rarr;</span><span class="fstep"><span class="fnum">5</span>Mapping</span><span class="farrow">&rarr;</span><span class="fstep"><span class="fnum">6</span>Fulfillment</span><span class="farrow">&rarr;</span><span class="fstep"><span class="fnum">7</span>Deal creation</span></div><p class="wlede" style="margin-top:22px;margin-bottom:0;">Decision, request and approval happen with the controls applied up front. The trade is captured at the execution venue and mapped into SAP, then created in SAP TRM straight through, validated on the way in. One end-to-end lifecycle, trading-venue and TMS agnostic, so trades flow into SAP Treasury and Risk Management as governed deals, reconciled to source.</p></div></section><section class="wband"><div class="inner"><div class="wlab">Built in</div><div class="dark"><h3>Built <span>in</span></h3><div class="rlist"><div class="ritem"><span class="rmk">+</span>Four-eye approval and segregation of duties, as standard</div><div class="ritem"><span class="rmk">+</span>No ABAP and no per-venue interface to maintain</div><div class="ritem"><span class="rmk">+</span>Straight-through capture, so the manual re-key is gone</div></div></div></div></section><section class="wband alt"><div class="inner"><div class="wlab">Works with</div><h2 class="wh2">Any venue in, SAP TRM out</h2><p class="wlede">Captured at Bloomberg FX GO, FXall, 360T, BidFX, Citi Pulse and more, then created in SAP TRM. It is trading-venue and TMS agnostic, so a new venue is a configuration change, and the deal flows into SAP Treasury and Risk Management reconciled to source.</p><div class="wchips"><span class="wchip">FXall</span><span class="wchip">Bloomberg FX GO</span><span class="wchip">360T</span><span class="wchip">BidFX</span><span class="wchip">Citi Pulse</span><span class="arrow">&rarr;</span><span class="wchip">SAP TRM</span></div></div></section><section class="wband"><div class="inner"><div class="wlab">Common questions</div><div class="wfaq"><details open><summary>What is Brisken Smart Trading (BST)?</summary><p>BST is the FX and trade-execution application in the family, and the live flagship. It brings exposure, market data and execution onto one surface and logs every action back into SAP under four-eye control.</p></details><details open><summary>How is a trade captured without re-keying it into SAP?</summary><p>The deal is captured at the execution venue and created in SAP TRM straight through, validated on the way in. Because it is venue and TMS agnostic, adding a new venue is a configuration change rather than a rebuild.</p></details></div></div></section><section class="wband alt"><div class="inner"><div class="wlab">Proof</div><p class="wlede" style="margin:0;">Listed on the SAP Store as Trade Automation, and the live flagship on SAP. Brisken is an SAP Co-Innovation Partner, certified to ISO 27001 and SOC 1 Type II.</p></div></section>
 <section class="wproof"><div class="inner"><div class="proof"><span class="pchip"><span class="sapbadge">SAP</span> Co-Innovation Partner</span><span class="pchip">SAP Store</span><span class="pchip">ISO 27001</span><span class="pchip">SOC 1 Type II</span><span class="pchip">Live with customers today</span></div></div></section>
-<section class="wcta-band"><div class="inner"><h2>Want the full picture?</h2><p>The one-pager is the summary. The full deck and the team go deeper.</p><div class="wcta" style="justify-content:center;"><a class="wbtn primary" href="/smart-trading-deck.html">See the full deck &rarr;</a><a class="wbtn ghost" href="/smart-trading.pdf" download>Download the one-pager</a><a class="wbtn ghost" href="https://www.brisken.com">www.brisken.com</a></div></div></section>
+<section class="wcta-band"><div class="inner"><h2>Want the full picture?</h2><p>The one-pager is the summary. The full deck and the team go deeper.</p><div class="wcta" style="justify-content:center;"><a class="wbtn primary" href="/smart-trading-deck.html">See the full deck &rarr;</a><a class="wbtn ghost" href="/smart-trading.pdf" download>Download as PDF</a><a class="wbtn ghost" href="https://www.brisken.com">www.brisken.com</a></div></div></section>
 <footer class="wfoot"><b>Brisken</b>, an SAP Co-Innovation Partner &middot; <a href="https://www.brisken.com">www.brisken.com</a><br>Last updated: 2026-07-14</footer>
 </body></html>
