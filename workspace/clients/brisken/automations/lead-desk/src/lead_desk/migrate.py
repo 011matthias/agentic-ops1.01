@@ -173,6 +173,16 @@ def classify_log_line(line: str) -> tuple[str, str, str]:
     return (ch, "outbound", "note")
 
 
+_EWAVE_RE = re.compile(r"\bE[123]\b", re.IGNORECASE)
+
+
+def is_during_event(text: str) -> bool:
+    """True for a during-event E-wave reference (E1/E2/E3). Graph is the
+    authoritative source for these (see ground.py), so the sheet must not
+    duplicate them into the timeline."""
+    return bool(_EWAVE_RE.search(text or ""))
+
+
 def import_workbook(store: ContactStore, xlsx: Path, campaign: str, report: dict,
                     preserve_app_fields: bool = False) -> dict:
     from openpyxl import load_workbook
@@ -262,6 +272,12 @@ def import_workbook(store: ContactStore, xlsx: Path, campaign: str, report: dict
                     has_out = True
                 if direction == "inbound":
                     has_in = True
+                # During-event (E1/E2/E3) is grounded from the mailboxes
+                # (ground.py); do not duplicate it from the sheet. has_out/has_in
+                # above still register the activity so the summary-date gap-fill
+                # below stays quiet for these contacts.
+                if is_during_event(line):
+                    continue
                 if store.add_event(
                     contact_id=cid, ts=_ts(d) or EVENT_WEEK_TS, channel=ch, direction=direction,
                     type=typ, detail=line, source="import", campaign=campaign, now=now,

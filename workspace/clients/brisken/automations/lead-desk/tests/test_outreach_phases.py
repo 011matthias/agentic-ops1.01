@@ -57,3 +57,49 @@ def test_ground_is_idempotent(tmp_path):
         r1 = ground.ground(store, "rome-2026", NOW, collected=collected)
         r2 = ground.ground(store, "rome-2026", NOW, collected=collected)
         assert r1["sent_events"] == 1 and r2["sent_events"] == 0  # re-run adds nothing
+
+
+def test_is_during_event():
+    from lead_desk.migrate import is_during_event
+    assert is_during_event("2026-06-19 E1 pre-event invite sent")
+    assert is_during_event('E3 response: "I will stop by."')
+    assert is_during_event("E1 send-log: sent")
+    assert not is_during_event("2026-07-08 booth-network follow-up sent")
+    assert not is_during_event("Personal DN: reach out re MDH interest")
+
+
+def test_drop_import_during_event_keeps_graph_and_others(tmp_path):
+    """Graph is authoritative for during-event: import E-wave/send-log dupes are
+    removed; the graph event, the post-event follow-up, and the Dirk touch stay."""
+    with ContactStore(tmp_path / "t.sqlite") as store:
+        _seed(store)
+        ev = dict(contact_id="c1", channel="email", direction="outbound", now=NOW)
+        store.add_event(ts="2026-06-19T00:00:00+00:00", type="invite",
+                        detail="2026-06-19 E1 pre-event invite sent",
+                        source="import", ext_key="imp-e1-c1", **ev)          # dupe
+        store.add_event(ts="2026-06-19T00:00:00+00:00", type="sent",
+                        detail="E1 send-log: sent", source="import",
+                        ext_key="sendlog-E1-c1", **ev)                        # dupe
+        store.add_event(ts="2026-06-19T00:00:00+00:00", type="sent",
+                        subject="During-event E1", detail="E1 (mailbox-grounded)",
+                        source="graph", ext_key="de-E1-c1", **ev)            # keep
+        store.add_event(ts="2026-07-08T00:00:00+00:00", type="sent",
+                        subject="Post-event follow-up", detail="Post-event: booth",
+                        source="sheet-postevent", ext_key="pe-c1", **ev)     # keep
+        store.add_event(ts="2026-06-24T00:00:00+00:00", type="touch",
+                        detail="Personal DN: reach out re MDH", source="import",
+                        ext_key="dirk-touch-c1", **ev)                        # keep
+
+        dry = ground.drop_import_during_event(store, "rome-2026", dry_run=True)
+        assert dry["import_during_event_removed"] == 2 and dry["dry_run"]
+        assert len(list(store.get_events("c1"))) == 5              # nothing deleted on dry-run
+
+        rep = ground.drop_import_during_event(store, "rome-2026")
+        assert rep["import_during_event_removed"] == 2
+        kept = [dict(e) for e in store.get_events("c1")]
+        details = {e["detail"] for e in kept}
+        assert "2026-06-19 E1 pre-event invite sent" not in details
+        assert "E1 send-log: sent" not in details
+        assert any(e["source"] == "graph" for e in kept)
+        assert any(e["source"] == "sheet-postevent" for e in kept)
+        assert any(e["detail"] == "Personal DN: reach out re MDH" for e in kept)
