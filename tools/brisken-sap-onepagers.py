@@ -511,6 +511,23 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
 .wchip img{height:19px;width:auto;display:block;}
 .wchip .arrow{color:#cbd5e1;font-weight:700;margin:0 2px;}
 
+/* accent callout */
+.wcallout{background:var(--glow);border-left:4px solid var(--ac);border-radius:0 12px 12px 0;padding:22px 26px;margin-top:6px;}
+.wcallout .ct{font-family:'Space Grotesk';font-size:19px;font-weight:700;color:#0f172a;letter-spacing:-.2px;margin-bottom:7px;}
+.wcallout p{font-size:15.5px;line-height:1.6;color:#475569;max-width:82ch;}
+
+/* horizontal process flow (wraps) */
+.wflow{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:6px;}
+.wflow .fstep{background:#fff;border:1px solid #e6ebf2;border-radius:10px;padding:11px 15px;font-size:13.5px;font-weight:600;color:#334155;box-shadow:0 1px 2px rgba(15,23,42,.04);}
+.wflow .fnum{color:var(--ac);font-family:'Space Grotesk';font-weight:700;margin-right:8px;}
+.wflow .farrow{color:#cbd5e1;font-weight:700;}
+
+/* two-column dots (delivers) */
+.wdots2{display:grid;grid-template-columns:1fr 1fr;gap:14px 40px;margin-top:6px;}
+.wdots2 .d{position:relative;padding-left:24px;font-size:15px;line-height:1.5;color:#334155;}
+.wdots2 .d::before{content:"";position:absolute;left:0;top:7px;width:8px;height:8px;background:var(--ac);border-radius:2px;transform:rotate(45deg);}
+@media(max-width:900px){.wdots2{grid-template-columns:1fr;}}
+
 /* proof strip + closing CTA + footer */
 .wproof{padding:44px 0;text-align:center;}
 .wproof .proof{margin-top:0;}
@@ -595,6 +612,24 @@ def web_cols2(left, right):
 def web_faq(items):
     body = "".join(f'<details><summary>{q}</summary><p>{a}</p></details>' for q, a in items)
     return f'<div class="wfaq">{body}</div>'
+
+
+def web_callout(title, body):
+    return f'<div class="wcallout"><div class="ct">{title}</div><p>{body}</p></div>'
+
+
+def web_flow(items):
+    parts = []
+    for i, it in enumerate(items):
+        if i:
+            parts.append('<span class="farrow">&rarr;</span>')
+        parts.append(f'<span class="fstep"><span class="fnum">{i + 1}</span>{it}</span>')
+    return f'<div class="wflow">{"".join(parts)}</div>'
+
+
+def web_dots2(points):
+    inner = "".join(f'<div class="d">{p}</div>' for p in points)
+    return f'<div class="wdots2">{inner}</div>'
 
 
 def web_chips(items):
@@ -719,20 +754,27 @@ def web_body_market_data_hub(p):
             "Per-provider upload scripts, maintained by hand",
             "Rates re-keyed into spreadsheets before they reach SAP",
             "Point-to-point integrations that break when a feed changes"]))
+        + web_band("Governed by the feed",
+                   '<p class="wlede" style="margin-bottom:0;">It validates, normalizes and distributes each feed, with an audit trail, segregation of duties, and manage-by-exception alerts. Governance is built into the feed, not bolted on per interface afterwards. The result is one number, the same in SAP and non-SAP, with a single point of control for entitlements and usage.</p>',
+                   h2="Control lives in the feed, not in each interface", alt=True)
         + web_band("Works with", web_chips([
             ("", "bloomberg"), ("", "lseg"), ("", "ice"), ("", "cme"),
             ("&rarr;", None), ("SAP TRM", None), ("Market Rates Management", None), ("non-SAP", None)]),
             h2="Every provider in, SAP and non-SAP out",
-            lede="Switching or adding a provider is a configuration change, not a new interface, so there is no per-vendor rebuild to maintain.", alt=True)
+            lede="Switching or adding a provider is a configuration change, not a new interface, so there is no per-vendor rebuild to maintain.")
         + web_band("Common questions", web_faq([
             ("How do I get Bloomberg market data into SAP TRM automatically?",
              "The SAP-native path is a Datafeed RFC connection with per-provider function lists and translation tables that need ABAP upkeep and break when Bloomberg changes a field. A governed market-data hub ingests Bloomberg once, normalizes it, and distributes into SAP TRM with an audit trail and exception alerts, no code."),
+            ("How do I load Refinitiv (LSEG) rates and curves into SAP S/4HANA treasury?",
+             "Refinitiv (LSEG) rates and curves reach SAP S/4HANA treasury through the same governed hub that handles any provider: ingest the feed once, normalize it, distribute into Market Rates Management. Switching or adding a provider is a configuration change, not a new interface, so there is no per-vendor rebuild to maintain."),
             ("Can I automate FX rates and yield curves into SAP Market Rates Management without ABAP?",
              "Yes. A no-code hub maps and schedules FX rates and yield curves into SAP Market Rates Management through configuration, so the treasury team owns the feed without writing or changing ABAP."),
+            ("How do I feed OANDA or central-bank rates into SAP cash management?",
+             "OANDA and central-bank rates feed into SAP cash management through the same governed hub as every other source, so multiple providers land in one normalized pipeline rather than separate point-to-point interfaces, each maintained on its own."),
             ("What is the alternative to a custom Bloomberg-to-SAP script that keeps breaking?",
              "A custom script breaks whenever the provider changes a field or the person who wrote it leaves. A managed hub replaces it with a configured, monitored interface, with an audit trail and manage-by-exception alerts."),
-        ]))
-        + web_band("Proof", '<p class="wlede" style="margin:0;">Listed on the SAP Store. The flagship product, with its own overview deck. SAP Co-Innovation Partner, ISO 27001 and SOC 1 Type II.</p>', alt=True)
+        ]), alt=True)
+        + web_band("Proof", '<p class="wlede" style="margin:0;">Listed on the SAP Store. The flagship product, with its own overview deck. SAP Co-Innovation Partner, ISO 27001 and SOC 1 Type II.</p>')
     )
 
 
@@ -749,22 +791,25 @@ def web_body_smart_trading(p):
         + web_band("Why it matters",
                    '<p class="wlede" style="margin:0;">Treasury desks still re-key trades from the venue into SAP TRM by hand: slow, a control risk, and it breaks the moment a venue changes a field.</p>',
                    h2="The manual middle, gone", alt=True)
+        + web_band("The full trade lifecycle",
+                   web_flow(["Decision", "Request", "Approval", "Execution", "Mapping", "Fulfillment", "Deal creation"])
+                   + '<p class="wlede" style="margin-top:22px;margin-bottom:0;">One end-to-end lifecycle, trading-venue and TMS agnostic. Trades flow into SAP Treasury and Risk Management as governed deals, reconciled to source.</p>',
+                   h2="Decision to booked deal, in one flow")
         + web_band("Built in", dark_band("Built <span>in</span>", [
             "Four-eye approval and segregation of duties, as standard",
             "No ABAP and no per-venue interface to maintain",
-            "Straight-through capture, so the manual re-key is gone"], mark="+"))
+            "Straight-through capture, so the manual re-key is gone"], mark="+"), alt=True)
         + web_band("Works with", web_chips([
             ("FXall", None), ("Bloomberg FX GO", None), ("360T", None), ("BidFX", None), ("Citi Pulse", None),
             ("&rarr;", None), ("SAP TRM", None)]),
-            h2="Any venue in, SAP TRM out",
-            lede="The end-to-end trade lifecycle: decision, request, approval, execution, mapping, and deal creation in SAP. Trading-venue and TMS agnostic.", alt=True)
+            h2="Any venue in, SAP TRM out")
         + web_band("Common questions", web_faq([
             ("What is Brisken Smart Trading (BST)?",
              "BST is the FX and trade-execution application in the family, and the live flagship. It brings exposure, market data and execution onto one surface and logs every action back into SAP under four-eye control."),
             ("How is a trade captured without re-keying it into SAP?",
              "The deal is captured at the execution venue and created in SAP TRM straight through, validated on the way in. Because it is venue and TMS agnostic, adding a new venue is a configuration change rather than a rebuild."),
-        ]))
-        + web_band("Proof", '<p class="wlede" style="margin:0;">Listed on the SAP Store as Trade Automation. The live flagship on SAP. SAP Co-Innovation Partner, ISO 27001 and SOC 1 Type II.</p>', alt=True)
+        ]), alt=True)
+        + web_band("Proof", '<p class="wlede" style="margin:0;">Listed on the SAP Store as Trade Automation. The live flagship on SAP. SAP Co-Innovation Partner, ISO 27001 and SOC 1 Type II.</p>')
     )
 
 
@@ -792,6 +837,8 @@ def web_body_remittance(p):
             ("&rarr;", None), ("SAP S/4HANA", None), ("Serrala", None), ("BPI", None), ("HighRadius", None)]),
             h2="Any remittance format in, SAP cash application out", alt=True)
         + web_band("Common questions", web_faq([
+            ("How do I automate unstructured remittance advice emails into SAP cash application?",
+             "Remittance advice arrives as unstructured email and PDF, which staff retype into SAP cash application. An AI-powered remittance gate reads the unstructured input, identifies and structures the data (payer, invoices, amounts, deductions), and delivers it into SAP S/4HANA, with a monitor that trains it over time. The manual retype step is removed."),
             ("Can AI read remittance PDFs and post them to SAP S/4HANA?",
              "Yes. A remittance gate uses an LLM to read remittance PDFs, email bodies and attachments, extract the structured fields, and post them into SAP S/4HANA cash application. A live agricultural-sector customer runs this on a ChatGPT-powered deployment on S/4HANA Private Cloud."),
             ("How do I reduce manual cash-application matching in SAP?",
@@ -824,6 +871,14 @@ def web_body_bank_fee(p):
         + web_band("What it recovers", dark_band("What it <span>recovers</span>", [
             "Overcharges that would otherwise be paid without a second look",
             "The audit trail behind every fee, in one place, not scattered across statements"], mark="+"))
+        + web_band("What it delivers", web_dots2([
+            "Every fee line enriched for cost analytics and surfaced on a dashboard.",
+            "Each charge matched against the negotiated agreement, with a line-level trail.",
+            "Every variance flagged, so overcharges are seen before they are paid.",
+            "One place for every account's fees, in every format, not scattered across statements."]), alt=True)
+        + web_band("Why format matters",
+                   web_callout("Format coverage is overcharge coverage.",
+                               "You cannot audit a fee statement you never managed to load. The portal sits in front and accepts every format, so no bank is left out of the review."))
         + web_band("Works with", web_chips([
             ("CAMT.086 (ISO 20022)", None), ("TWIST BSB", None), ("Proprietary formats", None),
             ("&rarr;", None), ("SAP bank-fee analysis", None), ("Any Bank Fee Analyzer", None)]),
@@ -852,17 +907,26 @@ def web_body_treasurycentral(p):
         + web_band("What it is",
                    '<p class="wlede" style="margin-bottom:0;">Most SAP finance teams run several brittle, hand-built feeds to move market data, trades, bank files and remittances in and out of SAP. They break when a field changes or the person who built them leaves. TreasuryCentral takes them off your team: the cockpit is what you see; OnePilot is the layer that moves the data in and out of SAP, governed end to end. The treasurer stays in command.</p>',
                    h2="The treasurer's day on one surface", alt=True)
+        + web_band("What it takes off your team", web_dots2([
+            "Market data: rates, curves and prices from every provider, governed into SAP.",
+            "Trades: captured at the venue and booked in SAP TRM, straight through.",
+            "Bank files: fee statements in any format, matched against the agreement.",
+            "Remittances: unstructured advice read by AI and posted to S/4HANA."]),
+            h2="The brittle feeds it replaces",
+            lede="TreasuryCentral is OnePilot scoped to the treasurer. The apps that run underneath take the hand-built feeds off your team, each one governed end to end.")
         + web_band("What you get", web_cards([
             ("One view of the money", "Cash, investments and debt", "Across entities, current and reconciled to SAP, not stitched from spreadsheets."),
             ("Governed market data", "FX and rates you can trust", "Rates, curves and exposures from your providers, validated before they reach a decision."),
             ("Control built in", "Governed by design", "Audit trail, manage-by-exception, four-eye and segregation of duties on every record."),
-        ]))
+        ]), alt=True)
         + web_band("Common questions", web_faq([
             ("What is TreasuryCentral?",
              "TreasuryCentral is the treasury edition of OnePilot. It puts the treasurer's whole day on one surface: cash, FX, market data, trades, bank files and remittances, governed end to end, on your SAP data."),
+            ("What runs underneath TreasuryCentral?",
+             "The treasury apps run on OnePilot, the governed AI layer that moves data in and out of SAP. TreasuryCentral is OnePilot scoped to the treasurer, so market data, trades, bank files and remittances all flow through one governed layer, on your SAP data."),
             ("Does it need a separate data store?",
              "No. It works on the SAP data you already trust, so there is no separate store to reconcile. Every move is logged, and every action stays inside your controls."),
-        ]), alt=True)
+        ]))
     )
 
 
@@ -886,11 +950,16 @@ def web_body_onepilot(p):
             ("Four-eye and SoD", "The agent prepares, a person releases", "Approvals and separation of duties on the actions that need them."),
             ("Full audit trail", "Manage by exception", "Every record is traceable, and nothing moves outside the rules you set."),
         ]))
+        + web_band("How it connects", web_chips([
+            ("RFC & OData", None), ("SFTP", None), ("SOAP & REST", None), ("AMQP", None),
+            ("Email", None), ("Excel add-in", None), ("XLSX / CSV / TXT", None), ("LLM & browser automation", None)])
+            + '<p class="wlede" style="margin-top:22px;margin-bottom:0;">Push and pull, off-the-shelf and third-party-managed. A new feed is set up on a managed product, so it goes live in weeks rather than a multi-quarter integration project your team has to build and then own.</p>',
+            h2="Connects to what you already run", alt=True)
         + web_band("In production", web_cards([
             ("Financial services", "S/4HANA Public Cloud", "A financial-services group already governs several data domains from one OnePilot deployment."),
             ("Agricultural", "S/4HANA", "Posts remittances into S/4HANA on a governed AI gate, with the retype removed."),
             ("Chemicals", "S/4HANA On-Prem", "An AI funding-request process, a complex multi-integration with SAP, fully automated."),
-        ]), alt=True)
+        ]))
         + web_band("Common questions", web_faq([
             ("Does OnePilot replace SAP?",
              "No. OnePilot orchestrates on top of SAP. The book of record stays in SAP, execution on the trading platform, and market data through the hub."),
@@ -900,7 +969,7 @@ def web_body_onepilot(p):
              "It is safe when the AI runs inside your controls rather than around them. Each process works to rules you set and approve, with four-eye release, segregation of duties and a full audit trail on every record. You keep command of policy and exceptions."),
             ("Can AI improve liquidity forecasting?",
              "A forecast is only as good as the data feeding it. OnePilot keeps that data current and governed in SAP, so the forecast runs on a clean, reconciled base. Treasury still owns the assumptions and the call."),
-        ]))
+        ]), alt=True)
     )
 
 
