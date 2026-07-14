@@ -29,6 +29,13 @@
   .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:34px;}
   @media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr);}}
   @media(max-width:560px){.grid{grid-template-columns:1fr;}}
+  .grid .more{display:none;}
+  .grid.expanded .more{display:block;}
+  .more-wrap{text-align:center;margin-top:22px;}
+  .more-btn{font-family:"Space Grotesk",sans-serif;font-size:12.5px;font-weight:600;letter-spacing:.04em;
+    color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:999px;
+    padding:10px 24px;cursor:pointer;transition:border-color .15s ease,box-shadow .15s ease,transform .15s ease;}
+  .more-btn:hover{border-color:#c7d2e0;box-shadow:0 6px 18px rgba(15,23,42,.08);transform:translateY(-1px);}
   a.card{--ac:var(--blue);display:block;text-decoration:none;color:inherit;background:var(--card);
     border:1px solid var(--line);border-radius:14px;padding:20px 20px 18px 22px;position:relative;overflow:hidden;
     box-shadow:0 1px 2px rgba(15,23,42,.04);transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease;}
@@ -50,17 +57,8 @@
     <h1>Product Deck</h1>
     <p class="sub">AI-powered treasury applications that run on your SAP data, live with customers today.</p>
   </section>
-  <div class="grid">
-    <a class="card" style="--ac:#0891b2" href="/market-data-hub.html"><div class="t">Market Data Hub</div><div class="d">One governed market-data feed into SAP, no code.</div><span class="pdf">View &rarr;</span></a>
-    <a class="card" style="--ac:#2563eb" href="/smart-trading.html"><div class="t">Brisken Smart Trading</div><div class="d">Straight-through trade capture into SAP TRM, no re-key.</div><span class="pdf">View &rarr;</span></a>
-    <a class="card" style="--ac:#059669" href="/remittance-advice-gate.html"><div class="t">Remittance Advice Gate</div><div class="d">Remittances read by AI, straight into SAP S/4HANA.</div><span class="pdf">View &rarr;</span></a>
-    <a class="card" style="--ac:#ea580c" href="/bank-fee-portal.html"><div class="t">Bank Fee Portal</div><div class="d">Bank fees validated against your agreements, inside SAP.</div><span class="pdf">View &rarr;</span></a>
-    <a class="card" style="--ac:#4f46e5" href="/treasurycentral.html"><div class="t">TreasuryCentral</div><div class="d">The single screen treasury works in, on your SAP data.</div><span class="pdf">View &rarr;</span></a>
-    <a class="card" style="--ac:#9333ea" href="/onepilot.html"><div class="t">OnePilot</div><div class="d">The governed AI layer that operates your SAP treasury apps.</div><span class="pdf">View &rarr;</span></a>
-  </div>
   <section class="hero mt">
     <div class="eyebrow">Full decks</div>
-    <h1>Product decks</h1>
     <p class="sub">The long form, for a buyer who wants the whole picture: the problem, the architecture, the controls, and what it runs on.</p>
   </section>
   <div class="grid">
@@ -68,7 +66,25 @@
     <a class="card" style="--ac:#2563eb" href="/smart-trading-deck.html"><div class="t">Brisken Smart Trading</div><div class="d">Ten pages: from the trade decision to the booked deal in SAP, with the manual middle gone.</div><span class="pdf">View &rarr;</span></a>
     <a class="card" style="--ac:#9333ea" href="/digital-co-worker.html"><div class="t">Digital Co-Worker</div><div class="d">Eleven pages: an AI co-worker that takes the repetitive steps across your systems, governed and logged.</div><span class="pdf">View &rarr;</span></a>
   </div>
-  <footer>Brisken, an SAP Co-Innovation Partner. <a href="https://www.brisken.com">www.brisken.com</a><br>Last updated: 2026-07-12</footer>
+  <section class="hero mt">
+    <div class="eyebrow">One-pagers</div>
+    <p class="sub">One page each: the problem, the fix, and what each product runs on, at a glance.</p>
+  </section>
+  <div class="grid" id="op-grid">
+    <a class="card" style="--ac:#ea580c" href="/bank-fee-portal.html"><div class="t">Bank Fee Portal</div><div class="d">Bank fees validated against your agreements, inside SAP.</div><span class="pdf">View &rarr;</span></a>
+    <a class="card" style="--ac:#4f46e5" href="/treasurycentral.html"><div class="t">TreasuryCentral</div><div class="d">The single screen treasury works in, on your SAP data.</div><span class="pdf">View &rarr;</span></a>
+    <a class="card" style="--ac:#9333ea" href="/onepilot.html"><div class="t">OnePilot</div><div class="d">The governed AI layer that operates your SAP treasury apps.</div><span class="pdf">View &rarr;</span></a>
+    <a class="card more" style="--ac:#0891b2" href="/market-data-hub.html"><div class="t">Market Data Hub</div><div class="d">One governed market-data feed into SAP, no code.</div><span class="pdf">View &rarr;</span></a>
+    <a class="card more" style="--ac:#2563eb" href="/smart-trading.html"><div class="t">Brisken Smart Trading</div><div class="d">Straight-through trade capture into SAP TRM, no re-key.</div><span class="pdf">View &rarr;</span></a>
+    <a class="card more" style="--ac:#059669" href="/remittance-advice-gate.html"><div class="t">Remittance Advice Gate</div><div class="d">Remittances read by AI, straight into SAP S/4HANA.</div><span class="pdf">View &rarr;</span></a>
+  </div>
+  <div class="more-wrap"><button class="more-btn" id="op-toggle" type="button">Show all one-pagers &darr;</button></div>
+  <footer>Brisken, an SAP Co-Innovation Partner. <a href="https://www.brisken.com">www.brisken.com</a><br>Last updated: 2026-07-14</footer>
 </div>
+<script>
+(function(){var g=document.getElementById('op-grid'),b=document.getElementById('op-toggle');
+if(g&&b)b.addEventListener('click',function(){var on=g.classList.toggle('expanded');
+b.innerHTML=on?'Show fewer &uarr;':'Show all one-pagers &darr;';});})();
+</script>
 </body>
 </html>
