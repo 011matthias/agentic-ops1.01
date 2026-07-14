@@ -44,12 +44,13 @@ from fastapi.templating import Jinja2Templates
 
 from . import auth, cadence, uploads
 from .service import (
-    apply_fields, build_board, build_contact_view, ingest_event, log_touch,
-    now_iso, toggle_suppress,
+    EDITABLE_FLAGS, EDITABLE_TEXT, apply_fields, build_board, build_contact_view,
+    create_contact, ingest_event, log_touch, now_iso, toggle_suppress,
 )
 from .store import (
     CHANNELS, DEGREES, DIRECTIONS, EVENT_TYPES, SEND_MODES, ContactStore,
 )
+from ..sync import have_creds, run_all, run_sync
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 
@@ -172,30 +173,39 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return RedirectResponse(url=f"/contacts/{contact_id}", status_code=303)
 
     @app.post("/contacts/{contact_id}/fields")
-    def post_fields(request: Request, contact_id: str,
-                    bant_need: str = Form(""), bant_authority: str = Form(""),
-                    bant_timeline: str = Form(""), bant_budget: str = Form(""),
-                    demo_date: str = Form(""), dirk_verdict: str = Form(""),
-                    demo_owner: str = Form(""), next_step: str = Form(""),
-                    next_step_due: str = Form(""), persona: str = Form(""),
-                    signal: str = Form(""), notes: str = Form(""),
-                    dirk_notes: str = Form("")):
-        def flag(v):
-            return 1 if v.strip() in ("1", "true", "on") else 0
-        fields = {
-            "bant_need": flag(bant_need), "bant_authority": flag(bant_authority),
-            "bant_timeline": flag(bant_timeline), "bant_budget": flag(bant_budget),
-            "demo_date": demo_date.strip(), "dirk_verdict": dirk_verdict.strip(),
-            "demo_owner": demo_owner.strip(), "next_step": next_step.strip(),
-            "next_step_due": next_step_due.strip(), "persona": persona.strip(),
-            "signal": signal.strip(), "notes": notes.strip(),
-            "dirk_notes": dirk_notes.strip(),
-        }
+    async def post_fields(request: Request, contact_id: str):
+        """Accept every editable field (identity / classification / provenance /
+        qualification). Only keys present in the form are updated; a checkbox
+        flag resolves to 0 only when its form declares it manages that flag
+        (via _managed_flags), so a partial edit never zeroes untouched flags."""
+        form = await request.form()
+        fields: dict = {}
+        for k in EDITABLE_TEXT:
+            if k in form:
+                fields[k] = str(form[k]).strip()
+        managed = set(str(form.get("_managed_flags", "")).split())
+        for k in EDITABLE_FLAGS:
+            if k in managed:
+                fields[k] = 1 if str(form.get(k, "")).strip() in ("1", "true", "on") else 0
         with open_store() as store:
             try:
                 apply_fields(store, contact_id, fields, current_user(request))
             except ValueError:
                 return HTMLResponse("Contact not found", status_code=404)
+        return RedirectResponse(url=f"/contacts/{contact_id}", status_code=303)
+
+    @app.post("/contacts")
+    async def create_contact_route(request: Request):
+        """Add a new lead. Dedupes by email (redirects to the existing contact if
+        the address is already on file)."""
+        form = await request.form()
+        data = {k: str(form.get(k, "")).strip() for k in
+                ("first_name", "last_name", "company", "job_title",
+                 "email", "tier", "lead_type")}
+        if not any(data[k] for k in ("first_name", "last_name", "company", "email")):
+            return HTMLResponse("Need at least a name, company, or email.", status_code=400)
+        with open_store() as store:
+            contact_id, _created = create_contact(store, data, current_user(request))
         return RedirectResponse(url=f"/contacts/{contact_id}", status_code=303)
 
     # --- exports --------------------------------------------------------
@@ -642,5 +652,54 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 results.append(ingest_event(store, ev))
         inserted = sum(1 for r in results if r.get("inserted"))
         return JSONResponse({"ok": True, "inserted": inserted, "results": results})
+
+    # --- sheet sync (Graph app-only, sheet -> DB) -----------------------
+    @app.post("/sync")
+    async def post_sync(request: Request, campaign: str = ""):
+        """Pull the campaign master sheet(s) into the DB now. Allowed for a
+        logged-in user (the board button) or the ingest secret (external cron)."""
+        import asyncio
+        authed = bool(auth.read_user(request.cookies.get(auth.COOKIE_NAME))) \
+            or auth.ingest_authorized(request.headers.get("authorization"))
+        if auth.gate_enabled() and not authed:
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        if not have_creds():
+            return JSONResponse({"error": "graph credentials not configured"}, status_code=503)
+        try:
+            if campaign:
+                reps = [await asyncio.to_thread(run_sync, data_root_path, campaign=campaign)]
+            else:
+                reps = await asyncio.to_thread(run_all, data_root_path)
+        except Exception as exc:  # noqa: BLE001 - surface sync failures to the caller
+            return JSONResponse({"error": str(exc)}, status_code=500)
+        if "text/html" in (request.headers.get("accept") or ""):
+            return RedirectResponse(url="/", status_code=303)  # browser form submit
+        return JSONResponse({"ok": True, "synced": [
+            {"campaign": r.get("campaign"), "contacts": r.get("total_contacts"),
+             "source_modified": (r.get("source") or {}).get("last_modified")}
+            for r in reps]})
+
+    # --- daily sheet -> DB scheduler (guarded; inert without Graph creds) --
+    @app.on_event("startup")
+    async def _start_sync_scheduler():
+        import asyncio
+        if os.environ.get("LEAD_DESK_SYNC_DISABLED"):
+            return
+        if not have_creds():
+            print("[sync] Graph credentials absent; daily scheduler disabled")
+            return
+        interval = int(os.environ.get("LEAD_DESK_SYNC_INTERVAL", "86400"))  # daily
+
+        async def _loop():
+            while True:
+                try:
+                    reps = await asyncio.to_thread(run_all, data_root_path)
+                    tot = sum(r.get("total_contacts", 0) for r in reps)
+                    print(f"[sync] pass ok: {len(reps)} campaign(s), {tot} contacts")
+                except Exception as exc:  # noqa: BLE001
+                    print(f"[sync] pass failed: {exc}")
+                await asyncio.sleep(interval)
+
+        asyncio.create_task(_loop())
 
     return app

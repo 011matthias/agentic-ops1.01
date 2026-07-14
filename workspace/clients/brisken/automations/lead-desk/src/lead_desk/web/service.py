@@ -34,6 +34,36 @@ SUPPRESS_REASONS = (
 CONSENT_REASONS = ("do_not_contact", "no_consent", "stop")
 HELD_REASONS = ("held",)
 
+# Every contact field the cockpit editor can write, grouped by input kind.
+# apply_fields() allows exactly this union; the contact template renders TEXT as
+# inputs/selects and FLAGS as checkboxes. Identity/classification/provenance stay
+# sheet-authoritative on a re-sync (migrate.APP_OWNED_ON_RESYNC), but the operator
+# can always override any field here from the cockpit.
+EDITABLE_TEXT = (
+    # identity
+    "first_name", "last_name", "company", "job_title",
+    "email", "alt_email", "phone", "country", "linkedin_url",
+    # classification
+    "tier", "tier_reason", "lead_type", "persona", "signal",
+    "crm_owner", "brisken_customer", "if_we_know_them",
+    # provenance (text)
+    "attendee_type", "booth_registered_at", "source", "crm_last_activity",
+    # qualification / next step
+    "demo_date", "dirk_verdict", "demo_owner",
+    "next_step", "next_step_due", "notes", "dirk_notes",
+)
+EDITABLE_FLAGS = (
+    "bant_need", "bant_authority", "bant_timeline", "bant_budget",
+    "in_our_booth", "scanned_at_booth", "fob_encoded",
+    "no_show", "sponsor_opt_in",
+)
+
+# Tier autocomplete vocabulary for the classification editor (datalist).
+TIER_VOCAB = (
+    "H5", "T1", "T2", "T3", "GA", "STOP", "ANON",
+    "OWN_TEAM", "DUPLICATE", "TEST", "ORGANISER", "UNREACHABLE",
+)
+
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -307,6 +337,7 @@ def build_contact_view(store: ContactStore, contact_id: str) -> dict | None:
         "cadences": cadences,
         "stage_labels": STAGE_LABELS,
         "suppress_reasons": SUPPRESS_REASONS,
+        "tier_vocab": list(TIER_VOCAB),
     }
 
 
@@ -340,18 +371,34 @@ def toggle_suppress(store: ContactStore, contact_id: str, suppressed: bool,
 
 def apply_fields(store: ContactStore, contact_id: str, fields: dict,
                  user: str | None) -> None:
-    """Update judgment fields; setting demo_date / accepted verdict emits a
+    """Update any editable contact field (identity, classification, provenance,
+    qualification). A change writes a `note` audit event, keeping the log the
+    record of every mutation. Setting demo_date / accepted verdict also emits a
     milestone event so the derived stage and the field cannot disagree."""
     current = store.get_contact(contact_id)
     if current is None:
         raise ValueError("unknown contact")
     now = now_iso()
-    clean = {k: v for k, v in fields.items() if k in (
-        "bant_need", "bant_authority", "bant_timeline", "bant_budget",
-        "demo_date", "dirk_verdict", "demo_owner", "next_step", "next_step_due",
-        "persona", "signal", "notes", "dirk_notes",
-    )}
+    allowed = set(EDITABLE_TEXT) | set(EDITABLE_FLAGS)
+    clean = {k: v for k, v in fields.items() if k in allowed}
+
+    # Audit: record which fields actually change (append-only, never a silent edit).
+    changed = []
+    for k, v in clean.items():
+        old_s = "" if current[k] is None else str(current[k])
+        new_s = "" if v is None else str(v)
+        if old_s != new_s:
+            changed.append(k)
+
     store.update_fields(contact_id, clean, now)
+
+    if changed:
+        store.add_event(
+            contact_id=contact_id, ts=now, channel="call", direction="outbound",
+            type="note", subject="Fields updated",
+            detail="edited: " + ", ".join(sorted(changed)),
+            source="manual", created_by=user, now=now,
+        )
 
     new_demo = (clean.get("demo_date") or "").strip()
     if new_demo and not (current["demo_date"] or "").strip():
@@ -366,6 +413,42 @@ def apply_fields(store: ContactStore, contact_id: str, fields: dict,
             type="accepted", subject="Accepted", detail="Dirk verdict: accepted",
             source="manual", created_by=user, now=now,
         )
+
+
+def create_contact(store: ContactStore, data: dict, user: str | None) -> tuple[str, bool]:
+    """Create a new lead. Dedupes by email: if the address is already on file,
+    returns the existing contact_id and (id, False); otherwise inserts and
+    returns (new_id, True), logging a `contact created` audit event."""
+    from uuid import uuid4
+
+    from ..identity import natural_key
+
+    now = now_iso()
+    email = (data.get("email") or "").strip()
+    if email:
+        existing = store.find_by_email(email)
+        if existing is not None:
+            return existing["contact_id"], False
+
+    nk = natural_key(email or None, data.get("first_name"),
+                     data.get("last_name"), data.get("company"))
+    if store.get_contact_by_key(nk) is not None:
+        nk = f"{nk}:{uuid4().hex[:8]}"          # avoid anon-key collision
+    contact_id = uuid4().hex
+
+    payload = {"contact_id": contact_id, "natural_key": nk,
+               "campaign": "rome-2026", "source": "manual"}
+    for k in EDITABLE_TEXT:
+        v = (data.get(k) or "").strip()
+        if v:
+            payload[k] = v
+    store.upsert_contact(payload, now)
+    store.add_event(
+        contact_id=contact_id, ts=now, channel="call", direction="outbound",
+        type="note", subject="Contact created", detail="added via Lead Desk",
+        source="manual", created_by=user, now=now,
+    )
+    return contact_id, True
 
 
 def ingest_event(store: ContactStore, payload: dict) -> dict:

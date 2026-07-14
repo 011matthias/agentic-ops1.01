@@ -14,6 +14,7 @@ web = [
     "uvicorn>=0.30",           # ASGI server
     "python-multipart>=0.0.9", # multipart/form-data for the touch/suppress forms
     "jinja2>=3.1",             # server-rendered templates
+    "requests>=2.31",          # sheet-sync (sync.py) Graph app-only calls, POST /sync
 ]
 capture = ["httpx>=0.27"]      # Phase 2 Graph capture worker (app-only reads + POST /events)
 # Local Windows send worker (Outlook COM). Never in the Fly image: the
@@ -24,6 +25,7 @@ worker = ["httpx>=0.27", "pywin32>=306; sys_platform == 'win32'"]
 lead-desk-web = "lead_desk.web.serve:main"
 lead-desk-migrate = "lead_desk.migrate:main"
 lead-desk-export = "lead_desk.export:main"
+lead-desk-sync = "lead_desk.sync:main"
 lead-desk-capture = "lead_desk.capture:main"
 lead-desk-adopt = "lead_desk.adopt:main"
 lead-desk-reconcile = "lead_desk.reconcile_cli:main"
