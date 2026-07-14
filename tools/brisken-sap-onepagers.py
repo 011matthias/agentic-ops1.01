@@ -428,28 +428,500 @@ def body_onepilot():
 </main>'''
 
 
-# Web-page chrome (appended after BASE_CSS so it overrides the print sizing):
-# each one-pager is also served as a native page on resources.brisken.com, the
-# A4 sheet centred on a neutral stage with a back link + Download PDF button.
+# Web-page layout (appended after BASE_CSS so it overrides the print A4 sizing).
+# The PDF (page()) stays a fixed A4 sheet; the native page served on
+# resources.brisken.com is a full-bleed, responsive product page that fills the
+# viewport and carries more content (how-it-works, delivers, FAQ, integrations,
+# production proof) rather than a scaled A4 sheet floating in a grey stage.
+# The atomic brand visuals (.funnel/.radial/.arch/.fee/.rflow/.dark/.steps/.dots)
+# are reused from BASE_CSS so the web page and the PDF share the same visual DNA.
 WEB_CSS = r"""
-html,body{width:auto;height:100%;}
-body{margin:0;height:100vh;display:flex;flex-direction:column;background:#e2e8f0;overflow:hidden;}
-.topbar{flex:0 0 auto;display:flex;justify-content:space-between;align-items:center;
-  padding:12px 22px;background:#fff;border-bottom:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(15,23,42,.06);}
-.topbar a{font-family:'IBM Plex Sans',sans-serif;text-decoration:none;font-size:14px;font-weight:600;}
-.tb-back{color:#475569;}
-.tb-dl{background:var(--ac);color:#fff;padding:8px 18px;border-radius:99px;}
-.stage{flex:1 1 auto;display:flex;align-items:center;justify-content:center;overflow:auto;padding:14px;}
-.sheet-wrap{flex:0 0 auto;position:relative;width:210mm;background:#fff;overflow:hidden;
-  box-shadow:0 10px 34px rgba(15,23,42,.18);}
-.sheet-wrap .sheet{height:auto;min-height:297mm;}
+html{width:auto;height:auto;scroll-behavior:smooth;}
+body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
+  font-family:'IBM Plex Sans',sans-serif;-webkit-font-smoothing:antialiased;}
+.wnav{position:sticky;top:0;z-index:40;display:flex;justify-content:space-between;align-items:center;
+  gap:16px;padding:11px 26px;background:rgba(255,255,255,.92);border-bottom:1px solid #e6ebf2;}
+.wnav .nl{display:flex;align-items:center;gap:11px;min-width:0;}
+.wnav .nl .nlogo{height:22px;display:block;}
+.wnav .nl .sep{color:#cbd5e1;}
+.wnav .nl .plabel{font-family:'Space Grotesk';font-weight:600;font-size:14px;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.wnav .nr{display:flex;align-items:center;gap:14px;flex:0 0 auto;}
+.wnav a{text-decoration:none;font-size:13.5px;font-weight:600;}
+.wnav .nback{color:#64748b;}
+.wnav .ndl{background:var(--ac);color:#fff;padding:8px 16px;border-radius:99px;}
+.inner{max-width:1160px;margin:0 auto;padding:0 26px;}
+
+/* hero fills the first screen */
+.whero{position:relative;overflow:hidden;border-bottom:1px solid #e6ebf2;
+  background:radial-gradient(1100px 480px at 82% -12%,var(--glow),transparent 60%),linear-gradient(180deg,#ffffff,#f4f7fb);}
+.whero::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--ac),var(--ac2));}
+.whero .inner{display:grid;grid-template-columns:1.04fr .96fr;gap:52px;align-items:center;
+  min-height:calc(100vh - 57px);padding-top:44px;padding-bottom:44px;}
+.weyebrow{font-family:'Space Grotesk';font-size:13px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--ac);margin-bottom:14px;}
+.whero h1{font-family:'Space Grotesk';font-size:52px;line-height:1.03;letter-spacing:-1.2px;font-weight:700;color:#0f172a;margin:0 0 18px;}
+.whero h1 .ac{color:var(--ac);}
+.wpromise{font-size:20px;line-height:1.45;color:#475569;max-width:36ch;}
+.wrename{font-size:13.5px;color:#94a3b8;margin-top:12px;}
+.wpoints{list-style:none;margin:26px 0 0;padding:0;display:flex;flex-direction:column;gap:12px;}
+.wpoints li{position:relative;padding-left:26px;font-size:15px;line-height:1.5;color:#334155;}
+.wpoints li::before{content:"";position:absolute;left:0;top:7px;width:9px;height:9px;background:var(--ac);border-radius:2px;transform:rotate(45deg);}
+.wcta{display:flex;flex-wrap:wrap;gap:12px;margin-top:32px;}
+.wbtn{display:inline-block;text-decoration:none;font-weight:600;font-size:14px;border-radius:99px;padding:12px 22px;transition:transform .15s ease,box-shadow .15s ease;}
+.wbtn.primary{background:var(--ac);color:#fff;box-shadow:0 6px 18px var(--glow);}
+.wbtn.ghost{background:#fff;color:#0f172a;border:1px solid #e6ebf2;}
+.wbtn:hover{transform:translateY(-2px);}
+.wvisual{background:#fff;border:1px solid #e6ebf2;border-radius:18px;padding:26px;box-shadow:0 16px 44px rgba(15,23,42,.09);}
+.wvisual.bare{background:none;border:none;padding:0;box-shadow:none;}
+.wvlab{font-family:'Space Grotesk';font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#64748b;text-align:center;margin-bottom:18px;}
+
+/* content bands */
+.wband{border-bottom:1px solid #eef2f7;padding:58px 0;}
+.wband.alt{background:#ffffff;}
+.wlab{font-family:'Space Grotesk';font-size:12.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--ac);margin-bottom:10px;}
+.wh2{font-family:'Space Grotesk';font-size:27px;font-weight:700;color:#0f172a;letter-spacing:-.4px;margin-bottom:8px;}
+.wlede{font-size:16.5px;line-height:1.6;color:#475569;max-width:72ch;margin-bottom:26px;}
+.wband .steps{margin-top:6px;}
+.wband .dark{margin-top:6px;}
+.wcols2{display:grid;grid-template-columns:1fr 1fr;gap:44px;margin-top:6px;}
+.wcols2 .band-lab{font-family:'Space Grotesk';font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ac);margin-bottom:10px;}
+.wcols2 .p{font-size:15px;line-height:1.6;color:#475569;}
+
+/* cards (capabilities / governance / proof) */
+.wcards{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:6px;}
+.wcard{background:#fff;border:1px solid #e6ebf2;border-radius:14px;padding:24px;border-top:3px solid var(--ac);box-shadow:0 1px 2px rgba(15,23,42,.04);}
+.wcard .ct{font-family:'Space Grotesk';font-size:16.5px;font-weight:600;color:#0f172a;margin-bottom:8px;}
+.wcard .cd{font-size:14px;line-height:1.55;color:#64748b;}
+.wcard .cs{font-family:'Space Grotesk';font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ac);margin-bottom:12px;display:block;}
+
+/* faq */
+.wfaq{margin-top:6px;}
+.wfaq details{border-top:1px solid #e6ebf2;padding:18px 2px;}
+.wfaq details:last-child{border-bottom:1px solid #e6ebf2;}
+.wfaq summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:18px;
+  font-family:'Space Grotesk';font-weight:600;font-size:17px;color:#0f172a;}
+.wfaq summary::-webkit-details-marker{display:none;}
+.wfaq summary::after{content:"+";color:var(--ac);font-size:24px;line-height:1;font-weight:700;flex:0 0 auto;transition:transform .18s ease;}
+.wfaq details[open] summary::after{transform:rotate(45deg);}
+.wfaq p{margin-top:12px;font-size:15.5px;line-height:1.65;color:#475569;max-width:88ch;}
+
+/* works-with chips */
+.wchips{display:flex;flex-wrap:wrap;gap:12px;margin-top:6px;}
+.wchip{background:#fff;border:1px solid #e6ebf2;border-radius:10px;padding:11px 17px;font-size:14px;font-weight:600;
+  color:#334155;box-shadow:0 1px 2px rgba(15,23,42,.04);display:flex;align-items:center;gap:9px;}
+.wchip img{height:19px;width:auto;display:block;}
+.wchip .arrow{color:#cbd5e1;font-weight:700;margin:0 2px;}
+
+/* proof strip + closing CTA + footer */
+.wproof{padding:44px 0;text-align:center;}
+.wproof .proof{margin-top:0;}
+.wcta-band{background:#0f172a;color:#e2e8f0;padding:56px 0;text-align:center;}
+.wcta-band h2{font-family:'Space Grotesk';color:#fff;font-size:26px;letter-spacing:-.3px;margin-bottom:10px;}
+.wcta-band p{color:#94a3b8;font-size:16px;margin:0 auto 26px;max-width:52ch;}
+.wcta-band .wbtn.ghost{background:transparent;color:#fff;border-color:rgba(148,163,184,.5);}
+.wfoot{padding:26px;text-align:center;font-size:13px;color:#94a3b8;background:#f4f7fb;line-height:1.7;}
+.wfoot a{color:var(--ac);text-decoration:none;font-weight:600;}
+
+@media(max-width:900px){
+  .whero .inner{grid-template-columns:1fr;min-height:0;gap:34px;}
+  .whero h1{font-size:40px;}
+  .wcards{grid-template-columns:1fr;}
+  .wcols2{grid-template-columns:1fr;gap:26px;}
+  .wnav .nback{display:none;}
+}
 """
 
-# fit-to-viewport: scale the A4 sheet to fill the stage (presentation full-screen)
-FIT_JS = ("<script>(function(){var w=document.querySelector('.sheet-wrap'),"
-          "s=document.querySelector('.stage'),W=210*96/25.4,H=297*96/25.4;"
-          "function f(){var z=Math.min((s.clientWidth-28)/W,(s.clientHeight-28)/H);"
-          "if(z>0)w.style.zoom=z;}addEventListener('resize',f);addEventListener('load',f);f();})();</script>")
+# --------------------------------------------------------------------------- #
+# Web-page building blocks. All copy below traces to the internal sourced set
+# (the qa-clusters, the onepilot platform/prototype pages, and the approved
+# one-pager copy in this file). No new claims; Bank Fee and TreasuryCentral keep
+# the restraint of the shipped one-pagers (no unbacked "live customer" line).
+LAST_UPDATED = "2026-07-14"
+
+
+def _cta_buttons(p, hero=True):
+    pdf = f'/{p["short"]}.pdf'
+    deck = p.get("deck")
+    if deck:
+        primary = f'<a class="wbtn primary" href="{deck}">See the full deck &rarr;</a>'
+        second = f'<a class="wbtn ghost" href="{pdf}" download>Download the one-pager</a>'
+    else:
+        primary = f'<a class="wbtn primary" href="{pdf}" download>Download the one-pager</a>'
+        second = '<a class="wbtn ghost" href="/">All resources</a>'
+    return primary + second
+
+
+def web_hero(p, eyebrow, h1, promise, points, visual, rename="", bare=False):
+    rn = f'<p class="wrename">{rename}</p>' if rename else ""
+    pts = "".join(f"<li>{x}</li>" for x in points)
+    vcls = "wvisual bare" if bare else "wvisual"
+    return f'''<section class="whero"><div class="inner">
+  <div class="hcopy">
+    <div class="weyebrow">{eyebrow}</div>
+    <h1>{h1}</h1>
+    <p class="wpromise">{promise}</p>
+    {rn}
+    <ul class="wpoints">{pts}</ul>
+    <div class="wcta">{_cta_buttons(p)}</div>
+  </div>
+  <div class="{vcls}">{visual}</div>
+</div></section>'''
+
+
+def web_band(label, inner, h2="", lede="", alt=False):
+    cls = "wband alt" if alt else "wband"
+    h2h = f'<h2 class="wh2">{h2}</h2>' if h2 else ""
+    ledeh = f'<p class="wlede">{lede}</p>' if lede else ""
+    return f'<section class="{cls}"><div class="inner"><div class="wlab">{label}</div>{h2h}{ledeh}{inner}</div></section>'
+
+
+def web_steps(steps, cols=3):
+    body = "".join(f'<div class="step"><div class="sn">{n}</div><div class="st">{t}</div><div class="sd">{d}</div></div>'
+                   for n, t, d in steps)
+    return f'<div class="steps" style="grid-template-columns:repeat({cols},1fr);">{body}</div>'
+
+
+def web_cards(cards):
+    out = []
+    for s, t, d in cards:
+        cs = f'<span class="cs">{s}</span>' if s else ""
+        out.append(f'<div class="wcard">{cs}<div class="ct">{t}</div><div class="cd">{d}</div></div>')
+    return f'<div class="wcards">{"".join(out)}</div>'
+
+
+def web_cols2(left, right):
+    return f'<div class="wcols2">{left}{right}</div>'
+
+
+def web_faq(items):
+    body = "".join(f'<details><summary>{q}</summary><p>{a}</p></details>' for q, a in items)
+    return f'<div class="wfaq">{body}</div>'
+
+
+def web_chips(items):
+    """items: list of (label, logo_key_or_None). A None label renders an arrow."""
+    parts = []
+    for label, logo in items:
+        if label == "&rarr;":
+            parts.append('<span class="arrow">&rarr;</span>')
+            continue
+        img = f'<img src="data:image/png;base64,{LOGOS[logo]}" alt="">' if logo else ""
+        parts.append(f'<span class="wchip">{img}{label}</span>')
+    return f'<div class="wchips">{"".join(parts)}</div>'
+
+
+def web_cta_band(p):
+    deck = p.get("deck")
+    btns = []
+    if deck:
+        btns.append(f'<a class="wbtn primary" href="{deck}">See the full deck &rarr;</a>')
+    btns.append(f'<a class="wbtn primary" href="/{p["short"]}.pdf" download>Download the one-pager</a>' if not deck
+                else f'<a class="wbtn ghost" href="/{p["short"]}.pdf" download>Download the one-pager</a>')
+    btns.append('<a class="wbtn ghost" href="https://www.brisken.com">www.brisken.com</a>')
+    return (f'<section class="wcta-band"><div class="inner"><h2>{p.get("cta_h", "Want the full picture?")}</h2>'
+            f'<p>{p.get("cta_p", "The one-pager is the summary. The full deck and the team go deeper.")}</p>'
+            f'<div class="wcta" style="justify-content:center;">{"".join(btns)}</div></div></section>')
+
+
+def web_footer():
+    return (f'<footer class="wfoot"><b>Brisken</b>, an SAP Co-Innovation Partner &middot; '
+            f'<a href="https://www.brisken.com">www.brisken.com</a><br>Last updated: {LAST_UPDATED}</footer>')
+
+
+# ---- per-product visuals (reuse the A4 brand widgets, laid out for a panel) --
+def vis_mdh():
+    return (f'<div class="wvlab">Every provider &middot; one feed</div>'
+            f'<div class="logos">{lchip("bloomberg")}{lchip("lseg")}{lchip("ice")}{lchip("cme")}</div>'
+            '<div class="funnel"><div class="stem"></div><div class="feed">one governed feed</div>'
+            '<div class="stem"></div><div class="outs"><span class="out">SAP</span><span class="out">non-SAP</span></div></div>'
+            '<div class="vcap">Both directions, no code. Central banks included.</div>')
+
+
+def vis_smart_trading():
+    return ('<div class="wvlab">Venue to SAP, straight through</div>'
+            '<div class="steps" style="grid-template-columns:1fr;gap:16px;">'
+            '<div class="step"><div class="sn">01</div><div class="st">Decide &amp; approve</div><div class="sd">Decision, approval and execution, with the controls applied up front.</div></div>'
+            '<div class="step"><div class="sn">02</div><div class="st">Execution venues</div><div class="sd">Captured at the venue: Bloomberg FX GO, FXall, 360T, BidFX and more.</div></div>'
+            '<div class="step"><div class="sn">03</div><div class="st">SAP TRM</div><div class="sd">The deal is created in SAP TRM straight through, validated on the way in.</div></div>'
+            '</div>')
+
+
+def vis_remittance():
+    return ('<div class="wvlab">Unstructured in &middot; posted out</div>'
+            '<div class="rflow">'
+            '<div class="rrow"><span class="dpill">Email body</span><span class="dpill">PDF attachment</span><span class="dpill">Scanned advice</span></div>'
+            '<div class="rside">Unstructured emails and attachments</div>'
+            '<div class="stem"></div><div class="dai">AI reads &middot; structures &middot; matches</div><div class="stem"></div>'
+            f'<div class="sapnode"><img src="data:image/png;base64,{LOGOS["sap"]}" alt="SAP"><b>SAP S/4HANA</b></div>'
+            '<div class="vcap">Posted, matched, exceptions surfaced.</div></div>')
+
+
+def vis_bank_fee():
+    # Shorter bars, and a chart box tall enough to contain the bar PLUS its
+    # caption (the .cbar is bar + caption; with align-items:flex-end a caption
+    # that overflows the box pushes the bar top up into the label). Extra height
+    # keeps clear air between the "Charged vs agreed" label and the bars.
+    return ('<div class="wvlab">Charged vs agreed</div>'
+            '<div class="chart" style="height:60mm;">'
+            '<div class="cbar"><div class="col" style="height:40mm;background:linear-gradient(180deg,#cbd5e1,#94a3b8);"><div class="over"></div></div><div class="clab"><b>Charged</b>what the bank billed</div></div>'
+            '<div class="cbar"><div class="col" style="height:24mm;background:var(--ac);"></div><div class="clab"><b>Agreed</b>what you negotiated</div></div>'
+            '</div>'
+            '<div class="ledger" style="margin-top:16px;"><div class="lhead">Line by line</div>'
+            '<div class="lrow"><span>Wire transfer fee</span><span class="ltag ok">matches</span></div>'
+            '<div class="lrow"><span>FX conversion margin</span><span class="ltag flag">flagged</span></div>'
+            '<div class="lrow"><span>Custody fee</span><span class="ltag ok">matches</span></div>'
+            '<div class="lrow"><span>Cash management</span><span class="ltag ok">matches</span></div>'
+            '<div class="lrow"><span>Payment processing</span><span class="ltag flag">flagged</span></div></div>')
+
+
+def vis_treasurycentral():
+    import math
+    nodes = ["Cash", "Investments", "Debt", "FX", "Market Data", "Governance"]
+    cx, cy, rx, ry = 75.0, 37.0, 56.0, 28.0
+    node_html, spokes = "", ""
+    for i, name in enumerate(nodes):
+        rad = math.radians(-90 + i * 60)
+        x = cx + rx * math.cos(rad)
+        y = cy + ry * math.sin(rad)
+        spokes += f'<line x1="{cx:.1f}" y1="{cy:.1f}" x2="{x:.1f}" y2="{y:.1f}" stroke="var(--ac)" stroke-width="0.5" stroke-opacity="0.35"/>'
+        node_html += f'<div class="rad-node" style="left:{x / 150 * 100:.1f}%;top:{y / 74 * 100:.1f}%;">{name}</div>'
+    svg = f'<svg viewBox="0 0 150 74" preserveAspectRatio="none" fill="none">{spokes}</svg>'
+    return (f'<div class="wvlab">One cockpit &middot; six domains</div>'
+            f'<div class="radial">{svg}<div class="rad-core"><div class="c1">Treasury<span class="ac">Central</span></div>'
+            f'<div class="c2">the cockpit</div></div>{node_html}</div>')
+
+
+def vis_onepilot():
+    pillars = "".join(f'<div class="pil">{x}</div>' for x in
+                      ["Market Data Hub", "Smart Trading", "Remittance Gate", "Bank Fee Portal"])
+    return ('<div class="arch">'
+            '<div class="arch-top">One<span class="ac">Pilot</span><span class="lab">the governed AI layer</span></div>'
+            '<div class="arch-conn"></div>'
+            f'<div class="arch-pillars">{pillars}</div>'
+            '<div class="arch-base">out to <b>SAP</b> and non-SAP, bi-directional, across your landscape</div></div>')
+
+
+# ---- per-product web page bodies ------------------------------------------- #
+def web_body_market_data_hub(p):
+    return (
+        web_hero(
+            p, "Market data", 'Market <span class="ac">Data Hub</span>',
+            "Every rate, curve and price through one managed feed. No hand-keyed uploads.",
+            ["Bloomberg, LSEG, ICE and CME through one governed feed, not a script per provider.",
+             "Ingested once, normalized, then distributed to SAP and non-SAP, both directions.",
+             "Adding or switching a provider is a configuration change, not a new interface."],
+            vis_mdh())
+        + web_band("How it works", web_steps([
+            ("1", "Ingest", "Every provider's rates, curves and prices, each in its own format."),
+            ("2", "Govern", "One managed feed controls entitlements and usage in a single place."),
+            ("3", "Distribute", "The same number to SAP and non-SAP, both ways, straight through."),
+        ]), h2="One managed feed, from source to system", alt=True)
+        + web_band("What it retires", dark_band("What it <span>retires</span>", [
+            "Per-provider upload scripts, maintained by hand",
+            "Rates re-keyed into spreadsheets before they reach SAP",
+            "Point-to-point integrations that break when a feed changes"]))
+        + web_band("Works with", web_chips([
+            ("", "bloomberg"), ("", "lseg"), ("", "ice"), ("", "cme"),
+            ("&rarr;", None), ("SAP TRM", None), ("Market Rates Management", None), ("non-SAP", None)]),
+            h2="Every provider in, SAP and non-SAP out",
+            lede="Switching or adding a provider is a configuration change, not a new interface, so there is no per-vendor rebuild to maintain.", alt=True)
+        + web_band("Common questions", web_faq([
+            ("How do I get Bloomberg market data into SAP TRM automatically?",
+             "The SAP-native path is a Datafeed RFC connection with per-provider function lists and translation tables that need ABAP upkeep and break when Bloomberg changes a field. A governed market-data hub ingests Bloomberg once, normalizes it, and distributes into SAP TRM with an audit trail and exception alerts, no code."),
+            ("Can I automate FX rates and yield curves into SAP Market Rates Management without ABAP?",
+             "Yes. A no-code hub maps and schedules FX rates and yield curves into SAP Market Rates Management through configuration, so the treasury team owns the feed without writing or changing ABAP."),
+            ("What is the alternative to a custom Bloomberg-to-SAP script that keeps breaking?",
+             "A custom script breaks whenever the provider changes a field or the person who wrote it leaves. A managed hub replaces it with a configured, monitored interface, with an audit trail and manage-by-exception alerts."),
+        ]))
+        + web_band("Proof", '<p class="wlede" style="margin:0;">Listed on the SAP Store. The flagship product, with its own overview deck. SAP Co-Innovation Partner, ISO 27001 and SOC 1 Type II.</p>', alt=True)
+    )
+
+
+def web_body_smart_trading(p):
+    return (
+        web_hero(
+            p, "Trade capture", 'Brisken <span class="ac">Smart Trading</span>',
+            "The trade lifecycle from venue to booked deal, straight through. No re-keying.",
+            ["Captured at the execution venue and created in SAP TRM straight through, validated on the way in.",
+             "Venue and TMS agnostic, so a new venue is a configuration change, not a rebuild.",
+             "Four-eye approval and segregation of duties, built in as standard."],
+            vis_smart_trading(),
+            rename="Formerly Trade Automation / TraderPlus. Now Brisken Smart Trading (BST).")
+        + web_band("Why it matters",
+                   '<p class="wlede" style="margin:0;">Treasury desks still re-key trades from the venue into SAP TRM by hand: slow, a control risk, and it breaks the moment a venue changes a field.</p>',
+                   h2="The manual middle, gone", alt=True)
+        + web_band("Built in", dark_band("Built <span>in</span>", [
+            "Four-eye approval and segregation of duties, as standard",
+            "No ABAP and no per-venue interface to maintain",
+            "Straight-through capture, so the manual re-key is gone"], mark="+"))
+        + web_band("Works with", web_chips([
+            ("FXall", None), ("Bloomberg FX GO", None), ("360T", None), ("BidFX", None), ("Citi Pulse", None),
+            ("&rarr;", None), ("SAP TRM", None)]),
+            h2="Any venue in, SAP TRM out",
+            lede="The end-to-end trade lifecycle: decision, request, approval, execution, mapping, and deal creation in SAP. Trading-venue and TMS agnostic.", alt=True)
+        + web_band("Common questions", web_faq([
+            ("What is Brisken Smart Trading (BST)?",
+             "BST is the FX and trade-execution application in the family, and the live flagship. It brings exposure, market data and execution onto one surface and logs every action back into SAP under four-eye control."),
+            ("How is a trade captured without re-keying it into SAP?",
+             "The deal is captured at the execution venue and created in SAP TRM straight through, validated on the way in. Because it is venue and TMS agnostic, adding a new venue is a configuration change rather than a rebuild."),
+        ]))
+        + web_band("Proof", '<p class="wlede" style="margin:0;">Listed on the SAP Store as Trade Automation. The live flagship on SAP. SAP Co-Innovation Partner, ISO 27001 and SOC 1 Type II.</p>', alt=True)
+    )
+
+
+def web_body_remittance(p):
+    return (
+        web_hero(
+            p, "Remittance processing", 'Remittance <span class="ac">Advice Gate</span>',
+            "AI reads the remittance and posts it. No one retypes anything.",
+            ["An LLM reads the unstructured email or attachment, structures it, and posts to SAP S/4HANA.",
+             "Clean items post straight through; only genuine exceptions reach the team, with the source advice attached.",
+             "In production: a live agricultural-sector customer runs it on S/4HANA Private Cloud."],
+            vis_remittance())
+        + web_band("How it works",
+                   '<p class="wlede" style="margin-bottom:0;">An LLM reads the unstructured email or attachment, structures it, and posts to SAP S/4HANA. Matches happen on the way in, so clean items flow through and only exceptions surface. A monitor lets the team correct and retrain it as new layouts appear.</p>',
+                   h2="From unstructured advice to a posted match", alt=True)
+        + web_band("What it delivers", web_cols2(
+            '<div><div class="band-lab">Straight through</div>' + dots([
+                "Clean items post straight through, untouched by a person.",
+                "The team reviews exceptions instead of retyping every remittance by hand."]) + '</div>',
+            '<div><div class="band-lab">Any input</div>' + dots([
+                "Reads email bodies, PDF attachments, scanned documents and spreadsheet exports.",
+                "Extracts payer, invoice references, amounts and deductions, no fixed template."]) + '</div>'))
+        + web_band("Works with", web_chips([
+            ("Email", None), ("PDF", None), ("Scanned advice", None), ("CSV", None),
+            ("&rarr;", None), ("SAP S/4HANA", None), ("Serrala", None), ("BPI", None), ("HighRadius", None)]),
+            h2="Any remittance format in, SAP cash application out", alt=True)
+        + web_band("Common questions", web_faq([
+            ("Can AI read remittance PDFs and post them to SAP S/4HANA?",
+             "Yes. A remittance gate uses an LLM to read remittance PDFs, email bodies and attachments, extract the structured fields, and post them into SAP S/4HANA cash application. A live agricultural-sector customer runs this on a ChatGPT-powered deployment on S/4HANA Private Cloud."),
+            ("How do I reduce manual cash-application matching in SAP?",
+             "A remittance gate does the reading and structuring automatically and hands SAP the data already formatted for matching, so the team reviews exceptions instead of retyping every remittance by hand."),
+            ("What remittance inputs can an AI gate read?",
+             "Email bodies, PDF attachments, scanned documents and spreadsheet exports. It reads the unstructured input directly rather than relying on a fixed template, and a monitor lets the team correct and retrain it as new layouts appear."),
+            ("Does it work with Serrala, BPI or HighRadius?",
+             "The gate delivers structured remittance data into SAP S/4HANA, and can also target cash-application platforms such as Serrala, BPI or HighRadius. It sits upstream as the step that turns unstructured remittances into clean, structured input."),
+        ]))
+        + web_band("In production",
+                   '<p class="wlede" style="margin:0;">Already in production: a live agricultural-sector customer runs this on a ChatGPT-powered deployment on S/4HANA Private Cloud, with the stated goal of removing the human from the retype entirely.</p>', alt=True)
+    )
+
+
+def web_body_bank_fee(p):
+    return (
+        web_hero(
+            p, "Bank fee control", 'Bank <span class="ac">Fee Portal</span>',
+            "Check every bank charge against what you actually agreed, line by line.",
+            ["Loads every bank fee statement in any format: CAMT.086, TWIST BSB and proprietary.",
+             "Matches each charge against your negotiated agreement and flags every variance.",
+             "A line-level audit trail behind every fee, in one place, not scattered across statements."],
+            vis_bank_fee())
+        + web_band("How it works", web_steps([
+            ("1", "Load", "Every bank statement and fee line, from every account, in any format."),
+            ("2", "Match", "Each charge against your negotiated agreement."),
+            ("3", "Flag", "Every variance, with a line-level trail behind it."),
+        ]), h2="Every statement in, every variance flagged",
+            lede="Fee leakage is rarely a single dramatic overcharge; it is the slow drift between a contracted rate and what the bank actually applies, on the statements nobody reviews because they came in the wrong format.", alt=True)
+        + web_band("What it recovers", dark_band("What it <span>recovers</span>", [
+            "Overcharges that would otherwise be paid without a second look",
+            "The audit trail behind every fee, in one place, not scattered across statements"], mark="+"))
+        + web_band("Works with", web_chips([
+            ("CAMT.086 (ISO 20022)", None), ("TWIST BSB", None), ("Proprietary formats", None),
+            ("&rarr;", None), ("SAP bank-fee analysis", None), ("Any Bank Fee Analyzer", None)]),
+            h2="Any statement format in, one analysis out",
+            lede="SAP's native bank-fee analysis expects clean CAMT.086 in, but banks still send proprietary and TWIST BSB formats. A format-agnostic portal normalizes them all so the fee review is not gated on format.", alt=True)
+        + web_band("Common questions", web_faq([
+            ("How do I automate CAMT.086 bank fee statement analysis in SAP?",
+             "CAMT.086 is the ISO 20022 bank-fee-statement format that replaces TWIST BSB. SAP added native bank-fee analysis in S/4HANA 1809 via a Fiori app, but it expects clean CAMT.086 in; banks still send proprietary and TWIST formats. A bank-fee portal ingests any format, enriches for analytics, and distributes to the analyzer, so the fee review is not gated on format."),
+            ("How do I detect bank overcharges or fee leakage with SAP treasury?",
+             "Bank fee statements are rarely audited line by line, so contracted rates and applied charges drift apart unnoticed. Loading the statements as structured data lets the system compare charged against expected fees and flag discrepancies. The portal's job is getting every statement, in any format, into that analysis so the comparison can run at all."),
+            ("How do I process TWIST BSB or proprietary bank fee statements into SAP?",
+             "A format-agnostic portal parses TWIST BSB and proprietary files, normalizes them to the structure SAP's analyzer reads, and delivers them in, so no bank is left out of the review."),
+        ]))
+    )
+
+
+def web_body_treasurycentral(p):
+    return (
+        web_hero(
+            p, "The treasury cockpit", 'Treasury<span class="ac">Central</span>',
+            "Cash, investments, debt, FX and market data in one screen, on your SAP data.",
+            ["One view of the money: cash, investments and debt across entities, reconciled to SAP.",
+             "FX and market data validated before they reach a decision.",
+             "Audit trail, manage-by-exception, four-eye and segregation of duties on every record."],
+            vis_treasurycentral())
+        + web_band("What it is",
+                   '<p class="wlede" style="margin-bottom:0;">Most SAP finance teams run several brittle, hand-built feeds to move market data, trades, bank files and remittances in and out of SAP. They break when a field changes or the person who built them leaves. TreasuryCentral takes them off your team: the cockpit is what you see; OnePilot is the layer that moves the data in and out of SAP, governed end to end. The treasurer stays in command.</p>',
+                   h2="The treasurer's day on one surface", alt=True)
+        + web_band("What you get", web_cards([
+            ("One view of the money", "Cash, investments and debt", "Across entities, current and reconciled to SAP, not stitched from spreadsheets."),
+            ("Governed market data", "FX and rates you can trust", "Rates, curves and exposures from your providers, validated before they reach a decision."),
+            ("Control built in", "Governed by design", "Audit trail, manage-by-exception, four-eye and segregation of duties on every record."),
+        ]))
+        + web_band("Common questions", web_faq([
+            ("What is TreasuryCentral?",
+             "TreasuryCentral is the treasury edition of OnePilot. It puts the treasurer's whole day on one surface: cash, FX, market data, trades, bank files and remittances, governed end to end, on your SAP data."),
+            ("Does it need a separate data store?",
+             "No. It works on the SAP data you already trust, so there is no separate store to reconcile. Every move is logged, and every action stays inside your controls."),
+        ]), alt=True)
+    )
+
+
+def web_body_onepilot(p):
+    return (
+        web_hero(
+            p, "The AI operating layer", 'One<span class="ac">Pilot</span>',
+            "The governed AI layer that runs your treasury apps. In production now.",
+            ["It asks, automates and acts across the applications, always inside your controls.",
+             "Build your own apps and automations without writing a line of code.",
+             "In production: a financial-services group governs several data domains from one deployment."],
+            vis_onepilot(), bare=True)
+        + web_band("How it works", web_steps([
+            ("1", "Ingest", "Any source and format: Bloomberg, LSEG, 360T, OANDA, central banks, banks, files, email."),
+            ("2", "Validate", "Cleansing, mapping, calculations and anomaly detection, before anything reaches SAP."),
+            ("3", "Govern", "Audit trail, manage-by-exception, segregation of duties and four-eye on every record."),
+            ("4", "Distribute", "Straight into S/4HANA, TRM, Cash and Credit Management. No ABAP, no custom interface."),
+        ], cols=4), h2="From any source to governed SAP records", alt=True)
+        + web_band("Governed by design", web_cards([
+            ("Permission-bound", "Agents act within access", "An agent sees and acts only on what the user is allowed to. Access outside that boundary is not dimmed, it is absent."),
+            ("Four-eye and SoD", "The agent prepares, a person releases", "Approvals and separation of duties on the actions that need them."),
+            ("Full audit trail", "Manage by exception", "Every record is traceable, and nothing moves outside the rules you set."),
+        ]))
+        + web_band("In production", web_cards([
+            ("Financial services", "S/4HANA Public Cloud", "A financial-services group already governs several data domains from one OnePilot deployment."),
+            ("Agricultural", "S/4HANA", "Posts remittances into S/4HANA on a governed AI gate, with the retype removed."),
+            ("Chemicals", "S/4HANA On-Prem", "An AI funding-request process, a complex multi-integration with SAP, fully automated."),
+        ]), alt=True)
+        + web_band("Common questions", web_faq([
+            ("Does OnePilot replace SAP?",
+             "No. OnePilot orchestrates on top of SAP. The book of record stays in SAP, execution on the trading platform, and market data through the hub."),
+            ("Can we deploy AI agents in treasury without consuming our IT budget?",
+             "Yes. OnePilot is configured, not coded, and runs as a managed product on top of your SAP landscape, so there is no ABAP build and nothing new for your IT team to own. A new feed or agent goes live in weeks, which keeps the work off the IT backlog."),
+            ("Is AI automation in treasury safe?",
+             "It is safe when the AI runs inside your controls rather than around them. Each process works to rules you set and approve, with four-eye release, segregation of duties and a full audit trail on every record. You keep command of policy and exceptions."),
+            ("Can AI improve liquidity forecasting?",
+             "A forecast is only as good as the data feeding it. OnePilot keeps that data current and governed in SAP, so the forecast runs on a clean, reconciled base. Treasury still owns the assumptions and the call."),
+        ]))
+    )
+
+
+WEB_BODIES = {
+    "market-data-hub": web_body_market_data_hub,
+    "smart-trading": web_body_smart_trading,
+    "remittance-advice-gate": web_body_remittance,
+    "bank-fee-portal": web_body_bank_fee,
+    "treasurycentral": web_body_treasurycentral,
+    "onepilot": web_body_onepilot,
+}
+
+# Per-product deck link (only where a full deck exists on the site) + closing copy.
+WEB_META = {
+    "market-data-hub": dict(deck="/market-data-hub-deck.html"),
+    "smart-trading": dict(deck="/smart-trading-deck.html"),
+    "remittance-advice-gate": dict(),
+    "bank-fee-portal": dict(),
+    "treasurycentral": dict(),
+    "onepilot": dict(),
+}
 
 
 def _sheet(p):
@@ -475,13 +947,24 @@ def page(p):  # print / PDF: bare A4 sheet
     return f'{_head(p)}\n<body>{_sheet(p)}</body></html>'
 
 
-def page_web(p):  # native web page: chrome + sheet scaled to fill the screen
-    return f'''{_head(p, WEB_CSS)}
+def page_web(p):  # native web page: full-bleed responsive product page
+    short = p["short"]
+    pw = {**p, **WEB_META.get(short, {})}
+    body = WEB_BODIES[short](pw)
+    return f'''{_head(pw, WEB_CSS)}
 <body>
-<div class="topbar"><a class="tb-back" href="/">&larr; Brisken Resources</a>
-<a class="tb-dl" href="/{p['short']}.pdf">Download PDF</a></div>
-<div class="stage"><div class="sheet-wrap">{_sheet(p)}</div></div>
-{FIT_JS}
+<div class="wnav">
+  <a class="nl" href="/">
+    <img class="nlogo" src="data:image/png;base64,{LOGOS['brisken']}" alt="Brisken">
+    <span class="sep">&middot;</span><span class="plabel">{pw['title']}</span>
+  </a>
+  <div class="nr"><a class="nback" href="/">&larr; All resources</a>
+  <a class="ndl" href="/{short}.pdf" download>Download PDF</a></div>
+</div>
+{body}
+<section class="wproof"><div class="inner">{PROOF}</div></section>
+{web_cta_band(pw)}
+{web_footer()}
 </body></html>'''
 
 
@@ -530,7 +1013,17 @@ def main() -> int:
     ap.add_argument("--out", type=Path, default=OUT_DEFAULT, help=f"PDF output dir (default: {OUT_DEFAULT})")
     ap.add_argument("--web-out", type=Path, default=WEB_OUT_DEFAULT, help=f"web-page HTML output dir (default: {WEB_OUT_DEFAULT})")
     ap.add_argument("--no-web", action="store_true", help="skip writing the native web-page HTML")
+    ap.add_argument("--web-only", action="store_true",
+                    help="write only the web-page HTML; skip Chrome/PDF rendering and the PDF gate (PDFs unchanged)")
     args = ap.parse_args()
+
+    if args.web_only:
+        web = args.web_out.resolve()
+        web.mkdir(parents=True, exist_ok=True)
+        for p in PRODUCTS:
+            (web / f'{p["short"]}.html').write_text(page_web(p), encoding="utf-8")
+        print(f"web pages: {len(PRODUCTS)} written -> {web} (web-only; PDFs untouched)")
+        return 0
 
     if not CHROME.is_file():
         sys.exit(f"Chrome not found at {CHROME}; it is the only render engine that works while Edge is open")
