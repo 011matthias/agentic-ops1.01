@@ -56,6 +56,9 @@ def _b64(name: str) -> str:
 
 
 LOGOS = {k: _b64(k) for k in ("brisken", "bloomberg", "lseg", "ice", "cme", "sap")}
+# Square Brisken mark for the browser-tab favicon (150x150). Every served page
+# carries it so the tab reads "Brisken" with the logo, not a default globe.
+FAVICON = _b64("brisken-favicon")
 
 
 def lchip(key: str) -> str:
@@ -600,6 +603,36 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
   .wfoot{background:#fff !important;padding:6mm 0 0 !important;}
   a{color:inherit !important;}
 }
+"""
+
+# Extra CSS for the full-deck pages: the same nav/hero/band system as the
+# one-pagers, plus a stacked-slide hero visual and a large embedded deck viewer.
+DECK_CSS = r"""
+/* hero visual: a reliable stack of slide cards (no live-PDF dependency) */
+.deckcard{background:#fff;overflow:hidden;}
+.deckstack{position:relative;height:250px;margin-top:4px;}
+.deckstack .sl{position:absolute;left:0;right:0;margin:0 auto;top:11%;width:66%;height:78%;border-radius:12px;
+  background:#fff;border:1px solid #e6ebf2;box-shadow:0 12px 34px rgba(15,23,42,.10);}
+.deckstack .s3{transform:translate(30px,15px) rotate(4deg);opacity:.42;}
+.deckstack .s2{transform:translate(15px,8px) rotate(2deg);opacity:.7;}
+.deckstack .s1{border-top:4px solid var(--ac);display:flex;flex-direction:column;justify-content:center;
+  gap:14px;padding:26px 30px;background:linear-gradient(162deg,#fff,#f8fafc);}
+.deckstack .slrow{height:13px;border-radius:6px;background:linear-gradient(90deg,var(--ac),var(--ac2));opacity:.92;}
+.deckstack .slrow.w70{width:70%;}
+.deckstack .slrow.w45{width:45%;background:#e2e8f0;}
+
+/* full embedded deck viewer */
+.deckframe{margin-top:6px;border:1px solid #e6ebf2;border-radius:16px;overflow:hidden;
+  box-shadow:0 18px 50px rgba(15,23,42,.12);background:#334155;}
+.deckview{display:block;width:100%;height:80vh;min-height:520px;border:0;background:#334155;}
+.deck-fallback{display:none;}
+@media(max-width:640px){
+  .deckview{display:none;}
+  .deck-fallback{display:block;margin-top:6px;padding:34px 22px;text-align:center;color:#475569;
+    font-size:15px;line-height:1.7;border:1px dashed #cbd5e1;border-radius:14px;}
+  .deck-fallback a{color:var(--ac);font-weight:600;}
+}
+@media print{.deckframe,.deckview{display:none !important;}}
 """
 
 # --------------------------------------------------------------------------- #
@@ -1167,6 +1200,9 @@ def _head(p, extra_css=""):
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Brisken &middot; {p.get('title', 'Resources')}</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="data:image/png;base64,{FAVICON}">
+<link rel="apple-touch-icon" href="data:image/png;base64,{FAVICON}">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <style>:root{{--ac:{p['accent']};--ac2:{p['accent2']};--glow:{p['glow']};}}{BASE_CSS}{extra_css}</style></head>'''
@@ -1193,6 +1229,83 @@ def page_web(p):  # native web page: full-bleed responsive product page
 {body}
 <section class="wproof"><div class="inner">{PROOF}</div></section>
 {web_cta_band(pw)}
+{web_footer()}
+</body></html>'''
+
+
+# The three multi-page product decks. Copy traces to the approved index-card
+# lines and the shipped one-pager bodies; no new claims. These pages wrap the
+# existing deck PDFs in the same nav/hero/band frame as the one-pagers.
+DECKS = [
+    dict(short="market-data-hub-deck", pdf="market-data-hub-deck", pages=12,
+         title="Market Data Hub deck", h1="Market Data Hub",
+         accent="#0891b2", accent2="#22b8cf", glow="rgba(8,145,178,.28)",
+         promise="Every market-data feed in, one governed layer, six steps from source to system.",
+         points=["Bloomberg, LSEG, ICE and CME feeds into one governed layer",
+                 "Six steps from source to SAP, no code in the middle",
+                 "One normalized feed your treasury apps read"],
+         lede="Twelve pages: the providers, the governed layer in the middle, and the six steps "
+              "that carry a rate from the source into SAP."),
+    dict(short="smart-trading-deck", pdf="smart-trading-deck", pages=10,
+         title="Brisken Smart Trading deck", h1="Brisken Smart Trading",
+         accent="#2563eb", accent2="#60a5fa", glow="rgba(37,99,235,.26)",
+         promise="From the trade decision to the booked deal in SAP, with the manual middle gone.",
+         points=["Straight-through capture into SAP TRM, no re-key",
+                 "The trade decision through to the booked deal in one flow",
+                 "The manual middle step removed"],
+         lede="Ten pages: how a trade moves from the decision to a booked deal in SAP TRM without "
+              "the manual re-keying that usually sits in between."),
+    dict(short="digital-co-worker", pdf="digital-co-worker", pages=11,
+         title="Digital Co-Worker deck", h1="Digital Co-Worker",
+         accent="#9333ea", accent2="#c084fc", glow="rgba(147,51,234,.30)",
+         promise="An AI co-worker that takes the repetitive steps across your systems, governed and logged.",
+         points=["Runs the repetitive steps across your SAP systems",
+                 "Every action governed and logged",
+                 "Works inside the controls you already run"],
+         lede="Eleven pages: where an AI co-worker fits across your systems, the steps it takes, "
+              "and the controls that keep every action governed and logged."),
+]
+
+
+def page_deck(d):
+    pts = "".join(f"<li>{x}</li>" for x in d["points"])
+    pdf = f'/{d["pdf"]}.pdf'
+    return f'''{_head(d, WEB_CSS + DECK_CSS)}
+<body>
+<div class="wnav">
+  <a class="nl" href="/">
+    <img class="nlogo" src="data:image/png;base64,{LOGOS['brisken']}" alt="Brisken">
+    <span class="sep">&middot;</span><span class="plabel">{d['title']}</span>
+  </a>
+  <div class="nr"><a class="nback" href="/">&larr; All resources</a>
+  <a class="ndl" href="{pdf}" download>Download PDF</a></div>
+</div>
+<section class="whero"><div class="inner">
+  <div class="hcopy">
+    <div class="weyebrow">Full deck &middot; {d['pages']} pages</div>
+    <h1>{d['h1']}</h1>
+    <p class="wpromise">{d['promise']}</p>
+    <ul class="wpoints">{pts}</ul>
+    <div class="wcta">
+      <a class="wbtn primary" href="{pdf}" download>Download the deck</a>
+      <a class="wbtn ghost" href="/">All resources</a>
+    </div>
+  </div>
+  <div class="wvisual deckcard">
+    <div class="wvlab">{d['pages']}-page deck</div>
+    <div class="deckstack">
+      <span class="sl s3"></span><span class="sl s2"></span>
+      <span class="sl s1"><span class="slrow"></span><span class="slrow w70"></span><span class="slrow w45"></span></span>
+    </div>
+  </div>
+</div></section>
+<section class="wband alt"><div class="inner">
+  <div class="wlab">The deck</div>
+  <h2 class="wh2">All {d['pages']} pages</h2>
+  <p class="wlede">{d['lede']}</p>
+  <div class="deckframe"><iframe class="deckview" src="{pdf}#toolbar=0&navpanes=0&view=FitH" title="{d['h1']} deck" loading="lazy"></iframe></div>
+  <div class="deck-fallback">This deck opens best on a larger screen.<br><a href="{pdf}">Download the PDF</a> to view all {d['pages']} pages.</div>
+</div></section>
 {web_footer()}
 </body></html>'''
 
@@ -1252,6 +1365,12 @@ def main() -> int:
     for p in PRODUCTS:
         (web / f'{p["short"]}.html').write_text(page_web(p), encoding="utf-8")
     print(f"web pages: {len(PRODUCTS)} written -> {web}")
+
+    # The 3 full-deck pages: same nav/hero/band frame as the one-pagers, wrapping
+    # the existing deck PDFs (no re-render; the deck PDFs are already built).
+    for d in DECKS:
+        (web / f'{d["short"]}.html').write_text(page_deck(d), encoding="utf-8")
+    print(f"deck pages: {len(DECKS)} written -> {web}")
 
     if args.web_only:
         print("web-only: skipped PDF render")
