@@ -21,6 +21,7 @@ import argparse
 import os
 from pathlib import Path
 
+from .migrate import is_during_event
 from .sync import GRAPH, graph_token
 from .web.service import now_iso
 from .web.store import ContactStore
@@ -154,16 +155,58 @@ def ground(store: ContactStore, campaign: str, now: str,
     }
 
 
+def drop_import_during_event(store: ContactStore, campaign: str,
+                             dry_run: bool = False) -> dict:
+    """Remove sheet/import-sourced DURING-EVENT events now that Graph is the
+    authoritative during-event source (owner 2026-07-14: "stick to just Graph").
+
+    Deletes ``source='import'`` events that are E-wave sends/replies
+    ("E1 pre-event invite sent", "E3 response: ...") or send-log rows
+    ("E1 send-log: sent"), plus the generic ``last_outreach``/``last_reply``
+    gap-fills for contacts that already carry a graph-grounded during-event
+    event. Leaves the Dirk touch, post-event follow-up, and all non-during-event
+    import rows untouched. Non-destructive with ``dry_run=True``."""
+    con = store.conn
+    graphed = {r[0] for r in con.execute(
+        "SELECT DISTINCT contact_id FROM outreach_events "
+        "WHERE campaign=? AND source='graph' AND subject LIKE 'During-event%'",
+        (campaign,)).fetchall()}
+    rows = con.execute(
+        "SELECT event_id, contact_id, subject, detail FROM outreach_events "
+        "WHERE campaign=? AND source='import'", (campaign,)).fetchall()
+    victims = []
+    for eid, cid, subject, detail in rows:
+        text = f"{subject or ''} {detail or ''}"
+        if is_during_event(text) or "send-log" in text.lower():
+            victims.append(eid)
+        elif cid in graphed and (detail or "") in ("last_outreach", "last_reply"):
+            victims.append(eid)
+    if victims and not dry_run:
+        con.executemany("DELETE FROM outreach_events WHERE event_id=?",
+                        [(v,) for v in victims])
+        con.commit()
+    return {"campaign": campaign, "import_during_event_removed": len(victims),
+            "dry_run": dry_run}
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="lead-desk-ground")
     p.add_argument("--data", default=os.environ.get("LEAD_DESK_DATA", "lead-desk-data"))
     p.add_argument("--campaign", default="rome-2026")
+    p.add_argument("--drop-import-dupes", action="store_true",
+                   help="remove sheet/import during-event events (Graph is authoritative)")
+    p.add_argument("--dry-run", action="store_true",
+                   help="with --drop-import-dupes: report the count, delete nothing")
     args = p.parse_args(argv)
     if args.campaign not in CAMPAIGN_WAVES:
         print(f"no wave config for campaign '{args.campaign}'")
         return 1
     db = Path(args.data).resolve() / "lead-desk.sqlite"
     with ContactStore(db) as store:
+        if args.drop_import_dupes:
+            rep = drop_import_during_event(store, args.campaign, dry_run=args.dry_run)
+            print(f"[dedupe] {rep}")
+            return 0
         rep = ground(store, args.campaign, now_iso())
     print(f"[ground] {args.campaign}: {rep}")
     return 0
