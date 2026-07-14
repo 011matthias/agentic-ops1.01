@@ -47,6 +47,12 @@ TIER_SUPPRESS = {
     "UNREACHABLE": "unreachable", "ANON": "anon",
 }
 
+# Fields the app owns once a contact exists: a scheduled sheet re-sync
+# (preserve_app_fields=True) must not overwrite the operator's own pipeline
+# work. Identity / classification / provenance / suppression stay
+# sheet-authoritative; these do not.
+APP_OWNED_ON_RESYNC = ("next_step", "next_step_due")
+
 # --- Iteration 2 classifiers: real status the raw log misses -----------------
 
 # Dirk personally reached the contact (relationship touch, not a campaign send).
@@ -164,7 +170,8 @@ def classify_log_line(line: str) -> tuple[str, str, str]:
     return (ch, "outbound", "note")
 
 
-def import_workbook(store: ContactStore, xlsx: Path, campaign: str, report: dict) -> dict:
+def import_workbook(store: ContactStore, xlsx: Path, campaign: str, report: dict,
+                    preserve_app_fields: bool = False) -> dict:
     from openpyxl import load_workbook
 
     wb = load_workbook(str(xlsx), read_only=True, data_only=True)
@@ -222,6 +229,10 @@ def import_workbook(store: ContactStore, xlsx: Path, campaign: str, report: dict
             "crm_last_activity": _s(col(r, "crm_last_activity")),
             "dirk_notes": _s(col(r, "dirk_notes")),
         }
+        # Sheet-follows-app re-sync: once a contact exists, keep the app's own
+        # pipeline fields (next_step) rather than letting the sheet reset them.
+        if preserve_app_fields and store.get_contact_by_key(nk) is not None:
+            data = {k: v for k, v in data.items() if k not in APP_OWNED_ON_RESYNC}
         store.upsert_contact(data, now)
         contacts += 1
         if email_l:

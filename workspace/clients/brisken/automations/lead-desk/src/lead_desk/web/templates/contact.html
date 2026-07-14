@@ -65,9 +65,73 @@
   </div>
 </div>
 
-<div class="card">
-  <h2>Qualification and next step</h2>
-  <form method="post" action="/contacts/{{ c.contact_id }}/fields">
+<form method="post" action="/contacts/{{ c.contact_id }}/fields">
+  <input type="hidden" name="_managed_flags" value="bant_need bant_authority bant_timeline bant_budget in_our_booth scanned_at_booth fob_encoded no_show sponsor_opt_in">
+  <div class="card">
+    <h2>Identity</h2>
+    <div class="grid2">
+      <div><label>First name</label><input type="text" name="first_name" value="{{ c.first_name or '' }}"></div>
+      <div><label>Last name</label><input type="text" name="last_name" value="{{ c.last_name or '' }}"></div>
+    </div>
+    <div class="grid2">
+      <div><label>Company</label><input type="text" name="company" value="{{ c.company or '' }}"></div>
+      <div><label>Job title</label><input type="text" name="job_title" value="{{ c.job_title or '' }}"></div>
+    </div>
+    <div class="grid2">
+      <div><label>Email</label><input type="text" name="email" value="{{ c.email or '' }}"></div>
+      <div><label>Alt email</label><input type="text" name="alt_email" value="{{ c.alt_email or '' }}"></div>
+    </div>
+    <div class="grid2">
+      <div><label>Phone</label><input type="text" name="phone" value="{{ c.phone or '' }}"></div>
+      <div><label>Country</label><input type="text" name="country" value="{{ c.country or '' }}"></div>
+    </div>
+    <label>LinkedIn URL</label><input type="text" name="linkedin_url" value="{{ c.linkedin_url or '' }}">
+  </div>
+
+  <div class="card">
+    <h2>Classification</h2>
+    <div class="grid2">
+      <div><label>Tier</label>
+        <input type="text" name="tier" value="{{ c.tier or '' }}" list="tier-vocab">
+        <datalist id="tier-vocab">{% for t in view.tier_vocab %}<option value="{{ t }}">{% endfor %}</datalist>
+      </div>
+      <div><label>Lead type</label><input type="text" name="lead_type" value="{{ c.lead_type or '' }}"></div>
+    </div>
+    <label>Tier reason</label><input type="text" name="tier_reason" value="{{ c.tier_reason or '' }}">
+    <div class="grid2">
+      <div><label>Persona</label><input type="text" name="persona" value="{{ c.persona or '' }}"></div>
+      <div><label>Signal (public trigger)</label><input type="text" name="signal" value="{{ c.signal or '' }}"></div>
+    </div>
+    <div class="grid2">
+      <div><label>CRM owner</label><input type="text" name="crm_owner" value="{{ c.crm_owner or '' }}"></div>
+      <div><label>Brisken customer</label><input type="text" name="brisken_customer" value="{{ c.brisken_customer or '' }}"></div>
+    </div>
+    <label>If we know them</label><input type="text" name="if_we_know_them" value="{{ c.if_we_know_them or '' }}">
+  </div>
+
+  <div class="card">
+    <h2>Provenance</h2>
+    <div class="grid4">
+      <label class="inline" style="color:var(--text); margin:0;"><input type="checkbox" name="in_our_booth" value="1" style="width:auto;" {% if c.in_our_booth %}checked{% endif %}> In our booth</label>
+      <label class="inline" style="color:var(--text); margin:0;"><input type="checkbox" name="scanned_at_booth" value="1" style="width:auto;" {% if c.scanned_at_booth %}checked{% endif %}> Scanned at booth</label>
+      <label class="inline" style="color:var(--text); margin:0;"><input type="checkbox" name="fob_encoded" value="1" style="width:auto;" {% if c.fob_encoded %}checked{% endif %}> Fob encoded</label>
+      <label class="inline" style="color:var(--text); margin:0;"><input type="checkbox" name="no_show" value="1" style="width:auto;" {% if c.no_show %}checked{% endif %}> No show</label>
+    </div>
+    <div class="grid4" style="margin-top:8px;">
+      <label class="inline" style="color:var(--text); margin:0;"><input type="checkbox" name="sponsor_opt_in" value="1" style="width:auto;" {% if c.sponsor_opt_in %}checked{% endif %}> Sponsor opt-in</label>
+    </div>
+    <div class="grid2">
+      <div><label>Attendee type</label><input type="text" name="attendee_type" value="{{ c.attendee_type or '' }}"></div>
+      <div><label>Source</label><input type="text" name="source" value="{{ c.source or '' }}"></div>
+    </div>
+    <div class="grid2">
+      <div><label>Booth registered at</label><input type="text" name="booth_registered_at" value="{{ c.booth_registered_at or '' }}"></div>
+      <div><label>CRM last activity</label><input type="text" name="crm_last_activity" value="{{ c.crm_last_activity or '' }}"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Qualification and next step</h2>
     <label>BANT</label>
     <div class="grid4">
       <label class="inline" style="color:var(--text); margin:0;"><input type="checkbox" name="bant_need" value="1" style="width:auto;" {% if c.bant_need %}checked{% endif %}> Need</label>
@@ -87,14 +151,13 @@
     </div>
     <div class="grid2">
       <div><label>Demo owner</label><input type="text" name="demo_owner" value="{{ c.demo_owner or '' }}"></div>
-      <div><label>Persona</label><input type="text" name="persona" value="{{ c.persona or '' }}"></div>
+      <div></div>
     </div>
-    <label>Signal (public trigger)</label><input type="text" name="signal" value="{{ c.signal or '' }}">
     <label>Notes</label><textarea name="notes" rows="2">{{ c.notes or '' }}</textarea>
     <label>Dirk notes</label><textarea name="dirk_notes" rows="2">{{ c.dirk_notes or '' }}</textarea>
-    <div style="margin-top:10px;"><button class="btn btn-small" type="submit">Save</button></div>
-  </form>
-</div>
+    <div style="margin-top:10px;"><button class="btn btn-small" type="submit">Save all fields</button></div>
+  </div>
+</form>
 
 {% if view.cadences %}
 <div class="card">

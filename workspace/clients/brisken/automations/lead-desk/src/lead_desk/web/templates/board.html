@@ -24,6 +24,7 @@
       {% if v.campaign_row %}<a class="btn btn-secondary btn-small" href="/campaigns/{{ v.campaign }}">Manage</a>{% endif %}
       <a class="btn btn-secondary btn-small" href="/export.csv">Export CSV</a>
       <a class="btn btn-secondary btn-small" href="/export.xlsx">Export XLSX</a>
+      <form method="post" action="/sync" style="margin:0; display:inline;"><button class="btn btn-secondary btn-small" type="submit" title="Pull the latest master sheet from SharePoint now">Sync from sheet</button></form>
     </div>
   </div>
 
@@ -117,6 +118,19 @@
     </div>
   </form>
 </div>
+
+<details class="card">
+  <summary style="cursor:pointer; font-weight:600;">+ Add contact</summary>
+  <form method="post" action="/contacts" class="row-actions" style="margin-top:12px;">
+    <div style="min-width:110px;"><label>First name</label><input type="text" name="first_name"></div>
+    <div style="min-width:110px;"><label>Last name</label><input type="text" name="last_name"></div>
+    <div style="min-width:150px;"><label>Company</label><input type="text" name="company"></div>
+    <div style="min-width:170px;"><label>Email</label><input type="text" name="email"></div>
+    <div style="min-width:80px;"><label>Tier</label><input type="text" name="tier" list="tier-vocab-board"></div>
+    <button class="btn btn-small" type="submit">Add</button>
+  </form>
+  <datalist id="tier-vocab-board"><option value="H5"><option value="T1"><option value="T2"><option value="T3"><option value="GA"></datalist>
+</details>
 
 <div class="card scroll-x">
   <div class="muted" style="margin-bottom:8px;">{{ v.rows|length }} shown</div>
