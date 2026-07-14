@@ -18,6 +18,7 @@ Hard rules:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 from pathlib import Path
 
@@ -43,6 +44,11 @@ CAMPAIGN_WAVES: dict[str, dict] = {
         "reply_window": ("2026-06-15T00:00:00Z", "2026-07-12T00:00:00Z"),
     },
 }
+
+# First POST-event day per campaign: a direct (non-E-wave) send dated on/after
+# this counts as post-event outreach on the board; earlier ones are recorded as
+# neutral "Direct outreach". Rome's SAP conference last day was Thu 2026-06-25.
+EVENT_END: dict[str, str] = {"rome-2026": "2026-06-26"}
 
 
 def _norm(s) -> str:
@@ -155,6 +161,94 @@ def ground(store: ContactStore, campaign: str, now: str,
     }
 
 
+def collect_direct(campaign: str) -> list[tuple[str, str, str]]:
+    """Return (email, send_date, subject) for every NON-E-wave outbound send
+    across both mailboxes. Recipient-matched to contacts, and internal-address
+    exclusion, happen in ``ground_direct`` (owner 2026-07-14: search the outbox,
+    match the master-sheet contacts). The E-waves are skipped here because
+    ``ground`` already writes them as During-event events."""
+    cfg = CAMPAIGN_WAVES[campaign]
+    waves = cfg["waves"]
+    headers = {"Authorization": "Bearer " + graph_token()}
+    sw0, sw1 = cfg["send_window"]
+    out: list[tuple[str, str, str]] = []
+    for mbx in cfg["mailboxes"]:
+        assert mbx in MAILBOXES, f"mailbox not allowlisted: {mbx}"
+        for m in _pull(mbx, "SentItems",
+                       f"sentDateTime ge {sw0} and sentDateTime le {sw1}",
+                       "subject,sentDateTime,toRecipients,ccRecipients", headers):
+            subject = (m.get("subject") or "").strip()
+            if _base_subject(subject) in waves:
+                continue                       # during-event E-wave, already grounded
+            d = (m.get("sentDateTime") or "")[:10]
+            if not d:
+                continue
+            recips = (m.get("toRecipients") or []) + (m.get("ccRecipients") or [])
+            for tr in recips:
+                addr = _norm(tr.get("emailAddress", {}).get("address"))
+                if addr:
+                    out.append((addr, d, subject))
+    return out
+
+
+def _subj_hash(subject: str) -> str:
+    return hashlib.sha1(_base_subject(subject).encode("utf-8")).hexdigest()[:8]
+
+
+def ground_direct(store: ContactStore, campaign: str, now: str,
+                  direct: list[tuple[str, str, str]] | None = None) -> dict:
+    """Ground DIRECT (non-E-wave) mailbox outreach onto existing contacts.
+
+    A send to a real contact dated on/after ``EVENT_END`` is written as a
+    ``Post-event outreach`` event (source=graph) that counts under the board's
+    post-event phase, kept DISTINCT from the sheet's ``Post-event follow-up``;
+    earlier ones are neutral ``Direct outreach``. Internal ``@brisken.com`` /
+    ``OWN_TEAM`` recipients and non-attendees (no matching contact) are excluded,
+    which is what strips the Planner / receipt / forwarded-invoice noise that a
+    naive outbox ingest would pull in. Idempotent + non-destructive."""
+    direct = collect_direct(campaign) if direct is None else direct
+    cutoff = EVENT_END.get(campaign, "9999-12-31")
+    post_events = during_events = 0
+    skipped_internal = skipped_non_contact = 0
+    grounded: set[str] = set()
+    seen: set[str] = set()
+    for email, d, subject in direct:
+        if not d or email.endswith("@brisken.com"):
+            skipped_internal += 1
+            continue
+        row = store.find_by_email(email)
+        if row is None:
+            skipped_non_contact += 1
+            continue
+        if (row["tier"] or "").upper() == "OWN_TEAM":
+            skipped_internal += 1
+            continue
+        cid = row["contact_id"]
+        post = d >= cutoff
+        ext = f"mbx-{cid}-{d}-{_subj_hash(subject)}"
+        if ext in seen:
+            continue
+        seen.add(ext)
+        if store.add_event(
+            contact_id=cid, ts=_ts(d), channel="email", direction="outbound",
+            type="sent", subject=("Post-event outreach" if post else "Direct outreach"),
+            detail=f"{subject} ({d}, mailbox-grounded)",
+            source="graph", ext_key=ext, campaign=campaign, now=now,
+        ):
+            grounded.add(cid)
+            if post:
+                post_events += 1
+            else:
+                during_events += 1
+    return {
+        "contacts_with_direct": len(grounded),
+        "post_event_events": post_events,
+        "direct_during_events": during_events,
+        "recipients_skipped_internal": skipped_internal,
+        "recipients_skipped_non_contact": skipped_non_contact,
+    }
+
+
 def drop_import_during_event(store: ContactStore, campaign: str,
                              dry_run: bool = False) -> dict:
     """Remove sheet/import-sourced DURING-EVENT events now that Graph is the
@@ -207,8 +301,11 @@ def main(argv: list[str] | None = None) -> int:
             rep = drop_import_during_event(store, args.campaign, dry_run=args.dry_run)
             print(f"[dedupe] {rep}")
             return 0
-        rep = ground(store, args.campaign, now_iso())
+        now = now_iso()
+        rep = ground(store, args.campaign, now)
+        drep = ground_direct(store, args.campaign, now)
     print(f"[ground] {args.campaign}: {rep}")
+    print(f"[direct] {args.campaign}: {drep}")
     return 0
 
 

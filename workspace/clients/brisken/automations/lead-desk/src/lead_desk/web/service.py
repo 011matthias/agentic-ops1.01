@@ -183,7 +183,10 @@ def outreach_phases(events: list[dict]) -> dict:
         elif subj.startswith("During-event "):
             wave = subj[len("During-event "):].strip()
             waves.setdefault(wave, d)
-        elif subj == "Post-event follow-up":
+        elif subj in ("Post-event follow-up", "Post-event outreach"):
+            # "Post-event follow-up" = sheet booth-wave; "Post-event outreach" =
+            # a direct mailbox-grounded follow-up (ground.ground_direct). Both are
+            # post-event, kept distinct from during-event.
             if post_sent is None or (d and d > post_sent):
                 post_sent = d
                 post_detail = e.get("detail")
@@ -238,7 +241,7 @@ def build_board(store: ContactStore, filters: dict | None = None,
     for pr in store.conn.execute(
         "SELECT contact_id, subject, ts, detail FROM outreach_events "
         "WHERE campaign = ? AND (subject LIKE 'During-event%' "
-        "OR subject = 'Post-event follow-up')", (campaign,),
+        "OR subject IN ('Post-event follow-up', 'Post-event outreach'))", (campaign,),
     ).fetchall():
         phase_by_contact.setdefault(pr["contact_id"], []).append(dict(pr))
     for r in rows:
