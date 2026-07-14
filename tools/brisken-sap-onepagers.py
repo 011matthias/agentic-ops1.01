@@ -45,6 +45,7 @@ from pypdf import PdfReader
 
 REPO = Path(__file__).resolve().parent.parent
 OUT_DEFAULT = REPO / "workspace" / "clients" / "brisken" / "deliverables" / "lead-generation" / "sap-assets"
+WEB_OUT_DEFAULT = REPO / "workspace" / "clients" / "brisken" / "resources-site"
 GATE = REPO / "tools" / "validate-demo-material.py"
 LOGO_DIR = REPO / "tools" / "fixtures" / "brisken-sap-logos"
 CHROME = Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe")
@@ -427,28 +428,66 @@ def body_onepilot():
 </main>'''
 
 
-def page(p):
+# Web-page chrome (appended after BASE_CSS so it overrides the print sizing):
+# each one-pager is also served as a native page on resources.brisken.com, the
+# A4 sheet centred on a neutral stage with a back link + Download PDF button.
+WEB_CSS = r"""
+html,body{width:auto;height:auto;min-height:100vh;background:#eef2f7;}
+body{margin:0;}
+.topbar{position:sticky;top:0;z-index:20;display:flex;justify-content:space-between;align-items:center;
+  padding:14px 22px;background:#fff;border-bottom:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(15,23,42,.05);}
+.topbar a{font-family:'IBM Plex Sans',sans-serif;text-decoration:none;font-size:14px;font-weight:600;}
+.tb-back{color:#475569;}
+.tb-dl{background:var(--ac);color:#fff;padding:8px 18px;border-radius:99px;}
+.stage{display:flex;justify-content:center;padding:26px 16px 56px;}
+.sheet-wrap{position:relative;width:210mm;background:#fff;border-radius:2.5mm;overflow:hidden;
+  box-shadow:0 12px 44px rgba(15,23,42,.16);}
+.sheet-wrap .sheet{height:auto;min-height:297mm;}
+@media(max-width:940px){.sheet-wrap{zoom:.66;}}
+@media(max-width:620px){.sheet-wrap{zoom:.44;}}
+"""
+
+
+def _sheet(p):
     body = p["body"].replace("</main>", PROOF + "\n</main>")
-    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-<style>:root{{--ac:{p['accent']};--ac2:{p['accent2']};--glow:{p['glow']};}}{BASE_CSS}</style></head>
-<body><div class="topline"></div><div class="sheet">
+    return f'''<div class="topline"></div><div class="sheet">
 <header><img class="logo-img" src="data:image/png;base64,{LOGOS['brisken']}" alt="Brisken">
 <div class="partner"><span class="sapbadge">SAP</span> Co-Innovation Partner</div></header>
 {body}
 <footer><b>Brisken</b> &middot; SAP Co-Innovation Partner &middot; www.brisken.com</footer>
-</div></body></html>'''
+</div>'''
+
+
+def _head(p, extra_css=""):
+    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brisken &middot; {p.get('title', 'Resources')}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>:root{{--ac:{p['accent']};--ac2:{p['accent2']};--glow:{p['glow']};}}{BASE_CSS}{extra_css}</style></head>'''
+
+
+def page(p):  # print / PDF: bare A4 sheet
+    return f'{_head(p)}\n<body>{_sheet(p)}</body></html>'
+
+
+def page_web(p):  # native web page: chrome + centred sheet
+    return f'''{_head(p, WEB_CSS)}
+<body>
+<div class="topbar"><a class="tb-back" href="/">&larr; Brisken Resources</a>
+<a class="tb-dl" href="/{p['short']}.pdf">Download PDF</a></div>
+<div class="stage"><div class="sheet-wrap">{_sheet(p)}</div></div>
+</body></html>'''
 
 
 def build_products():
     return [
-        dict(slug="brisken-market-data-hub-onepager",        accent="#0891b2", accent2="#22b8cf", glow="rgba(8,145,178,.28)",  body=body_market_data_hub()),
-        dict(slug="brisken-smart-trading-onepager",          accent="#2563eb", accent2="#60a5fa", glow="rgba(37,99,235,.26)",  body=body_smart_trading()),
-        dict(slug="brisken-remittance-advice-gate-onepager", accent="#059669", accent2="#34d399", glow="rgba(5,150,105,.26)",  body=body_remittance()),
-        dict(slug="brisken-bank-fee-portal-onepager",        accent="#ea580c", accent2="#fb923c", glow="rgba(234,88,12,.26)",  body=body_bank_fee_portal()),
-        dict(slug="brisken-treasurycentral-onepager",        accent="#4f46e5", accent2="#818cf8", glow="rgba(79,70,229,.26)",  body=body_treasurycentral()),
-        dict(slug="brisken-onepilot-onepager",               accent="#9333ea", accent2="#c084fc", glow="rgba(147,51,234,.30)", body=body_onepilot()),
+        dict(slug="brisken-market-data-hub-onepager",        short="market-data-hub",        title="Market Data Hub",        accent="#0891b2", accent2="#22b8cf", glow="rgba(8,145,178,.28)",  body=body_market_data_hub()),
+        dict(slug="brisken-smart-trading-onepager",          short="smart-trading",          title="Brisken Smart Trading",  accent="#2563eb", accent2="#60a5fa", glow="rgba(37,99,235,.26)",  body=body_smart_trading()),
+        dict(slug="brisken-remittance-advice-gate-onepager", short="remittance-advice-gate", title="Remittance Advice Gate", accent="#059669", accent2="#34d399", glow="rgba(5,150,105,.26)",  body=body_remittance()),
+        dict(slug="brisken-bank-fee-portal-onepager",        short="bank-fee-portal",        title="Bank Fee Portal",        accent="#ea580c", accent2="#fb923c", glow="rgba(234,88,12,.26)",  body=body_bank_fee_portal()),
+        dict(slug="brisken-treasurycentral-onepager",        short="treasurycentral",        title="TreasuryCentral",        accent="#4f46e5", accent2="#818cf8", glow="rgba(79,70,229,.26)",  body=body_treasurycentral()),
+        dict(slug="brisken-onepilot-onepager",               short="onepilot",               title="OnePilot",               accent="#9333ea", accent2="#c084fc", glow="rgba(147,51,234,.30)", body=body_onepilot()),
     ]
 
 
@@ -482,8 +521,10 @@ def run_gate(pdfs: list[Path]) -> bool:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Render the 6 Brisken SAP one-pagers and gate them.")
+    ap = argparse.ArgumentParser(description="Render the 6 Brisken SAP one-pagers (PDF + web pages) and gate them.")
     ap.add_argument("--out", type=Path, default=OUT_DEFAULT, help=f"PDF output dir (default: {OUT_DEFAULT})")
+    ap.add_argument("--web-out", type=Path, default=WEB_OUT_DEFAULT, help=f"web-page HTML output dir (default: {WEB_OUT_DEFAULT})")
+    ap.add_argument("--no-web", action="store_true", help="skip writing the native web-page HTML")
     args = ap.parse_args()
 
     if not CHROME.is_file():
@@ -514,6 +555,14 @@ def main() -> int:
         print("BANNED-CONTENT GATE FAILED on the rendered PDFs; do not ship them")
         return 1
     print("banned-content gate: PASS")
+
+    if not args.no_web:
+        web = args.web_out.resolve()
+        web.mkdir(parents=True, exist_ok=True)
+        for p in PRODUCTS:
+            (web / f'{p["short"]}.html').write_text(page_web(p), encoding="utf-8")
+        print(f"web pages: {len(PRODUCTS)} written -> {web}")
+
     return 0 if all_ok else 1
 
 
