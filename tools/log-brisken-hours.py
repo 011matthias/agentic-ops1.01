@@ -89,7 +89,17 @@ _TAB_SPECS = {
         "aliases": {"time", "timesheet", "recon", "expense", "expense-recon", "p1",
                     "expense reconciliation"},
     },
+    "OneAssessmentLog": {
+        "csv_base": "hours-one-assessment",
+        "aliases": {"oneassessment", "one assessment", "one-assessment", "oa",
+                    "jochen", "assessment", "treasury"},
+    },
 }
+
+# The two original engagement tabs are always present; OneAssessment (a later
+# engagement, added 2026-07-15) is optional, so a fresh month that does not
+# carry it still binds cleanly.
+_REQUIRED = {"LeadGenLog", "HoursLog"}
 
 TABS: dict = {}          # live sheet title -> {"table", "csv_base", "aliases"}
 
@@ -101,7 +111,7 @@ def bind_tabs(wb) -> None:
         for tname in ws.tables:
             if tname in _TAB_SPECS:
                 TABS[ws.title] = {**_TAB_SPECS[tname], "table": tname}
-    missing = {t for t in _TAB_SPECS} - {m["table"] for m in TABS.values()}
+    missing = _REQUIRED - {m["table"] for m in TABS.values()}
     if missing:
         raise SystemExit(f"{XLSX.name}: no sheet carries table(s) {sorted(missing)}")
 
@@ -211,6 +221,7 @@ def cmd_status(wb) -> int:
     print(f"{XLSX.name}  (rate {RATE_CELL} = EUR {rate}/hr)\n")
     for sheet in TABS:
         ws = wb[sheet]
+        rate = ws[RATE_CELL].value or 0      # per-tab rate (tabs may differ)
         rows = read_rows(ws)
         tot = bill = 0.0
         for _r, _date, _task, start, end, billable, _notes in rows:
