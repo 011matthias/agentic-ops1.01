@@ -26,8 +26,11 @@ COOKIE_NAME = "erc_session"
 SESSION_MAX_AGE = 60 * 60 * 12  # 12 hours
 
 # Paths reachable without a session: the login form/handler, the health
-# probe, and the favicon. Everything else is gated.
+# probe, the favicon, and the packaged static assets (brand CSS/logos the
+# login page itself needs; no client data lives there). Everything else is
+# gated.
 OPEN_PATHS = frozenset({"/login", "/logout", "/healthz", "/favicon.ico"})
+OPEN_PREFIXES = ("/static/",)
 
 # Stable for the life of the process; used only when AUTH_SECRET is unset.
 _PROCESS_SECRET = secrets.token_hex(32)
@@ -69,4 +72,4 @@ def cookie_is_secure() -> bool:
 
 
 def path_is_open(path: str) -> bool:
-    return path in OPEN_PATHS
+    return path in OPEN_PATHS or path.startswith(OPEN_PREFIXES)

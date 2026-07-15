@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Brisken Expense Reconciliation{% endblock %}</title>
+  <link rel="icon" type="image/png" href="/static/favicon.png">
   <script>
     (function () {
       var t = localStorage.getItem('theme');
@@ -15,19 +16,8 @@
       );
     })();
   </script>
+  <link rel="stylesheet" href="/static/tokens.css">
   <style>
-    :root {
-      --bg: #f6f7f9; --surface: #ffffff; --border: #e2e5ea; --border-strong: #94a3b8; --text: #1a1d23;
-      --muted: #6b7280; --accent: #2563eb; --accent-light: #3b82f6;
-      --green: #059669; --green-bg: #ecfdf5; --orange: #d97706; --orange-bg: #fffbeb;
-      --red: #dc2626; --red-bg: #fef2f2; --shadow: 0 1px 3px rgba(0,0,0,.08);
-    }
-    [data-theme="dark"] {
-      --bg: #0f1115; --surface: #181b21; --border: #2a2f3a; --border-strong: #4a5d80; --text: #e6e8ec;
-      --muted: #9aa3b2; --accent: #3b82f6; --accent-light: #60a5fa;
-      --green: #34d399; --green-bg: #06281f; --orange: #fbbf24; --orange-bg: #2a2008;
-      --red: #f87171; --red-bg: #2a1212; --shadow: 0 1px 3px rgba(0,0,0,.4);
-    }
     * { box-sizing: border-box; }
     body {
       margin: 0; background: var(--bg); color: var(--text);
@@ -40,8 +30,15 @@
       padding: 12px 24px; background: var(--surface);
       border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10;
     }
-    .nav-left { font-weight: 600; }
-    .nav-client { color: var(--muted); font-weight: 400; }
+    .nav-left { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+    .brand-logo { height: 22px; display: none; }
+    [data-theme="light"] .brand-logo--light { display: block; }
+    [data-theme="dark"] .brand-logo--dark { display: block; }
+    .nav-product {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
+      letter-spacing: .12em; color: var(--muted); border-left: 1px solid var(--border-strong);
+      padding-left: 12px; white-space: nowrap;
+    }
     .nav-theme {
       background: transparent; border: 1px solid var(--border); border-radius: 999px;
       color: var(--text); cursor: pointer; padding: 6px 12px; font-size: 13px;
@@ -60,10 +57,10 @@
       background: var(--surface); border: 1px solid var(--border);
       border-radius: 12px; padding: 20px; box-shadow: var(--shadow); margin-bottom: 20px;
     }
-    h1 { font-size: 22px; margin: 0 0 4px; }
-    h2 { font-size: 16px; margin: 0 0 12px; }
+    h1 { font-size: 22px; margin: 0 0 4px; color: var(--heading); }
+    h2 { font-size: 16px; margin: 0 0 12px; color: var(--heading); }
     label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
-    input[type=text], input[type=file], select, textarea {
+    input[type=text], input[type=file], input[type=month], select, textarea {
       width: 100%; padding: 8px 10px; border: 1px solid var(--border);
       border-radius: 8px; background: var(--bg); color: var(--text); font-size: 14px;
       font-family: inherit;
@@ -71,7 +68,7 @@
     textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
     .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .btn {
-      display: inline-block; background: var(--accent); color: #fff; border: none;
+      display: inline-block; background: var(--accent); color: var(--btn-ink); border: none;
       border-radius: 999px; padding: 9px 18px; font-size: 14px; font-weight: 500;
       cursor: pointer; text-decoration: none;
     }
@@ -90,6 +87,8 @@
     .badge.review { background: var(--orange-bg); color: var(--orange); }
     .badge.unmatched { background: var(--red-bg); color: var(--red); }
     .badge.pending { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
+    .badge.posted { background: var(--posted-bg); color: var(--posted); }
+    .badge.subscription { background: var(--bg); color: var(--muted); border: 1px solid var(--border-strong); }
     table { width: 100%; border-collapse: collapse; }
     th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
     th { font-size: 12px; color: var(--muted); font-weight: 600; }
@@ -98,11 +97,23 @@
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
     .alert { background: var(--red-bg); color: var(--red); border: 1px solid var(--red); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; }
     .footer { color: var(--muted); font-size: 12px; padding: 16px 24px; text-align: center; }
+    @media (max-width: 760px) {
+      .site-nav { padding: 10px 12px; flex-wrap: wrap; row-gap: 8px; }
+      .nav-tabs { flex-wrap: wrap; }
+      .nav-product { display: none; }
+      .wrap { padding: 16px 12px; }
+      .grid { grid-template-columns: 1fr; }
+      .stat { min-width: calc(50% - 12px); }
+    }
   </style>
 </head>
 <body>
   <nav class="site-nav">
-    <div class="nav-left">Brisken <span class="nav-client">&middot; Expense Reconciliation</span></div>
+    <a class="nav-left" href="/" aria-label="Brisken home">
+      <img class="brand-logo brand-logo--light" src="/static/brisken-logo-light.png" alt="Brisken">
+      <img class="brand-logo brand-logo--dark" src="/static/brisken-logo-dark.png" alt="Brisken">
+      <span class="nav-product">EXPENSE RECONCILIATION</span>
+    </a>
     <div style="display:flex; align-items:center; gap:12px;">
       <div class="nav-tabs" role="tablist">
         <a class="nav-tab" href="/">Runs</a>
@@ -117,7 +128,7 @@
   <div class="wrap">
     {% block content %}{% endblock %}
   </div>
-  <div class="footer">Brisken expense reconciliation, local tool. Runs on this machine; financial data stays here.</div>
+  <div class="footer">Brisken expense reconciliation. Your financial data stays on Brisken's private server.</div>
   <script>
     (function () {
       // Mark the current page's nav tab active (the boxed/highlighted state).
