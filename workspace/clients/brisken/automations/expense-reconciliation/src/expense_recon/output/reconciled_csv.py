@@ -55,6 +55,7 @@ RECONCILED_COLUMNS = (
     "Original Currency",
     "FX Rate",
     "Statement Text",
+    "Entry Status",
     # ── match status ──
     "Match Status",
     "Match Type",
@@ -189,6 +190,11 @@ def build_reconciled_rows(
             _str(tx.original_currency),
             _rate(tx.fx_rate),
             tx.raw_text,
+            (
+                "ALREADY_POSTED"
+                if tx.entry_status == "posted"
+                else ("SUBSCRIPTION" if tx.entry_status == "subscription" else "")
+            ),
             # match status
             status,
             match.match_type.value if match is not None else "",

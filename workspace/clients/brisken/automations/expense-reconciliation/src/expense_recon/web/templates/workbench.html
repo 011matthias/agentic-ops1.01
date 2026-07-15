@@ -64,6 +64,8 @@
     <div class="stat"><div class="stat-value">{{ "yes" if s.invariant_ok else "NO" }}</div><div class="stat-label">All accounted for</div></div>
     <div class="stat"><div class="stat-value">{{ s.n_duplicate_groups }}</div><div class="stat-label">Dup groups</div></div>
     <div class="stat"><div class="stat-value">{{ s.n_learned_lines }}</div><div class="stat-label">Auto-filled (memory)</div></div>
+    {% if s.n_already_posted %}<div class="stat"><div class="stat-value" style="color:var(--posted);">{{ s.n_already_posted }}</div><div class="stat-label">Already in Zoho</div></div>{% endif %}
+    {% if s.n_missing_receipt_image %}<div class="stat"><div class="stat-value" style="color:var(--muted);">{{ s.n_missing_receipt_image }}</div><div class="stat-label">No receipt image</div></div>{% endif %}
     {% if s.n_unknown_currency %}<div class="stat"><div class="stat-value" style="color:var(--orange);">{{ s.n_unknown_currency }}</div><div class="stat-label">Unknown currency</div></div>{% endif %}
   </div>
   {% if s.n_parse_errors %}
@@ -90,6 +92,8 @@
       <div>
         <span class="badge {{ row.effective_bucket }}" id="status-{{ row.transaction_id }}">{{ row.effective_bucket }}</span>
         {% if row.triage_score is not none %}<span class="muted mono" style="font-size:12px;">{{ row.triage_score }}/100</span>{% endif %}
+        {% if row.entry_status == "posted" %}<span class="badge posted" title="This row is yellow in your workbook: already entered in Zoho. It is never exported to the Zoho journal again.">already in Zoho</span>
+        {% elif row.entry_status == "subscription" %}<span class="badge subscription" title="This row is gray in your workbook: a subscription.">subscription</span>{% endif %}
         <strong style="margin-left:8px;">{{ row.vendor }}</strong>
         <span class="muted">&middot; {{ row.date }} &middot; {{ row.account_id }}</span>
       </div>

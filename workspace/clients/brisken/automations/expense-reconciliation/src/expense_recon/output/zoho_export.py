@@ -223,6 +223,13 @@ def build_journal_rows(
         rec = rec_by_id.get(match.document_id)
         if tx is None or rec is None:
             continue
+        # L1 posting policy: a yellow row in Chris's workbook is ALREADY
+        # entered in Zoho — exporting it again would double-post the
+        # journal. The row stays fully visible in the report and the
+        # reconciled CSV (nothing silently dropped); only the Books
+        # import skips it. The skip count is surfaced by the callers.
+        if tx.entry_status == "posted":
+            continue
 
         date_str = tx.transaction_date.isoformat() if tx.transaction_date else ""
         ref = tx.transaction_id

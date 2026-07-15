@@ -999,6 +999,9 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
                 "chosen_document_id": held_doc,
                 "candidates": cands,
                 "has_learned": has_learned,
+                # L1: her workbook's fill-color annotation (yellow=posted,
+                # gray=subscription); drives the workbench chips.
+                "entry_status": tx.entry_status,
                 "triage_score": max(
                     (c["score"] for c in cands if c["score"]), default=None
                 ),
@@ -1165,6 +1168,13 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
         # L4 — missing receipt images (0 when the source has no image info).
         "has_image_info": has_image_info,
         "n_missing_receipt_image": n_missing_receipt_image,
+        # L1 — fill-color annotations from the statement workbook.
+        "n_already_posted": sum(
+            1 for t in transactions if t.entry_status == "posted"
+        ),
+        "n_subscription": sum(
+            1 for t in transactions if t.entry_status == "subscription"
+        ),
     }
 
     return {

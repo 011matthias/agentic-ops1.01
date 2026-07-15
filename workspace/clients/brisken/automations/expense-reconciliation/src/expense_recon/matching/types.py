@@ -145,6 +145,14 @@ class Transaction:
     original_currency: str | None = None       # ISO of the original currency (EUR, BRL, ...)
     fx_rate: Decimal | None = None             # rate the bank applied (original -> card)
 
+    # Sheet-entry annotation from Chris's per-card workbook fills (L1,
+    # 2026-07-15 walkthrough): a yellow row is already entered in Zoho, a
+    # gray row is a subscription. Annotation ONLY — it never changes bucket
+    # membership, so the reconciliation guarantee is untouched; the one
+    # posting-policy consumer is the Zoho journal export, which skips
+    # "posted" rows so a re-import can never double-post.
+    entry_status: str | None = None            # "posted" | "subscription" | None
+
 
 @dataclass(frozen=True)
 class Receipt:
