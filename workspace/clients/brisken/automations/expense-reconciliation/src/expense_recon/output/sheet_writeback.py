@@ -1,0 +1,190 @@
+"""Sheet writeback — L3 (2026-07-15 walkthrough).
+
+Chris uploads her own per-card .xlsx workbook as the statement. After
+reconciliation this module writes HER OWN workbook back with ONE new
+column appended — ``"Zoho Account (tool)"``, the resolved Zoho posting
+account per statement row — and touches nothing else. Her existing
+columns are never overwritten; her values, fills, and formulas survive
+because the workbook is loaded with ``data_only=False``. Loading with
+``data_only=True`` and saving would permanently replace every formula
+with its cached value, so ``data_only=False`` is mandatory here.
+
+openpyxl round-trip caveats (inherent to load/save, not fixable here):
+charts, images, pivot tables, and some conditional-formatting
+constructs do not survive the cycle. Cell values, formulas, fills,
+fonts, number formats, and column widths do. Chris's per-card sheets
+are plain tabular fills, so this is acceptable — and the original file
+is never overwritten (output goes to ``out_path``).
+
+Row anchor: tabular-statement transaction ids are
+``"{account_id}:{row_index}"`` where ``row_index`` is the sheet row
+(header = 1, data starts at 2) — see ``ingest/statement_xlsx.py``. Ids
+of any other shape (PDF-parsed transactions) are skipped defensively:
+they have no sheet row to anchor to.
+
+Idempotent: re-running against an already written-back workbook finds
+the existing ``"Zoho Account (tool)"`` header and reuses that column
+instead of appending a second one; the rows it writes are overwritten
+in place.
+"""
+from __future__ import annotations
+
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+from openpyxl import load_workbook
+from openpyxl.styles import Font
+
+from ..matching.types import Match, MatchOutcome, Receipt, Transaction
+from .zoho_export import _resolve_account
+
+if TYPE_CHECKING:
+    from ..ingest.chart_of_accounts import ChartOfAccounts
+
+WRITEBACK_HEADER = "Zoho Account (tool)"
+
+# Placeholders per outcome bucket. `(uncategorized - assign)` mirrors
+# the zoho_export flag so the two surfaces speak the same language.
+_ALREADY_POSTED = "(already in Zoho)"
+_UNCATEGORIZED = "(uncategorized - assign)"
+_NEEDS_REVIEW = "(needs review)"
+_NO_RECEIPT = "(no receipt matched)"
+
+
+def _anchor_row(transaction_id: str) -> int | None:
+    """The sheet row a transaction anchors to, or None when the id is
+    not the tabular ``"{account_id}:{row_index}"`` shape (PDF-parsed
+    transactions carry different id shapes — skip, never crash)."""
+    _, sep, tail = transaction_id.rpartition(":")
+    if not sep:
+        return None
+    try:
+        row = int(tail)
+    except ValueError:
+        return None
+    # Row 1 is the header; a parsed anchor below the data region would
+    # clobber it. Defensive: data starts at 2.
+    return row if row >= 2 else None
+
+
+def _writeback_column(ws) -> int:
+    """Find the writeback column in row 1, or create it at
+    ``max_column + 1`` with a bold header."""
+    for cell in ws[1]:
+        if cell.value == WRITEBACK_HEADER:
+            return cell.column
+    col = ws.max_column + 1
+    header = ws.cell(row=1, column=col, value=WRITEBACK_HEADER)
+    header.font = Font(bold=True)
+    return col
+
+
+def _account_cell_value(
+    rec: Receipt, coa: "ChartOfAccounts | None"
+) -> str:
+    """The matched receipt's posting account(s), for one cell.
+
+    Each line item's categorization contributes ``zoho_account or
+    category``; with a chart, the reference is resolved to the
+    canonical Zoho account name (an unresolvable reference keeps the
+    raw label — this is a review surface, so showing the pick beats
+    hiding it). Distinct accounts join with "; " in first-seen order.
+    No categorizations at all → flagged, never guessed.
+    """
+    values: list[str] = []
+    for item in rec.line_items:
+        cat = item.categorization
+        if cat is None:
+            continue
+        ref = cat.zoho_account or cat.category
+        if not ref:
+            continue
+        value = ref
+        if coa is not None:
+            value = _resolve_account(ref, coa) or ref
+        if value not in values:
+            values.append(value)
+    if not values:
+        return _UNCATEGORIZED
+    return "; ".join(values)
+
+
+def _cell_value(
+    tx: Transaction,
+    match_by_tx: dict[str, Match],
+    rec_by_id: dict[str, Receipt],
+    review_tx: set[str],
+    unmatched_tx: set[str],
+    coa: "ChartOfAccounts | None",
+) -> str | None:
+    """The writeback cell value for one transaction, or None to leave
+    the row untouched. Priority: posted > matched > review > unmatched
+    (a yellow already-in-Zoho row wins even when it also matched)."""
+    if tx.entry_status == "posted":
+        return _ALREADY_POSTED
+    match = match_by_tx.get(tx.transaction_id)
+    if match is not None:
+        rec = rec_by_id.get(match.document_id)
+        if rec is None:
+            return None  # defensive: match without its receipt
+        return _account_cell_value(rec, coa)
+    if tx.transaction_id in review_tx:
+        return _NEEDS_REVIEW
+    if tx.transaction_id in unmatched_tx:
+        return _NO_RECEIPT
+    return None
+
+
+def write_sheet_writeback(
+    original_path: str | Path,
+    out_path: str | Path,
+    outcome: MatchOutcome,
+    transactions: list[Transaction],
+    receipts: list[Receipt],
+    *,
+    sheet_name: str | None = None,
+    chart_of_accounts: "ChartOfAccounts | None" = None,
+) -> Path:
+    """Write Chris's workbook back with the appended writeback column.
+
+    Loads ``original_path`` (``data_only=False`` — mandatory, see module
+    docstring; ``keep_vba`` for .xlsm), annotates ONLY the writeback
+    column's cells + its header on the target sheet, and saves to
+    ``out_path``. Returns ``out_path``.
+    """
+    original_path = Path(original_path)
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    rec_by_id = {r.document_id: r for r in receipts}
+    match_by_tx: dict[str, Match] = {}
+    for m in outcome.matches:
+        match_by_tx.setdefault(m.transaction_id, m)
+    review_tx = {m.transaction_id for m in outcome.judgment_required} | {
+        m.transaction_id for m in outcome.ambiguous
+    }
+    unmatched_tx = set(outcome.unmatched_transactions)
+
+    wb = load_workbook(
+        filename=original_path,
+        data_only=False,
+        keep_vba=(original_path.suffix.lower() == ".xlsm"),
+    )
+    try:
+        ws = wb[sheet_name] if sheet_name is not None else wb.active
+        col = _writeback_column(ws)
+        for tx in transactions:
+            value = _cell_value(
+                tx, match_by_tx, rec_by_id, review_tx, unmatched_tx,
+                chart_of_accounts,
+            )
+            if value is None:
+                continue
+            row = _anchor_row(tx.transaction_id)
+            if row is None:
+                continue
+            ws.cell(row=row, column=col, value=value)
+        wb.save(out_path)
+    finally:
+        wb.close()
+    return out_path

@@ -49,6 +49,7 @@ from .service import (
     prepare_run,
     regenerate_reconciled,
     regenerate_report,
+    regenerate_writeback,
     regenerate_zoho,
     reset_memory,
     validate_manual_match,
@@ -891,6 +892,29 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             path,
             filename=f"reconciled-{run_id}.csv",
             media_type="text/csv",
+        )
+
+    @app.get("/runs/{run_id}/statement-categorized.xlsx")
+    def download_writeback(run_id: str, request: Request):
+        # L3 — her own uploaded workbook with one new "Zoho Account (tool)"
+        # column; only for xlsx/xlsm statements.
+        with open_store() as store:
+            run = _visible_run(store, request, run_id)
+            if run is None:
+                return HTMLResponse("Run not found", status_code=404)
+            decisions = store.get_decisions(run_id)
+            overrides = store.get_category_overrides(run_id)
+        path = regenerate_writeback(run, decisions, overrides)
+        if path is None:
+            return HTMLResponse(
+                "This run's statement is not an Excel workbook", status_code=404
+            )
+        return FileResponse(
+            path,
+            filename=f"statement-categorized-{run_id}{path.suffix}",
+            media_type=(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ),
         )
 
     # ── Embedded docs: the user guide + the how-it-works walkthrough,

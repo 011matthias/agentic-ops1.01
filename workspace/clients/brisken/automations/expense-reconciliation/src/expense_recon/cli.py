@@ -93,6 +93,7 @@ from .matching.judgment import judge_ambiguous, judge_fx_match
 from .matching.types import Match, MatchOutcome, Receipt, Transaction
 from .output.reconciled_csv import write_reconciled_csv
 from .output.report_xlsx import write_report
+from .output.sheet_writeback import write_sheet_writeback
 from .runlog import RunLog, decisions_from_outcome
 from .output.zoho_export import write_zoho_export
 from .store import (
@@ -551,6 +552,35 @@ def run(
         )
         logger.info("wrote reconciled CSV: %s", recon_csv_path)
         print(f"Wrote reconciled CSV: {recon_csv_path}")
+
+    # L3 sheet writeback (2026-07-15 walkthrough): hand Chris HER OWN
+    # workbook back with one appended "Zoho Account (tool)" column — the
+    # resolved posting account per statement row. Opt-in via
+    # `output.sheet_writeback`; Excel statements only (the row anchor is
+    # the sheet row number, which PDF/CSV ids don't carry).
+    stmt_cfg = cfg.get("statement") or {}
+    stmt_path = (
+        (config_dir / stmt_cfg["path"]).resolve() if stmt_cfg.get("path") else None
+    )
+    if (
+        out_cfg.get("sheet_writeback")
+        and stmt_path is not None
+        and stmt_path.suffix.lower() in (".xlsx", ".xlsm")
+    ):
+        writeback_path = Path(report_path).parent / (
+            f"{stmt_path.stem}-categorized{stmt_path.suffix}"
+        )
+        write_sheet_writeback(
+            stmt_path,
+            writeback_path,
+            outcome,
+            transactions,
+            receipts,
+            sheet_name=stmt_cfg.get("sheet_name"),
+            chart_of_accounts=chart_of_accounts,
+        )
+        logger.info("wrote sheet writeback: %s", writeback_path)
+        print(f"Wrote sheet writeback: {writeback_path}")
 
     # BLUEPRINT 5.7-5.10: append this run to the SQLite run-log when a
     # `run_log:` block is configured (opt-in; no block = no file, no

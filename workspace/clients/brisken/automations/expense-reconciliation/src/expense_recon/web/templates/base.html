@@ -126,6 +126,7 @@
         <a class="nav-tab" href="/guide">Guide</a>
         <a class="nav-tab" href="/how-it-works">How it works</a>
       </div>
+      <button class="nav-theme" id="lang-toggle" onclick="ercToggleLang()" aria-label="Switch language">EN | PT</button>
       <button class="nav-theme" onclick="(function(){var d=document.documentElement;var c=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',c);localStorage.setItem('theme',c);})()" aria-label="Toggle theme">Theme</button>
     </div>
   </nav>
@@ -134,6 +135,73 @@
   </div>
   <div class="footer">Brisken expense reconciliation. Your financial data stays on Brisken's private server.</div>
   <script>
+    // ── Lightweight EN/PT localization for the user surface. Chris works
+    // in Portuguese (2026-07-15 walkthrough); operator pages stay EN.
+    // Elements opt in via data-i18n="key"; EN strings live in the markup
+    // (the fallback), PT overrides here. Persisted like the theme.
+    var ERC_PT = {
+      nav_home: "Início",
+      uh_title: "Envie seus documentos",
+      uh_sub: "Envie o extrato do banco e o arquivo de comprovantes de um mês. Preparamos sua revisão e avisamos por e-mail quando estiver pronta; não precisa esperar aqui.",
+      uh_stmt: "Extrato do banco (.csv, .xlsx ou .pdf)",
+      uh_rcpt: "Arquivo de comprovantes do Zoho Expense (.csv). Pode enviar depois.",
+      uh_card: "De qual cartão é este extrato?",
+      uh_card_pick: "Escolha um cartão",
+      uh_card_name: "De qual cartão é este extrato? (escreva o nome)",
+      uh_month: "Qual mês? (opcional)",
+      uh_send: "Enviar documentos",
+      uh_reassure: "Verificamos os arquivos e preparamos sua revisão. O status aparece abaixo.",
+      uh_docs: "Seus documentos",
+      uh_col_what: "O que",
+      uh_col_sent: "Enviado",
+      uh_col_status: "Status",
+      uh_wait_rcpt: "aguardando comprovantes",
+      uh_st_received: "Recebido",
+      uh_st_processing: "Em andamento",
+      uh_st_ready: "Pronto para revisar",
+      uh_open: "Abrir revisão",
+      uh_open_short: "Abrir",
+      uh_ready: "Pronto para revisar",
+      uh_col_run: "Reconciliação",
+      uh_col_when: "Quando",
+      uh_col_charges: "Lançamentos",
+      uh_col_matched: "Conciliados",
+      wb_sec_attention: "Precisa da sua atenção",
+      wb_sec_matched: "Conciliado automaticamente",
+      wb_sec_posted: "Já está no Zoho",
+      wb_sec_posted_note: "Linhas amarelas da sua planilha e tudo que você marcou com a tecla z. Nunca são exportadas de novo para o Zoho.",
+      wb_sec_noreceipt: "Ainda sem comprovante",
+      wb_sec_other: "Outras verificações",
+      wb_sec_empty: "Nada aqui.",
+      wb_confirm_all: "Confirmar todos os conciliados",
+      wb_btn_posted: "Já está no Zoho",
+      lg_matched: "Conciliado",
+      lg_review: "Precisa olhar",
+      lg_noreceipt: "Sem comprovante",
+      lg_posted: "Já no Zoho",
+      lg_subscription: "Assinatura"
+    };
+    function ercApplyLang() {
+      var lang = localStorage.getItem("erc-lang") || "en";
+      document.documentElement.setAttribute("data-lang", lang);
+      document.querySelectorAll("[data-i18n]").forEach(function (el) {
+        var key = el.getAttribute("data-i18n");
+        if (lang === "pt" && ERC_PT[key]) {
+          if (!el.dataset.i18nEn) { el.dataset.i18nEn = el.textContent; }
+          el.textContent = ERC_PT[key];
+        } else if (el.dataset.i18nEn) {
+          el.textContent = el.dataset.i18nEn;
+        }
+      });
+      var btn = document.getElementById("lang-toggle");
+      if (btn) { btn.textContent = lang === "pt" ? "PT | EN" : "EN | PT"; }
+    }
+    function ercToggleLang() {
+      var next = (localStorage.getItem("erc-lang") || "en") === "pt" ? "en" : "pt";
+      localStorage.setItem("erc-lang", next);
+      ercApplyLang();
+    }
+    ercApplyLang();
     (function () {
       // Mark the current page's nav tab active (the boxed/highlighted state).
       var path = (location.pathname || '/').replace(/\/+$/, '') || '/';

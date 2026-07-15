@@ -51,6 +51,7 @@ from ..output.report_xlsx import write_report
 from ..output.zoho_export import write_zoho_export
 from .serialize import snapshot_from_dict, snapshot_to_dict
 from .store import (
+    STATUS_ALREADY_POSTED,
     STATUS_CONFIRMED,
     STATUS_PENDING,
     STATUS_REJECTED,
@@ -625,8 +626,12 @@ def apply_decisions(
     ambiguous_by_tx: dict[str, list[Match]] = {}
 
     # Pass 1: confirmed (explicit) claims, most-recent confirm first.
+    # already_posted behaves like confirmed here (terminal, claims its
+    # receipt so nothing else grabs it); the export layer excludes it.
     confirmed_txs = [
-        tx for tx in transactions if status_for(tx.transaction_id) == STATUS_CONFIRMED
+        tx
+        for tx in transactions
+        if status_for(tx.transaction_id) in (STATUS_CONFIRMED, STATUS_ALREADY_POSTED)
     ]
     confirmed_txs.sort(
         key=lambda tx: (decisions[tx.transaction_id].updated_at or ""), reverse=True
@@ -643,8 +648,13 @@ def apply_decisions(
         if chosen is None or chosen in consumed:
             continue  # nothing to claim / receipt already taken -> unmatched
         orig = next((m for m in cands if m.document_id == chosen), None)
+        reason = (
+            "already posted in Zoho (reviewer)"
+            if status_for(tx_id) == STATUS_ALREADY_POSTED
+            else "confirmed by reviewer"
+        )
         match_by_tx[tx_id] = (
-            replace(orig, requires_review=False, reason="confirmed by reviewer")
+            replace(orig, requires_review=False, reason=reason)
             if orig
             else Match(
                 transaction_id=tx_id,
@@ -919,6 +929,14 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
         else:
             n_unmatched_tx += 1
 
+        # PR-E: the workbench section this row renders in. "posted" wins
+        # (her yellow / the reviewer's z-key); review needs attention;
+        # a still-pending unmatched row with candidates is worth attention
+        # too; everything else unmatched is "no receipt yet".
+        is_posted = (
+            tx.entry_status == "posted" or status == STATUS_ALREADY_POSTED
+        )
+
         cands = []
         seen_docs = set()
         for m in by_tx.get(tx_id, []):
@@ -960,11 +978,27 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
                 }
             )
 
+        if is_posted:
+            section = "posted"
+        elif effective_bucket == "review":
+            section = "attention"
+        elif effective_bucket == "reconciled":
+            section = "matched"
+        elif status == STATUS_PENDING and cands:
+            section = "attention"
+        else:
+            section = "noreceipt"
+
         # PR A — readiness accounting (uses the effective bucket + the
-        # held receipt's lines).
-        if status == STATUS_PENDING and effective_bucket in ("reconciled", "review"):
+        # held receipt's lines). Posted rows are settled by definition:
+        # they never block readiness and never count as unreconciled.
+        if (
+            status == STATUS_PENDING
+            and effective_bucket in ("reconciled", "review")
+            and not is_posted
+        ):
             n_undecided += 1
-        if effective_bucket != "reconciled":
+        if effective_bucket != "reconciled" and not is_posted:
             unreconciled[tx.transaction_currency] = (
                 unreconciled.get(tx.transaction_currency, Decimal("0"))
                 + abs(tx.amount)
@@ -1002,6 +1036,7 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
                 # L1: her workbook's fill-color annotation (yellow=posted,
                 # gray=subscription); drives the workbench chips.
                 "entry_status": tx.entry_status,
+                "section": section,
                 "triage_score": max(
                     (c["score"] for c in cands if c["score"]), default=None
                 ),
@@ -1192,6 +1227,8 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
         "duplicate_receipts": duplicate_receipts,
         "category_options": list(EXPENSE_CATEGORIES),
         "parse_errors": parse_errors,
+        # L3: xlsx statements can be written back with the resolved accounts.
+        "writeback_available": writeback_available(run),
     }
 
 
@@ -1253,6 +1290,19 @@ def regenerate_zoho(
     transactions, receipts, outcome, _ = snapshot_from_dict(run.snapshot)
     receipts = apply_overrides(receipts, overrides)
     effective = apply_decisions(outcome, transactions, receipts, decisions)
+    # PR-E: a reviewer-marked already_posted charge never reaches the
+    # journal (the fill-color "posted" path is excluded inside the writer;
+    # this is the manual z-key sibling).
+    posted_ids = {
+        tid for tid, d in decisions.items() if d.status == STATUS_ALREADY_POSTED
+    }
+    if posted_ids:
+        effective = replace(
+            effective,
+            matches=[
+                m for m in effective.matches if m.transaction_id not in posted_ids
+            ],
+        )
     out_path = Path(run.work_dir) / "zoho_journal.csv"
     coa_gate = _coa_gate_from_config(run.config, run.work_dir)
     write_zoho_export(effective, transactions, receipts, out_path, coa_gate=coa_gate)
@@ -1278,6 +1328,47 @@ def regenerate_reconciled(
     effective = apply_decisions(outcome, transactions, receipts, decisions)
     out_path = Path(run.work_dir) / "reconciled.csv"
     write_reconciled_csv(effective, transactions, receipts, out_path)
+    return out_path
+
+
+def writeback_available(run: RunRow) -> bool:
+    """True when the run's statement is an Excel workbook the L3 writeback
+    can annotate (her own sheet + the resolved-account column)."""
+    stmt = (run.config or {}).get("statement", {}).get("path", "")
+    return Path(stmt).suffix.lower() in (".xlsx", ".xlsm")
+
+
+def regenerate_writeback(
+    run: RunRow, decisions: dict[str, Decision], overrides: dict
+) -> Path | None:
+    """Write the L3 sheet writeback for a run: HER OWN uploaded workbook
+    with one new "Zoho Account (tool)" column, after the reviewer's
+    decisions + overrides. Returns None when the statement is not an
+    Excel workbook (CSV / PDF runs have no sheet to write back into)."""
+    if not writeback_available(run):
+        return None
+    from ..output.sheet_writeback import write_sheet_writeback
+
+    transactions, receipts, outcome, _ = snapshot_from_dict(run.snapshot)
+    receipts = apply_overrides(receipts, overrides)
+    effective = apply_decisions(outcome, transactions, receipts, decisions)
+    stmt_cfg = run.config.get("statement", {})
+    stmt_path = Path(run.work_dir) / stmt_cfg["path"]
+    suffix = stmt_path.suffix
+    out_path = Path(run.work_dir) / f"{stmt_path.stem}-categorized{suffix}"
+    chart = None
+    gate = _coa_gate_from_config(run.config, run.work_dir)
+    if gate is not None:
+        chart = getattr(gate, "chart", None)
+    write_sheet_writeback(
+        stmt_path,
+        out_path,
+        effective,
+        transactions,
+        receipts,
+        sheet_name=stmt_cfg.get("sheet_name"),
+        chart_of_accounts=chart,
+    )
     return out_path
 
 

@@ -29,7 +29,16 @@ from pathlib import Path
 STATUS_PENDING = "pending"
 STATUS_CONFIRMED = "confirmed"
 STATUS_REJECTED = "rejected"
-VALID_STATUSES = (STATUS_PENDING, STATUS_CONFIRMED, STATUS_REJECTED)
+# L1/PR-E: "this charge is already entered in Zoho" (her yellow). Terminal
+# like confirmed (counts as decided, claims its receipt) but the Zoho
+# journal export EXCLUDES it -- never double-post.
+STATUS_ALREADY_POSTED = "already_posted"
+VALID_STATUSES = (
+    STATUS_PENDING,
+    STATUS_CONFIRMED,
+    STATUS_REJECTED,
+    STATUS_ALREADY_POSTED,
+)
 
 # Intake lifecycle (testing mode): the user's uploaded document set, waiting
 # for an operator. `received` on upload; `processing` once an operator runs
