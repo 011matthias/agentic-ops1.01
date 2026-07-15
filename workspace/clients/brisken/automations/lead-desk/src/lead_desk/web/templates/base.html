@@ -111,6 +111,24 @@
       border-radius: 4px; padding: 1px 5px; color: var(--muted); }
     .footer { color: var(--muted); font-size: 12px; padding: 14px 24px; text-align: center; }
     .scroll-x { overflow-x: auto; }
+    /* A hot-but-active reply: red outline, NOT the solid suppressed-red that
+       makes a live lead read as off-board. */
+    .badge.aging { background: transparent; color: var(--red); border: 1px solid var(--red); }
+    .tier-legend { color: var(--muted); font-size: 12px; margin-top: 10px; }
+    .tier-legend b { color: var(--text); font-weight: 600; }
+    /* Sticky save bar for the long contact editor: the single Save control
+       stays reachable without scrolling to the bottom of the 4th card. */
+    .save-bar { position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center;
+      justify-content: flex-end; gap: 10px; padding: 10px 16px; margin-bottom: 18px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      box-shadow: 0 -3px 12px rgba(0,0,0,.10); }
+    @media (max-width: 640px) {
+      .site-nav { flex-wrap: wrap; gap: 8px; padding: 10px 14px; }
+      .nav-right { flex-wrap: wrap; gap: 8px; }
+      .wrap { padding: 14px 12px; }
+      .card { padding: 14px; }
+      .grid2, .grid4 { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>

@@ -161,6 +161,21 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 return HTMLResponse("Contact not found", status_code=404)
         return RedirectResponse(url=f"/contacts/{contact_id}", status_code=303)
 
+    @app.post("/contacts/{contact_id}/mark-replied")
+    def post_mark_replied(request: Request, contact_id: str, back: str = Form("")):
+        """One-click 'I replied to them': logs an outbound email so our last_out
+        is now newer than their inbound, clearing the row from the action set.
+        No email is sent - this only records that the operator handled it."""
+        with open_store() as store:
+            try:
+                log_touch(store, contact_id, channel="email", direction="outbound",
+                          type="sent", ts=None, subject="Replied",
+                          detail="Marked replied from the board", user=current_user(request))
+            except ValueError:
+                return HTMLResponse("Contact not found", status_code=404)
+        target = back if back.startswith("/") else f"/contacts/{contact_id}"
+        return RedirectResponse(url=target, status_code=303)
+
     @app.post("/contacts/{contact_id}/suppress")
     def post_suppress(request: Request, contact_id: str,
                       suppressed: str = Form(""), reason: str = Form("")):

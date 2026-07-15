@@ -1,11 +1,23 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sign in - Brisken Lead Desk</title>
+<script>
+  (function () {
+    var t = localStorage.getItem('theme');
+    document.documentElement.setAttribute('data-theme',
+      t === 'dark' || (t !== 'light' && window.matchMedia('(prefers-color-scheme:dark)').matches)
+        ? 'dark' : 'light');
+  })();
+</script>
 <style>
   :root {
+    --bg: #f6f7f9; --surface: #ffffff; --text: #1a1d23; --muted: #6b7280;
+    --border: #e2e5ea; --accent: #2563eb; --orange: #d97706; --orange-bg: #fffbeb;
+  }
+  [data-theme="dark"] {
     --bg: #0f1318; --surface: #171c23; --text: #e6e9ee; --muted: #9aa4b1;
     --border: #2a323c; --accent: #5b8cff; --orange: #fbbf24; --orange-bg: #2c2310;
   }
