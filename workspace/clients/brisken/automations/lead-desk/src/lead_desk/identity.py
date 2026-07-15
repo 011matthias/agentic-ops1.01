@@ -15,16 +15,26 @@ import hashlib
 
 
 def natural_key(email: str | None, first: str | None, last: str | None,
-                company: str | None) -> str:
+                company: str | None, ordinal: int | None = None) -> str:
     if email:
         return email.strip().lower()
-    # No email: key on identity content only (name + company). The old key
-    # mixed in the source-row ordinal, which is stable only within one fixed
-    # file order and shifts whenever a row is inserted/sorted above it, so the
-    # SAME person re-keyed and duplicated on every sheet reorder. A content key
-    # is stable across reorders; genuine same-name/same-company collisions are
-    # surfaced by the migrate duplicate report for review.
-    basis = "|".join([first or "", last or "", company or ""]).strip().lower()
+    named = bool((first or "").strip() or (last or "").strip())
+    parts = [first or "", last or "", company or ""]
+    # NAMED email-less rows key on content (name + company) so the SAME person
+    # stays one contact across sheet reorders; the old key mixed in the
+    # source-row ordinal, which shifts on any insert/sort above the row and so
+    # duplicated the person on every re-sync. True same-name/same-company
+    # collisions surface in the migrate duplicate report.
+    #
+    # NAMELESS org-only rows (e.g. TA Cook PII-withheld opt-outs: distinct
+    # attendees recorded as company-only, blank name) are indistinguishable by
+    # content, so a content key would collapse several distinct people from one
+    # org into a single contact - real data loss. They keep the source-row
+    # ordinal. These rows are off-board (never contacted), so the reorder
+    # duplication is cosmetic, which is the far lesser evil than losing headcount.
+    if not named and ordinal is not None:
+        parts.append(f"#{ordinal}")
+    basis = "|".join(parts).strip().lower()
     return "anon:" + hashlib.sha1(basis.encode("utf-8")).hexdigest()[:16]
 
 

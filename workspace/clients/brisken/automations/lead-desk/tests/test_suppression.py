@@ -39,6 +39,20 @@ def test_natural_key_falls_back_to_name():
     assert k.startswith("anon:") and len(k) > 5
 
 
+def test_named_anon_key_ignores_ordinal():
+    # A NAMED email-less row keys on content, so the source-row ordinal never
+    # changes it: the same person stays one contact across sheet reorders.
+    assert natural_key(None, "Domenic", None, "JTI", 5) == \
+           natural_key(None, "Domenic", None, "JTI", 99)
+
+
+def test_nameless_orgonly_key_keeps_ordinal():
+    # Org-only rows (TA Cook PII-withheld opt-outs) have no name to key on, so
+    # they stay DISTINCT via the ordinal; collapsing them would lose headcount.
+    assert natural_key(None, None, None, "Zanders", 1) != \
+           natural_key(None, None, None, "Zanders", 2)
+
+
 def test_log_line_classification():
     assert classify_log_line("2026-06-19 E1 pre-event invite sent") == ("email", "outbound", "invite")
     assert classify_log_line('2026-06-24 E3 response: "yes"') == ("email", "inbound", "reply")

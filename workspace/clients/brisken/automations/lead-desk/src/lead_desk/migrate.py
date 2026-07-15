@@ -203,7 +203,7 @@ def import_workbook(store: ContactStore, xlsx: Path, campaign: str, report: dict
     events_added = 0
     contacts = 0
 
-    for r in it:
+    for ordinal, r in enumerate(it):
         if all(c is None for c in r):
             continue
         first = _s(col(r, "first_name"))
@@ -211,7 +211,7 @@ def import_workbook(store: ContactStore, xlsx: Path, campaign: str, report: dict
         company = _s(col(r, "company"))
         email = _s(col(r, "email"))
         email_l = email.lower() if email else None
-        nk = natural_key(email, first, last, company)
+        nk = natural_key(email, first, last, company, ordinal)
         cid = contact_id_for(nk)
 
         rowdict = {h: col(r, h) for h in header}
