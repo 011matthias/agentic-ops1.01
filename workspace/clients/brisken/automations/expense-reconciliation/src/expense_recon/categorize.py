@@ -269,17 +269,22 @@ def _learned_categorization(
 ) -> Categorization | None:
     """A Tier-1 LEARNED categorization for this receipt's merchant, or None
     when there is no learned mapping. The provenance reasoning carries the
-    month of the confirming decision so the workbench can show it."""
+    month of the confirming decision so the workbench can show it; rows
+    seeded from Zoho Books posting history (L2, source_run "zoho-seed:*")
+    name that history instead of a reviewer decision."""
     if learned is None or not receipt.detected_vendor:
         return None
     hit = learned.get(receipt.legal_entity_id, receipt.detected_vendor)
     if hit is None or not hit.category:
         return None
-    when = hit.last_confirmed_at[:7] if hit.last_confirmed_at else None
-    provenance = (
-        f"learned from your {when} decision" if when
-        else "learned from your confirmed decision"
-    )
+    if hit.source_run and hit.source_run.startswith("zoho-seed"):
+        provenance = "from your Zoho Books posting history"
+    else:
+        when = hit.last_confirmed_at[:7] if hit.last_confirmed_at else None
+        provenance = (
+            f"learned from your {when} decision" if when
+            else "learned from your confirmed decision"
+        )
     return Categorization(
         category=hit.category,
         zoho_account=hit.zoho_account,

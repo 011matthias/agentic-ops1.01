@@ -67,10 +67,6 @@ from .store import (
 from . import auth
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
-# Self-contained HTML docs embedded into the tool: the user guide and the
-# how-it-works walkthrough. Packaged with the app (the wheel ships the web
-# subtree, like templates/), served verbatim behind the gate.
-_GUIDES_DIR = Path(__file__).parent / "guides"
 # Packaged brand assets (design tokens, Brisken logos, favicon). Served
 # ungated so the login page can style itself; nothing here is client data.
 _STATIC_DIR = Path(__file__).parent / "static"
@@ -101,7 +97,11 @@ def _run_job(db_path: Path, job_id: str, prepared: PreparedRun) -> None:
     """
     try:
         with RunStore(db_path) as store:
-            run_id = execute_run(store, prepared)
+            run_id = execute_run(
+                store,
+                prepared,
+                on_stage=lambda s: store.set_job_stage(job_id, s, _now_iso()),
+            )
             store.set_job_status(
                 job_id, JOB_DONE, run_id=run_id, updated_at=_now_iso()
             )
@@ -917,21 +917,20 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             ),
         )
 
-    # ── Embedded docs: the user guide + the how-it-works walkthrough,
-    # reached from the tool nav (gated like every other page). They are
-    # self-contained HTML deliverables, served verbatim rather than wrapped
-    # in the app chrome.
-    @app.get("/guide", response_class=HTMLResponse)
-    def user_guide() -> HTMLResponse:
-        return HTMLResponse(
-            (_GUIDES_DIR / "user-guide.html").read_text(encoding="utf-8")
-        )
+    # ── Help: one merged trilingual page (replaces the old /guide +
+    # /how-it-works standalone docs, which had drifted). Rendered inside
+    # the app chrome so it inherits the brand tokens, theme, and role nav.
+    @app.get("/help", response_class=HTMLResponse)
+    def help_page(request: Request) -> HTMLResponse:
+        return templates.TemplateResponse(request, "help.html", {})
 
-    @app.get("/how-it-works", response_class=HTMLResponse)
-    def tool_flow() -> HTMLResponse:
-        return HTMLResponse(
-            (_GUIDES_DIR / "tool-flow.html").read_text(encoding="utf-8")
-        )
+    @app.get("/guide")
+    def guide_redirect():
+        return RedirectResponse(url="/help", status_code=301)
+
+    @app.get("/how-it-works")
+    def how_it_works_redirect():
+        return RedirectResponse(url="/help", status_code=301)
 
     # ── Memory (PR 2e): see and correct what the tool has learned ──────
     @app.get("/memory", response_class=HTMLResponse)

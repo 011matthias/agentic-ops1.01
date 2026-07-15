@@ -255,16 +255,20 @@ def prepare_run(
     )
 
 
-def execute_run(store: RunStore, prepared: PreparedRun) -> str:
+def execute_run(
+    store: RunStore, prepared: PreparedRun, *, on_stage=None
+) -> str:
     """Run the pipeline for a prepared run and persist the snapshot. Returns
     the run id. This is the slow part (LLM OCR / categorization / judgment);
-    the web layer runs it in the background and polls for completion."""
+    the web layer runs it in the background and polls for completion.
+    `on_stage` (optional) receives pass-boundary names for staged progress."""
     try:
         result = reconcile(
             prepared.cfg,
             prepared.work_dir,
             learned=prepared.learned,
             match_memory=prepared.match_memory,
+            on_stage=on_stage,
         )
     except ConfigError as exc:
         raise RunInputError(str(exc)) from exc
@@ -297,6 +301,11 @@ def execute_run(store: RunStore, prepared: PreparedRun) -> str:
         f"{prepared.now_iso[:10]}"
     ).strip()
 
+    if on_stage is not None:
+        try:
+            on_stage("saving")
+        except Exception:  # noqa: BLE001
+            pass
     store.create_run(
         run_id=prepared.run_id,
         created_at=prepared.now_iso,

@@ -123,8 +123,7 @@
         {% else %}
         <a class="nav-tab" href="/" data-i18n="nav_home">Home</a>
         {% endif %}
-        <a class="nav-tab" href="/guide">Guide</a>
-        <a class="nav-tab" href="/how-it-works">How it works</a>
+        <a class="nav-tab" href="/help" data-i18n="nav_help">Help</a>
       </div>
       <button class="nav-theme" id="lang-toggle" onclick="ercToggleLang()" aria-label="Switch language">EN | PT</button>
       <button class="nav-theme" onclick="(function(){var d=document.documentElement;var c=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',c);localStorage.setItem('theme',c);})()" aria-label="Toggle theme">Theme</button>
@@ -141,6 +140,7 @@
     // (the fallback), PT overrides here. Persisted like the theme.
     var ERC_PT = {
       nav_home: "Início",
+      nav_help: "Ajuda",
       uh_title: "Envie seus documentos",
       uh_sub: "Envie o extrato do banco e o arquivo de comprovantes de um mês. Preparamos sua revisão e avisamos por e-mail quando estiver pronta; não precisa esperar aqui.",
       uh_stmt: "Extrato do banco (.csv, .xlsx ou .pdf)",

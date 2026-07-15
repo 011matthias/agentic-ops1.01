@@ -77,6 +77,27 @@ def test_empty_lookup_is_a_noop():
     assert _cat(out[0]).source is ClassificationSource.REVIEW
 
 
+def test_zoho_seeded_hit_carries_books_history_provenance():
+    # An L2-seeded row (source_run "zoho-seed:{org}") is a LEARNED Tier-1
+    # hit whose reasoning names the Zoho Books posting history, not a
+    # reviewer decision.
+    lookup = MerchantCategoryLookup([
+        MerchantCategory(
+            LE, normalize_vendor("Anthropic"), "Software & Subscriptions",
+            "Other Infra and IT Costs for Cloud Business", 1,
+            "2026-07-15T00:00:00", "zoho-seed:822741658",
+        )
+    ])
+    r = _rcpt("Anthropic")  # no line items -> weak path -> memory consult
+    out = categorize_receipts([r], client=None, learned=lookup)
+    cat = _cat(out[0])
+    assert cat.source is ClassificationSource.LEARNED
+    assert cat.category == "Software & Subscriptions"
+    assert cat.zoho_account == "Other Infra and IT Costs for Cloud Business"
+    assert cat.confidence == 1.0
+    assert cat.reasoning == "from your Zoho Books posting history"
+
+
 def test_override_recommit_updates_audit_trail(tmp_path):
     # The retrains loop: a reviewer override re-committed to memory is a
     # latest-wins upsert that bumps decision_count and moves last_confirmed.

@@ -374,8 +374,10 @@ class RunStore:
         updated_at: str,
     ) -> None:
         self.conn.execute(
-            "UPDATE jobs SET status = ?, run_id = ?, error = ?, stage = ?, "
-            "updated_at = ? WHERE job_id = ?",
+            # COALESCE keeps the last recorded pipeline stage when the final
+            # status write passes no stage (done/error must not blank it).
+            "UPDATE jobs SET status = ?, run_id = ?, error = ?, "
+            "stage = COALESCE(?, stage), updated_at = ? WHERE job_id = ?",
             (status, run_id, error, stage, updated_at, job_id),
         )
         self.conn.commit()

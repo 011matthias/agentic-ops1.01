@@ -570,7 +570,7 @@
   }
 
   async function forgetAndReclassify(btn) {
-    // PR C — "this was wrong": forget the merchant (future runs stop
+    // PR C, "this was wrong": forget the merchant (future runs stop
     // auto-filling it) and open the reclassify dropdown for this line.
     const res = await fetch(`/runs/${RUN_ID}/forget`, {
       method: "POST",

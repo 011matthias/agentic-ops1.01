@@ -123,6 +123,53 @@ def test_api_error_on_nonzero_zoho_code():
     assert exc.value.code == 4
 
 
+def test_list_expenses_follows_pagination():
+    http = FakeHttp([
+        _TOKEN_OK,
+        (200, {"code": 0, "expenses": [{"vendor_name": "A", "date": "2026-01-05"}],
+               "page_context": {"has_more_page": True}}),
+        (200, {"code": 0, "expenses": [{"vendor_name": "B", "date": "2026-02-05"}],
+               "page_context": {"has_more_page": False}}),
+    ])
+    client = ZohoClient(_cfg(), http=http)
+
+    expenses = client.list_expenses()
+
+    assert [e["vendor_name"] for e in expenses] == ["A", "B"]
+    assert "/books/v3/expenses" in http.calls[1][1]
+    assert "organization_id=999" in http.calls[1][1]
+
+
+def test_list_expenses_filters_dates_client_side():
+    # One page carrying records around the window; the filter happens on
+    # OUR side (Zoho's own list filters are inconsistent across DCs), so
+    # the request itself carries no date params.
+    http = FakeHttp([
+        _TOKEN_OK,
+        (200, {"code": 0, "expenses": [
+            {"vendor_name": "too-early", "date": "2025-12-31"},
+            {"vendor_name": "in-window", "date": "2026-01-15"},
+            {"vendor_name": "on-edge", "date": "2026-02-28"},
+            {"vendor_name": "too-late", "date": "2026-03-01"},
+            {"vendor_name": "undated"},
+        ], "page_context": {"has_more_page": False}}),
+    ])
+    client = ZohoClient(_cfg(), http=http)
+
+    expenses = client.list_expenses(date_start="2026-01-01", date_end="2026-02-28")
+
+    assert [e["vendor_name"] for e in expenses] == ["in-window", "on-edge"]
+    assert "date" not in http.calls[1][1]  # no date params sent to Zoho
+
+
+def test_list_expenses_api_error():
+    http = FakeHttp([_TOKEN_OK, (200, {"code": 57, "message": "no scope"})])
+    client = ZohoClient(_cfg(), http=http)
+    with pytest.raises(ZohoAPIError) as exc:
+        client.list_expenses()
+    assert exc.value.code == 57
+
+
 def test_from_env_reports_all_missing_at_once():
     with pytest.raises(ValueError) as exc:
         ZohoConfig.from_env(env={"ZOHO_CLIENT_ID": "x"})
