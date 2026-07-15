@@ -55,6 +55,7 @@ from .store import (
     STATUS_PENDING,
     STATUS_REJECTED,
     Decision,
+    IntakeRow,
     RunRow,
     RunStore,
 )
@@ -170,6 +171,7 @@ class PreparedRun:
     use_llm_effective: bool
     now_iso: str
     operator: str | None
+    intake_id: str | None = None
 
 
 def prepare_run(
@@ -183,6 +185,7 @@ def prepare_run(
     now_iso: str,
     operator: str | None,
     learning_db_path: Path | None = None,
+    intake_id: str | None = None,
 ) -> PreparedRun:
     """Save the uploads and resolve everything the pipeline needs, fast and
     fail-fast. Raises `RunInputError` for a user-fixable problem (an
@@ -247,6 +250,7 @@ def prepare_run(
         use_llm_effective=use_llm_effective,
         now_iso=now_iso,
         operator=operator,
+        intake_id=intake_id,
     )
 
 
@@ -303,6 +307,7 @@ def execute_run(store: RunStore, prepared: PreparedRun) -> str:
         work_dir=str(prepared.work_dir),
         llm_enabled=prepared.use_llm_effective,
         has_coa=result.chart_of_accounts is not None,
+        intake_id=prepared.intake_id,
     )
     return prepared.run_id
 
@@ -334,6 +339,124 @@ def create_run(
         learning_db_path=learning_db_path,
     )
     return execute_run(store, prepared)
+
+
+# Statement / receipts extensions the intake accepts. Deliberately the same
+# set the run form accepts; anything else is a wrong-file mistake worth
+# catching at upload time with friendly copy.
+_STATEMENT_SUFFIXES = (".csv", ".xlsx", ".xlsm", ".pdf")
+_RECEIPTS_SUFFIXES = (".csv",)
+
+
+def create_intake(
+    store: RunStore,
+    data_root: Path,
+    *,
+    statement_bytes: bytes,
+    statement_filename: str,
+    receipts_bytes: bytes | None,
+    receipts_filename: str | None,
+    label: str,
+    card_key: str | None,
+    now_iso: str,
+    uploaded_by: str | None,
+) -> IntakeRow:
+    """Save an uploaded document set WITHOUT running the pipeline (testing
+    mode: users upload, operators run). Blocking validation is minimal --
+    files present with sane extensions; the column-map auto-detect runs
+    best-effort into `detect_note` (advisory for the operator queue, never
+    a wall in front of the uploader). Raises `RunInputError` only for the
+    user-fixable minimum."""
+    if not statement_bytes:
+        raise RunInputError("No statement file uploaded.")
+    stmt_name = _safe_name(statement_filename or "", "statement.csv")
+    if Path(stmt_name).suffix.lower() not in _STATEMENT_SUFFIXES:
+        raise RunInputError(
+            "The statement file should be a .csv, .xlsx or .pdf export from "
+            "the bank."
+        )
+    rcpt_name: str | None = None
+    if receipts_bytes:
+        rcpt_name = _safe_name(receipts_filename or "", "receipts.csv")
+        if Path(rcpt_name).suffix.lower() not in _RECEIPTS_SUFFIXES:
+            raise RunInputError("The receipts file should be a .csv export.")
+    if not label.strip():
+        raise RunInputError("Please pick which card this statement is from.")
+
+    intake_id = uuid.uuid4().hex[:12]
+    work_dir = data_root / "intakes" / intake_id
+    work_dir.mkdir(parents=True, exist_ok=True)
+    (work_dir / stmt_name).write_bytes(statement_bytes)
+    if rcpt_name is not None:
+        (work_dir / rcpt_name).write_bytes(receipts_bytes or b"")
+
+    detect_note = _detect_note(work_dir / stmt_name)
+
+    store.create_intake(
+        intake_id=intake_id,
+        created_at=now_iso,
+        label=label.strip(),
+        uploaded_by=uploaded_by,
+        statement_name=stmt_name,
+        receipts_name=rcpt_name,
+        card_key=(card_key or "").strip() or None,
+        work_dir=str(work_dir),
+        detect_note=detect_note,
+    )
+    intake = store.get_intake(intake_id)
+    assert intake is not None
+    return intake
+
+
+def _detect_note(stmt_path: Path) -> str:
+    """Best-effort column-map advisory for the operator queue. Never raises:
+    a detection failure is exactly the information the operator needs."""
+    suffix = stmt_path.suffix.lower()
+    if suffix == ".pdf":
+        return "Chase PDF: no column map needed"
+    try:
+        guessed, missing, _headers = stmt_inspect.inspect(stmt_path)
+    except Exception as exc:  # noqa: BLE001 - advisory only
+        return f"auto-detect failed: {exc}"
+    if missing:
+        return "auto-detect missing: " + ", ".join(missing)
+    return "column map auto-detected: " + ", ".join(
+        f"{k}={v}" for k, v in sorted(guessed.items())
+    )
+
+
+def prepare_intake_run(
+    data_root: Path,
+    intake: IntakeRow,
+    form: RunForm,
+    *,
+    now_iso: str,
+    operator: str | None,
+    learning_db_path: Path | None = None,
+) -> PreparedRun:
+    """Prepare a pipeline run from a stored intake's files (the operator's
+    run-from-queue path). Reads the uploaded bytes back from the intake's
+    work dir and delegates to `prepare_run`, tagging the run with the
+    intake id so publish can flip the intake to `ready`."""
+    intake_dir = Path(intake.work_dir)
+    statement_bytes = (intake_dir / intake.statement_name).read_bytes()
+    if intake.receipts_name is None:
+        raise RunInputError(
+            "This upload has no receipts file yet; ask for it before running."
+        )
+    receipts_bytes = (intake_dir / intake.receipts_name).read_bytes()
+    return prepare_run(
+        data_root,
+        statement_bytes=statement_bytes,
+        statement_filename=intake.statement_name,
+        receipts_bytes=receipts_bytes,
+        receipts_filename=intake.receipts_name,
+        form=form,
+        now_iso=now_iso,
+        operator=operator,
+        learning_db_path=learning_db_path,
+        intake_id=intake.intake_id,
+    )
 
 
 def _resolve_statement_map(stmt_path: Path, form: RunForm) -> dict[str, str]:

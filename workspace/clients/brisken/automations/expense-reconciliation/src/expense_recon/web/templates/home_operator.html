@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block content %}
+{% if intakes %}
+<div class="card">
+  <h2>Intake queue</h2>
+  <p class="muted">Uploads from the user, waiting for a pipeline run. Keep the tab open while a run is in progress.</p>
+  <table>
+    <thead>
+      <tr><th>What</th><th>Uploaded</th><th>Files</th><th>Auto-detect</th><th>Status</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for i in intakes %}
+      <tr>
+        <td>{{ i.label }}</td>
+        <td class="muted">{{ i.created_at[:16] }}</td>
+        <td class="mono" style="font-size:12px;">{{ i.statement_name }}{% if i.receipts_name %} + {{ i.receipts_name }}{% else %} <span class="badge unmatched">no receipts yet</span>{% endif %}</td>
+        <td class="muted" style="font-size:12px;">{{ i.detect_note or "" }}</td>
+        <td>
+          {% if i.status == "received" %}<span class="badge pending">received</span>
+          {% elif i.status == "processing" %}<span class="badge review">processing</span>
+          {% else %}<span class="badge reconciled">ready</span>{% endif %}
+        </td>
+        <td class="right">
+          {% if i.status == "ready" and i.run_id %}
+          <a class="btn btn-secondary btn-small" href="/runs/{{ i.run_id }}">Open run</a>
+          {% elif i.receipts_name %}
+          <a class="btn btn-small" href="/intakes/{{ i.intake_id }}/prepare">Prepare run</a>
+          {% else %}
+          <span class="muted" style="font-size:12px;">waiting for receipts</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="card">
+  <h1>Reconcile a month</h1>
+  <p class="muted">Upload one card statement and the matching receipts. The tool matches, categorizes, and gives you a review workbench. For a CSV or Excel statement the column mapping is auto-detected; override only if a field is wrong. A Chase PDF statement needs no column map and no card name; the cards and the per-charge foreign-currency detail are read straight from the PDF.</p>
+
+  {% if error %}
+  <div class="alert">{{ error }}</div>
+  {% if headers %}
+  <p class="muted">Columns found in your statement file:</p>
+  <p class="mono">{{ headers | join(" , ") }}</p>
+  {% endif %}
+  {% endif %}
+
+  {% with form_action="/runs", show_files=True %}
+    {% include "_run_form.html" %}
+  {% endwith %}
+</div>
+
+{% if runs %}
+<div class="card">
+  <h2>All runs</h2>
+  <table>
+    <thead>
+      <tr><th>Run</th><th>When</th><th class="right">Transactions</th><th class="right">Matched</th><th class="right">Review</th><th>Published</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for r in runs %}
+      <tr>
+        <td>{{ r.label }}</td>
+        <td class="muted">{{ r.created_at }}</td>
+        <td class="right">{{ r.summary.get("n_transactions", "") }}</td>
+        <td class="right">{{ r.summary.get("n_matched", "") }}</td>
+        <td class="right">{{ r.summary.get("n_review", "") }}</td>
+        <td>{% if r.published %}<span class="badge reconciled">published</span>{% else %}<span class="badge pending">operator only</span>{% endif %}</td>
+        <td class="right"><a class="btn btn-secondary btn-small" href="/runs/{{ r.run_id }}">Open</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

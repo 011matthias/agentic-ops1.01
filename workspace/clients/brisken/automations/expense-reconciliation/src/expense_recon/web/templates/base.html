@@ -116,9 +116,13 @@
     </a>
     <div style="display:flex; align-items:center; gap:12px;">
       <div class="nav-tabs" role="tablist">
+        {% if role == "operator" %}
         <a class="nav-tab" href="/">Runs</a>
         <a class="nav-tab" href="/compare">Compare</a>
         <a class="nav-tab" href="/memory">Memory</a>
+        {% else %}
+        <a class="nav-tab" href="/" data-i18n="nav_home">Home</a>
+        {% endif %}
         <a class="nav-tab" href="/guide">Guide</a>
         <a class="nav-tab" href="/how-it-works">How it works</a>
       </div>

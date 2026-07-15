@@ -34,9 +34,23 @@
         {% if s.llm_cost_usd and s.llm_cost_usd not in ("0", "0.0") %}&middot; est. ${{ s.llm_cost_usd }}{% endif %}
       </p>
     </div>
-    <div>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      {% if role == "operator" %}
+      {% if run and run.published %}
+      <span class="badge reconciled">published</span>
+      <form method="post" action="/runs/{{ view.run_id }}/unpublish" style="display:inline; margin:0;">
+        <button class="btn btn-secondary" type="submit">Unpublish</button>
+      </form>
+      {% else %}
+      <span class="badge pending">operator only</span>
+      <form method="post" action="/runs/{{ view.run_id }}/publish" style="display:inline; margin:0;"
+            onsubmit="return confirm('Publish this run? The user will see it and can review it.');">
+        <button class="btn" type="submit">Publish for review</button>
+      </form>
+      {% endif %}
       <button class="btn btn-secondary" onclick="commitMemory()" title="Teach the tool from the matches you confirmed and the categories you reclassified, so next month is less work.">Commit to memory</button>
-      <a class="btn btn-secondary" href="/">New run</a>
+      {% endif %}
+      <a class="btn btn-secondary" href="/">{% if role == "operator" %}New run{% else %}Home{% endif %}</a>
     </div>
   </div>
   <p id="memory-status" class="muted" style="margin-top:10px; display:none;"></p>
@@ -136,7 +150,7 @@
                 </select>
               </td>
               <td class="muted">{{ li.source }}{% if li.provenance %}<br><span style="font-size:11px;">{{ li.provenance }}</span>{% endif %}
-                {% if li.is_learned %}
+                {% if li.is_learned and role == "operator" %}
                 <br><button class="btn btn-secondary btn-small" style="margin-top:4px;"
                     data-entity="{{ c.receipt.legal_entity_id }}" data-vendor="{{ c.receipt.vendor }}"
                     data-doc="{{ c.receipt.document_id }}" data-line="{{ li.index }}"

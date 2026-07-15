@@ -1,0 +1,20 @@
+{
+  "cards": [
+    {
+      "key": "corp-2838",
+      "label": "Corporate card ending 2838",
+      "label_pt": "Cartao corporativo final 2838",
+      "account_id": "card-2838",
+      "legal_entity": "Corporate Services",
+      "currency": "USD"
+    },
+    {
+      "key": "cloud-0000",
+      "label": "Cloud Services card ending 0000",
+      "label_pt": "Cartao Cloud Services final 0000",
+      "account_id": "card-0000",
+      "legal_entity": "Cloud Services",
+      "currency": "USD"
+    }
+  ]
+}
