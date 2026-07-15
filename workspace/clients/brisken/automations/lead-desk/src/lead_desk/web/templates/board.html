@@ -55,10 +55,11 @@
     {% for s in v.stages %}
     <a class="stat {% if f.stage == s %}active{% endif %}" href="/?{{ cq }}&stage={{ s }}">
       <div class="stat-value">{{ v.stage_counts[s] }}</div>
-      <div class="stat-label">{{ s }}</div>
+      <div class="stat-label">{{ v.stage_labels[s] or s }}</div>
     </a>
     {% endfor %}
   </div>
+  <div class="tier-legend"><b>Tiers</b>: H5 top priority &middot; T1 &gt; T2 &gt; T3 (descending priority) &middot; GA general audience. ANON / DUPLICATE / STOP / OWN_TEAM / ORGANISER / UNREACHABLE are excluded from outreach.</div>
 
   <div class="inline" style="margin-top:14px; flex-wrap:wrap;">
     <a class="chip hot {% if f.bucket == 'action' %}active{% endif %}" href="/?{{ cq }}&bucket=action" title="Everyone who owes an action from us right now: a reply we have not sent, or a follow-up past due. Your primary daily list.">Needs action <span class="n">{{ v.buckets.needs_action }}</span></a>
@@ -136,8 +137,9 @@
 <div class="card scroll-x">
   <div class="muted" style="margin-bottom:8px;">{{ v.rows|length }} shown{% if f.q and v.suppressed_matches and not f.show_suppressed %} &middot; {{ v.suppressed_matches }} suppressed contact{{ 's' if v.suppressed_matches != 1 else '' }} also match this search: <a href="/?campaign={{ v.campaign }}&amp;q={{ f.q|urlencode }}&amp;show_suppressed=1">show them &rarr;</a>{% endif %}</div>
   <table>
+    {% set ncols = 10 + (1 if v.show_degree else 0) + (1 if v.show_step else 0) %}
     <thead><tr>
-      <th>Name</th><th>Company</th><th>Tier</th><th>Degree</th><th>Stage</th><th title="During-event E1/E2/E3 (mailbox) &middot; P = post-event follow-up (sheet)">Outreach</th><th>Status</th><th title="The master sheet's own status column (display only; does not drive the derived Stage or Status)">Sheet status</th><th>Step</th><th>Next touch</th><th>Last out / in</th><th>Next step</th>
+      <th>Name</th><th>Company</th><th title="Priority tier: H5 highest, then T1&gt;T2&gt;T3, GA general audience; the rest are excluded">Tier</th>{% if v.show_degree %}<th title="Warmness degree in this campaign's cadence (cold / cold-touched / warm)">Degree</th>{% endif %}<th>Stage</th><th title="During-event E1/E2/E3 (mailbox) &middot; P = post-event follow-up (sheet)">Outreach</th><th>Status</th><th title="The master sheet's own status column (display only; does not drive the derived Stage or Status)">Sheet status</th>{% if v.show_step %}<th title="Cadence step progress (x of y)">Step</th>{% endif %}<th title="Next touch = the automatic cadence step scheduled next">Next touch</th><th>Last out / in</th><th title="Next step = your manual note on what to do next (not automatic)">Next step</th>
     </tr></thead>
     <tbody>
     {% for r in v.rows %}
@@ -146,8 +148,8 @@
             {% if r.job_title %}<div class="muted" style="font-size:12px;">{{ r.job_title }}</div>{% endif %}</td>
         <td>{{ r.company or '' }}</td>
         <td>{% if r.tier %}<span class="badge tier">{{ r.tier }}</span>{% endif %}</td>
-        <td>{% if r.degree %}<span class="badge {% if r.degree == 'warm' %}stage-booked{% elif r.degree == 'cold_touched' %}stage-replied{% else %}stage-sent{% endif %}">{{ r.degree }}</span>{% elif r.cadence %}<span class="muted">-</span>{% endif %}</td>
-        <td><span class="badge stage-{{ r.stage }}">{{ r.stage }}</span></td>
+        {% if v.show_degree %}<td>{% if r.degree %}<span class="badge {% if r.degree == 'warm' %}stage-booked{% elif r.degree == 'cold_touched' %}stage-replied{% else %}stage-sent{% endif %}">{{ r.degree }}</span>{% elif r.cadence %}<span class="muted">-</span>{% endif %}</td>{% endif %}
+        <td><span class="badge stage-{{ r.stage }}" title="{{ r.stage }}">{{ v.stage_labels[r.stage] or r.stage }}</span></td>
         <td style="white-space:nowrap;">{% for w in r.phases.during_event.waves %}<span class="badge tier" style="padding:0 4px;">{{ w }}</span>{% endfor %}{% if r.phases.during_event.replied %}<span class="badge stage-replied" style="padding:0 4px;" title="replied during event">R</span>{% endif %}{% if r.phases.post_event.any %} <span class="badge stage-booked" style="padding:0 4px;" title="post-event follow-up {{ r.phases.post_event.sent }}">P</span>{% endif %}{% if not r.phases.during_event.waves and not r.phases.during_event.replied and not r.phases.post_event.any %}<span class="muted">-</span>{% endif %}</td>
         <td>{% if r.recommended and r.recommended.needed %}<button type="button" class="badge stage-replied action-btn"
               onclick="showAction(this)"
@@ -157,16 +159,23 @@
               data-reason="{{ r.recommended.reason }}"
               data-lastin="{{ r.recommended.last_in }}"
               data-lastout="{{ r.recommended.last_out }}"
+              data-kind="{{ r.recommended.kind }}"
+              data-cid="{{ r.contact_id }}"
               data-href="/contacts/{{ r.contact_id }}"
               title="Click for the recommended action">{{ r.status }} &#9432;</button>{% else %}{{ r.status }}{% endif %}
             {% if r.dangling %}<span class="badge stage-replied" title="follow-up past due">due</span>{% endif %}
-            {% if r.aging %}<span class="badge suppressed" title="unanswered reply">aging</span>{% endif %}</td>
+            {% if r.aging %}<span class="badge aging" title="unanswered reply">aging</span>{% endif %}
+            {% if r.recommended and r.recommended.needed and r.recommended.kind == 'reply' %}
+            <form method="post" action="/contacts/{{ r.contact_id }}/mark-replied" style="display:inline; margin:0;">
+              <input type="hidden" name="back" value="/?{{ cq }}{% if f.bucket %}&amp;bucket={{ f.bucket }}{% endif %}">
+              <button type="submit" class="btn btn-small btn-secondary" title="Log that you replied (no email is sent)">Mark replied</button>
+            </form>{% endif %}</td>
         <td>{% if r.outreach_status %}<span class="muted" style="font-size:12px;">{{ r.outreach_status }}</span>{% endif %}</td>
-        <td class="mono" style="font-size:11.5px;">
+        {% if v.show_step %}<td class="mono" style="font-size:11.5px;">
           {%- if r.cadence and r.cadence.steps_total -%}
             {{ r.cadence.steps_done }}/{{ r.cadence.steps_total }}
           {%- else -%}-{%- endif -%}
-        </td>
+        </td>{% endif %}
         <td class="mono" style="font-size:11.5px;">
           {% if r.cadence %}
             {% if r.cadence.state == 'active' and r.cadence.next_due %}
@@ -190,7 +199,7 @@
         <td>{{ r.next_step or '' }}{% if r.next_step_due %} <span class="muted">({{ r.next_step_due[:10] }})</span>{% endif %}</td>
       </tr>
     {% else %}
-      <tr><td colspan="12" class="muted">No active contacts match.{% if f.q and v.suppressed_matches and not f.show_suppressed %} <a href="/?campaign={{ v.campaign }}&amp;q={{ f.q|urlencode }}&amp;show_suppressed=1">{{ v.suppressed_matches }} suppressed contact{{ 's' if v.suppressed_matches != 1 else '' }} match &rarr; show them</a>{% endif %}</td></tr>
+      <tr><td colspan="{{ ncols }}" class="muted">No active contacts match.{% if f.q and v.suppressed_matches and not f.show_suppressed %} <a href="/?campaign={{ v.campaign }}&amp;q={{ f.q|urlencode }}&amp;show_suppressed=1">{{ v.suppressed_matches }} suppressed contact{{ 's' if v.suppressed_matches != 1 else '' }} match &rarr; show them</a>{% endif %}</td></tr>
     {% endfor %}
     </tbody>
   </table>
@@ -208,7 +217,7 @@
     border-left: 3px solid var(--accent); padding-left: 12px; }
 </style>
 <div id="action-modal" class="action-modal" onclick="if(event.target===this)hideAction()">
-  <div class="action-modal-box">
+  <div class="action-modal-box" role="dialog" aria-modal="true" aria-labelledby="am-name">
     <div class="am-head">
       <div><strong id="am-name"></strong><div class="muted" id="am-status" style="font-size:13px;"></div></div>
       <button type="button" class="btn btn-small btn-secondary" onclick="hideAction()">Close</button>
@@ -217,7 +226,13 @@
     <div id="am-action" class="am-action"></div>
     <div class="muted" id="am-reason" style="margin-top:10px;"></div>
     <div class="muted mono" id="am-dates" style="margin-top:8px;"></div>
-    <div style="margin-top:16px;"><a id="am-link" class="btn btn-small" href="#">Open contact &rarr;</a></div>
+    <div style="margin-top:16px;" class="inline">
+      <a id="am-link" class="btn btn-small" href="#">Open contact &rarr;</a>
+      <form id="am-replied-form" method="post" style="display:none; margin:0;">
+        <input type="hidden" name="back" id="am-back">
+        <button type="submit" class="btn btn-small btn-secondary">Mark replied</button>
+      </form>
+    </div>
   </div>
 </div>
 {% endblock %}
@@ -234,8 +249,10 @@
   })();
 
   // "Action needed" -> show the recommended action in a detail modal.
+  var _lastFocus = null;
   function showAction(btn) {
     var d = btn.dataset;
+    _lastFocus = btn;
     document.getElementById('am-name').textContent = d.name;
     document.getElementById('am-status').textContent = d.status;
     document.getElementById('am-action').textContent = d.action;
@@ -245,9 +262,32 @@
     if (d.lastout) { dates.push('Last sent: ' + d.lastout); }
     document.getElementById('am-dates').textContent = dates.join('  ·  ');
     document.getElementById('am-link').href = d.href;
-    document.getElementById('action-modal').style.display = 'flex';
+    // one-click "Mark replied" only when a reply is what is owed
+    var f = document.getElementById('am-replied-form');
+    if (d.kind === 'reply' && d.cid) {
+      f.action = '/contacts/' + d.cid + '/mark-replied';
+      document.getElementById('am-back').value = location.pathname + location.search;
+      f.style.display = 'inline';
+    } else { f.style.display = 'none'; }
+    var modal = document.getElementById('action-modal');
+    modal.style.display = 'flex';
+    modal.querySelector('.btn').focus();  // move focus into the dialog
   }
-  function hideAction() { document.getElementById('action-modal').style.display = 'none'; }
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { hideAction(); } });
+  function hideAction() {
+    document.getElementById('action-modal').style.display = 'none';
+    if (_lastFocus) { _lastFocus.focus(); _lastFocus = null; }  // restore focus
+  }
+  document.addEventListener('keydown', function (e) {
+    var modal = document.getElementById('action-modal');
+    if (modal.style.display !== 'flex') { return; }
+    if (e.key === 'Escape') { hideAction(); return; }
+    if (e.key === 'Tab') {  // trap Tab within the dialog
+      var f = modal.querySelectorAll('a[href], button, input, [tabindex]:not([tabindex="-1"])');
+      if (!f.length) { return; }
+      var first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  });
 </script>
 {% endblock %}

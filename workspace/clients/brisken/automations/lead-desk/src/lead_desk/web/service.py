@@ -202,6 +202,7 @@ def recommended_action(row: dict, today: date) -> dict:
         default = "Send the planned follow-up."
     return {
         "needed": True,
+        "kind": "reply" if replied else "followup",
         "status": status_label(row),
         "action": next_step or default,
         "from_next_step": bool(next_step),
@@ -406,12 +407,20 @@ def build_board(store: ContactStore, filters: dict | None = None,
         if q and not show_suppressed else 0
     )
 
+    # Hide the Degree / Step columns when every visible row is empty (all-NULL
+    # degrees, no active cadence): two dead '-' columns just add noise.
+    show_degree = any(r.get("degree") for r in shown)
+    show_step = any((r.get("cadence") or {}).get("steps_total") for r in shown)
+
     return {
         "campaign": campaign,
         "campaign_row": dict(campaign_row) if campaign_row else None,
         "campaigns": campaigns,
         "stage_counts": stage_counts,
         "stages": list(STAGES),
+        "stage_labels": STAGE_LABELS,
+        "show_degree": show_degree,
+        "show_step": show_step,
         "total_active": len(active),
         "total_suppressed": len(rows) - len(active),
         "buckets": buckets,
