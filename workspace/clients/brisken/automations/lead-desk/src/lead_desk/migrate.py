@@ -203,7 +203,7 @@ def import_workbook(store: ContactStore, xlsx: Path, campaign: str, report: dict
     events_added = 0
     contacts = 0
 
-    for ordinal, r in enumerate(it):
+    for r in it:
         if all(c is None for c in r):
             continue
         first = _s(col(r, "first_name"))
@@ -211,7 +211,7 @@ def import_workbook(store: ContactStore, xlsx: Path, campaign: str, report: dict
         company = _s(col(r, "company"))
         email = _s(col(r, "email"))
         email_l = email.lower() if email else None
-        nk = natural_key(email, first, last, company, ordinal)
+        nk = natural_key(email, first, last, company)
         cid = contact_id_for(nk)
 
         rowdict = {h: col(r, h) for h in header}
@@ -226,6 +226,10 @@ def import_workbook(store: ContactStore, xlsx: Path, campaign: str, report: dict
             "country": _s(col(r, "country")), "linkedin_url": _s(col(r, "linkedin_url")),
             "tier": _s(col(r, "Tier")), "tier_reason": _s(col(r, "Tier_reason")),
             "lead_type": _s(col(r, "lead_type")),
+            # Sheet's human status, stored for DISPLAY only (owner 2026-07-15).
+            # Sheet-authoritative on re-sync; deliberately NOT in
+            # APP_OWNED_ON_RESYNC and NOT mapped into stage.
+            "outreach_status": _s(col(r, "email outreach_status")),
             "suppressed": supp, "suppress_reason": reason,
             "suppressed_at": now if supp else None,
             "suppressed_by": "import" if supp else None,

@@ -133,10 +133,10 @@
 </details>
 
 <div class="card scroll-x">
-  <div class="muted" style="margin-bottom:8px;">{{ v.rows|length }} shown</div>
+  <div class="muted" style="margin-bottom:8px;">{{ v.rows|length }} shown{% if f.q and v.suppressed_matches and not f.show_suppressed %} &middot; {{ v.suppressed_matches }} suppressed contact{{ 's' if v.suppressed_matches != 1 else '' }} also match this search: <a href="/?campaign={{ v.campaign }}&amp;q={{ f.q|urlencode }}&amp;show_suppressed=1">show them &rarr;</a>{% endif %}</div>
   <table>
     <thead><tr>
-      <th>Name</th><th>Company</th><th>Tier</th><th>Degree</th><th>Stage</th><th title="During-event E1/E2/E3 (mailbox) &middot; P = post-event follow-up (sheet)">Outreach</th><th>Status</th><th>Step</th><th>Next touch</th><th>Last out / in</th><th>Next step</th>
+      <th>Name</th><th>Company</th><th>Tier</th><th>Degree</th><th>Stage</th><th title="During-event E1/E2/E3 (mailbox) &middot; P = post-event follow-up (sheet)">Outreach</th><th>Status</th><th title="The master sheet's own status column (display only; does not drive the derived Stage or Status)">Sheet status</th><th>Step</th><th>Next touch</th><th>Last out / in</th><th>Next step</th>
     </tr></thead>
     <tbody>
     {% for r in v.rows %}
@@ -160,6 +160,7 @@
               title="Click for the recommended action">{{ r.status }} &#9432;</button>{% else %}{{ r.status }}{% endif %}
             {% if r.dangling %}<span class="badge stage-replied" title="follow-up past due">due</span>{% endif %}
             {% if r.aging %}<span class="badge suppressed" title="unanswered reply">aging</span>{% endif %}</td>
+        <td>{% if r.outreach_status %}<span class="muted" style="font-size:12px;">{{ r.outreach_status }}</span>{% endif %}</td>
         <td class="mono" style="font-size:11.5px;">
           {%- if r.cadence and r.cadence.steps_total -%}
             {{ r.cadence.steps_done }}/{{ r.cadence.steps_total }}
@@ -188,7 +189,7 @@
         <td>{{ r.next_step or '' }}{% if r.next_step_due %} <span class="muted">({{ r.next_step_due[:10] }})</span>{% endif %}</td>
       </tr>
     {% else %}
-      <tr><td colspan="11" class="muted">No contacts match.</td></tr>
+      <tr><td colspan="12" class="muted">No active contacts match.{% if f.q and v.suppressed_matches and not f.show_suppressed %} <a href="/?campaign={{ v.campaign }}&amp;q={{ f.q|urlencode }}&amp;show_suppressed=1">{{ v.suppressed_matches }} suppressed contact{{ 's' if v.suppressed_matches != 1 else '' }} match &rarr; show them</a>{% endif %}</td></tr>
     {% endfor %}
     </tbody>
   </table>

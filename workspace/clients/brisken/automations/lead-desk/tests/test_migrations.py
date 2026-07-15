@@ -20,6 +20,17 @@ def test_fresh_db_reaches_schema_version_with_all_views(tmp_path):
         assert _views(store) == {"contact_activity", "contact_stage", "enrollment_progress"}
 
 
+def test_outreach_status_column_added(tmp_path):
+    # v2 migration adds the sheet-status display column; upsert + read round-trips.
+    with ContactStore(tmp_path / "t.sqlite") as store:
+        cols = {r[1] for r in store.conn.execute("PRAGMA table_info(contacts)").fetchall()}
+        assert "outreach_status" in cols
+        store.upsert_contact({"contact_id": "c1", "natural_key": "a@x.com",
+                              "email": "a@x.com", "outreach_status": "In conversation"},
+                             now=NOW)
+        assert store.get_contact("c1")["outreach_status"] == "In conversation"
+
+
 def test_views_derive_stage(tmp_path):
     # Exercises contact_stage + contact_activity end to end.
     with ContactStore(tmp_path / "t.sqlite") as store:

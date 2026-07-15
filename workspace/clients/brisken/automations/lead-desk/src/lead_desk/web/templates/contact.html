@@ -13,6 +13,7 @@
         {% if c.tier %}<span class="badge tier">{{ c.tier }}</span>{% endif %}
         <span class="badge stage-{{ c.stage }}">{{ c.stage }}</span>
         <span class="muted">{{ c.status }}</span>
+        {% if c.outreach_status %}<span class="badge" title="The master sheet's own status column (display only; does not drive the derived stage)">Sheet: {{ c.outreach_status }}</span>{% endif %}
         {% if c.suppressed %}<span class="badge suppressed">suppressed: {{ c.suppress_reason }}</span>{% endif %}
       </div>
     </div>

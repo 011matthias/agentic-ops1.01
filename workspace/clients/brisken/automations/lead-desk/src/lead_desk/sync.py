@@ -27,6 +27,7 @@ from collections import Counter
 from pathlib import Path
 
 from .migrate import fold_send_logs, import_workbook
+from .web.service import now_iso
 from .web.store import ContactStore
 
 GRAPH = "https://graph.microsoft.com/v1.0"
@@ -155,6 +156,12 @@ def run_sync(data_dir: Path | str, *, campaign: str = "rome-2026",
                                       preserve_app_fields=True)
         if send_logs and extras is not None:
             fold_send_logs(store, email_index, campaign, extras, report)
+        # Enroll every synced contact so the board (which reads enrollments)
+        # shows them; without this a synced lead - including a hot replier - is
+        # invisible and every count under-reports. No-op if the campaign row is
+        # absent. Enrollment is inert until an approval, so this cannot send.
+        report["newly_enrolled"] = store.enroll_campaign_contacts(
+            campaign, "sync", now_iso())
         rows = store.board_rows(campaign)
         report["total_contacts"] = len(rows)
         report["suppressed"] = sum(1 for r in rows if r["suppressed"])

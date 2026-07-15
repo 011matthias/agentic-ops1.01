@@ -112,7 +112,7 @@ def import_upload(store: ContactStore, campaign_id: str, filename: str,
         if not email and not (first or last or company):
             skipped.append(f"row {ordinal + 2}: no email and no name/company")
             continue
-        nk = natural_key(email, first, last, company, ordinal if not email else None)
+        nk = natural_key(email, first, last, company)
         cid = contact_id_for(nk)
         existing = store.get_contact(cid)
 

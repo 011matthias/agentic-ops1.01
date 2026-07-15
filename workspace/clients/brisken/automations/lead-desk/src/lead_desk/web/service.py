@@ -242,23 +242,37 @@ def build_board(store: ContactStore, filters: dict | None = None,
     campaigns = [dict(c) for c in store.list_campaigns()]
     campaign_row = store.get_campaign(campaign)
     enrolled = store.enrollments_for_campaign(campaign) if campaign_row else []
+
+    # The board must show EVERY campaign contact, not only the enrolled subset:
+    # a synced lead that was never enrolled (a hot T1 replier included) must
+    # never vanish, and stage/bucket/total counts must be over the full roster.
+    # board_rows() is that full set; enrolled rows carry the cadence overlay.
+    board = [dict(x) for x in store.board_rows(campaign)]
+
+    rows: list[dict] = []
+    enrolled_ids: set[str] = set()
     if enrolled:
         rows = [_row(r) for r in enrolled]
-        # Enrolled rows come without the touch-derivation flags; backfill them.
-        flags = {r["contact_id"]: r for r in
-                 (dict(x) for x in store.board_rows(campaign))}
+        board_by_id = {r["contact_id"]: r for r in board}
         for r in rows:
-            f = flags.get(r["contact_id"], {})
+            enrolled_ids.add(r["contact_id"])
+            # Enrolled rows come without the touch-derivation flags; backfill them.
+            f = board_by_id.get(r["contact_id"], {})
             r["has_touch"] = f.get("has_touch", 0)
             r["has_campaign_send"] = f.get("has_campaign_send", 0)
             r["event_count"] = f.get("event_count", 0)
         _attach_cadence(store, rows, campaign_row)
-    else:
-        # Legacy fallback: campaigns with no enrollments (pre-adopt state).
-        rows = [_row(r) for r in store.board_rows(campaign)]
-        for r in rows:
-            r["cadence"] = None
-            r["due_today"] = r["manual_due"] = False
+    # UNION the un-enrolled campaign contacts (defense-in-depth if enroll-on-sync
+    # missed one, and the pre-adopt legacy state). No cadence overlay for these;
+    # the templates already render a null cadence (the old legacy branch proved it).
+    for r in board:
+        if r["contact_id"] in enrolled_ids:
+            continue
+        r["cadence"] = None
+        r["due_today"] = r["manual_due"] = False
+        rows.append(r)
+    rows.sort(key=lambda r: ((r.get("company") or "").lower(),
+                             (r.get("last_name") or "").lower()))
 
     for r in rows:
         r["status"] = status_label(r)
@@ -341,12 +355,19 @@ def build_board(store: ContactStore, filters: dict | None = None,
         shown = [r for r in shown if r["due_today"]]
     elif fbucket == "manual_due":
         shown = [r for r in shown if r["manual_due"]]
+    def _hit(r):
+        hay = " ".join(str(r.get(k) or "") for k in
+                       ("first_name", "last_name", "company", "email", "job_title"))
+        return q in hay.lower()
     if q:
-        def hit(r):
-            hay = " ".join(str(r.get(k) or "") for k in
-                           ("first_name", "last_name", "company", "email", "job_title"))
-            return q in hay.lower()
-        shown = [r for r in shown if hit(r)]
+        shown = [r for r in shown if _hit(r)]
+    # Search fallback: a query that matches only suppressed (hidden) contacts
+    # must not dead-end as "No contacts match". Count the suppressed matches so
+    # the board can offer to reveal them (links to the same query, show_suppressed=1).
+    suppressed_matches = (
+        sum(1 for r in rows if r.get("suppressed") and _hit(r))
+        if q and not show_suppressed else 0
+    )
 
     return {
         "campaign": campaign,
@@ -362,6 +383,7 @@ def build_board(store: ContactStore, filters: dict | None = None,
         "degrees": degrees,
         "stalled_attempts": [dict(a) for a in stalled_attempts],
         "rows": shown,
+        "suppressed_matches": suppressed_matches,
         "filters": {
             "tier": ftier, "stage": fstage, "owner": fowner,
             "bucket": fbucket, "degree": fdegree, "q": filters.get("q") or "",

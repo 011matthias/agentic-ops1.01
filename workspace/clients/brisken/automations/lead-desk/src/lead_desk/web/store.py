@@ -83,6 +83,7 @@ CONTACT_COLUMNS = (
     "first_name", "last_name", "company", "job_title",
     "email", "alt_email", "phone", "country", "linkedin_url",
     "tier", "tier_reason", "lead_type", "persona", "signal",
+    "outreach_status",
     "suppressed", "suppress_reason", "suppressed_at", "suppressed_by",
     "crm_owner", "demo_owner", "next_step", "next_step_due",
     "source", "in_our_booth", "scanned_at_booth", "if_we_know_them",
@@ -359,15 +360,32 @@ def _refresh_views_sql(*names: str) -> list[str]:
     return out
 
 
-# Ordered schema migrations. Each key N holds the SQL run to move a DB from
-# user_version N-1 to N (idempotent: DROP...IF EXISTS / ADD COLUMN guards).
-# BUMP SCHEMA_VERSION and append a new entry whenever a _VIEWS definition
-# changes or a column is added, so the change reaches the deployed prod DB.
-_MIGRATIONS: dict[int, list[str]] = {
+def _add_column(table: str, col: str, decl: str):
+    """A replay-safe ADD COLUMN migration step: SQLite has no
+    ``ADD COLUMN IF NOT EXISTS``, so guard on table_info. Idempotent even if a
+    DB's user_version is ever rolled back and the migration replays."""
+    def _step(conn) -> None:
+        existing = {r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        if col not in existing:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+    return _step
+
+
+# Ordered schema migrations. Each key N holds the steps that move a DB from
+# user_version N-1 to N; a step is either a raw SQL string or a callable(conn).
+# All steps are replay-safe (DROP...IF EXISTS / guarded ADD COLUMN). BUMP
+# SCHEMA_VERSION and append a new entry whenever a _VIEWS definition changes or
+# a column is added, so the change reaches the deployed prod DB.
+_MIGRATIONS: dict[int, list] = {
     # v1: establish the runner and refresh all three derived views so future
     # definition edits reach the prod volume (whose views were frozen by the
     # old CREATE VIEW IF NOT EXISTS bootstrap).
     1: _refresh_views_sql("contact_activity", "contact_stage", "enrollment_progress"),
+    # v2: the sheet's human status column, stored for display only (owner 2026
+    # -07-15: display-only, no stage mapping). Sheet-authoritative on re-sync;
+    # NOT in migrate.APP_OWNED_ON_RESYNC. Lives only here (not in _SCHEMA) so a
+    # fresh DB gets it via this migration and an existing DB via the ALTER.
+    2: [_add_column("contacts", "outreach_status", "TEXT")],
 }
 
 # Highest applied migration. On a fresh DB the runner applies 1..N in order;
@@ -432,7 +450,10 @@ class ContactStore:
             version = self.conn.execute("PRAGMA user_version").fetchone()[0]
             for target in range(version + 1, SCHEMA_VERSION + 1):
                 for stmt in _MIGRATIONS[target]:
-                    self.conn.execute(stmt)
+                    if callable(stmt):
+                        stmt(self.conn)
+                    else:
+                        self.conn.execute(stmt)
                 # user_version takes no bind parameter; target is a trusted int.
                 self.conn.execute(f"PRAGMA user_version = {target}")
             self.conn.commit()
@@ -766,6 +787,24 @@ class ContactStore:
         )
         self.conn.commit()
         return cur.rowcount > 0
+
+    def enroll_campaign_contacts(self, campaign_id: str, by: str | None, now: str) -> int:
+        """Enroll every contact tagged with this campaign that is not yet
+        enrolled (idempotent). Mirrors the per-row enroll in uploads.py so a
+        sheet sync makes synced leads visible on the board. Returns the number
+        newly enrolled. No-op when the campaign row does not exist (FK)."""
+        if self.get_campaign(campaign_id) is None:
+            return 0
+        cur = self.conn.execute(
+            "INSERT OR IGNORE INTO enrollments (contact_id, campaign_id, enrolled_at, enrolled_by) "
+            "SELECT c.contact_id, ?, ?, ? FROM contacts c "
+            "WHERE c.campaign = ? "
+            "AND NOT EXISTS (SELECT 1 FROM enrollments en "
+            "                WHERE en.contact_id = c.contact_id AND en.campaign_id = ?)",
+            (campaign_id, now, by, campaign_id, campaign_id),
+        )
+        self.conn.commit()
+        return cur.rowcount
 
     def get_enrollment(self, enrollment_id: int) -> sqlite3.Row | None:
         return self.conn.execute(

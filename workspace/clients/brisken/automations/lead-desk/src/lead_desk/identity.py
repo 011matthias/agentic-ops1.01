@@ -15,17 +15,16 @@ import hashlib
 
 
 def natural_key(email: str | None, first: str | None, last: str | None,
-                company: str | None, ordinal: int | None = None) -> str:
+                company: str | None) -> str:
     if email:
         return email.strip().lower()
-    # No email: key on identity plus the stable source-row ordinal, so two
-    # anonymous booth taps (blank name/company) never merge into one contact.
-    # Losing distinct booth records (under-merge) is worse than over-splitting,
-    # which the same-name duplicate report surfaces for review.
-    parts = [first or "", last or "", company or ""]
-    if ordinal is not None:
-        parts.append(f"#{ordinal}")
-    basis = "|".join(parts).strip().lower()
+    # No email: key on identity content only (name + company). The old key
+    # mixed in the source-row ordinal, which is stable only within one fixed
+    # file order and shifts whenever a row is inserted/sorted above it, so the
+    # SAME person re-keyed and duplicated on every sheet reorder. A content key
+    # is stable across reorders; genuine same-name/same-company collisions are
+    # surfaced by the migrate duplicate report for review.
+    basis = "|".join([first or "", last or "", company or ""]).strip().lower()
     return "anon:" + hashlib.sha1(basis.encode("utf-8")).hexdigest()[:16]
 
 
