@@ -50,7 +50,9 @@ from pathlib import Path
 CHANNELS = ("email", "linkedin", "meeting", "call")
 DIRECTIONS = ("outbound", "inbound")
 EVENT_TYPES = (
-    "sent", "touch", "reply", "invite", "bounce", "note", "booked", "held", "accepted"
+    "sent", "touch", "reply", "invite", "bounce", "note", "booked", "held", "accepted",
+    # compensating events (reverse a milestone; the stage view reads the latest)
+    "unbooked", "unaccepted",
 )
 SOURCES = ("graph-auto", "manual", "import", "worker-auto")
 
@@ -309,14 +311,18 @@ CREATE VIEW contact_stage AS
 SELECT c.contact_id,
   CASE
     WHEN c.dirk_verdict = 'accepted'
-      OR EXISTS (SELECT 1 FROM outreach_events e WHERE e.contact_id = c.contact_id AND e.type = 'accepted')
+      OR (SELECT e.type FROM outreach_events e
+          WHERE e.contact_id = c.contact_id AND e.type IN ('accepted', 'unaccepted')
+          ORDER BY e.ts DESC, e.event_id DESC LIMIT 1) = 'accepted'
       THEN 'accepted'
     WHEN EXISTS (SELECT 1 FROM outreach_events e WHERE e.contact_id = c.contact_id AND e.type = 'held')
       THEN 'held'
-    WHEN c.demo_date IS NOT NULL AND c.demo_date != ''
-      OR EXISTS (SELECT 1 FROM outreach_events e WHERE e.contact_id = c.contact_id AND e.type = 'booked')
+    WHEN (c.demo_date IS NOT NULL AND c.demo_date != '')
+      OR (SELECT e.type FROM outreach_events e
+          WHERE e.contact_id = c.contact_id AND e.type IN ('booked', 'unbooked')
+          ORDER BY e.ts DESC, e.event_id DESC LIMIT 1) = 'booked'
       THEN 'booked'
-    WHEN (c.bant_need + c.bant_authority + c.bant_timeline) > 0
+    WHEN (c.bant_need + c.bant_authority + c.bant_timeline + c.bant_budget) > 0
       AND EXISTS (SELECT 1 FROM outreach_events e
                   WHERE e.contact_id = c.contact_id AND e.direction = 'inbound' AND e.type = 'reply')
       THEN 'qualifying'
@@ -386,6 +392,10 @@ _MIGRATIONS: dict[int, list] = {
     # NOT in migrate.APP_OWNED_ON_RESYNC. Lives only here (not in _SCHEMA) so a
     # fresh DB gets it via this migration and an existing DB via the ALTER.
     2: [_add_column("contacts", "outreach_status", "TEXT")],
+    # v3: refresh contact_stage - qualifying now counts bant_budget in the BANT
+    # sum, and booked/accepted read the LATEST booked/unbooked (accepted/
+    # unaccepted) event so clearing a demo_date / verdict actually reverses.
+    3: _refresh_views_sql("contact_stage"),
 }
 
 # Highest applied migration. On a fresh DB the runner applies 1..N in order;

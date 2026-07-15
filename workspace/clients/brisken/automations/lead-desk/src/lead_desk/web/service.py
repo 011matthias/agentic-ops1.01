@@ -70,13 +70,37 @@ def now_iso() -> str:
 
 
 def _d(value: str | None) -> date | None:
-    """Parse the leading YYYY-MM-DD of a timestamp/date string."""
+    """Parse the leading YYYY-MM-DD of a timestamp/date string (age arithmetic)."""
     if not value:
         return None
     try:
         return date.fromisoformat(str(value)[:10])
     except ValueError:
         return None
+
+
+def _dt(value: str | None) -> datetime | None:
+    """Parse a full ISO timestamp (the answered/unanswered decision needs
+    sub-day precision, unlike _d which truncates to the date). A naive value is
+    normalised to UTC so a naive-vs-aware compare can never raise mid-board."""
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+
+
+def _unanswered(row: dict) -> bool:
+    """True when their latest inbound is strictly newer than our latest outbound,
+    at FULL timestamp precision. A reply we answered the SAME day (our ts later)
+    is answered - the old date-truncated `>=` mis-flagged it as still owing a
+    reply and told the operator to reply again."""
+    li, lo = _dt(row.get("last_in")), _dt(row.get("last_out"))
+    if li is None:
+        return False
+    return lo is None or li > lo
 
 
 def _row(r) -> dict:
@@ -97,50 +121,49 @@ def status_label(row: dict) -> str:
     if row.get("suppressed"):
         reason = row.get("suppress_reason") or "suppressed"
         if reason in HELD_REASONS:
-            return "Held"
+            # "On hold" (not "Held"): disambiguate the off-board suppression
+            # from the 'held' pipeline STAGE, whose label is "Demo held".
+            return "On hold"
         if reason in CONSENT_REASONS:
             return f"Do not contact ({reason})"
         return f"Excluded ({reason})"
     stage = row.get("stage", "sourced")
-    last_in = _d(row.get("last_in"))
-    last_out = _d(row.get("last_out"))
     if stage == "sent":
         if is_reached_dirk(row):
             return "Reached (Dirk)"
-        if last_in is None or (last_out and last_in < last_out):
-            return "Awaiting their reply"
-        return "Contacted"
+        return "Contacted" if _unanswered(row) else "Awaiting their reply"
     if stage == "replied":
-        if last_in and (last_out is None or last_in >= last_out):
-            return "Replied, needs reply"
-        return "Replied"
+        return "Replied, needs reply" if _unanswered(row) else "Replied"
     return STAGE_LABELS.get(stage, stage)
 
 
 def is_awaiting_reply(row: dict) -> bool:
     if row.get("suppressed") or row.get("stage") != "sent":
         return False
-    last_in, last_out = _d(row.get("last_in")), _d(row.get("last_out"))
-    return last_in is None or (last_out is not None and last_in < last_out)
+    return not _unanswered(row)
 
 
 def is_dangling(row: dict, today: date) -> bool:
+    """A follow-up the operator scheduled is now past due AND we have not sent
+    anything since. Stage-agnostic: a booked/held/accepted contact with a
+    past-due next step owes an action too. Clears once we send after the due
+    date (last_out >= due)."""
     if row.get("suppressed"):
         return False
-    if row.get("stage") not in ("sent", "replied", "qualifying"):
-        return False
     due = _d(row.get("next_step_due"))
-    return due is not None and due < today
+    if due is None or due >= today:
+        return False
+    lo = _d(row.get("last_out"))
+    return lo is None or lo < due
 
 
 def is_aging_hot(row: dict, today: date) -> bool:
     if row.get("suppressed") or row.get("stage") not in ("replied", "qualifying"):
         return False
-    last_in, last_out = _d(row.get("last_in")), _d(row.get("last_out"))
-    if last_in is None:
+    if not _unanswered(row):
         return False
-    unanswered = last_out is None or last_in >= last_out
-    return unanswered and (today - last_in).days >= AGING_DAYS
+    last_in = _d(row.get("last_in"))
+    return last_in is not None and (today - last_in).days >= AGING_DAYS
 
 
 def recommended_action(row: dict, today: date) -> dict:
@@ -153,7 +176,16 @@ def recommended_action(row: dict, today: date) -> dict:
     side (e.g. we are simply awaiting their reply)."""
     if row.get("suppressed"):
         return {"needed": False}
-    replied = status_label(row) == "Replied, needs reply" or is_aging_hot(row, today)
+    due = _d(row.get("next_step_due"))
+    today_date = today
+    # A next step scheduled for a FUTURE date is an explicit deferral (classic
+    # OOO "nudge after they return") - do not nag for a reply meanwhile.
+    deferred = due is not None and due > today_date
+    # An unanswered inbound at 'replied' OR 'qualifying' owes a reply NOW (not
+    # only after AGING_DAYS): a more-qualified lead should not wait longer than
+    # a just-replied one.
+    replied = (not deferred) and row.get("stage") in ("replied", "qualifying") \
+        and _unanswered(row)
     dangling = is_dangling(row, today)
     if not (replied or dangling):
         return {"needed": False}
@@ -305,6 +337,9 @@ def build_board(store: ContactStore, filters: dict | None = None,
         if campaign_row else []
     )
     buckets = {
+        # The operator's primary daily question: who owes an action right now.
+        # Sum of recommended.needed over the true active roster (P1 corrected it).
+        "needs_action": sum(1 for r in active if r["recommended"].get("needed")),
         "awaiting_reply": sum(1 for r in active if r["awaiting"]),
         "dangling": sum(1 for r in active if r["dangling"]),
         "aging_hot": sum(1 for r in active if r["aging"]),
@@ -343,7 +378,9 @@ def build_board(store: ContactStore, filters: dict | None = None,
         shown = [r for r in shown if r.get("crm_owner") == fowner]
     if fdegree:
         shown = [r for r in shown if r.get("degree") == fdegree]
-    if fbucket == "awaiting":
+    if fbucket == "action":
+        shown = [r for r in shown if r["recommended"].get("needed")]
+    elif fbucket == "awaiting":
         shown = [r for r in shown if r["awaiting"]]
     elif fbucket == "dangling":
         shown = [r for r in shown if r["dangling"]]
@@ -507,16 +544,35 @@ def apply_fields(store: ContactStore, contact_id: str, fields: dict,
         )
 
     new_demo = (clean.get("demo_date") or "").strip()
-    if new_demo and not (current["demo_date"] or "").strip():
+    had_demo = bool((current["demo_date"] or "").strip())
+    if new_demo and not had_demo:
         store.add_event(
             contact_id=contact_id, ts=now, channel="meeting", direction="outbound",
             type="booked", subject="Demo booked", detail=f"demo_date={new_demo}",
             source="manual", created_by=user, now=now,
         )
-    if clean.get("dirk_verdict") == "accepted" and current["dirk_verdict"] != "accepted":
+    # Reversibility: clearing a demo_date un-books the contact. The stage view
+    # reads the LATEST booked/unbooked event, so this compensating event wins
+    # over the earlier 'booked' - a fat-fingered demo no longer sticks forever.
+    elif had_demo and "demo_date" in clean and not new_demo:
+        store.add_event(
+            contact_id=contact_id, ts=now, channel="meeting", direction="outbound",
+            type="unbooked", subject="Demo un-booked", detail="demo_date cleared",
+            source="manual", created_by=user, now=now,
+        )
+    verdict = clean.get("dirk_verdict")
+    if verdict == "accepted" and current["dirk_verdict"] != "accepted":
         store.add_event(
             contact_id=contact_id, ts=now, channel="meeting", direction="inbound",
             type="accepted", subject="Accepted", detail="Dirk verdict: accepted",
+            source="manual", created_by=user, now=now,
+        )
+    # Reversibility: verdict leaving 'accepted' un-accepts (compensating event).
+    elif "dirk_verdict" in clean and verdict != "accepted" and current["dirk_verdict"] == "accepted":
+        store.add_event(
+            contact_id=contact_id, ts=now, channel="meeting", direction="inbound",
+            type="unaccepted", subject="Acceptance revoked",
+            detail=f"Dirk verdict changed to {verdict or '(cleared)'}",
             source="manual", created_by=user, now=now,
         )
 
