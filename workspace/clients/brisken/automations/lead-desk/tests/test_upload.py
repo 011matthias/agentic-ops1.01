@@ -14,8 +14,11 @@ from lead_desk.web.store import ContactStore
 
 def make_contact(store, cid_suffix, email=None, **fields):
     """Upsert a contact the same way the importer keys it (email natural key)."""
-    nk = natural_key(email, fields.get("first_name"), fields.get("last_name"),
-                     fields.get("company"), None if email else int(cid_suffix))
+    if email:
+        nk = natural_key(email, fields.get("first_name"), fields.get("last_name"),
+                         fields.get("company"))
+    else:  # test-stable distinct anon key (the ordinal param was removed)
+        nk = f"anon:test-{cid_suffix}"
     cid = contact_id_for(nk)
     data = {"contact_id": cid, "natural_key": nk, "campaign": "rome-2026",
             "email": email}
