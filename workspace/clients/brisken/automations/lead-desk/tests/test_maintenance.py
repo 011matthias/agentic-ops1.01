@@ -119,6 +119,22 @@ def test_rekey_is_idempotent(tmp_path):
         assert again["groups_changed"] == 0 and again["contacts_removed"] == 0
 
 
+def test_rekey_leaves_nameless_orgonly_untouched(tmp_path):
+    with ContactStore(tmp_path / "t.sqlite") as store:
+        store.create_campaign("rome-2026", "Rome 2026", NOW, status="done")
+        # three org-only opt-outs from the same company: distinct headcount,
+        # no name -> rekey must NOT merge them (that would be data loss).
+        for nk in ("anon:z1", "anon:z2", "anon:z3"):
+            store.upsert_contact({"contact_id": contact_id_for(nk), "natural_key": nk,
+                                  "company": "Zanders", "tier": "ANON",
+                                  "suppressed": 1, "suppress_reason": "no_consent",
+                                  "campaign": "rome-2026"}, now=NOW)
+        report = rekey_anon_contacts(store)
+        assert report["anon_total"] == 0          # named-only scope excludes them
+        assert report["groups_changed"] == 0
+        assert store.count_contacts() == 3         # all three preserved
+
+
 def test_rekey_leaves_distinct_people_alone(tmp_path):
     with ContactStore(tmp_path / "t.sqlite") as store:
         store.create_campaign("rome-2026", "Rome 2026", NOW, status="done")

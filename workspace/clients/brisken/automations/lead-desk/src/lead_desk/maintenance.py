@@ -125,13 +125,19 @@ def _merge_anon_group(store: ContactStore, members: list[dict],
 
 
 def rekey_anon_contacts(store: ContactStore, dry_run: bool = False) -> dict:
-    """Re-key every email-less (anon) contact onto the stable content key
+    """Re-key NAMED email-less (anon) contacts onto the stable content key
     (name+company, no row-ordinal) and merge the duplicates the old ordinal key
-    created. Idempotent: a second run finds every anon contact already at its
-    content key and changes nothing. Event count is invariant (events are
-    repointed, never dropped); contact/enrollment counts fall by the dupes."""
+    created. Idempotent: a second run finds every named anon contact already at
+    its content key and changes nothing. Event count is invariant (events are
+    repointed, never dropped); contact/enrollment counts fall by the dupes.
+
+    NAMELESS org-only rows (TA Cook PII-withheld opt-outs recorded company-only)
+    are deliberately EXCLUDED: they are indistinguishable by content, so a merge
+    would collapse distinct attendees into one and lose the org headcount. They
+    keep their ordinal key (see identity.natural_key) and are left untouched."""
     anon = store.conn.execute(
         "SELECT * FROM contacts WHERE natural_key LIKE 'anon:%' "
+        "AND (TRIM(COALESCE(first_name,'')) != '' OR TRIM(COALESCE(last_name,'')) != '') "
         "ORDER BY created_at, contact_id"
     ).fetchall()
     groups: dict[str, list[dict]] = defaultdict(list)
