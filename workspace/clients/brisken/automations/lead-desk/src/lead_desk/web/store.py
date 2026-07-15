@@ -176,39 +176,6 @@ CREATE INDEX IF NOT EXISTS ix_events_contact ON outreach_events(contact_id, ts);
 CREATE INDEX IF NOT EXISTS ix_events_type    ON outreach_events(campaign, type, direction);
 CREATE INDEX IF NOT EXISTS ix_contacts_camp  ON contacts(campaign, suppressed, tier);
 
-CREATE VIEW IF NOT EXISTS contact_activity AS
-SELECT c.contact_id,
-  (SELECT MAX(e.ts) FROM outreach_events e
-     WHERE e.contact_id = c.contact_id AND e.direction = 'outbound') AS last_out,
-  (SELECT MAX(e.ts) FROM outreach_events e
-     WHERE e.contact_id = c.contact_id AND e.direction = 'inbound')  AS last_in
-FROM contacts c;
-
-CREATE VIEW IF NOT EXISTS contact_stage AS
-SELECT c.contact_id,
-  CASE
-    WHEN c.dirk_verdict = 'accepted'
-      OR EXISTS (SELECT 1 FROM outreach_events e WHERE e.contact_id = c.contact_id AND e.type = 'accepted')
-      THEN 'accepted'
-    WHEN EXISTS (SELECT 1 FROM outreach_events e WHERE e.contact_id = c.contact_id AND e.type = 'held')
-      THEN 'held'
-    WHEN c.demo_date IS NOT NULL AND c.demo_date != ''
-      OR EXISTS (SELECT 1 FROM outreach_events e WHERE e.contact_id = c.contact_id AND e.type = 'booked')
-      THEN 'booked'
-    WHEN (c.bant_need + c.bant_authority + c.bant_timeline) > 0
-      AND EXISTS (SELECT 1 FROM outreach_events e
-                  WHERE e.contact_id = c.contact_id AND e.direction = 'inbound' AND e.type = 'reply')
-      THEN 'qualifying'
-    WHEN EXISTS (SELECT 1 FROM outreach_events e
-                 WHERE e.contact_id = c.contact_id AND e.direction = 'inbound' AND e.type = 'reply')
-      THEN 'replied'
-    WHEN EXISTS (SELECT 1 FROM outreach_events e
-                 WHERE e.contact_id = c.contact_id AND e.direction = 'outbound' AND e.type IN ('sent', 'invite', 'touch'))
-      THEN 'sent'
-    ELSE 'sourced'
-  END AS stage
-FROM contacts c;
-
 CREATE TABLE IF NOT EXISTS campaigns (
     campaign_id   TEXT PRIMARY KEY,
     name          TEXT NOT NULL,
@@ -316,8 +283,54 @@ CREATE TABLE IF NOT EXISTS campaign_template_pins (
 CREATE INDEX IF NOT EXISTS ix_events_extkey  ON outreach_events(ext_key);
 CREATE INDEX IF NOT EXISTS ix_enroll_camp    ON enrollments(campaign_id);
 CREATE INDEX IF NOT EXISTS ix_attempts_enrl  ON send_attempts(enrollment_id, step_no);
+"""
 
-CREATE VIEW IF NOT EXISTS enrollment_progress AS
+# ---------------------------------------------------------------------------
+# Derived VIEWS live here, NOT in _SCHEMA, and are (re)created by the
+# migration runner below rather than by ``CREATE VIEW IF NOT EXISTS``. The
+# old bootstrap used IF NOT EXISTS, which froze a view's definition on the
+# already-deployed prod DB: editing the SQL never reached production because
+# the view already existed. The runner drops + recreates them from these
+# definitions whenever SCHEMA_VERSION advances, so a definition change here
+# actually lands on the prod volume. Keep each as the single source of truth.
+_VIEWS = {
+    "contact_activity": """
+CREATE VIEW contact_activity AS
+SELECT c.contact_id,
+  (SELECT MAX(e.ts) FROM outreach_events e
+     WHERE e.contact_id = c.contact_id AND e.direction = 'outbound') AS last_out,
+  (SELECT MAX(e.ts) FROM outreach_events e
+     WHERE e.contact_id = c.contact_id AND e.direction = 'inbound')  AS last_in
+FROM contacts c
+""",
+    "contact_stage": """
+CREATE VIEW contact_stage AS
+SELECT c.contact_id,
+  CASE
+    WHEN c.dirk_verdict = 'accepted'
+      OR EXISTS (SELECT 1 FROM outreach_events e WHERE e.contact_id = c.contact_id AND e.type = 'accepted')
+      THEN 'accepted'
+    WHEN EXISTS (SELECT 1 FROM outreach_events e WHERE e.contact_id = c.contact_id AND e.type = 'held')
+      THEN 'held'
+    WHEN c.demo_date IS NOT NULL AND c.demo_date != ''
+      OR EXISTS (SELECT 1 FROM outreach_events e WHERE e.contact_id = c.contact_id AND e.type = 'booked')
+      THEN 'booked'
+    WHEN (c.bant_need + c.bant_authority + c.bant_timeline) > 0
+      AND EXISTS (SELECT 1 FROM outreach_events e
+                  WHERE e.contact_id = c.contact_id AND e.direction = 'inbound' AND e.type = 'reply')
+      THEN 'qualifying'
+    WHEN EXISTS (SELECT 1 FROM outreach_events e
+                 WHERE e.contact_id = c.contact_id AND e.direction = 'inbound' AND e.type = 'reply')
+      THEN 'replied'
+    WHEN EXISTS (SELECT 1 FROM outreach_events e
+                 WHERE e.contact_id = c.contact_id AND e.direction = 'outbound' AND e.type IN ('sent', 'invite', 'touch'))
+      THEN 'sent'
+    ELSE 'sourced'
+  END AS stage
+FROM contacts c
+""",
+    "enrollment_progress": """
+CREATE VIEW enrollment_progress AS
 SELECT en.enrollment_id, en.contact_id, en.campaign_id,
   (SELECT COUNT(*) FROM outreach_events e
      WHERE e.contact_id = en.contact_id
@@ -330,8 +343,36 @@ SELECT en.enrollment_id, en.contact_id, en.campaign_id,
        AND e.type = 'reply' AND e.ts >= en.enrolled_at)           AS replied,
   EXISTS (SELECT 1 FROM outreach_events e
      WHERE e.contact_id = en.contact_id AND e.type = 'bounce')    AS bounced
-FROM enrollments en;
-"""
+FROM enrollments en
+""",
+}
+
+
+def _refresh_views_sql(*names: str) -> list[str]:
+    """DROP + CREATE statements that make the named views match ``_VIEWS``.
+    A migration uses this so an existing prod DB picks up a view-definition
+    change (``CREATE VIEW IF NOT EXISTS`` never refreshes an existing view)."""
+    out: list[str] = []
+    for n in names:
+        out.append(f"DROP VIEW IF EXISTS {n}")
+        out.append(_VIEWS[n].strip())
+    return out
+
+
+# Ordered schema migrations. Each key N holds the SQL run to move a DB from
+# user_version N-1 to N (idempotent: DROP...IF EXISTS / ADD COLUMN guards).
+# BUMP SCHEMA_VERSION and append a new entry whenever a _VIEWS definition
+# changes or a column is added, so the change reaches the deployed prod DB.
+_MIGRATIONS: dict[int, list[str]] = {
+    # v1: establish the runner and refresh all three derived views so future
+    # definition edits reach the prod volume (whose views were frozen by the
+    # old CREATE VIEW IF NOT EXISTS bootstrap).
+    1: _refresh_views_sql("contact_activity", "contact_stage", "enrollment_progress"),
+}
+
+# Highest applied migration. On a fresh DB the runner applies 1..N in order;
+# on the prod DB it applies only the entries above its current user_version.
+SCHEMA_VERSION = max(_MIGRATIONS)
 
 
 def event_hash(contact_id, ts, channel, type_, detail, ext_key=None) -> str:
@@ -352,6 +393,10 @@ class ContactStore:
         self.conn = sqlite3.connect(str(self.db_path))
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON")
+        # Wait up to 5s for a competing write instead of erroring immediately;
+        # matters at cold boot when several threadpool connections open at once
+        # and the migration runner briefly holds the write lock.
+        self.conn.execute("PRAGMA busy_timeout = 5000")
         self._init_schema()
 
     def __enter__(self) -> "ContactStore":
@@ -366,6 +411,34 @@ class ContactStore:
     def _init_schema(self) -> None:
         self.conn.executescript(_SCHEMA)
         self.conn.commit()
+        self._run_migrations()
+
+    def _run_migrations(self) -> None:
+        """Apply pending schema migrations exactly once, gated on
+        ``PRAGMA user_version``.
+
+        Views and future column adds live in ``_MIGRATIONS`` (NOT in
+        per-connect DDL): running DROP VIEW / ALTER TABLE on every connect
+        would race the concurrent threadpool connections a scale-to-zero
+        machine opens at cold boot. The version guard means the DDL runs
+        only until one connection advances user_version to SCHEMA_VERSION;
+        every later connect is a single PRAGMA read and returns. BEGIN
+        IMMEDIATE serialises the first-boot race: a loser blocks, then
+        re-reads the (now current) version inside the lock and skips."""
+        if self.conn.execute("PRAGMA user_version").fetchone()[0] >= SCHEMA_VERSION:
+            return
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            version = self.conn.execute("PRAGMA user_version").fetchone()[0]
+            for target in range(version + 1, SCHEMA_VERSION + 1):
+                for stmt in _MIGRATIONS[target]:
+                    self.conn.execute(stmt)
+                # user_version takes no bind parameter; target is a trusted int.
+                self.conn.execute(f"PRAGMA user_version = {target}")
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
 
     # -- contacts ---------------------------------------------------------
 
@@ -498,6 +571,25 @@ class ContactStore:
             (key, value, now),
         )
         self.conn.commit()
+
+    def state_keys_with_prefix(self, prefix: str) -> list[str]:
+        """State keys starting with ``prefix`` ('%'/'_' in prefix are escaped)."""
+        esc = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        rows = self.conn.execute(
+            "SELECT key FROM state WHERE key LIKE ? ESCAPE '\\' ORDER BY key",
+            (esc + "%",),
+        ).fetchall()
+        return [r["key"] for r in rows]
+
+    def delete_state(self, key: str) -> bool:
+        """Remove one state row. Returns True if a row was deleted."""
+        cur = self.conn.execute("DELETE FROM state WHERE key = ?", (key,))
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def campaign_ids(self) -> set[str]:
+        rows = self.conn.execute("SELECT campaign_id FROM campaigns").fetchall()
+        return {r["campaign_id"] for r in rows}
 
     # -- campaigns ---------------------------------------------------------
 
