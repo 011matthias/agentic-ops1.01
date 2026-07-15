@@ -44,10 +44,13 @@ def make_engine_campaign(store, contact_ids, cid="camp1", *, daily_cap=40,
     worker can claim. ``start`` defaults True so the common case yields a
     live 'sending' campaign; pass start=False to hold at 'approved'.
 
-    Enrollment/approval timestamps use real now; the reply-stop tests rely on
-    reply ts >= enrolled_at, so replies use later fixed 2026-07-15 timestamps.
+    Enrollment/approval timestamps use a FIXED base one day before the test
+    window; the reply-stop tests rely on reply ts >= enrolled_at, and the
+    replies use fixed 2026-07-15 timestamps. Using real now here made the suite
+    a time-bomb: once the wall clock passed the fixed reply timestamps,
+    reply ts < enrolled_at and the reply-stop no longer registered.
     """
-    now = now_iso()
+    now = "2026-07-14T09:00:00+00:00"
     store.create_campaign(cid, "Test Campaign", now, daily_cap=daily_cap)
     store.save_template("t1", "email", "Hello {{first_name}}",
                         "Body for {{company}}", "tester", now)

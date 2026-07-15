@@ -1,8 +1,13 @@
 """The core invariant: pipeline stage is derived from the event log, not stored."""
 from __future__ import annotations
 
-from lead_desk.web.service import build_board, build_contact_view, now_iso
+from datetime import date
+
+from lead_desk.web.service import (
+    build_board, build_contact_view, now_iso, recommended_action)
 from lead_desk.web.store import ContactStore
+
+TODAY = date(2026, 7, 15)
 
 
 def _contact(store, cid="c1", **over):
@@ -92,7 +97,7 @@ def test_campaign_send_overrides_reached_label(tmp_path):
                     direction="outbound", type="sent", now=now_iso())
         s.add_event(contact_id="c1", ts="2026-06-20T00:00:00+00:00", channel="meeting",
                     direction="outbound", type="touch", now=now_iso())
-        assert status_label(_board_row(s, "c1")) == "Awaiting reply"
+        assert status_label(_board_row(s, "c1")) == "Awaiting their reply"
 
 
 def test_reached_dirk_bucket(tmp_path):
@@ -153,3 +158,57 @@ def test_awaiting_and_ingest_by_email(tmp_path):
         res2 = ingest_event(s, {"email": "lead@acme.com", "type": "sent",
                                 "occurred_at": "2026-07-01T09:00:00+00:00"})
         assert res2["inserted"] is False
+
+
+# -- recommended_action: powers the board's clickable 'Action needed' detail --
+
+def test_recommended_action_replied_uses_next_step():
+    row = {"stage": "replied", "last_in": "2026-07-14", "last_out": "2026-07-10",
+           "next_step": "Confirm the Sept 9 call slot."}
+    rec = recommended_action(row, TODAY)
+    assert rec["needed"] is True
+    assert rec["status"] == "Replied, needs reply"
+    assert rec["action"] == "Confirm the Sept 9 call slot."   # operator's next_step verbatim
+    assert rec["from_next_step"] is True
+    assert "2026-07-14" in rec["reason"]
+
+
+def test_recommended_action_replied_default_when_no_next_step():
+    row = {"stage": "replied", "last_in": "2026-07-14", "last_out": "2026-07-10"}
+    rec = recommended_action(row, TODAY)
+    assert rec["needed"] is True
+    assert rec["action"] == "Reply to their latest message."
+    assert rec["from_next_step"] is False
+
+
+def test_recommended_action_awaiting_reply_not_needed():
+    # we sent, they have not replied -> ball is in their court, no action owed
+    row = {"stage": "sent", "last_out": "2026-07-14", "last_in": None}
+    assert recommended_action(row, TODAY)["needed"] is False
+
+
+def test_recommended_action_suppressed_not_needed():
+    row = {"stage": "replied", "last_in": "2026-07-14", "suppressed": 1}
+    assert recommended_action(row, TODAY)["needed"] is False
+
+
+def test_recommended_action_dangling_followup():
+    # sent, follow-up due in the past, no reply -> a follow-up is owed
+    row = {"stage": "sent", "last_out": "2026-06-20", "last_in": None,
+           "next_step": "", "next_step_due": "2026-07-01"}
+    rec = recommended_action(row, TODAY)
+    assert rec["needed"] is True
+    assert rec["action"] == "Send the planned follow-up."
+    assert "2026-07-01" in rec["reason"]
+
+
+def test_recommended_action_attached_to_board_rows(tmp_path):
+    with ContactStore(tmp_path / "db.sqlite") as s:
+        _contact(s)
+        s.add_event(contact_id="c1", ts="2026-07-01T00:00:00+00:00", channel="email",
+                    direction="outbound", type="sent", now=now_iso())
+        s.add_event(contact_id="c1", ts="2026-07-14T00:00:00+00:00", channel="email",
+                    direction="inbound", type="reply", now=now_iso())
+        row = {r["contact_id"]: r for r in build_board(s)["rows"]}["c1"]
+        assert row["status"] == "Replied, needs reply"
+        assert row["recommended"]["needed"] is True

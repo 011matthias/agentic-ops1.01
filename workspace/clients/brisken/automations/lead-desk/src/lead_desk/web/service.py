@@ -108,7 +108,7 @@ def status_label(row: dict) -> str:
         if is_reached_dirk(row):
             return "Reached (Dirk)"
         if last_in is None or (last_out and last_in < last_out):
-            return "Awaiting reply"
+            return "Awaiting their reply"
         return "Contacted"
     if stage == "replied":
         if last_in and (last_out is None or last_in >= last_out):
@@ -141,6 +141,42 @@ def is_aging_hot(row: dict, today: date) -> bool:
         return False
     unanswered = last_out is None or last_in >= last_out
     return unanswered and (today - last_in).days >= AGING_DAYS
+
+
+def recommended_action(row: dict, today: date) -> dict:
+    """The concrete next action for a contact the board flags as needing one.
+
+    Powers the board's clickable 'Action needed' detail and the contact-page
+    callout. Suppressed (off-board) rows never need action. Uses the operator's
+    ``next_step`` verbatim when set, otherwise derives a sensible default from
+    the wait-state. Returns ``{"needed": False}`` when nothing is owed on our
+    side (e.g. we are simply awaiting their reply)."""
+    if row.get("suppressed"):
+        return {"needed": False}
+    replied = status_label(row) == "Replied, needs reply" or is_aging_hot(row, today)
+    dangling = is_dangling(row, today)
+    if not (replied or dangling):
+        return {"needed": False}
+    last_in = (row.get("last_in") or "")[:10]
+    next_step = (row.get("next_step") or "").strip()
+    if replied:
+        reason = (f"They replied on {last_in} and we have not responded yet."
+                  if last_in else "They replied and we have not responded yet.")
+        default = "Reply to their latest message."
+    else:
+        due = (row.get("next_step_due") or "")[:10]
+        reason = (f"The planned follow-up was due on {due}." if due
+                  else "A planned follow-up is past due.")
+        default = "Send the planned follow-up."
+    return {
+        "needed": True,
+        "status": status_label(row),
+        "action": next_step or default,
+        "from_next_step": bool(next_step),
+        "reason": reason,
+        "last_in": last_in,
+        "last_out": (row.get("last_out") or "")[:10],
+    }
 
 
 def _attach_cadence(store: ContactStore, rows: list[dict], campaign_row) -> None:
@@ -231,6 +267,7 @@ def build_board(store: ContactStore, filters: dict | None = None,
         r["aging"] = is_aging_hot(r, today)
         r["reached"] = is_reached_dirk(r)
         r["held"] = bool(r.get("suppressed")) and r.get("suppress_reason") in HELD_REASONS
+        r["recommended"] = recommended_action(r, today)
 
     # Outreach-phase summary per contact: during-event (E1/E2/E3) vs post-event,
     # kept distinct. One query over the phase-labelled events, grouped in Python.
@@ -345,6 +382,8 @@ def build_contact_view(store: ContactStore, contact_id: str) -> dict | None:
     contact["last_in"] = enriched.get("last_in")
     contact["last_out"] = enriched.get("last_out")
     contact["status"] = status_label({**contact, **enriched})
+    contact["recommended"] = recommended_action(
+        {**contact, **enriched}, datetime.now(timezone.utc).date())
     events = [_row(e) for e in store.get_events(contact_id)]
 
     # Cadence card: one entry per campaign this contact is enrolled in.
