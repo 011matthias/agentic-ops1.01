@@ -61,13 +61,13 @@
   </div>
 
   <div class="inline" style="margin-top:14px; flex-wrap:wrap;">
-    <a class="chip" href="/?{{ cq }}&bucket=due_today">Due today <span class="n">{{ v.buckets.due_today }}</span></a>
-    <a class="chip warn" href="/?{{ cq }}&bucket=manual_due">Manual touches <span class="n">{{ v.buckets.manual_due }}</span></a>
-    <a class="chip" href="/?{{ cq }}&bucket=awaiting">Awaiting reply <span class="n">{{ v.buckets.awaiting_reply }}</span></a>
-    <a class="chip warn" href="/?{{ cq }}&bucket=dangling">Follow-up due <span class="n">{{ v.buckets.dangling }}</span></a>
-    <a class="chip hot" href="/?{{ cq }}&bucket=aging">Aging replies <span class="n">{{ v.buckets.aging_hot }}</span></a>
-    <a class="chip good" href="/?{{ cq }}&bucket=reached">Reached (Dirk) <span class="n">{{ v.buckets.reached_dirk }}</span></a>
-    <a class="chip hold" href="/?{{ cq }}&bucket=held">Held <span class="n">{{ v.buckets.held }}</span></a>
+    <a class="chip" href="/?{{ cq }}&bucket=due_today" title="Cadence email steps scheduled to auto-send today.">Due today <span class="n">{{ v.buckets.due_today }}</span></a>
+    <a class="chip warn" href="/?{{ cq }}&bucket=manual_due" title="LinkedIn steps due now that you send by hand (not auto-email).">Manual touches <span class="n">{{ v.buckets.manual_due }}</span></a>
+    <a class="chip" href="/?{{ cq }}&bucket=awaiting" title="We have contacted them and are waiting on THEIR reply; the ball is in their court.">Awaiting their reply <span class="n">{{ v.buckets.awaiting_reply }}</span></a>
+    <a class="chip warn" href="/?{{ cq }}&bucket=dangling" title="A follow-up you scheduled (its next-step date) is now past due on our side.">Follow-up due <span class="n">{{ v.buckets.dangling }}</span></a>
+    <a class="chip hot" href="/?{{ cq }}&bucket=aging" title="They replied and we still have not responded after several days.">Aging replies <span class="n">{{ v.buckets.aging_hot }}</span></a>
+    <a class="chip good" href="/?{{ cq }}&bucket=reached" title="Dirk reached them personally; no campaign email was sent.">Reached (Dirk) <span class="n">{{ v.buckets.reached_dirk }}</span></a>
+    <a class="chip hold" href="/?{{ cq }}&bucket=held" title="Outreach deliberately parked and revisitable (a general-audience hold or a manual hold). Not 'do not contact'.">Held <span class="n">{{ v.buckets.held }}</span></a>
     {% if v.buckets.stalled %}
     <a class="chip hot" href="/campaigns/{{ v.campaign }}#attempts" title="sends needing a human decision">Stalled sends <span class="n">{{ v.buckets.stalled }}</span></a>
     {% endif %}

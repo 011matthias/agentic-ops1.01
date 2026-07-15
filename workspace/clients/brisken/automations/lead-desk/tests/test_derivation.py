@@ -97,7 +97,7 @@ def test_campaign_send_overrides_reached_label(tmp_path):
                     direction="outbound", type="sent", now=now_iso())
         s.add_event(contact_id="c1", ts="2026-06-20T00:00:00+00:00", channel="meeting",
                     direction="outbound", type="touch", now=now_iso())
-        assert status_label(_board_row(s, "c1")) == "Awaiting reply"
+        assert status_label(_board_row(s, "c1")) == "Awaiting their reply"
 
 
 def test_reached_dirk_bucket(tmp_path):

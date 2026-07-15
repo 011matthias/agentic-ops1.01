@@ -108,7 +108,7 @@ def status_label(row: dict) -> str:
         if is_reached_dirk(row):
             return "Reached (Dirk)"
         if last_in is None or (last_out and last_in < last_out):
-            return "Awaiting reply"
+            return "Awaiting their reply"
         return "Contacted"
     if stage == "replied":
         if last_in and (last_out is None or last_in >= last_out):
