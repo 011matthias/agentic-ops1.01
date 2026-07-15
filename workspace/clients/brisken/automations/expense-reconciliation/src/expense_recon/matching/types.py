@@ -216,6 +216,16 @@ class Receipt:
     reimbursable: bool | None = None
     expense_location: str | None = None
 
+    @property
+    def has_receipt_image(self) -> bool:
+        """True when the expense carries any receipt-image reference (a
+        direct URL or an attachment filename). A missing comprovante is a
+        first-class per-expense state in Chris's workflow (2026-07-15
+        walkthrough): she has to go back and attach it in Zoho Expense.
+        Surfaces only render the flag when the run's source carries image
+        info at all (the slice-1 receipts CSV never does)."""
+        return bool(self.receipt_url or self.receipt_name)
+
 
 @dataclass(frozen=True)
 class Match:

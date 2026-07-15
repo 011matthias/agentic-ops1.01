@@ -67,6 +67,7 @@ RECONCILED_COLUMNS = (
     "Zoho Category",
     "Payment Mode",
     "Receipt URL",
+    "Receipt Image",
     "Receipt Vendor",
     "Receipt Date",
     "Receipt Total",
@@ -148,6 +149,11 @@ def build_reconciled_rows(
     """
     rec_by_id = {r.document_id: r for r in receipts}
     disp = _disposition(outcome)
+    # L4 noise guard: only flag missing receipt images when the run's
+    # source carries image info at all (the slice-1 receipts CSV never
+    # populates receipt_url/receipt_name; flagging every row would be
+    # noise, not signal).
+    run_has_image_info = any(r.has_receipt_image for r in receipts)
 
     rows: list[list[str]] = []
     for tx in transactions:
@@ -195,6 +201,11 @@ def build_reconciled_rows(
             _str(rec.zoho_category) if rec is not None else "",
             _str(rec.payment_mode) if rec is not None else "",
             _str(receipt_url),
+            (
+                ("Yes" if rec.has_receipt_image else "MISSING")
+                if (rec is not None and run_has_image_info)
+                else ""
+            ),
             _str(rec.detected_vendor) if rec is not None else "",
             _date(rec.detected_date) if rec is not None else "",
             _money(rec.detected_total) if rec is not None else "",

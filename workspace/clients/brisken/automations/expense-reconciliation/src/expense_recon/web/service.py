@@ -820,6 +820,9 @@ def _receipt_view(r: Receipt, overrides: dict[tuple[str, int], dict]) -> dict:
         # Dirk 2026-06-16: when the currency is unknown, say so in the UI
         # rather than showing a blank or a silently-assumed USD.
         "currency_unknown": r.detected_currency is None,
+        # L4: the missing-comprovante state. The template renders the badge
+        # only when the run-level `has_image_info` flag is set (noise guard).
+        "has_receipt_image": r.has_receipt_image,
         "reference": r.detected_reference or "",
         "report_number": r.report_number or "",
         "receipt_url": r.receipt_url or "",
@@ -1128,6 +1131,12 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
 
     n_tx = len(transactions)
     n_unknown_currency = sum(1 for r in receipts if r.detected_currency is None)
+    # L4 noise guard: the missing-image badge renders only when this run's
+    # receipt source carries image references at all.
+    has_image_info = any(r.has_receipt_image for r in receipts)
+    n_missing_receipt_image = (
+        sum(1 for r in receipts if not r.has_receipt_image) if has_image_info else 0
+    )
     summary = {
         "n_transactions": n_tx,
         "n_receipts": len(receipts),
@@ -1153,6 +1162,9 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
         },
         # PR C — memory legibility.
         "n_learned_lines": n_learned_lines,
+        # L4 — missing receipt images (0 when the source has no image info).
+        "has_image_info": has_image_info,
+        "n_missing_receipt_image": n_missing_receipt_image,
     }
 
     return {

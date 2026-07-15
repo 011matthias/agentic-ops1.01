@@ -164,12 +164,22 @@ def _build_rows(
     """
     rows: list[_Row] = []
 
+    # L4: flag a matched expense with no receipt-image reference, but only
+    # when this run's source carries image info at all (the slice-1
+    # receipts CSV never does; flagging everything would be noise).
+    has_image_info = any(r.has_receipt_image for r in rec_by_id.values())
+
+    def _note(rec: Receipt, base: str) -> str:
+        if has_image_info and not rec.has_receipt_image:
+            return f"{base} · missing receipt image" if base else "missing receipt image"
+        return base
+
     for match in outcome.matches:
         tx = tx_by_id.get(match.transaction_id)
         rec = rec_by_id.get(match.document_id)
         if tx is None or rec is None:
             continue
-        rows.extend(_rows_from_match(tx, rec, match, extra_note=""))
+        rows.extend(_rows_from_match(tx, rec, match, extra_note=_note(rec, "")))
 
     for match in outcome.judgment_required:
         tx = tx_by_id.get(match.transaction_id)
@@ -179,7 +189,7 @@ def _build_rows(
         # FX cases ride on the matched receipt's line items but stay
         # REVIEW until the LLM judgment layer (slice 2) confirms.
         rows.extend(
-            _rows_from_match(tx, rec, match, extra_note="FX — needs judgment", force_review=True)
+            _rows_from_match(tx, rec, match, extra_note=_note(rec, "FX — needs judgment"), force_review=True)
         )
 
     seen_ambiguous_tx: set[str] = set()
@@ -192,7 +202,7 @@ def _build_rows(
         if tx is None or rec is None:
             continue
         rows.extend(
-            _rows_from_match(tx, rec, match, extra_note="Ambiguous — pick one", force_review=True)
+            _rows_from_match(tx, rec, match, extra_note=_note(rec, "Ambiguous — pick one"), force_review=True)
         )
 
     for tx_id in outcome.unmatched_transactions:

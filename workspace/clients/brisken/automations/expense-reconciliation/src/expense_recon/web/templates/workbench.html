@@ -110,6 +110,7 @@
           <strong>{{ c.receipt.vendor }}</strong>
           <span class="muted">&middot; {{ c.receipt.date }} &middot; {{ c.receipt.total }} {{ c.receipt.currency }}</span>
           {% if c.receipt.report_number %}<span class="muted mono">&middot; {{ c.receipt.report_number }}</span>{% endif %}
+          {% if view.summary.has_image_info and not c.receipt.has_receipt_image %}<span class="badge pending" title="No receipt picture is attached to this expense in Zoho Expense; attach it there so the record is complete.">no receipt image</span>{% endif %}
           {% if c.receipt.payment_mode or c.receipt.zoho_category or c.receipt.reimbursable is sameas true %}
           <div class="muted" style="font-size:12px; margin-top:2px;">
             {% if c.receipt.payment_mode %}Paid via: {{ c.receipt.payment_mode }}{% endif %}
