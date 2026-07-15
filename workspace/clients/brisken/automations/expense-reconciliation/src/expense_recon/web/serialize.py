@@ -107,6 +107,7 @@ def transaction_to_dict(t: Transaction) -> dict:
         "original_amount": _dec(t.original_amount),
         "original_currency": t.original_currency,
         "fx_rate": _dec(t.fx_rate),
+        "entry_status": t.entry_status,
     }
 
 
@@ -125,6 +126,8 @@ def transaction_from_dict(d: dict) -> Transaction:
         original_amount=_as_dec(d.get("original_amount")),
         original_currency=d.get("original_currency"),
         fx_rate=_as_dec(d.get("fx_rate")),
+        # .get keeps pre-L1 snapshots loadable (no entry_status key).
+        entry_status=d.get("entry_status"),
     )
 
 

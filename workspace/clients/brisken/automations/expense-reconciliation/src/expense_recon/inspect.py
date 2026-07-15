@@ -74,6 +74,20 @@ _HEURISTICS: dict[str, list[re.Pattern[str]]] = {
         re.compile(r"^waehrung$", re.I),   # DE (ASCII)
         re.compile(r"^währung$", re.I),    # DE (Unicode)
     ],
+    # L5: optional per-charge FX detail. Conservative patterns; a miss
+    # costs nothing (the fields are optional).
+    "original_amount": [
+        re.compile(r"^original\s*amount$", re.I),
+        re.compile(r"^foreign\s*amount$", re.I),
+    ],
+    "original_currency": [
+        re.compile(r"^original\s*currency$", re.I),
+        re.compile(r"^foreign\s*currency$", re.I),
+    ],
+    "fx_rate": [
+        re.compile(r"^exchange\s*rate$", re.I),
+        re.compile(r"^fx\s*rate$", re.I),
+    ],
 }
 
 
@@ -93,7 +107,16 @@ def guess_column_map(headers: list[str]) -> tuple[dict[str, str], list[str]]:
     # A header that's been claimed by an earlier logical field is
     # not available for later ones.
     claimed: set[str] = set()
-    for logical in ("posting_date", "transaction_date", "amount", "vendor", "transaction_currency"):
+    for logical in (
+        "posting_date",
+        "transaction_date",
+        "amount",
+        "vendor",
+        "transaction_currency",
+        "original_amount",
+        "original_currency",
+        "fx_rate",
+    ):
         for header in headers_clean:
             if header in claimed:
                 continue

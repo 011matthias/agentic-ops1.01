@@ -180,6 +180,39 @@ class ZohoClient:
             page += 1
         return accounts
 
+    def list_expenses(
+        self, *, date_start: str | None = None, date_end: str | None = None
+    ) -> list[dict]:
+        """All expense records (paginated per_page=200), date-filtered
+        CLIENT-SIDE on each record's `date` field (YYYY-MM-DD string
+        comparison; Zoho's own list filters are inconsistent across DCs).
+        `date_start` / `date_end` are inclusive bounds; None means open."""
+        expenses: list[dict] = []
+        page = 1
+        while True:
+            payload = self._get(
+                "/books/v3/expenses", {"page": str(page), "per_page": "200"}
+            )
+            expenses.extend(payload.get("expenses", []))
+            ctx = payload.get("page_context") or {}
+            if not ctx.get("has_more_page"):
+                break
+            page += 1
+        if date_start is None and date_end is None:
+            return expenses
+
+        def _in_window(rec: dict) -> bool:
+            d = rec.get("date") or ""
+            if not d:
+                return False  # an undated record cannot be affirmed in-window
+            if date_start is not None and d < date_start:
+                return False
+            if date_end is not None and d > date_end:
+                return False
+            return True
+
+        return [e for e in expenses if _in_window(e)]
+
 
 def _urllib_transport(
     method: str, url: str, headers: Mapping[str, str], body: bytes | None

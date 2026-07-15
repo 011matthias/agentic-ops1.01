@@ -93,6 +93,7 @@ from .matching.judgment import judge_ambiguous, judge_fx_match
 from .matching.types import Match, MatchOutcome, Receipt, Transaction
 from .output.reconciled_csv import write_reconciled_csv
 from .output.report_xlsx import write_report
+from .output.sheet_writeback import write_sheet_writeback
 from .runlog import RunLog, decisions_from_outcome
 from .output.zoho_export import write_zoho_export
 from .store import (
@@ -338,7 +339,8 @@ def _load_match_memory(cfg: dict, config_dir: Path):
 
 
 def reconcile(
-    cfg: dict, config_dir: Path, *, learned=None, match_memory=None
+    cfg: dict, config_dir: Path, *, learned=None, match_memory=None,
+    on_stage=None,
 ) -> ReconcileResult:
     """Run ingest -> categorize -> match -> judgment and return the
     in-memory result, writing nothing to disk.
@@ -353,13 +355,28 @@ def reconcile(
     is a `MatchMemory` (vendor aliases + per-merchant FX) feeding match
     scoring/tie-break. The web UI passes both directly; the CLI falls back
     to a `learning:` config block. None => no memory consult.
+
+    `on_stage(name)` (optional) is called at the pass boundaries
+    ("reading" / "receipts" / "categorizing" / "matching" / "judging"),
+    so a caller can show staged progress instead of one opaque spinner.
+    Exceptions from the callback are swallowed: progress display must
+    never break a run.
     """
+    def _stage(name: str) -> None:
+        if on_stage is not None:
+            try:
+                on_stage(name)
+            except Exception:  # noqa: BLE001 - progress is best-effort
+                logger.debug("on_stage(%r) callback failed", name, exc_info=True)
+
     # LLM client first: folder-mode receipt ingest (slice 2.2 OCR)
     # needs it before any receipt is read.
     llm_client, cost_tracker = _build_llm_client(cfg)
     logger.info("LLM client: %s", "enabled" if llm_client else "none (keyword stub)")
 
+    _stage("reading")
     transactions, stmt_issues = _load_statement(cfg, config_dir)
+    _stage("receipts")
     receipts, receipt_issues = _load_receipts(
         cfg,
         config_dir,
@@ -400,6 +417,7 @@ def reconcile(
     # vendor-fallback path to Tier-1 LEARNED; a good line read still wins.
     if learned is None:
         learned = _load_learned(cfg, config_dir)
+    _stage("categorizing")
     receipts = categorize_receipts(
         receipts, client=llm_client, chart_of_accounts=account_labels, learned=learned
     )
@@ -416,6 +434,7 @@ def reconcile(
             vendor_aliases=match_memory.vendor_aliases,
             merchant_fx=dict(match_memory.merchant_fx),
         )
+    _stage("matching")
     outcome = match_month(transactions, receipts, match_cfg)
     logger.info(
         "matched=%d, judgment=%d, ambiguous=%d, unmatched_tx=%d, unmatched_rec=%d",
@@ -426,6 +445,7 @@ def reconcile(
         len(outcome.unmatched_receipts),
     )
 
+    _stage("judging")
     tx_by_id = {tx.transaction_id: tx for tx in transactions}
     rec_by_id = {r.document_id: r for r in receipts}
     _apply_judgment(outcome, tx_by_id, rec_by_id, llm_client)
@@ -551,6 +571,35 @@ def run(
         )
         logger.info("wrote reconciled CSV: %s", recon_csv_path)
         print(f"Wrote reconciled CSV: {recon_csv_path}")
+
+    # L3 sheet writeback (2026-07-15 walkthrough): hand Chris HER OWN
+    # workbook back with one appended "Zoho Account (tool)" column — the
+    # resolved posting account per statement row. Opt-in via
+    # `output.sheet_writeback`; Excel statements only (the row anchor is
+    # the sheet row number, which PDF/CSV ids don't carry).
+    stmt_cfg = cfg.get("statement") or {}
+    stmt_path = (
+        (config_dir / stmt_cfg["path"]).resolve() if stmt_cfg.get("path") else None
+    )
+    if (
+        out_cfg.get("sheet_writeback")
+        and stmt_path is not None
+        and stmt_path.suffix.lower() in (".xlsx", ".xlsm")
+    ):
+        writeback_path = Path(report_path).parent / (
+            f"{stmt_path.stem}-categorized{stmt_path.suffix}"
+        )
+        write_sheet_writeback(
+            stmt_path,
+            writeback_path,
+            outcome,
+            transactions,
+            receipts,
+            sheet_name=stmt_cfg.get("sheet_name"),
+            chart_of_accounts=chart_of_accounts,
+        )
+        logger.info("wrote sheet writeback: %s", writeback_path)
+        print(f"Wrote sheet writeback: {writeback_path}")
 
     # BLUEPRINT 5.7-5.10: append this run to the SQLite run-log when a
     # `run_log:` block is configured (opt-in; no block = no file, no

@@ -205,10 +205,53 @@ uv run expense-recon doctor --config run.json                  # pre-flight conf
 uv run expense-recon calibrate --config run.json               # matcher metrics, no xlsx
 ```
 
+## Testing mode (hosted, 2026-07-15)
+
+While the tool is in testing, the hosted app (`brisken-expense-recon.fly.dev`)
+runs a **role-split intake model** so Chris can use it without triggering
+the pipeline:
+
+- **User (Chris)** logs in with `EXPENSE_RECON_ACCESS_CODE` and only
+  *uploads* documents (statement + optional receipts + a card picker).
+  Nothing runs; the upload is saved and appears as "Received".
+- **Operator (dev)** logs in with `EXPENSE_RECON_OPERATOR_CODE`, runs the
+  pipeline from the intake queue, reviews, and **Publishes** the run back;
+  the user then sees it as "Ready to review" and reviews it (no LLM
+  involved in review). Operator-only surface: intake queue, run, Compare,
+  Memory, publish.
+- The server stays **API-free**: `tools/brisken-recon-notify.py` (run
+  dev-side, `--once` after a publish or on a scheduled task) polls
+  `/api/operator/state` and sends the Graph mails (new upload -> matthias;
+  run ready -> Chris + matthias; new feedback -> matthias). No Graph creds
+  on the box.
+- **Anchored feedback**: every logged-in page carries the double-click
+  widget (same pattern as the OnePilot prototype). A reviewer double-clicks
+  any spot, or uses the floating Feedback button, and the note lands in
+  `/data/feedback.jsonl` attributed to the session role, page, and run id.
+  Operators read it at `/feedback-log` (nav tab) or `/feedback.jsonl`.
+
+Card presets for the simplified upload live in `/data/cards.json` (env
+`EXPENSE_RECON_CARDS`; shape in `examples/cards.example.json`); unset =>
+a plain card-name text box (fail-open).
+
+**Deploy** (Band-3, explicit order only):
+
+```bash
+fly secrets set EXPENSE_RECON_OPERATOR_CODE=<op> EXPENSE_RECON_ACCESS_CODE=<user> --stage
+# author + upload /data/cards.json (real card list), then:
+flyctl deploy   # from this module dir; the DB self-migrates on first open
+```
+
+Notifier env (dev-side, gitignored `../../context/.env`):
+`BRISKEN_TENANT_ID`, `BRISKEN_GRAPH_CLIENT_ID`, `BRISKEN_GRAPH_CLIENT_SECRET`,
+`EXPENSE_RECON_OPERATOR_CODE`, and `EXPENSE_RECON_NOTIFY_USER` (Chris's
+email; the ready-ping is dev-copy-only until set).
+
 ## Browser UI (review workbench)
 
 Chris does not have to hand-edit a JSON config or read the xlsx. The
-same pipeline is wrapped in a local web app she runs on her own machine:
+same pipeline is wrapped in a web app (hosted per "Testing mode" above,
+or run locally on loopback):
 
 ```bash
 cd workspace/clients/brisken/automations/expense-reconciliation

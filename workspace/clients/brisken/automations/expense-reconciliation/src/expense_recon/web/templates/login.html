@@ -1,46 +1,70 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sign in - Brisken Expense Reconciliation</title>
+<link rel="icon" type="image/png" href="/static/favicon.png">
+<script>
+  (function () {
+    var t = localStorage.getItem('theme');
+    var d = document.documentElement;
+    d.setAttribute(
+      'data-theme',
+      t === 'dark' || (t !== 'light' && window.matchMedia('(prefers-color-scheme:dark)').matches)
+        ? 'dark' : 'light'
+    );
+  })();
+</script>
+<link rel="stylesheet" href="/static/tokens.css">
 <style>
-  :root {
-    --bg: #0f1318; --surface: #171c23; --text: #e6e9ee; --muted: #9aa4b1;
-    --border: #2a323c; --accent: #5b8cff; --orange: #fbbf24; --orange-bg: #2c2310;
-  }
   * { box-sizing: border-box; }
   body {
     margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
     background: var(--bg); color: var(--text);
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   }
   .card {
     width: 100%; max-width: 360px; background: var(--surface); border: 1px solid var(--border);
-    border-radius: 14px; padding: 28px 26px; box-shadow: 0 8px 30px rgba(0,0,0,.4);
+    border-radius: 14px; padding: 28px 26px; box-shadow: var(--shadow); margin: 16px;
   }
-  h1 { font-size: 18px; margin: 0 0 4px; }
-  p.sub { color: var(--muted); font-size: 13.5px; margin: 0 0 20px; }
+  .brand { display: flex; justify-content: center; margin-bottom: 18px; }
+  .brand-logo { height: 26px; display: none; }
+  [data-theme="light"] .brand-logo--light { display: block; }
+  [data-theme="dark"] .brand-logo--dark { display: block; }
+  h1 { font-size: 18px; margin: 0 0 4px; color: var(--heading); text-align: center; }
+  p.sub { color: var(--muted); font-size: 13.5px; margin: 0 0 20px; text-align: center; }
   label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
   input[type="password"] {
     width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border);
     border-radius: 8px; padding: 10px 12px; font-size: 15px;
   }
   button {
-    width: 100%; margin-top: 16px; background: var(--accent); color: #fff; border: 0;
+    width: 100%; margin-top: 16px; background: var(--accent); color: var(--btn-ink); border: 0;
     border-radius: 999px; padding: 11px 14px; font-size: 14px; font-weight: 600; cursor: pointer;
   }
-  button:hover { filter: brightness(1.06); }
+  button:hover { background: var(--accent-light); }
   .alert {
     background: var(--orange-bg); color: var(--orange); border: 1px solid var(--orange);
     border-radius: 8px; padding: 9px 12px; font-size: 13.5px; margin-bottom: 16px;
   }
   .foot { color: var(--muted); font-size: 12px; margin-top: 18px; text-align: center; }
+  .theme-toggle {
+    position: fixed; top: 14px; right: 14px; width: auto; margin: 0;
+    background: transparent; border: 1px solid var(--border); border-radius: 999px;
+    color: var(--text); cursor: pointer; padding: 6px 12px; font-size: 13px; font-weight: 400;
+  }
+  .theme-toggle:hover { background: var(--surface); }
 </style>
 </head>
 <body>
+  <button type="button" class="theme-toggle" onclick="(function(){var d=document.documentElement;var c=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',c);localStorage.setItem('theme',c);})()" aria-label="Toggle theme">Theme</button>
   <form class="card" method="post" action="/login">
-    <h1>Brisken Expense Reconciliation</h1>
+    <div class="brand">
+      <img class="brand-logo brand-logo--light" src="/static/brisken-logo-light.png" alt="Brisken">
+      <img class="brand-logo brand-logo--dark" src="/static/brisken-logo-dark.png" alt="Brisken">
+    </div>
+    <h1>Expense Reconciliation</h1>
     <p class="sub">Enter the access code to continue.</p>
     {% if error %}<div class="alert">{{ error }}</div>{% endif %}
     <label for="code">Access code</label>

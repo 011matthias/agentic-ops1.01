@@ -29,7 +29,30 @@ from pathlib import Path
 STATUS_PENDING = "pending"
 STATUS_CONFIRMED = "confirmed"
 STATUS_REJECTED = "rejected"
-VALID_STATUSES = (STATUS_PENDING, STATUS_CONFIRMED, STATUS_REJECTED)
+# L1/PR-E: "this charge is already entered in Zoho" (her yellow). Terminal
+# like confirmed (counts as decided, claims its receipt) but the Zoho
+# journal export EXCLUDES it -- never double-post.
+STATUS_ALREADY_POSTED = "already_posted"
+VALID_STATUSES = (
+    STATUS_PENDING,
+    STATUS_CONFIRMED,
+    STATUS_REJECTED,
+    STATUS_ALREADY_POSTED,
+)
+
+# Intake lifecycle (testing mode): the user's uploaded document set, waiting
+# for an operator. `received` on upload; `processing` once an operator runs
+# the pipeline on it; `ready` when the resulting run is published back.
+INTAKE_RECEIVED = "received"
+INTAKE_PROCESSING = "processing"
+INTAKE_READY = "ready"
+VALID_INTAKE_STATUSES = (INTAKE_RECEIVED, INTAKE_PROCESSING, INTAKE_READY)
+
+# Background-job states (durable: a Fly machine can scale to zero mid-run;
+# a job row that is still `running` at boot was interrupted).
+JOB_RUNNING = "running"
+JOB_DONE = "done"
+JOB_ERROR = "error"
 
 
 @dataclass
@@ -44,6 +67,25 @@ class RunRow:
     work_dir: str
     llm_enabled: bool
     has_coa: bool
+    published: bool = False
+    published_at: str | None = None
+    intake_id: str | None = None
+
+
+@dataclass
+class IntakeRow:
+    intake_id: str
+    created_at: str
+    label: str
+    uploaded_by: str | None
+    statement_name: str
+    receipts_name: str | None
+    card_key: str | None
+    work_dir: str
+    status: str
+    run_id: str | None
+    detect_note: str | None
+    updated_at: str | None
 
 
 @dataclass
@@ -102,9 +144,51 @@ class RunStore:
                 updated_at   TEXT,
                 PRIMARY KEY (run_id, document_id, line_index)
             );
+            CREATE TABLE IF NOT EXISTS intakes (
+                intake_id      TEXT PRIMARY KEY,
+                created_at     TEXT NOT NULL,
+                label          TEXT NOT NULL,
+                uploaded_by    TEXT,
+                statement_name TEXT NOT NULL,
+                receipts_name  TEXT,
+                card_key       TEXT,
+                work_dir       TEXT NOT NULL,
+                status         TEXT NOT NULL DEFAULT 'received',
+                run_id         TEXT,
+                detect_note    TEXT,
+                updated_at     TEXT
+            );
+            CREATE TABLE IF NOT EXISTS jobs (
+                job_id     TEXT PRIMARY KEY,
+                intake_id  TEXT,
+                status     TEXT NOT NULL,
+                run_id     TEXT,
+                error      TEXT,
+                stage      TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT
+            );
             """
         )
+        self._migrate()
         self.conn.commit()
+
+    def _migrate(self) -> None:
+        """Idempotent column adds for databases created before testing mode.
+        Existing runs stay published=0 (operator-visible only) until an
+        operator publishes them explicitly."""
+        existing = {
+            row["name"]
+            for row in self.conn.execute("PRAGMA table_info(runs)").fetchall()
+        }
+        adds = (
+            ("published", "INTEGER NOT NULL DEFAULT 0"),
+            ("published_at", "TEXT"),
+            ("intake_id", "TEXT"),
+        )
+        for column, ddl in adds:
+            if column not in existing:
+                self.conn.execute(f"ALTER TABLE runs ADD COLUMN {column} {ddl}")
 
     # -- runs -------------------------------------------------------------
 
@@ -121,11 +205,12 @@ class RunStore:
         work_dir: str,
         llm_enabled: bool,
         has_coa: bool,
+        intake_id: str | None = None,
     ) -> None:
         self.conn.execute(
             "INSERT INTO runs (run_id, created_at, label, operator, summary, "
-            "snapshot, config, work_dir, llm_enabled, has_coa) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "snapshot, config, work_dir, llm_enabled, has_coa, intake_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 run_id,
                 created_at,
@@ -137,15 +222,27 @@ class RunStore:
                 work_dir,
                 int(llm_enabled),
                 int(has_coa),
+                intake_id,
             ),
         )
         self.conn.commit()
 
-    def list_runs(self) -> list[RunRow]:
-        rows = self.conn.execute(
-            "SELECT * FROM runs ORDER BY created_at DESC"
-        ).fetchall()
+    def list_runs(self, published_only: bool = False) -> list[RunRow]:
+        query = "SELECT * FROM runs"
+        if published_only:
+            query += " WHERE published = 1"
+        query += " ORDER BY created_at DESC"
+        rows = self.conn.execute(query).fetchall()
         return [self._row_to_run(r) for r in rows]
+
+    def set_run_published(
+        self, run_id: str, published: bool, published_at: str | None
+    ) -> None:
+        self.conn.execute(
+            "UPDATE runs SET published = ?, published_at = ? WHERE run_id = ?",
+            (int(published), published_at, run_id),
+        )
+        self.conn.commit()
 
     def get_run(self, run_id: str) -> RunRow | None:
         row = self.conn.execute(
@@ -166,7 +263,167 @@ class RunStore:
             work_dir=row["work_dir"],
             llm_enabled=bool(row["llm_enabled"]),
             has_coa=bool(row["has_coa"]),
+            published=bool(row["published"]),
+            published_at=row["published_at"],
+            intake_id=row["intake_id"],
         )
+
+    # -- intakes (testing mode) --------------------------------------------
+
+    def create_intake(
+        self,
+        *,
+        intake_id: str,
+        created_at: str,
+        label: str,
+        uploaded_by: str | None,
+        statement_name: str,
+        receipts_name: str | None,
+        card_key: str | None,
+        work_dir: str,
+        detect_note: str | None,
+    ) -> None:
+        self.conn.execute(
+            "INSERT INTO intakes (intake_id, created_at, label, uploaded_by, "
+            "statement_name, receipts_name, card_key, work_dir, status, "
+            "detect_note, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                intake_id,
+                created_at,
+                label,
+                uploaded_by,
+                statement_name,
+                receipts_name,
+                card_key,
+                work_dir,
+                INTAKE_RECEIVED,
+                detect_note,
+                created_at,
+            ),
+        )
+        self.conn.commit()
+
+    def list_intakes(self) -> list[IntakeRow]:
+        rows = self.conn.execute(
+            "SELECT * FROM intakes ORDER BY created_at DESC"
+        ).fetchall()
+        return [self._row_to_intake(r) for r in rows]
+
+    def get_intake(self, intake_id: str) -> IntakeRow | None:
+        row = self.conn.execute(
+            "SELECT * FROM intakes WHERE intake_id = ?", (intake_id,)
+        ).fetchone()
+        return self._row_to_intake(row) if row else None
+
+    def set_intake_status(
+        self,
+        intake_id: str,
+        status: str,
+        *,
+        run_id: str | None = None,
+        updated_at: str,
+    ) -> None:
+        if status not in VALID_INTAKE_STATUSES:
+            raise ValueError(
+                f"invalid intake status {status!r}; expected {VALID_INTAKE_STATUSES}"
+            )
+        self.conn.execute(
+            "UPDATE intakes SET status = ?, run_id = ?, updated_at = ? "
+            "WHERE intake_id = ?",
+            (status, run_id, updated_at, intake_id),
+        )
+        self.conn.commit()
+
+    @staticmethod
+    def _row_to_intake(row: sqlite3.Row) -> IntakeRow:
+        return IntakeRow(
+            intake_id=row["intake_id"],
+            created_at=row["created_at"],
+            label=row["label"],
+            uploaded_by=row["uploaded_by"],
+            statement_name=row["statement_name"],
+            receipts_name=row["receipts_name"],
+            card_key=row["card_key"],
+            work_dir=row["work_dir"],
+            status=row["status"],
+            run_id=row["run_id"],
+            detect_note=row["detect_note"],
+            updated_at=row["updated_at"],
+        )
+
+    # -- jobs (durable background-run state) --------------------------------
+
+    def create_job(
+        self, job_id: str, intake_id: str | None, created_at: str
+    ) -> None:
+        self.conn.execute(
+            "INSERT INTO jobs (job_id, intake_id, status, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (job_id, intake_id, JOB_RUNNING, created_at, created_at),
+        )
+        self.conn.commit()
+
+    def set_job_status(
+        self,
+        job_id: str,
+        status: str,
+        *,
+        run_id: str | None = None,
+        error: str | None = None,
+        stage: str | None = None,
+        updated_at: str,
+    ) -> None:
+        self.conn.execute(
+            # COALESCE keeps the last recorded pipeline stage when the final
+            # status write passes no stage (done/error must not blank it).
+            "UPDATE jobs SET status = ?, run_id = ?, error = ?, "
+            "stage = COALESCE(?, stage), updated_at = ? WHERE job_id = ?",
+            (status, run_id, error, stage, updated_at, job_id),
+        )
+        self.conn.commit()
+
+    def set_job_stage(self, job_id: str, stage: str, updated_at: str) -> None:
+        self.conn.execute(
+            "UPDATE jobs SET stage = ?, updated_at = ? WHERE job_id = ?",
+            (stage, updated_at, job_id),
+        )
+        self.conn.commit()
+
+    def get_job(self, job_id: str) -> dict | None:
+        row = self.conn.execute(
+            "SELECT status, run_id, error, stage FROM jobs WHERE job_id = ?",
+            (job_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return {
+            "status": row["status"],
+            "run_id": row["run_id"],
+            "error": row["error"],
+            "stage": row["stage"],
+        }
+
+    def sweep_stale_jobs(self, now_iso: str) -> list[str | None]:
+        """Mark every still-`running` job as interrupted (a server restart
+        killed its thread) and return the affected intake ids so the caller
+        can reset them to `received`. Keeps the queue honest after a Fly
+        scale-to-zero stop."""
+        rows = self.conn.execute(
+            "SELECT job_id, intake_id FROM jobs WHERE status = ?", (JOB_RUNNING,)
+        ).fetchall()
+        for row in rows:
+            self.conn.execute(
+                "UPDATE jobs SET status = ?, error = ?, updated_at = ? "
+                "WHERE job_id = ?",
+                (
+                    JOB_ERROR,
+                    "interrupted by a server restart; run it again",
+                    now_iso,
+                    row["job_id"],
+                ),
+            )
+        self.conn.commit()
+        return [row["intake_id"] for row in rows]
 
     # -- decisions --------------------------------------------------------
 

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Prepare run - Brisken Expense Reconciliation{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Prepare a run: {{ intake.label }}</h1>
+  <p class="muted">
+    Files uploaded {{ intake.created_at[:16] }}:
+    <span class="mono">{{ intake.statement_name }}</span>{% if intake.receipts_name %} + <span class="mono">{{ intake.receipts_name }}</span>{% endif %}.
+    {% if intake.detect_note %}Auto-detect: {{ intake.detect_note }}.{% endif %}
+    Keep this tab open while the run is in progress.
+  </p>
+
+  {% if error %}
+  <div class="alert">{{ error }}</div>
+  {% if headers %}
+  <p class="muted">Columns found in the statement file:</p>
+  <p class="mono">{{ headers | join(" , ") }}</p>
+  {% endif %}
+  {% endif %}
+
+  {% with form_action="/intakes/" + intake.intake_id + "/run", show_files=False %}
+    {% include "_run_form.html" %}
+  {% endwith %}
+</div>
+<p><a class="btn btn-secondary btn-small" href="/">Back to the queue</a></p>
+{% endblock %}

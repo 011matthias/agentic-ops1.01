@@ -1,0 +1,43 @@
+/* Brisken design tokens - single source of truth for every page of the
+   expense-recon web app (app pages, login, help). Palette lifted from the
+   Brisken website (workspace/clients/brisken/website/treasury.html) so the
+   tool reads as a Brisken surface. Both themes; pages switch via
+   [data-theme] on <html>, persisted in localStorage('theme'). */
+:root {
+  --bg: #f4f7fb;
+  --surface: #ffffff;
+  --border: #e2e9f2;
+  --border-strong: #c8d5e5;
+  --text: #0a1a2f;
+  --muted: #56657c;
+  --heading: #00396f;
+  --accent: #0e7c86;
+  --accent-light: #0b626a;
+  --accent-bg: #e4f3f4;
+  --brand-cyan: #00b8ce;
+  --btn-ink: #ffffff;
+  --green: #1e8e5a; --green-bg: #e6f4ec;
+  --orange: #d97706; --orange-bg: #fffbeb;
+  --red: #dc2626; --red-bg: #fef2f2;
+  --posted: #8a6100; --posted-bg: #fbf3cd;
+  --shadow: 0 1px 2px rgba(10, 26, 47, .05), 0 10px 30px rgba(10, 26, 47, .06);
+}
+[data-theme="dark"] {
+  --bg: #081320;
+  --surface: #0e2036;
+  --border: #1e3550;
+  --border-strong: #2e4865;
+  --text: #e8eef6;
+  --muted: #9db0c8;
+  --heading: #dbe8fa;
+  --accent: #3fb9c4;
+  --accent-light: #6ad3dc;
+  --accent-bg: #0c2e36;
+  --brand-cyan: #2fc6d6;
+  --btn-ink: #04252a;
+  --green: #34b879; --green-bg: #0d2a1e;
+  --orange: #fbbf24; --orange-bg: #2a2008;
+  --red: #f87171; --red-bg: #2a1212;
+  --posted: #f2d478; --posted-bg: #2e2708;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 12px 30px rgba(0, 0, 0, .34);
+}

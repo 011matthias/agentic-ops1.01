@@ -51,10 +51,12 @@ from ..output.report_xlsx import write_report
 from ..output.zoho_export import write_zoho_export
 from .serialize import snapshot_from_dict, snapshot_to_dict
 from .store import (
+    STATUS_ALREADY_POSTED,
     STATUS_CONFIRMED,
     STATUS_PENDING,
     STATUS_REJECTED,
     Decision,
+    IntakeRow,
     RunRow,
     RunStore,
 )
@@ -170,6 +172,7 @@ class PreparedRun:
     use_llm_effective: bool
     now_iso: str
     operator: str | None
+    intake_id: str | None = None
 
 
 def prepare_run(
@@ -183,6 +186,7 @@ def prepare_run(
     now_iso: str,
     operator: str | None,
     learning_db_path: Path | None = None,
+    intake_id: str | None = None,
 ) -> PreparedRun:
     """Save the uploads and resolve everything the pipeline needs, fast and
     fail-fast. Raises `RunInputError` for a user-fixable problem (an
@@ -247,19 +251,24 @@ def prepare_run(
         use_llm_effective=use_llm_effective,
         now_iso=now_iso,
         operator=operator,
+        intake_id=intake_id,
     )
 
 
-def execute_run(store: RunStore, prepared: PreparedRun) -> str:
+def execute_run(
+    store: RunStore, prepared: PreparedRun, *, on_stage=None
+) -> str:
     """Run the pipeline for a prepared run and persist the snapshot. Returns
     the run id. This is the slow part (LLM OCR / categorization / judgment);
-    the web layer runs it in the background and polls for completion."""
+    the web layer runs it in the background and polls for completion.
+    `on_stage` (optional) receives pass-boundary names for staged progress."""
     try:
         result = reconcile(
             prepared.cfg,
             prepared.work_dir,
             learned=prepared.learned,
             match_memory=prepared.match_memory,
+            on_stage=on_stage,
         )
     except ConfigError as exc:
         raise RunInputError(str(exc)) from exc
@@ -292,6 +301,11 @@ def execute_run(store: RunStore, prepared: PreparedRun) -> str:
         f"{prepared.now_iso[:10]}"
     ).strip()
 
+    if on_stage is not None:
+        try:
+            on_stage("saving")
+        except Exception:  # noqa: BLE001
+            pass
     store.create_run(
         run_id=prepared.run_id,
         created_at=prepared.now_iso,
@@ -303,6 +317,7 @@ def execute_run(store: RunStore, prepared: PreparedRun) -> str:
         work_dir=str(prepared.work_dir),
         llm_enabled=prepared.use_llm_effective,
         has_coa=result.chart_of_accounts is not None,
+        intake_id=prepared.intake_id,
     )
     return prepared.run_id
 
@@ -334,6 +349,124 @@ def create_run(
         learning_db_path=learning_db_path,
     )
     return execute_run(store, prepared)
+
+
+# Statement / receipts extensions the intake accepts. Deliberately the same
+# set the run form accepts; anything else is a wrong-file mistake worth
+# catching at upload time with friendly copy.
+_STATEMENT_SUFFIXES = (".csv", ".xlsx", ".xlsm", ".pdf")
+_RECEIPTS_SUFFIXES = (".csv",)
+
+
+def create_intake(
+    store: RunStore,
+    data_root: Path,
+    *,
+    statement_bytes: bytes,
+    statement_filename: str,
+    receipts_bytes: bytes | None,
+    receipts_filename: str | None,
+    label: str,
+    card_key: str | None,
+    now_iso: str,
+    uploaded_by: str | None,
+) -> IntakeRow:
+    """Save an uploaded document set WITHOUT running the pipeline (testing
+    mode: users upload, operators run). Blocking validation is minimal --
+    files present with sane extensions; the column-map auto-detect runs
+    best-effort into `detect_note` (advisory for the operator queue, never
+    a wall in front of the uploader). Raises `RunInputError` only for the
+    user-fixable minimum."""
+    if not statement_bytes:
+        raise RunInputError("No statement file uploaded.")
+    stmt_name = _safe_name(statement_filename or "", "statement.csv")
+    if Path(stmt_name).suffix.lower() not in _STATEMENT_SUFFIXES:
+        raise RunInputError(
+            "The statement file should be a .csv, .xlsx or .pdf export from "
+            "the bank."
+        )
+    rcpt_name: str | None = None
+    if receipts_bytes:
+        rcpt_name = _safe_name(receipts_filename or "", "receipts.csv")
+        if Path(rcpt_name).suffix.lower() not in _RECEIPTS_SUFFIXES:
+            raise RunInputError("The receipts file should be a .csv export.")
+    if not label.strip():
+        raise RunInputError("Please pick which card this statement is from.")
+
+    intake_id = uuid.uuid4().hex[:12]
+    work_dir = data_root / "intakes" / intake_id
+    work_dir.mkdir(parents=True, exist_ok=True)
+    (work_dir / stmt_name).write_bytes(statement_bytes)
+    if rcpt_name is not None:
+        (work_dir / rcpt_name).write_bytes(receipts_bytes or b"")
+
+    detect_note = _detect_note(work_dir / stmt_name)
+
+    store.create_intake(
+        intake_id=intake_id,
+        created_at=now_iso,
+        label=label.strip(),
+        uploaded_by=uploaded_by,
+        statement_name=stmt_name,
+        receipts_name=rcpt_name,
+        card_key=(card_key or "").strip() or None,
+        work_dir=str(work_dir),
+        detect_note=detect_note,
+    )
+    intake = store.get_intake(intake_id)
+    assert intake is not None
+    return intake
+
+
+def _detect_note(stmt_path: Path) -> str:
+    """Best-effort column-map advisory for the operator queue. Never raises:
+    a detection failure is exactly the information the operator needs."""
+    suffix = stmt_path.suffix.lower()
+    if suffix == ".pdf":
+        return "Chase PDF: no column map needed"
+    try:
+        guessed, missing, _headers = stmt_inspect.inspect(stmt_path)
+    except Exception as exc:  # noqa: BLE001 - advisory only
+        return f"auto-detect failed: {exc}"
+    if missing:
+        return "auto-detect missing: " + ", ".join(missing)
+    return "column map auto-detected: " + ", ".join(
+        f"{k}={v}" for k, v in sorted(guessed.items())
+    )
+
+
+def prepare_intake_run(
+    data_root: Path,
+    intake: IntakeRow,
+    form: RunForm,
+    *,
+    now_iso: str,
+    operator: str | None,
+    learning_db_path: Path | None = None,
+) -> PreparedRun:
+    """Prepare a pipeline run from a stored intake's files (the operator's
+    run-from-queue path). Reads the uploaded bytes back from the intake's
+    work dir and delegates to `prepare_run`, tagging the run with the
+    intake id so publish can flip the intake to `ready`."""
+    intake_dir = Path(intake.work_dir)
+    statement_bytes = (intake_dir / intake.statement_name).read_bytes()
+    if intake.receipts_name is None:
+        raise RunInputError(
+            "This upload has no receipts file yet; ask for it before running."
+        )
+    receipts_bytes = (intake_dir / intake.receipts_name).read_bytes()
+    return prepare_run(
+        data_root,
+        statement_bytes=statement_bytes,
+        statement_filename=intake.statement_name,
+        receipts_bytes=receipts_bytes,
+        receipts_filename=intake.receipts_name,
+        form=form,
+        now_iso=now_iso,
+        operator=operator,
+        learning_db_path=learning_db_path,
+        intake_id=intake.intake_id,
+    )
 
 
 def _resolve_statement_map(stmt_path: Path, form: RunForm) -> dict[str, str]:
@@ -502,8 +635,12 @@ def apply_decisions(
     ambiguous_by_tx: dict[str, list[Match]] = {}
 
     # Pass 1: confirmed (explicit) claims, most-recent confirm first.
+    # already_posted behaves like confirmed here (terminal, claims its
+    # receipt so nothing else grabs it); the export layer excludes it.
     confirmed_txs = [
-        tx for tx in transactions if status_for(tx.transaction_id) == STATUS_CONFIRMED
+        tx
+        for tx in transactions
+        if status_for(tx.transaction_id) in (STATUS_CONFIRMED, STATUS_ALREADY_POSTED)
     ]
     confirmed_txs.sort(
         key=lambda tx: (decisions[tx.transaction_id].updated_at or ""), reverse=True
@@ -520,8 +657,13 @@ def apply_decisions(
         if chosen is None or chosen in consumed:
             continue  # nothing to claim / receipt already taken -> unmatched
         orig = next((m for m in cands if m.document_id == chosen), None)
+        reason = (
+            "already posted in Zoho (reviewer)"
+            if status_for(tx_id) == STATUS_ALREADY_POSTED
+            else "confirmed by reviewer"
+        )
         match_by_tx[tx_id] = (
-            replace(orig, requires_review=False, reason="confirmed by reviewer")
+            replace(orig, requires_review=False, reason=reason)
             if orig
             else Match(
                 transaction_id=tx_id,
@@ -697,6 +839,9 @@ def _receipt_view(r: Receipt, overrides: dict[tuple[str, int], dict]) -> dict:
         # Dirk 2026-06-16: when the currency is unknown, say so in the UI
         # rather than showing a blank or a silently-assumed USD.
         "currency_unknown": r.detected_currency is None,
+        # L4: the missing-comprovante state. The template renders the badge
+        # only when the run-level `has_image_info` flag is set (noise guard).
+        "has_receipt_image": r.has_receipt_image,
         "reference": r.detected_reference or "",
         "report_number": r.report_number or "",
         "receipt_url": r.receipt_url or "",
@@ -793,6 +938,14 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
         else:
             n_unmatched_tx += 1
 
+        # PR-E: the workbench section this row renders in. "posted" wins
+        # (her yellow / the reviewer's z-key); review needs attention;
+        # a still-pending unmatched row with candidates is worth attention
+        # too; everything else unmatched is "no receipt yet".
+        is_posted = (
+            tx.entry_status == "posted" or status == STATUS_ALREADY_POSTED
+        )
+
         cands = []
         seen_docs = set()
         for m in by_tx.get(tx_id, []):
@@ -834,11 +987,27 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
                 }
             )
 
+        if is_posted:
+            section = "posted"
+        elif effective_bucket == "review":
+            section = "attention"
+        elif effective_bucket == "reconciled":
+            section = "matched"
+        elif status == STATUS_PENDING and cands:
+            section = "attention"
+        else:
+            section = "noreceipt"
+
         # PR A — readiness accounting (uses the effective bucket + the
-        # held receipt's lines).
-        if status == STATUS_PENDING and effective_bucket in ("reconciled", "review"):
+        # held receipt's lines). Posted rows are settled by definition:
+        # they never block readiness and never count as unreconciled.
+        if (
+            status == STATUS_PENDING
+            and effective_bucket in ("reconciled", "review")
+            and not is_posted
+        ):
             n_undecided += 1
-        if effective_bucket != "reconciled":
+        if effective_bucket != "reconciled" and not is_posted:
             unreconciled[tx.transaction_currency] = (
                 unreconciled.get(tx.transaction_currency, Decimal("0"))
                 + abs(tx.amount)
@@ -873,6 +1042,10 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
                 "chosen_document_id": held_doc,
                 "candidates": cands,
                 "has_learned": has_learned,
+                # L1: her workbook's fill-color annotation (yellow=posted,
+                # gray=subscription); drives the workbench chips.
+                "entry_status": tx.entry_status,
+                "section": section,
                 "triage_score": max(
                     (c["score"] for c in cands if c["score"]), default=None
                 ),
@@ -1005,6 +1178,12 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
 
     n_tx = len(transactions)
     n_unknown_currency = sum(1 for r in receipts if r.detected_currency is None)
+    # L4 noise guard: the missing-image badge renders only when this run's
+    # receipt source carries image references at all.
+    has_image_info = any(r.has_receipt_image for r in receipts)
+    n_missing_receipt_image = (
+        sum(1 for r in receipts if not r.has_receipt_image) if has_image_info else 0
+    )
     summary = {
         "n_transactions": n_tx,
         "n_receipts": len(receipts),
@@ -1030,6 +1209,16 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
         },
         # PR C — memory legibility.
         "n_learned_lines": n_learned_lines,
+        # L4 — missing receipt images (0 when the source has no image info).
+        "has_image_info": has_image_info,
+        "n_missing_receipt_image": n_missing_receipt_image,
+        # L1 — fill-color annotations from the statement workbook.
+        "n_already_posted": sum(
+            1 for t in transactions if t.entry_status == "posted"
+        ),
+        "n_subscription": sum(
+            1 for t in transactions if t.entry_status == "subscription"
+        ),
     }
 
     return {
@@ -1047,6 +1236,8 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
         "duplicate_receipts": duplicate_receipts,
         "category_options": list(EXPENSE_CATEGORIES),
         "parse_errors": parse_errors,
+        # L3: xlsx statements can be written back with the resolved accounts.
+        "writeback_available": writeback_available(run),
     }
 
 
@@ -1108,6 +1299,19 @@ def regenerate_zoho(
     transactions, receipts, outcome, _ = snapshot_from_dict(run.snapshot)
     receipts = apply_overrides(receipts, overrides)
     effective = apply_decisions(outcome, transactions, receipts, decisions)
+    # PR-E: a reviewer-marked already_posted charge never reaches the
+    # journal (the fill-color "posted" path is excluded inside the writer;
+    # this is the manual z-key sibling).
+    posted_ids = {
+        tid for tid, d in decisions.items() if d.status == STATUS_ALREADY_POSTED
+    }
+    if posted_ids:
+        effective = replace(
+            effective,
+            matches=[
+                m for m in effective.matches if m.transaction_id not in posted_ids
+            ],
+        )
     out_path = Path(run.work_dir) / "zoho_journal.csv"
     coa_gate = _coa_gate_from_config(run.config, run.work_dir)
     write_zoho_export(effective, transactions, receipts, out_path, coa_gate=coa_gate)
@@ -1133,6 +1337,47 @@ def regenerate_reconciled(
     effective = apply_decisions(outcome, transactions, receipts, decisions)
     out_path = Path(run.work_dir) / "reconciled.csv"
     write_reconciled_csv(effective, transactions, receipts, out_path)
+    return out_path
+
+
+def writeback_available(run: RunRow) -> bool:
+    """True when the run's statement is an Excel workbook the L3 writeback
+    can annotate (her own sheet + the resolved-account column)."""
+    stmt = (run.config or {}).get("statement", {}).get("path", "")
+    return Path(stmt).suffix.lower() in (".xlsx", ".xlsm")
+
+
+def regenerate_writeback(
+    run: RunRow, decisions: dict[str, Decision], overrides: dict
+) -> Path | None:
+    """Write the L3 sheet writeback for a run: HER OWN uploaded workbook
+    with one new "Zoho Account (tool)" column, after the reviewer's
+    decisions + overrides. Returns None when the statement is not an
+    Excel workbook (CSV / PDF runs have no sheet to write back into)."""
+    if not writeback_available(run):
+        return None
+    from ..output.sheet_writeback import write_sheet_writeback
+
+    transactions, receipts, outcome, _ = snapshot_from_dict(run.snapshot)
+    receipts = apply_overrides(receipts, overrides)
+    effective = apply_decisions(outcome, transactions, receipts, decisions)
+    stmt_cfg = run.config.get("statement", {})
+    stmt_path = Path(run.work_dir) / stmt_cfg["path"]
+    suffix = stmt_path.suffix
+    out_path = Path(run.work_dir) / f"{stmt_path.stem}-categorized{suffix}"
+    chart = None
+    gate = _coa_gate_from_config(run.config, run.work_dir)
+    if gate is not None:
+        chart = getattr(gate, "chart", None)
+    write_sheet_writeback(
+        stmt_path,
+        out_path,
+        effective,
+        transactions,
+        receipts,
+        sheet_name=stmt_cfg.get("sheet_name"),
+        chart_of_accounts=chart,
+    )
     return out_path
 
 

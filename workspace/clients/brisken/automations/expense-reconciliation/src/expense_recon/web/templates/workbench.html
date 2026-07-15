@@ -1,81 +1,14 @@
 {% extends "base.html" %}
 {% block title %}{{ view.label }} - Reconciliation{% endblock %}
 {% block content %}
-{% set s = view.summary %}
-<style>
-  .txn.selected { box-shadow: 0 0 0 2px var(--accent); }
-  .btn.disabled { opacity: .45; pointer-events: none; cursor: not-allowed; }
-  #ready-bar .pill { font-weight: 600; }
-  #ready-bar.ready .pill { color: var(--green); }
-  #ready-bar.notready .pill { color: var(--orange); }
-  .kbd-hint kbd {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
-    background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px;
-  }
-</style>
-{% if s.ai_unavailable %}
-<div style="background:var(--orange-bg); color:var(--orange); border:1px solid var(--orange); border-radius:8px; padding:12px 14px; margin-bottom:16px;">
-  <strong>AI categorization was requested, but no API key is set on the server.</strong>
-  This run used the keyword classifier instead, so the reconciliation is complete. To turn on AI categorization, restart the server with OPENAI_API_KEY set in its environment.
-</div>
-{% endif %}
-{% if s.n_unknown_currency %}
-<div style="background:var(--orange-bg); color:var(--orange); border:1px solid var(--orange); border-radius:8px; padding:12px 14px; margin-bottom:16px;">
-  <strong>{{ s.n_unknown_currency }} receipt(s) have an unknown currency.</strong>
-  The currency was not in the data and was not assumed, so these receipts were not matched. They are listed under "Receipts with no matching transaction" below. Set each one's currency in the source export (or the receipts file) and re-run so they can reconcile.
-</div>
-{% endif %}
-<div class="card">
-  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
-    <div>
-      <h1>{{ view.label }}</h1>
-      <p class="muted">Run {{ view.run_id }} &middot; {{ view.created_at }}
-        &middot; AI categorization {{ "on" if view.llm_enabled else "off" }}
-        {% if s.llm_cost_usd and s.llm_cost_usd not in ("0", "0.0") %}&middot; est. ${{ s.llm_cost_usd }}{% endif %}
-      </p>
-    </div>
-    <div>
-      <button class="btn btn-secondary" onclick="commitMemory()" title="Teach the tool from the matches you confirmed and the categories you reclassified, so next month is less work.">Commit to memory</button>
-      <a class="btn btn-secondary" href="/">New run</a>
-    </div>
-  </div>
-  <p id="memory-status" class="muted" style="margin-top:10px; display:none;"></p>
-
-  <div class="stats" style="margin-top:16px;">
-    <div class="stat"><div class="stat-value">{{ s.n_transactions }}</div><div class="stat-label">Transactions</div></div>
-    <div class="stat"><div class="stat-value" id="stat-reconciled">{{ s.n_reconciled }}</div><div class="stat-label">Reconciled</div></div>
-    <div class="stat"><div class="stat-value" id="stat-review">{{ s.n_review }}</div><div class="stat-label">Needs review</div></div>
-    <div class="stat"><div class="stat-value" id="stat-unmatched">{{ s.n_unmatched_tx }}</div><div class="stat-label">Unmatched</div></div>
-    <div class="stat"><div class="stat-value" id="stat-rate">{{ s.match_rate }}%</div><div class="stat-label">Match rate</div></div>
-    <div class="stat"><div class="stat-value">{{ "yes" if s.invariant_ok else "NO" }}</div><div class="stat-label">All accounted for</div></div>
-    <div class="stat"><div class="stat-value">{{ s.n_duplicate_groups }}</div><div class="stat-label">Dup groups</div></div>
-    <div class="stat"><div class="stat-value">{{ s.n_learned_lines }}</div><div class="stat-label">Auto-filled (memory)</div></div>
-    {% if s.n_unknown_currency %}<div class="stat"><div class="stat-value" style="color:var(--orange);">{{ s.n_unknown_currency }}</div><div class="stat-label">Unknown currency</div></div>{% endif %}
-  </div>
-  {% if s.n_parse_errors %}
-  <p class="muted" style="margin-top:10px;">{{ s.n_parse_errors }} row(s) could not be parsed (see foot of page).</p>
-  {% endif %}
-</div>
-
-<div class="card">
-  <h2>Transactions</h2>
-  <input type="text" id="filter" placeholder="Filter by vendor..." style="margin-bottom:6px;" oninput="filterRows()">
-  <p class="muted kbd-hint" style="margin:0 0 8px; font-size:12px;">
-    Keyboard: <kbd>j</kbd>/<kbd>k</kbd> move &middot; <kbd>c</kbd> confirm &middot; <kbd>r</kbd> reject &middot; <kbd>e</kbd> edit category &middot; <kbd>Ctrl/&#8984;+K</kbd> filter
-  </p>
-  {% if s.n_learned_lines %}
-  <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text); margin:0 0 14px;">
-    <input type="checkbox" id="only-learned" style="width:auto;" onchange="filterRows()">
-    Show only rows auto-filled from memory ({{ s.n_learned_lines }})
-  </label>
-  {% endif %}
-
-  {% for row in view.rows %}
+{% macro txn_row(row) %}
   <div class="txn" data-vendor="{{ row.vendor | lower }}" data-txid="{{ row.transaction_id }}" data-learned="{{ '1' if row.has_learned else '0' }}" style="border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:12px;">
     <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
       <div>
         <span class="badge {{ row.effective_bucket }}" id="status-{{ row.transaction_id }}">{{ row.effective_bucket }}</span>
         {% if row.triage_score is not none %}<span class="muted mono" style="font-size:12px;">{{ row.triage_score }}/100</span>{% endif %}
+        {% if row.entry_status == "posted" %}<span class="badge posted" title="This row is yellow in your workbook: already entered in Zoho. It is never exported to the Zoho journal again.">already in Zoho</span>
+        {% elif row.entry_status == "subscription" %}<span class="badge subscription" title="This row is gray in your workbook: a subscription.">subscription</span>{% endif %}
         <strong style="margin-left:8px;">{{ row.vendor }}</strong>
         <span class="muted">&middot; {{ row.date }} &middot; {{ row.account_id }}</span>
       </div>
@@ -96,6 +29,7 @@
           <strong>{{ c.receipt.vendor }}</strong>
           <span class="muted">&middot; {{ c.receipt.date }} &middot; {{ c.receipt.total }} {{ c.receipt.currency }}</span>
           {% if c.receipt.report_number %}<span class="muted mono">&middot; {{ c.receipt.report_number }}</span>{% endif %}
+          {% if view.summary.has_image_info and not c.receipt.has_receipt_image %}<span class="badge pending" title="No receipt picture is attached to this expense in Zoho Expense; attach it there so the record is complete.">no receipt image</span>{% endif %}
           {% if c.receipt.payment_mode or c.receipt.zoho_category or c.receipt.reimbursable is sameas true %}
           <div class="muted" style="font-size:12px; margin-top:2px;">
             {% if c.receipt.payment_mode %}Paid via: {{ c.receipt.payment_mode }}{% endif %}
@@ -136,7 +70,7 @@
                 </select>
               </td>
               <td class="muted">{{ li.source }}{% if li.provenance %}<br><span style="font-size:11px;">{{ li.provenance }}</span>{% endif %}
-                {% if li.is_learned %}
+                {% if li.is_learned and role == "operator" %}
                 <br><button class="btn btn-secondary btn-small" style="margin-top:4px;"
                     data-entity="{{ c.receipt.legal_entity_id }}" data-vendor="{{ c.receipt.vendor }}"
                     data-doc="{{ c.receipt.document_id }}" data-line="{{ li.index }}"
@@ -163,9 +97,10 @@
     </div>
     {% endif %}
 
-    <div style="margin-top:12px; display:flex; gap:8px;">
+    <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
       <button class="btn btn-small" onclick="confirmRow('{{ row.transaction_id }}')">Confirm</button>
       <button class="btn btn-secondary btn-small" onclick="setDecision('{{ row.transaction_id }}','rejected',null)">Reject</button>
+      <button class="btn btn-secondary btn-small" title="This charge is already entered in Zoho; keep it out of the journal export." onclick="setDecision('{{ row.transaction_id }}','already_posted',null)" data-i18n="wb_btn_posted">Already in Zoho</button>
       <button class="btn btn-secondary btn-small" onclick="setDecision('{{ row.transaction_id }}','pending',null)">Reset</button>
     </div>
 
@@ -182,28 +117,145 @@
     </div>
     {% endif %}
   </div>
-  {% endfor %}
-</div>
+{% endmacro %}
 
-{% if view.unmatched_transactions %}
-<div class="card">
-  <h2>Transactions with no matching receipt ({{ view.unmatched_transactions | length }})</h2>
-  <table>
-    <thead><tr><th>Vendor</th><th>Date</th><th>Account</th><th class="right">Amount</th></tr></thead>
-    <tbody>
-      {% for t in view.unmatched_transactions %}
-      <tr>
-        <td>{{ t.vendor }} <span class="muted mono">{{ t.transaction_id }}</span></td>
-        <td>{{ t.date }}</td>
-        <td class="muted">{{ t.account_id }}</td>
-        <td class="right mono">{{ t.amount }} {{ t.currency }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+{% set s = view.summary %}
+<style>
+  .txn.selected { box-shadow: 0 0 0 2px var(--accent); }
+  .btn.disabled { opacity: .45; pointer-events: none; cursor: not-allowed; }
+  details.bucket { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 14px; background: var(--surface); }
+  details.bucket > summary { cursor: pointer; padding: 12px 14px; font-weight: 600; font-size: 14px; color: var(--heading); list-style: none; display: flex; align-items: center; gap: 10px; }
+  details.bucket > summary::-webkit-details-marker { display: none; }
+  details.bucket > summary::before { content: "\25B8"; color: var(--muted); transition: transform .15s ease; }
+  details.bucket[open] > summary::before { transform: rotate(90deg); }
+  details.bucket > .txn, details.bucket > p { margin-left: 14px; margin-right: 14px; }
+  details.bucket > .txn:last-child, details.bucket > p:last-child { margin-bottom: 14px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: 12px; color: var(--muted); margin: 12px 0 0; }
+  .legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+  #ready-bar .pill { font-weight: 600; }
+  #ready-bar.ready .pill { color: var(--green); }
+  #ready-bar.notready .pill { color: var(--orange); }
+  .kbd-hint kbd {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px;
+  }
+</style>
+{% if s.ai_unavailable %}
+<div style="background:var(--orange-bg); color:var(--orange); border:1px solid var(--orange); border-radius:8px; padding:12px 14px; margin-bottom:16px;">
+  <strong>AI categorization was requested, but no API key is set on the server.</strong>
+  This run used the keyword classifier instead, so the reconciliation is complete. To turn on AI categorization, restart the server with OPENAI_API_KEY set in its environment.
 </div>
 {% endif %}
+{% if s.n_unknown_currency %}
+<div style="background:var(--orange-bg); color:var(--orange); border:1px solid var(--orange); border-radius:8px; padding:12px 14px; margin-bottom:16px;">
+  <strong>{{ s.n_unknown_currency }} receipt(s) have an unknown currency.</strong>
+  The currency was not in the data and was not assumed, so these receipts were not matched. They are listed under "Receipts with no matching transaction" below. Set each one's currency in the source export (or the receipts file) and re-run so they can reconcile.
+</div>
+{% endif %}
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
+    <div>
+      <h1>{{ view.label }}</h1>
+      <p class="muted">Run {{ view.run_id }} &middot; {{ view.created_at }}
+        &middot; AI categorization {{ "on" if view.llm_enabled else "off" }}
+        {% if s.llm_cost_usd and s.llm_cost_usd not in ("0", "0.0") %}&middot; est. ${{ s.llm_cost_usd }}{% endif %}
+      </p>
+    </div>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      {% if role == "operator" %}
+      {% if run and run.published %}
+      <span class="badge reconciled">published</span>
+      <form method="post" action="/runs/{{ view.run_id }}/unpublish" style="display:inline; margin:0;">
+        <button class="btn btn-secondary" type="submit">Unpublish</button>
+      </form>
+      {% else %}
+      <span class="badge pending">operator only</span>
+      <form method="post" action="/runs/{{ view.run_id }}/publish" style="display:inline; margin:0;"
+            onsubmit="return confirm('Publish this run? The user will see it and can review it.');">
+        <button class="btn" type="submit">Publish for review</button>
+      </form>
+      {% endif %}
+      <button class="btn btn-secondary" onclick="commitMemory()" title="Teach the tool from the matches you confirmed and the categories you reclassified, so next month is less work.">Commit to memory</button>
+      {% endif %}
+      <a class="btn btn-secondary" href="/">{% if role == "operator" %}New run{% else %}Home{% endif %}</a>
+    </div>
+  </div>
+  <p id="memory-status" class="muted" style="margin-top:10px; display:none;"></p>
 
+  <div class="stats" style="margin-top:16px;">
+    <div class="stat"><div class="stat-value">{{ s.n_transactions }}</div><div class="stat-label">Transactions</div></div>
+    <div class="stat"><div class="stat-value" id="stat-reconciled">{{ s.n_reconciled }}</div><div class="stat-label">Reconciled</div></div>
+    <div class="stat"><div class="stat-value" id="stat-review">{{ s.n_review }}</div><div class="stat-label">Needs review</div></div>
+    <div class="stat"><div class="stat-value" id="stat-unmatched">{{ s.n_unmatched_tx }}</div><div class="stat-label">Unmatched</div></div>
+    <div class="stat"><div class="stat-value" id="stat-rate">{{ s.match_rate }}%</div><div class="stat-label">Match rate</div></div>
+    <div class="stat"><div class="stat-value">{{ "yes" if s.invariant_ok else "NO" }}</div><div class="stat-label">All accounted for</div></div>
+    <div class="stat"><div class="stat-value">{{ s.n_duplicate_groups }}</div><div class="stat-label">Dup groups</div></div>
+    <div class="stat"><div class="stat-value">{{ s.n_learned_lines }}</div><div class="stat-label">Auto-filled (memory)</div></div>
+    {% if s.n_already_posted %}<div class="stat"><div class="stat-value" style="color:var(--posted);">{{ s.n_already_posted }}</div><div class="stat-label">Already in Zoho</div></div>{% endif %}
+    {% if s.n_missing_receipt_image %}<div class="stat"><div class="stat-value" style="color:var(--muted);">{{ s.n_missing_receipt_image }}</div><div class="stat-label">No receipt image</div></div>{% endif %}
+    {% if s.n_unknown_currency %}<div class="stat"><div class="stat-value" style="color:var(--orange);">{{ s.n_unknown_currency }}</div><div class="stat-label">Unknown currency</div></div>{% endif %}
+  </div>
+  <div class="legend">
+    <span><span class="dot" style="background:var(--green);"></span><span data-i18n="lg_matched">Matched</span></span>
+    <span><span class="dot" style="background:var(--orange);"></span><span data-i18n="lg_review">Needs a look</span></span>
+    <span><span class="dot" style="background:var(--red);"></span><span data-i18n="lg_noreceipt">No receipt</span></span>
+    <span><span class="dot" style="background:var(--posted);"></span><span data-i18n="lg_posted">Already in Zoho</span></span>
+    <span><span class="dot" style="background:var(--muted);"></span><span data-i18n="lg_subscription">Subscription</span></span>
+  </div>
+  {% if s.n_parse_errors %}
+  <p class="muted" style="margin-top:10px;">{{ s.n_parse_errors }} row(s) could not be parsed (see "Other checks" at the foot of the page).</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Transactions</h2>
+  <input type="text" id="filter" placeholder="Filter by vendor..." style="margin-bottom:6px;" oninput="filterRows()">
+  <p class="muted kbd-hint" style="margin:0 0 8px; font-size:12px;">
+    Keyboard: <kbd>j</kbd>/<kbd>k</kbd> move &middot; <kbd>c</kbd> confirm &middot; <kbd>r</kbd> reject &middot; <kbd>z</kbd> already in Zoho &middot; <kbd>e</kbd> edit category &middot; <kbd>Ctrl/&#8984;+K</kbd> filter
+  </p>
+  {% if s.n_learned_lines %}
+  <label style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--text); margin:0 0 14px;">
+    <input type="checkbox" id="only-learned" style="width:auto;" onchange="filterRows()">
+    Show only rows auto-filled from memory ({{ s.n_learned_lines }})
+  </label>
+  {% endif %}
+
+  {% set sec_attention = view.rows | selectattr('section', 'equalto', 'attention') | list %}
+  {% set sec_matched = view.rows | selectattr('section', 'equalto', 'matched') | list %}
+  {% set sec_posted = view.rows | selectattr('section', 'equalto', 'posted') | list %}
+  {% set sec_noreceipt = view.rows | selectattr('section', 'equalto', 'noreceipt') | list %}
+
+  <details class="bucket" open>
+    <summary><span data-i18n="wb_sec_attention">Needs your attention</span> <span class="badge review">{{ sec_attention | length }}</span></summary>
+    {% for row in sec_attention %}{{ txn_row(row) }}{% endfor %}
+    {% if not sec_attention %}<p class="muted" data-i18n="wb_sec_empty">Nothing here.</p>{% endif %}
+  </details>
+
+  <details class="bucket">
+    <summary><span data-i18n="wb_sec_matched">Matched automatically</span> <span class="badge matched">{{ sec_matched | length }}</span>
+      <button id="confirm-all-btn" class="btn btn-secondary btn-small" style="margin-left:10px;" onclick="event.preventDefault(); confirmAllMatched();" data-i18n="wb_confirm_all">Confirm all matched</button>
+    </summary>
+    {% for row in sec_matched %}{{ txn_row(row) }}{% endfor %}
+    {% if not sec_matched %}<p class="muted" data-i18n="wb_sec_empty">Nothing here.</p>{% endif %}
+  </details>
+
+  <details class="bucket">
+    <summary><span data-i18n="wb_sec_posted">Already in Zoho</span> <span class="badge posted">{{ sec_posted | length }}</span></summary>
+    <p class="muted" style="font-size:12px;" data-i18n="wb_sec_posted_note">Yellow rows from your workbook plus anything you marked with the z key. Never exported to the Zoho journal again.</p>
+    {% for row in sec_posted %}{{ txn_row(row) }}{% endfor %}
+    {% if not sec_posted %}<p class="muted" data-i18n="wb_sec_empty">Nothing here.</p>{% endif %}
+  </details>
+
+  <details class="bucket">
+    <summary><span data-i18n="wb_sec_noreceipt">No receipt yet</span> <span class="badge unmatched">{{ sec_noreceipt | length }}</span></summary>
+    {% for row in sec_noreceipt %}{{ txn_row(row) }}{% endfor %}
+    {% if not sec_noreceipt %}<p class="muted" data-i18n="wb_sec_empty">Nothing here.</p>{% endif %}
+  </details>
+</div>
+
+<details class="bucket">
+  <summary><span data-i18n="wb_sec_other">Other checks</span> <span class="badge pending">{{ (view.duplicate_charges | length) + (view.duplicate_receipts | length) + (view.unmatched_receipts | length) + (view.parse_errors | length) }}</span></summary>
+  <div style="padding: 0 14px 14px;">
 {% if view.duplicate_charges or view.duplicate_receipts %}
 <div class="card">
   <h2>Possible duplicates ({{ (view.duplicate_charges | length) + (view.duplicate_receipts | length) }})</h2>
@@ -279,25 +331,31 @@
   </table>
 </div>
 {% endif %}
+  </div>
+</details>
 
 <div style="height:64px"></div>
 <div id="ready-bar" class="{{ 'ready' if s.ready_to_post else 'notready' }}"
      style="position:fixed; left:0; right:0; bottom:0; z-index:20; background:var(--surface); border-top:1px solid var(--border); box-shadow:0 -2px 8px rgba(0,0,0,.10);">
   <div style="max-width:1100px; margin:0 auto; padding:10px 24px; display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;">
     <div style="font-size:13px;">
-      <span class="pill" id="rb-headline">{{ "Ready to post" if s.ready_to_post else "Not ready to post" }}</span>
+      <span class="pill" id="rb-headline">{{ "Ready to send to Zoho" if s.ready_to_post else "Not ready yet" }}</span>
       <span class="muted">&middot; <span id="rb-undecided">{{ s.n_undecided }}</span> undecided</span>
       <span class="muted">&middot; unreconciled <span id="rb-unreconciled" class="mono">{% for ccy, amt in s.unreconciled_by_ccy.items() %}{{ amt }} {{ ccy }}{% if not loop.last %} &middot; {% endif %}{% else %}none{% endfor %}</span></span>
       <span class="muted">&middot; <span id="rb-unmapped">{{ s.n_unmapped_accounts }}</span> line(s) need a category</span>
     </div>
     <div style="display:flex; gap:8px; align-items:center;">
-      <button id="confirm-all-btn" class="btn btn-secondary btn-small" onclick="confirmAllMatched()">Confirm all matched</button>
       <a id="download-zoho" class="btn btn-secondary btn-small {{ '' if s.ready_to_post else 'disabled' }}"
          title="{{ 'Download the Zoho Books journal import' if s.ready_to_post else 'Clear the undecided rows first' }}"
          {% if s.ready_to_post %}href="/runs/{{ view.run_id }}/zoho.csv"{% endif %}>Zoho journal (.csv)</a>
       <a id="download-reconciled" class="btn btn-secondary btn-small {{ '' if s.ready_to_post else 'disabled' }}"
          title="{{ 'Download the flat reconciled data' if s.ready_to_post else 'Clear the undecided rows first' }}"
          {% if s.ready_to_post %}href="/runs/{{ view.run_id }}/reconciled.csv"{% endif %}>Reconciled data (.csv)</a>
+      {% if view.writeback_available %}
+      <a id="download-writeback" class="btn btn-secondary btn-small {{ '' if s.ready_to_post else 'disabled' }}"
+         title="{{ 'Your sheet with the Zoho accounts in a new column' if s.ready_to_post else 'Clear the undecided rows first' }}"
+         {% if s.ready_to_post %}href="/runs/{{ view.run_id }}/statement-categorized.xlsx"{% endif %}>Your sheet + accounts</a>
+      {% endif %}
       <a id="download-report" class="btn btn-small {{ '' if s.ready_to_post else 'disabled' }}"
          title="{{ 'Download the review report' if s.ready_to_post else 'Clear the undecided rows first' }}"
          {% if s.ready_to_post %}href="/runs/{{ view.run_id }}/report.xlsx"{% endif %}>Download report (.xlsx)</a>
@@ -332,6 +390,8 @@
     if (!id) return;
     const row = document.querySelector('.txn[data-txid="' + id + '"]');
     if (!row) return;
+    const sec = row.closest("details");
+    if (sec && !sec.open) { sec.open = true; }
     row.scrollIntoView({ block: "center" });
     row.style.transition = "box-shadow .25s ease";
     row.style.boxShadow = "0 0 0 3px var(--green)";
@@ -349,8 +409,9 @@
     const effective = status === "confirmed" ? "reconciled" : (status === "rejected" ? "unmatched" : null);
     const badge = document.getElementById("status-" + txId);
     if (badge && effective) { badge.className = "badge " + effective; badge.textContent = effective; }
-    if (status === "pending") {
-      // Reload to recompute the original bucket for this row, then flash it.
+    if (status === "pending" || status === "already_posted") {
+      // Reload: the row moves to a different section (and pending also
+      // recomputes its original bucket); then flash it back into view.
       flashAfterReload(txId);
       window.location.reload(); return;
     }
@@ -374,10 +435,11 @@
     const dl = document.getElementById("download-report");
     const zoho = document.getElementById("download-zoho");
     const recon = document.getElementById("download-reconciled");
+    const wb = document.getElementById("download-writeback");
     const head = document.getElementById("rb-headline");
     if (s.ready_to_post) {
       bar.className = "ready";
-      head.textContent = "Ready to post";
+      head.textContent = "Ready to send to Zoho";
       dl.classList.remove("disabled");
       dl.setAttribute("href", `/runs/${RUN_ID}/report.xlsx`);
       dl.setAttribute("title", "Download the review report");
@@ -387,9 +449,14 @@
       recon.classList.remove("disabled");
       recon.setAttribute("href", `/runs/${RUN_ID}/reconciled.csv`);
       recon.setAttribute("title", "Download the flat reconciled data");
+      if (wb) {
+        wb.classList.remove("disabled");
+        wb.setAttribute("href", `/runs/${RUN_ID}/statement-categorized.xlsx`);
+        wb.setAttribute("title", "Your sheet with the Zoho accounts in a new column");
+      }
     } else {
       bar.className = "notready";
-      head.textContent = "Not ready to post";
+      head.textContent = "Not ready yet";
       dl.classList.add("disabled");
       dl.removeAttribute("href");
       dl.setAttribute("title", "Clear the undecided rows first");
@@ -399,6 +466,11 @@
       recon.classList.add("disabled");
       recon.removeAttribute("href");
       recon.setAttribute("title", "Clear the undecided rows first");
+      if (wb) {
+        wb.classList.add("disabled");
+        wb.removeAttribute("href");
+        wb.setAttribute("title", "Clear the undecided rows first");
+      }
     }
   }
 
@@ -486,14 +558,19 @@
     document.querySelectorAll(".txn").forEach(function (el) {
       const matchText = el.getAttribute("data-vendor").includes(q);
       const matchLearned = !learnedOnly || el.getAttribute("data-learned") === "1";
-      el.style.display = (matchText && matchLearned) ? "" : "none";
+      const show = matchText && matchLearned;
+      el.style.display = show ? "" : "none";
+      if (show && q) {
+        const sec = el.closest("details");
+        if (sec && !sec.open) { sec.open = true; }
+      }
     });
     selIdx = -1;
     document.querySelectorAll(".txn.selected").forEach(function (el) { el.classList.remove("selected"); });
   }
 
   async function forgetAndReclassify(btn) {
-    // PR C — "this was wrong": forget the merchant (future runs stop
+    // PR C, "this was wrong": forget the merchant (future runs stop
     // auto-filling it) and open the reclassify dropdown for this line.
     const res = await fetch(`/runs/${RUN_ID}/forget`, {
       method: "POST",
@@ -516,7 +593,9 @@
   let selIdx = -1;
   function visibleTxns() {
     return Array.from(document.querySelectorAll(".txn")).filter(function (el) {
-      return el.style.display !== "none";
+      if (el.style.display === "none") return false;
+      const sec = el.closest("details");
+      return !sec || sec.open;
     });
   }
   function selectRow(idx) {
@@ -546,6 +625,7 @@
     else if (e.key === "k") { e.preventDefault(); selectRow(selIdx < 0 ? 0 : selIdx - 1); }
     else if (e.key === "c") { const r = selectedTxn(); if (r) { e.preventDefault(); confirmRow(r.dataset.txid); } }
     else if (e.key === "r") { const r = selectedTxn(); if (r) { e.preventDefault(); setDecision(r.dataset.txid, "rejected", null); } }
+    else if (e.key === "z") { const r = selectedTxn(); if (r) { e.preventDefault(); setDecision(r.dataset.txid, "already_posted", null); } }
     else if (e.key === "e") {
       const r = selectedTxn();
       if (r) { const sel = r.querySelector("select"); if (sel) { e.preventDefault(); sel.focus(); } }

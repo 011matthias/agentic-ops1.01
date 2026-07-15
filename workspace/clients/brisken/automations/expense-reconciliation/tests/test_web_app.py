@@ -205,7 +205,7 @@ def test_ready_bar_renders_and_gates_download(client):
     resp = client.get(f"/runs/{run_id}")
     assert resp.status_code == 200
     assert "Confirm all matched" in resp.text
-    assert "Not ready to post" in resp.text
+    assert "Not ready yet" in resp.text
     assert "undecided" in resp.text
     # The gated download carries the `disabled` class until review is clean.
     assert 'id="download-report"' in resp.text

@@ -164,12 +164,28 @@ def _build_rows(
     """
     rows: list[_Row] = []
 
+    # L4: flag a matched expense with no receipt-image reference, but only
+    # when this run's source carries image info at all (the slice-1
+    # receipts CSV never does; flagging everything would be noise).
+    has_image_info = any(r.has_receipt_image for r in rec_by_id.values())
+
+    def _note(tx: Transaction, rec: Receipt, base: str) -> str:
+        bits = [base] if base else []
+        # L1: her sheet's fill-color annotation, carried into the note.
+        if tx.entry_status == "posted":
+            bits.append("already in Zoho (yellow row)")
+        elif tx.entry_status == "subscription":
+            bits.append("subscription (gray row)")
+        if has_image_info and not rec.has_receipt_image:
+            bits.append("missing receipt image")
+        return " · ".join(bits)
+
     for match in outcome.matches:
         tx = tx_by_id.get(match.transaction_id)
         rec = rec_by_id.get(match.document_id)
         if tx is None or rec is None:
             continue
-        rows.extend(_rows_from_match(tx, rec, match, extra_note=""))
+        rows.extend(_rows_from_match(tx, rec, match, extra_note=_note(tx, rec, "")))
 
     for match in outcome.judgment_required:
         tx = tx_by_id.get(match.transaction_id)
@@ -179,7 +195,7 @@ def _build_rows(
         # FX cases ride on the matched receipt's line items but stay
         # REVIEW until the LLM judgment layer (slice 2) confirms.
         rows.extend(
-            _rows_from_match(tx, rec, match, extra_note="FX — needs judgment", force_review=True)
+            _rows_from_match(tx, rec, match, extra_note=_note(tx, rec, "FX — needs judgment"), force_review=True)
         )
 
     seen_ambiguous_tx: set[str] = set()
@@ -192,7 +208,7 @@ def _build_rows(
         if tx is None or rec is None:
             continue
         rows.extend(
-            _rows_from_match(tx, rec, match, extra_note="Ambiguous — pick one", force_review=True)
+            _rows_from_match(tx, rec, match, extra_note=_note(tx, rec, "Ambiguous — pick one"), force_review=True)
         )
 
     for tx_id in outcome.unmatched_transactions:
@@ -343,6 +359,9 @@ def _write_summary(
     n_review = len(review_tx_ids)
     n_unmatched_tx = len(unmatched_tx_ids)
     n_unmatched_rec = len(outcome.unmatched_receipts)
+    # L1: fill-color annotations from the statement workbook.
+    n_already_posted = sum(1 for t in transactions if t.entry_status == "posted")
+    n_subscription = sum(1 for t in transactions if t.entry_status == "subscription")
 
     # Reconciliation invariant: every tx in exactly one bucket. The set
     # union catches BOTH silent drops and double-classification; the
@@ -400,6 +419,10 @@ def _write_summary(
     ws.append(["Needs Review (FX / ambiguous)", n_review])
     ws.append(["Unmatched transactions", n_unmatched_tx])
     ws.append(["Unmatched receipts", n_unmatched_rec])
+    if n_already_posted:
+        ws.append(["Already posted in Zoho (yellow rows)", n_already_posted])
+    if n_subscription:
+        ws.append(["Subscriptions (gray rows)", n_subscription])
     ws.append(["Reconciliation invariant", "OK" if invariant_ok else "BROKEN — investigate"])
     ws.append([])
 

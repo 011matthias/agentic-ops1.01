@@ -16,6 +16,9 @@ Routes:
     GET  /runs/{id}/zoho.csv    download the Zoho journal import (matched)
     GET  /runs/{id}/reconciled.csv  download the flat reconciled CSV
     GET  /guide / /how-it-works  embedded docs
+    POST /feedback              anchored reviewer note (any logged-in role)
+    GET  /feedback-log          the collected notes (operator only)
+    GET  /feedback.jsonl        raw notes download (operator only)
 """
 from __future__ import annotations
 
@@ -26,9 +29,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, Form, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+)
 from fastapi.templating import Jinja2Templates
 
+from ..cards_provision import card_by_key, load_cards
 from .service import (
     DEFAULT_EXPENSE_COLUMN_MAP,
     STATEMENT_MAP_FIELDS,
@@ -39,25 +49,37 @@ from .service import (
     build_view,
     commit_to_memory,
     compare_runs,
+    create_intake,
     create_run,
     execute_run,
     forget_memory_vendor,
     matched_autopick_decisions,
+    prepare_intake_run,
     prepare_run,
     regenerate_reconciled,
     regenerate_report,
+    regenerate_writeback,
     regenerate_zoho,
     reset_memory,
     validate_manual_match,
 )
-from .store import STATUS_CONFIRMED, VALID_STATUSES, RunStore
+from .store import (
+    INTAKE_PROCESSING,
+    INTAKE_READY,
+    INTAKE_RECEIVED,
+    JOB_DONE,
+    JOB_ERROR,
+    STATUS_CONFIRMED,
+    VALID_STATUSES,
+    RunStore,
+)
 from . import auth
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
-# Self-contained HTML docs embedded into the tool: the user guide and the
-# how-it-works walkthrough. Packaged with the app (the wheel ships the web
-# subtree, like templates/), served verbatim behind the gate.
-_GUIDES_DIR = Path(__file__).parent / "guides"
+# Packaged brand assets (design tokens, Brisken logos, favicon). Served
+# ungated so the login page can style itself; nothing here is client data.
+_STATIC_DIR = Path(__file__).parent / "static"
+_STATIC_TYPES = {".css": "text/css", ".png": "image/png", ".svg": "image/svg+xml"}
 
 
 def _now_iso() -> str:
@@ -72,22 +94,43 @@ def _operator() -> str | None:
     )
 
 
-def _run_job(
-    db_path: Path, jobs: dict, job_id: str, prepared: PreparedRun
-) -> None:
+def _run_id_from_path(page: str) -> str | None:
+    """The run id when a feedback note was left on a run page, else None."""
+    parts = page.strip("/").split("/")
+    if len(parts) >= 2 and parts[0] == "runs" and parts[1]:
+        return parts[1][:64]
+    return None
+
+
+def _run_job(db_path: Path, job_id: str, prepared: PreparedRun) -> None:
     """Run a prepared reconciliation off the request (PR F).
 
     Starlette runs this sync function in a worker thread, so the event loop
     stays free to serve the polling page. It opens its own RunStore (a
-    SQLite connection is per-thread) and records the outcome in the
-    in-memory job map the poller reads.
+    SQLite connection is per-thread) and records the outcome in the durable
+    `jobs` table the poller reads -- durable because a Fly scale-to-zero
+    stop can kill this thread; the startup sweep then marks the job
+    interrupted instead of leaving an eternal spinner.
     """
     try:
         with RunStore(db_path) as store:
-            run_id = execute_run(store, prepared)
-        jobs[job_id] = {"status": "done", "run_id": run_id, "error": None}
+            run_id = execute_run(
+                store,
+                prepared,
+                on_stage=lambda s: store.set_job_stage(job_id, s, _now_iso()),
+            )
+            store.set_job_status(
+                job_id, JOB_DONE, run_id=run_id, updated_at=_now_iso()
+            )
     except Exception as exc:  # noqa: BLE001 - surface any failure to the poller
-        jobs[job_id] = {"status": "error", "run_id": None, "error": str(exc)}
+        with RunStore(db_path) as store:
+            store.set_job_status(
+                job_id, JOB_ERROR, error=str(exc), updated_at=_now_iso()
+            )
+            if prepared.intake_id is not None:
+                store.set_intake_status(
+                    prepared.intake_id, INTAKE_RECEIVED, updated_at=_now_iso()
+                )
 
 
 def create_app(data_root: str | Path | None = None) -> FastAPI:
@@ -103,26 +146,51 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     # Durable cross-run memory (Phase 2). Separate db from the per-run web
     # state: runs come and go, learned facts persist across months.
     app.state.learning_db_path = data_root_path / "learning.sqlite"
-    # In-memory background-job map (PR F). A single-user local tool runs one
-    # process, so an in-memory map is enough; a job lost to a server restart
-    # just means re-uploading the file.
-    app.state.jobs = {}
-    templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+
+    # Startup sweep: a job still `running` in the durable table was killed
+    # by a restart (Fly scale-to-zero). Mark it interrupted and put its
+    # intake back in the queue so the operator sees the truth, not a
+    # spinner.
+    with RunStore(db_path) as _store:
+        for _intake_id in _store.sweep_stale_jobs(_now_iso()):
+            if _intake_id is not None:
+                _store.set_intake_status(
+                    _intake_id, INTAKE_RECEIVED, updated_at=_now_iso()
+                )
+
+    def _template_globals(request: Request) -> dict:
+        # Every template can branch on the session role (user surface vs
+        # operator surface) without each handler threading it through.
+        return {"role": getattr(request.state, "role", auth.ROLE_OPERATOR)}
+
+    templates = Jinja2Templates(
+        directory=str(_TEMPLATES_DIR), context_processors=[_template_globals]
+    )
 
     def open_store() -> RunStore:
         return RunStore(db_path)
 
     # --- Password gate (hosted only) -------------------------------------
-    # Active iff EXPENSE_RECON_ACCESS_CODE is set. Loopback/local use leaves
-    # it unset and stays open; a public host MUST set it (this tool serves
-    # financial data). See auth.py.
+    # Active iff an access code is set. Loopback/local use leaves the codes
+    # unset, stays open, and resolves to the operator role (full surface);
+    # a public host MUST set them (this tool serves financial data). See
+    # auth.py for the role model.
     @app.middleware("http")
     async def require_login(request: Request, call_next):
-        if auth.gate_enabled() and not auth.path_is_open(request.url.path):
-            if not auth.token_valid(request.cookies.get(auth.COOKIE_NAME)):
+        role = auth.ROLE_OPERATOR
+        if auth.gate_enabled():
+            role = auth.token_role(request.cookies.get(auth.COOKIE_NAME))
+            if role is None and not auth.path_is_open(request.url.path):
                 if request.method == "GET":
                     return RedirectResponse(url="/login", status_code=303)
                 return JSONResponse({"error": "authentication required"}, status_code=401)
+        request.state.role = role or auth.ROLE_USER
+        if request.state.role != auth.ROLE_OPERATOR and auth.path_requires_operator(
+            request.url.path, request.method
+        ):
+            if request.method == "GET":
+                return RedirectResponse(url="/", status_code=303)
+            return JSONResponse({"error": "operator access required"}, status_code=403)
         return await call_next(request)
 
     @app.get("/login", response_class=HTMLResponse)
@@ -135,13 +203,14 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     def login_submit(request: Request, code: str = Form("")):
         if not auth.gate_enabled():
             return RedirectResponse(url="/", status_code=303)
-        if not auth.code_matches(code):
+        role = auth.code_role(code)
+        if role is None:
             return templates.TemplateResponse(
                 request, "login.html", {"error": "Wrong access code."}, status_code=401
             )
         resp = RedirectResponse(url="/", status_code=303)
         resp.set_cookie(
-            auth.COOKIE_NAME, auth.issue_token(),
+            auth.COOKIE_NAME, auth.issue_token(role),
             max_age=auth.SESSION_MAX_AGE, httponly=True,
             secure=auth.cookie_is_secure(), samesite="lax",
         )
@@ -159,25 +228,185 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
 
     @app.get("/favicon.ico")
     def favicon():
-        # No icon asset; answer cleanly so the browser stops logging a 404.
-        from fastapi.responses import Response
+        return FileResponse(_STATIC_DIR / "favicon.png", media_type="image/png")
 
-        return Response(status_code=204)
+    @app.get("/static/{name}")
+    def static_asset(name: str):
+        # Basename-only lookup in the packaged static dir; unknown names 404.
+        target = _STATIC_DIR / Path(name).name
+        media_type = _STATIC_TYPES.get(target.suffix.lower())
+        if media_type is None or not target.is_file():
+            return HTMLResponse("Not found", status_code=404)
+        return FileResponse(
+            target, media_type=media_type,
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
+
+    def _operator_home_ctx(store: RunStore, *, error=None, headers=None) -> dict:
+        return {
+            "runs": store.list_runs(),
+            "intakes": store.list_intakes(),
+            "cards": load_cards(),
+            "statement_fields": STATEMENT_MAP_FIELDS,
+            "expense_map": DEFAULT_EXPENSE_COLUMN_MAP,
+            "error": error,
+            "headers": headers,
+        }
+
+    def _user_home_ctx(store: RunStore, *, error=None) -> dict:
+        return {
+            "intakes": store.list_intakes(),
+            "published_runs": store.list_runs(published_only=True),
+            "cards": load_cards(),
+            "error": error,
+        }
 
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request) -> HTMLResponse:
         with open_store() as store:
-            runs = store.list_runs()
+            if request.state.role == auth.ROLE_OPERATOR:
+                return templates.TemplateResponse(
+                    request, "home_operator.html", _operator_home_ctx(store)
+                )
+            return templates.TemplateResponse(
+                request, "home_user.html", _user_home_ctx(store)
+            )
+
+    # ── Intake (testing mode): the USER path. Saves the documents, runs
+    # nothing. Operators run the pipeline from the queue; the dev-side
+    # notifier polls /api/operator/state and mails us about new uploads.
+    @app.post("/intakes")
+    async def post_intake(
+        request: Request,
+        statement: UploadFile,
+        receipts: UploadFile | None = None,
+        card_key: str = Form(""),
+        card_name: str = Form(""),
+        month: str = Form(""),
+    ):
+        cards = load_cards()
+        card = card_by_key(card_key, cards)
+        card_label = card.label if card else card_name.strip()
+        month_clean = month.strip()
+        # The card is the one required identifier; a month alone must not
+        # slip through as the label.
+        label = f"{card_label} {month_clean}".strip() if card_label else ""
+
+        statement_bytes = await statement.read()
+        receipts_bytes = await receipts.read() if receipts is not None else None
+        try:
+            with open_store() as store:
+                create_intake(
+                    store,
+                    app.state.data_root,
+                    statement_bytes=statement_bytes,
+                    statement_filename=statement.filename or "statement.csv",
+                    receipts_bytes=receipts_bytes,
+                    receipts_filename=(
+                        receipts.filename if receipts is not None else None
+                    ),
+                    label=label,
+                    card_key=card.key if card else None,
+                    now_iso=_now_iso(),
+                    uploaded_by=request.state.role,
+                )
+        except RunInputError as exc:
+            with open_store() as store:
+                if request.state.role == auth.ROLE_OPERATOR:
+                    return templates.TemplateResponse(
+                        request,
+                        "home_operator.html",
+                        _operator_home_ctx(store, error=exc.message),
+                        status_code=400,
+                    )
+                return templates.TemplateResponse(
+                    request,
+                    "home_user.html",
+                    _user_home_ctx(store, error=exc.message),
+                    status_code=400,
+                )
+        return RedirectResponse(url="/", status_code=303)
+
+    def _parse_run_form(
+        *,
+        account_id: str,
+        account_legal_entities: str,
+        account_card_currency: str,
+        sheet_name: str,
+        receipts_source: str,
+        receipts_default_currency: str,
+        use_llm: str,
+        expense_column_map: str,
+        map_transaction_date: str,
+        map_amount: str,
+        map_vendor: str,
+        map_posting_date: str,
+        map_transaction_currency: str,
+        card_key: str = "",
+    ) -> RunForm:
+        """Shared form parsing for POST /runs and POST /intakes/{id}/run.
+        Raises RunInputError for a user-fixable problem. A provisioned card
+        preset fills account/entity/currency; explicit fields still win."""
+        overrides = {
+            "transaction_date": map_transaction_date.strip(),
+            "amount": map_amount.strip(),
+            "vendor": map_vendor.strip(),
+            "posting_date": map_posting_date.strip(),
+            "transaction_currency": map_transaction_currency.strip(),
+        }
+        try:
+            expense_map = (
+                json.loads(expense_column_map)
+                if expense_column_map.strip()
+                else dict(DEFAULT_EXPENSE_COLUMN_MAP)
+            )
+        except json.JSONDecodeError as exc:
+            raise RunInputError(f"Receipt column map is not valid JSON: {exc}")
+
+        # Account -> legal entity map (Dirk 2026-06-16): the legal entity is
+        # derived from the paying account, not typed each run. Blank => no
+        # map, the account name becomes the entity.
+        try:
+            entity_map_raw = (
+                json.loads(account_legal_entities)
+                if account_legal_entities.strip()
+                else {}
+            )
+            if not isinstance(entity_map_raw, dict):
+                raise ValueError("expected a JSON object of account -> legal entity")
+            entity_map = {str(k): str(v) for k, v in entity_map_raw.items()}
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise RunInputError(
+                f"Account to legal-entity map is not valid JSON: {exc}"
+            )
+
+        card = card_by_key(card_key, load_cards())
+        resolved_account = account_id.strip() or (card.account_id if card else "")
+        resolved_currency = account_card_currency.strip() or (
+            card.currency if card else ""
+        )
+        if card and card.account_id not in entity_map:
+            entity_map[card.account_id] = card.legal_entity
+
+        return RunForm(
+            account_id=resolved_account,
+            account_legal_entities=entity_map,
+            account_card_currency=resolved_currency or "USD",
+            sheet_name=sheet_name.strip() or None,
+            column_map_overrides={k: v for k, v in overrides.items() if v},
+            receipts_source=receipts_source.strip() or "csv",
+            expense_column_map=expense_map,
+            receipts_default_currency=receipts_default_currency.strip(),
+            use_llm=bool(use_llm.strip()),
+        )
+
+    def _start_background_run(request: Request, background: BackgroundTasks, prepared: PreparedRun, label: str):
+        job_id = uuid.uuid4().hex[:12]
+        with open_store() as store:
+            store.create_job(job_id, prepared.intake_id, _now_iso())
+        background.add_task(_run_job, app.state.db_path, job_id, prepared)
         return templates.TemplateResponse(
-            request,
-            "index.html",
-            {
-                "runs": runs,
-                "statement_fields": STATEMENT_MAP_FIELDS,
-                "expense_map": DEFAULT_EXPENSE_COLUMN_MAP,
-                "error": None,
-                "headers": None,
-            },
+            request, "running.html", {"job_id": job_id, "label": label}
         )
 
     @app.post("/runs")
@@ -199,62 +428,38 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         map_vendor: str = Form(""),
         map_posting_date: str = Form(""),
         map_transaction_currency: str = Form(""),
+        card_key: str = Form(""),
     ):
-        overrides = {
-            "transaction_date": map_transaction_date.strip(),
-            "amount": map_amount.strip(),
-            "vendor": map_vendor.strip(),
-            "posting_date": map_posting_date.strip(),
-            "transaction_currency": map_transaction_currency.strip(),
-        }
         try:
-            expense_map = (
-                json.loads(expense_column_map)
-                if expense_column_map.strip()
-                else dict(DEFAULT_EXPENSE_COLUMN_MAP)
+            form = _parse_run_form(
+                account_id=account_id,
+                account_legal_entities=account_legal_entities,
+                account_card_currency=account_card_currency,
+                sheet_name=sheet_name,
+                receipts_source=receipts_source,
+                receipts_default_currency=receipts_default_currency,
+                use_llm=use_llm,
+                expense_column_map=expense_column_map,
+                map_transaction_date=map_transaction_date,
+                map_amount=map_amount,
+                map_vendor=map_vendor,
+                map_posting_date=map_posting_date,
+                map_transaction_currency=map_transaction_currency,
+                card_key=card_key,
             )
-        except json.JSONDecodeError as exc:
-            return _render_form_error(
-                templates, request, f"Receipt column map is not valid JSON: {exc}"
-            )
-
-        # Account -> legal entity map (Dirk 2026-06-16): the legal entity is
-        # derived from the paying account, not typed each run. Blank => no
-        # map, the account name becomes the entity.
-        try:
-            entity_map_raw = (
-                json.loads(account_legal_entities)
-                if account_legal_entities.strip()
-                else {}
-            )
-            if not isinstance(entity_map_raw, dict):
-                raise ValueError("expected a JSON object of account -> legal entity")
-            entity_map = {str(k): str(v) for k, v in entity_map_raw.items()}
-        except (json.JSONDecodeError, ValueError) as exc:
-            return _render_form_error(
-                templates,
-                request,
-                f"Account to legal-entity map is not valid JSON: {exc}",
-            )
-
-        form = RunForm(
-            account_id=account_id.strip(),
-            account_legal_entities=entity_map,
-            account_card_currency=account_card_currency.strip() or "USD",
-            sheet_name=sheet_name.strip() or None,
-            column_map_overrides={k: v for k, v in overrides.items() if v},
-            receipts_source=receipts_source.strip() or "csv",
-            expense_column_map=expense_map,
-            receipts_default_currency=receipts_default_currency.strip(),
-            use_llm=bool(use_llm.strip()),
-        )
+        except RunInputError as exc:
+            return _render_form_error(templates, request, open_store, exc.message)
 
         statement_bytes = await statement.read()
         receipts_bytes = await receipts.read()
         if not statement_bytes:
-            return _render_form_error(templates, request, "No statement file uploaded.")
+            return _render_form_error(
+                templates, request, open_store, "No statement file uploaded."
+            )
         if not receipts_bytes:
-            return _render_form_error(templates, request, "No receipts file uploaded.")
+            return _render_form_error(
+                templates, request, open_store, "No receipts file uploaded."
+            )
 
         statement_name = statement.filename or "statement.csv"
         receipts_name = receipts.filename or "receipts.csv"
@@ -279,7 +484,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     )
             except RunInputError as exc:
                 return _render_form_error(
-                    templates, request, exc.message, headers=exc.headers
+                    templates, request, open_store, exc.message, headers=exc.headers
                 )
             return RedirectResponse(url=f"/runs/{run_id}", status_code=303)
 
@@ -299,19 +504,264 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             )
         except RunInputError as exc:
             return _render_form_error(
-                templates, request, exc.message, headers=exc.headers
+                templates, request, open_store, exc.message, headers=exc.headers
             )
-
-        job_id = uuid.uuid4().hex[:12]
-        app.state.jobs[job_id] = {"status": "running", "run_id": None, "error": None}
-        background.add_task(
-            _run_job, app.state.db_path, app.state.jobs, job_id, prepared
+        return _start_background_run(
+            request, background, prepared, form.account_id or "this month"
         )
+
+    # ── Operator: run the pipeline on a stored intake ──────────────────
+    @app.get("/intakes/{intake_id}/prepare", response_class=HTMLResponse)
+    def intake_prepare(request: Request, intake_id: str):
+        with open_store() as store:
+            intake = store.get_intake(intake_id)
+        if intake is None:
+            return HTMLResponse("Upload not found", status_code=404)
+        card = card_by_key(intake.card_key, load_cards())
         return templates.TemplateResponse(
             request,
-            "running.html",
-            {"job_id": job_id, "label": form.account_id or "this month"},
+            "operator_run.html",
+            {
+                "intake": intake,
+                "card": card,
+                "cards": load_cards(),
+                "statement_fields": STATEMENT_MAP_FIELDS,
+                "expense_map": DEFAULT_EXPENSE_COLUMN_MAP,
+                "error": None,
+                "headers": None,
+            },
         )
+
+    @app.post("/intakes/{intake_id}/run")
+    async def intake_run(
+        request: Request,
+        background: BackgroundTasks,
+        intake_id: str,
+        account_id: str = Form(""),
+        account_legal_entities: str = Form(""),
+        account_card_currency: str = Form(""),
+        sheet_name: str = Form(""),
+        receipts_source: str = Form("csv"),
+        receipts_default_currency: str = Form(""),
+        use_llm: str = Form(""),
+        expense_column_map: str = Form(""),
+        map_transaction_date: str = Form(""),
+        map_amount: str = Form(""),
+        map_vendor: str = Form(""),
+        map_posting_date: str = Form(""),
+        map_transaction_currency: str = Form(""),
+        card_key: str = Form(""),
+    ):
+        with open_store() as store:
+            intake = store.get_intake(intake_id)
+        if intake is None:
+            return HTMLResponse("Upload not found", status_code=404)
+
+        def _error_page(message: str, headers=None, status_code: int = 400):
+            card = card_by_key(intake.card_key, load_cards())
+            return templates.TemplateResponse(
+                request,
+                "operator_run.html",
+                {
+                    "intake": intake,
+                    "card": card,
+                    "cards": load_cards(),
+                    "statement_fields": STATEMENT_MAP_FIELDS,
+                    "expense_map": DEFAULT_EXPENSE_COLUMN_MAP,
+                    "error": message,
+                    "headers": headers,
+                },
+                status_code=status_code,
+            )
+
+        try:
+            form = _parse_run_form(
+                account_id=account_id,
+                account_legal_entities=account_legal_entities,
+                account_card_currency=account_card_currency,
+                sheet_name=sheet_name,
+                receipts_source=receipts_source,
+                receipts_default_currency=receipts_default_currency,
+                use_llm=use_llm,
+                expense_column_map=expense_column_map,
+                map_transaction_date=map_transaction_date,
+                map_amount=map_amount,
+                map_vendor=map_vendor,
+                map_posting_date=map_posting_date,
+                map_transaction_currency=map_transaction_currency,
+                card_key=card_key or intake.card_key or "",
+            )
+            prepared = prepare_intake_run(
+                app.state.data_root,
+                intake,
+                form,
+                now_iso=_now_iso(),
+                operator=_operator(),
+                learning_db_path=app.state.learning_db_path,
+            )
+        except RunInputError as exc:
+            return _error_page(exc.message, headers=exc.headers)
+
+        with open_store() as store:
+            store.set_intake_status(
+                intake_id, INTAKE_PROCESSING, updated_at=_now_iso()
+            )
+
+        if os.environ.get("EXPENSE_RECON_WEB_SYNC") == "1":
+            try:
+                with open_store() as store:
+                    run_id = execute_run(store, prepared)
+            except RunInputError as exc:
+                with open_store() as store:
+                    store.set_intake_status(
+                        intake_id, INTAKE_RECEIVED, updated_at=_now_iso()
+                    )
+                return _error_page(exc.message, headers=exc.headers)
+            return RedirectResponse(url=f"/runs/{run_id}", status_code=303)
+
+        return _start_background_run(request, background, prepared, intake.label)
+
+    # ── Operator: publish a reviewed run back to the user ───────────────
+    @app.post("/runs/{run_id}/publish")
+    def publish_run(run_id: str):
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return HTMLResponse("Run not found", status_code=404)
+            store.set_run_published(run_id, True, _now_iso())
+            if run.intake_id is not None:
+                store.set_intake_status(
+                    run.intake_id, INTAKE_READY,
+                    run_id=run_id, updated_at=_now_iso(),
+                )
+        return RedirectResponse(url=f"/runs/{run_id}", status_code=303)
+
+    @app.post("/runs/{run_id}/unpublish")
+    def unpublish_run(run_id: str):
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return HTMLResponse("Run not found", status_code=404)
+            store.set_run_published(run_id, False, None)
+            if run.intake_id is not None:
+                store.set_intake_status(
+                    run.intake_id, INTAKE_PROCESSING, updated_at=_now_iso()
+                )
+        return RedirectResponse(url=f"/runs/{run_id}", status_code=303)
+
+    # ── Operator state API: polled by the dev-side notifier (server stays
+    # API-free per the One Assessment precedent; mail is sent from a dev
+    # machine, never from this box).
+    @app.get("/api/operator/state")
+    def operator_state():
+        with open_store() as store:
+            intakes = store.list_intakes()
+            published = [r for r in store.list_runs() if r.published]
+        return JSONResponse(
+            {
+                "intakes": [
+                    {
+                        "intake_id": i.intake_id,
+                        "created_at": i.created_at,
+                        "label": i.label,
+                        "status": i.status,
+                        "statement_name": i.statement_name,
+                        "receipts_name": i.receipts_name,
+                        "detect_note": i.detect_note,
+                        "run_id": i.run_id,
+                    }
+                    for i in intakes
+                ],
+                "published_runs": [
+                    {
+                        "run_id": r.run_id,
+                        "label": r.label,
+                        "published_at": r.published_at,
+                    }
+                    for r in published
+                ],
+                "feedback": {
+                    "count": len(_read_feedback()),
+                },
+            }
+        )
+
+    # ── Reviewer feedback: the double-click widget in base.html posts here
+    # from every logged-in page. Attribution comes from the SESSION (the
+    # role), never from the body; the page path and the run id (when the
+    # note was left on a run page) locate the note. Storage is an
+    # append-only jsonl on the data volume; reading it is operator-only
+    # (auth._OPERATOR_RULES).
+    feedback_file = data_root_path / "feedback.jsonl"
+
+    @app.post("/feedback")
+    async def leave_feedback(request: Request) -> JSONResponse:
+        try:
+            data = await request.json()
+        except Exception:  # noqa: BLE001 - malformed body is a client error
+            return JSONResponse({"ok": False, "error": "invalid json"}, status_code=400)
+        if not isinstance(data, dict):
+            return JSONResponse({"ok": False, "error": "invalid payload"}, status_code=400)
+        comment = str(data.get("comment", "")).strip()
+        if not comment:
+            return JSONResponse(
+                {"ok": False, "error": "comment is required"}, status_code=400
+            )
+        # Position sanitized to the known numeric fields, so a note can be
+        # located exactly later (coordinates, scroll, % down the page).
+        raw_pos = data.get("pos")
+        pos = {}
+        if isinstance(raw_pos, dict):
+            for key in ("pageX", "pageY", "clientX", "clientY", "scrollY", "vw", "vh", "docH", "pct"):
+                value = raw_pos.get(key)
+                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                    continue
+                pos[key] = int(value)
+        page = str(data.get("path", ""))[:300]
+        entry = {
+            "ts": _now_iso(),
+            "role": request.state.role,
+            "page": page,
+            "run_id": _run_id_from_path(page),
+            "title": str(data.get("title", ""))[:300],
+            "section": str(data.get("section", "")).strip()[:200],
+            "selector": str(data.get("selector", "")).strip()[:480],
+            "anchor": str(data.get("anchor", "")).strip()[:300],
+            "pos": pos or None,
+            "comment": comment[:8000],
+            "ip": request.headers.get("fly-client-ip")
+            or (request.client.host if request.client else ""),
+            "ua": request.headers.get("user-agent", "")[:400],
+        }
+        with feedback_file.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        return JSONResponse({"ok": True})
+
+    def _read_feedback() -> list[dict]:
+        rows: list[dict] = []
+        if feedback_file.exists():
+            for line in feedback_file.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(row, dict):
+                    rows.append(row)
+        return rows
+
+    @app.get("/feedback-log", response_class=HTMLResponse)
+    def feedback_log(request: Request) -> HTMLResponse:
+        rows = _read_feedback()
+        rows.reverse()  # newest first
+        return templates.TemplateResponse(request, "feedback_log.html", {"rows": rows})
+
+    @app.get("/feedback.jsonl")
+    def feedback_raw() -> PlainTextResponse:
+        text = feedback_file.read_text(encoding="utf-8") if feedback_file.exists() else ""
+        return PlainTextResponse(text, media_type="application/x-ndjson")
 
     @app.get("/compare", response_class=HTMLResponse)
     def compare(request: Request, a: str = "", b: str = ""):
@@ -341,22 +791,37 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     @app.get("/jobs/{job_id}")
     def job_status(job_id: str):
         # PR F — the running page polls this until status flips to done (then
-        # it navigates to the workbench) or error.
-        job = app.state.jobs.get(job_id)
+        # it navigates to the workbench) or error. Durable read: the row
+        # survives a restart, so an interrupted job reports honestly.
+        with open_store() as store:
+            job = store.get_job(job_id)
         if job is None:
             return JSONResponse({"error": "unknown job"}, status_code=404)
         return JSONResponse(job)
 
+    def _visible_run(store: RunStore, request: Request, run_id: str):
+        """The run, or None when it does not exist OR the session is a user
+        and the run is unpublished (404 either way, so unpublished run ids
+        are not confirmable from the user role)."""
+        run = store.get_run(run_id)
+        if run is None:
+            return None
+        if request.state.role != auth.ROLE_OPERATOR and not run.published:
+            return None
+        return run
+
     @app.get("/runs/{run_id}", response_class=HTMLResponse)
     def workbench(request: Request, run_id: str):
         with open_store() as store:
-            run = store.get_run(run_id)
+            run = _visible_run(store, request, run_id)
             if run is None:
                 return HTMLResponse("Run not found", status_code=404)
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
         view = build_view(run, decisions, overrides)
-        return templates.TemplateResponse(request, "workbench.html", {"view": view})
+        return templates.TemplateResponse(
+            request, "workbench.html", {"view": view, "run": run}
+        )
 
     @app.post("/runs/{run_id}/decisions")
     async def post_decision(run_id: str, request: Request):
@@ -367,7 +832,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if not tx_id or status not in VALID_STATUSES:
             return JSONResponse({"error": "bad request"}, status_code=400)
         with open_store() as store:
-            run = store.get_run(run_id)
+            run = _visible_run(store, request, run_id)
             if run is None:
                 return JSONResponse({"error": "run not found"}, status_code=404)
             store.set_decision(run_id, tx_id, status, chosen, _now_iso())
@@ -377,13 +842,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return JSONResponse({"ok": True, "summary": view["summary"]})
 
     @app.post("/runs/{run_id}/decisions/confirm-matched")
-    def post_confirm_matched(run_id: str):
+    def post_confirm_matched(run_id: str, request: Request):
         # PR A — one click confirms every matched-bucket transaction with
         # its auto-picked receipt, so only review + unmatched need hand
         # work. Reuses the per-row decision write; never stomps an
         # explicit confirm/reject.
         with open_store() as store:
-            run = store.get_run(run_id)
+            run = _visible_run(store, request, run_id)
             if run is None:
                 return JSONResponse({"error": "run not found"}, status_code=404)
             decisions = store.get_decisions(run_id)
@@ -409,7 +874,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if not document_id or not isinstance(line_index, int):
             return JSONResponse({"error": "bad request"}, status_code=400)
         with open_store() as store:
-            if store.get_run(run_id) is None:
+            if _visible_run(store, request, run_id) is None:
                 return JSONResponse({"error": "run not found"}, status_code=404)
             store.set_category_override(
                 run_id, document_id, line_index, category, zoho_account, _now_iso()
@@ -428,7 +893,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if not tx_id or not document_id:
             return JSONResponse({"error": "bad request"}, status_code=400)
         with open_store() as store:
-            run = store.get_run(run_id)
+            run = _visible_run(store, request, run_id)
             if run is None:
                 return JSONResponse({"error": "run not found"}, status_code=404)
             err = validate_manual_match(run, tx_id, document_id)
@@ -474,9 +939,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return JSONResponse({"ok": True, "learned": learned})
 
     @app.get("/runs/{run_id}/report.xlsx")
-    def download_report(run_id: str):
+    def download_report(run_id: str, request: Request):
         with open_store() as store:
-            run = store.get_run(run_id)
+            run = _visible_run(store, request, run_id)
             if run is None:
                 return HTMLResponse("Run not found", status_code=404)
             decisions = store.get_decisions(run_id)
@@ -491,12 +956,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         )
 
     @app.get("/runs/{run_id}/zoho.csv")
-    def download_zoho(run_id: str):
+    def download_zoho(run_id: str, request: Request):
         # PR E — the Zoho Books journal-entry import CSV, with the reviewer's
         # decisions + category overrides applied. Only effective matched
         # transactions are exported (the writer's posting policy).
         with open_store() as store:
-            run = store.get_run(run_id)
+            run = _visible_run(store, request, run_id)
             if run is None:
                 return HTMLResponse("Run not found", status_code=404)
             decisions = store.get_decisions(run_id)
@@ -509,12 +974,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         )
 
     @app.get("/runs/{run_id}/reconciled.csv")
-    def download_reconciled(run_id: str):
+    def download_reconciled(run_id: str, request: Request):
         # The flat reconciled CSV — the CSV twin of the .xlsx report, with
         # the reviewer's decisions + category overrides applied. Every
         # statement line with its match status + matched-expense enrichment.
         with open_store() as store:
-            run = store.get_run(run_id)
+            run = _visible_run(store, request, run_id)
             if run is None:
                 return HTMLResponse("Run not found", status_code=404)
             decisions = store.get_decisions(run_id)
@@ -526,21 +991,43 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             media_type="text/csv",
         )
 
-    # ── Embedded docs: the user guide + the how-it-works walkthrough,
-    # reached from the tool nav (gated like every other page). They are
-    # self-contained HTML deliverables, served verbatim rather than wrapped
-    # in the app chrome.
-    @app.get("/guide", response_class=HTMLResponse)
-    def user_guide() -> HTMLResponse:
-        return HTMLResponse(
-            (_GUIDES_DIR / "user-guide.html").read_text(encoding="utf-8")
+    @app.get("/runs/{run_id}/statement-categorized.xlsx")
+    def download_writeback(run_id: str, request: Request):
+        # L3 — her own uploaded workbook with one new "Zoho Account (tool)"
+        # column; only for xlsx/xlsm statements.
+        with open_store() as store:
+            run = _visible_run(store, request, run_id)
+            if run is None:
+                return HTMLResponse("Run not found", status_code=404)
+            decisions = store.get_decisions(run_id)
+            overrides = store.get_category_overrides(run_id)
+        path = regenerate_writeback(run, decisions, overrides)
+        if path is None:
+            return HTMLResponse(
+                "This run's statement is not an Excel workbook", status_code=404
+            )
+        return FileResponse(
+            path,
+            filename=f"statement-categorized-{run_id}{path.suffix}",
+            media_type=(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ),
         )
 
-    @app.get("/how-it-works", response_class=HTMLResponse)
-    def tool_flow() -> HTMLResponse:
-        return HTMLResponse(
-            (_GUIDES_DIR / "tool-flow.html").read_text(encoding="utf-8")
-        )
+    # ── Help: one merged trilingual page (replaces the old /guide +
+    # /how-it-works standalone docs, which had drifted). Rendered inside
+    # the app chrome so it inherits the brand tokens, theme, and role nav.
+    @app.get("/help", response_class=HTMLResponse)
+    def help_page(request: Request) -> HTMLResponse:
+        return templates.TemplateResponse(request, "help.html", {})
+
+    @app.get("/guide")
+    def guide_redirect():
+        return RedirectResponse(url="/help", status_code=301)
+
+    @app.get("/how-it-works")
+    def how_it_works_redirect():
+        return RedirectResponse(url="/help", status_code=301)
 
     # ── Memory (PR 2e): see and correct what the tool has learned ──────
     @app.get("/memory", response_class=HTMLResponse)
@@ -571,18 +1058,25 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
 def _render_form_error(
     templates: Jinja2Templates,
     request: Request,
+    open_store,
     message: str,
     headers: list[str] | None = None,
 ) -> HTMLResponse:
-    return templates.TemplateResponse(
-        request,
-        "index.html",
-        {
-            "runs": [],
-            "statement_fields": STATEMENT_MAP_FIELDS,
-            "expense_map": DEFAULT_EXPENSE_COLUMN_MAP,
-            "error": message,
-            "headers": headers,
-        },
-        status_code=400,
-    )
+    # Operator-only surface (POST /runs is operator-gated), so the error
+    # re-render is the operator home WITH its real context: losing the
+    # recent-runs table on a form error was a long-standing paper cut.
+    with open_store() as store:
+        return templates.TemplateResponse(
+            request,
+            "home_operator.html",
+            {
+                "runs": store.list_runs(),
+                "intakes": store.list_intakes(),
+                "cards": load_cards(),
+                "statement_fields": STATEMENT_MAP_FIELDS,
+                "expense_map": DEFAULT_EXPENSE_COLUMN_MAP,
+                "error": message,
+                "headers": headers,
+            },
+            status_code=400,
+        )
