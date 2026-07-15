@@ -141,7 +141,8 @@ def test_held_bucket_off_board_but_filterable(tmp_path):
         assert view["buckets"]["held"] == 1            # only c2
         held = build_board(s, {"bucket": "held"})
         assert [r["contact_id"] for r in held["rows"]] == ["c2"]
-        assert held["rows"][0]["status"] == "Held"
+        # "On hold" (not "Held") to disambiguate from the 'Demo held' stage label
+        assert held["rows"][0]["status"] == "On hold"
 
 
 def test_awaiting_and_ingest_by_email(tmp_path):

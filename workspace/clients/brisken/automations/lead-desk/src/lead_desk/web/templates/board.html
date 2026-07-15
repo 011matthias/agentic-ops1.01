@@ -61,6 +61,7 @@
   </div>
 
   <div class="inline" style="margin-top:14px; flex-wrap:wrap;">
+    <a class="chip hot {% if f.bucket == 'action' %}active{% endif %}" href="/?{{ cq }}&bucket=action" title="Everyone who owes an action from us right now: a reply we have not sent, or a follow-up past due. Your primary daily list.">Needs action <span class="n">{{ v.buckets.needs_action }}</span></a>
     <a class="chip" href="/?{{ cq }}&bucket=due_today" title="Cadence email steps scheduled to auto-send today.">Due today <span class="n">{{ v.buckets.due_today }}</span></a>
     <a class="chip warn" href="/?{{ cq }}&bucket=manual_due" title="LinkedIn steps due now that you send by hand (not auto-email).">Manual touches <span class="n">{{ v.buckets.manual_due }}</span></a>
     <a class="chip" href="/?{{ cq }}&bucket=awaiting" title="We have contacted them and are waiting on THEIR reply; the ball is in their court.">Awaiting their reply <span class="n">{{ v.buckets.awaiting_reply }}</span></a>
@@ -147,7 +148,7 @@
         <td>{% if r.tier %}<span class="badge tier">{{ r.tier }}</span>{% endif %}</td>
         <td>{% if r.degree %}<span class="badge {% if r.degree == 'warm' %}stage-booked{% elif r.degree == 'cold_touched' %}stage-replied{% else %}stage-sent{% endif %}">{{ r.degree }}</span>{% elif r.cadence %}<span class="muted">-</span>{% endif %}</td>
         <td><span class="badge stage-{{ r.stage }}">{{ r.stage }}</span></td>
-        <td style="white-space:nowrap;">{% if r.phases.during_event.any %}{% for w in r.phases.during_event.waves %}<span class="badge tier" style="padding:0 4px;">{{ w }}</span>{% endfor %}{% if r.phases.during_event.replied %}<span class="badge stage-replied" style="padding:0 4px;" title="replied to E-wave">R</span>{% endif %}{% else %}<span class="muted">-</span>{% endif %}{% if r.phases.post_event.any %} <span class="badge stage-booked" style="padding:0 4px;" title="post-event follow-up {{ r.phases.post_event.sent }}">P</span>{% endif %}</td>
+        <td style="white-space:nowrap;">{% for w in r.phases.during_event.waves %}<span class="badge tier" style="padding:0 4px;">{{ w }}</span>{% endfor %}{% if r.phases.during_event.replied %}<span class="badge stage-replied" style="padding:0 4px;" title="replied during event">R</span>{% endif %}{% if r.phases.post_event.any %} <span class="badge stage-booked" style="padding:0 4px;" title="post-event follow-up {{ r.phases.post_event.sent }}">P</span>{% endif %}{% if not r.phases.during_event.waves and not r.phases.during_event.replied and not r.phases.post_event.any %}<span class="muted">-</span>{% endif %}</td>
         <td>{% if r.recommended and r.recommended.needed %}<button type="button" class="badge stage-replied action-btn"
               onclick="showAction(this)"
               data-name="{{ r.first_name }} {{ r.last_name }}"
