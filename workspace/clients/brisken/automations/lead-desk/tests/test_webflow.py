@@ -139,3 +139,29 @@ def test_upload_to_unknown_campaign_404s(client):
     r = client.post("/campaigns/nope/upload",
                     files={"file": ("l.csv", io.BytesIO(CSV), "text/csv")})
     assert r.status_code == 404
+
+
+def test_action_needed_button_and_detail_render(client):
+    """The clickable 'Action needed' button, its detail modal, and the contact
+    callout all render for a replied-needs-reply contact."""
+    from lead_desk.web.service import now_iso
+    from lead_desk.web.store import ContactStore
+    with ContactStore(client.app_state_db) as s:
+        s.upsert_contact({"contact_id": "r1", "natural_key": "r1",
+                          "campaign": "rome-2026", "first_name": "Uffe",
+                          "last_name": "Teisner", "company": "Grundfos",
+                          "email": "u@grundfos.com",
+                          "next_step": "Confirm the Sept 9 call slot."}, now_iso())
+        s.add_event(contact_id="r1", ts="2026-07-01T00:00:00+00:00", channel="email",
+                    direction="outbound", type="sent", now=now_iso())
+        s.add_event(contact_id="r1", ts="2026-07-14T00:00:00+00:00", channel="email",
+                    direction="inbound", type="reply", now=now_iso())
+    r = client.get("/")
+    assert r.status_code == 200
+    assert "action-btn" in r.text and "showAction(this)" in r.text
+    assert 'id="action-modal"' in r.text
+    assert "Confirm the Sept 9 call slot." in r.text      # recommended action on the button
+    r = client.get("/contacts/r1")
+    assert r.status_code == 200
+    assert "Action needed" in r.text                      # contact-page callout heading
+    assert "Confirm the Sept 9 call slot." in r.text      # the recommended action itself

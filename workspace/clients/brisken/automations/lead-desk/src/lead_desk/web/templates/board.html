@@ -148,7 +148,16 @@
         <td>{% if r.degree %}<span class="badge {% if r.degree == 'warm' %}stage-booked{% elif r.degree == 'cold_touched' %}stage-replied{% else %}stage-sent{% endif %}">{{ r.degree }}</span>{% elif r.cadence %}<span class="muted">-</span>{% endif %}</td>
         <td><span class="badge stage-{{ r.stage }}">{{ r.stage }}</span></td>
         <td style="white-space:nowrap;">{% if r.phases.during_event.any %}{% for w in r.phases.during_event.waves %}<span class="badge tier" style="padding:0 4px;">{{ w }}</span>{% endfor %}{% if r.phases.during_event.replied %}<span class="badge stage-replied" style="padding:0 4px;" title="replied to E-wave">R</span>{% endif %}{% else %}<span class="muted">-</span>{% endif %}{% if r.phases.post_event.any %} <span class="badge stage-booked" style="padding:0 4px;" title="post-event follow-up {{ r.phases.post_event.sent }}">P</span>{% endif %}</td>
-        <td>{{ r.status }}
+        <td>{% if r.recommended and r.recommended.needed %}<button type="button" class="badge stage-replied action-btn"
+              onclick="showAction(this)"
+              data-name="{{ r.first_name }} {{ r.last_name }}"
+              data-status="{{ r.recommended.status }}"
+              data-action="{{ r.recommended.action }}"
+              data-reason="{{ r.recommended.reason }}"
+              data-lastin="{{ r.recommended.last_in }}"
+              data-lastout="{{ r.recommended.last_out }}"
+              data-href="/contacts/{{ r.contact_id }}"
+              title="Click for the recommended action">{{ r.status }} &#9432;</button>{% else %}{{ r.status }}{% endif %}
             {% if r.dangling %}<span class="badge stage-replied" title="follow-up past due">due</span>{% endif %}
             {% if r.aging %}<span class="badge suppressed" title="unanswered reply">aging</span>{% endif %}</td>
         <td class="mono" style="font-size:11.5px;">
@@ -184,6 +193,31 @@
     </tbody>
   </table>
 </div>
+
+<style>
+  .action-btn { cursor: pointer; border: none; }
+  .action-modal { display: none; position: fixed; inset: 0; z-index: 60;
+    background: rgba(0,0,0,.45); align-items: center; justify-content: center; padding: 16px; }
+  .action-modal-box { background: var(--surface, var(--bg)); color: var(--text);
+    border: 1px solid var(--border); border-radius: 12px; max-width: 520px; width: 100%;
+    padding: 20px 22px; box-shadow: 0 12px 40px rgba(0,0,0,.3); }
+  .am-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .am-action { font-size: 16px; font-weight: 600; margin: 4px 0 0;
+    border-left: 3px solid var(--accent); padding-left: 12px; }
+</style>
+<div id="action-modal" class="action-modal" onclick="if(event.target===this)hideAction()">
+  <div class="action-modal-box">
+    <div class="am-head">
+      <div><strong id="am-name"></strong><div class="muted" id="am-status" style="font-size:13px;"></div></div>
+      <button type="button" class="btn btn-small btn-secondary" onclick="hideAction()">Close</button>
+    </div>
+    <h4 style="margin:16px 0 4px;">Recommended action</h4>
+    <div id="am-action" class="am-action"></div>
+    <div class="muted" id="am-reason" style="margin-top:10px;"></div>
+    <div class="muted mono" id="am-dates" style="margin-top:8px;"></div>
+    <div style="margin-top:16px;"><a id="am-link" class="btn btn-small" href="#">Open contact &rarr;</a></div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -196,5 +230,22 @@
       else { var s = localStorage.getItem(KEY); if (s && s.length > 1) { location.replace('/' + s); } }
     } catch (e) {}
   })();
+
+  // "Action needed" -> show the recommended action in a detail modal.
+  function showAction(btn) {
+    var d = btn.dataset;
+    document.getElementById('am-name').textContent = d.name;
+    document.getElementById('am-status').textContent = d.status;
+    document.getElementById('am-action').textContent = d.action;
+    document.getElementById('am-reason').textContent = d.reason;
+    var dates = [];
+    if (d.lastin) { dates.push('Last reply in: ' + d.lastin); }
+    if (d.lastout) { dates.push('Last sent: ' + d.lastout); }
+    document.getElementById('am-dates').textContent = dates.join('  ·  ');
+    document.getElementById('am-link').href = d.href;
+    document.getElementById('action-modal').style.display = 'flex';
+  }
+  function hideAction() { document.getElementById('action-modal').style.display = 'none'; }
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { hideAction(); } });
 </script>
 {% endblock %}

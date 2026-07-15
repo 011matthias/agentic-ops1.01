@@ -27,6 +27,17 @@
   </div>
 </div>
 
+{% if c.recommended and c.recommended.needed %}
+<div class="card" style="border-left:4px solid var(--accent);">
+  <div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px;">
+    <strong>Action needed</strong>
+    <span class="muted" style="font-size:13px;">{{ c.recommended.status }}</span>
+  </div>
+  <div style="font-size:15px; font-weight:600; margin-top:6px;">{{ c.recommended.action }}</div>
+  <div class="muted" style="margin-top:6px;">{{ c.recommended.reason }}</div>
+</div>
+{% endif %}
+
 <div class="card">
   <h2>Outreach phases</h2>
   <div class="muted" style="font-size:12.5px; margin-bottom:8px;">During-event and post-event outreach are tracked separately and never merged.</div>
