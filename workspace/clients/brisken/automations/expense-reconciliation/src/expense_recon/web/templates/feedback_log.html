@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Feedback - Brisken Expense Reconciliation{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Reviewer feedback</h1>
+  <p class="muted">
+    {{ rows|length }} note{{ "" if rows|length == 1 else "s" }}, newest first.
+    Notes left with the double-click widget on any page land here.
+    <a href="/feedback.jsonl">Download JSONL</a>
+  </p>
+  <table>
+    <tr>
+      <th>When</th>
+      <th>Who</th>
+      <th>Where</th>
+      <th>Comment</th>
+    </tr>
+    {% for r in rows %}
+    <tr>
+      <td class="mono" style="white-space:nowrap;">{{ r.get("ts", "") }}</td>
+      <td><span class="badge pending">{{ r.get("role", "?") }}</span></td>
+      <td>
+        {% if r.get("run_id") %}
+        <a href="/runs/{{ r.get('run_id') }}">{{ r.get("page") }}</a>
+        {% else %}
+        <span class="mono">{{ r.get("page") or "/" }}</span>
+        {% endif %}
+        {% if r.get("section") %}<div class="muted">{{ r.get("section") }}</div>{% endif %}
+        {% if r.get("anchor") %}<div class="muted">&#8220;{{ r.get("anchor") }}&#8221;</div>{% endif %}
+        {% if r.get("pos") and r.get("pos").get("pct") is not none %}
+        <div class="muted">{{ r.get("pos").get("pct") }}% down the page</div>
+        {% endif %}
+        {% if r.get("selector") %}
+        <div class="mono muted" style="font-size:11px; word-break:break-all;">{{ r.get("selector") }}</div>
+        {% endif %}
+      </td>
+      <td>{{ r.get("comment", "") }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4" class="muted">No feedback yet.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

@@ -16,6 +16,9 @@ Routes:
     GET  /runs/{id}/zoho.csv    download the Zoho journal import (matched)
     GET  /runs/{id}/reconciled.csv  download the flat reconciled CSV
     GET  /guide / /how-it-works  embedded docs
+    POST /feedback              anchored reviewer note (any logged-in role)
+    GET  /feedback-log          the collected notes (operator only)
+    GET  /feedback.jsonl        raw notes download (operator only)
 """
 from __future__ import annotations
 
@@ -26,7 +29,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, Form, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+)
 from fastapi.templating import Jinja2Templates
 
 from ..cards_provision import card_by_key, load_cards
@@ -83,6 +92,14 @@ def _operator() -> str | None:
         or os.environ.get("USERNAME")
         or os.environ.get("USER")
     )
+
+
+def _run_id_from_path(page: str) -> str | None:
+    """The run id when a feedback note was left on a run page, else None."""
+    parts = page.strip("/").split("/")
+    if len(parts) >= 2 and parts[0] == "runs" and parts[1]:
+        return parts[1][:64]
+    return None
 
 
 def _run_job(db_path: Path, job_id: str, prepared: PreparedRun) -> None:
@@ -663,8 +680,88 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     }
                     for r in published
                 ],
+                "feedback": {
+                    "count": len(_read_feedback()),
+                },
             }
         )
+
+    # ── Reviewer feedback: the double-click widget in base.html posts here
+    # from every logged-in page. Attribution comes from the SESSION (the
+    # role), never from the body; the page path and the run id (when the
+    # note was left on a run page) locate the note. Storage is an
+    # append-only jsonl on the data volume; reading it is operator-only
+    # (auth._OPERATOR_RULES).
+    feedback_file = data_root_path / "feedback.jsonl"
+
+    @app.post("/feedback")
+    async def leave_feedback(request: Request) -> JSONResponse:
+        try:
+            data = await request.json()
+        except Exception:  # noqa: BLE001 - malformed body is a client error
+            return JSONResponse({"ok": False, "error": "invalid json"}, status_code=400)
+        if not isinstance(data, dict):
+            return JSONResponse({"ok": False, "error": "invalid payload"}, status_code=400)
+        comment = str(data.get("comment", "")).strip()
+        if not comment:
+            return JSONResponse(
+                {"ok": False, "error": "comment is required"}, status_code=400
+            )
+        # Position sanitized to the known numeric fields, so a note can be
+        # located exactly later (coordinates, scroll, % down the page).
+        raw_pos = data.get("pos")
+        pos = {}
+        if isinstance(raw_pos, dict):
+            for key in ("pageX", "pageY", "clientX", "clientY", "scrollY", "vw", "vh", "docH", "pct"):
+                value = raw_pos.get(key)
+                if isinstance(value, bool) or not isinstance(value, (int, float)):
+                    continue
+                pos[key] = int(value)
+        page = str(data.get("path", ""))[:300]
+        entry = {
+            "ts": _now_iso(),
+            "role": request.state.role,
+            "page": page,
+            "run_id": _run_id_from_path(page),
+            "title": str(data.get("title", ""))[:300],
+            "section": str(data.get("section", "")).strip()[:200],
+            "selector": str(data.get("selector", "")).strip()[:480],
+            "anchor": str(data.get("anchor", "")).strip()[:300],
+            "pos": pos or None,
+            "comment": comment[:8000],
+            "ip": request.headers.get("fly-client-ip")
+            or (request.client.host if request.client else ""),
+            "ua": request.headers.get("user-agent", "")[:400],
+        }
+        with feedback_file.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        return JSONResponse({"ok": True})
+
+    def _read_feedback() -> list[dict]:
+        rows: list[dict] = []
+        if feedback_file.exists():
+            for line in feedback_file.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(row, dict):
+                    rows.append(row)
+        return rows
+
+    @app.get("/feedback-log", response_class=HTMLResponse)
+    def feedback_log(request: Request) -> HTMLResponse:
+        rows = _read_feedback()
+        rows.reverse()  # newest first
+        return templates.TemplateResponse(request, "feedback_log.html", {"rows": rows})
+
+    @app.get("/feedback.jsonl")
+    def feedback_raw() -> PlainTextResponse:
+        text = feedback_file.read_text(encoding="utf-8") if feedback_file.exists() else ""
+        return PlainTextResponse(text, media_type="application/x-ndjson")
 
     @app.get("/compare", response_class=HTMLResponse)
     def compare(request: Request, a: str = "", b: str = ""):

@@ -222,7 +222,13 @@ the pipeline:
 - The server stays **API-free**: `tools/brisken-recon-notify.py` (run
   dev-side, `--once` after a publish or on a scheduled task) polls
   `/api/operator/state` and sends the Graph mails (new upload -> matthias;
-  run ready -> Chris + matthias). No Graph creds on the box.
+  run ready -> Chris + matthias; new feedback -> matthias). No Graph creds
+  on the box.
+- **Anchored feedback**: every logged-in page carries the double-click
+  widget (same pattern as the OnePilot prototype). A reviewer double-clicks
+  any spot, or uses the floating Feedback button, and the note lands in
+  `/data/feedback.jsonl` attributed to the session role, page, and run id.
+  Operators read it at `/feedback-log` (nav tab) or `/feedback.jsonl`.
 
 Card presets for the simplified upload live in `/data/cards.json` (env
 `EXPENSE_RECON_CARDS`; shape in `examples/cards.example.json`); unset =>

@@ -8,11 +8,12 @@ The hosted app (brisken-expense-recon.fly.dev) stays API-free per the One
 Assessment precedent: it never holds Graph credentials and never sends
 mail. THIS script, run on a dev machine (manually with --once after a
 publish, or via a scheduled task every ~15 min), polls the app's
-operator-state endpoint and sends the two notification mails via
+operator-state endpoint and sends the notification mails via
 Microsoft Graph:
 
 * new intake (user uploaded documents)  -> mail the dev
 * newly published run (result is ready) -> mail the user (Chris) + dev
+* new reviewer feedback (double-click widget) -> mail the dev
 
 State (which intakes/publishes were already announced) lives in a local
 gitignored JSON file, so re-runs never double-send.
@@ -74,6 +75,18 @@ def diff_state(state: dict, remote: dict) -> tuple[list[dict], list[dict]]:
     return new_intakes, new_publishes
 
 
+def diff_feedback(state: dict, remote: dict) -> int:
+    """Pure diff: how many reviewer-feedback notes are new since last pass.
+
+    The state API exposes only the count (the notes themselves are pulled
+    from /feedback.jsonl when there is something to announce). The jsonl is
+    append-only, so count deltas are exact; a count that shrank (volume
+    reset) announces nothing and re-baselines via apply_to_state."""
+    seen = int(state.get("seen_feedback_count", 0))
+    count = int((remote.get("feedback") or {}).get("count", 0))
+    return max(0, count - seen)
+
+
 def apply_to_state(state: dict, remote: dict) -> dict:
     """Mark everything currently visible as seen (after announcing)."""
     return {
@@ -87,6 +100,7 @@ def apply_to_state(state: dict, remote: dict) -> dict:
                 if r.get("run_id")
             }
         ),
+        "seen_feedback_count": int((remote.get("feedback") or {}).get("count", 0)),
     }
 
 
@@ -153,7 +167,9 @@ def send_mail(token: str, subject: str, body: str, recipients: tuple[str, ...]) 
         raise RuntimeError(f"sendMail failed: {resp.status_code} {resp.text[:300]}")
 
 
-def fetch_state_from_app() -> dict:
+def fetch_state_from_app():
+    """Operator login + state pull. Returns (state_json, session) so a
+    follow-up read (the feedback jsonl) can reuse the session cookie."""
     import requests
 
     code = os.environ.get("EXPENSE_RECON_OPERATOR_CODE", "").strip()
@@ -167,7 +183,25 @@ def fetch_state_from_app() -> dict:
             raise RuntimeError(f"operator login failed: {login.status_code}")
     resp = session.get(f"{BASE_URL}/api/operator/state", timeout=60)
     resp.raise_for_status()
-    return resp.json()
+    return resp.json(), session
+
+
+def fetch_feedback_entries(session) -> list[dict]:
+    """All reviewer-feedback notes, oldest first (operator-only endpoint)."""
+    resp = session.get(f"{BASE_URL}/feedback.jsonl", timeout=60)
+    resp.raise_for_status()
+    entries: list[dict] = []
+    for line in resp.text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(entry, dict):
+            entries.append(entry)
+    return entries
 
 
 def main() -> int:
@@ -180,13 +214,14 @@ def main() -> int:
 
     load_env_file(args.env_file)
 
-    remote = fetch_state_from_app()
+    remote, session = fetch_state_from_app()
     state = {}
     if args.state.exists():
         state = json.loads(args.state.read_text(encoding="utf-8"))
     new_intakes, new_publishes = diff_state(state, remote)
+    new_feedback = diff_feedback(state, remote)
 
-    if not new_intakes and not new_publishes:
+    if not new_intakes and not new_publishes and not new_feedback:
         print("nothing new")
         return 0
 
@@ -217,6 +252,27 @@ def main() -> int:
                 f"{r.get('run_id')} goes to the dev copy only"
             )
         plans.append((subject, body, recipients))
+    if new_feedback:
+        notes = fetch_feedback_entries(session)[-new_feedback:]
+        subject = (
+            f"Expense recon: {new_feedback} new feedback "
+            f"note{'s' if new_feedback != 1 else ''}"
+        )
+        lines = []
+        for n in notes:
+            where = n.get("page") or "/"
+            if n.get("section"):
+                where += f" ({n['section']})"
+            lines.append(
+                f"- [{n.get('ts', '?')}] {n.get('role', '?')} on {where}:\n"
+                f"  {n.get('comment', '')}"
+            )
+        body = (
+            "New reviewer feedback in the expense tool.\n\n"
+            + "\n".join(lines)
+            + f"\n\nFull log: {BASE_URL}/feedback-log\n"
+        )
+        plans.append((subject, body, DEV_RECIPIENTS))
 
     if args.dry_run:
         for subject, body, recipients in plans:

@@ -97,6 +97,45 @@
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
     .alert { background: var(--red-bg); color: var(--red); border: 1px solid var(--red); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; }
     .footer { color: var(--muted); font-size: 12px; padding: 16px 24px; text-align: center; }
+    /* ── Reviewer feedback: floating button + anchored popover + one-time
+       hint. Mirrors the OnePilot prototype widget, restyled on the app's
+       tokens. */
+    .feedback-fab {
+      position: fixed; right: 18px; bottom: 18px; z-index: 60;
+      background: var(--accent); color: var(--btn-ink); border: none; cursor: pointer;
+      padding: 9px 16px; border-radius: 999px; font-size: 13px; font-weight: 600;
+      font-family: inherit; box-shadow: var(--shadow);
+    }
+    .feedback-fab:hover { background: var(--accent-light); }
+    .fbpop {
+      position: fixed; z-index: 120; width: 320px; max-width: calc(100vw - 24px);
+      background: var(--surface); border: 1px solid var(--border-strong);
+      border-radius: 12px; box-shadow: var(--shadow); padding: 14px;
+    }
+    .fbpop[hidden] { display: none; }
+    .fbpop-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+    .fbpop-where { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: var(--accent); line-height: 1.35; }
+    .fbpop-where b { display: block; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; font-weight: 500; }
+    .fbpop-x { border: none; background: none; color: var(--muted); cursor: pointer; font-size: 19px; line-height: 1; padding: 0 2px; flex: none; }
+    .fbpop-x:hover { color: var(--text); }
+    .fbpop textarea { min-height: 84px; resize: vertical; }
+    .fbpop-actions { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+    .fbpop-actions .btn[disabled] { opacity: .6; cursor: progress; }
+    .fb-status { font-size: 12.5px; min-height: 1em; color: var(--muted); }
+    .fb-status.err { color: var(--red); }
+    .fbpop-done b { color: var(--heading); font-size: 14px; display: block; }
+    .fbpop-done span { color: var(--muted); font-size: 12.5px; display: block; margin-top: 4px; }
+    .fbpop-as { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--muted); margin: 10px 0 0; }
+    .fbhint-overlay { position: fixed; inset: 0; z-index: 130; background: rgba(2,18,43,.46); display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .fbhint-overlay[hidden] { display: none; }
+    .fbhint {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      box-shadow: var(--shadow); max-width: 420px; width: 100%; padding: 26px 26px 22px;
+    }
+    .fbhint h3 { font-size: 18px; color: var(--heading); margin: 0 0 10px; }
+    .fbhint p { color: var(--muted); font-size: 14px; line-height: 1.55; margin: 0 0 8px; }
+    .fbhint .cursor { color: var(--accent); font-weight: 600; }
+    .fbhint-actions { display: flex; gap: 12px; margin-top: 16px; }
     @media (max-width: 760px) {
       .site-nav { padding: 10px 12px; flex-wrap: wrap; row-gap: 8px; }
       .nav-tabs { flex-wrap: wrap; }
@@ -120,6 +159,7 @@
         <a class="nav-tab" href="/">Runs</a>
         <a class="nav-tab" href="/compare">Compare</a>
         <a class="nav-tab" href="/memory">Memory</a>
+        <a class="nav-tab" href="/feedback-log">Feedback</a>
         {% else %}
         <a class="nav-tab" href="/" data-i18n="nav_home">Home</a>
         {% endif %}
@@ -133,6 +173,42 @@
     {% block content %}{% endblock %}
   </div>
   <div class="footer">Brisken expense reconciliation. Your financial data stays on Brisken's private server.</div>
+
+  <button type="button" class="feedback-fab" data-fb-open data-i18n="fb_fab" aria-label="Leave feedback">Feedback</button>
+
+  <!-- Anchored feedback popover: appears where the reviewer double-clicks -->
+  <div class="fbpop" id="fbPop" role="dialog" aria-label="Leave feedback" hidden>
+    <div class="fbpop-head">
+      <div class="fbpop-where"><b data-i18n="fb_where">Feedback on</b><span id="fbWhereText">this page</span></div>
+      <button type="button" class="fbpop-x" id="fbClose" aria-label="Close">&#215;</button>
+    </div>
+    <div id="fbBody">
+      <label for="fbComment" data-i18n="fb_comment" style="margin-top:0;">Comment</label>
+      <textarea id="fbComment" maxlength="4000" data-i18n-ph="fb_comment_ph" placeholder="What is unclear, wrong, or missing?"></textarea>
+      <div class="fbpop-actions">
+        <button type="button" class="btn" id="fbSend" data-i18n="fb_send">Send</button>
+        <span class="fb-status" id="fbStatus" role="status" aria-live="polite"></span>
+      </div>
+      <p class="fbpop-as"><span data-i18n="fb_as">Sent as</span> {{ role }}</p>
+    </div>
+    <div class="fbpop-done" id="fbDone" hidden>
+      <b data-i18n="fb_done_t">Thank you, that is logged.</b>
+      <span data-i18n="fb_done_s">Double-click anywhere to leave another.</span>
+    </div>
+  </div>
+
+  <!-- One-time explainer for the double-click feedback -->
+  <div class="fbhint-overlay" id="fbHintOverlay" hidden>
+    <div class="fbhint" role="dialog" aria-label="How to leave feedback" aria-modal="true">
+      <h3 data-i18n="fb_hint_title">Leave feedback anywhere</h3>
+      <p><span class="cursor" data-i18n="fb_hint_dbl">Double-click anywhere on the page</span> <span data-i18n="fb_hint_p1">to leave a note about that exact spot: a number, a match, a label, the wording.</span></p>
+      <p data-i18n="fb_hint_p2">Prefer a general note? Use the Feedback button in the bottom corner.</p>
+      <div class="fbhint-actions">
+        <button type="button" class="btn" id="fbHintOk" data-i18n="fb_hint_ok">Got it</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // ── Lightweight EN/PT localization for the user surface. Chris works
     // in Portuguese (2026-07-15 walkthrough); operator pages stay EN.
@@ -179,7 +255,20 @@
       lg_review: "Precisa olhar",
       lg_noreceipt: "Sem comprovante",
       lg_posted: "Já no Zoho",
-      lg_subscription: "Assinatura"
+      lg_subscription: "Assinatura",
+      fb_fab: "Feedback",
+      fb_where: "Comentário sobre",
+      fb_comment: "Comentário",
+      fb_comment_ph: "O que está confuso, errado ou faltando?",
+      fb_send: "Enviar",
+      fb_as: "Enviado como",
+      fb_done_t: "Obrigado, foi registrado.",
+      fb_done_s: "Clique duas vezes em qualquer lugar para deixar outro.",
+      fb_hint_title: "Deixe comentários em qualquer lugar",
+      fb_hint_dbl: "Clique duas vezes em qualquer lugar da página",
+      fb_hint_p1: "para deixar uma nota sobre aquele ponto exato: um número, uma conciliação, um texto.",
+      fb_hint_p2: "Prefere uma nota geral? Use o botão Feedback no canto da tela.",
+      fb_hint_ok: "Entendi"
     };
     function ercApplyLang() {
       var lang = localStorage.getItem("erc-lang") || "en";
@@ -191,6 +280,15 @@
           el.textContent = ERC_PT[key];
         } else if (el.dataset.i18nEn) {
           el.textContent = el.dataset.i18nEn;
+        }
+      });
+      document.querySelectorAll("[data-i18n-ph]").forEach(function (el) {
+        var key = el.getAttribute("data-i18n-ph");
+        if (lang === "pt" && ERC_PT[key]) {
+          if (!el.dataset.i18nPhEn) { el.dataset.i18nPhEn = el.placeholder; }
+          el.placeholder = ERC_PT[key];
+        } else if (el.dataset.i18nPhEn) {
+          el.placeholder = el.dataset.i18nPhEn;
         }
       });
       var btn = document.getElementById("lang-toggle");
@@ -223,6 +321,146 @@
         e.preventDefault();
         location.href = tabs[next].getAttribute('href');
       });
+    })();
+  </script>
+  <script>
+    // ── Anchored reviewer feedback (mirrors the OnePilot prototype widget).
+    // Double-click anywhere -> popover at that spot; the FAB -> general
+    // note. POSTs to /feedback; the server attributes the note to the
+    // session role, so the page sends only location context.
+    (function () {
+      var pop = document.getElementById('fbPop');
+      if (!pop) return;
+      var whereText = document.getElementById('fbWhereText');
+      var commentI = document.getElementById('fbComment');
+      var sendBtn = document.getElementById('fbSend');
+      var statusEl = document.getElementById('fbStatus');
+      var body = document.getElementById('fbBody');
+      var done = document.getElementById('fbDone');
+      var ctx = { section: '', selector: '', anchor: '', pos: null };
+
+      var FB_MSG = {
+        en: { empty: 'Add a comment.', sending: 'Sending...', fail: 'Could not send. Please try again.' },
+        pt: { empty: 'Escreva um comentário.', sending: 'Enviando...', fail: 'Não foi possível enviar. Tente novamente.' }
+      };
+      function fbMsg(k) {
+        var lang = localStorage.getItem('erc-lang') || 'en';
+        return (FB_MSG[lang] || FB_MSG.en)[k];
+      }
+      function setStatus(m, err) {
+        statusEl.textContent = m || '';
+        statusEl.className = 'fb-status' + (err ? ' err' : '');
+      }
+
+      function position(x, y) {
+        pop.style.visibility = 'hidden';
+        pop.hidden = false;
+        var w = pop.offsetWidth, h = pop.offsetHeight;
+        var vw = window.innerWidth, vh = window.innerHeight, left, top;
+        if (vw < 560 || x == null) {
+          left = Math.max(12, (vw - w) / 2);
+          top = Math.max(12, vh - h - 20);
+        } else {
+          left = Math.min(Math.max(12, x + 14), vw - w - 12);
+          top = Math.min(Math.max(12, y + 14), vh - h - 12);
+        }
+        pop.style.left = left + 'px'; pop.style.top = top + 'px'; pop.style.visibility = '';
+      }
+
+      function open(opts) {
+        opts = opts || {};
+        ctx.section = opts.section || '';
+        ctx.selector = opts.selector || '';
+        ctx.anchor = opts.anchor || '';
+        ctx.pos = opts.pos || null;
+        whereText.textContent = opts.label || (ctx.section || 'this page');
+        body.hidden = false; done.hidden = true; setStatus('');
+        commentI.value = '';
+        position(opts.x, opts.y);
+        commentI.focus();
+      }
+      function close() { pop.hidden = true; }
+
+      // A stable CSS-selector path to the clicked element, anchored to the
+      // nearest ancestor id, so a note can be traced to the exact spot.
+      function buildSelector(el) {
+        if (!el || el.nodeType !== 1) return '';
+        var parts = [], node = el, depth = 0;
+        while (node && node.nodeType === 1 && node.tagName.toLowerCase() !== 'body' && depth < 8) {
+          if (node.id) { parts.unshift('#' + node.id); break; }
+          var seg = node.tagName.toLowerCase(), p = node.parentNode;
+          if (p && p.children) {
+            var sibs = Array.prototype.filter.call(p.children, function (c) { return c.tagName === node.tagName; });
+            if (sibs.length > 1) seg += ':nth-of-type(' + (Array.prototype.indexOf.call(sibs, node) + 1) + ')';
+          }
+          parts.unshift(seg);
+          node = p; depth++;
+        }
+        return parts.join(' > ').slice(0, 480);
+      }
+
+      function captureContext(el) {
+        var card = el.closest && el.closest('.card, .site-nav, .footer');
+        var label = '';
+        if (card) {
+          var h = card.querySelector('h1, h2');
+          label = (h ? h.textContent : '').replace(/\s+/g, ' ').trim();
+        }
+        var t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+        return { section: label.slice(0, 140), selector: buildSelector(el), anchor: t ? t.slice(0, 90) : '' };
+      }
+
+      document.addEventListener('dblclick', function (e) {
+        if (e.target.closest('#fbPop, #fbHintOverlay, a, button, input, textarea, select, label, summary')) return;
+        var c = captureContext(e.target);
+        var sel = window.getSelection && window.getSelection(); if (sel) sel.removeAllRanges();
+        var docH = Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0) || 1;
+        var pos = {
+          pageX: Math.round(e.pageX), pageY: Math.round(e.pageY),
+          clientX: Math.round(e.clientX), clientY: Math.round(e.clientY),
+          scrollY: Math.round(window.pageYOffset || 0),
+          vw: window.innerWidth, vh: window.innerHeight,
+          docH: Math.round(docH), pct: Math.round((e.pageY / docH) * 100)
+        };
+        var label = c.anchor ? '“' + c.anchor.slice(0, 44) + (c.anchor.length > 44 ? '…' : '') + '”' : (c.section || 'this page');
+        open({ x: e.clientX, y: e.clientY, section: c.section, selector: c.selector, anchor: c.anchor, pos: pos, label: label });
+      });
+
+      Array.prototype.forEach.call(document.querySelectorAll('[data-fb-open]'), function (b) {
+        b.addEventListener('click', function (e) { e.preventDefault(); open({ section: 'General note' }); });
+      });
+
+      document.getElementById('fbClose').addEventListener('click', close);
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !pop.hidden) close(); });
+      document.addEventListener('mousedown', function (e) {
+        if (!pop.hidden && !e.target.closest('#fbPop') && !e.target.closest('[data-fb-open]')) close();
+      });
+
+      sendBtn.addEventListener('click', function () {
+        var comment = commentI.value.trim();
+        if (!comment) { setStatus(fbMsg('empty'), true); return; }
+        sendBtn.disabled = true; setStatus(fbMsg('sending'));
+        fetch('/feedback', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            comment: comment, section: ctx.section, selector: ctx.selector,
+            anchor: ctx.anchor, pos: ctx.pos, path: location.pathname, title: document.title
+          })
+        }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+          .then(function () {
+            sendBtn.disabled = false; body.hidden = true; done.hidden = false;
+            setTimeout(function () { if (!pop.hidden && !done.hidden) close(); }, 2200);
+          })
+          .catch(function () { sendBtn.disabled = false; setStatus(fbMsg('fail'), true); });
+      });
+
+      // One-time explainer, shown on the first logged-in page view.
+      var ov = document.getElementById('fbHintOverlay');
+      function hideHint() { ov.hidden = true; try { localStorage.setItem('erc-fb-hint-seen', '1'); } catch (e) {} }
+      document.getElementById('fbHintOk').addEventListener('click', hideHint);
+      ov.addEventListener('mousedown', function (e) { if (e.target === ov) hideHint(); });
+      try { if (!localStorage.getItem('erc-fb-hint-seen')) setTimeout(function () { ov.hidden = false; }, 600); }
+      catch (e) { setTimeout(function () { ov.hidden = false; }, 600); }
     })();
   </script>
   {% block scripts %}{% endblock %}

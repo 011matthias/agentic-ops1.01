@@ -54,11 +54,27 @@ def test_apply_to_state_marks_all_visible():
     remote = {
         "intakes": [{"intake_id": "i1"}, {"intake_id": "i2"}],
         "published_runs": [{"run_id": "r9"}],
+        "feedback": {"count": 3},
     }
     state = mod.apply_to_state({"seen_intakes": ["gone"]}, remote)
-    assert state == {"seen_intakes": ["i1", "i2"], "seen_published": ["r9"]}
+    assert state == {
+        "seen_intakes": ["i1", "i2"],
+        "seen_published": ["r9"],
+        "seen_feedback_count": 3,
+    }
     # idempotent second pass announces nothing
     assert mod.diff_state(state, remote) == ([], [])
+    assert mod.diff_feedback(state, remote) == 0
+
+
+def test_feedback_diff_counts_only_new_notes():
+    mod = _load()
+    assert mod.diff_feedback({}, {"feedback": {"count": 2}}) == 2
+    assert mod.diff_feedback({"seen_feedback_count": 2}, {"feedback": {"count": 5}}) == 3
+    # pre-feedback state files and pre-feedback servers both announce nothing
+    assert mod.diff_feedback({"seen_feedback_count": 2}, {}) == 0
+    # a shrunk count (volume reset) never goes negative
+    assert mod.diff_feedback({"seen_feedback_count": 9}, {"feedback": {"count": 1}}) == 0
 
 
 def test_sender_is_hard_allowlisted():

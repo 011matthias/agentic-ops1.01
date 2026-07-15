@@ -49,10 +49,12 @@ OPEN_PATHS = frozenset({"/login", "/logout", "/healthz", "/favicon.ico"})
 OPEN_PREFIXES = ("/static/",)
 
 # Operator-only surface (testing mode): the pipeline trigger, job polling,
-# the intake run flow, publish, memory teaching, compare, and the state
-# API the dev-side notifier polls. `None` methods = every method. The
-# published-run visibility check for users is per-run (needs the DB row)
-# and lives in the route handlers, not here.
+# the intake run flow, publish, memory teaching, compare, the state
+# API the dev-side notifier polls, and the reviewer-feedback log (leaving
+# feedback via POST /feedback is open to every logged-in role; reading it
+# is not). `None` methods = every method. The published-run visibility
+# check for users is per-run (needs the DB row) and lives in the route
+# handlers, not here.
 _OPERATOR_RULES: tuple[tuple[re.Pattern, frozenset | None], ...] = (
     (re.compile(r"^/runs$"), frozenset({"POST"})),
     (re.compile(r"^/jobs/"), None),
@@ -61,6 +63,8 @@ _OPERATOR_RULES: tuple[tuple[re.Pattern, frozenset | None], ...] = (
     (re.compile(r"^/intakes/[^/]+($|/)"), None),  # POST /intakes itself is for users
     (re.compile(r"^/runs/[^/]+/(publish|unpublish|commit-memory|forget)$"), None),
     (re.compile(r"^/api/operator($|/)"), None),
+    (re.compile(r"^/feedback-log$"), None),
+    (re.compile(r"^/feedback\.jsonl$"), None),
 )
 
 # Stable for the life of the process; used only when AUTH_SECRET is unset.
