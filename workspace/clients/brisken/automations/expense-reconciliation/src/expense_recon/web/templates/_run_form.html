@@ -13,10 +13,12 @@
     <div>
       <label for="statement">Card statement (.csv / .xlsx / .pdf)</label>
       <input type="file" id="statement" name="statement" accept=".csv,.xlsx,.xlsm,.pdf" required>
+      <p class="muted" style="margin:4px 0 0; font-size:12px;">From the bank's website: the monthly statement PDF, or an activity export (.csv / .xlsx).</p>
     </div>
     <div>
-      <label for="receipts">Receipts file (.csv)</label>
-      <input type="file" id="receipts" name="receipts" accept=".csv" required>
+      <label for="receipts">Receipts: Zoho Expense report PDF or CSV</label>
+      <input type="file" id="receipts" name="receipts" accept=".csv,.pdf" required>
+      <p class="muted" style="margin:4px 0 0; font-size:12px;">From Zoho Expense: the expense report PDF (the ER-... document), or a CSV export. A report PDF is detected automatically; the source dropdown below only applies to CSVs.</p>
     </div>
   </div>
   {% endif %}
