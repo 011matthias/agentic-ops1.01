@@ -9,7 +9,62 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 
 ## brisken
 | Date | Topic | Type | Link |
-|------|-------|------|------|
+|------|--------|------|------|
+| 2026-07-17 | Brisken Protokoll Upload Lock | comms | [Checkpoint](docs/2026-07-17%20-%20Brisken%20Protokoll%20Upload%20Lock/Checkpoint.md) |
+| 2026-07-17 | Brisken 2026_PPTX Reorg Execution | client-dev | [Checkpoint](docs/2026-07-17%20-%20Brisken%202026_PPTX%20Reorg%20Execution/Checkpoint.md) |
+| 2026-07-17 | Brisken Expense Recon ER-PDF Ingest | client-dev | [Checkpoint](docs/2026-07-17%20-%20Brisken%20Expense%20Recon%20ER-PDF%20Ingest/Checkpoint.md) |
+| 2026-07-17 | Brisken Gupta Follow-Up And Shell Brief Resolution | comms | [Checkpoint](docs/2026-07-17%20-%20Brisken%20Gupta%20Follow-Up%20And%20Shell%20Brief%20Resolution/Checkpoint.md) |
+| 2026-07-17 | Brisken Outreach Staging | client-dev | [Checkpoint](docs/2026-07-17%20-%20Brisken%20Outreach%20Staging/Checkpoint.md) |
+| 2026-07-16 | Brisken Rome Outreach Status Reconciliation | client-dev | [Checkpoint](docs/2026-07-16%20-%20Brisken%20Rome%20Outreach%20Status%20Reconciliation/Checkpoint.md) |
+| 2026-07-16 | Brisken Expense-Recon ER-PDF Ingest Prep | client-dev | [Checkpoint](docs/2026-07-16%20-%20Brisken%20Expense-Recon%20ER-PDF%20Ingest%20Prep/Checkpoint.md) |
+| 2026-07-16 | Brisken Protokoll Dirk Review Integration | comms | [Checkpoint](docs/2026-07-16%20-%20Brisken%20Protokoll%20Dirk%20Review%20Integration/Checkpoint.md) |
+| 2026-07-16 | Brisken Lead Desk Branding | client-dev | [Checkpoint](docs/2026-07-16%20-%20Brisken%20Lead%20Desk%20Branding/Checkpoint.md) |
+| 2026-07-16 | Brisken 2026_PPTX Deck Library Reorg | client-dev | [Checkpoint](docs/2026-07-16%20-%20Brisken%202026_PPTX%20Deck%20Library%20Reorg/Checkpoint.md) |
+| 2026-07-16 | Brisken Presenter Pass and Sanofi Rollout | client-dev | [Checkpoint](docs/2026-07-16%20-%20Brisken%20Presenter%20Pass%20and%20Sanofi%20Rollout/Checkpoint.md) |
+| 2026-07-16 | Brisken Sanofi Call Sign-Off | client-dev | [Checkpoint](docs/2026-07-16%20-%20Brisken%20Sanofi%20Call%20Sign-Off/Checkpoint.md) |
+| 2026-07-16 | Brisken Lead Desk 4d Graph Sender | client-dev | [Checkpoint](docs/2026-07-16%20-%20Brisken%20Lead%20Desk%204d%20Graph%20Sender/Checkpoint.md) |
+| 2026-07-16 | Brisken Website GTC Links Fix | client-dev | [Checkpoint](docs/2026-07-16%20-%20Brisken%20Website%20GTC%20Links%20Fix/Checkpoint.md) |
+| 2026-07-16 | Brisken Protokoll EN Reproduction | comms | [Checkpoint](docs/2026-07-16%20-%20Brisken%20Protokoll%20EN%20Reproduction/Checkpoint.md) |
+| 2026-07-16 | Brisken Deck Archive Story Audit | client-dev | [Checkpoint](docs/2026-07-16%20-%20Brisken%20Deck%20Archive%20Story%20Audit/Checkpoint.md) |
+| 2026-07-16 | Expense Recon Feedback Widget + Deploy | client-dev | [Checkpoint](docs/2026-07-16%20-%20Expense%20Recon%20Feedback%20Widget%20+%20Deploy/Checkpoint.md) |
+| 2026-07-16 | Brisken Decks Three Distinct Bodies | client-dev | [Checkpoint](docs/2026-07-16%20-%20Brisken%20Decks%20Three%20Distinct%20Bodies/Checkpoint.md) |
+| 2026-07-16 | Lead Desk Audit-Fix Build | client-dev | [Checkpoint](docs/2026-07-16%20-%20Lead%20Desk%20Audit-Fix%20Build/Checkpoint.md) |
+| 2026-07-16 | Brisken Deck Storyline + Asset Architecture | client-dev | [Checkpoint](docs/2026-07-16%20-%20Brisken%20Deck%20Storyline%20+%20Asset%20Architecture/Checkpoint.md) |
+| 2026-07-15 | Brisken Expense-Recon Testing-Mode Restructure | client-dev | [Checkpoint](docs/2026-07-15%20-%20Brisken%20Expense-Recon%20Testing-Mode%20Restructure/Checkpoint.md) |
+| 2026-07-15 | Brisken Rome Grounding + Lead Desk Action-Needed | client-dev | [Checkpoint](docs/2026-07-15%20-%20Brisken%20Rome%20Grounding%20+%20Lead%20Desk%20Action-Needed/Checkpoint.md) |
+| 2026-07-15 | Brisken Hours Log + OneAssessment Tab | misc | [Checkpoint](docs/2026-07-15%20-%20Brisken%20Hours%20Log%20+%20OneAssessment%20Tab/Checkpoint.md) |
+| 2026-07-15 | Brisken Lead Desk Outreach Integration | client-dev | [Mini-Checkpoint-1](docs/2026-07-15%20-%20Brisken%20Lead%20Desk%20Outreach%20Integration/Mini-Checkpoint-1.md) |
+| 2026-07-14 | Brisken Videos V3 | client-dev | [Checkpoint](docs/2026-07-14%20-%20Brisken%20Videos%20V3/Checkpoint.md) |
+| 2026-07-14 | Brisken Resources Page Redesign | client-dev | [Checkpoint](docs/2026-07-14%20-%20Brisken%20Resources%20Page%20Redesign/Checkpoint.md) |
+| 2026-07-14 | Brisken Whiteboard Video Remake Brief | client-dev | [Checkpoint](docs/2026-07-14%20-%20Brisken%20Whiteboard%20Video%20Remake%20Brief/Checkpoint.md) |
+| 2026-07-14 | Brisken Microsoft Graph Access | client-dev | [Checkpoint](docs/2026-07-14%20-%20Brisken%20Microsoft%20Graph%20Access/Checkpoint.md) |
+| 2026-07-14 | Brisken Rome H5 Task Correction + Outreach Verification | client-dev | [Checkpoint](docs/2026-07-14%20-%20Brisken%20Rome%20H5%20Task%20Correction%20+%20Outreach%20Verification/Checkpoint.md) |
+| 2026-07-14 | Brisken Website Wix Lead Outreach | comms | [Checkpoint](docs/2026-07-14%20-%20Brisken%20Website%20Wix%20Lead%20Outreach/Checkpoint.md) |
+| 2026-07-14 | Brisken Lead Desk Campaign Engine | client-dev | [Checkpoint](docs/2026-07-14%20-%20Brisken%20Lead%20Desk%20Campaign%20Engine/Checkpoint.md) |
+| 2026-07-13 | Rome Post-Event Asset Hub Deploy | client-dev | [Checkpoint](docs/2026-07-13%20-%20Rome%20Post-Event%20Asset%20Hub%20Deploy/Checkpoint.md) |
+| 2026-07-14 | Brisken Rome Master Sheet + Outreach Audit | client-dev | [Checkpoint](docs/2026-07-14%20-%20Brisken%20Rome%20Master%20Sheet%20+%20Outreach%20Audit/Checkpoint.md) |
+| 2026-07-13 | Brisken Rome T3 Truth + Sales Nav Reconcile | client-dev | [Checkpoint](docs/2026-07-13%20-%20Brisken%20Rome%20T3%20Truth%20+%20Sales%20Nav%20Reconcile/Checkpoint.md) |
+| 2026-07-13 | Rome Contact Sheet Outbox Reconciliation | comms | [Checkpoint](docs/2026-07-13%20-%20Rome%20Contact%20Sheet%20Outbox%20Reconciliation/Checkpoint.md) |
+| 2026-07-13 | Brisken SAP One-Pager Redesign | client-dev | [Checkpoint](docs/2026-07-13%20-%20Brisken%20SAP%20One-Pager%20Redesign/Checkpoint.md) |
+| 2026-07-13 | Brisken Lead-Gen Hours Log | misc | [Checkpoint](docs/2026-07-13%20-%20Brisken%20Lead-Gen%20Hours%20Log/Checkpoint.md) |
+| 2026-07-13 | Rome T3 Email Wave | comms | [Checkpoint](docs/2026-07-13%20-%20Rome%20T3%20Email%20Wave/Checkpoint.md) |
+| 2026-07-12 | Brisken Resources Light Theme | client-dev | [Checkpoint](docs/2026-07-12%20-%20Brisken%20Resources%20Light%20Theme/Checkpoint.md) |
+| 2026-07-12 | Brisken Lovable Hub Audit | client-dev | [Checkpoint](docs/2026-07-12%20-%20Brisken%20Lovable%20Hub%20Audit/Checkpoint.md) |
+| 2026-07-12 | Brisken Video Narrator + Logo Handoff | client-dev | [Checkpoint](docs/2026-07-12%20-%20Brisken%20Video%20Narrator%20+%20Logo%20Handoff/Checkpoint.md) |
+| 2026-07-12 | Brisken Lead Desk Iteration 2 + Phase 2 Worker | client-dev | [Checkpoint](docs/2026-07-12%20-%20Brisken%20Lead%20Desk%20Iteration%202/Checkpoint.md) |
+| 2026-07-12 | Brisken Lead Desk Build | client-dev | [Checkpoint](docs/2026-07-12%20-%20Brisken%20Lead%20Desk%20Build/Checkpoint.md) |
+| 2026-07-12 | Brisken Use-Case Decks + Dirk Notification | comms | [Checkpoint](docs/2026-07-12%20-%20Brisken%20Use-Case%20Decks%20+%20Dirk%20Notification/Checkpoint.md) |
+| 2026-07-12 | Brisken Hours Log + Block-Size Rule Removal | misc | [Checkpoint](docs/2026-07-12%20-%20Brisken%20Hours%20Log%20+%20Block-Size%20Rule%20Removal/Checkpoint.md) |
+| 2026-07-11 | Dirk Email Hyperlink Standard | system-infra | [Checkpoint](docs/2026-07-11%20-%20Dirk%20Email%20Hyperlink%20Standard/Checkpoint.md) |
+| 2026-07-11 | Brisken TreasuryCentral Deck + Email | client-dev | [Checkpoint](docs/2026-07-11%20-%20Brisken%20TreasuryCentral%20Deck%20+%20Email/Checkpoint.md) |
+| 2026-07-11 | Brisken Rome ICD Dashboard Handling | comms | [Checkpoint](docs/2026-07-11%20-%20Brisken%20Rome%20ICD%20Dashboard%20Handling/Checkpoint.md) |
+| 2026-07-11 | Brisken Planner Audit + Sanofi Nudge | comms | [Checkpoint](docs/2026-07-11%20-%20Brisken%20Planner%20Audit%20+%20Sanofi%20Nudge/Checkpoint.md) |
+| 2026-07-11 | Brisken Outreach Topic Intake | client-dev | [Checkpoint](docs/2026-07-11%20-%20Brisken%20Outreach%20Topic%20Intake/Checkpoint.md) |
+| 2026-07-11 | Brisken Videos SharePoint Move + Calvin Workspace Tweak | client-dev | [Checkpoint](docs/2026-07-11%20-%20Brisken%20Videos%20SharePoint%20Move%20+%20Calvin%20Workspace%20Tweak/Checkpoint.md) |
+| 2026-07-11 | Brisken SAP Brochures Redesign | client-dev | [Checkpoint](docs/2026-07-11%20-%20Brisken%20SAP%20Brochures%20Redesign/Checkpoint.md) |
+| 2026-07-11 | Brisken Rome T2 Email Outreach | client-dev | [Checkpoint](docs/2026-07-11%20-%20Brisken%20Rome%20T2%20Email%20Outreach/Checkpoint.md) |
+| 2026-07-11 | Brisken Partner SAP Outreach | client-dev | [Checkpoint](docs/2026-07-11%20-%20Brisken%20Partner%20SAP%20Outreach/Checkpoint.md) |
+| 2026-07-10 | Brisken Rome Master Sheet Restructure | client-dev | [Checkpoint](docs/2026-07-10%20-%20Brisken%20Rome%20Master%20Sheet%20Restructure/Checkpoint.md) |
 | 2026-07-10 | Brisken BTP Removal H2-H4 | client-dev | [Checkpoint](docs/2026-07-10%20-%20Brisken%20BTP%20Removal%20H2-H4/Checkpoint.md) |
 | 2026-07-09 | Brisken SAP PartnerFinder Profile Completion | client-dev | [Checkpoint](docs/2026-07-09%20-%20Brisken%20SAP%20PartnerFinder%20Profile%20Completion/Checkpoint.md) |
 | 2026-07-09 | Brisken BTP Removal Audit | client-dev | [Checkpoint](docs/2026-07-09%20-%20Brisken%20BTP%20Removal%20Audit/Checkpoint.md) |
@@ -79,6 +134,26 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-06-11 | Brisken Expense Recon OCR Doctor Runlog | client-dev | [Checkpoint](docs/2026-06-11%20-%20Brisken%20Expense%20Recon%20OCR%20Doctor%20Runlog/Mini-Checkpoint-1.md) |
 | 2026-06-09 | Brisken Zoho Integration Slice 4 (4.6+4.9+live verify) | client-dev | [Checkpoint](docs/2026-06-09%20-%20Brisken%20Zoho%20Integration%20Slice%204/Checkpoint.md) |
 
+## jochen-projekt
+| Date | Topic | Type | Link |
+|------|-------|------|------|
+| 2026-07-17 | One Assessment Followup + Brisken Branding | client-dev | [Checkpoint](docs/2026-07-17%20-%20One%20Assessment%20Followup%20+%20Brisken%20Branding/Checkpoint.md) |
+| 2026-07-16 | One Assessment RG Calibration + Adjudication | client-dev | [Checkpoint](docs/2026-07-16%20-%20One%20Assessment%20RG%20Calibration%20+%20Adjudication/Checkpoint.md) |
+| 2026-07-16 | One Assessment Document Channel + Gate + Manual-LLM | client-dev | [Checkpoint](docs/2026-07-16%20-%20One%20Assessment%20Document%20Channel%20+%20Gate%20+%20Manual-LLM/Checkpoint.md) |
+| 2026-07-15 | One Assessment Workshop Channel + Feedback Resolution | client-dev | [Checkpoint](docs/2026-07-15%20-%20One%20Assessment%20Workshop%20Channel%20+%20Feedback%20Resolution/Checkpoint.md) |
+| 2026-07-15 | One Assessment Feedback Widget + Portal Access | client-dev | [Checkpoint](docs/2026-07-15%20-%20One%20Assessment%20Feedback%20Widget%20+%20Portal%20Access/Checkpoint.md) |
+| 2026-07-15 | One Assessment Portal Buttons + NextDecade | client-dev | [Checkpoint](docs/2026-07-15%20-%20One%20Assessment%20Portal%20Buttons%20+%20NextDecade/Checkpoint.md) |
+| 2026-07-15 | One Assessment Portal Access | client-dev | [Checkpoint](docs/2026-07-15%20-%20One%20Assessment%20Portal%20Access/Checkpoint.md) |
+| 2026-07-15 | One Assessment Portal Segmentation | client-dev | [Checkpoint](docs/2026-07-15%20-%20One%20Assessment%20Portal%20Segmentation/Checkpoint.md) |
+| 2026-07-14 | One Assessment Intake Portal + Portal Home | client-dev | [Checkpoint](docs/2026-07-14%20-%20One%20Assessment%20Intake%20Portal%20%2B%20Portal%20Home/Checkpoint.md) |
+| 2026-07-14 | One Assessment Fly Migration | client-dev | [Checkpoint](docs/2026-07-14%20-%20One%20Assessment%20Fly%20Migration/Checkpoint.md) |
+| 2026-07-14 | Jochen Protokoll for Dirk | comms | [Checkpoint](docs/2026-07-14%20-%20Jochen%20Protokoll%20for%20Dirk/Checkpoint.md) |
+| 2026-07-14 | Jochen Quick Treasury Assessment Build | client-dev | [Checkpoint](docs/2026-07-14%20-%20Jochen%20Quick%20Treasury%20Assessment%20Build/Checkpoint.md) |
+| 2026-07-14 | Jochen Projekt Transcript Synthesis | misc | [Checkpoint](docs/2026-07-14%20-%20Jochen%20Projekt%20Transcript%20Synthesis/Checkpoint.md) |
+| 2026-07-13 | Jochen Audio Transcription | misc | [Checkpoint](docs/2026-07-13%20-%20Jochen%20Audio%20Transcription/Checkpoint.md) |
+| 2026-07-13 | Jochen Treasury Assessment Pipeline | client-dev | [Checkpoint](docs/2026-07-13%20-%20Jochen%20Treasury%20Assessment%20Pipeline/Checkpoint.md) |
+| 2026-07-13 | Jochen Projekt Assessment Pipeline Plan | client-dev | [Checkpoint](docs/2026-07-13%20-%20Jochen%20Projekt%20Assessment%20Pipeline%20Plan/Checkpoint.md) |
+
 ## volabyg
 | Date | Topic | Type | Link |
 |------|-------|------|------|
@@ -87,6 +162,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-13 | AOL Notation Experiment | system-infra | [Checkpoint](docs/2026-07-13%20-%20AOL%20Notation%20Experiment/Checkpoint.md) |
+| 2026-07-10 | Harness Hardening Audit + Execution | system-infra | [Checkpoint](docs/2026-07-10%20-%20Harness%20Hardening%20Audit%20%2B%20Execution/Checkpoint.md) |
 | 2026-06-21 | Project Status Convention | system-infra | [Checkpoint](docs/2026-06-21%20-%20Project%20Status%20Convention/Checkpoint.md) |
 | 2026-06-18 | Deep Self-Anneal Convergence Cycle | system-infra | [Checkpoint](docs/2026-06-18%20-%20Deep%20Self-Anneal%20Convergence%20Cycle/Checkpoint.md) |
 | 2026-06-18 | File-Placement System + Self-Anneal Extension | system-infra | [Checkpoint](docs/2026-06-18%20-%20File-Placement%20System%20+%20Self-Anneal%20Extension/Checkpoint.md) |
@@ -122,6 +199,12 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## meji-media
 | Date | Topic | Link |
 |------|-------|------|
+| 2026-07-16 | Meji Media Intel Sweep + Multi-Inbox Build | [Checkpoint](docs/2026-07-16%20-%20Meji%20Media%20Intel%20Sweep%20+%20Multi-Inbox%20Build/Checkpoint.md) |
+| 2026-07-16 | Meji Media Leak Sweep | [Checkpoint](docs/2026-07-16%20-%20Meji%20Media%20Leak%20Sweep/Checkpoint.md) |
+| 2026-07-14 | Meji Version C Dream Accounts | [Checkpoint](docs/2026-07-14%20-%20Meji%20Version%20C%20Dream%20Accounts/Checkpoint.md) |
+| 2026-07-14 | Meji Corporate Cold Diagnosis and Prep | [Checkpoint](docs/2026-07-14%20-%20Meji%20Corporate%20Cold%20Diagnosis%20and%20Prep/Checkpoint.md) |
+| 2026-07-13 | Meji Make Credit Alert | [Mini-Checkpoint-1](docs/2026-07-13%20-%20Meji%20Make%20Credit%20Alert/Mini-Checkpoint-1.md) |
+| 2026-07-12 | Meji Media P2 Approval + Warm Fix | [Checkpoint](docs/2026-07-12%20-%20Meji%20Media%20P2%20Approval%20+%20Warm%20Fix/Checkpoint.md) |
 | 2026-07-07 | Meji Media Ops (P2 Send, Referral, Report, P1 Ramp) | [Checkpoint](docs/2026-07-07%20-%20Meji%20Media%20Ops/Checkpoint.md) |
 | 2026-07-01 | Meji P2 Retarget + P3 Ramp | [Checkpoint](docs/2026-07-01%20-%20Meji%20P2%20Retarget%20+%20P3%20Ramp/Checkpoint.md) |
 | 2026-06-27 | Meji P3 Go-Live + Weekly Review System | [Checkpoint](docs/2026-06-27%20-%20Meji%20P3%20Go-Live%20+%20Weekly%20Review%20System/Checkpoint.md) |
