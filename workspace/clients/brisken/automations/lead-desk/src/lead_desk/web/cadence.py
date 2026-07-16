@@ -619,15 +619,25 @@ def approval_report(store: ContactStore, campaign_id: str) -> dict:
 
 
 def approve_campaign(store: ContactStore, campaign_id: str, user: str,
-                     confirm_slug: str) -> dict:
+                     confirm_slug: str, now: str | None = None) -> dict:
     """THE gate. Validates, freezes template pins + the list hash, stamps the
-    campaign approved and every pending enrollment. Nothing sends before this."""
+    campaign approved and every pending enrollment. Nothing sends before this.
+
+    ``now`` (ISO) is injectable so tests can pin approved_at; production leaves
+    it None and uses the wall clock."""
     if confirm_slug.strip() != campaign_id:
         return {"ok": False, "errors": ["type the campaign id to confirm"]}
     report = approval_report(store, campaign_id)
+    # Lifecycle guard: a 'done' campaign (e.g. the historical Rome roster) must
+    # not be re-approvable by data-validation side effects alone; reopening is a
+    # deliberate transition. Only draft / paused / (incremental) approved-sending
+    # proceed.
+    if (report.get("campaign") or {}).get("status") == "done":
+        return {"ok": False, "errors": [
+            "This campaign is marked done. Reopen it before approving."]}
     if not report["ok"]:
         return report
-    now = _iso(now_utc())
+    now = now or _iso(now_utc())
     # Fresh approval (draft/paused) pins the latest version of every template.
     # An INCREMENTAL approval (campaign already approved; approving late-added
     # enrollments) PRESERVES existing pins - otherwise a template edited since
@@ -656,11 +666,13 @@ def approve_campaign(store: ContactStore, campaign_id: str, user: str,
 
 
 def start_sending(store: ContactStore, campaign_id: str, user: str,
-                  confirm_slug: str) -> dict:
+                  confirm_slug: str, now: str | None = None) -> dict:
     """THE SECOND GATE. Approval froze the copy + list; this is the explicit
     in-app confirm that actually turns sending ON (status approved -> sending).
     The worker only ever claims from a 'sending' campaign, so nothing leaves
-    until a human presses this and re-types the campaign id."""
+    until a human presses this and re-types the campaign id.
+
+    ``now`` (ISO) is injectable for tests; production leaves it None."""
     if confirm_slug.strip() != campaign_id:
         return {"ok": False, "errors": ["type the campaign id to confirm"]}
     campaign = store.get_campaign(campaign_id)
@@ -670,7 +682,7 @@ def start_sending(store: ContactStore, campaign_id: str, user: str,
         return {"ok": False, "errors": [
             f"campaign is '{campaign['status']}'; it must be 'approved' "
             "(copy + list frozen) before sending can start"]}
-    now = _iso(now_utc())
+    now = now or _iso(now_utc())
     store.update_campaign(campaign_id, {"status": "sending"}, now)
     store.set_state(f"sending-started:{campaign_id}",
                     json.dumps({"at": now, "by": user}), now)

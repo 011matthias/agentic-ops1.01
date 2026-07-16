@@ -291,12 +291,14 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             enrollments = [dict(r) for r in store.enrollments_for_campaign(cid)]
             attempts = [dict(a) for a in store.attempts_for_campaign(cid)]
             pins = store.get_pins(cid)
+            kill_switch = (store.get_state("kill_switch") or "0") == "1"
         return templates.TemplateResponse(
             request, "campaign.html",
             {"campaign": campaign, "report": report, "rules": rules,
              "sequences": sequences, "templates_": all_templates,
              "enrollments": enrollments, "attempts": attempts, "pins": pins,
              "degrees": DEGREES, "send_modes": SEND_MODES,
+             "kill_switch": kill_switch,
              "user": current_user(request)},
         )
 
@@ -501,8 +503,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 return HTMLResponse("Attempt not found", status_code=404)
             if attempt["status"] not in ("stalled", "parked", "failed"):
                 return HTMLResponse("Not retryable", status_code=400)
+            # Reset attempt_count too: try_lease re-leases a 'queued' row only
+            # while attempt_count < max_attempts, so an operator retry of a
+            # send that exhausted the transient-retry cap was a silent no-op
+            # without this. An operator-initiated retry is a fresh start.
             store.update_attempt(attempt_key.strip(), {
-                "status": "queued", "failure_reason": None,
+                "status": "queued", "failure_reason": None, "attempt_count": 0,
             })
         target = f"/campaigns/{campaign}" if campaign.strip() else "/"
         return RedirectResponse(url=target, status_code=303)

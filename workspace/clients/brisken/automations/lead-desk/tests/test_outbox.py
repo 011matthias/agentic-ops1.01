@@ -62,10 +62,13 @@ def make_engine_campaign(store, contact_ids, cid="camp1", *, daily_cap=40,
         enr = store.find_enrollment(contact_id, cid)
         store.set_degree(enr["enrollment_id"], degree, "manual", "test")
     if approve:
-        res = cadence.approve_campaign(store, cid, "tester", cid)
+        # Pin approved_at to the fixed base so a day-0 step's due date does not
+        # depend on the wall clock (else once real-now passes the fixed IN_WINDOW,
+        # approved_at > IN_WINDOW and the claim tests break - a latent time-bomb).
+        res = cadence.approve_campaign(store, cid, "tester", cid, now=now)
         assert res["ok"], res
         if start:
-            sres = cadence.start_sending(store, cid, "tester", cid)
+            sres = cadence.start_sending(store, cid, "tester", cid, now=now)
             assert sres["ok"], sres
     return cid
 
