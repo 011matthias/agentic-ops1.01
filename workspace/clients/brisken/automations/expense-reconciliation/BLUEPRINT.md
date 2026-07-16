@@ -920,6 +920,24 @@ this beyond Chris.
 **Effort:** Lovable path ~3 days. Zoho Expense path ~2 days. Decision
 depends on whether Brisken wants to be Zoho-Expense-dependent.
 
+**Lighter-weight partial (BUILT 2026-07-16):** rather than the full
+Zoho API path, receipts now also flow in as the consolidated Zoho
+Expense report PDF (ER-NNNNN) Chris already has, no Zoho API access
+needed. `src/expense_recon/ingest/expense_report_pdf.py` reads the
+EXPENSE SUMMARY table's text layer (pypdf) deterministically into
+`Receipt` objects, cross-checking the parsed per-currency sum against
+the report's own printed Total Expense Amount to the cent. Wired as
+`receipts.source: "expense_report_pdf"` in the CLI (auto-inferred from
+a `.pdf` receipts path when `source` is omitted) and sniffed
+automatically in the web upload (`web/service.py` `prepare_run`) so
+the operator never has to flip the receipts-source dropdown. Verified
+against 5 real Brisken ER PDFs fetched via Graph (rule_brisken_graph_first):
+all 5 parsed with 0 issues and matched their printed totals exactly.
+The receipt-image pages embedded later in the same PDF (Uber rides,
+forwarded hotel/flight confirmations) are NOT OCR'd by this path; a
+per-row missing-receipt flag was scoped out as not cheap to detect
+deterministically from the table alone.
+
 ---
 
 ## Critical-path summary
