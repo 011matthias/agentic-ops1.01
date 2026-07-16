@@ -81,6 +81,35 @@ def test_prepare_run_sniffs_pdf_receipts_to_expense_report_pdf_source(tmp_path):
     assert "column_map" not in prepared.cfg["receipts"]
 
 
+def test_prepare_run_pdf_source_on_csv_upload_is_form_error(tmp_path):
+    """The dropdown now offers 'Zoho Expense report PDF' explicitly; picking
+    it with a .csv upload must be a friendly RunInputError, not a deep
+    parser crash."""
+    from expense_recon.web.service import RunInputError
+
+    with pytest.raises(RunInputError, match="needs a .pdf upload"):
+        prepare_run(
+            tmp_path,
+            statement_bytes=(EXAMPLES / "statement.example.csv").read_bytes(),
+            statement_filename="statement.example.csv",
+            receipts_bytes=(EXAMPLES / "receipts.example.csv").read_bytes(),
+            receipts_filename="receipts.example.csv",
+            form=_run_form(receipts_source="expense_report_pdf"),
+            now_iso="2026-07-16T00:00:00",
+            operator=None,
+        )
+
+
+def test_operator_form_offers_report_pdf_source(client):
+    """The operator home run-form dropdown lists the report-PDF source
+    (added 2026-07-16 alongside the CSV options, not replacing them)."""
+    html = client.get("/").text
+    assert 'value="expense_report_pdf"' in html
+    assert "Zoho Expense report PDF" in html
+    assert 'value="expense_csv"' in html          # still offered
+    assert 'value="csv"' in html                  # still the default
+
+
 def test_prepare_run_keeps_csv_source_for_csv_receipts(tmp_path):
     prepared = prepare_run(
         tmp_path,
