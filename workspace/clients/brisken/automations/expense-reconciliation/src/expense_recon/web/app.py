@@ -60,6 +60,7 @@ from .service import (
     regenerate_report,
     regenerate_writeback,
     regenerate_zoho,
+    replace_intake_files,
     reset_memory,
     validate_manual_match,
 )
@@ -309,6 +310,55 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     card_key=card.key if card else None,
                     now_iso=_now_iso(),
                     uploaded_by=request.state.role,
+                )
+        except RunInputError as exc:
+            with open_store() as store:
+                if request.state.role == auth.ROLE_OPERATOR:
+                    return templates.TemplateResponse(
+                        request,
+                        "home_operator.html",
+                        _operator_home_ctx(store, error=exc.message),
+                        status_code=400,
+                    )
+                return templates.TemplateResponse(
+                    request,
+                    "home_user.html",
+                    _user_home_ctx(store, error=exc.message),
+                    status_code=400,
+                )
+        return RedirectResponse(url="/", status_code=303)
+
+    # Replace (or late-add) files on a queued intake (2026-07-16 user
+    # feedback: a wrongly-attached file needs a way out). `received` only;
+    # the service layer enforces that and validates extensions.
+    @app.post("/intakes/{intake_id}/files")
+    async def post_intake_files(
+        request: Request,
+        intake_id: str,
+        statement: UploadFile | None = None,
+        receipts: UploadFile | None = None,
+    ):
+        with open_store() as store:
+            intake = store.get_intake(intake_id)
+        if intake is None:
+            return HTMLResponse("Upload not found", status_code=404)
+
+        statement_bytes = await statement.read() if statement is not None else None
+        receipts_bytes = await receipts.read() if receipts is not None else None
+        try:
+            with open_store() as store:
+                replace_intake_files(
+                    store,
+                    intake,
+                    statement_bytes=statement_bytes,
+                    statement_filename=(
+                        statement.filename if statement is not None else None
+                    ),
+                    receipts_bytes=receipts_bytes,
+                    receipts_filename=(
+                        receipts.filename if receipts is not None else None
+                    ),
+                    now_iso=_now_iso(),
                 )
         except RunInputError as exc:
             with open_store() as store:

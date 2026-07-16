@@ -72,6 +72,32 @@
           {% endif %}
         </td>
       </tr>
+      {% if i.status == "received" %}
+      <tr>
+        <td colspan="4" style="padding-top:0;">
+          <details>
+            <summary class="muted" style="cursor:pointer; font-size:13px;" data-i18n="uh_swap">Sent the wrong file? Replace it here.</summary>
+            <form method="post" action="/intakes/{{ i.intake_id }}/files" enctype="multipart/form-data"
+                  style="margin-top:8px;"
+                  onsubmit="var b=this.querySelector('button[type=submit]'); b.disabled=true; b.textContent=document.documentElement.getAttribute('data-lang')==='pt'?'Enviando...':'Sending...';">
+              <div class="grid">
+                <div>
+                  <label for="swap-stmt-{{ i.intake_id }}" data-i18n="uh_swap_stmt">New bank statement (leave empty to keep the current one)</label>
+                  <input type="file" id="swap-stmt-{{ i.intake_id }}" name="statement" accept=".csv,.xlsx,.xlsm,.pdf">
+                </div>
+                <div>
+                  <label for="swap-rcpt-{{ i.intake_id }}" data-i18n="uh_swap_rcpt">New receipts file (leave empty to keep the current one)</label>
+                  <input type="file" id="swap-rcpt-{{ i.intake_id }}" name="receipts" accept=".csv,.pdf">
+                </div>
+              </div>
+              <div style="margin-top:8px;">
+                <button class="btn btn-secondary btn-small" type="submit" data-i18n="uh_swap_send">Replace</button>
+              </div>
+            </form>
+          </details>
+        </td>
+      </tr>
+      {% endif %}
       {% endfor %}
     </tbody>
   </table>

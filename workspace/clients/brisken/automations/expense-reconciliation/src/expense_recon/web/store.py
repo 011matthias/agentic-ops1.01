@@ -315,6 +315,35 @@ class RunStore:
         ).fetchone()
         return self._row_to_intake(row) if row else None
 
+    def update_intake_files(
+        self,
+        intake_id: str,
+        *,
+        statement_name: str | None = None,
+        receipts_name: str | None = None,
+        detect_note: str | None = None,
+        updated_at: str,
+    ) -> None:
+        """Partial update after a file replace (2026-07-16 user feedback:
+        "tem que ter opcao para tirar o arquivo que foi colocado errado").
+        Only the columns passed as non-None change; the status is
+        untouched (the endpoint restricts replaces to `received`)."""
+        sets, params = ["updated_at = ?"], [updated_at]
+        if statement_name is not None:
+            sets.append("statement_name = ?")
+            params.append(statement_name)
+        if receipts_name is not None:
+            sets.append("receipts_name = ?")
+            params.append(receipts_name)
+        if detect_note is not None:
+            sets.append("detect_note = ?")
+            params.append(detect_note)
+        params.append(intake_id)
+        self.conn.execute(
+            f"UPDATE intakes SET {', '.join(sets)} WHERE intake_id = ?", params
+        )
+        self.conn.commit()
+
     def set_intake_status(
         self,
         intake_id: str,
