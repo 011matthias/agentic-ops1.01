@@ -88,3 +88,11 @@ as an encrypted Fly.io secret; it is never committed to source control.
 
 Least privilege in one line: two read scopes, one mailbox, one region,
 rotatable credential, no write anywhere.
+
+Credential decision (deferred to the 4d build): whether the capture worker
+reuses the existing "BRISKEN MARKETING OPS INTEGRATION" app-only creds (already
+Fly secrets, broader scope) or a dedicated least-privilege second app is
+decided in the 4d Graph-sender build, not here. The capture code reads
+`LEAD_DESK_TENANT_ID` / `LEAD_DESK_CLIENT_ID` / `LEAD_DESK_CLIENT_SECRET` and a
+`LEAD_DESK_MAILBOXES` allowlist (dirk + matthias), so either choice is a
+config-only change.
