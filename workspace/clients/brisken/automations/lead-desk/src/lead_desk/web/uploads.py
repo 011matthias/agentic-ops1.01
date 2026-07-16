@@ -13,7 +13,7 @@ import csv
 import io
 
 from ..identity import contact_id_for, natural_key
-from .store import CONTACT_COLUMNS, ContactStore
+from .store import CONTACT_COLUMNS, DEGREES, ContactStore
 from . import cadence
 from .service import now_iso
 
@@ -52,7 +52,17 @@ def _rows_from_csv(data: bytes) -> tuple[list[str], list[dict]]:
     headers = [_norm_header(h) for h in (reader.fieldnames or [])]
     rows = []
     for raw in reader:
-        rows.append({_norm_header(k): (v or "").strip() for k, v in raw.items() if k})
+        row: dict = {}
+        for k, v in raw.items():
+            if not k:
+                continue
+            nk = _norm_header(k)
+            val = (v or "").strip()
+            # When two source headers collapse to the same field, keep the FIRST
+            # non-empty value instead of silently last-wins.
+            if not row.get(nk):
+                row[nk] = val
+        rows.append(row)
     return headers, rows
 
 
@@ -75,7 +85,9 @@ def _rows_from_xlsx(data: bytes) -> tuple[list[str], list[dict]]:
             if not h:
                 continue
             v = r[i] if i < len(r) else None
-            row[h] = str(v).strip() if v is not None else ""
+            val = str(v).strip() if v is not None else ""
+            if not row.get(h):   # first non-empty wins on a collapsed column
+                row[h] = val
         rows.append(row)
     return headers, rows
 
@@ -95,10 +107,15 @@ def import_upload(store: ContactStore, campaign_id: str, filename: str,
 
     known = set(UPLOADABLE) | {"full_name", "degree"}
     unmapped = sorted(h for h in headers if h and h not in known)
+    # Two source headers that normalise to the same field collapse into one
+    # column (last value would otherwise be lost silently); report which fields.
+    from collections import Counter
+    collapsed = sorted(f for f, n in Counter(h for h in headers if h).items() if n > 1)
     now = now_iso()
     new_contacts = adopted = enrolled = already = degree_set = 0
     suppressed_hit = 0
     skipped: list[str] = []
+    bad_degrees: list[str] = []
 
     for ordinal, row in enumerate(rows):
         email = (row.get("email") or "").strip() or None
@@ -145,7 +162,9 @@ def import_upload(store: ContactStore, campaign_id: str, filename: str,
             already += 1
         # An explicit degree column in the file is a manual assignment.
         want_degree = (row.get("degree") or "").strip().lower()
-        if want_degree:
+        if want_degree and want_degree not in DEGREES:
+            bad_degrees.append(f"row {ordinal + 2}: '{want_degree}'")  # rejected, not stored
+        elif want_degree:
             enr = store.find_enrollment(cid, campaign_id)
             if enr is not None and not enr["approved_at"]:
                 store.set_degree(enr["enrollment_id"], want_degree, "manual",
@@ -161,4 +180,5 @@ def import_upload(store: ContactStore, campaign_id: str, filename: str,
         "manual_degrees_from_file": degree_set,
         "classified": classify["changed"],
         "unmapped_columns": unmapped, "skipped": skipped,
+        "collapsed_columns": collapsed, "rejected_degrees": bad_degrees,
     }

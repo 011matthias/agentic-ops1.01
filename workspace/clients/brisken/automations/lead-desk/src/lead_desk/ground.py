@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 from pathlib import Path
 
 from .migrate import is_during_event
@@ -49,13 +50,17 @@ def _norm(s) -> str:
     return (s or "").strip().lower()
 
 
+# All leading reply/forward prefixes, repeated, EN + DE (Re/Fw/Fwd/AW/WG),
+# with or without a bracketed count ("Re[2]:"). collapse_ws handles the rest.
+_PREFIX_RE = re.compile(r"^(?:\s*(?:re|fw|fwd|aw|wg)(?:\[\d+\])?\s*:\s*)+", re.IGNORECASE)
+
+
 def _base_subject(subj: str) -> str:
-    """Strip a single Re:/Fw: prefix so a reply/forward maps to its wave."""
-    s = _norm(subj)
-    for p in ("re: ", "fw: ", "fwd: "):
-        if s.startswith(p):
-            return s[len(p):].strip()
-    return s
+    """Normalise a subject to its wave base: strip EVERY leading reply/forward
+    prefix (repeated Re:/Fw:/Fwd: and the German AW:/WG:) and collapse internal
+    whitespace, so a 'Re: Re: AW:  worth ...' reply still maps to its wave."""
+    s = _PREFIX_RE.sub("", _norm(subj))
+    return re.sub(r"\s+", " ", s).strip()
 
 
 def _pull(mbx: str, folder: str, flt: str, select: str, headers: dict) -> list[dict]:
@@ -83,6 +88,7 @@ def collect(campaign: str) -> tuple[dict[str, dict[str, str]], dict[str, str]]:
     rw0, rw1 = cfg["reply_window"]
     sends: dict[str, dict[str, str]] = {}
     replies: dict[str, str] = {}
+    unmatched: dict[str, int] = {}
     for mbx in cfg["mailboxes"]:
         assert mbx in MAILBOXES, f"mailbox not allowlisted: {mbx}"
         for m in _pull(mbx, "SentItems",
@@ -90,6 +96,12 @@ def collect(campaign: str) -> tuple[dict[str, dict[str, str]], dict[str, str]]:
                        "subject,sentDateTime,toRecipients", headers):
             wave = waves.get(_base_subject(m.get("subject")))
             if not wave:
+                # An in-window send that matches no wave: log it so a wording
+                # drift (a subject edited since these were hard-coded) is visible
+                # rather than a silent miss.
+                base = _base_subject(m.get("subject"))
+                if base:
+                    unmatched[base] = unmatched.get(base, 0) + 1
                 continue
             d = (m.get("sentDateTime") or "")[:10]
             for tr in (m.get("toRecipients") or []):
@@ -107,6 +119,11 @@ def collect(campaign: str) -> tuple[dict[str, dict[str, str]], dict[str, str]]:
             d = (m.get("receivedDateTime") or "")[:10]
             if frm and (frm not in replies or d < replies[frm]):
                 replies[frm] = d
+    if unmatched:
+        top = sorted(unmatched.items(), key=lambda kv: -kv[1])[:8]
+        print(f"[ground] {sum(unmatched.values())} in-window send(s) matched NO wave "
+              f"(possible subject drift): "
+              + "; ".join(f'"{s}" x{n}' for s, n in top))
     return sends, replies
 
 

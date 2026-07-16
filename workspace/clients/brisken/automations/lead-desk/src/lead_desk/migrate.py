@@ -202,6 +202,7 @@ def import_workbook(store: ContactStore, xlsx: Path, campaign: str, report: dict
     name_groups: dict[str, list[str]] = defaultdict(list)
     events_added = 0
     contacts = 0
+    sheet_diffs: list[dict] = []   # app-owned fields where the sheet now differs
 
     for ordinal, r in enumerate(it):
         if all(c is None for c in r):
@@ -248,7 +249,17 @@ def import_workbook(store: ContactStore, xlsx: Path, campaign: str, report: dict
         }
         # Sheet-follows-app re-sync: once a contact exists, keep the app's own
         # pipeline fields (next_step) rather than letting the sheet reset them.
-        if preserve_app_fields and store.get_contact_by_key(nk) is not None:
+        # But if the sheet now carries a DIFFERENT non-empty value for one of
+        # those fields, record it so the operator sees "sheet differs" rather
+        # than the edit vanishing silently.
+        existing_row = store.get_contact_by_key(nk) if preserve_app_fields else None
+        if existing_row is not None:
+            for fld in APP_OWNED_ON_RESYNC:
+                sheet_val = str(data.get(fld) or "").strip()
+                board_val = str(existing_row[fld] or "").strip()
+                if sheet_val and sheet_val != board_val:
+                    sheet_diffs.append({"contact_id": cid, "field": fld,
+                                        "sheet": sheet_val, "board": board_val})
             data = {k: v for k, v in data.items() if k not in APP_OWNED_ON_RESYNC}
         store.upsert_contact(data, now)
         contacts += 1
@@ -328,6 +339,8 @@ def import_workbook(store: ContactStore, xlsx: Path, campaign: str, report: dict
     report["contacts"] = contacts
     report["events_from_sheet"] = events_added
     report["fuzzy_dups"] = {k: v for k, v in name_groups.items() if len(set(v)) > 1}
+    report["sheet_diffs"] = sheet_diffs
+    report["sheet_diff_count"] = len(sheet_diffs)
     return email_index
 
 

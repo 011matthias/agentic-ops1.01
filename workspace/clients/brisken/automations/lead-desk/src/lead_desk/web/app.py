@@ -44,8 +44,9 @@ from fastapi.templating import Jinja2Templates
 
 from . import auth, cadence, uploads
 from .service import (
-    EDITABLE_FLAGS, EDITABLE_TEXT, apply_fields, build_board, build_contact_view,
-    create_contact, ingest_event, log_touch, now_iso, toggle_suppress,
+    EDITABLE_FLAGS, EDITABLE_TEXT, StaleWriteError, apply_fields, build_board,
+    build_contact_view, create_contact, ingest_event, log_touch, now_iso,
+    toggle_suppress,
 )
 from .store import (
     CHANNELS, DEGREES, DIRECTIONS, EVENT_TYPES, SEND_MODES, ContactStore,
@@ -202,9 +203,15 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         for k in EDITABLE_FLAGS:
             if k in managed:
                 fields[k] = 1 if str(form.get(k, "")).strip() in ("1", "true", "on") else 0
+        expected = str(form.get("updated_at", "")).strip() or None
         with open_store() as store:
             try:
-                apply_fields(store, contact_id, fields, current_user(request))
+                apply_fields(store, contact_id, fields, current_user(request),
+                             expected_updated_at=expected)
+            except StaleWriteError:
+                # Someone (a sync or another editor) changed the row since this
+                # form loaded: reject and reload rather than clobber the newer data.
+                return RedirectResponse(url=f"/contacts/{contact_id}?stale=1", status_code=303)
             except ValueError:
                 return HTMLResponse("Contact not found", status_code=404)
         return RedirectResponse(url=f"/contacts/{contact_id}", status_code=303)
@@ -686,17 +693,25 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             return JSONResponse({"error": "unauthorized"}, status_code=401)
         if not have_creds():
             return JSONResponse({"error": "graph credentials not configured"}, status_code=503)
+        is_browser = "text/html" in (request.headers.get("accept") or "")
         try:
             if campaign:
                 reps = [await asyncio.to_thread(run_sync, data_root_path, campaign=campaign)]
             else:
                 reps = await asyncio.to_thread(run_all, data_root_path)
         except Exception as exc:  # noqa: BLE001 - surface sync failures to the caller
+            with open_store() as st:
+                st.set_state("last_sync_error", f"{now_iso()}: {exc}", now_iso())
+            if is_browser:  # readable banner, not a raw JSON dump in the browser
+                return RedirectResponse(url="/?sync_error=1", status_code=303)
             return JSONResponse({"error": str(exc)}, status_code=500)
-        if "text/html" in (request.headers.get("accept") or ""):
-            return RedirectResponse(url="/", status_code=303)  # browser form submit
+        total = sum(r.get("total_contacts", 0) or 0 for r in reps)
+        diffs = sum(r.get("sheet_diff_count", 0) or 0 for r in reps)
+        if is_browser:  # confirmation banner instead of a silent reload
+            return RedirectResponse(url=f"/?synced={total}&sdiffs={diffs}", status_code=303)
         return JSONResponse({"ok": True, "synced": [
             {"campaign": r.get("campaign"), "contacts": r.get("total_contacts"),
+             "sheet_diffs": r.get("sheet_diff_count"),
              "source_modified": (r.get("source") or {}).get("last_modified")}
             for r in reps]})
 
@@ -712,14 +727,25 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         interval = int(os.environ.get("LEAD_DESK_SYNC_INTERVAL", "86400"))  # daily
 
         async def _loop():
+            backoff = 60
             while True:
                 try:
                     reps = await asyncio.to_thread(run_all, data_root_path)
                     tot = sum(r.get("total_contacts", 0) for r in reps)
                     print(f"[sync] pass ok: {len(reps)} campaign(s), {tot} contacts")
+                    sleep_for, backoff = interval, 60
                 except Exception as exc:  # noqa: BLE001
                     print(f"[sync] pass failed: {exc}")
-                await asyncio.sleep(interval)
+                    try:
+                        with open_store() as st:
+                            st.set_state("last_sync_error", f"{now_iso()}: {exc}", now_iso())
+                    except Exception:  # noqa: BLE001 - never let error-recording kill the loop
+                        pass
+                    # Retry in MINUTES (exponential, capped at 1h), not after the
+                    # full daily interval, so a transient Graph 503 recovers fast.
+                    sleep_for = min(backoff, interval)
+                    backoff = min(backoff * 2, 3600)
+                await asyncio.sleep(sleep_for)
 
         asyncio.create_task(_loop())
 

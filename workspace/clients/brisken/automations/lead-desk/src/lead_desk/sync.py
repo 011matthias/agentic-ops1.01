@@ -166,6 +166,12 @@ def run_sync(data_dir: Path | str, *, campaign: str = "rome-2026",
         report["total_contacts"] = len(rows)
         report["suppressed"] = sum(1 for r in rows if r["suppressed"])
         report["stages"] = dict(Counter(r["stage"] for r in rows))
+        # Freshness signals for the board strip: last good sync + any fields
+        # where the sheet now differs from the operator's board edits.
+        ts = now_iso()
+        store.set_state("last_sync_ok", ts, ts)
+        store.set_state("last_sync_diffs", str(report.get("sheet_diff_count", 0)), ts)
+        store.delete_state("last_sync_error")
     try:
         tmp.unlink()
     except OSError:
