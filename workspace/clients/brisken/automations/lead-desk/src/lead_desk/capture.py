@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -39,7 +40,66 @@ SCOPE = "https://graph.microsoft.com/.default"
 
 # Graph $select sets, kept minimal (only what the sink needs to match + record).
 _MSG_SELECT = "internetMessageId,subject,sentDateTime,receivedDateTime,from,toRecipients,ccRecipients"
+# Inbox needs the auto-reply headers + a body snippet to attribute an NDR bounce.
+_INBOX_SELECT = _MSG_SELECT + ",internetMessageHeaders,bodyPreview"
 _EVT_SELECT = "iCalUId,subject,start,organizer,attendees"
+
+# Future demos are invisible until the meeting day unless calendarView reaches
+# forward; the sink is idempotent on iCalUId, so a generous horizon is safe.
+CALENDAR_HORIZON_DAYS = 60
+
+# HARD mailbox allowlist (rule_brisken_graph_first): the capture worker may only
+# ever read these two mailboxes, regardless of env input.
+ALLOWED_MAILBOXES = ("dirk.neumann@brisken.com", "matthias.silva@brisken.com")
+
+_EMAIL_RE = re.compile(r"[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}", re.IGNORECASE)
+_NDR_SENDERS = ("postmaster@", "mailer-daemon@", "microsoftexchange")
+_NDR_SUBJECT_RE = re.compile(
+    r"undeliverable|delivery has failed|mail delivery failed|delivery status "
+    r"notification|returned mail|unzustellbar|nicht zugestellt", re.IGNORECASE)
+_AUTO_SUBJECT_RE = re.compile(
+    r"automatic reply|out of office|auto[- ]?reply|abwesenhe|autosvar|"
+    r"automatische antwort|absence du bureau", re.IGNORECASE)
+
+
+def _headers_map(msg: dict) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for h in msg.get("internetMessageHeaders") or []:
+        name = (h.get("name") or "").strip().lower()
+        if name:
+            out[name] = (h.get("value") or "").strip()
+    return out
+
+
+def is_auto_reply(msg: dict) -> bool:
+    """An OOO / vacation / auto-generated message. Detected from RFC 3834
+    ``Auto-Submitted`` / ``X-Auto-Response-Suppress`` headers, else the subject."""
+    h = _headers_map(msg)
+    auto = h.get("auto-submitted", "").lower()
+    if auto and auto != "no":            # auto-replied | auto-generated
+        return True
+    if h.get("x-auto-response-suppress"):
+        return True
+    return bool(_AUTO_SUBJECT_RE.search(msg.get("subject") or ""))
+
+
+def is_ndr(msg: dict) -> bool:
+    """A bounce / non-delivery report from a mailer daemon."""
+    frm = (((msg.get("from") or {}).get("emailAddress") or {}).get("address") or "").lower()
+    if any(s in frm for s in _NDR_SENDERS):
+        return True
+    return bool(_NDR_SUBJECT_RE.search(msg.get("subject") or ""))
+
+
+def _failed_recipient(msg: dict, owner: str) -> str | None:
+    """Best-effort extraction of the bounced address from an NDR's subject +
+    body snippet (skipping our own address and the daemon's)."""
+    text = f"{msg.get('subject') or ''} {msg.get('bodyPreview') or ''}"
+    for addr in _EMAIL_RE.findall(text):
+        a = addr.lower()
+        if a != owner and "postmaster" not in a and "mailer-daemon" not in a:
+            return a
+    return None
 
 
 # -- pure mapping (unit-tested without network) -------------------------------
@@ -70,18 +130,48 @@ def sent_to_payloads(msgs: list[dict]) -> list[dict]:
     return out
 
 
-def inbox_to_payloads(msgs: list[dict]) -> list[dict]:
-    """A message from Inbox -> one inbound 'reply' event keyed on the sender."""
+def inbox_to_payloads(msgs: list[dict], mailbox: str = "") -> list[dict]:
+    """An Inbox message -> a sink payload, classified so a cadence is not halted
+    or a stage promoted by noise:
+
+    * an NDR / bounce -> ``type='bounce'`` keyed on the FAILED recipient, so the
+      sink auto-suppresses that contact (not the mailer daemon);
+    * an OOO / auto-reply -> a low-signal ``type='note'`` (does not promote to
+      'replied' and does not halt the cadence);
+    * a genuine inbound -> ``type='reply'``.
+    """
+    owner = (mailbox or "").strip().lower()
     out = []
     for m in msgs:
+        mid = m.get("internetMessageId")
+        subj = m.get("subject")
+        ts = m.get("receivedDateTime")
         addr = (((m.get("from") or {}).get("emailAddress") or {}).get("address") or "").strip().lower()
+        if is_ndr(m):
+            failed = _failed_recipient(m, owner)
+            if failed:
+                out.append({
+                    "email": failed, "type": "bounce", "direction": "inbound",
+                    "channel": "email", "occurred_at": ts, "subject": subj,
+                    "detail": "auto: non-delivery report", "source": "graph-auto",
+                    "internet_message_id": mid,
+                })
+            continue
         if not addr:
+            continue
+        if is_auto_reply(m):
+            out.append({
+                "email": addr, "type": "note", "direction": "inbound",
+                "channel": "email", "occurred_at": ts, "subject": subj,
+                "detail": "auto: auto-reply / OOO (cadence not halted)",
+                "source": "graph-auto", "internet_message_id": mid,
+            })
             continue
         out.append({
             "email": addr, "type": "reply", "direction": "inbound",
-            "channel": "email", "occurred_at": m.get("receivedDateTime"),
-            "subject": m.get("subject"), "detail": "auto: inbound reply",
-            "source": "graph-auto", "internet_message_id": m.get("internetMessageId"),
+            "channel": "email", "occurred_at": ts, "subject": subj,
+            "detail": "auto: inbound reply", "source": "graph-auto",
+            "internet_message_id": mid,
         })
     return out
 
@@ -145,21 +235,29 @@ class GraphClient:
         return items
 
 
-def poll(client: GraphClient, mailbox: str, since: datetime, until: datetime) -> list[dict]:
-    """Fetch sent + inbox + calendar in [since, until] and return sink payloads."""
-    s = since.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    u = until.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+def _z(dt: datetime) -> str:
+    return dt.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def poll(client: GraphClient, mailbox: str, since: datetime, until: datetime,
+         horizon_days: int = CALENDAR_HORIZON_DAYS) -> list[dict]:
+    """Fetch sent + inbox + calendar and return sink payloads. Mail is bounded
+    [since, until]; the CALENDAR upper bound reaches ``horizon_days`` forward so
+    a demo booked for a future date is captured now, not on the meeting day."""
+    assert mailbox.strip().lower() in ALLOWED_MAILBOXES, f"mailbox not allowlisted: {mailbox}"
+    s = _z(since)
+    cal_u = _z(until + timedelta(days=horizon_days))
     box = f"{GRAPH}/users/{mailbox}"
     sent = client.get_all(
         f"{box}/mailFolders/sentitems/messages?$select={_MSG_SELECT}"
         f"&$filter=sentDateTime ge {s}&$top=100")
     inbox = client.get_all(
-        f"{box}/mailFolders/inbox/messages?$select={_MSG_SELECT}"
+        f"{box}/mailFolders/inbox/messages?$select={_INBOX_SELECT}"
         f"&$filter=receivedDateTime ge {s}&$top=100")
     events = client.get_all(
-        f"{box}/calendarView?startDateTime={s}&endDateTime={u}"
+        f"{box}/calendarView?startDateTime={s}&endDateTime={cal_u}"
         f"&$select={_EVT_SELECT}&$top=100")
-    return (sent_to_payloads(sent) + inbox_to_payloads(inbox)
+    return (sent_to_payloads(sent) + inbox_to_payloads(inbox, mailbox)
             + calendar_to_payloads(events, mailbox))
 
 
@@ -200,10 +298,19 @@ def main(argv: list[str] | None = None) -> int:
 
     env = os.environ
     missing = [k for k in ("LEAD_DESK_TENANT_ID", "LEAD_DESK_CLIENT_ID",
-                           "LEAD_DESK_CLIENT_SECRET", "LEAD_DESK_MAILBOX")
+                           "LEAD_DESK_CLIENT_SECRET")
                if not env.get(k)]
     if missing:
         print(f"ERROR: missing env: {', '.join(missing)}")
+        return 2
+
+    # Resolve the mailbox set (LEAD_DESK_MAILBOXES comma-list, else the single
+    # LEAD_DESK_MAILBOX) and HARD-filter to the allowlist - never poll another.
+    raw = env.get("LEAD_DESK_MAILBOXES") or env.get("LEAD_DESK_MAILBOX") or ""
+    mailboxes = [m for m in (x.strip().lower() for x in raw.split(",") if x.strip())
+                 if m in ALLOWED_MAILBOXES]
+    if not mailboxes:
+        print(f"ERROR: no allowlisted mailbox configured (allowed: {', '.join(ALLOWED_MAILBOXES)})")
         return 2
 
     now = datetime.now(timezone.utc)
@@ -214,8 +321,11 @@ def main(argv: list[str] | None = None) -> int:
 
     client = GraphClient(env["LEAD_DESK_TENANT_ID"], env["LEAD_DESK_CLIENT_ID"],
                          env["LEAD_DESK_CLIENT_SECRET"])
-    payloads = poll(client, env["LEAD_DESK_MAILBOX"], since, now)
-    print(f"polled {env['LEAD_DESK_MAILBOX']} since {since.isoformat()}: {len(payloads)} candidate events")
+    payloads: list[dict] = []
+    for mbx in mailboxes:
+        payloads.extend(poll(client, mbx, since, now))
+    print(f"polled {', '.join(mailboxes)} since {since.isoformat()}: "
+          f"{len(payloads)} candidate events")
 
     if args.dry_run:
         for pl in payloads[:25]:
