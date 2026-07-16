@@ -490,6 +490,17 @@ def build_contact_view(store: ContactStore, contact_id: str) -> dict | None:
             "attempts": [dict(a) for a in attempts],
         })
 
+    # Possible duplicates to merge: same last name + company, not already merged.
+    merge_candidates: list[dict] = []
+    if (contact.get("last_name") or "").strip() or (contact.get("company") or "").strip():
+        merge_candidates = [dict(c) for c in store.conn.execute(
+            "SELECT contact_id, first_name, last_name, company, email FROM contacts "
+            "WHERE contact_id != ? AND merged_into IS NULL "
+            "AND lower(COALESCE(last_name,'')) = lower(?) "
+            "AND lower(COALESCE(company,'')) = lower(?)",
+            (contact_id, contact.get("last_name") or "", contact.get("company") or ""),
+        ).fetchall()]
+
     return {
         "contact": contact,
         "events": events,
@@ -498,6 +509,7 @@ def build_contact_view(store: ContactStore, contact_id: str) -> dict | None:
         "suppress_reasons": SUPPRESS_REASONS,
         "tier_vocab": list(TIER_VOCAB),
         "phases": outreach_phases(events),
+        "merge_candidates": merge_candidates,
     }
 
 

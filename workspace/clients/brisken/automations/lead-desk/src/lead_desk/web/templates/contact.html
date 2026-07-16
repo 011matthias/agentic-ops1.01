@@ -28,6 +28,42 @@
   </div>
 </div>
 
+<div class="card" style="border-left:4px solid var(--accent);">
+  <div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px;">
+    <h2>Context brief</h2>
+    <button type="button" class="btn btn-small btn-secondary" onclick="copyBrief(this)">Copy</button>
+  </div>
+  <div id="ctx-brief" style="font-size:13.5px; line-height:1.6;">
+    <div><strong>Who:</strong> {{ c.job_title or 'role unknown' }}{% if c.company %} at {{ c.company }}{% endif %}{% if c.persona %} &middot; {{ c.persona }}{% endif %}.</div>
+    <div><strong>Why now:</strong> {{ c.signal or c.tier_reason or 'no public trigger on file' }}.</div>
+    <div><strong>Relationship:</strong> {{ c.if_we_know_them or 'no prior relationship noted' }}{% if c.dirk_notes %} &middot; {{ c.dirk_notes }}{% endif %}.</div>
+    <div><strong>History:</strong> {% if view.phases.during_event.any %}E-waves {{ view.phases.during_event.waves|join(', ') }}{% if view.phases.during_event.replied %}, replied {{ view.phases.during_event.replied }}{% endif %}{% elif view.phases.post_event.any %}post-event follow-up {{ view.phases.post_event.sent }}{% else %}no outreach on record{% endif %}.</div>
+    <div><strong>Ask:</strong> {{ c.next_step or 'no next step set' }}.</div>
+  </div>
+</div>
+
+{% if view.merge_candidates %}
+<div class="card" style="border-left:4px solid var(--orange);">
+  <h2>Possible duplicates</h2>
+  <div class="muted" style="font-size:12px; margin-bottom:8px;">Same last name + company. Merging folds the other contact's timeline and enrollments into THIS contact and leaves it as a suppressed duplicate.</div>
+  <table>
+    <thead><tr><th>Name</th><th>Company</th><th>Email</th><th></th></tr></thead>
+    <tbody>
+    {% for m in view.merge_candidates %}
+      <tr>
+        <td><a href="/contacts/{{ m.contact_id }}">{{ m.first_name }} {{ m.last_name }}</a></td>
+        <td>{{ m.company or '' }}</td><td>{{ m.email or '' }}</td>
+        <td><form method="post" action="/contacts/{{ m.contact_id }}/merge" style="margin:0;" onsubmit="return confirm('Merge {{ m.first_name }} {{ m.last_name }} INTO this contact? The other row becomes a suppressed duplicate. This cannot be undone.');">
+          <input type="hidden" name="survivor" value="{{ c.contact_id }}">
+          <button class="btn btn-small btn-secondary" type="submit">Merge into this</button>
+        </form></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 {% if c.recommended and c.recommended.needed %}
 <div class="card" style="border-left:4px solid var(--accent);">
   <div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px;">
@@ -271,4 +307,15 @@
     </tbody>
   </table>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function copyBrief(btn) {
+    var t = document.getElementById('ctx-brief').innerText;
+    navigator.clipboard.writeText(t).then(function () {
+      var o = btn.textContent; btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = o; }, 1200);
+    });
+  }
+</script>
 {% endblock %}

@@ -215,6 +215,12 @@ def import_workbook(store: ContactStore, xlsx: Path, campaign: str, report: dict
         nk = natural_key(email, first, last, company, ordinal)
         cid = contact_id_for(nk)
 
+        # A merged-away duplicate stays a tombstone: never resurrect it as a
+        # fresh active contact on the next sync.
+        _prior = store.get_contact_by_key(nk)
+        if _prior is not None and _prior["merged_into"]:
+            continue
+
         rowdict = {h: col(r, h) for h in header}
         supp, reason = suppression(rowdict)
 

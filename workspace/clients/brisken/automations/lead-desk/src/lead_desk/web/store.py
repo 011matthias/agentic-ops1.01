@@ -93,6 +93,7 @@ CONTACT_COLUMNS = (
     "fob_encoded", "booth_registered_at", "crm_last_activity",
     "bant_need", "bant_authority", "bant_timeline", "bant_budget",
     "demo_date", "dirk_verdict", "dirk_notes", "notes",
+    "merged_into",
 )
 
 _SCHEMA = """
@@ -396,11 +397,31 @@ _MIGRATIONS: dict[int, list] = {
     # sum, and booked/accepted read the LATEST booked/unbooked (accepted/
     # unaccepted) event so clearing a demo_date / verdict actually reverses.
     3: _refresh_views_sql("contact_stage"),
+    # v4: merge-duplicate tombstone pointer. A merged loser stays as a
+    # suppressed 'duplicate' row pointing at its survivor, so the next sheet
+    # sync cannot resurrect it as a fresh active contact.
+    4: [_add_column("contacts", "merged_into", "TEXT")],
 }
 
 # Highest applied migration. On a fresh DB the runner applies 1..N in order;
 # on the prod DB it applies only the entries above its current user_version.
 SCHEMA_VERSION = max(_MIGRATIONS)
+
+
+# Suppression reasons, most-restrictive first (permanent consent blocks, then
+# exclusion tiers, then the revisitable hold). Used when a merge unions two
+# contacts' suppression onto the survivor.
+_SUPPRESS_PRIORITY = (
+    "no_consent", "stop", "do_not_contact", "bounced",
+    "duplicate", "test", "organiser", "own_team", "unreachable", "anon", "held",
+)
+
+
+def _stronger_suppress_reason(a: str | None, b: str | None) -> str | None:
+    for r in _SUPPRESS_PRIORITY:
+        if a == r or b == r:
+            return r
+    return a or b
 
 
 def event_hash(contact_id, ts, channel, type_, detail, ext_key=None) -> str:
@@ -505,10 +526,50 @@ class ContactStore:
         addr = (addr or "").strip().lower()
         if not addr:
             return None
-        return self.conn.execute(
+        row = self.conn.execute(
             "SELECT * FROM contacts WHERE lower(email) = ? OR lower(alt_email) = ? LIMIT 1",
             (addr, addr),
         ).fetchone()
+        # Follow a merge tombstone to the survivor, so an event captured for a
+        # merged loser's address lands on the surviving contact's timeline.
+        if row is not None and row["merged_into"]:
+            survivor = self.get_contact(row["merged_into"])
+            if survivor is not None:
+                return survivor
+        return row
+
+    def merge_contacts(self, survivor_id: str, loser_id: str, now: str) -> dict:
+        """Fold ``loser`` into ``survivor``: repoint the loser's events +
+        enrollments, union suppression most-restrictively, and leave the loser
+        as a suppressed 'duplicate' tombstone pointing at the survivor (so the
+        next sheet sync cannot resurrect it). Returns a small result dict."""
+        survivor = self.get_contact(survivor_id)
+        loser = self.get_contact(loser_id)
+        if survivor is None or loser is None or survivor_id == loser_id:
+            return {"ok": False, "error": "bad survivor/loser"}
+        moved = self.conn.execute(
+            "UPDATE outreach_events SET contact_id = ? WHERE contact_id = ?",
+            (survivor_id, loser_id)).rowcount
+        self.conn.execute(
+            "UPDATE OR IGNORE enrollments SET contact_id = ? WHERE contact_id = ?",
+            (survivor_id, loser_id))
+        self.conn.execute("DELETE FROM enrollments WHERE contact_id = ?", (loser_id,))
+        # most-restrictive suppression wins on the survivor
+        reason = _stronger_suppress_reason(
+            survivor["suppress_reason"] if survivor["suppressed"] else None,
+            loser["suppress_reason"] if loser["suppressed"] else None)
+        if reason and not survivor["suppressed"]:
+            self.conn.execute(
+                "UPDATE contacts SET suppressed = 1, suppress_reason = ?, "
+                "suppressed_at = ?, suppressed_by = 'merge', updated_at = ? WHERE contact_id = ?",
+                (reason, now, now, survivor_id))
+        self.conn.execute(
+            "UPDATE contacts SET suppressed = 1, suppress_reason = 'duplicate', "
+            "merged_into = ?, updated_at = ? WHERE contact_id = ?",
+            (survivor_id, now, loser_id))
+        self.conn.commit()
+        return {"ok": True, "events_moved": moved,
+                "survivor": survivor_id, "loser": loser_id}
 
     def update_fields(self, contact_id: str, fields: dict, now: str) -> None:
         cols = [c for c in fields if c in CONTACT_COLUMNS
