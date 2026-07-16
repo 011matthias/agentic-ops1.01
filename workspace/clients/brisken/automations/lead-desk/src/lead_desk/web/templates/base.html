@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
   <title>{% block title %}Brisken Lead Desk{% endblock %}</title>
   <script>
     (function () {
@@ -154,6 +155,18 @@
         if (s) { e.preventDefault(); s.focus(); s.select(); }
       }
     });
+    // CSRF: inject the session token into every POST form on submit.
+    document.addEventListener('submit', function (e) {
+      var f = e.target;
+      if (f && (f.method || '').toLowerCase() === 'post' && !f.querySelector('input[name="csrf"]')) {
+        var m = document.querySelector('meta[name="csrf-token"]');
+        if (m && m.content) {
+          var i = document.createElement('input');
+          i.type = 'hidden'; i.name = 'csrf'; i.value = m.content;
+          f.appendChild(i);
+        }
+      }
+    }, true);
   </script>
   {% block scripts %}{% endblock %}
 </body>
