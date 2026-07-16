@@ -60,6 +60,19 @@ def _now_utc() -> datetime:
     return cadence.now_utc()
 
 
+def cloud_worker_enabled() -> tuple[bool, str]:
+    """The in-app tick loop is OPT-IN: it runs only where LEAD_DESK_CLOUD_WORKER=1
+    is set (fly.toml [env] on the hosted app). Local dev and test runs never set
+    it, so a TestClient app or a laptop `lead-desk-web` can never start a loop
+    that talks to real Graph (the dev .env creds fallback would otherwise make
+    that possible)."""
+    if os.environ.get("LEAD_DESK_CLOUD_WORKER") != "1":
+        return False, "LEAD_DESK_CLOUD_WORKER != 1 (opt-in; set on Fly only)"
+    if not have_creds():
+        return False, "BRISKEN_GRAPH_* credentials absent"
+    return True, "enabled"
+
+
 # -- capture ------------------------------------------------------------------
 
 def _capture_state_path(data_dir: Path) -> Path:

@@ -22,3 +22,11 @@ _FIXED_NOW = _dt.datetime(2026, 7, 15, 9, 0, tzinfo=_dt.timezone.utc)
 @pytest.fixture(autouse=True)
 def _pin_engine_clock(monkeypatch):
     monkeypatch.setattr(cadence, "now_utc", lambda: _FIXED_NOW)
+
+
+@pytest.fixture(autouse=True)
+def _no_cloud_worker(monkeypatch):
+    """The in-app cloud worker is opt-in (LEAD_DESK_CLOUD_WORKER=1 on Fly
+    only). Hard-delete it here so a dev shell that exported it can never leak
+    a live Graph loop into a TestClient app."""
+    monkeypatch.delenv("LEAD_DESK_CLOUD_WORKER", raising=False)
