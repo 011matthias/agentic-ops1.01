@@ -8,15 +8,20 @@
       <h1>Campaigns</h1>
       <div class="muted">Each campaign: upload contacts, classify by warmness, approve copy + list once, then the worker sends automatically until reply/bounce/suppress.</div>
     </div>
+    {% if kill_switch %}
+    <div class="inline">
+      <span class="badge suppressed" title="No campaign can send while this is on">SENDING BLOCKED &middot; kill switch ON</span>
+      <form method="post" action="/worker/kill" style="margin:0;" onsubmit="return confirm('Re-enable sending? This lifts the global stop on ALL campaigns.');">
+        <input type="hidden" name="on" value="0">
+        <button class="btn btn-small btn-secondary" type="submit">Re-enable sending</button>
+      </form>
+    </div>
+    {% else %}
     <form method="post" action="/worker/kill" style="margin:0;">
-      {% if kill_switch %}
-      <input type="hidden" name="on" value="0">
-      <button class="btn btn-small" type="submit" style="background:var(--red);">KILL SWITCH ON - click to re-enable sending</button>
-      {% else %}
       <input type="hidden" name="on" value="1">
-      <button class="btn btn-small btn-secondary" type="submit">Stop all sending (kill switch)</button>
-      {% endif %}
+      <button class="btn btn-small" type="submit" style="background:var(--red);">Stop all sending (kill switch)</button>
     </form>
+    {% endif %}
   </div>
 </div>
 

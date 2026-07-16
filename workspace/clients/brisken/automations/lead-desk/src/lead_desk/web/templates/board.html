@@ -38,6 +38,11 @@
     Approved and frozen, but sending is OFF: press Start sending to go live.
     <a href="/campaigns/{{ v.campaign }}">Sending gate &rarr;</a>
   </div>
+  {% elif v.campaign_row and v.campaign_row.status == 'sending' and v.kill_switch %}
+  <div style="margin-top:12px; padding:10px 14px; border:1px solid var(--red); border-radius:10px; background:var(--red-bg); color:var(--red);">
+    Status is 'sending' but the kill switch is ON, so nothing is being claimed.
+    <a href="/campaigns">Lift the kill switch &rarr;</a>
+  </div>
   {% elif v.campaign_row and v.campaign_row.status == 'sending' %}
   <div style="margin-top:12px; padding:10px 14px; border:1px solid var(--green); border-radius:10px; background:var(--green-bg); color:var(--green);">
     Sending is LIVE: the worker is claiming due steps.
