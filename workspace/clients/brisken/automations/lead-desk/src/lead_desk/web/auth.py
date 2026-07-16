@@ -25,19 +25,28 @@ Env vars:
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import os
 import secrets
+import time
 
 COOKIE_NAME = "lead_desk_session"
 SESSION_MAX_AGE = 60 * 60 * 12  # 12 hours
+
+# /login brute-force throttle: block after this many fails within the window.
+LOGIN_MAX_FAILS = 8
+LOGIN_WINDOW = 300  # seconds
 
 # Reachable without a session cookie: the login flow, the health probe, the
 # favicon, the ingest sink, and the worker outbox API (each API guards itself
 # with its own secret).
 OPEN_PATHS = frozenset({
     "/login", "/logout", "/healthz", "/favicon.ico", "/events",
+    # /sync self-guards: its handler checks cookie OR ingest bearer. Without
+    # this the cookie gate rejected the documented external-cron ingest path.
+    "/sync",
     "/api/outbox/claim", "/api/outbox/result", "/api/outbox/draft-sent",
     "/api/worker/status", "/api/worker/watchlist", "/api/worker/heartbeat",
 })
@@ -84,18 +93,79 @@ def resolve_user(submitted: str) -> str | None:
     return match
 
 
-def issue_token(user: str) -> str:
-    mac = hmac.new(_secret(), user.encode("utf-8"), hashlib.sha256).hexdigest()
-    return f"{user}.{mac}"
+def issue_token(user: str, now: float | None = None) -> str:
+    """Signed cookie binding user + issued-at + a random nonce, so a token is
+    unique per login and expires server-side (see read_user)."""
+    iat = int(now if now is not None else time.time())
+    payload = f"{user}|{iat}|{secrets.token_hex(8)}"
+    b = base64.urlsafe_b64encode(payload.encode("utf-8")).decode("ascii")
+    mac = hmac.new(_secret(), b.encode("ascii"), hashlib.sha256).hexdigest()
+    return f"{b}.{mac}"
 
 
-def read_user(token: str | None) -> str | None:
-    """Validate a session cookie and return its user, or None."""
+def read_user(token: str | None, now: float | None = None) -> str | None:
+    """Validate a session cookie and return its user, or None. Enforces the
+    12h window server-side. Old-format (user.mac) tokens no longer parse, so
+    they are rejected -> a one-time forced re-login after this ships."""
     if not token or "." not in token:
         return None
-    user, _, mac = token.partition(".")
-    expected = hmac.new(_secret(), user.encode("utf-8"), hashlib.sha256).hexdigest()
-    return user if hmac.compare_digest(mac, expected) else None
+    b, _, mac = token.rpartition(".")
+    expected = hmac.new(_secret(), b.encode("ascii"), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(mac, expected):
+        return None
+    try:
+        payload = base64.urlsafe_b64decode(b.encode("ascii")).decode("utf-8")
+        user, iat_s, _nonce = payload.split("|", 2)
+        iat = int(iat_s)
+    except Exception:  # noqa: BLE001 - any malformed/old-format token -> re-login
+        return None
+    if (now if now is not None else time.time()) - iat > SESSION_MAX_AGE:
+        return None
+    return user or None
+
+
+# -- CSRF (double-submit token bound to the session) --------------------------
+
+def csrf_token(user: str) -> str:
+    return hmac.new(_secret(), (user + "|csrf").encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def csrf_for_cookie(token: str | None) -> str:
+    """The CSRF token to embed in forms for the current session ('' if none)."""
+    user = read_user(token)
+    return csrf_token(user) if user else ""
+
+
+def csrf_valid(cookie_token: str | None, submitted: str | None) -> bool:
+    user = read_user(cookie_token)
+    if not user or not submitted:
+        return False
+    return hmac.compare_digest(submitted, csrf_token(user))
+
+
+# -- /login brute-force throttle (in-process, per client IP) ------------------
+
+_LOGIN_FAILS: dict[str, list[float]] = {}
+
+
+def _prune(ip: str, now: float) -> list[float]:
+    fails = [t for t in _LOGIN_FAILS.get(ip, []) if now - t < LOGIN_WINDOW]
+    _LOGIN_FAILS[ip] = fails
+    return fails
+
+
+def login_blocked(ip: str, now: float | None = None) -> bool:
+    now = now if now is not None else time.time()
+    return len(_prune(ip, now)) >= LOGIN_MAX_FAILS
+
+
+def record_login_fail(ip: str, now: float | None = None) -> None:
+    now = now if now is not None else time.time()
+    _prune(ip, now).append(now)
+
+
+def record_login_success(ip: str) -> None:
+    _LOGIN_FAILS.pop(ip, None)
 
 
 def cookie_is_secure() -> bool:

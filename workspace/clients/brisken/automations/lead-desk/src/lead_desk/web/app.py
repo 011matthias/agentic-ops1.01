@@ -56,6 +56,64 @@ from ..sync import have_creds, run_all, run_sync
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 
+def _cookie_value(cookie_header: str, name: str) -> str | None:
+    for part in (cookie_header or "").split(";"):
+        k, _, v = part.strip().partition("=")
+        if k == name:
+            return v
+    return None
+
+
+class _CSRFMiddleware:
+    """Double-submit CSRF check on cookie-authed, url-encoded mutating forms.
+    Bearer machine APIs (Authorization header), the ingest/open paths, and
+    multipart uploads are exempt (the latter keep SameSite=Lax protection).
+    Defense-in-depth on top of the SameSite=Lax session cookie."""
+
+    _EXEMPT = ("/events", "/api/", "/sync", "/login", "/logout")
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope["method"] not in ("POST", "PUT", "PATCH", "DELETE"):
+            return await self.app(scope, receive, send)
+        path = scope["path"]
+        headers = {k.decode("latin1").lower(): v.decode("latin1")
+                   for k, v in scope.get("headers", [])}
+        if (any(path == p or path.startswith(p) for p in self._EXEMPT)
+                or "authorization" in headers
+                or not headers.get("content-type", "").startswith(
+                    "application/x-www-form-urlencoded")):
+            return await self.app(scope, receive, send)
+        cookie = _cookie_value(headers.get("cookie", ""), auth.COOKIE_NAME)
+        if not auth.gate_enabled() or not cookie:
+            return await self.app(scope, receive, send)  # local/dev: no gate, no CSRF
+        body = b""
+        while True:
+            msg = await receive()
+            body += msg.get("body", b"")
+            if not msg.get("more_body"):
+                break
+        from urllib.parse import parse_qs
+        submitted = parse_qs(body.decode("utf-8", "replace")).get("csrf", [""])[0]
+        if not auth.csrf_valid(cookie, submitted):
+            resp = JSONResponse(
+                {"error": "CSRF check failed; reload the page and try again."},
+                status_code=403)
+            return await resp(scope, receive, send)
+        sent = False
+
+        async def replay():
+            nonlocal sent
+            if not sent:
+                sent = True
+                return {"type": "http.request", "body": body, "more_body": False}
+            return {"type": "http.disconnect"}
+
+        return await self.app(scope, replay, send)
+
+
 def create_app(data_root: str | Path | None = None) -> FastAPI:
     data_root_path = Path(
         data_root or os.environ.get("LEAD_DESK_DATA", "lead-desk-data")
@@ -65,7 +123,14 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
 
     app = FastAPI(title="Brisken Lead Desk")
     app.state.db_path = db_path
-    templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+
+    def _csrf_context(request: Request) -> dict:
+        # Auto-inject the session CSRF token into every template render.
+        return {"csrf_token": auth.csrf_for_cookie(request.cookies.get(auth.COOKIE_NAME))}
+
+    templates = Jinja2Templates(directory=str(_TEMPLATES_DIR),
+                                context_processors=[_csrf_context])
+    app.add_middleware(_CSRFMiddleware)
 
     def open_store() -> ContactStore:
         return ContactStore(db_path)
@@ -83,6 +148,21 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 return JSONResponse({"error": "authentication required"}, status_code=401)
         return await call_next(request)
 
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        resp = await call_next(request)
+        resp.headers["X-Frame-Options"] = "DENY"
+        resp.headers["X-Content-Type-Options"] = "nosniff"
+        resp.headers["Referrer-Policy"] = "same-origin"
+        # Templates use inline styles/scripts + onclick handlers, so 'unsafe-inline'
+        # is required for now (plan: start permissive, tighten later).
+        resp.headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'self'; img-src 'self' data:; "
+            "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "
+            "base-uri 'self'; frame-ancestors 'none'")
+        return resp
+
     @app.get("/login", response_class=HTMLResponse)
     def login_form(request: Request):
         if not auth.gate_enabled():
@@ -93,11 +173,22 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     def login_submit(request: Request, code: str = Form("")):
         if not auth.gate_enabled():
             return RedirectResponse(url="/", status_code=303)
+        # Fly puts the real client IP in Fly-Client-IP; request.client.host is
+        # the fly-proxy, so keying the throttle on it would rate-limit everyone.
+        ip = request.headers.get("fly-client-ip") or (
+            request.client.host if request.client else "unknown")
+        if auth.login_blocked(ip):
+            return templates.TemplateResponse(
+                request, "login.html",
+                {"error": "Too many attempts. Wait a few minutes and try again."},
+                status_code=429)
         user = auth.resolve_user(code)
         if not user:
+            auth.record_login_fail(ip)
             return templates.TemplateResponse(
                 request, "login.html", {"error": "Wrong access code."}, status_code=401
             )
+        auth.record_login_success(ip)
         resp = RedirectResponse(url="/", status_code=303)
         resp.set_cookie(
             auth.COOKIE_NAME, auth.issue_token(user),
