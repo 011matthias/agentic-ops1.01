@@ -107,6 +107,11 @@ CANONICAL_HOOKS = {
                     "command": _cmd(".claude/hooks/file-placement-gate.py"),
                     "timeout": 10000,
                 },
+                {
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/scorer-lock-gate.py"),
+                    "timeout": 10000,
+                },
             ],
         },
         {
@@ -239,6 +244,7 @@ EXPECTED_HOOK_SCRIPTS = {
     "session-pressure-meter.py",
     "stop-b1-gate.py",
     "sibling-session-gate.py",
+    "scorer-lock-gate.py",
 }
 
 # Canonical hook count, derived so the assertion strings can never drift out
