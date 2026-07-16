@@ -358,6 +358,40 @@ def test_capture_failure_blocks_claiming(tmp_path):
     assert store.conn.execute("SELECT COUNT(*) c FROM send_attempts").fetchone()["c"] == 0
 
 
+# -- opt-in runtime guard (P2) ----------------------------------------------
+
+def test_cloud_worker_is_opt_in(monkeypatch):
+    from lead_desk import cloud_worker as cw
+    monkeypatch.delenv("LEAD_DESK_CLOUD_WORKER", raising=False)
+    enabled, reason = cw.cloud_worker_enabled()
+    assert enabled is False and "opt-in" in reason
+
+
+def test_cloud_worker_needs_creds(monkeypatch):
+    from lead_desk import cloud_worker as cw
+    monkeypatch.setenv("LEAD_DESK_CLOUD_WORKER", "1")
+    monkeypatch.setattr(cw, "have_creds", lambda: False)
+    enabled, reason = cw.cloud_worker_enabled()
+    assert enabled is False and "credentials" in reason
+    monkeypatch.setattr(cw, "have_creds", lambda: True)
+    assert cw.cloud_worker_enabled() == (True, "enabled")
+
+
+def test_app_startup_does_not_start_loop_without_opt_in(tmp_path, monkeypatch):
+    """TestClient startup must never launch the Graph loop: the opt-in env is
+    absent (conftest guarantees it), so the startup hook prints and returns."""
+    import lead_desk.cloud_worker as cw
+    from fastapi.testclient import TestClient
+    from lead_desk.web.app import create_app
+
+    called = []
+    monkeypatch.setattr(cw, "run_tick",
+                        lambda *a, **k: called.append(1))
+    with TestClient(create_app(tmp_path / "d")) as client:
+        assert client.get("/healthz").status_code == 200
+    assert called == []
+
+
 def test_capture_bounce_auto_suppresses(tmp_path):
     data, store = setup(tmp_path)
     store.set_state("kill_switch", "1", now_iso())

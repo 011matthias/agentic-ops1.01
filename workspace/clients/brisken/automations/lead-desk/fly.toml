@@ -10,13 +10,19 @@ primary_region = "fra"
 
 [env]
   LEAD_DESK_DATA = "/data"
+  # 4d: opt-in switch for the in-app cloud worker (Graph capture + dormant
+  # sender). Only the hosted app sets this; dev/test never do.
+  LEAD_DESK_CLOUD_WORKER = "1"
 
 [http_service]
   internal_port = 8080
   force_https = true
   auto_stop_machines = true
   auto_start_machines = true
-  min_machines_running = 0
+  # 4d: keep one machine alive so the cloud worker tick + the daily sheet-sync
+  # actually run around the clock (scale-to-zero silently paused both whenever
+  # nobody had the board open).
+  min_machines_running = 1
 
   [[http_service.checks]]
     interval = "30s"

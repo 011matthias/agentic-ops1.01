@@ -828,6 +828,34 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
              "source_modified": (r.get("source") or {}).get("last_modified")}
             for r in reps]})
 
+    # --- cloud worker tick loop (4d; OPT-IN via LEAD_DESK_CLOUD_WORKER=1) --
+    @app.on_event("startup")
+    async def _start_cloud_worker():
+        import asyncio
+        from ..cloud_worker import cloud_worker_enabled, run_tick
+        enabled, reason = cloud_worker_enabled()
+        if not enabled:
+            print(f"[cloud-worker] disabled: {reason}")
+            return
+        interval = int(os.environ.get("LEAD_DESK_TICK_INTERVAL", "900"))
+
+        async def _loop():
+            backoff = 60
+            while True:
+                try:
+                    rep = await asyncio.to_thread(run_tick, data_root_path)
+                    print(f"[cloud-worker] tick ok: kill={rep.get('kill_switch')} "
+                          f"paused={rep.get('paused')} claimed={rep.get('claimed')} "
+                          f"capture={rep.get('capture') or rep.get('capture_error')}")
+                    sleep_for, backoff = interval, 60
+                except Exception as exc:  # noqa: BLE001 - the loop must survive a bad tick
+                    print(f"[cloud-worker] tick failed: {exc}")
+                    sleep_for = min(backoff, interval)
+                    backoff = min(backoff * 2, 3600)
+                await asyncio.sleep(sleep_for)
+
+        asyncio.create_task(_loop())
+
     # --- daily sheet -> DB scheduler (guarded; inert without Graph creds) --
     @app.on_event("startup")
     async def _start_sync_scheduler():
