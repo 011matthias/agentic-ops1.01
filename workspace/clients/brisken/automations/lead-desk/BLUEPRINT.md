@@ -36,12 +36,17 @@ Brain / hands split:
   template versions + list hash + schedule), the outbox lock table
   (`send_attempts`, at-most-once leases, no auto-re-lease), kill switch,
   worker heartbeat. Never sends.
-- **Local Windows worker (hands, `lead-desk-worker`):** scheduled task every
-  15 min in the interactive session. Tick order IS the halt guarantee:
-  replay journal -> capture replies/bounces from matthias+dirk inboxes via
-  Outlook COM -> claim due sends -> execute (COM send / Dirk-draft load)
-  -> heartbeat. Machine off = sends queue server-side, drain at throttle
-  pace, never burst. Glue + runbook in `worker/` (dockerignored).
+- **Cloud worker (hands, in-app since 4d, 2026-07-16):** an in-app loop on
+  the same Fly machine (`cloud_worker.run_tick`, opt-in via
+  `LEAD_DESK_CLOUD_WORKER=1` in fly.toml). Tick order IS the halt
+  guarantee: replay journal -> capture sent/replies/bounces/meetings from
+  the matthias+dirk mailboxes app-only via Microsoft Graph -> claim due
+  sends -> execute (Graph sendMail as matthias / draft staged in Dirk's
+  mailbox) -> heartbeat. HARD dirk+matthias mailbox allowlist before every
+  Graph call; auto mode refuses any other from-address. The predecessor
+  local Windows Outlook-COM worker (`worker/`, dockerignored) is retired:
+  its scheduled task is disabled and the code stays only as a validated
+  fallback until the Graph send path passes the watched send-gate drill.
 
 Invariant extended: **cadence state is a pure function of the log.** Cadence
 events carry the reserved `ext_key='cadence:{enrollment_id}:{step_no}'`, so
@@ -67,7 +72,8 @@ ingest). New scripts: `lead-desk-adopt` (Rome 290 -> enrollments under a
 Before the first real campaign: run the TEST-campaign gate (enroll
 ourselves + one external address, cap 10; verify reply-halt, NDR ->
 bounce -> suppress, Zoho dropbox filing, crash drill, kill switches,
-catch-up) per `worker/README.md`.
+catch-up). The COM worker passed this gate 2026-07-13; the Graph cloud
+sender must pass its own watched drill before it is ever armed.
 
 ## Iteration 2, stage reflects real status (shipped 2026-07-12)
 

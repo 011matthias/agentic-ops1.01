@@ -358,6 +358,27 @@ def test_capture_failure_blocks_claiming(tmp_path):
     assert store.conn.execute("SELECT COUNT(*) c FROM send_attempts").fetchone()["c"] == 0
 
 
+# -- standalone capture CLI creds fallback (P3) -------------------------------
+
+def test_capture_cli_falls_back_to_brisken_creds(monkeypatch, capsys):
+    """Missing LEAD_DESK_* creds resolve from the BRISKEN_* Fly secrets; with
+    neither present the CLI still exits 2 naming the LEAD_DESK_* keys."""
+    from lead_desk import capture
+    for k in ("LEAD_DESK_TENANT_ID", "LEAD_DESK_CLIENT_ID",
+              "LEAD_DESK_CLIENT_SECRET", "BRISKEN_TENANT_ID",
+              "BRISKEN_GRAPH_CLIENT_ID", "BRISKEN_GRAPH_CLIENT_SECRET",
+              "LEAD_DESK_MAILBOX", "LEAD_DESK_MAILBOXES"):
+        monkeypatch.delenv(k, raising=False)
+    assert capture.main(["--dry-run"]) == 2
+    assert "missing env" in capsys.readouterr().out
+    monkeypatch.setenv("BRISKEN_TENANT_ID", "t")
+    monkeypatch.setenv("BRISKEN_GRAPH_CLIENT_ID", "c")
+    monkeypatch.setenv("BRISKEN_GRAPH_CLIENT_SECRET", "s")
+    # creds now resolve via fallback; the next abort is the mailbox check
+    assert capture.main(["--dry-run"]) == 2
+    assert "no allowlisted mailbox" in capsys.readouterr().out
+
+
 # -- opt-in runtime guard (P2) ----------------------------------------------
 
 def test_cloud_worker_is_opt_in(monkeypatch):

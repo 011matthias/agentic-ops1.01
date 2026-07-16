@@ -6,15 +6,21 @@ stage, status buckets, and cadence progress are derived from the log, never
 hand-stamped. Replaces the scattered Rome master-sheet copies, send-log
 CSVs, booth notes, and Planner board.
 
-Campaign engine (iteration 3): upload a list -> rules classify each lead
-into a warmness degree -> each degree runs a predetermined sequence
-(N steps, day offsets) -> one approval freezes copy + list -> the local
-Windows worker auto-sends (cold: from matthias.silva@ CC Dirk; warm: staged
-as drafts in Dirk's mailbox) and polls both inboxes -> follow-up stops on
-reply/bounce/suppress -> every send BCCs the Zoho CRM dropbox.
+Campaign engine (iteration 3 + 4d): upload a list -> rules classify each
+lead into a warmness degree -> each degree runs a predetermined sequence
+(N steps, day offsets) -> one approval freezes copy + list -> the in-app
+cloud worker auto-sends via Microsoft Graph (cold: from matthias.silva@
+CC Dirk; warm: staged as drafts in Dirk's mailbox, his click is the gate)
+and captures both mailboxes -> follow-up stops on reply/bounce/suppress ->
+every send BCCs the Zoho CRM dropbox. The Graph credential is the existing
+"BRISKEN MARKETING OPS INTEGRATION" app registration (same one the sheet
+sync uses); a HARD dirk+matthias mailbox allowlist is asserted in code
+before every Graph call. The sender ships dormant: the kill switch and the
+per-campaign two-gate flow stay engaged until the watched send-gate drill
+plus an explicit owner greenlight arm it.
 
-See `BLUEPRINT.md` for the architecture and `worker/README.md` for the
-Windows worker runbook + TEST-campaign gate.
+See `BLUEPRINT.md` for the architecture. The pre-4d local Windows
+Outlook-COM worker is retired (`worker/README.md`).
 
 ## Local run
 
@@ -57,5 +63,8 @@ can never auto-send).
 - `lead-desk-export` : regenerate the master sheet (csv/xlsx) from the db.
 - `lead-desk-adopt` : enroll a legacy contact cohort into the campaign model.
 - `lead-desk-reconcile` : repair outbox lock-table / event-log drift.
-- `lead-desk-capture` : Phase 2 Graph capture (gated on Brisken IT creds).
-- `lead-desk-worker` : local Windows send/capture worker (see `worker/`).
+- `lead-desk-cloud-worker` : one cloud tick by hand (`--dry-run` /
+  `--draft-to-self` for drills); the app runs the same tick on a loop.
+- `lead-desk-capture` : standalone Graph capture CLI (the in-app cloud
+  worker covers this; kept for ssh drills).
+- `lead-desk-worker` : RETIRED local Windows COM worker (see `worker/`).

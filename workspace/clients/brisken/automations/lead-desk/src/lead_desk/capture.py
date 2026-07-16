@@ -1,10 +1,14 @@
-"""Phase 2 cloud auto-capture: read Dirk's mailbox + calendar app-only via
-Microsoft Graph and POST the touches to the Lead Desk ``/events`` sink.
+"""Cloud auto-capture: read the allowlisted mailboxes + calendars app-only
+via Microsoft Graph and POST the touches to the Lead Desk ``/events`` sink.
 
-Runs as a scheduled Fly Machine (same image, CMD overridden to
-``lead-desk-capture``). It is app-only (client-credentials); the credential is
-scoped to Dirk's mailbox alone by an Exchange Application Access Policy (see
-``PHASE2-IT-REQUEST.md``). Nothing here sends, edits, or deletes: it issues
+The in-app cloud worker (``cloud_worker.py``) drives these mappers on every
+tick; this module's own ``main`` remains a standalone CLI for ssh drills.
+Credential decision (4d, 2026-07-16): reuse the "BRISKEN MARKETING OPS
+INTEGRATION" app registration (BRISKEN_* env fallback below) instead of a
+dedicated least-privilege app; the compensating control is the HARD
+dirk+matthias mailbox allowlist asserted in code (an Exchange Application
+Access Policy on that app remains recommended, tracked in
+rule_brisken_graph_first). Nothing here sends, edits, or deletes: it issues
 Graph GETs and HTTP POSTs to our own sink.
 
 Idempotency is the sink's job: every event carries the message's
@@ -17,10 +21,10 @@ is used only as an efficiency hint.
     lead-desk-capture --dry-run                 # fetch + map + print, no POST
 
 Env (all required unless noted):
-    LEAD_DESK_TENANT_ID       Entra tenant (aa3bd2bf-...)
-    LEAD_DESK_CLIENT_ID       app registration (client) id
-    LEAD_DESK_CLIENT_SECRET   app secret
-    LEAD_DESK_MAILBOX         mailbox UPN to read (dirk.neumann@brisken.com)
+    LEAD_DESK_TENANT_ID       Entra tenant (falls back to BRISKEN_TENANT_ID)
+    LEAD_DESK_CLIENT_ID       app client id (falls back to BRISKEN_GRAPH_CLIENT_ID)
+    LEAD_DESK_CLIENT_SECRET   app secret (falls back to BRISKEN_GRAPH_CLIENT_SECRET)
+    LEAD_DESK_MAILBOX(ES)     mailbox UPN(s) to read, hard-filtered to the allowlist
     LEAD_DESK_URL             sink base url (https://brisken-lead-desk.fly.dev)
     LEAD_DESK_INGEST_SECRET   bearer for POST /events
     LEAD_DESK_CAPTURE_STATE   optional watermark file (default /data/capture-state.json)
@@ -297,9 +301,13 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
 
     env = os.environ
-    missing = [k for k in ("LEAD_DESK_TENANT_ID", "LEAD_DESK_CLIENT_ID",
-                           "LEAD_DESK_CLIENT_SECRET")
-               if not env.get(k)]
+    # 4d creds decision: the dedicated LEAD_DESK_* app was never provisioned;
+    # fall back to the BRISKEN MARKETING OPS INTEGRATION creds (Fly secrets).
+    creds = {k: env.get(k) or env.get(fb) for k, fb in (
+        ("LEAD_DESK_TENANT_ID", "BRISKEN_TENANT_ID"),
+        ("LEAD_DESK_CLIENT_ID", "BRISKEN_GRAPH_CLIENT_ID"),
+        ("LEAD_DESK_CLIENT_SECRET", "BRISKEN_GRAPH_CLIENT_SECRET"))}
+    missing = [k for k, v in creds.items() if not v]
     if missing:
         print(f"ERROR: missing env: {', '.join(missing)}")
         return 2
@@ -319,8 +327,9 @@ def main(argv: list[str] | None = None) -> int:
     # Re-scan a small overlap even when a watermark exists (dedup absorbs it).
     since = min(watermark, now - timedelta(days=1)) if watermark else now - timedelta(days=args.since_days)
 
-    client = GraphClient(env["LEAD_DESK_TENANT_ID"], env["LEAD_DESK_CLIENT_ID"],
-                         env["LEAD_DESK_CLIENT_SECRET"])
+    client = GraphClient(creds["LEAD_DESK_TENANT_ID"],
+                         creds["LEAD_DESK_CLIENT_ID"],
+                         creds["LEAD_DESK_CLIENT_SECRET"])
     payloads: list[dict] = []
     for mbx in mailboxes:
         payloads.extend(poll(client, mbx, since, now))
