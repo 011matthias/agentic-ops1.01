@@ -81,6 +81,7 @@ from .categorize import categorize_receipts
 from .ingest._common import ParseIssue
 from .ingest.chart_of_accounts import ChartOfAccounts
 from .ingest.expense_csv import parse_expense_csv_tolerant
+from .ingest.expense_report_pdf import parse_expense_report_pdf_tolerant
 from .ingest.receipts_csv import parse_receipts_csv_tolerant
 from .ingest.receipts_folder import parse_receipts_folder
 from .ingest.statement_csv import parse_statement_csv_tolerant
@@ -173,13 +174,14 @@ def _load_receipts(
     llm_client: LLMClient | None = None,
 ) -> tuple[list[Receipt], list[ParseIssue]]:
     """Load receipts from a Zoho Expense CSV (Path A, BLUEPRINT 8.1), a
-    slice-1 extracted-fields CSV, or a folder of images/PDFs (slice 2.2
-    OCR).
+    consolidated Zoho Expense report PDF (2026-07-16), a slice-1
+    extracted-fields CSV, or a folder of images/PDFs (slice 2.2 OCR).
 
-    `receipts.source` is "expense_csv" | "csv" | "folder"; when absent
-    it is inferred from the path (directory → folder, else "csv").
-    Folder mode needs an `llm:` block — OCR has no keyword-stub
-    fallback. The "expense_csv" source is config-driven and requires a
+    `receipts.source` is "expense_csv" | "expense_report_pdf" | "csv" |
+    "folder"; when absent it is inferred from the path (directory ->
+    folder, .pdf -> expense_report_pdf, else "csv"). Folder mode needs
+    an `llm:` block — OCR has no keyword-stub fallback. The
+    "expense_csv" source is config-driven and requires a
     `receipts.column_map` (logical field → Zoho export column header).
     """
     r = cfg.get("receipts")
@@ -192,7 +194,21 @@ def _load_receipts(
     if not path.exists():
         raise ConfigError(f"receipts path not found: {path}")
 
-    source = r.get("source") or ("folder" if path.is_dir() else "csv")
+    source = r.get("source") or (
+        "folder" if path.is_dir()
+        else "expense_report_pdf" if path.suffix.lower() == ".pdf"
+        else "csv"
+    )
+    if source == "expense_report_pdf":
+        if path.is_dir():
+            raise ConfigError(
+                f"receipts.source is 'expense_report_pdf' but {path} is a directory"
+            )
+        return parse_expense_report_pdf_tolerant(
+            path=path,
+            legal_entity_id=legal_entity_id,
+            default_currency=r.get("default_currency"),
+        )
     if source == "expense_csv":
         if path.is_dir():
             raise ConfigError(
@@ -234,7 +250,7 @@ def _load_receipts(
         )
     raise ConfigError(
         f"config.receipts.source {source!r} not supported "
-        f"(use 'expense_csv', 'csv', or 'folder')"
+        f"(use 'expense_csv', 'expense_report_pdf', 'csv', or 'folder')"
     )
 
 

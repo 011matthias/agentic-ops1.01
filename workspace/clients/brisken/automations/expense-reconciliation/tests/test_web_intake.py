@@ -96,6 +96,45 @@ def test_intake_rejects_wrong_statement_extension(client):
     assert ".csv, .xlsx or .pdf" in resp.text
 
 
+def test_intake_accepts_pdf_receipts(client):
+    """Chris's real artifact (2026-07-16): the Zoho Expense report PDF,
+    not only the extracted-fields CSV."""
+    resp = client.post(
+        "/intakes",
+        files={
+            "statement": (
+                "statement.example.csv",
+                (EXAMPLES / "statement.example.csv").read_bytes(),
+                "text/csv",
+            ),
+            "receipts": ("expense-report.pdf", b"%PDF-1.4 synthetic", "application/pdf"),
+        },
+        data={"card_name": "Corporate card 2838", "month": "2026-06"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303, resp.text
+    with RunStore(client._data_root / "recon-web.sqlite") as store:
+        intake = store.list_intakes()[0]
+    assert intake.receipts_name == "expense-report.pdf"
+
+
+def test_intake_rejects_wrong_receipts_extension(client):
+    resp = client.post(
+        "/intakes",
+        files={
+            "statement": (
+                "statement.example.csv",
+                (EXAMPLES / "statement.example.csv").read_bytes(),
+                "text/csv",
+            ),
+            "receipts": ("notes.txt", b"hello", "text/plain"),
+        },
+        data={"card_name": "Corporate card 2838"},
+    )
+    assert resp.status_code == 400
+    assert ".csv export or a Zoho Expense report .pdf" in resp.text
+
+
 def test_undetectable_statement_still_accepted_with_note(client):
     resp = client.post(
         "/intakes",

@@ -217,6 +217,13 @@ def prepare_run(
     else:
         column_map = _resolve_statement_map(stmt_path, form)
 
+    # Zoho Expense report PDF (2026-07-16): sniffed from the upload, not
+    # picked by the form -- the report-PDF source needs no column map, so
+    # forcing it here means the operator never has to remember to flip the
+    # receipts_source dropdown when Chris sends the PDF instead of the CSV.
+    if rcpt_path.suffix.lower() == ".pdf":
+        form = replace(form, receipts_source="expense_report_pdf")
+
     # A requested-but-unavailable AI key must NOT block the run. The
     # keyword classifier always produces a complete reconciliation, so we
     # drop the `llm:` block, run the deterministic path, and record an
@@ -355,7 +362,9 @@ def create_run(
 # set the run form accepts; anything else is a wrong-file mistake worth
 # catching at upload time with friendly copy.
 _STATEMENT_SUFFIXES = (".csv", ".xlsx", ".xlsm", ".pdf")
-_RECEIPTS_SUFFIXES = (".csv",)
+# .pdf (2026-07-16): the consolidated Zoho Expense report PDF Chris actually
+# has, alongside the slice-1 extracted-fields CSV.
+_RECEIPTS_SUFFIXES = (".csv", ".pdf")
 
 
 def create_intake(
@@ -389,7 +398,10 @@ def create_intake(
     if receipts_bytes:
         rcpt_name = _safe_name(receipts_filename or "", "receipts.csv")
         if Path(rcpt_name).suffix.lower() not in _RECEIPTS_SUFFIXES:
-            raise RunInputError("The receipts file should be a .csv export.")
+            raise RunInputError(
+                "The receipts file should be a .csv export or a Zoho Expense "
+                "report .pdf."
+            )
     if not label.strip():
         raise RunInputError("Please pick which card this statement is from.")
 
