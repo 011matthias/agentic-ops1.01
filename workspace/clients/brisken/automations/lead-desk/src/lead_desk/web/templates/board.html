@@ -55,6 +55,13 @@
   </div>
   {% endif %}
 
+  <div class="muted" style="margin-top:12px; font-size:12px; display:flex; flex-wrap:wrap; gap:6px 16px; align-items:center;">
+    {% if request.query_params.get('synced') is not none %}<span style="color:var(--green); font-weight:600;">&#10003; Synced {{ request.query_params.get('synced') }} contacts from the sheet.</span>{% endif %}
+    {% if v.last_sync_error and (request.query_params.get('sync_error') or not v.last_sync_ok) %}<span style="color:var(--red); font-weight:600;">SYNC FAILED &middot; {{ v.last_sync_error }}</span>{% elif v.last_sync_ok %}<span>Last synced from sheet: {{ v.last_sync_ok[:16] }}</span>{% endif %}
+    {% if v.last_sync_diffs %}<span style="color:var(--orange);">{{ v.last_sync_diffs }} contact(s): the sheet's next-step differs from the board (board value kept).</span>{% endif %}
+    <span title="The board reflects the master sheet plus manual grounding. Live mailbox capture (Phase 2) is not running yet, so a stage touched only in Outlook can be stale until the next sheet update.">&#9432; Stage may be stale: no live mail capture yet.</span>
+  </div>
+
   <div class="stats" style="margin-top:14px;">
     <a class="stat {% if not f.stage %}active{% endif %}" href="/?{{ cq }}"><div class="stat-value">{{ v.total_active }}</div><div class="stat-label">Active</div></a>
     {% for s in v.stages %}

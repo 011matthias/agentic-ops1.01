@@ -107,8 +107,15 @@
   </div>
 </div>
 
+{% if request.query_params.get('stale') %}
+<div class="card" style="border-left:4px solid var(--orange); background:var(--orange-bg);">
+  <strong>Not saved.</strong> This contact was changed (a sheet sync or another editor) since you opened the form. The current values are loaded below; re-apply your edit and save again.
+</div>
+{% endif %}
+
 <form method="post" action="/contacts/{{ c.contact_id }}/fields">
   <input type="hidden" name="_managed_flags" value="bant_need bant_authority bant_timeline bant_budget in_our_booth scanned_at_booth fob_encoded no_show sponsor_opt_in">
+  <input type="hidden" name="updated_at" value="{{ c.updated_at }}">
   <div class="card">
     <h2>Identity</h2>
     <div class="grid2">

@@ -65,6 +65,10 @@ TIER_VOCAB = (
 )
 
 
+class StaleWriteError(Exception):
+    """The contact changed (a sync or another editor) since this form loaded."""
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -417,6 +421,9 @@ def build_board(store: ContactStore, filters: dict | None = None,
         "campaign_row": dict(campaign_row) if campaign_row else None,
         "campaigns": campaigns,
         "kill_switch": (store.get_state("kill_switch") or "0") == "1",
+        "last_sync_ok": store.get_state("last_sync_ok"),
+        "last_sync_error": store.get_state("last_sync_error"),
+        "last_sync_diffs": int(store.get_state("last_sync_diffs") or 0),
         "stage_counts": stage_counts,
         "stages": list(STAGES),
         "stage_labels": STAGE_LABELS,
@@ -523,14 +530,20 @@ def toggle_suppress(store: ContactStore, contact_id: str, suppressed: bool,
 
 
 def apply_fields(store: ContactStore, contact_id: str, fields: dict,
-                 user: str | None) -> None:
+                 user: str | None, expected_updated_at: str | None = None) -> None:
     """Update any editable contact field (identity, classification, provenance,
     qualification). A change writes a `note` audit event, keeping the log the
     record of every mutation. Setting demo_date / accepted verdict also emits a
-    milestone event so the derived stage and the field cannot disagree."""
+    milestone event so the derived stage and the field cannot disagree.
+
+    ``expected_updated_at`` is the optimistic lock: if the row's updated_at has
+    moved since the form loaded (a sync or another editor wrote it), raise
+    StaleWriteError instead of clobbering the newer data."""
     current = store.get_contact(contact_id)
     if current is None:
         raise ValueError("unknown contact")
+    if expected_updated_at and str(current["updated_at"]) != str(expected_updated_at):
+        raise StaleWriteError(str(current["updated_at"]))
     now = now_iso()
     allowed = set(EDITABLE_TEXT) | set(EDITABLE_FLAGS)
     clean = {k: v for k, v in fields.items() if k in allowed}
@@ -543,7 +556,9 @@ def apply_fields(store: ContactStore, contact_id: str, fields: dict,
         if old_s != new_s:
             changed.append(k)
 
-    store.update_fields(contact_id, clean, now)
+    # Write ONLY the changed fields, so a stale form field can't quietly reset
+    # an unrelated value another writer just changed.
+    store.update_fields(contact_id, {k: clean[k] for k in changed}, now)
 
     if changed:
         store.add_event(
