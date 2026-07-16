@@ -221,8 +221,16 @@ def prepare_run(
     # picked by the form -- the report-PDF source needs no column map, so
     # forcing it here means the operator never has to remember to flip the
     # receipts_source dropdown when Chris sends the PDF instead of the CSV.
+    # The reverse mismatch (dropdown says report PDF, upload is not a .pdf)
+    # is a user-fixable form error, not a deep parser failure.
     if rcpt_path.suffix.lower() == ".pdf":
         form = replace(form, receipts_source="expense_report_pdf")
+    elif form.receipts_source == "expense_report_pdf":
+        raise RunInputError(
+            "Receipts source 'Zoho Expense report PDF' needs a .pdf upload; "
+            f"this receipts file is {rcpt_path.suffix or 'without an extension'}. "
+            "Upload the report PDF, or pick a CSV source."
+        )
 
     # A requested-but-unavailable AI key must NOT block the run. The
     # keyword classifier always produces a complete reconciliation, so we
