@@ -70,6 +70,8 @@ export const config = {
     "/docs/warme-wimmer/:path*",
     "/docs/meji-media",
     "/docs/meji-media/:path*",
+    "/docs/assessment-demo",
+    "/docs/assessment-demo/:path*",
     "/gate-login",
     "/api/gate-unlock",
   ],
