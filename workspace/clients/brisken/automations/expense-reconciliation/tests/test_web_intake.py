@@ -198,3 +198,146 @@ def test_operator_queue_lists_intake(client):
     assert "Intake queue" in resp.text
     assert "Corporate card 2838 2026-06" in resp.text
     assert "Prepare run" in resp.text
+
+
+# ── Replace / late-add files on a queued intake (2026-07-16 feedback:
+# "tem que ter opcao para tirar o arquivo que foi colocado errado") ──
+
+
+def _one_intake(client, **kw):
+    resp = client.post(
+        "/intakes",
+        files=_files(**kw),
+        data={"card_name": "Corporate card 2838", "month": "2026-06"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303, resp.text
+    with RunStore(client._data_root / "recon-web.sqlite") as store:
+        return store.list_intakes()[0]
+
+
+def test_replace_receipts_on_received_intake(client):
+    intake = _one_intake(client)
+    old_name = intake.receipts_name
+    resp = client.post(
+        f"/intakes/{intake.intake_id}/files",
+        files={"receipts": ("expense-report.pdf", b"%PDF-1.4 replacement", "application/pdf")},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303, resp.text
+    with RunStore(client._data_root / "recon-web.sqlite") as store:
+        updated = store.get_intake(intake.intake_id)
+    assert updated.receipts_name == "expense-report.pdf"
+    work = Path(updated.work_dir)
+    assert (work / "expense-report.pdf").read_bytes() == b"%PDF-1.4 replacement"
+    assert not (work / old_name).exists()          # the wrong file is gone
+    assert updated.statement_name == intake.statement_name  # untouched
+
+
+def test_late_add_receipts_to_waiting_intake(client):
+    intake = _one_intake(client, receipts=False)
+    assert intake.receipts_name is None
+    resp = client.post(
+        f"/intakes/{intake.intake_id}/files",
+        files={"receipts": (
+            "receipts.example.csv",
+            (EXAMPLES / "receipts.example.csv").read_bytes(),
+            "text/csv",
+        )},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303, resp.text
+    with RunStore(client._data_root / "recon-web.sqlite") as store:
+        updated = store.get_intake(intake.intake_id)
+    assert updated.receipts_name == "receipts.example.csv"
+
+
+def test_replace_statement_refreshes_detect_note(client):
+    intake = _one_intake(client)
+    resp = client.post(
+        f"/intakes/{intake.intake_id}/files",
+        files={"statement": ("chase.pdf", b"%PDF-1.4 stmt", "application/pdf")},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303, resp.text
+    with RunStore(client._data_root / "recon-web.sqlite") as store:
+        updated = store.get_intake(intake.intake_id)
+    assert updated.statement_name == "chase.pdf"
+    assert "Chase PDF" in (updated.detect_note or "")
+    # the original statement file was cleaned up
+    assert not (Path(updated.work_dir) / intake.statement_name).exists()
+
+
+def test_replace_rejects_wrong_receipts_extension(client):
+    intake = _one_intake(client)
+    resp = client.post(
+        f"/intakes/{intake.intake_id}/files",
+        files={"receipts": ("notes.txt", b"hello", "text/plain")},
+    )
+    assert resp.status_code == 400
+    assert ".csv export or a Zoho Expense report .pdf" in resp.text
+    with RunStore(client._data_root / "recon-web.sqlite") as store:
+        unchanged = store.get_intake(intake.intake_id)
+    assert unchanged.receipts_name == intake.receipts_name
+
+
+def test_replace_with_no_files_is_form_error(client):
+    intake = _one_intake(client)
+    resp = client.post(f"/intakes/{intake.intake_id}/files")
+    assert resp.status_code == 400
+    assert "at least one file" in resp.text.lower()
+
+
+def test_replace_blocked_once_processing(client):
+    from expense_recon.web.store import INTAKE_PROCESSING
+
+    intake = _one_intake(client)
+    with RunStore(client._data_root / "recon-web.sqlite") as store:
+        store.set_intake_status(
+            intake.intake_id, INTAKE_PROCESSING, updated_at="2026-07-17T00:00:00"
+        )
+    resp = client.post(
+        f"/intakes/{intake.intake_id}/files",
+        files={"receipts": ("r.pdf", b"%PDF-1.4", "application/pdf")},
+    )
+    assert resp.status_code == 400
+    assert "already being processed" in resp.text
+
+
+def test_replace_unknown_intake_404(client):
+    resp = client.post(
+        "/intakes/deadbeef/files",
+        files={"receipts": ("r.pdf", b"%PDF-1.4", "application/pdf")},
+    )
+    assert resp.status_code == 404
+
+
+def test_user_home_shows_swap_control_on_received_intake(tmp_path, monkeypatch):
+    """The replace form renders on the USER home for a queued intake, and
+    disappears once the intake leaves `received`."""
+    from expense_recon.web.store import INTAKE_READY
+
+    monkeypatch.setenv("EXPENSE_RECON_ACCESS_CODE", "user-code-1")
+    monkeypatch.setenv("EXPENSE_RECON_OPERATOR_CODE", "operator-code-1")
+    monkeypatch.setenv("EXPENSE_RECON_INSECURE_COOKIE", "1")
+    app = create_app(tmp_path)
+    with TestClient(app) as c:
+        resp = c.post("/login", data={"code": "user-code-1"}, follow_redirects=False)
+        assert resp.status_code == 303
+        c.post(
+            "/intakes",
+            files=_files(),
+            data={"card_name": "Corporate card 2838"},
+            follow_redirects=False,
+        )
+        html = c.get("/").text
+        assert "Sent the wrong file? Replace it here." in html
+        assert "/files" in html
+
+        with RunStore(tmp_path / "recon-web.sqlite") as store:
+            intake = store.list_intakes()[0]
+            store.set_intake_status(
+                intake.intake_id, INTAKE_READY, updated_at="2026-07-17T00:00:00"
+            )
+        html = c.get("/").text
+        assert "Sent the wrong file? Replace it here." not in html

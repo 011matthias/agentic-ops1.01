@@ -51,6 +51,7 @@ from ..output.report_xlsx import write_report
 from ..output.zoho_export import write_zoho_export
 from .serialize import snapshot_from_dict, snapshot_to_dict
 from .store import (
+    INTAKE_RECEIVED,
     STATUS_ALREADY_POSTED,
     STATUS_CONFIRMED,
     STATUS_PENDING,
@@ -436,6 +437,73 @@ def create_intake(
     intake = store.get_intake(intake_id)
     assert intake is not None
     return intake
+
+
+def replace_intake_files(
+    store: RunStore,
+    intake: IntakeRow,
+    *,
+    statement_bytes: bytes | None,
+    statement_filename: str | None,
+    receipts_bytes: bytes | None,
+    receipts_filename: str | None,
+    now_iso: str,
+) -> IntakeRow:
+    """Replace (or late-add) the statement and/or receipts file on a queued
+    intake (2026-07-16 user feedback: a wrongly-attached file needs a way
+    out). Only intakes still in `received` may be edited -- once a run
+    exists the files are the run's provenance and must not shift under it.
+    Validation mirrors `create_intake`; the replaced file is deleted from
+    the work dir so the operator can never grab the stale one."""
+    if intake.status != INTAKE_RECEIVED:
+        raise RunInputError(
+            "These documents are already being processed; they can no "
+            "longer be swapped. Send a new upload instead."
+        )
+    if not statement_bytes and not receipts_bytes:
+        raise RunInputError("Pick at least one file to replace.")
+
+    work_dir = Path(intake.work_dir)
+    new_stmt_name: str | None = None
+    new_rcpt_name: str | None = None
+    detect_note: str | None = None
+
+    if statement_bytes:
+        new_stmt_name = _safe_name(statement_filename or "", "statement.csv")
+        if Path(new_stmt_name).suffix.lower() not in _STATEMENT_SUFFIXES:
+            raise RunInputError(
+                "The statement file should be a .csv, .xlsx or .pdf export "
+                "from the bank."
+            )
+    if receipts_bytes:
+        new_rcpt_name = _safe_name(receipts_filename or "", "receipts.csv")
+        if Path(new_rcpt_name).suffix.lower() not in _RECEIPTS_SUFFIXES:
+            raise RunInputError(
+                "The receipts file should be a .csv export or a Zoho Expense "
+                "report .pdf."
+            )
+
+    # Validation passed for everything requested; now touch the disk.
+    if new_stmt_name is not None:
+        (work_dir / new_stmt_name).write_bytes(statement_bytes)
+        if intake.statement_name and intake.statement_name != new_stmt_name:
+            (work_dir / intake.statement_name).unlink(missing_ok=True)
+        detect_note = _detect_note(work_dir / new_stmt_name)
+    if new_rcpt_name is not None:
+        (work_dir / new_rcpt_name).write_bytes(receipts_bytes)
+        if intake.receipts_name and intake.receipts_name != new_rcpt_name:
+            (work_dir / intake.receipts_name).unlink(missing_ok=True)
+
+    store.update_intake_files(
+        intake.intake_id,
+        statement_name=new_stmt_name,
+        receipts_name=new_rcpt_name,
+        detect_note=detect_note,
+        updated_at=now_iso,
+    )
+    updated = store.get_intake(intake.intake_id)
+    assert updated is not None
+    return updated
 
 
 def _detect_note(stmt_path: Path) -> str:
