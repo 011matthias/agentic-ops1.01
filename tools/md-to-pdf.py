@@ -87,6 +87,23 @@ def find_edge() -> Path:
     )
 
 
+def find_chrome() -> Path | None:
+    """Locate chrome.exe as the fallback engine. Edge headless can fail
+    silently (writes nothing, exits 0) when an Edge window is open even
+    with an isolated --user-data-dir; Chrome takes the same flags."""
+    candidates = [
+        Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
+        Path(r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"),
+    ]
+    from_path = shutil.which("chrome") or shutil.which("google-chrome")
+    if from_path:
+        candidates.insert(0, Path(from_path))
+    for c in candidates:
+        if c.is_file():
+            return c
+    return None
+
+
 # -------- HTML template --------
 
 
@@ -117,7 +134,20 @@ h1, h2, h3, h4 {
   line-height: 1.25;
   font-weight: 700;
   page-break-after: avoid;
+  break-after: avoid;
 }
+
+/* A heading must never be the last thing on a page: keep it with the block
+   that immediately follows (list, paragraph or sub-list), and keep that block
+   from splitting away from its heading. Chrome still breaks a block that is
+   genuinely taller than a page, so this is safe for long content too. */
+h2 + ul, h2 + ol, h2 + p, h2 + h3, h2 + h4,
+h3 + ul, h3 + ol, h3 + p,
+h4 + ul, h4 + ol, h4 + p {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+li { page-break-inside: avoid; break-inside: avoid; }
 
 h1 {
   font-size: 22pt;
@@ -288,18 +318,28 @@ def build_html(md_text: str, title: str, footer_text: str) -> str:
 # -------- PDF generation --------
 
 
-def run_edge_to_pdf(edge: Path, html_path: Path, out_path: Path) -> None:
-    """Invoke Edge headless to print HTML to PDF."""
-    with tempfile.TemporaryDirectory(prefix="md-to-pdf-edge-") as tmp_profile:
+class EngineProducedNothing(Exception):
+    """The browser exited 0 but wrote no PDF (silent-failure mode)."""
+
+
+def run_engine_to_pdf(engine: Path, html_path: Path, out_path: Path) -> None:
+    """Invoke a Chromium engine headless to print HTML to PDF.
+
+    Prints to a fresh temp file and only then replaces out_path, so a
+    pre-existing PDF at out_path can never masquerade as a successful
+    render when the engine silently writes nothing."""
+    tmp_out = out_path.with_name(out_path.name + ".tmp")
+    tmp_out.unlink(missing_ok=True)
+    with tempfile.TemporaryDirectory(prefix="md-to-pdf-engine-") as tmp_profile:
         cmd = [
-            str(edge),
+            str(engine),
             "--headless=new",
             "--disable-gpu",
             "--no-pdf-header-footer",
             "--no-first-run",
             "--no-default-browser-check",
             f"--user-data-dir={tmp_profile}",
-            f"--print-to-pdf={out_path}",
+            f"--print-to-pdf={tmp_out}",
             html_path.as_uri(),
         ]
         try:
@@ -310,17 +350,19 @@ def run_edge_to_pdf(edge: Path, html_path: Path, out_path: Path) -> None:
                 timeout=120,
             )
         except subprocess.TimeoutExpired:
-            raise SystemExit("ERROR: Edge headless timed out after 120s")
+            raise SystemExit(f"ERROR: {engine.name} headless timed out after 120s")
 
         if result.returncode != 0:
             sys.stderr.write(result.stdout)
             sys.stderr.write(result.stderr)
-            raise SystemExit(f"ERROR: Edge exited with code {result.returncode}")
+            tmp_out.unlink(missing_ok=True)
+            raise SystemExit(f"ERROR: {engine.name} exited with code {result.returncode}")
 
-        if not out_path.is_file() or out_path.stat().st_size == 0:
-            sys.stderr.write(result.stdout)
-            sys.stderr.write(result.stderr)
-            raise SystemExit(f"ERROR: Edge ran but produced no PDF at {out_path}")
+        if not tmp_out.is_file() or tmp_out.stat().st_size == 0:
+            tmp_out.unlink(missing_ok=True)
+            raise EngineProducedNothing(engine.name)
+
+    os.replace(tmp_out, out_path)
 
 
 # -------- main --------
@@ -363,10 +405,30 @@ def main(argv: list[str]) -> int:
     edge = find_edge()
     html_str = build_html(md_text, title=title, footer_text=footer_text)
 
+    used_engine = edge
+
+    def render(html_path: Path) -> None:
+        nonlocal used_engine
+        try:
+            run_engine_to_pdf(edge, html_path, out_path)
+        except EngineProducedNothing:
+            chrome = find_chrome()
+            if chrome is None:
+                raise SystemExit(
+                    f"ERROR: {edge.name} ran but produced no PDF (silent "
+                    "headless failure; close open Edge windows or install "
+                    "Chrome as fallback)."
+                )
+            sys.stderr.write(
+                f"WARN: {edge.name} produced no PDF; retrying with {chrome}\n"
+            )
+            used_engine = chrome
+            run_engine_to_pdf(chrome, html_path, out_path)
+
     if args.keep_html:
         html_path = out_path.with_suffix(".html")
         html_path.write_text(html_str, encoding="utf-8")
-        run_edge_to_pdf(edge, html_path, out_path)
+        render(html_path)
     else:
         with tempfile.NamedTemporaryFile(
             mode="w", encoding="utf-8", suffix=".html",
@@ -375,7 +437,7 @@ def main(argv: list[str]) -> int:
             f.write(html_str)
             html_path = Path(f.name)
         try:
-            run_edge_to_pdf(edge, html_path, out_path)
+            render(html_path)
         finally:
             try:
                 html_path.unlink()
@@ -392,7 +454,7 @@ def main(argv: list[str]) -> int:
 
     sys.stdout.write(f"Wrote {out_path}\n")
     sys.stdout.write(f"  pages: {pages}\n")
-    sys.stdout.write(f"  engine: Edge ({edge})\n")
+    sys.stdout.write(f"  engine: {used_engine.name} ({used_engine})\n")
     return 0
 
 

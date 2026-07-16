@@ -24,6 +24,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    import _scope  # canonical path->category scope predicates (shared)
+except Exception:  # never let a missing shared lib brick the hook
+    _scope = None
+
 REPO = Path(__file__).resolve().parent.parent.parent
 STRIP_TOOL = REPO / "tools" / "strip-em-dash.py"
 HOOK_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hook-log.txt")
@@ -47,26 +53,14 @@ def normalize_path(file_path: str) -> str:
 
 
 def in_human_to_human_scope(file_path: str) -> bool:
-    """Mirror post-write-gate's deliverable+comms scope: the client-facing set.
+    """Client-facing set: deliverables + outbound drafts/proposals (html/md).
 
-    Match: client deliverables, doc-site/platform-public HTML, outbound drafts,
-    proposals. These are read verbatim by a client or external reader.
-    Exclude (by omission): context/*.md outside drafts/, docs/, .claude/, code.
+    Excludes context/*.md outside drafts/ (incl. comms-log.md), docs/, .claude/,
+    code (by omission) per the 2026-05-15 scope correction: this hook MUTATES
+    the file (auto-strips em-dashes), so it must not rewrite the verbatim
+    sent-message record. Canonical predicate lives in _scope.py.
     """
-    if not file_path:
-        return False
-    p = file_path.replace("\\", "/").lower()
-    if not p.endswith((".html", ".htm", ".md", ".markdown", ".mdx")):
-        return False
-    deliverable = any(m in p for m in (
-        "/platform/public/",
-        "/deliverables/",
-        "/hero-exports/",
-        "/notion-pages/",
-        "/doc-site/",
-    ))
-    comms = ("/context/drafts/" in p) or ("/proposals/" in p)
-    return deliverable or comms
+    return bool(_scope) and _scope.in_human_to_human_scope(file_path)
 
 
 def main() -> None:
