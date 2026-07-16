@@ -177,16 +177,32 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         target = back if back.startswith("/") else f"/contacts/{contact_id}"
         return RedirectResponse(url=target, status_code=303)
 
+    @app.post("/contacts/{contact_id}/merge")
+    def post_merge(request: Request, contact_id: str, survivor: str = Form("")):
+        """Merge this contact (the loser) into ``survivor`` (a contact_id). The
+        loser becomes a suppressed 'duplicate' tombstone pointing at survivor;
+        events + enrollments move over. Redirects to the survivor."""
+        survivor = survivor.strip()
+        if not survivor or survivor == contact_id:
+            return HTMLResponse("Pick a different survivor contact", status_code=400)
+        with open_store() as store:
+            if store.get_contact(contact_id) is None or store.get_contact(survivor) is None:
+                return HTMLResponse("Contact not found", status_code=404)
+            store.merge_contacts(survivor, contact_id, now_iso())
+        return RedirectResponse(url=f"/contacts/{survivor}", status_code=303)
+
     @app.post("/contacts/{contact_id}/suppress")
     def post_suppress(request: Request, contact_id: str,
-                      suppressed: str = Form(""), reason: str = Form("")):
+                      suppressed: str = Form(""), reason: str = Form(""),
+                      back: str = Form("")):
         on = suppressed.strip() in ("1", "true", "on")
         with open_store() as store:
             if store.get_contact(contact_id) is None:
                 return HTMLResponse("Contact not found", status_code=404)
             toggle_suppress(store, contact_id, on, reason.strip() or None,
                             current_user(request))
-        return RedirectResponse(url=f"/contacts/{contact_id}", status_code=303)
+        target = back.strip() if back.strip().startswith("/") else f"/contacts/{contact_id}"
+        return RedirectResponse(url=target, status_code=303)
 
     @app.post("/contacts/{contact_id}/fields")
     async def post_fields(request: Request, contact_id: str):
@@ -204,6 +220,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             if k in managed:
                 fields[k] = 1 if str(form.get(k, "")).strip() in ("1", "true", "on") else 0
         expected = str(form.get("updated_at", "")).strip() or None
+        back = str(form.get("back", "")).strip()
         with open_store() as store:
             try:
                 apply_fields(store, contact_id, fields, current_user(request),
@@ -211,10 +228,15 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             except StaleWriteError:
                 # Someone (a sync or another editor) changed the row since this
                 # form loaded: reject and reload rather than clobber the newer data.
-                return RedirectResponse(url=f"/contacts/{contact_id}?stale=1", status_code=303)
+                sep = "&" if (back and "?" in back) else "?"
+                target = f"{back}{sep}stale=1" if back.startswith("/") \
+                    else f"/contacts/{contact_id}?stale=1"
+                return RedirectResponse(url=target, status_code=303)
             except ValueError:
                 return HTMLResponse("Contact not found", status_code=404)
-        return RedirectResponse(url=f"/contacts/{contact_id}", status_code=303)
+        # Board inline edits pass back=/?... so the operator stays on the board.
+        target = back if back.startswith("/") else f"/contacts/{contact_id}"
+        return RedirectResponse(url=target, status_code=303)
 
     @app.post("/contacts")
     async def create_contact_route(request: Request):
