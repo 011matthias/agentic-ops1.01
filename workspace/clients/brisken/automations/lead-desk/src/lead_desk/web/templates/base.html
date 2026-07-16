@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token }}">
   <title>{% block title %}Brisken Lead Desk{% endblock %}</title>
+  <link rel="icon" type="image/png" href="/static/favicon.png">
   <script>
     (function () {
       var t = localStorage.getItem('theme');
@@ -16,19 +17,8 @@
       );
     })();
   </script>
+  <link rel="stylesheet" href="/static/tokens.css">
   <style>
-    :root {
-      --bg: #f6f7f9; --surface: #ffffff; --border: #e2e5ea; --border-strong: #94a3b8; --text: #1a1d23;
-      --muted: #6b7280; --accent: #2563eb; --accent-light: #3b82f6;
-      --green: #059669; --green-bg: #ecfdf5; --orange: #d97706; --orange-bg: #fffbeb;
-      --red: #dc2626; --red-bg: #fef2f2; --blue-bg: #eff6ff; --shadow: 0 1px 3px rgba(0,0,0,.08);
-    }
-    [data-theme="dark"] {
-      --bg: #0f1115; --surface: #181b21; --border: #2a2f3a; --border-strong: #4a5d80; --text: #e6e8ec;
-      --muted: #9aa3b2; --accent: #3b82f6; --accent-light: #60a5fa;
-      --green: #34d399; --green-bg: #06281f; --orange: #fbbf24; --orange-bg: #2a2008;
-      --red: #f87171; --red-bg: #2a1212; --blue-bg: #0c1b33; --shadow: 0 1px 3px rgba(0,0,0,.4);
-    }
     * { box-sizing: border-box; }
     body {
       margin: 0; background: var(--bg); color: var(--text);
@@ -42,8 +32,16 @@
       padding: 12px 24px; background: var(--surface);
       border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10;
     }
-    .nav-left { font-weight: 600; }
-    .nav-client { color: var(--muted); font-weight: 400; }
+    .nav-left { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+    .nav-left:hover { text-decoration: none; }
+    .brand-logo { height: 22px; display: none; }
+    [data-theme="light"] .brand-logo--light { display: block; }
+    [data-theme="dark"] .brand-logo--dark { display: block; }
+    .nav-product {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
+      letter-spacing: .12em; color: var(--muted); border-left: 1px solid var(--border-strong);
+      padding-left: 12px; white-space: nowrap;
+    }
     .nav-right { display: flex; align-items: center; gap: 12px; }
     .nav-tab { color: var(--muted); font-weight: 600; font-size: 13px; padding: 6px 11px;
       border-radius: 7px; border: 1px solid transparent; }
@@ -58,8 +56,8 @@
       background: var(--surface); border: 1px solid var(--border);
       border-radius: 12px; padding: 18px; box-shadow: var(--shadow); margin-bottom: 18px;
     }
-    h1 { font-size: 21px; margin: 0 0 4px; }
-    h2 { font-size: 15px; margin: 0 0 12px; }
+    h1 { font-size: 21px; margin: 0 0 4px; color: var(--heading); }
+    h2 { font-size: 15px; margin: 0 0 12px; color: var(--heading); }
     label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
     input[type=text], input[type=date], input[type=datetime-local], input[type=search],
     select, textarea {
@@ -68,7 +66,7 @@
     }
     textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
     .btn {
-      display: inline-block; background: var(--accent); color: #fff; border: none;
+      display: inline-block; background: var(--accent); color: var(--btn-ink); border: none;
       border-radius: 999px; padding: 8px 16px; font-size: 13px; font-weight: 500; cursor: pointer;
     }
     .btn:hover { background: var(--accent-light); text-decoration: none; }
@@ -134,7 +132,11 @@
 </head>
 <body>
   <nav class="site-nav">
-    <div class="nav-left">Brisken <span class="nav-client">&middot; Lead Desk</span></div>
+    <a class="nav-left" href="/" aria-label="Brisken home">
+      <img class="brand-logo brand-logo--light" src="/static/brisken-logo-light.png" alt="Brisken">
+      <img class="brand-logo brand-logo--dark" src="/static/brisken-logo-dark.png" alt="Brisken">
+      <span class="nav-product">LEAD DESK</span>
+    </a>
     <div class="nav-right">
       <a class="nav-tab" href="/">Board</a>
       <a class="nav-tab" href="/campaigns">Campaigns</a>

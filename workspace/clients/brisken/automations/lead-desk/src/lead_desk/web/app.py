@@ -38,7 +38,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import (
-    HTMLResponse, JSONResponse, RedirectResponse, Response,
+    FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response,
 )
 from fastapi.templating import Jinja2Templates
 
@@ -54,6 +54,10 @@ from .store import (
 from ..sync import have_creds, run_all, run_sync
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
+# Packaged brand assets (design tokens, Brisken logos, favicon). Served
+# ungated so the login page can style itself; nothing here is client data.
+_STATIC_DIR = Path(__file__).parent / "static"
+_STATIC_TYPES = {".css": "text/css", ".png": "image/png", ".svg": "image/svg+xml"}
 
 
 def _cookie_value(cookie_header: str, name: str) -> str | None:
@@ -209,7 +213,19 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
 
     @app.get("/favicon.ico")
     def favicon():
-        return Response(status_code=204)
+        return FileResponse(_STATIC_DIR / "favicon.png", media_type="image/png")
+
+    @app.get("/static/{name}")
+    def static_asset(name: str):
+        # Basename-only lookup in the packaged static dir; unknown names 404.
+        target = _STATIC_DIR / Path(name).name
+        media_type = _STATIC_TYPES.get(target.suffix.lower())
+        if media_type is None or not target.is_file():
+            return HTMLResponse("Not found", status_code=404)
+        return FileResponse(
+            target, media_type=media_type,
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
 
     # --- board ----------------------------------------------------------
     @app.get("/", response_class=HTMLResponse)

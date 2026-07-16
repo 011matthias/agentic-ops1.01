@@ -173,7 +173,9 @@ def cookie_is_secure() -> bool:
 
 
 def path_is_open(path: str) -> bool:
-    return path in OPEN_PATHS
+    # /static/* serves packaged brand assets (tokens, logos, favicon) so the
+    # login page can style itself pre-auth; nothing under it is client data.
+    return path in OPEN_PATHS or path.startswith("/static/")
 
 
 def ingest_secret() -> str | None:
