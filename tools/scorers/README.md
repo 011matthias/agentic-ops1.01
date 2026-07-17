@@ -27,17 +27,33 @@ structural impossibility, not a discipline hope.
 
 ## Lock semantics
 
-- Agent Edit/Write on an existing `tools/scorers/*.py` -> denied by the hook.
+- Agent Edit/Write on an existing `tools/scorers/*.py` -> denied by
+  `scorer-lock-gate.py`; write-shaped SHELL commands (redirects, `tee`,
+  `sed -i`, `Set-Content`, ...) targeting a scorer or `PINS.json` -> denied
+  by `optimize-run-gate.py`, run or no run. The v1 shell-redirect bypass is
+  closed; the residual vector (interpreter escapes like `python -c
+  "open(...)"`) cannot produce an accepted round (per-round hash checks) or
+  merge (CI pin test), and remains a `scorer-lock-bypass` friction event.
 - Creating a NEW scorer file is allowed (that is how scorers get authored);
   it ships through the normal PR chain, and the human review of that PR is
   the sign-off that the metric is honest.
 - `SCORER_LOCK_ALLOW=1` is the maintenance escape hatch for a session where
   the user has explicitly approved editing a scorer. Never set it on your own
-  initiative; the ask must come from the user.
+  initiative; the ask must come from the user. The same seam gates
+  `pin_scorer.py pin`.
 - This README stays editable (documentation, not a metric).
-- The hook only sees Write/Edit tool calls. Rewriting a scorer via shell
-  redirection would bypass it; doing so is a friction event
-  (`scorer-lock-bypass`) of the same class as a skipped B-gate.
+
+## Pins (PINS.json)
+
+Every scorer is bound to a user-reviewed content hash in
+`tools/scorers/PINS.json` (sha1 git-blob over CRLF->LF-normalized bytes,
+identical on Windows and CI). Three checkpoints enforce it: the optimize
+engine refuses to START on a pin mismatch, re-verifies the hash EVERY
+round, and `test_scorer_pins.py` blocks a drifted or unpinned scorer from
+merging. Re-pin flow after a user-approved scorer change:
+`SCORER_LOCK_ALLOW=1 uv run tools/pin_scorer.py pin <name> [--pr N]`, then
+ship the PINS.json diff in the same PR - the diff line is the review
+surface. `uv run tools/pin_scorer.py check` is the human-run verifier.
 
 ## Fit check before adding a scorer
 
