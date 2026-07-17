@@ -166,8 +166,12 @@ def test_propose_accept_check_roundtrip(tmp_path, capsys):
     assert {r["document_id"]: r["verdict"] for r in rows} == {
         "r-1": "AUTO", "r-2": "AUTO", "r-3": "NONE",
     }
-    # Human marks the unmatched receipt as legitimately not on this card.
+    # Human overrides one AUTO as ambiguous (decision token "exclude"
+    # maps to label status "excluded" -- 2026-07-17 regression) and marks
+    # the unmatched receipt as legitimately not on this card.
     for r in rows:
+        if r["document_id"] == "r-2":
+            r["decision"] = "exclude"
         if r["document_id"] == "r-3":
             r["decision"] = "no_charge"
     with proposal.open("w", encoding="utf-8", newline="") as f:
@@ -181,6 +185,8 @@ def test_propose_accept_check_roundtrip(tmp_path, capsys):
     by_doc = {r["document_id"]: r for r in labels}
     assert by_doc["r-1"]["status"] == "confirmed"
     assert by_doc["r-1"]["source"] == "auto"
+    assert by_doc["r-2"]["status"] == "excluded"
+    assert by_doc["r-2"]["transaction_id"] == ""
     assert by_doc["r-3"]["status"] == "no_charge"
 
     assert cli_main(["label", "check", "--config", str(config)]) == 0

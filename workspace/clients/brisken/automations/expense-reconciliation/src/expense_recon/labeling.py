@@ -291,8 +291,12 @@ def cmd_accept(config: Path, proposal: Path | None, out: Path | None) -> int:
                 skipped += 1
                 continue
             if decision in ("exclude", "no_charge"):
+                # Decision vocabulary says "exclude"; the label status is
+                # "excluded" (VALID_STATUSES). Map it, or every excluded
+                # row fails `label check` as an invalid status.
+                status = "excluded" if decision == "exclude" else decision
                 labels.append({"document_id": doc, "transaction_id": "",
-                               "status": decision, "source": "human",
+                               "status": status, "source": "human",
                                "evidence": ""})
                 continue
             if decision not in tx_ids:
