@@ -7,6 +7,9 @@ that mutates the asset cannot also move the goalposts. This gate makes that
 structural:
 
   DENY     Write/Edit on an EXISTING tools/scorers/*.py (goalpost-moving)
+  DENY     Write/Edit on tools/scorers/PINS.json (the committed name->hash
+           pin registry; re-pin only via `uv run tools/pin_scorer.py pin`
+           under the same SCORER_LOCK_ALLOW seam)
   ADVISE   creating a NEW tools/scorers/*.py (allowed - that is how scorers
            get authored - but reminds: PR review is the honesty sign-off,
            register in tools/INDEX.md)
@@ -39,7 +42,7 @@ if _ENV_REPO:
 REPO_POSIX = REPO.replace("\\", "/").rstrip("/")
 REPO_POSIX_LOWER = REPO_POSIX.lower()
 
-SCORER_RE = re.compile(r"^tools/scorers/.+\.py$", re.IGNORECASE)
+SCORER_RE = re.compile(r"^tools/scorers/(.+\.py|PINS\.json)$", re.IGNORECASE)
 
 
 def deny(reason: str) -> None:
@@ -105,6 +108,14 @@ def main() -> int:
         return 0
 
     target = os.path.join(REPO, *rel.split("/"))
+    if rel.lower().endswith("pins.json"):
+        deny(
+            f"[scorer-lock] {rel} is the scorer pin registry and is never "
+            "edited directly. Re-pin via `uv run tools/pin_scorer.py pin "
+            "<name>` under SCORER_LOCK_ALLOW=1 after a user-approved scorer "
+            "change; the PINS diff ships in the PR for review."
+        )
+        return 0
     if os.path.isfile(target):
         deny(
             f"[scorer-lock] {rel} is a locked scorer (tools/scorers/README.md). "

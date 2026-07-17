@@ -106,3 +106,17 @@ def test_pass_out_of_repo_path():
 def test_pass_empty_payload():
     proc = run_hook("scorer-lock-gate.py", {}, cwd=REPO)
     assert proc.returncode == 0 and _classify(proc) == "pass"
+
+
+# --- PINS.json: the pin registry is part of the locked surface --------------
+
+def test_deny_edit_pins_registry():
+    proc = _run("tools/scorers/PINS.json", tool="Edit")
+    assert _classify(proc) == "deny"
+    assert "pin_scorer.py" in proc.stdout  # deny message names the sanctioned path
+
+
+def test_advise_pins_under_allow_seam():
+    proc = _run("tools/scorers/PINS.json", tool="Write",
+                env={"SCORER_LOCK_ALLOW": "1"})
+    assert _classify(proc) == "advise"
