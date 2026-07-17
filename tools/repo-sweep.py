@@ -23,6 +23,11 @@ Safety gates (any hit = skip, log, continue):
     is mid-work; skip entirely (partial sweeps make incoherent commits).
     Deleted paths age via their nearest existing ancestor directory (NTFS
     bumps the parent dir mtime on unlink), never epoch-0.
+  - untracked directories are expanded to per-file entries before gating
+    (porcelain lists them as ONE entry; a directory-level add would bypass
+    the per-file gates -- the .remotion 193MB first-night lesson)
+  - regenerable cache/tooling dirs (.remotion, node_modules, .venv,
+    __pycache__, ...) are never committed at any depth
   - credential-shaped filenames are never committed even if untracked
   - files > 50 MB are excluded and logged
   - > 5000 dirty entries means something is broken; skip and log
@@ -66,6 +71,15 @@ CREDENTIAL_PATTERNS = [
     ".npmrc", ".pypirc",
 ]
 CREDENTIAL_ALLOW = [".env.example", ".env.sample", ".env.template", ".env.dist"]
+
+# Regenerable cache/tooling dirs: never commit-worthy at ANY path depth.
+# First-night lesson (2026-07-17): an untracked .remotion/ appeared as ONE
+# porcelain entry, so a directory-level `git add` swallowed a 193MB browser
+# exe past the per-file size gate and GitHub rejected the push.
+JUNK_DIRS = {
+    ".remotion", "node_modules", ".venv", "__pycache__", ".next", ".astro",
+    ".pytest_cache", ".ruff_cache", ".git", ".mypy_cache", ".tox",
+}
 
 RED_CONCLUSIONS = {"FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED",
                    "STARTUP_FAILURE"}
@@ -288,12 +302,40 @@ def blocked_state(repo: str) -> str | None:
     return None
 
 
+def is_junk_path(rel: str) -> bool:
+    return any(part in JUNK_DIRS for part in rel.rstrip("/").split("/"))
+
+
+def expand_entry(repo: str, status: str, rel: str) -> list[tuple[str, str]]:
+    """Untracked DIRECTORIES arrive as one porcelain entry; expand them to
+    per-file entries so the credential and size gates see every file."""
+    full = os.path.join(repo, rel.replace("/", os.sep))
+    if status.strip() != "??" or not os.path.isdir(full):
+        return [(status, rel)]
+    out: list[tuple[str, str]] = []
+    for root, dirs, files in os.walk(full):
+        dirs[:] = [d for d in dirs if d not in JUNK_DIRS]
+        for f in files:
+            frel = os.path.relpath(os.path.join(root, f), repo).replace(os.sep, "/")
+            out.append(("??", frel))
+    return out
+
+
 def plan(repo: str, entries: list[tuple[str, str]]) -> tuple[dict[str, list[str]], list[str]]:
     """(group -> paths to commit, skipped-with-reason lines)."""
     groups: dict[str, list[str]] = {}
     skipped: list[str] = []
+    expanded: list[tuple[str, str]] = []
     for status, rel in entries:
+        if is_junk_path(rel):
+            skipped.append(f"{rel} (regenerable cache/tooling dir)")
+            continue
+        expanded.extend(expand_entry(repo, status, rel))
+    for status, rel in expanded:
         full = os.path.join(repo, rel.replace("/", os.sep))
+        if is_junk_path(rel):
+            skipped.append(f"{rel} (regenerable cache/tooling dir)")
+            continue
         if is_credential_name(rel):
             skipped.append(f"{rel} (credential-shaped)")
             continue
