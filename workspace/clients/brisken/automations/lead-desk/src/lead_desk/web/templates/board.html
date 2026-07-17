@@ -71,7 +71,7 @@
     </a>
     {% endfor %}
   </div>
-  <div class="tier-legend"><b>Tiers</b>: H5 top priority &middot; T1 &gt; T2 &gt; T3 (descending priority) &middot; GA general audience. ANON / DUPLICATE / STOP / OWN_TEAM / ORGANISER / UNREACHABLE are excluded from outreach.</div>
+  <div class="tier-legend"><b>Tiers</b>: H5 top priority &middot; T1 &gt; T2 &gt; T3 (descending priority) &middot; GA general audience (gets its own GA outreach wave). ANON / DUPLICATE / STOP / OWN_TEAM / ORGANISER / UNREACHABLE are excluded from outreach.</div>
 
   <div class="inline" style="margin-top:14px; flex-wrap:wrap;">
     <a class="chip hot {% if f.bucket == 'action' %}active{% endif %}" href="/?{{ cq }}&bucket=action" title="Everyone who owes an action from us right now: a reply we have not sent, or a follow-up past due. Your primary daily list.">Needs action <span class="n">{{ v.buckets.needs_action }}</span></a>
@@ -81,7 +81,7 @@
     <a class="chip warn" href="/?{{ cq }}&bucket=dangling" title="A follow-up you scheduled (its next-step date) is now past due on our side.">Follow-up due <span class="n">{{ v.buckets.dangling }}</span></a>
     <a class="chip hot" href="/?{{ cq }}&bucket=aging" title="They replied and we still have not responded after several days.">Aging replies <span class="n">{{ v.buckets.aging_hot }}</span></a>
     <a class="chip good" href="/?{{ cq }}&bucket=reached" title="Dirk reached them personally; no campaign email was sent.">Reached (Dirk) <span class="n">{{ v.buckets.reached_dirk }}</span></a>
-    <a class="chip hold" href="/?{{ cq }}&bucket=held" title="Outreach deliberately parked and revisitable (a general-audience hold or a manual hold). Not 'do not contact'.">Held <span class="n">{{ v.buckets.held }}</span></a>
+    <a class="chip hold" href="/?{{ cq }}&bucket=held" title="Outreach deliberately parked and revisitable (a manual / next-step hold). Not 'do not contact'.">Held <span class="n">{{ v.buckets.held }}</span></a>
     {% if v.buckets.stalled %}
     <a class="chip hot" href="/campaigns/{{ v.campaign }}#attempts" title="sends needing a human decision">Stalled sends <span class="n">{{ v.buckets.stalled }}</span></a>
     {% endif %}

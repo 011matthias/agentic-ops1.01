@@ -179,14 +179,15 @@ so the board mis-showed two groups as active "sourced" to-dos. Fixed:
   `status_label` shows "Reached (Dirk)" when a touch (and no campaign send) put
   the contact at `sent`, so a relationship touch reads distinctly from a
   campaign send. 8 contacts move sourced -> reached.
-- **GA + deliberate holds -> "Held".** A new `suppress_reason='held'`
-  (revisitable, ranked below the consent reasons + exclusion tiers) covers the
-  GA general-awareness cohort (`tier='GA'` / `dirk_notes='GA'`) and explicit
-  `next_step` holds (`on hold|do not send|excluded|covered by`). Transient holds
-  (OOO, awaiting-decision, scheduling) stay active. 44 contacts move off the
-  active board (active 124 -> 80), filterable via the "Held" chip and shown as
-  "Held", visibly distinct from consent-suppressed ("Do not contact") and
-  excluded tiers ("Excluded").
+- **Deliberate holds -> "Held".** A new `suppress_reason='held'`
+  (revisitable, ranked below the consent reasons + exclusion tiers) covers
+  explicit `next_step` holds (`on hold|do not send|excluded|covered by`).
+  Transient holds (OOO, awaiting-decision, scheduling) stay active. Filterable
+  via the "Held" chip and shown as "Held", visibly distinct from
+  consent-suppressed ("Do not contact") and excluded tiers ("Excluded").
+  Iteration 2 originally held the GA cohort too; reversed 2026-07-17 (owner
+  directive): GA is an active outreach tier that receives its own GA wave, and
+  once T3 + GA sends are out, per-tier follow-up starts on non-responders.
 - Board gains "Reached (Dirk)" and "Held" filter chips + buckets. Migration
   stays idempotent (touch keyed by a stable `dirk-touch-{cid}` ext_key).
 
