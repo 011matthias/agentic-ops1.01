@@ -55,6 +55,20 @@ wrote" is NOT verification. The hook enforces the scope split; it
 cannot see whether you verified. Using the autonomous lane on
 unverified work is a friction event (`verification-theater`).
 
+For changes under `tools/`, `.claude/hooks/`, or `tools/tests/`,
+run `uv run tools/preflight-hooks.py` (`--full` before a
+`tools/tests` change) so "passes locally" means "passes the CI
+`Enforcement hook tests` job". One structural backstop closes the
+lint half automatically: `.claude/hooks/ruff-push-gate.py`
+(PreToolUse:Bash|PowerShell, wired in `wire-hooks.py`) runs the
+exact CI ruff command at `git push` time when the push touches a
+Python file in that scope, and returns permissionDecision="ask"
+with the ruff output inline if it would fail; the slower pytest
+half stays in CI plus the `--full` runner. Built 2026-07-17 after
+five PRs went red on the `hooks` job in one day for ruff F401/F841
+in newly-added files that passed locally but not in the clean CI
+env.
+
 ## Band 2 — auto-merge, CI-gated
 
 `gh pr merge` runs automatically when the target PR's CI is green.
