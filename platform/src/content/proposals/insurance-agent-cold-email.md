@@ -13,7 +13,6 @@ sent: null
 value_estimate: "$1,400 setup + $750/mo"
 timeline: "2 weeks setup, then monthly"
 tags: [cold-email, lead-generation, deliverability, apollo, instantly, smartlead, insurance, outbound]
-access_code: "insurance-2026"
 deliverables:
   letter: true
   video: true

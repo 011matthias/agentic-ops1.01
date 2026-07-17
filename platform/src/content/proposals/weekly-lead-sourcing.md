@@ -13,7 +13,6 @@ sent: null
 value_estimate: "first list at posted $20 (trial); ongoing weekly rate set after trial"
 timeline: "1-3 months, one delivery per week"
 tags: [lead-sourcing, lead-generation, data-entry, linkedin, apollo, sales-navigator, google-sheets, weekly-delivery]
-access_code: ""
 deliverables:
   letter: true
   video: false

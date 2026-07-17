@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Sales Chatbot &ndash; Timeline | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+    h2 { page-break-before: always; }
+    h2:first-of-type { page-break-before: avoid; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+
+/* Navigation */
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+
+/* Sidebar */
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+
+/* Main Content */
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+
+/* Hero */
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 560px; margin: 0 auto 32px; line-height: 1.6; }
+.stats-row { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
+.stat-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 24px; text-align: center; min-width: 140px;
+    transition: transform .15s, box-shadow .15s;
+}
+.stat-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.stat-value { font-size: 24px; font-weight: 800; color: var(--blue); }
+.stat-label { font-size: 12px; color: var(--text2); font-weight: 500; margin-top: 2px; }
+
+/* Sections */
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+
+/* Callout */
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+.callout.purple { border-color: var(--purple); background: var(--purple-bg); }
+.callout.purple .callout-title, .callout.purple p { color: var(--purple-dark); }
+
+/* Timeline Strip */
+.timeline-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin: 24px 0; }
+.tl-card {
+    padding: 20px; border-radius: 10px; border: 1px solid var(--border);
+    border-left: 4px solid var(--blue); background: var(--surface);
+    transition: transform .15s, box-shadow .15s;
+}
+.tl-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.tl-card.phase2 { border-left-color: var(--purple); }
+.tl-card.phase3 { border-left-color: var(--orange); }
+.tl-card.phase4 { border-left-color: var(--green); }
+.tl-card.phase5 { border-left-color: var(--blue); }
+.tl-badge {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    padding: 3px 10px; border-radius: 20px; margin-bottom: 8px;
+}
+.tl-card .tl-badge { background: var(--blue-light); color: var(--blue); }
+.tl-card.phase2 .tl-badge { background: var(--purple-light); color: var(--purple); }
+.tl-card.phase3 .tl-badge { background: var(--orange-light); color: var(--orange); }
+.tl-card.phase4 .tl-badge { background: var(--green-light); color: var(--green); }
+.tl-card.phase5 .tl-badge { background: var(--blue-light); color: var(--blue); }
+.tl-title { font-size: 15px; font-weight: 600; color: var(--text-strong); margin-bottom: 4px; }
+.tl-price { font-size: 12px; color: var(--text2); margin-bottom: 10px; }
+.tl-items { list-style: none; padding: 0; }
+.tl-items li { font-size: 12px; color: var(--text); padding: 2px 0; display: flex; align-items: center; gap: 6px; }
+.tl-items li::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--blue); flex-shrink: 0; }
+.tl-card.phase2 .tl-items li::before { background: var(--purple); }
+.tl-card.phase3 .tl-items li::before { background: var(--orange); }
+.tl-card.phase4 .tl-items li::before { background: var(--green); }
+.tl-card.phase5 .tl-items li::before { background: var(--blue); }
+
+/* Day cards */
+.day-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin: 24px 0; }
+.day-grid.two-col { grid-template-columns: 1fr 1fr; }
+.day-card {
+    border-radius: 10px; border: 1px solid var(--border); background: var(--surface);
+    padding: 16px; transition: transform .15s, box-shadow .15s;
+}
+.day-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.day-card.p1 { border-top: 3px solid var(--blue); }
+.day-card.p2 { border-top: 3px solid var(--purple); }
+.day-card.p3 { border-top: 3px solid var(--orange); }
+.day-card.p4 { border-top: 3px solid var(--green); }
+.day-card.p5 { border-top: 3px solid var(--blue); }
+.day-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+.day-card.p1 .day-label { color: var(--blue); }
+.day-card.p2 .day-label { color: var(--purple); }
+.day-card.p3 .day-label { color: var(--orange); }
+.day-card.p4 .day-label { color: var(--green); }
+.day-card.p5 .day-label { color: var(--blue); }
+.day-title { font-size: 14px; font-weight: 700; color: var(--text-strong); margin-bottom: 10px; }
+.day-tasks { list-style: none; padding: 0; }
+.day-tasks li { font-size: 12px; color: var(--text); padding: 3px 0; display: flex; align-items: flex-start; gap: 6px; line-height: 1.4; }
+.day-tasks li::before { content: ''; width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+.day-card.p1 .day-tasks li::before { background: var(--blue); }
+.day-card.p2 .day-tasks li::before { background: var(--purple); }
+.day-card.p3 .day-tasks li::before { background: var(--orange); }
+.day-card.p4 .day-tasks li::before { background: var(--green); }
+.day-card.p5 .day-tasks li::before { background: var(--blue); }
+
+/* Prereq checklist */
+.prereq-list { list-style: none; padding: 0; margin: 16px 0; }
+.prereq-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface); margin-bottom: 8px;
+}
+.prereq-icon {
+    width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; color: #fff; background: var(--blue); flex-shrink: 0; margin-top: 1px;
+}
+.prereq-text { flex: 1; }
+.prereq-name { font-size: 13px; font-weight: 700; color: var(--text-strong); }
+.prereq-desc { font-size: 12px; color: var(--text2); margin-top: 2px; line-height: 1.4; }
+
+/* CTA */
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+
+/* Footer */
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; }
+
+/* Tablet */
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+
+/* Mobile */
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .hero h1 { font-size: 24px; }
+    .stats-row { gap: 8px; }
+    .stat-card { min-width: 100px; padding: 12px 16px; }
+    .stat-value { font-size: 20px; }
+    .timeline-strip { grid-template-columns: 1fr; }
+    .day-grid { grid-template-columns: 1fr; }
+}
+</style>
+<script>
+(function(){var t=localStorage.getItem('ghlchatbot-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/ghl-ai-sales-chatbot/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">AI Sales Chatbot</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/ghl-ai-sales-chatbot/">Overview</a>
+        <a href="/clients/ghl-ai-sales-chatbot/solution">Solution</a>
+        <a href="/clients/ghl-ai-sales-chatbot/workflow">Workflow</a>
+        <a href="/clients/ghl-ai-sales-chatbot/timeline" class="active">Timeline</a>
+        <a href="/clients/ghl-ai-sales-chatbot/investment">Investment</a>
+        <a href="/clients/ghl-ai-sales-chatbot/faq">FAQ</a>
+        <a href="/clients/ghl-ai-sales-chatbot/onboarding">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">Timeline sections</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#overview" class="step-link active"><span class="step-num">1</span> Overview</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#phase-1" class="step-link"><span class="step-num">2</span> Phase 1: Foundation</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#phase-2" class="step-link"><span class="step-num">3</span> Phase 2: AI Brain</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#phase-3" class="step-link"><span class="step-num">4</span> Phase 3: Voice + Media</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#phase-4" class="step-link"><span class="step-num">5</span> Phase 4: Follow-ups</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#phase-5" class="step-link"><span class="step-num">6</span> Phase 5: Snapshot</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#prereqs" class="step-link"><span class="step-num">7</span> Prerequisites</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<!-- Hero -->
+<section class="hero" id="overview">
+    <div class="hero-badge">Delivery Timeline</div>
+    <h1>Three to Four Weeks to Production</h1>
+    <p class="hero-sub">Five phases, each delivering working functionality. By end of week 4, the complete system is live, snapshot-ready, and documented for handoff.</p>
+    <div class="stats-row">
+        <div class="stat-card"><div class="stat-value">5</div><div class="stat-label">Phases</div></div>
+        <div class="stat-card"><div class="stat-value">3-4</div><div class="stat-label">Weeks</div></div>
+        <div class="stat-card"><div class="stat-value">8</div><div class="stat-label">Components</div></div>
+        <div class="stat-card"><div class="stat-value">Day 1</div><div class="stat-label">Webhooks live</div></div>
+    </div>
+</section>
+
+<!-- Phase Overview Strip -->
+<div class="timeline-strip">
+    <div class="tl-card">
+        <div class="tl-badge">Week 1</div>
+        <div class="tl-title">Foundation</div>
+        <ul class="tl-items">
+            <li>GHL sub-account</li>
+            <li>Pipelines/tags/custom fields</li>
+            <li>Webhook infrastructure</li>
+            <li>n8n orchestration</li>
+        </ul>
+    </div>
+    <div class="tl-card phase2">
+        <div class="tl-badge">Week 1&ndash;2</div>
+        <div class="tl-title">AI Brain</div>
+        <ul class="tl-items">
+            <li>Conversation engine</li>
+            <li>Sales playbook</li>
+            <li>Objection handling</li>
+            <li>Conversation memory</li>
+        </ul>
+    </div>
+    <div class="tl-card phase3">
+        <div class="tl-badge">Week 2&ndash;3</div>
+        <div class="tl-title">Voice + Media</div>
+        <ul class="tl-items">
+            <li>ElevenLabs persona</li>
+            <li>Twilio integration</li>
+            <li>Multimedia triggers</li>
+        </ul>
+    </div>
+    <div class="tl-card phase4">
+        <div class="tl-badge">Week 3</div>
+        <div class="tl-title">Follow-ups + Tracking</div>
+        <ul class="tl-items">
+            <li>Behavior sequences</li>
+            <li>Conversion detection</li>
+            <li>Auto-tagging</li>
+            <li>Dashboard</li>
+        </ul>
+    </div>
+    <div class="tl-card phase5">
+        <div class="tl-badge">Week 3&ndash;4</div>
+        <div class="tl-title">Snapshot + Polish</div>
+        <ul class="tl-items">
+            <li>Snapshot creation</li>
+            <li>Provisioning script</li>
+            <li>Docs</li>
+            <li>Loom walkthrough</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Phase 1 Detail -->
+<h2 id="phase-1">Phase 1: Foundation (Week 1)</h2>
+<p>The infrastructure layer. By end of Day 5, GHL is configured, webhooks are live, and n8n can receive messages and send responses through GHL's Conversations API.</p>
+
+<div class="day-grid">
+    <div class="day-card p1">
+        <div class="day-label">Day 1&ndash;2</div>
+        <div class="day-title">GHL + Infrastructure</div>
+        <ul class="day-tasks">
+            <li>Sub-account setup, pipelines, custom fields, tags</li>
+            <li>Webhook endpoints configured</li>
+            <li>n8n instance deployed</li>
+            <li>API connections tested</li>
+        </ul>
+    </div>
+    <div class="day-card p1">
+        <div class="day-label">Day 3&ndash;4</div>
+        <div class="day-title">Orchestration Layer</div>
+        <ul class="day-tasks">
+            <li>n8n webhook receivers</li>
+            <li>GHL API v2 integration (contacts, conversations, pipelines)</li>
+            <li>Message routing logic</li>
+            <li>Basic reply-and-respond loop working</li>
+        </ul>
+    </div>
+    <div class="day-card p1">
+        <div class="day-label">Day 5</div>
+        <div class="day-title">Integration Testing</div>
+        <ul class="day-tasks">
+            <li>End-to-end message flow: inbound GHL message &rarr; n8n &rarr; placeholder AI &rarr; response via GHL Conversations API</li>
+            <li>All API connections verified</li>
+        </ul>
+    </div>
+</div>
+
+<div class="callout green">
+    <div class="callout-title">End of Phase 1</div>
+    <p>GHL is configured, webhooks are live, and n8n can receive messages and send responses. The AI brain is a placeholder at this point &mdash; Phase 2 replaces it with the real engine.</p>
+</div>
+
+<!-- Phase 2 Detail -->
+<h2 id="phase-2">Phase 2: AI Brain (Week 1&ndash;2)</h2>
+<p>The intelligence layer. The AI engine is deployed, ingests the sales playbook, and starts handling real conversations with brand personality and objection handling.</p>
+
+<div class="day-grid">
+    <div class="day-card p2">
+        <div class="day-label">Day 6&ndash;7</div>
+        <div class="day-title">Conversation Engine</div>
+        <ul class="day-tasks">
+            <li>AI engine deployed (Claude/OpenAI)</li>
+            <li>Sales playbook ingested</li>
+            <li>System prompt with brand personality, tone rules, compliance guardrails</li>
+        </ul>
+    </div>
+    <div class="day-card p2">
+        <div class="day-label">Day 8&ndash;9</div>
+        <div class="day-title">Objection Handling + Memory</div>
+        <ul class="day-tasks">
+            <li>Objection library (10&ndash;15 common objections)</li>
+            <li>Conversation state machine (cold open &rarr; rapport &rarr; qualification &rarr; offer &rarr; objection &rarr; close)</li>
+            <li>Conversation memory: AI reads full history before each response</li>
+        </ul>
+    </div>
+    <div class="day-card p2">
+        <div class="day-label">Day 10</div>
+        <div class="day-title">Tuning + Live Testing</div>
+        <ul class="day-tasks">
+            <li>Test conversations with real sales scenarios</li>
+            <li>Tune prompt for tone, response quality, objection handling accuracy</li>
+            <li>Confidence threshold for human escalation</li>
+        </ul>
+    </div>
+</div>
+
+<div class="callout purple">
+    <div class="callout-title">End of Phase 2</div>
+    <p>The AI brain is live and handling real conversations. It follows the sales flow, handles objections, and sounds like the brand owner. Connected to GHL via n8n &mdash; every response is sent through GHL's messaging channels.</p>
+</div>
+
+<!-- Phase 3 Detail -->
+<h2 id="phase-3">Phase 3: Voice + Multimedia (Week 2&ndash;3)</h2>
+<p>The communication layer expands beyond text. Voice notes, multimedia, and context-based medium selection give the AI a human presence.</p>
+
+<div class="day-grid two-col">
+    <div class="day-card p3">
+        <div class="day-label">Day 11&ndash;12</div>
+        <div class="day-title">Voice Pipeline</div>
+        <ul class="day-tasks">
+            <li>ElevenLabs voice persona configured (cloned from recording or preset)</li>
+            <li>Twilio integration for voice note delivery (MMS)</li>
+            <li>Inbound voice transcription pipeline</li>
+        </ul>
+    </div>
+    <div class="day-card p3">
+        <div class="day-label">Day 13&ndash;14</div>
+        <div class="day-title">Multimedia + Context Triggers</div>
+        <ul class="day-tasks">
+            <li>Media library configured (testimonials, screenshots, process infographic)</li>
+            <li>Context-trigger rules in AI engine: "when prospect asks about results, send testimonial"</li>
+            <li>Voice note triggers: "after 2 unanswered texts, switch to voice note"</li>
+        </ul>
+    </div>
+</div>
+
+<div class="callout orange">
+    <div class="callout-title">End of Phase 3</div>
+    <p>The system now communicates via text, voice notes, and multimedia. The AI decides which medium to use based on conversation context and prospect behavior.</p>
+</div>
+
+<!-- Phase 4 Detail -->
+<h2 id="phase-4">Phase 4: Follow-ups + Tracking (Week 3)</h2>
+<p>Autonomous follow-up sequences and conversion detection. The system handles the full lead journey without human intervention.</p>
+
+<div class="day-grid two-col">
+    <div class="day-card p4">
+        <div class="day-label">Day 15&ndash;16</div>
+        <div class="day-title">Behavior-Based Follow-Ups</div>
+        <ul class="day-tasks">
+            <li>Three follow-up sequences built in n8n: ghost (no response), clicked-but-did-not-buy, asked-but-did-not-convert</li>
+            <li>Each generates AI-personalized messages</li>
+            <li>Timing and triggers configured</li>
+        </ul>
+    </div>
+    <div class="day-card p4">
+        <div class="day-label">Day 17&ndash;18</div>
+        <div class="day-title">Conversion Detection</div>
+        <ul class="day-tasks">
+            <li>GHL pipeline stage change webhooks</li>
+            <li>Purchase/booking/community-join detection</li>
+            <li>Auto-stop sales messaging</li>
+            <li>Onboarding workflow triggers</li>
+            <li>Activity log per lead</li>
+        </ul>
+    </div>
+</div>
+
+<div class="callout green">
+    <div class="callout-title">End of Phase 4</div>
+    <p>The system runs the full lead journey autonomously: conversation &rarr; follow-up &rarr; conversion detection &rarr; onboarding handoff. Pipeline tracking and activity logging are live.</p>
+</div>
+
+<!-- Phase 5 Detail -->
+<h2 id="phase-5">Phase 5: Snapshot + Polish (Week 3&ndash;4)</h2>
+<p>The system is production-ready. This phase creates the snapshot for cloning and documents everything for handoff.</p>
+
+<div class="day-grid two-col">
+    <div class="day-card p5">
+        <div class="day-label">Day 19&ndash;20</div>
+        <div class="day-title">Snapshot + Provisioning</div>
+        <ul class="day-tasks">
+            <li>GHL snapshot created (captures all CRM config)</li>
+            <li>Provisioning script built (Twilio number, ElevenLabs persona, n8n webhooks, AI config per client)</li>
+            <li>Test: deploy snapshot to test sub-account, run provisioning script, verify end-to-end</li>
+        </ul>
+    </div>
+    <div class="day-card p5">
+        <div class="day-label">Day 21</div>
+        <div class="day-title">Documentation + Handoff</div>
+        <ul class="day-tasks">
+            <li>Maintenance guide</li>
+            <li>System architecture doc</li>
+            <li>Loom walkthrough recorded</li>
+            <li>Workflow exports</li>
+            <li>All credentials documented</li>
+        </ul>
+    </div>
+</div>
+
+<div class="callout green">
+    <div class="callout-title">End of Phase 5: production ready</div>
+    <p>The system is live, tested, documented, and snapshot-ready. You can clone it to a new client sub-account in under 30 minutes. From here, the system runs without intervention.</p>
+</div>
+
+<!-- Prerequisites -->
+<h2 id="prereqs">Prerequisites</h2>
+<p>What we need from you before Day 1 to start building immediately.</p>
+
+<ul class="prereq-list">
+    <li class="prereq-item">
+        <div class="prereq-icon">1</div>
+        <div class="prereq-text">
+            <div class="prereq-name">GoHighLevel agency account (or sub-account access)</div>
+            <div class="prereq-desc">We build inside a sub-account. Agency-level access lets us create and configure everything.</div>
+        </div>
+    </li>
+    <li class="prereq-item">
+        <div class="prereq-icon">2</div>
+        <div class="prereq-text">
+            <div class="prereq-name">Credit repair offer details (pricing, community access, etc.)</div>
+            <div class="prereq-desc">The AI needs to know what it is selling: pricing, packages, onboarding steps, and community access details.</div>
+        </div>
+    </li>
+    <li class="prereq-item">
+        <div class="prereq-icon">3</div>
+        <div class="prereq-text">
+            <div class="prereq-name">Brand voice recording (60 seconds for ElevenLabs cloning) OR pick a preset voice</div>
+            <div class="prereq-desc">A 60-second recording of you speaking naturally. We use this to create a voice clone for voice notes. Alternatively, pick from ElevenLabs preset voices.</div>
+        </div>
+    </li>
+    <li class="prereq-item">
+        <div class="prereq-icon">4</div>
+        <div class="prereq-text">
+            <div class="prereq-name">Existing sales scripts or objection handling notes</div>
+            <div class="prereq-desc">We build the playbook from these. The more you can share about your current sales process, the better the AI performs from Day 1.</div>
+        </div>
+    </li>
+    <li class="prereq-item">
+        <div class="prereq-icon">5</div>
+        <div class="prereq-text">
+            <div class="prereq-name">Twilio account (or we set one up on Day 1)</div>
+            <div class="prereq-desc">For voice note delivery via MMS. If you do not have one, we create it during Phase 1.</div>
+        </div>
+    </li>
+    <li class="prereq-item">
+        <div class="prereq-icon">6</div>
+        <div class="prereq-text">
+            <div class="prereq-name">OpenAI or Anthropic API key (for the AI engine)</div>
+            <div class="prereq-desc">The AI conversation engine runs on your API key. We configure it during setup.</div>
+        </div>
+    </li>
+    <li class="prereq-item">
+        <div class="prereq-icon">7</div>
+        <div class="prereq-text">
+            <div class="prereq-name">Sample lead messages (5&ndash;10 real conversations to train and test against)</div>
+            <div class="prereq-desc">Real conversation screenshots or exports. We use these to test and tune the AI's responses before going live.</div>
+        </div>
+    </li>
+</ul>
+
+<div class="callout orange">
+    <div class="callout-title">Critical path</div>
+    <p>The AI brain quality depends on the sales playbook input. The more you can share about your current sales process &mdash; scripts, common objections, successful close techniques &mdash; the better the AI performs from Day 1.</p>
+</div>
+
+<!-- CTA -->
+<section class="cta-section">
+    <h2>Ready to review pricing?</h2>
+    <p>See the full investment breakdown, what is included, running costs, and cloning economics.</p>
+    <a href="/clients/ghl-ai-sales-chatbot/investment" class="cta-btn">View Investment &rarr;</a>
+</section>
+
+<footer class="footer" style="border-top: 1px solid var(--border); padding: 24px 0 40px;">
+    <p>Built and maintained by <a href="https://unpauseai.com" target="_blank" rel="noopener">UnpauseAI</a></p>
+    <p style="margin-top:4px;"><a href="https://unpauseai.com/privacy">Privacy Policy</a> &middot; <a href="https://unpauseai.com/terms">Terms of Service</a></p>
+    <p style="margin-top:4px; font-size: 12px;">Last updated: March 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+function toggleTheme() {
+    var el = document.documentElement;
+    var t = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    el.setAttribute('data-theme', t);
+    localStorage.setItem('ghlchatbot-theme', t);
+}
+
+var links = document.querySelectorAll('.step-link');
+var sections = [];
+links.forEach(function(a) {
+    var id = a.getAttribute('href').replace('#','');
+    var el = document.getElementById(id);
+    if (el) sections.push({ el: el, link: a });
+});
+
+function updateActive() {
+    var scrollY = window.scrollY + 120;
+    var active = sections[0];
+    for (var i = 0; i < sections.length; i++) {
+        if (sections[i].el.offsetTop <= scrollY) active = sections[i];
+    }
+    links.forEach(function(l) { l.classList.remove('active'); });
+    if (active) active.link.classList.add('active');
+}
+window.addEventListener('scroll', updateActive);
+updateActive();
+
+links.forEach(function(a) {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        var id = this.getAttribute('href').replace('#','');
+        var el = document.getElementById(id);
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+        document.querySelector('.sidebar').classList.remove('open');
+    });
+});
+</script>
+
+<!-- Access Gate -->
+<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
+  <div style="text-align:center;max-width:360px;padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg>
+      <span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span>
+    </div>
+    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">AI Sales Chatbot Proposal</h2>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Enter your access code to continue.</p>
+    <div style="display:flex;gap:8px;">
+      <input id="auth-input" type="password" placeholder="Access code" autocomplete="off" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;" onkeydown="if(event.key==='Enter')checkAuth()" />
+      <button onclick="checkAuth()" style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">Enter</button>
+    </div>
+    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Incorrect code. Please try again.</p>
+  </div>
+</div>
+<script>
+var GP_CODE='ghl-asc';
+function checkAuth(){var v=document.getElementById('auth-input').value;if(v===GP_CODE){localStorage.setItem('ghlchatbot-access','granted');var g=document.getElementById('auth-gate');g.style.opacity='0';setTimeout(function(){g.style.display='none'},300)}else{document.getElementById('auth-error').style.display='block';document.getElementById('auth-input').value='';document.getElementById('auth-input').focus()}}
+(function(){if(localStorage.getItem('ghlchatbot-access')==='granted'){document.getElementById('auth-gate').style.display='none'}else{var i=document.getElementById('auth-input');if(i)i.focus()}})();
+</script>
+</body>
+</html>

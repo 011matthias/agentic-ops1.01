@@ -1,0 +1,86 @@
+{
+  "spec_version": "1.0",
+  "client_type": "Startup Founder",
+  "system_name": "Founder Operations Dashboard",
+  "generated_by": "UnpauseAI System Configurator",
+  "dashboard_panels": [
+    {
+      "name": "Daily Briefing",
+      "description": "AI-generated morning summary: calendar events, pending tasks, pipeline updates, and action items",
+      "data_sources": ["Google Calendar", "Notion", "HubSpot"]
+    },
+    {
+      "name": "Pipeline Overview",
+      "description": "Visual funnel showing active deals, stage distribution, and projected close dates",
+      "data_sources": ["HubSpot"]
+    },
+    {
+      "name": "Task Priority Board",
+      "description": "AI-prioritized task list pulled from Notion, ranked by urgency and business impact",
+      "data_sources": ["Notion", "Slack"]
+    },
+    {
+      "name": "Meeting Prep Cards",
+      "description": "Auto-generated research briefs for upcoming meetings: attendee background, company context, talking points",
+      "data_sources": ["Google Calendar", "Claude API"]
+    },
+    {
+      "name": "Follow-Up Tracker",
+      "description": "Conversations that need replies, sorted by days since last contact and deal value",
+      "data_sources": ["Gmail", "HubSpot"]
+    }
+  ],
+  "agents": [
+    {
+      "name": "Research Agent",
+      "trigger": "New calendar event with external attendee",
+      "action": "Scrape attendee company website, analyze with Claude, generate meeting prep card",
+      "n8n_workflow": "research-agent.json",
+      "estimated_build": "2 days"
+    },
+    {
+      "name": "Follow-Up Agent",
+      "trigger": "Daily schedule (9am)",
+      "action": "Scan email threads and CRM for conversations idle >3 days, draft follow-up messages",
+      "n8n_workflow": "follow-up-agent.json",
+      "estimated_build": "1.5 days"
+    },
+    {
+      "name": "Daily Briefing Agent",
+      "trigger": "Daily schedule (7am)",
+      "action": "Pull calendar, tasks, and pipeline data. Claude generates a prioritized morning briefing",
+      "n8n_workflow": "briefing-agent.json",
+      "estimated_build": "1 day"
+    },
+    {
+      "name": "Content Assistant",
+      "trigger": "Manual (Slack command or dashboard button)",
+      "action": "Draft email replies, meeting summaries, or status updates from context",
+      "n8n_workflow": "content-assistant.json",
+      "estimated_build": "1.5 days"
+    }
+  ],
+  "integrations": [
+    {"tool": "Google Calendar", "type": "read/write", "purpose": "Event data for briefings and meeting prep"},
+    {"tool": "Gmail", "type": "read", "purpose": "Thread monitoring for follow-up detection"},
+    {"tool": "HubSpot", "type": "read/write", "purpose": "Pipeline data, contact records, deal stages"},
+    {"tool": "Notion", "type": "read/write", "purpose": "Task management, note storage"},
+    {"tool": "Slack", "type": "write", "purpose": "Notifications, alerts, and agent commands"},
+    {"tool": "Claude API", "type": "api", "purpose": "Research analysis, content generation, prioritization"}
+  ],
+  "infrastructure": {
+    "automation": "n8n (self-hosted on Railway)",
+    "ai_model": "Claude Haiku 4.5 (fast operations) + Claude Sonnet 4.6 (complex research)",
+    "hosting_cost": "$5-10/mo (Railway) + $10-25/mo (Claude API usage)",
+    "monitoring": "n8n execution logs + Slack error alerts"
+  },
+  "timeline": {
+    "total": "2-3 weeks",
+    "phases": [
+      {"name": "Discovery + Spec", "duration": "2-3 days"},
+      {"name": "Core Build", "duration": "5-7 days"},
+      {"name": "Testing + Hardening", "duration": "3-4 days"},
+      {"name": "Handoff", "duration": "1-2 days"}
+    ]
+  }
+}

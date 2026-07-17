@@ -2,19 +2,19 @@
 id: p006
 slug: warme-wimmer-make-migration
 prospect: "Warme Wimmer"
-contact: "Raphael"
+contact: "Irina Dragunow (PM)"
 source: upwork
 source_url: "https://www.upwork.com/jobs/~022037459187581558171"
 project_title: "Make.com Migration, Stabilization & Ongoing Maintenance"
-status: sent
+status: won
+won: "2026-04-07"
 track: 2
 created: "2026-03-27"
 sent: "2026-03-27"
 reviewed: "2026-03-27"
-value_estimate: "$30/hr, ~$3,000-5,000/month"
+value_estimate: "$25/hr, 40 hrs/week limit"
 timeline: "Ongoing, start within 1 week"
 tags: [make-com, migration, lexoffice, hero-software, maintenance, germany]
-access_code: "warme-2026"
 deliverables:
   letter: true
   video: true

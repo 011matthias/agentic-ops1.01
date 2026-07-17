@@ -33,22 +33,52 @@ export default function Footer() {
                 Services
               </Link>
               <Link
+                href="/pricing"
+                className="text-sm text-muted transition-colors hover:text-foreground"
+              >
+                Pricing
+              </Link>
+              <Link
                 href="/work"
                 className="text-sm text-muted transition-colors hover:text-foreground"
               >
                 Work
               </Link>
               <Link
-                href="/assessment"
-                className="text-sm text-muted transition-colors hover:text-foreground"
-              >
-                Assessment
-              </Link>
-              <Link
                 href="/contact"
                 className="text-sm text-muted transition-colors hover:text-foreground"
               >
                 Contact
+              </Link>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted">
+                Resources
+              </p>
+              <Link
+                href="/blog"
+                className="text-sm text-muted transition-colors hover:text-foreground"
+              >
+                Blog
+              </Link>
+              <Link
+                href="/faq"
+                className="text-sm text-muted transition-colors hover:text-foreground"
+              >
+                FAQ
+              </Link>
+              <Link
+                href="/compare"
+                className="text-sm text-muted transition-colors hover:text-foreground"
+              >
+                Compare Options
+              </Link>
+              <Link
+                href="/assessment"
+                className="text-sm text-muted transition-colors hover:text-foreground"
+              >
+                Assessment
               </Link>
             </div>
 

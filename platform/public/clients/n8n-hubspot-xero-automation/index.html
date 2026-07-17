@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Overview | n8n HubSpot + Xero Automation</title>
+<style>
+:root,[data-theme="light"]{--bg:#fff;--bg-s:#f8fafc;--text:#1e293b;--text-s:#64748b;--border:#e2e8f0;--primary:#2563eb;--primary-l:#dbeafe;--accent:#10b981;--accent-l:#d1fae5;--card:#fff;--shadow:0 1px 3px rgba(0,0,0,.1);--nav-bg:rgba(255,255,255,.95)}
+[data-theme="dark"]{--bg:#0f172a;--bg-s:#1e293b;--text:#e2e8f0;--text-s:#94a3b8;--border:#334155;--primary:#3b82f6;--primary-l:#1e3a5f;--accent:#34d399;--accent-l:#064e3b;--card:#1e293b;--shadow:0 1px 3px rgba(0,0,0,.4);--nav-bg:rgba(15,23,42,.95)}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+a{color:var(--primary);text-decoration:none}
+a:hover{text-decoration:underline}
+h1{font-size:2.2rem;line-height:1.2;margin-bottom:.5rem}
+h2{font-size:1.5rem;margin-bottom:1rem;color:var(--text)}
+h3{font-size:1.1rem;margin-bottom:.5rem}
+nav{position:sticky;top:0;z-index:100;background:var(--nav-bg);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);padding:.75rem 1.5rem;display:flex;align-items:center;gap:1rem}
+.nav-brand{font-weight:700;font-size:1.1rem;color:var(--primary);white-space:nowrap}
+.nav-links{display:flex;gap:.25rem;flex-wrap:wrap;flex:1}
+.nav-links a{padding:.35rem .65rem;border-radius:6px;font-size:.85rem;color:var(--text-s);transition:background .15s}
+.nav-links a:hover,.nav-links a.active{background:var(--primary-l);color:var(--primary);text-decoration:none}
+.theme-toggle{background:var(--bg-s);border:1px solid var(--border);border-radius:20px;padding:.3rem .7rem;cursor:pointer;font-size:.8rem;color:var(--text-s);white-space:nowrap}
+.hamburger{display:none;background:none;border:1px solid var(--border);border-radius:6px;padding:.3rem .6rem;cursor:pointer;font-size:1rem;color:var(--text)}
+.access-gate{position:fixed;inset:0;z-index:1000;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1rem;padding:2rem}
+.access-gate h2{font-size:1.3rem}
+.access-gate input{padding:.6rem 1rem;border:1px solid var(--border);border-radius:8px;font-size:1rem;background:var(--bg-s);color:var(--text);width:260px}
+.access-gate button{padding:.6rem 1.5rem;background:var(--primary);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:.95rem}
+.access-error{color:#ef4444;font-size:.85rem;min-height:1.2rem}
+.hero{background:linear-gradient(135deg,var(--primary-l),var(--accent-l));padding:4rem 1.5rem;text-align:center}
+.hero p{color:var(--text-s);font-size:1.1rem;max-width:600px;margin:0 auto}
+section{max-width:900px;margin:0 auto;padding:3rem 1.5rem}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem;margin-top:2rem}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.5rem;text-align:center;box-shadow:var(--shadow)}
+.stat-card .number{font-size:2.5rem;font-weight:800;color:var(--primary);line-height:1}
+.stat-card .label{font-size:.85rem;color:var(--text-s);margin-top:.35rem}
+.grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:1.5rem;margin-top:1.5rem}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.5rem;box-shadow:var(--shadow)}
+.card h3{color:var(--primary)}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem;margin-top:1.5rem}
+.step{text-align:center;padding:1.5rem 1rem}
+.step .step-num{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:var(--primary);color:#fff;font-weight:700;font-size:1.1rem;margin-bottom:.75rem}
+.step p{font-size:.9rem;color:var(--text-s)}
+.cta{text-align:center;margin-top:2rem}
+.cta a{display:inline-block;padding:.75rem 2rem;background:var(--primary);color:#fff;border-radius:8px;font-weight:600;transition:opacity .15s}
+.cta a:hover{opacity:.9;text-decoration:none}
+footer{border-top:1px solid var(--border);padding:2rem 1.5rem;text-align:center;color:var(--text-s);font-size:.85rem;margin-top:3rem}
+@media(max-width:768px){
+  .hamburger{display:block}
+  .nav-links{display:none;position:absolute;top:100%;left:0;right:0;background:var(--nav-bg);flex-direction:column;padding:1rem;border-bottom:1px solid var(--border)}
+  .nav-links.open{display:flex}
+  .stats,.steps{grid-template-columns:1fr}
+  .grid-2{grid-template-columns:1fr}
+  h1{font-size:1.6rem}
+}
+</style>
+</head>
+<body>
+<div id="access-gate" class="access-gate">
+  <h2>This proposal is private</h2>
+  <p style="color:var(--text-s);font-size:.9rem">Enter the access code to continue</p>
+  <form id="access-form"><input type="text" id="access-code" placeholder="Access code" autocomplete="off" autofocus><button type="submit">Enter</button></form>
+  <div id="access-error" class="access-error"></div>
+</div>
+
+<nav>
+  <div class="nav-brand">UnpauseAI</div>
+  <button class="hamburger" onclick="toggleMenu()" aria-label="Menu">&#9776;</button>
+  <div class="nav-links">
+    <a href="/clients/n8n-hubspot-xero-automation/" class="active">Overview</a>
+    <a href="/clients/n8n-hubspot-xero-automation/solution">Solution</a>
+    <a href="/clients/n8n-hubspot-xero-automation/workflow">Workflow</a>
+    <a href="/clients/n8n-hubspot-xero-automation/timeline">Timeline</a>
+    <a href="/clients/n8n-hubspot-xero-automation/investment">Investment</a>
+    <a href="/clients/n8n-hubspot-xero-automation/faq">FAQ</a>
+    <a href="/clients/n8n-hubspot-xero-automation/onboarding">Get Started</a>
+  </div>
+  <button class="theme-toggle" onclick="toggleTheme()">Light / Dark</button>
+</nav>
+
+<div class="hero">
+  <h1>n8n Automation for HubSpot + Xero</h1>
+  <p>Two automations that connect your sales pipeline to invoicing and client onboarding. Built on your existing n8n instance.</p>
+  <div class="stats">
+    <div class="stat-card">
+      <div class="number">2</div>
+      <div class="label">Automations</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">3</div>
+      <div class="label">Pricing tiers handled</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">0</div>
+      <div class="label">Manual steps</div>
+    </div>
+  </div>
+</div>
+
+<section>
+  <h2>What Gets Automated</h2>
+  <div class="grid-2">
+    <div class="card">
+      <h3>Deal Won to Invoice</h3>
+      <p>When a HubSpot deal moves to "Won", n8n picks up the deal details, maps the correct pricing tier from your custom field, finds or creates the contact in Xero, and sends the invoice automatically.</p>
+      <p style="margin-top:.75rem;font-size:.9rem;color:var(--text-s)">No more manual invoice creation. No more copy-pasting between HubSpot and Xero.</p>
+    </div>
+    <div class="card">
+      <h3>Form Submission to Google Drive</h3>
+      <p>When someone fills out a form on the client's website (HubSpot Forms), n8n creates a new folder in Google Drive with a consistent naming convention and links it back to the HubSpot contact record.</p>
+      <p style="margin-top:.75rem;font-size:.9rem;color:var(--text-s)">Every new lead gets an organized workspace from day one.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>How It Works</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <h3>Review</h3>
+      <p>I audit your existing n8n mock-ups and check your HubSpot plan, Xero API access, and Google Drive permissions.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <h3>Build</h3>
+      <p>Fix the existing setup or rebuild from scratch, whichever gets you to a clean, reliable result faster.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <h3>Test + Handoff</h3>
+      <p>End-to-end testing with real data, documentation of every step, and a walkthrough so you can manage it yourself.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>What You Get</h2>
+  <div class="card">
+    <ul style="list-style:none;display:grid;gap:.6rem">
+      <li>Two production-ready n8n workflows on your self-hosted instance</li>
+      <li>Error handling for missing contacts, auth failures, and invalid field values</li>
+      <li>Logging so you can see exactly what happened on every run</li>
+      <li>Documentation covering the setup, configuration, and troubleshooting</li>
+      <li>A walkthrough call to make sure you're comfortable managing it</li>
+    </ul>
+  </div>
+  <div class="cta">
+    <a href="/clients/n8n-hubspot-xero-automation/solution">View the Solution &rarr;</a>
+  </div>
+</section>
+
+<footer>
+  <p>Prepared by UnpauseAI &middot; <a href="mailto:nico@unpauseai.com">nico@unpauseai.com</a> &middot; 2026</p>
+</footer>
+
+<script>
+(function(){
+  var K='n8n-hubspot-xero-automation-access',C='n8n-hubspot-2026';
+  var g=document.getElementById('access-gate');
+  if(localStorage.getItem(K)===C){g.style.display='none';return}
+  document.getElementById('access-form').addEventListener('submit',function(e){
+    e.preventDefault();
+    var v=document.getElementById('access-code').value.trim();
+    if(v===C){localStorage.setItem(K,C);g.style.display='none'}
+    else{document.getElementById('access-error').textContent='Invalid code. Please try again.'}
+  });
+})();
+function toggleTheme(){
+  var h=document.documentElement,c=h.getAttribute('data-theme')||'light',n=c==='light'?'dark':'light';
+  h.setAttribute('data-theme',n);localStorage.setItem('n8n-hubspot-xero-automation-theme',n);
+}
+(function(){var s=localStorage.getItem('n8n-hubspot-xero-automation-theme');if(s)document.documentElement.setAttribute('data-theme',s)})();
+function toggleMenu(){document.querySelector('.nav-links').classList.toggle('open')}
+</script>
+</body>
+</html>

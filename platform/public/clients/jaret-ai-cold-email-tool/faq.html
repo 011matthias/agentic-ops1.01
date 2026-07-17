@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FAQ | AI Cold Email Tool | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+
+/* Access Gate */
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+
+/* Navigation */
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+
+/* Sidebar */
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+
+/* Main Content */
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+
+/* Hero */
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 580px; margin: 0 auto; line-height: 1.6; }
+
+/* Sections */
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+
+/* FAQ Accordion */
+details {
+    border: 1px solid var(--border); border-radius: 8px;
+    margin-bottom: 12px; overflow: hidden;
+}
+summary {
+    padding: 14px 18px; font-weight: 600; font-size: 14px;
+    cursor: pointer; background: var(--surface); color: var(--text-strong);
+    list-style: none; display: flex; align-items: center; justify-content: space-between;
+    transition: background .15s;
+}
+summary:hover { background: var(--surface2); }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: '+'; font-size: 18px; color: var(--text2); transition: transform .2s; flex-shrink: 0; margin-left: 12px; }
+details[open] summary::after { content: '-'; }
+details[open] summary { background: var(--blue-bg); color: var(--blue-dark); }
+details[open] summary::after { color: var(--blue); }
+.faq-body { padding: 0 18px 16px; font-size: 14px; color: var(--text); line-height: 1.65; background: var(--bg); }
+.faq-body p { margin-bottom: 10px; color: var(--text); }
+.faq-body p:last-child { margin-bottom: 0; }
+
+/* CTA */
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+
+/* Footer */
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); }
+
+/* Tablet */
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+
+/* Mobile */
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .hero h1 { font-size: 24px; }
+}
+</style>
+<script>
+(function(){var t=localStorage.getItem('jaret-cold-email-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<!-- Access Gate -->
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared for your team. Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/jaret-ai-cold-email-tool/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">AI Cold Email Tool</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/jaret-ai-cold-email-tool/">Overview</a>
+        <a href="/clients/jaret-ai-cold-email-tool/solution">Solution</a>
+        <a href="/clients/jaret-ai-cold-email-tool/workflow">Workflow</a>
+        <a href="/clients/jaret-ai-cold-email-tool/timeline">Timeline</a>
+        <a href="/clients/jaret-ai-cold-email-tool/investment">Investment</a>
+        <a href="/clients/jaret-ai-cold-email-tool/faq" class="active">FAQ</a>
+        <a href="/clients/jaret-ai-cold-email-tool/onboarding">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">FAQ sections</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#technical" class="step-link active"><span class="step-num">1</span> Technical</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#pricing" class="step-link"><span class="step-num">2</span> Pricing</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#after-delivery" class="step-link"><span class="step-num">3</span> After Delivery</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<!-- Hero -->
+<section class="hero">
+    <div class="hero-badge">FREQUENTLY ASKED QUESTIONS</div>
+    <h1>Common Questions</h1>
+    <p class="hero-sub">Covering the technical details, pricing, and what happens after the pipeline is handed off.</p>
+</section>
+
+<!-- Technical -->
+<h2 id="technical">Technical</h2>
+
+<details>
+    <summary>What do I need to provide to get started?</summary>
+    <div class="faq-body">
+        <p>Three API keys (Apollo.io, OpenAI, Instantly.ai) and a Google account for Sheets access. If you're running n8n on your own server, I'll also need SSH access. If you prefer n8n Cloud, I'll set it up there instead. The onboarding page collects all of this.</p>
+    </div>
+</details>
+
+<details>
+    <summary>Can I use a different email tool instead of Instantly.ai?</summary>
+    <div class="faq-body">
+        <p>Yes. The workflow is modular. The email delivery stage is one node group that can be swapped for Smartlead, Lemlist, or any tool with an API. The rest of the pipeline (scraping, AI research, email writing) stays the same.</p>
+    </div>
+</details>
+
+<details>
+    <summary>How does the AI personalization actually work?</summary>
+    <div class="faq-body">
+        <p>For each lead, OpenAI reads the company's website and extracts what they do, their industry, and their approximate size. It then writes a unique opening paragraph that references something specific about the company. No two leads get the same email. The prompts are tunable, so you can adjust the tone, length, and angle after handoff.</p>
+    </div>
+</details>
+
+<details>
+    <summary>What about email deliverability?</summary>
+    <div class="faq-body">
+        <p>Instantly.ai handles domain warm-up and sending limits automatically. I'll configure the initial warm-up schedule and set daily sending caps based on your domain age. The workflow also filters out invalid emails before they reach Instantly, which protects your sender reputation. If a lead bounces, they're automatically removed from the sequence.</p>
+    </div>
+</details>
+
+<details>
+    <summary>How does this relate to our sales team?</summary>
+    <div class="faq-body">
+        <p>This system handles prospecting and initial outreach at scale. Your sales team focuses on conversations with interested leads, not cold outreach. When someone replies to a cold email, the reply shows up in Instantly. From there, your sales rep takes over the conversation. The pipeline feeds them warm responses instead of cold lists.</p>
+    </div>
+</details>
+
+<!-- Pricing -->
+<h2 id="pricing">Pricing</h2>
+
+<details>
+    <summary>Why fixed-price instead of hourly?</summary>
+    <div class="faq-body">
+        <p>Fixed-price means the scope is defined upfront. You know exactly what you're getting and what it costs. I've built similar pipelines before, so I can estimate accurately. If something takes me longer than expected, that's my problem, not yours.</p>
+    </div>
+</details>
+
+<details>
+    <summary>Can I start with just one phase?</summary>
+    <div class="faq-body">
+        <p>Yes. Phase 1 (Apollo.io lead scraping to Google Sheets) works as a standalone deliverable for $260. You'd get leads flowing into your sheet, and we can add the AI personalization and Instantly.ai stages later.</p>
+    </div>
+</details>
+
+<details>
+    <summary>What's included in the 7 days of support?</summary>
+    <div class="faq-body">
+        <p>Bug fixes only. If something I built breaks or doesn't work as documented, I'll fix it at no extra cost. Feature requests, new integrations, or changes to the pipeline scope are separate work.</p>
+    </div>
+</details>
+
+<!-- After Delivery -->
+<h2 id="after-delivery">After Delivery</h2>
+
+<details>
+    <summary>Do I need technical skills to run this?</summary>
+    <div class="faq-body">
+        <p>No. Once the workflow is set up, you run it by clicking a button in n8n (or it runs on schedule). Changing Apollo search filters is editing a text field. Updating email templates is editing a prompt. The Loom walkthrough shows all of this step by step.</p>
+    </div>
+</details>
+
+<details>
+    <summary>Can I extend the pipeline later?</summary>
+    <div class="faq-body">
+        <p>Yes. Common extensions: reply detection and routing to a CRM, lead scoring based on engagement, multi-channel outreach (LinkedIn plus email), and webhook triggers from your website. Each is a separate n8n node group that plugs into the existing pipeline.</p>
+    </div>
+</details>
+
+<details>
+    <summary>What if I want to change the AI model later?</summary>
+    <div class="faq-body">
+        <p>The OpenAI node is one step in the workflow. Swapping it for Claude, Gemini, or a local model is a configuration change, not a rebuild. The input and output format stays the same.</p>
+    </div>
+</details>
+
+<div class="cta-section">
+    <h2>Ready to move forward?</h2>
+    <p>The onboarding form takes about 5 minutes. I'll confirm receipt and kick off Day 1 within 24 hours.</p>
+    <a href="/clients/jaret-ai-cold-email-tool/onboarding" class="cta-btn">Start Onboarding &#8594;</a>
+</div>
+
+<footer class="footer">
+    <p>Prepared by UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+// Access gate
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='jaret-2026'){
+        localStorage.setItem('jaret-cold-email-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.';
+    }
+}
+(function(){if(localStorage.getItem('jaret-cold-email-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+
+// Theme toggle
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('jaret-cold-email-theme',t);
+}
+
+// Sidebar active state
+(function(){
+    var links=document.querySelectorAll('.step-link');
+    var sections=[];
+    links.forEach(function(l){
+        var id=l.getAttribute('href');
+        if(id&&id.startsWith('#')){
+            var el=document.querySelector(id);
+            if(el)sections.push({el:el,link:l});
+        }
+    });
+    if(!sections.length)return;
+    var observer=new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+            if(e.isIntersecting){
+                links.forEach(function(l){l.classList.remove('active')});
+                sections.forEach(function(s){
+                    if(s.el===e.target)s.link.classList.add('active');
+                });
+            }
+        });
+    },{rootMargin:'-80px 0px -60% 0px'});
+    sections.forEach(function(s){observer.observe(s.el)});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Investment | AI Lead Generation System</title>
+<script>(function(){var t=localStorage.getItem('n8n-ai-lead-gen-followup-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})()</script>
+<style>
+:root{--bg:#ffffff;--text:#1a1a1a;--text2:#6b7280;--text-strong:#111827;--blue:#2563eb;--blue-dark:#1e40af;--blue-light:#dbeafe;--blue-bg:#eff6ff;--green:#059669;--green-light:#d1fae5;--green-bg:#ecfdf5;--green-dark:#047857;--purple:#7c3aed;--purple-light:#ede9fe;--purple-bg:#f5f3ff;--purple-dark:#5b21b6;--orange:#d97706;--orange-light:#fef3c7;--orange-bg:#fffbeb;--orange-dark:#b45309;--border:#e5e7eb;--surface:#f8fafc;--surface2:#f1f5f9;--nav-bg:#ffffff;--card-shadow:0 1px 3px rgba(0,0,0,.08);--th-bg:#1e40af}
+[data-theme="dark"]{--bg:#0f172a;--text:#e2e8f0;--text2:#94a3b8;--text-strong:#f1f5f9;--blue:#3b82f6;--blue-dark:#93c5fd;--blue-light:#1e3a5f;--blue-bg:#172554;--green:#34d399;--green-light:#064e3b;--green-bg:#022c22;--green-dark:#6ee7b7;--purple:#a78bfa;--purple-light:#2e1065;--purple-bg:#1e1040;--purple-dark:#c4b5fd;--orange:#fbbf24;--orange-light:#78350f;--orange-bg:#451a03;--orange-dark:#fcd34d;--border:#334155;--surface:#1e293b;--surface2:#1e293b;--nav-bg:#1e293b;--card-shadow:0 1px 3px rgba(0,0,0,.3);--th-bg:#1e3a5f}
+.access-gate{position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;transition:opacity .3s}.access-gate.hidden{opacity:0;pointer-events:none}.access-gate h2{font-size:20px;color:var(--text-strong)}.access-gate p{font-size:14px;color:var(--text2);max-width:360px;text-align:center}.access-gate input{padding:10px 16px;border:2px solid var(--border);border-radius:8px;font-size:15px;width:240px;background:var(--surface);color:var(--text);outline:none}.access-gate input:focus{border-color:var(--blue)}.access-gate button{padding:10px 24px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}.access-gate .error{color:#ef4444;font-size:13px;min-height:20px}
+@media print{.site-nav,.sidebar,.mobile-nav-toggle,.access-gate{display:none!important}.main-content{margin-left:0!important}}
+*{box-sizing:border-box;margin:0}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--text);background:var(--bg);line-height:1.65;font-size:15px;transition:background .2s,color .2s}a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+.site-nav{position:fixed;top:0;left:0;right:0;z-index:1000;background:var(--nav-bg);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:56px;box-shadow:var(--card-shadow)}.nav-left{display:flex;align-items:center;gap:12px}.nav-logo{display:flex;align-items:center;gap:6px;font-size:15px;text-decoration:none}.nav-logo .logo-bold{font-weight:700;color:var(--text)}.nav-logo .logo-accent{font-weight:700;color:var(--blue)}.nav-sep{color:var(--border);font-size:18px}.nav-client{font-size:14px;font-weight:600;color:var(--text)}.nav-links{display:flex;gap:2px}.nav-links a{font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;transition:background .15s,color .15s}.nav-links a:hover{background:var(--surface2);color:var(--text)}.nav-links a.active{background:var(--blue-light);color:var(--blue);font-weight:700}.nav-right{display:flex;align-items:center;gap:8px}.nav-status{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;background:var(--blue-light);color:var(--blue)}@keyframes navpulse{0%,100%{opacity:1}50%{opacity:.4}}.nav-theme{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px;color:var(--text2)}.nav-theme:hover{background:var(--border)}.mobile-nav-toggle{display:none;background:none;border:none;cursor:pointer;padding:8px;color:var(--text)}
+.sidebar{position:fixed;top:56px;left:0;width:220px;height:calc(100vh - 56px);overflow-y:auto;background:var(--nav-bg);border-right:1px solid var(--border);padding:20px 0;z-index:50;transition:transform .25s,background .2s}.sidebar-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);padding:0 16px;margin-bottom:12px}.step-list{list-style:none;padding:0}.step-item{position:relative}.step-link{display:flex;align-items:center;gap:10px;padding:8px 16px;font-size:13px;font-weight:500;color:var(--text2);text-decoration:none;transition:all .15s;border-left:3px solid transparent}.step-link:hover{background:var(--surface2);color:var(--text)}.step-link.active{background:var(--blue-light);color:var(--blue-dark);border-left-color:var(--blue);font-weight:700}.step-num{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border:2px solid var(--border);color:var(--text2);flex-shrink:0}.step-link.active .step-num{border-color:var(--blue);background:var(--blue);color:#fff}.step-line{position:absolute;left:26px;top:38px;width:2px;height:calc(100% - 30px);background:var(--border)}.step-item:last-child .step-line{display:none}
+.main-content{margin-left:220px;padding:56px 0 0 0}.content-inner{max-width:800px;margin:0 auto;padding:40px 30px 60px}
+.hero{text-align:center;padding:48px 0 40px;border-bottom:1px solid var(--border);margin-bottom:48px}.hero h1{font-size:30px;font-weight:800;color:var(--text-strong);margin-bottom:12px;line-height:1.2}.hero-sub{font-size:16px;color:var(--text2);max-width:560px;margin:0 auto;line-height:1.6}
+.stats-row{display:flex;justify-content:center;gap:32px;margin-top:24px;flex-wrap:wrap}.stat{text-align:center}.stat-num{font-size:22px;font-weight:800;color:var(--blue)}.stat-label{font-size:12px;color:var(--text2);margin-top:2px}
+h2{font-size:22px;color:var(--blue-dark);border-bottom:2px solid var(--blue);padding-bottom:8px;margin-top:56px;margin-bottom:20px;scroll-margin-top:80px}h3{font-size:17px;color:var(--text-strong);margin-top:28px;margin-bottom:12px}p{margin-bottom:16px;color:var(--text)}strong{color:var(--text-strong)}ul,ol{padding-left:24px;margin-bottom:16px}li{margin-bottom:6px}
+.callout{border-left:4px solid var(--blue);background:var(--blue-bg);padding:16px 20px;border-radius:0 8px 8px 0;margin:24px 0}.callout-title{font-size:13px;font-weight:700;color:var(--blue-dark);margin-bottom:4px;text-transform:uppercase;letter-spacing:.03em}.callout p{margin:0;color:var(--blue-dark);font-size:14px}.callout.green{border-color:var(--green);background:var(--green-bg)}.callout.green .callout-title,.callout.green p{color:var(--green-dark)}.callout.orange{border-color:var(--orange);background:var(--orange-bg)}.callout.orange .callout-title,.callout.orange p{color:var(--orange-dark)}
+table.detail{width:100%;border-collapse:collapse;margin:20px 0;font-size:14px}table.detail th{background:var(--th-bg);color:#fff;text-align:left;padding:10px 14px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}table.detail td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:top}table.detail tr:last-child td{border-bottom:none}table.detail tr:hover td{background:var(--surface2)}
+.price-card{border:2px solid var(--blue);border-radius:16px;padding:32px;margin:24px 0;background:var(--blue-bg);text-align:center}.price-amount{font-size:48px;font-weight:800;color:var(--blue-dark)}.price-label{font-size:14px;color:var(--text2);margin-top:4px}.price-breakdown{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:24px;text-align:left}.price-phase{border:1px solid var(--border);border-radius:10px;padding:16px;background:var(--bg)}.price-phase-amount{font-size:20px;font-weight:700;color:var(--blue-dark)}.price-phase-label{font-size:13px;color:var(--text2);margin-top:2px}.price-phase-items{font-size:13px;color:var(--text);margin-top:8px;line-height:1.6}
+.cta-btn{display:inline-flex;align-items:center;gap:8px;background:var(--blue);color:#fff;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;transition:background .15s,transform .15s;box-shadow:0 2px 8px rgba(37,99,235,.3)}.cta-btn:hover{background:var(--blue-dark);transform:translateY(-1px);text-decoration:none}
+.footer{text-align:center;color:var(--text2);font-size:13px;padding:20px 0 40px;border-top:1px solid var(--border);margin-top:24px}
+@media(max-width:1100px){.nav-links a{font-size:12px;padding:5px 8px}.nav-status{display:none}}
+@media(max-width:768px){.sidebar{transform:translateX(-100%);width:260px}.sidebar.open{transform:translateX(0)}.main-content{margin-left:0!important}.mobile-nav-toggle{display:block}.nav-links{display:none}.hero h1{font-size:24px}.stats-row{gap:20px}.price-breakdown{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="access-gate" id="accessGate"><h2>Proposal Access</h2><p>Enter the access code from your Upwork message to continue.</p><input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()"><button onclick="checkAccess()">Continue</button><div class="error" id="accessError"></div></div>
+
+<nav class="site-nav"><div class="nav-left"><button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h14M3 10h14M3 14h14"/></svg></button><a href="/clients/n8n-ai-lead-gen-followup/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a><span class="nav-sep">|</span><span class="nav-client">AI Lead Generation</span></div><div class="nav-links"><a href="/clients/n8n-ai-lead-gen-followup/">Overview</a><a href="/clients/n8n-ai-lead-gen-followup/solution">Solution</a><a href="/clients/n8n-ai-lead-gen-followup/workflow">Workflow</a><a href="/clients/n8n-ai-lead-gen-followup/timeline">Timeline</a><a href="/clients/n8n-ai-lead-gen-followup/investment" class="active">Investment</a><a href="/clients/n8n-ai-lead-gen-followup/faq">FAQ</a><a href="/clients/n8n-ai-lead-gen-followup/onboarding">Get Started</a></div><div class="nav-right"><span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;animation:navpulse 2s infinite"></span> Proposal</span><button class="nav-theme" onclick="toggleTheme()">Toggle theme</button></div></nav>
+
+<aside class="sidebar"><div class="sidebar-label">On this page</div><ul class="step-list">
+<li class="step-item"><a href="#pricing" class="step-link active"><span class="step-num">1</span> Pricing</a><div class="step-line"></div></li>
+<li class="step-item"><a href="#whats-included" class="step-link"><span class="step-num">2</span> What's Included</a><div class="step-line"></div></li>
+<li class="step-item"><a href="#comparison" class="step-link"><span class="step-num">3</span> Comparison</a><div class="step-line"></div></li>
+<li class="step-item"><a href="#roi" class="step-link"><span class="step-num">4</span> ROI Math</a><div class="step-line"></div></li>
+<li class="step-item"><a href="#budget-gap" class="step-link"><span class="step-num">5</span> About the Budget</a></li>
+</ul></aside>
+
+<div class="main-content"><div class="content-inner">
+
+<section class="hero">
+    <h1>Investment</h1>
+    <p class="hero-sub">$750 fixed price for the complete AI-powered lead generation system. Two phases, milestone-gated, you own everything.</p>
+    <div class="stats-row">
+        <div class="stat"><div class="stat-num">$750</div><div class="stat-label">fixed total</div></div>
+        <div class="stat"><div class="stat-num">$500</div><div class="stat-label">Phase 1</div></div>
+        <div class="stat"><div class="stat-num">$250</div><div class="stat-label">Phase 2</div></div>
+    </div>
+</section>
+
+<h2 id="pricing">Pricing Breakdown</h2>
+
+<div class="price-card">
+    <div class="price-amount">$750</div>
+    <div class="price-label">Fixed price for the complete system</div>
+    <div class="price-breakdown">
+        <div class="price-phase">
+            <div class="price-phase-amount">$500</div>
+            <div class="price-phase-label">Phase 1: Core Pipeline (Days 1-4)</div>
+            <div class="price-phase-items">Lead sourcing from 3+ channels<br>Google Sheets/Airtable storage<br>Deduplication + enrichment<br>Lead scoring (0-100)<br>Template-based outreach</div>
+        </div>
+        <div class="price-phase">
+            <div class="price-phase-amount">$250</div>
+            <div class="price-phase-label">Phase 2: AI + Follow-Up (Days 5-7)</div>
+            <div class="price-phase-items">AI-personalized outreach emails<br>2-3 step follow-up sequence<br>Reply detection + opt-out<br>Monitoring dashboard<br>Handoff documentation</div>
+        </div>
+    </div>
+</div>
+
+<h2 id="whats-included">What's Included</h2>
+
+<table class="detail">
+    <thead><tr><th>Deliverable</th><th>Details</th></tr></thead>
+    <tbody>
+        <tr><td><strong>4 n8n workflows</strong></td><td>Lead Sourcer, Qualify + Store, AI Outreach, Follow-Up. Fully configured and tested.</td></tr>
+        <tr><td><strong>Google Sheets/Airtable integration</strong></td><td>Structured sheet with lead data, scores, status, and outreach history. Your team can view and filter.</td></tr>
+        <tr><td><strong>AI outreach engine</strong></td><td>Claude or OpenAI integration for personalized email generation. Prompt tuned to your tone.</td></tr>
+        <tr><td><strong>Follow-up sequence</strong></td><td>2-3 automatic follow-ups with configurable timing. Reply detection stops the sequence.</td></tr>
+        <tr><td><strong>Error handling</strong></td><td>Retry logic, bounce handling, fallback templates, source health monitoring.</td></tr>
+        <tr><td><strong>Monitoring dashboard</strong></td><td>Sheet-based dashboard with lead counts, scores, outreach stats, and error rates.</td></tr>
+        <tr><td><strong>Handoff documentation</strong></td><td>Written guide covering how to adjust scoring weights, change sources, modify templates, and troubleshoot.</td></tr>
+        <tr><td><strong>Downloadable starter workflow</strong></td><td>Importable n8n JSON with annotated zones. Available now on the <a href="/clients/n8n-ai-lead-gen-followup/workflow">Workflow page</a>.</td></tr>
+        <tr><td><strong>Post-go-live support</strong></td><td>Adjustments and troubleshooting included after handoff. No time limit on reasonable requests.</td></tr>
+    </tbody>
+</table>
+
+<h2 id="comparison">How This Compares</h2>
+
+<table class="detail">
+    <thead><tr><th>Option</th><th>Cost</th><th>What You Get</th><th>What's Missing</th></tr></thead>
+    <tbody>
+        <tr>
+            <td><strong>DIY with Zapier/Make</strong></td>
+            <td>$50-150/mo for tools, plus your time</td>
+            <td>Basic integrations between apps. Trigger-action automations.</td>
+            <td>No lead scoring. No AI personalization. No follow-up logic. No deduplication. You're building and maintaining it yourself. Costs <a href="https://zapier.com/pricing" target="_blank" rel="noopener">$50-150/mo</a> in tool subscriptions alone.</td>
+        </tr>
+        <tr>
+            <td><strong>Lead gen agency</strong></td>
+            <td>$2,000-5,000/mo</td>
+            <td>Full-service: they find, qualify, and contact leads for you.</td>
+            <td>You don't own the system. When you stop paying, leads stop coming. Monthly cost adds up fast. Typical agency pricing from <a href="https://www.saleshandy.com/blog/lead-generation-cost/" target="_blank" rel="noopener">SalesHandy's 2025 analysis</a>.</td>
+        </tr>
+        <tr>
+            <td><strong>Virtual assistant</strong></td>
+            <td>$500-1,000/mo ongoing</td>
+            <td>A person manually searching, emailing, and following up.</td>
+            <td>Doesn't scale. Quality depends on the person. No AI personalization. No automatic follow-up. You're paying monthly forever. VA rates from <a href="https://www.upwork.com/hire/virtual-assistants/cost/" target="_blank" rel="noopener">Upwork's rate guide</a>.</td>
+        </tr>
+        <tr>
+            <td><strong>SaaS lead gen tools</strong></td>
+            <td>$100-500/mo</td>
+            <td>Lead databases, email finders, sequence tools (Apollo, Instantly, Lemlist).</td>
+            <td>You're still stitching tools together manually. No custom scoring for your market. Generic templates, not AI-personalized. Monthly subscription. Pricing from <a href="https://www.apollo.io/pricing" target="_blank" rel="noopener">Apollo</a>, <a href="https://instantly.ai/pricing" target="_blank" rel="noopener">Instantly</a>.</td>
+        </tr>
+        <tr>
+            <td><strong style="color:var(--blue)">This project</strong></td>
+            <td><strong style="color:var(--blue)">$750 one-time</strong></td>
+            <td>Complete system: sourcing, scoring, AI outreach, follow-up. You own the n8n workflows. No monthly fees (except n8n hosting and AI API costs, typically under $30/mo).</td>
+            <td>Requires n8n hosting ($20/mo for n8n cloud, or free if self-hosted). AI API costs ~$5-10/mo for typical volume.</td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="roi">ROI Math</h2>
+
+<p>Here's a conservative estimate for a Food &amp; Beverage lead generation context.</p>
+
+<table class="detail">
+    <thead><tr><th>Metric</th><th>Conservative Estimate</th></tr></thead>
+    <tbody>
+        <tr><td><strong>Leads sourced per week</strong></td><td>50-100 (from Google Maps, Yelp, directories)</td></tr>
+        <tr><td><strong>Qualified leads per week</strong></td><td>20-40 (score above 50)</td></tr>
+        <tr><td><strong>Outreach emails sent per week</strong></td><td>20-40 (one per qualified lead)</td></tr>
+        <tr><td><strong>Response rate (with AI personalization)</strong></td><td>5-15% (industry average for personalized cold email is 8-12%)</td></tr>
+        <tr><td><strong>Conversations per week</strong></td><td>2-6</td></tr>
+        <tr><td><strong>Conversion rate (conversation to customer)</strong></td><td>10-25% (depends on your offer)</td></tr>
+        <tr><td><strong>New customers per month</strong></td><td>2-6</td></tr>
+    </tbody>
+</table>
+
+<p>If each new customer is worth $200-500 to your business (a common range for F&amp;B B2B services), the system pays for itself in the first month. After that, the only ongoing costs are n8n hosting and AI API usage, typically under $30/mo combined.</p>
+
+<div class="callout green">
+    <div class="callout-title">The real ROI</div>
+    <p>The numbers above are conservative. The bigger win is the time you get back. If you're currently spending 5-10 hours per week on manual lead research and outreach, this system replaces that with zero-touch automation. That's 20-40 hours per month you can spend on the work that actually requires you.</p>
+</div>
+
+<h2 id="budget-gap">About the Budget</h2>
+
+<p>Your posting is listed at $10 fixed. I want to be straightforward about why this proposal is $750.</p>
+
+<p>This isn't a connect-two-apps job. It's a multi-workflow system with lead sourcing from 3+ channels, deduplication, AI-powered scoring, personalized outreach, and a 3-step follow-up sequence with reply detection. The scope is roughly 20-25 hours of design, development, and testing.</p>
+
+<p>I could build something for $10 that dumps Google Maps results into a spreadsheet. But that's a list, not a system. It wouldn't score leads, personalize outreach, or follow up automatically. And it wouldn't give you the "minimal manual input" you asked for.</p>
+
+<p>The $750 price reflects the full scope you described: "source leads, store and organize, send personalized outreach, automatically follow up, basic filtering and qualification." Every one of those is a distinct workflow with its own logic, error handling, and testing.</p>
+
+<div class="callout orange">
+    <div class="callout-title">Phase 1 only option</div>
+    <p>If you want to start smaller, Phase 1 alone ($500) gives you lead sourcing, storage, scoring, and template-based outreach. It's a working system. Phase 2 (AI personalization + follow-up) can be added later if you like what Phase 1 delivers.</p>
+</div>
+
+<div style="text-align:center;margin-top:48px">
+    <a href="/clients/n8n-ai-lead-gen-followup/onboarding" class="cta-btn">Get Started &rarr;</a>
+</div>
+
+<div class="footer"><p>Prepared by <a href="mailto:nicolas.neumann@unpauseai.com">UnpauseAI</a> &middot; 2026</p></div>
+
+</div></div>
+
+<script>
+function checkAccess(){var c=document.getElementById('accessCode').value.trim().toLowerCase();if(c==='leadgen-2026'){document.getElementById('accessGate').classList.add('hidden');localStorage.setItem('n8n-ai-lead-gen-followup-access','granted')}else{document.getElementById('accessError').textContent='Incorrect code.'}}
+if(localStorage.getItem('n8n-ai-lead-gen-followup-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}
+function toggleTheme(){var h=document.documentElement;var t=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',t);localStorage.setItem('n8n-ai-lead-gen-followup-theme',t)}
+var links=document.querySelectorAll('.step-link');var sections=[];links.forEach(function(a){var id=a.getAttribute('href').replace('#','');var el=document.getElementById(id);if(el)sections.push({el:el,link:a})});function updateActive(){var scrollY=window.scrollY+120;var active=sections[0];for(var i=0;i<sections.length;i++){if(sections[i].el.offsetTop<=scrollY)active=sections[i]}links.forEach(function(l){l.classList.remove('active')});if(active)active.link.classList.add('active')}window.addEventListener('scroll',updateActive);
+</script>
+</body>
+</html>

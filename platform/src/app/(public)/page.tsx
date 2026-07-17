@@ -245,7 +245,78 @@ export default function Home() {
         </section>
       </ScrollReveal>
 
-      {/* ── Section 6: Founder ── */}
+      {/* ── Section 6: Results ── */}
+      <ScrollReveal>
+        <section className="border-t border-border">
+          <div className="mx-auto max-w-4xl px-6 py-20 sm:py-24">
+            <div className="mb-12 text-center">
+              <span className="mb-3 inline-block text-xs font-semibold uppercase tracking-wider text-muted">
+                Results
+              </span>
+              <h2 className="text-3xl font-bold tracking-tight">
+                What our clients get
+              </h2>
+            </div>
+
+            <div className="grid gap-6 sm:grid-cols-3">
+              <div className="rounded-xl border border-border bg-blue-bg/50 p-6 text-center transition-all hover:-translate-y-0.5">
+                <div className="mb-1 text-3xl font-extrabold text-blue">&lt; 60s</div>
+                <div className="text-sm font-medium">Response time</div>
+                <div className="mt-1 text-xs text-muted">Down from 24-48 hours for lead follow-ups</div>
+              </div>
+              <div className="rounded-xl border border-border bg-purple-bg/50 p-6 text-center transition-all hover:-translate-y-0.5">
+                <div className="mb-1 text-3xl font-extrabold text-purple">Zero</div>
+                <div className="text-sm font-medium">Downtime migrations</div>
+                <div className="mt-1 text-xs text-muted">Platform cutovers without service interruption</div>
+              </div>
+              <div className="rounded-xl border border-border bg-green-bg/50 p-6 text-center transition-all hover:-translate-y-0.5">
+                <div className="mb-1 text-3xl font-extrabold text-green">30 days</div>
+                <div className="text-sm font-medium">Post-launch support</div>
+                <div className="mt-1 text-xs text-muted">Included with every implementation</div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </ScrollReveal>
+
+      {/* ── Section 6b: Testimonials ── */}
+      <ScrollReveal>
+        <section className="bg-gradient-to-b from-transparent via-surface/50 to-transparent">
+          <div className="mx-auto max-w-4xl px-6 py-16">
+            <p className="mb-8 text-center text-xs font-semibold uppercase tracking-wider text-muted">
+              What clients say
+            </p>
+            <div className="grid gap-6 sm:grid-cols-2">
+              <div className="rounded-xl border border-border bg-surface p-6">
+                <p className="mb-4 text-sm leading-relaxed text-muted italic">
+                  &ldquo;The automation handles everything now. We went from
+                  manually responding to every enquiry to having personalized
+                  follow-ups running within seconds. Our team focuses on closing
+                  instead of chasing.&rdquo;
+                </p>
+                <div className="text-sm">
+                  <span className="font-semibold">Operations Manager</span>
+                  <span className="text-muted">, Media &amp; Events Company</span>
+                </div>
+              </div>
+              <div className="rounded-xl border border-border bg-surface p-6">
+                <p className="mb-4 text-sm leading-relaxed text-muted italic">
+                  &ldquo;We migrated 15 workflows from Zapier without a single
+                  hour of downtime. The error handling alone is worth it. We
+                  actually know when something breaks now instead of finding out
+                  days later.&rdquo;
+                </p>
+                <div className="text-sm">
+                  <span className="font-semibold">Technical Lead</span>
+                  <span className="text-muted">, Professional Services Firm</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </ScrollReveal>
+
+      {/* ── Section 6c: Founder ── */}
       <ScrollReveal>
         <section className="border-t border-border">
           <div className="mx-auto max-w-3xl px-6 py-12 text-center">
@@ -261,7 +332,59 @@ export default function Home() {
         </section>
       </ScrollReveal>
 
-      {/* ── Section 7: CTA ── */}
+      {/* ── Section 7: Quick Links ── */}
+      <ScrollReveal>
+        <section className="border-t border-border">
+          <div className="mx-auto max-w-4xl px-6 py-16">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Link
+                href="/compare"
+                className="group rounded-xl border border-border bg-surface p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <h3 className="mb-1 font-semibold transition-colors group-hover:text-accent">
+                  Compare options
+                </h3>
+                <p className="text-sm text-muted">
+                  See how we compare to freelancers, agencies, and building in-house.
+                </p>
+                <span className="mt-3 inline-block text-sm font-medium text-accent">
+                  View comparison &rarr;
+                </span>
+              </Link>
+              <Link
+                href="/pricing"
+                className="group rounded-xl border border-border bg-surface p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <h3 className="mb-1 font-semibold transition-colors group-hover:text-accent">
+                  Transparent pricing
+                </h3>
+                <p className="text-sm text-muted">
+                  Fixed prices for every automation. Self-service from $99, custom from EUR 2,500.
+                </p>
+                <span className="mt-3 inline-block text-sm font-medium text-accent">
+                  View pricing &rarr;
+                </span>
+              </Link>
+              <Link
+                href="/blog"
+                className="group rounded-xl border border-border bg-surface p-5 transition-all hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <h3 className="mb-1 font-semibold transition-colors group-hover:text-accent">
+                  Learn from our blog
+                </h3>
+                <p className="text-sm text-muted">
+                  Platform comparisons, automation strategy, and lessons from production.
+                </p>
+                <span className="mt-3 inline-block text-sm font-medium text-accent">
+                  Read the blog &rarr;
+                </span>
+              </Link>
+            </div>
+          </div>
+        </section>
+      </ScrollReveal>
+
+      {/* ── Section 8: CTA ── */}
       <ScrollReveal>
         <section className="bg-gradient-to-b from-transparent via-accent/[0.03] to-transparent">
           <div className="mx-auto flex max-w-3xl flex-col items-center gap-4 px-6 py-20 sm:py-24 text-center">

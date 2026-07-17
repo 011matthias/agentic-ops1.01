@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Onboarding | GHL + Retell AI Technical Implementer | UnpauseAI</title>
+<script>
+(function(){var t=localStorage.getItem('ghl-retellai-implementer-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 580px; margin: 0 auto 32px; line-height: 1.6; }
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); margin-top: 24px; }
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .hero h1 { font-size: 24px; }
+}
+.form-group { margin-bottom: 24px; }
+.form-label { display: block; font-size: 14px; font-weight: 600; color: var(--text-strong); margin-bottom: 6px; }
+.form-hint { font-size: 12px; color: var(--text2); margin-bottom: 8px; }
+.form-input, .form-select, .form-textarea {
+    width: 100%; padding: 10px 14px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 14px; background: var(--surface); color: var(--text);
+    font-family: inherit; outline: none; transition: border-color .15s;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--blue); }
+.form-textarea { min-height: 100px; resize: vertical; }
+.form-section { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--border); }
+.form-section:first-child { margin-top: 0; border-top: none; padding-top: 0; }
+.form-submit {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border: none; border-radius: 8px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s, transform .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.form-submit:hover { background: var(--blue-dark); transform: translateY(-1px); }
+</style>
+</head>
+<body>
+
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared for you. Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+        </button>
+        <a href="/clients/ghl-retellai-implementer/" class="nav-logo">
+            <span class="logo-bold">Unpause</span><span class="logo-accent">AI</span>
+        </a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">VoiceAI Agency</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/ghl-retellai-implementer/">Overview</a>
+        <a href="/clients/ghl-retellai-implementer/solution">Solution</a>
+        <a href="/clients/ghl-retellai-implementer/timeline">Timeline</a>
+        <a href="/clients/ghl-retellai-implementer/investment">Investment</a>
+        <a href="/clients/ghl-retellai-implementer/faq">FAQ</a>
+        <a href="/clients/ghl-retellai-implementer/onboarding" class="active">Onboarding</a>
+        <a href="/clients/ghl-retellai-implementer/workflow">Workflow</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<aside class="sidebar">
+    <div class="sidebar-label">On this page</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#getting-started" class="step-link active"><span class="step-num">1</span> Getting Started</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#platform-access" class="step-link"><span class="step-num">2</span> Platform Access</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#sops-and-documentation" class="step-link"><span class="step-num">3</span> SOPs</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#first-client-details" class="step-link"><span class="step-num">4</span> First Client</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#communication-preferences" class="step-link"><span class="step-num">5</span> Communication</a>
+        </li>
+    </ul>
+</aside>
+
+<div class="main-content">
+<div class="content-inner">
+
+<section class="hero" id="hero">
+    <div class="hero-badge">Onboarding</div>
+    <h1>Let's get the test setup ready</h1>
+    <p class="hero-sub">Everything I need to configure your first client environment end-to-end, so we can evaluate the fit before committing to ongoing work.</p>
+</section>
+
+<h2 id="getting-started">Getting Started</h2>
+
+<p>Fill out what you can. Anything marked optional can wait until we're on a call. This helps me prepare for the test setup so we can hit the ground running.</p>
+
+<div class="callout green">
+    <div class="callout-title">Phase 1 scope</div>
+    <p>This form covers everything needed for Week 1: credentials, SOPs, and the first client details for the test environment. Nothing goes anywhere automatically. I'll review before we start.</p>
+</div>
+
+<form id="onboardingForm" onsubmit="handleSubmit(event)">
+
+<div class="form-section">
+<h2 id="platform-access">Platform Access</h2>
+<p>Share what you have. We can fill in gaps on a call if needed.</p>
+
+<div class="form-group">
+    <label class="form-label" for="ghl-access">GHL admin access</label>
+    <div class="form-hint">Sub-account URL or login credentials for the test environment</div>
+    <input class="form-input" type="text" id="ghl-access" name="ghl-access" placeholder="e.g., https://app.gohighlevel.com or login details">
+</div>
+
+<div class="form-group">
+    <label class="form-label" for="n8n-url">n8n instance URL</label>
+    <div class="form-hint">e.g., https://your-n8n.example.com</div>
+    <input class="form-input" type="text" id="n8n-url" name="n8n-url" placeholder="https://your-n8n.example.com">
+</div>
+
+<div class="form-group">
+    <label class="form-label" for="retell-access">Retell AI dashboard access</label>
+    <div class="form-hint">How should I get access? (e.g., invite to dashboard, shared workspace)</div>
+    <input class="form-input" type="text" id="retell-access" name="retell-access" placeholder="e.g., invite me to your Retell workspace">
+</div>
+
+<div class="form-group">
+    <label class="form-label" for="supabase-url">Supabase project URL <span style="font-weight:400;color:var(--text2)">(optional)</span></label>
+    <input class="form-input" type="text" id="supabase-url" name="supabase-url" placeholder="https://your-project.supabase.co">
+</div>
+
+<div class="form-group">
+    <label class="form-label" for="airtable-url">Airtable base URL <span style="font-weight:400;color:var(--text2)">(optional)</span></label>
+    <input class="form-input" type="text" id="airtable-url" name="airtable-url" placeholder="https://airtable.com/appXXXXXX/...">
+</div>
+
+<div class="form-group">
+    <label class="form-label" for="twilio-access">Twilio access</label>
+    <div class="form-hint">How should I get access? We can set this up together on a call if needed.</div>
+    <input class="form-input" type="text" id="twilio-access" name="twilio-access" placeholder="e.g., invite to Twilio console, or set up together">
+</div>
+</div>
+
+<div class="form-section">
+<h2 id="sops-and-documentation">SOPs and Documentation</h2>
+<p>These help me follow your existing process rather than reinvent it.</p>
+
+<div class="form-group">
+    <label class="form-label" for="sop-library">Link to SOP library</label>
+    <div class="form-hint">Google Drive, Notion, or wherever your SOPs live</div>
+    <input class="form-input" type="text" id="sop-library" name="sop-library" placeholder="https://notion.so/... or https://drive.google.com/...">
+</div>
+
+<div class="form-group">
+    <label class="form-label" for="loom-library">Link to Loom walkthroughs</label>
+    <div class="form-hint">Loom workspace or folder URL</div>
+    <input class="form-input" type="text" id="loom-library" name="loom-library" placeholder="https://www.loom.com/share/...">
+</div>
+
+<div class="form-group">
+    <label class="form-label" for="ghl-snapshot">Master GHL snapshot name or ID</label>
+    <div class="form-hint">The snapshot I'll use for the test setup</div>
+    <input class="form-input" type="text" id="ghl-snapshot" name="ghl-snapshot" placeholder="Snapshot name or ID">
+</div>
+
+<div class="form-group">
+    <label class="form-label" for="additional-notes">Any additional notes <span style="font-weight:400;color:var(--text2)">(optional)</span></label>
+    <div class="form-hint">Anything else I should know before starting</div>
+    <textarea class="form-textarea" id="additional-notes" name="additional-notes" placeholder="e.g., specific quirks in your setup, past issues with the stack, anything worth knowing upfront"></textarea>
+</div>
+</div>
+
+<div class="form-section">
+<h2 id="first-client-details">First Client Details</h2>
+<p>For the test setup, I'll configure one client environment end-to-end. Tell me about that client.</p>
+
+<div class="form-group">
+    <label class="form-label" for="client-name">Client name for test environment</label>
+    <input class="form-input" type="text" id="client-name" name="client-name" placeholder="e.g., Acme Plumbing">
+</div>
+
+<div class="form-group">
+    <label class="form-label" for="client-industry">Client industry or vertical</label>
+    <div class="form-hint">e.g., plumbing, dental, real estate</div>
+    <input class="form-input" type="text" id="client-industry" name="client-industry" placeholder="Industry or vertical">
+</div>
+
+<div class="form-group">
+    <label class="form-label" for="retell-agent-type">Retell agent type</label>
+    <select class="form-select" id="retell-agent-type" name="retell-agent-type">
+        <option value="">Select agent type</option>
+        <option value="appointment-setter">Appointment Setter</option>
+        <option value="lead-qualifier">Lead Qualifier</option>
+        <option value="customer-service">Customer Service</option>
+        <option value="other">Other</option>
+    </select>
+</div>
+
+<div class="form-group">
+    <label class="form-label" for="special-requirements">Special requirements <span style="font-weight:400;color:var(--text2)">(optional)</span></label>
+    <div class="form-hint">Any unique setup needs for this client</div>
+    <textarea class="form-textarea" id="special-requirements" name="special-requirements" placeholder="e.g., custom call routing, specific GHL pipeline stages, non-standard Retell webhook handling"></textarea>
+</div>
+</div>
+
+<div class="form-section">
+<h2 id="communication-preferences">Communication Preferences</h2>
+<p>How you'd like to work once we're up and running.</p>
+
+<div class="form-group">
+    <label class="form-label" for="comms-channel">Preferred communication channel</label>
+    <select class="form-select" id="comms-channel" name="comms-channel">
+        <option value="">Select channel</option>
+        <option value="upwork">Upwork messages</option>
+        <option value="slack">Slack</option>
+        <option value="email">Email</option>
+        <option value="other">Other</option>
+    </select>
+</div>
+
+<div class="form-group">
+    <label class="form-label" for="update-frequency">Preferred update frequency</label>
+    <select class="form-select" id="update-frequency" name="update-frequency">
+        <option value="">Select frequency</option>
+        <option value="daily">Daily updates</option>
+        <option value="per-task">Per-task updates</option>
+        <option value="weekly">Weekly summary</option>
+    </select>
+</div>
+
+<div class="form-group">
+    <label class="form-label" for="best-time">Best time to reach you</label>
+    <div class="form-hint">Your timezone and preferred hours</div>
+    <input class="form-input" type="text" id="best-time" name="best-time" placeholder="e.g., EST, 9am-5pm weekdays">
+</div>
+</div>
+
+<div style="margin-top: 40px; padding-top: 32px; border-top: 1px solid var(--border);">
+    <button type="submit" class="form-submit">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M2 8l5 5 7-9"/></svg>
+        Submit Onboarding Info
+    </button>
+    <p style="margin-top: 12px; font-size: 13px; color: var(--text2);">I'll review everything before we start. Nothing goes live automatically.</p>
+</div>
+
+</form>
+
+<div class="footer">
+    <p>Prepared by UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
+</div>
+
+</div>
+</div>
+
+<script>
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('ghl-retellai-implementer-theme',t);
+}
+
+var links = document.querySelectorAll('.step-link');
+var sections = [];
+links.forEach(function(a) {
+    var id = a.getAttribute('href').replace('#','');
+    var el = document.getElementById(id);
+    if (el) sections.push({ el: el, link: a });
+});
+
+function updateActive() {
+    var scrollY = window.scrollY + 120;
+    var active = sections[0];
+    for (var i = 0; i < sections.length; i++) {
+        if (sections[i].el.offsetTop <= scrollY) active = sections[i];
+    }
+    links.forEach(function(l) { l.classList.remove('active'); });
+    if (active) active.link.classList.add('active');
+}
+window.addEventListener('scroll', updateActive);
+updateActive();
+
+links.forEach(function(a) {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        var id = this.getAttribute('href').replace('#','');
+        var el = document.getElementById(id);
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+        document.querySelector('.sidebar').classList.remove('open');
+    });
+});
+
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='ghl-retellai-2026'){
+        localStorage.setItem('ghl-retellai-implementer-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.';
+    }
+}
+(function(){if(localStorage.getItem('ghl-retellai-implementer-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+
+function handleSubmit(e) {
+    e.preventDefault();
+    var btn = e.target.querySelector('.form-submit');
+    btn.textContent = 'Submitted!';
+    btn.style.background = 'var(--green)';
+    btn.style.transform = 'none';
+    btn.style.cursor = 'default';
+    btn.disabled = false;
+}
+</script>
+</body>
+</html>

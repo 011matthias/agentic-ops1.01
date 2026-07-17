@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Workflow | Dae's Course Build | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+
+/* Access Gate */
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+
+/* Navigation */
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+
+/* Sidebar */
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+
+/* Main Content */
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+
+/* Hero */
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 580px; margin: 0 auto 32px; line-height: 1.6; }
+
+/* Sections */
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+
+/* Callout */
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+
+/* Download box */
+.download-box {
+    background: var(--green-bg); border: 1px solid color-mix(in srgb, var(--green) 25%, var(--border));
+    border-radius: 12px; padding: 28px; margin: 28px 0; text-align: center;
+}
+.download-box h3 { color: var(--green-dark); margin-top: 0; font-size: 18px; }
+.download-box p { color: var(--green-dark); font-size: 14px; margin-bottom: 20px; }
+.download-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--green); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s;
+    box-shadow: 0 2px 8px rgba(5,150,105,.3);
+}
+.download-btn:hover { background: var(--green-dark); transform: translateY(-1px); text-decoration: none; }
+
+/* 4-Zone Grid */
+.zones-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 14px; margin: 32px 0; }
+.zones { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin: 32px 0; }
+.zone {
+    border-radius: 12px; padding: 20px; border: 1px solid var(--border);
+    transition: transform .15s, box-shadow .15s;
+}
+.zone:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.zone-blue { background: var(--blue-bg); border-color: color-mix(in srgb, var(--blue) 20%, var(--border)); }
+.zone-purple { background: var(--purple-bg); border-color: color-mix(in srgb, var(--purple) 20%, var(--border)); }
+.zone-green { background: var(--green-bg); border-color: color-mix(in srgb, var(--green) 20%, var(--border)); }
+.zone-orange { background: var(--orange-bg); border-color: color-mix(in srgb, var(--orange) 20%, var(--border)); }
+.zone-icon { font-size: 24px; margin-bottom: 8px; }
+.zone-title { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+.zone-blue .zone-title { color: var(--blue-dark); }
+.zone-purple .zone-title { color: var(--purple-dark); }
+.zone-green .zone-title { color: var(--green-dark); }
+.zone-orange .zone-title { color: var(--orange-dark); }
+.zone-sub { font-size: 11px; color: var(--text2); margin-bottom: 10px; }
+.zone-items { list-style: none; padding: 0; }
+.zone-items li {
+    font-size: 12px; padding: 4px 0; color: var(--text);
+    display: flex; align-items: center; gap: 8px;
+}
+.zone-items li::before { content: ''; width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+.zone-blue .zone-items li::before { background: var(--blue); }
+.zone-purple .zone-items li::before { background: var(--purple); }
+.zone-green .zone-items li::before { background: var(--green); }
+.zone-orange .zone-items li::before { background: var(--orange); }
+
+/* Table */
+table { width: 100%; border-collapse: collapse; margin: 24px 0; font-size: 14px; }
+thead th {
+    background: var(--th-bg); color: #fff; padding: 10px 14px;
+    text-align: left; font-weight: 600; font-size: 13px;
+}
+tbody tr:nth-child(even) { background: var(--surface); }
+tbody tr:nth-child(odd) { background: var(--bg); }
+tbody td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text); }
+tbody tr:last-child td { border-bottom: none; }
+
+/* Module structure */
+.module-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px; margin: 24px 0;
+}
+.module-title { font-size: 16px; font-weight: 700; color: var(--text-strong); margin-bottom: 16px; }
+.lesson-list { list-style: none; padding: 0; }
+.lesson-item {
+    display: flex; align-items: flex-start; gap: 14px;
+    padding: 12px 0; border-bottom: 1px solid var(--border);
+}
+.lesson-item:last-child { border-bottom: none; }
+.lesson-num {
+    width: 28px; height: 28px; border-radius: 50%; background: var(--blue-bg);
+    border: 2px solid var(--blue-light); display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: var(--blue); flex-shrink: 0; margin-top: 1px;
+}
+.lesson-body { flex: 1; }
+.lesson-name { font-size: 14px; font-weight: 600; color: var(--text-strong); margin-bottom: 4px; }
+.lesson-desc { font-size: 13px; color: var(--text2); margin: 0; }
+.lesson-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.lesson-tag {
+    font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px;
+    background: var(--surface2); color: var(--text2);
+}
+
+/* CTA */
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+
+/* Footer */
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); }
+
+/* Tablet */
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+
+/* Mobile */
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .zones-4 { grid-template-columns: 1fr 1fr; }
+    .zones { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 24px; }
+    table { font-size: 13px; }
+}
+@media (max-width: 480px) {
+    .zones-4 { grid-template-columns: 1fr; }
+}
+</style>
+<script>
+(function(){var t=localStorage.getItem('dae-course-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<!-- Access Gate -->
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared for Dae. Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/dae-ai-course-workflows/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Dae's Course Build</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/dae-ai-course-workflows/">Overview</a>
+        <a href="/clients/dae-ai-course-workflows/solution">Solution</a>
+        <a href="/clients/dae-ai-course-workflows/workflow" class="active">Workflow</a>
+        <a href="/clients/dae-ai-course-workflows/timeline">Timeline</a>
+        <a href="/clients/dae-ai-course-workflows/investment">Investment</a>
+        <a href="/clients/dae-ai-course-workflows/faq">FAQ</a>
+        <a href="/clients/dae-ai-course-workflows/onboarding">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">Proposal sections</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#system-overview" class="step-link active"><span class="step-num">1</span> System Overview</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#content-pipeline" class="step-link"><span class="step-num">2</span> Content Pipeline</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#tool-mapping" class="step-link"><span class="step-num">3</span> Tool Mapping</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#sample-module" class="step-link"><span class="step-num">4</span> Sample Module</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#download-blueprint" class="step-link"><span class="step-num">5</span> Download Blueprint</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<!-- Hero -->
+<section class="hero" id="hero">
+    <div class="hero-badge">WORKFLOW DESIGN</div>
+    <h1>How the Course Systems Work</h1>
+    <p class="hero-sub">Visual walkthrough of the AI content creation pipeline. This is the kind of system your students will learn to build and customize for their own business.</p>
+</section>
+
+<!-- System Overview -->
+<h2 id="system-overview">&#9881; System Overview</h2>
+<p>Every course module follows the same pattern: Input, Process, Output. The content creation system below is the flagship example. It shows how a non-technical user can go from a content idea to a published draft using ChatGPT and Make.com, without touching code.</p>
+<p>The beauty of this approach is that it's teachable. Once your students understand the pattern for content creation, they can apply the same logic to client communication, business automation, and beyond. The system doesn't require technical knowledge to configure or use.</p>
+
+<div class="callout">
+    <div class="callout-title">How it runs</div>
+    <p>This workflow runs in Make.com with a ChatGPT integration. Your students don't need to code anything. They configure it visually and plug in their own content topics.</p>
+</div>
+
+<!-- Content Pipeline -->
+<h2 id="content-pipeline">Content Pipeline</h2>
+<p>The AI content creation pipeline runs in four stages. Each stage has a defined input and output, so students understand exactly what's happening at every step and can troubleshoot or customize with confidence.</p>
+
+<div class="zones-4">
+    <div class="zone zone-blue">
+        <div class="zone-icon">&#128196;</div>
+        <div class="zone-title">Stage 1: Topic Input</div>
+        <div class="zone-sub">Google Sheets content calendar</div>
+        <ul class="zone-items">
+            <li>Title and target audience</li>
+            <li>Tone (professional, casual, educational)</li>
+            <li>Content type (blog, social, email)</li>
+            <li>Reference notes per topic</li>
+        </ul>
+    </div>
+    <div class="zone zone-purple">
+        <div class="zone-icon">&#129504;</div>
+        <div class="zone-title">Stage 2: AI Drafting</div>
+        <div class="zone-sub">Make.com reads sheet, sends to ChatGPT</div>
+        <ul class="zone-items">
+            <li>Structured prompt with audience and tone</li>
+            <li>Content type shapes the output format</li>
+            <li>Brand voice built into the prompt</li>
+            <li>One topic per Make.com run</li>
+        </ul>
+    </div>
+    <div class="zone zone-green">
+        <div class="zone-icon">&#9997;</div>
+        <div class="zone-title">Stage 3: Format and Polish</div>
+        <div class="zone-sub">Make.com text module, no AI needed</div>
+        <ul class="zone-items">
+            <li>Headers and section breaks added</li>
+            <li>Word count trimmed to target</li>
+            <li>Output formatted for the platform</li>
+            <li>Consistent structure every time</li>
+        </ul>
+    </div>
+    <div class="zone zone-orange">
+        <div class="zone-icon">&#128190;</div>
+        <div class="zone-title">Stage 4: Store and Schedule</div>
+        <div class="zone-sub">Google Drive, Notion, or social tools</div>
+        <ul class="zone-items">
+            <li>Finished draft saved automatically</li>
+            <li>Optional: push to social media tools</li>
+            <li>Optional: send to email platforms</li>
+            <li>Student chooses their destination</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Tool Mapping -->
+<h2 id="tool-mapping">Tool Mapping</h2>
+<p>Each of the four course areas maps to a specific set of tools. This table shows what runs where, so Dae can see the full picture before the build begins.</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Course Area</th>
+            <th>Primary Tool</th>
+            <th>AI Layer</th>
+            <th>Automation Layer</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>Content Creation</strong></td>
+            <td>Google Sheets + Drive</td>
+            <td>ChatGPT</td>
+            <td>Make.com</td>
+        </tr>
+        <tr>
+            <td><strong>Client Communication</strong></td>
+            <td>Email / Forms</td>
+            <td>ChatGPT</td>
+            <td>Zapier</td>
+        </tr>
+        <tr>
+            <td><strong>Business Automation</strong></td>
+            <td>CRM + Calendar</td>
+            <td>ChatGPT (optional)</td>
+            <td>Make.com or Zapier</td>
+        </tr>
+        <tr>
+            <td><strong>Course Toolkit</strong></td>
+            <td>All of the above</td>
+            <td>N/A</td>
+            <td>N/A</td>
+        </tr>
+    </tbody>
+</table>
+
+<!-- Sample Module -->
+<h2 id="sample-module">Sample Module Structure</h2>
+<p>Here's what one complete course module looks like. This is the flagship module that teaches students to build the content creation pipeline shown above.</p>
+
+<div class="module-card">
+    <div class="module-title">Module: "Build Your AI Content Machine"</div>
+    <ul class="lesson-list">
+        <li class="lesson-item">
+            <div class="lesson-num">1</div>
+            <div class="lesson-body">
+                <div class="lesson-name">Map your content workflow</div>
+                <div class="lesson-desc">Where does content come from? Where does it go? Students document their current process before automating it.</div>
+                <div class="lesson-tags">
+                    <span class="lesson-tag">Slide deck</span>
+                    <span class="lesson-tag">Workbook exercise</span>
+                </div>
+            </div>
+        </li>
+        <li class="lesson-item">
+            <div class="lesson-num">2</div>
+            <div class="lesson-body">
+                <div class="lesson-name">Write your first AI prompt framework</div>
+                <div class="lesson-desc">Structured prompting, not just asking ChatGPT a question. Students build a reusable template that produces consistent results.</div>
+                <div class="lesson-tags">
+                    <span class="lesson-tag">Slide deck</span>
+                    <span class="lesson-tag">Prompt template</span>
+                    <span class="lesson-tag">Demo recording</span>
+                </div>
+            </div>
+        </li>
+        <li class="lesson-item">
+            <div class="lesson-num">3</div>
+            <div class="lesson-body">
+                <div class="lesson-name">Connect the pipeline</div>
+                <div class="lesson-desc">Google Sheets to ChatGPT to Google Drive via Make.com. Students configure the workflow visually, no code required.</div>
+                <div class="lesson-tags">
+                    <span class="lesson-tag">Demo recording</span>
+                    <span class="lesson-tag">Make.com blueprint</span>
+                    <span class="lesson-tag">Workbook exercise</span>
+                </div>
+            </div>
+        </li>
+        <li class="lesson-item">
+            <div class="lesson-num">4</div>
+            <div class="lesson-body">
+                <div class="lesson-name">Customize for your brand</div>
+                <div class="lesson-desc">Tone, style, and audience targeting built into the prompt. Students adapt the framework to match their own voice and customers.</div>
+                <div class="lesson-tags">
+                    <span class="lesson-tag">Slide deck</span>
+                    <span class="lesson-tag">Prompt template</span>
+                </div>
+            </div>
+        </li>
+        <li class="lesson-item">
+            <div class="lesson-num">5</div>
+            <div class="lesson-body">
+                <div class="lesson-name">Run it in batch</div>
+                <div class="lesson-desc">Produce a week of content in one session. Students learn to run the pipeline at scale using their content calendar.</div>
+                <div class="lesson-tags">
+                    <span class="lesson-tag">Demo recording</span>
+                    <span class="lesson-tag">Workbook exercise</span>
+                </div>
+            </div>
+        </li>
+    </ul>
+</div>
+
+<div class="callout green">
+    <div class="callout-title">Repeatable pattern</div>
+    <p>This module structure repeats across all four course areas. Students learn the pattern once, then apply it to communication, automation, and beyond.</p>
+</div>
+
+<!-- Download Blueprint -->
+<h2 id="download-blueprint">Download Blueprint</h2>
+
+<div class="download-box">
+    <h3>Download the Content System Blueprint</h3>
+    <p>This Make.com blueprint runs the content creation pipeline from Stage 1 to Stage 4. Import it, connect your Google Sheet and ChatGPT API key, and test it. Your students will build their version of this in the course.</p>
+    <a href="/clients/dae-ai-course-workflows/dae-ai-course-workflows-content-system.json" class="download-btn">&#11015;&#65039; Download Make.com Blueprint (.json)</a>
+</div>
+
+<!-- CTA -->
+<div class="cta-section">
+    <h2>See the project timeline</h2>
+    <p>Each milestone has defined deliverables and a review checkpoint. You approve before we move forward.</p>
+    <a href="/clients/dae-ai-course-workflows/timeline" class="cta-btn">View the Timeline &#8594;</a>
+</div>
+
+<footer class="footer">
+    <p>Prepared for <strong>Dae</strong> by UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+// Access gate
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='dae-2026'){
+        localStorage.setItem('dae-course-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.';
+    }
+}
+(function(){if(localStorage.getItem('dae-course-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+
+// Theme toggle
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('dae-course-theme',t);
+}
+
+// Sidebar active state
+(function(){
+    var links=document.querySelectorAll('.step-link');
+    var sections=[];
+    links.forEach(function(l){
+        var id=l.getAttribute('href');
+        if(id&&id.startsWith('#')){
+            var el=document.querySelector(id);
+            if(el)sections.push({el:el,link:l});
+        }
+    });
+    if(!sections.length)return;
+    var observer=new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+            if(e.isIntersecting){
+                links.forEach(function(l){l.classList.remove('active')});
+                sections.forEach(function(s){
+                    if(s.el===e.target)s.link.classList.add('active');
+                });
+            }
+        });
+    },{rootMargin:'-80px 0px -60% 0px'});
+    sections.forEach(function(s){observer.observe(s.el)});
+})();
+</script>
+</body>
+</html>

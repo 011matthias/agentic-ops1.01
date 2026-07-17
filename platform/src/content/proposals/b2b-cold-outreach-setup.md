@@ -13,7 +13,6 @@ sent: null
 value_estimate: "$600-1,000 ($40/hr, est. 15-25h)"
 timeline: "2-4 weeks"
 tags: [cold-outreach, lead-generation, linkedin, sales-navigator, phantombuster, apollo, instantly, icp]
-access_code: ""
 deliverables:
   letter: true
   video: true
