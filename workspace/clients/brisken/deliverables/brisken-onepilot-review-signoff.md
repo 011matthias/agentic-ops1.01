@@ -5,6 +5,11 @@ approve the straightforward changes in one pass and make the few real
 calls. This does not cover the broader OnePilot positioning; that is a
 separate conversation.
 
+One coupling to flag: the homepage title and hero may change in that
+separate positioning conversation. If you approve the title or hero wording
+in the batch below, we align it with the positioning call before building,
+so nothing you sign off here gets quietly overwritten there.
+
 How to use it: tick the changes you want, strike any you do not, and
 answer the four questions at the end. We build the approved set from
 that.

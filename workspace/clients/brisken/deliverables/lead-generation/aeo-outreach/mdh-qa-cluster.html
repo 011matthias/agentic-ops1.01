@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- deliverable-allow: copy-clipboard | reason: linear Q&A reference page, no code/command blocks to copy -->
+<!-- deliverable-allow: keyboard-search | reason: single linear page; native browser find is sufficient, no filterable dataset UI -->
+<!-- BYLINE: Dirk to name the real Brisken SAP-treasury expert before publish; author is set to the Brisken organization until then (E-E-A-T, do not invent a person). -->
+<!-- PUBLISH GATE: hosting on a Brisken property + go-live are Dirk-gated (owned property). This file is ready-to-publish, not published. -->
+<!-- AEO: Cluster A (Market Data Hub), covers substrate queries 1-8. Sourced stat folded in: Shadow Integration Report 71% / 34% (N=41, 2026-06-17). -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Getting market data into SAP: the no-code, multi-provider answer</title>
+<meta name="description" content="How to get Bloomberg, Refinitiv, OANDA, 360T and central-bank rates into SAP TRM and Market Rates Management without ABAP or a custom script. Brisken's Market Data Hub, the SAP-native Datafeed path, and a single-vendor interface compared.">
+<meta name="author" content="Brisken">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Brisken OnePilot">
+<meta property="og:title" content="Getting market data into SAP: the no-code, multi-provider answer">
+<meta property="og:description" content="Bloomberg, Refinitiv, OANDA and 360T rates into SAP TRM, governed, no code. How a market-data hub compares to the SAP-native Datafeed and to a custom script.">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Getting market data into SAP (Brisken OnePilot)">
+<meta name="twitter:description" content="No-code, multi-provider market data into SAP TRM and Market Rates Management. The questions SAP treasury buyers actually ask, answered.">
+<script>(function(){var t=localStorage.getItem('theme');
+  var d=document.documentElement;
+  d.setAttribute('data-theme',
+    t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');
+})();</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "How do I get Bloomberg market data into SAP TRM automatically?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "The SAP-native path is a Datafeed RFC connection with per-provider function lists and translation tables, or a per-security custom interface, both of which need ABAP upkeep and break when Bloomberg changes a field. A governed market-data hub ingests Bloomberg once, normalizes it, and distributes into SAP TRM with an audit trail and exception alerts, no code."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I load Refinitiv (LSEG) rates and curves into SAP S/4HANA treasury?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Refinitiv (LSEG) rates and curves reach SAP S/4HANA treasury through the same governed hub that handles any provider: ingest the feed once, normalize it, distribute into Market Rates Management. Switching or adding a provider is a configuration change, not a new interface, so there is no per-vendor rebuild to maintain."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I automate FX rates and yield curves into SAP Market Rates Management without ABAP?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. SAP's native route uses a Datafeed RFC with function lists and translation tables, which needs ABAP to set up and maintain. A no-code market-data hub maps and schedules FX rates and yield curves into SAP Market Rates Management through configuration, so the treasury team owns the feed without writing or changing ABAP."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What is the alternative to a custom Bloomberg-to-SAP script that keeps breaking?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A custom script breaks whenever the provider changes a field or the person who wrote it leaves. A managed market-data hub replaces it with a configured, monitored interface: provider changes are absorbed in configuration, the feed is governed with an audit trail and exception alerts, and nobody is babysitting a brittle script."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I feed OANDA or central-bank rates into SAP cash management?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "OANDA and central-bank rates feed into SAP cash management through the same hub as every other source. Multiple providers land in one normalized pipeline rather than separate point interfaces, so the rates that drive cash and liquidity views come from one governed feed with a single point of control."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I govern multiple market-data providers into SAP from one place?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A market-data hub is the single point of control for every provider feeding SAP: Bloomberg, Refinitiv, OANDA, 360T, central banks. It validates, normalizes and distributes each feed, with an audit trail, segregation of duties, and manage-by-exception alerts. Governance is built into the feed, not bolted on per interface afterwards."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What is the best way to handle market-data integration for SAP treasury during an S/4HANA migration?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A migration forces every treasury data feed to be re-plumbed, which is when hand-built market-data interfaces are most expensive to rebuild. Moving the feeds onto a governed hub during the migration re-platforms them once onto a managed interface instead of re-coding each script. In a read of US SAP-treasury job ads, 34% sat inside an active migration."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is there a no-code alternative to SAP TRM datafeed configuration?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "The SAP TRM Datafeed needs ABAP-side setup of function lists and translation tables per provider. The alternative is a no-code hub that handles ingest, mapping and distribution through configuration, aimed at treasury teams that do not have the ABAP capacity to build and maintain the datafeed themselves."
+      }
+    }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  "name": "Getting market data into SAP: the no-code, multi-provider answer",
+  "about": ["SAP TRM", "market data integration", "SAP Market Rates Management", "Bloomberg SAP", "Refinitiv SAP", "S/4HANA migration"],
+  "publisher": {
+    "@type": "Organization",
+    "name": "Brisken",
+    "description": "SAP Co-Innovation Partner; governed, no-code financial-data orchestration for SAP."
+  },
+  "dateModified": "2026-06-18"
+}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+  :root, [data-theme="light"] {
+    --navy: #00396f; --teal: #0e7c86; --teal-strong: #0b626a; --teal-bg: #e4f3f4;
+    --approved: #1e8e5a;
+    --paper: #f4f7fb; --surface: #ffffff; --surface-2: #eef3fa;
+    --mist: #e2e9f2; --mist-strong: #c8d5e5;
+    --text: #0a1a2f; --muted: #56657c; --heading: #00396f;
+    --bg: var(--paper); --border: var(--mist); --border-strong: var(--mist-strong);
+    --accent: var(--teal); --accent-strong: var(--teal-strong); --accent-bg: var(--teal-bg);
+    --brand-ink: #003a96; --brand-cyan: #00b8ce;
+    --radius: 3px; --radius-pill: 999px;
+    --shadow: 0 1px 2px rgba(10,26,47,.05), 0 10px 30px rgba(10,26,47,.06);
+    --font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+    --font-body: "IBM Plex Sans", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  [data-theme="dark"] {
+    --navy: #0b4a8c; --teal: #3fb9c4; --teal-strong: #6ad3dc; --teal-bg: #0c2e36;
+    --approved: #34b879;
+    --paper: #081320; --surface: #0e2036; --surface-2: #0b1a2e;
+    --mist: #1e3550; --mist-strong: #2e4865;
+    --text: #e8eef6; --muted: #9db0c8; --heading: #dbe8fa;
+    --brand-ink: #e9f1fb; --brand-cyan: #2fc6d6;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 30px rgba(0,0,0,.34);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { font-family: var(--font-body); background: var(--bg); color: var(--text); line-height: 1.65; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 24px; }
+  a { color: var(--teal-strong); }
+  [data-theme="dark"] a { color: var(--teal-strong); }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+  h1 { font-family: var(--font-display); font-size: clamp(28px, 5vw, 44px); line-height: 1.12; letter-spacing: -.02em; color: var(--heading); }
+  h2 { font-family: var(--font-display); font-size: clamp(21px, 3.4vw, 28px); line-height: 1.2; letter-spacing: -.01em; color: var(--heading); margin-bottom: 14px; }
+  h3 { font-size: 17px; color: var(--heading); margin-bottom: 6px; }
+  p { margin-bottom: 14px; }
+  section { scroll-margin-top: 72px; }
+
+  /* Nav */
+  .site-nav { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between;
+    padding: 13px 24px; background: color-mix(in srgb, var(--surface) 88%, transparent);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
+  .nav-left { display: flex; align-items: center; gap: 9px; text-decoration: none; }
+  .brand-cube { width: 22px; height: 22px; flex: none; }
+  .nav-logo { font-family: var(--font-display); font-weight: 700; font-size: 20px; letter-spacing: -.018em; color: var(--brand-ink); line-height: 1; }
+  .nav-product { font-family: var(--font-mono); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted);
+    font-weight: 500; padding-left: 9px; margin-left: 1px; border-left: 1px solid var(--border-strong); }
+  .nav-right { display: flex; align-items: center; gap: 14px; }
+  .nav-status { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .nav-theme { border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); border-radius: var(--radius-pill);
+    width: 34px; height: 34px; cursor: pointer; font-size: 14px; line-height: 1; display: inline-flex; align-items: center; justify-content: center;
+    transition: border-color .12s, color .12s; }
+  .nav-theme:hover { border-color: var(--teal); color: var(--teal); }
+
+  /* Hero */
+  .hero { padding: 64px 0 36px; }
+  .eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--teal-strong); margin-bottom: 16px; display: inline-block; }
+  .hero-sub { font-size: 18px; color: var(--muted); max-width: 680px; margin-top: 16px; }
+  .lead-answer { font-size: 17px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--teal);
+    border-radius: 0 var(--radius) var(--radius) 0; padding: 18px 22px; margin-top: 26px; box-shadow: var(--shadow); }
+
+  /* Stat band */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden; margin: 32px 0 8px; }
+  .stat { background: var(--surface); padding: 24px 20px; }
+  .stat .v { font-family: var(--font-display); font-size: 40px; font-weight: 700; color: var(--teal-strong); line-height: 1; letter-spacing: -.02em; }
+  .stat.lead .v { color: var(--navy); }
+  [data-theme="dark"] .stat.lead .v { color: var(--teal-strong); }
+  .stat .k { font-size: 13.5px; color: var(--muted); margin-top: 8px; }
+  .stat .n { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-top: 10px; }
+  .stat-foot { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); margin-bottom: 40px; }
+
+  /* Sections */
+  .section { padding: 30px 0; border-top: 1px solid var(--border); }
+  .section:first-of-type { border-top: none; }
+  ul.clean { list-style: none; margin: 0 0 14px; }
+  ul.clean li { position: relative; padding-left: 20px; margin-bottom: 9px; }
+  ul.clean li::before { content: ""; position: absolute; left: 2px; top: 10px; width: 6px; height: 6px; border-radius: 50%; background: var(--teal); }
+
+  /* Q&A blocks */
+  .qa { border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 22px; margin-bottom: 16px; background: var(--surface); box-shadow: var(--shadow); }
+  .qa q { display: block; font-weight: 600; color: var(--heading); font-size: 16px; margin-bottom: 8px; quotes: none; }
+  .qa q::before, .qa q::after { content: ""; }
+  .qa .ans { color: var(--text); }
+  .qa .depth { color: var(--muted); font-size: 14.5px; margin-top: 10px; }
+  .qa .tag { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-top: 10px; display: block; }
+
+  /* Callout */
+  .callout { border-left: 3px solid var(--teal); background: var(--teal-bg); padding: 16px 20px; border-radius: 0 var(--radius) var(--radius) 0; margin: 6px 0 16px; }
+  [data-theme="dark"] .callout { background: var(--surface-2); }
+  .master { font-family: var(--font-display); font-size: 19px; color: var(--heading); font-weight: 600; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 16px; font-size: 14.5px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+  td.own { color: var(--text); font-weight: 500; }
+
+  /* Footer */
+  .footer { border-top: 1px solid var(--border); margin-top: 36px; padding: 30px 0 50px; }
+  .footer .byline { font-size: 14px; color: var(--muted); margin-bottom: 10px; }
+  .trust { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); letter-spacing: .03em; margin-bottom: 14px; }
+  .footer-bottom { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; font-size: 12.5px; color: var(--muted); }
+
+  @media (max-width: 620px) { .stats { grid-template-columns: 1fr; } }
+
+  @media print {
+    .site-nav { display: none !important; }
+    body { background: #fff; color: #000; }
+    .qa, .callout, .lead-answer { box-shadow: none; }
+    h2 { page-break-before: always; }
+    h2:first-of-type { page-break-before: avoid; }
+    .hero { padding-top: 12px; }
+  }
+</style>
+</head>
+<body id="top">
+
+<nav class="site-nav">
+  <a class="nav-left" href="#top" aria-label="Brisken OnePilot, back to top">
+    <svg class="brand-cube" viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M16 3 L28 9.5 V22.5 L16 29 L4 22.5 V9.5 Z" fill="none" stroke="var(--brand-cyan)" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M16 3 L16 16 M16 16 L28 9.5 M16 16 L4 9.5" fill="none" stroke="var(--brand-cyan)" stroke-width="2" stroke-linejoin="round"/>
+    </svg>
+    <span class="nav-logo">brisken</span>
+    <span class="nav-product">OnePilot</span>
+  </a>
+  <div class="nav-right">
+    <span class="nav-status">Market Data Hub &middot; Q&amp;A</span>
+    <button class="nav-theme" onclick="(function(){
+      var d=document.documentElement;
+      var c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+      d.setAttribute('data-theme',c);
+      localStorage.setItem('theme',c);
+    })()" aria-label="Toggle theme">&#9788;/&#9790;</button>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <header class="hero">
+    <span class="eyebrow">OnePilot &middot; Market Data Hub</span>
+    <h1>Getting market data into SAP, without ABAP or a script that breaks.</h1>
+    <p class="hero-sub">Bloomberg, Refinitiv, OANDA, 360T and central-bank rates feeding SAP TRM and Market Rates Management is usually a hand-built job. Here is how a governed, no-code hub does it instead, and how that compares to the SAP-native Datafeed and to a single-vendor interface.</p>
+    <div class="lead-answer">
+      Getting market data into SAP usually means a Datafeed RFC connection or a custom per-vendor script, both of which need ABAP upkeep and break when a provider changes a field. A governed market-data hub ingests every provider once, normalizes it, and distributes into SAP TRM and Market Rates Management with an audit trail, no code.
+    </div>
+  </header>
+
+  <section class="section">
+    <h2>The questions SAP treasury buyers actually ask</h2>
+
+    <div class="qa">
+      <q>How do I get Bloomberg market data into SAP TRM automatically?</q>
+      <div class="ans">The SAP-native path is a Datafeed RFC connection with per-provider function lists and translation tables, or a per-security custom interface, both of which need ABAP upkeep and break when Bloomberg changes a field. A governed market-data hub ingests Bloomberg once, normalizes it, and distributes into SAP TRM with an audit trail and exception alerts, no code.</div>
+      <span class="tag">Extractable answer &middot; 58 words</span>
+    </div>
+
+    <div class="qa">
+      <q>How do I load Refinitiv (LSEG) rates and curves into SAP S/4HANA treasury?</q>
+      <div class="ans">Refinitiv (LSEG) rates and curves reach SAP S/4HANA treasury through the same governed hub that handles any provider: ingest the feed once, normalize it, distribute into Market Rates Management. Switching or adding a provider is a configuration change, not a new interface, so there is no per-vendor rebuild to maintain.</div>
+      <span class="tag">Extractable answer &middot; 49 words</span>
+    </div>
+
+    <div class="qa">
+      <q>Can I automate FX rates and yield curves into SAP Market Rates Management without ABAP?</q>
+      <div class="ans">Yes. SAP's native route uses a Datafeed RFC with function lists and translation tables, which needs ABAP to set up and maintain. A no-code market-data hub maps and schedules FX rates and yield curves into SAP Market Rates Management through configuration, so the treasury team owns the feed without writing or changing ABAP.</div>
+      <span class="tag">Extractable answer &middot; 52 words</span>
+    </div>
+
+    <div class="qa">
+      <q>What is the alternative to a custom Bloomberg-to-SAP script that keeps breaking?</q>
+      <div class="ans">A custom script breaks whenever the provider changes a field or the person who wrote it leaves. A managed market-data hub replaces it with a configured, monitored interface: provider changes are absorbed in configuration, the feed is governed with an audit trail and exception alerts, and nobody is babysitting a brittle script.</div>
+      <span class="tag">Extractable answer &middot; 51 words</span>
+    </div>
+
+    <div class="qa">
+      <q>How do I feed OANDA or central-bank rates into SAP cash management?</q>
+      <div class="ans">OANDA and central-bank rates feed into SAP cash management through the same hub as every other source. Multiple providers land in one normalized pipeline rather than separate point interfaces, so the rates that drive cash and liquidity views come from one governed feed with a single point of control.</div>
+      <span class="tag">Extractable answer &middot; 49 words</span>
+    </div>
+
+    <div class="qa">
+      <q>How do I govern multiple market-data providers into SAP from one place?</q>
+      <div class="ans">A market-data hub is the single point of control for every provider feeding SAP: Bloomberg, Refinitiv, OANDA, 360T, central banks. It validates, normalizes and distributes each feed, with an audit trail, segregation of duties, and manage-by-exception alerts. Governance is built into the feed, not bolted on per interface afterwards.</div>
+      <span class="tag">Extractable answer &middot; 50 words</span>
+    </div>
+
+    <div class="qa">
+      <q>What is the best way to handle market-data integration for SAP treasury during an S/4HANA migration?</q>
+      <div class="ans">A migration forces every treasury data feed to be re-plumbed, which is when hand-built market-data interfaces are most expensive to rebuild. Moving the feeds onto a governed hub during the migration re-platforms them once onto a managed interface instead of re-coding each script. In a read of US SAP-treasury job ads, 34% sat inside an active migration.</div>
+      <span class="tag">Extractable answer &middot; 56 words</span>
+    </div>
+
+    <div class="qa">
+      <q>Is there a no-code alternative to SAP TRM datafeed configuration?</q>
+      <div class="ans">The SAP TRM Datafeed needs ABAP-side setup of function lists and translation tables per provider. The alternative is a no-code hub that handles ingest, mapping and distribution through configuration, aimed at treasury teams that do not have the ABAP capacity to build and maintain the datafeed themselves.</div>
+      <span class="tag">Extractable answer &middot; 47 words</span>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Market Data Hub vs the two usual paths</h2>
+    <p>Honest comparison. The SAP-native Datafeed is a real, supported path; the point of a hub is the no-code, multi-provider, governed layer over it, not a claim that SAP cannot do this.</p>
+    <table>
+      <tr>
+        <th>Dimension</th>
+        <th>OnePilot Market Data Hub</th>
+        <th>SAP-native Datafeed (RFC config)</th>
+        <th>Custom script / point interface</th>
+      </tr>
+      <tr>
+        <td>Setup</td>
+        <td class="own">No-code configuration</td>
+        <td>ABAP function lists + translation tables</td>
+        <td>Bespoke code per provider</td>
+      </tr>
+      <tr>
+        <td>Add or swap a provider</td>
+        <td class="own">Configuration change</td>
+        <td>New function list + mapping</td>
+        <td>New script</td>
+      </tr>
+      <tr>
+        <td>Multiple providers</td>
+        <td class="own">One normalized pipe, many sources</td>
+        <td>Configured per provider</td>
+        <td>One interface per provider</td>
+      </tr>
+      <tr>
+        <td>Governance</td>
+        <td class="own">Audit trail, segregation of duties, exception alerts built in</td>
+        <td>Manual or custom</td>
+        <td>None unless coded</td>
+      </tr>
+      <tr>
+        <td>Maintenance owner</td>
+        <td class="own">Vendor-managed (SaaS)</td>
+        <td>In-house ABAP</td>
+        <td>Whoever wrote it</td>
+      </tr>
+      <tr>
+        <td>When a provider changes a field</td>
+        <td class="own">Absorbed in configuration</td>
+        <td>ABAP edit needed</td>
+        <td>Script breaks</td>
+      </tr>
+      <tr>
+        <td>SAP-listed</td>
+        <td class="own">Yes, on the SAP Store</td>
+        <td>Native to SAP</td>
+        <td>Not applicable</td>
+      </tr>
+    </table>
+  </section>
+
+  <section class="section">
+    <h2>What the market looks like</h2>
+    <p>From Brisken's <a href="/shadow-integration-report.html">Shadow Integration Report</a>, a read of 41 US SAP-treasury job ads (US-only, 2026-06-17). Manual rate and curve loading is one of the hand-built feeds these numbers describe.</p>
+    <div class="stats">
+      <div class="stat lead">
+        <div class="v">71%</div>
+        <div class="k">of US SAP-treasury roles describe building or hand-running integrations into SAP, or manual data work</div>
+        <div class="n">29 of 41</div>
+      </div>
+      <div class="stat">
+        <div class="v">34%</div>
+        <div class="k">are tied to an active S/4HANA migration or SAP implementation, the moment feeds get re-plumbed</div>
+        <div class="n">14 of 41</div>
+      </div>
+      <div class="stat">
+        <div class="v">22%</div>
+        <div class="k">name a specific market-data or trading vendor whose feed must reach SAP (a floor)</div>
+        <div class="n">9 of 41</div>
+      </div>
+    </div>
+    <div class="stat-foot">Source: Brisken Shadow Integration Report, N=41, read 2026-06-17. These are market-research figures, not a Market Data Hub performance metric.</div>
+  </section>
+
+  <section class="section">
+    <h2>What it means for a treasury team</h2>
+    <p>If loading rates and curves is still a script or a spreadsheet someone maintains, the cost is not only the keying time; it is the day the feed breaks and the close waits on it. A governed hub moves that work from hand-built to configured and monitored, and the cheapest time to make the switch is the migration window, when the feeds are already being rebuilt.</p>
+    <div class="callout">
+      <span class="master">Ingest every provider once. Distribute into SAP, governed, no code.</span>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="byline">Brisken OnePilot. Market Data Hub is listed on the SAP Store. SAP-native facts cited here trace to SAP's own TRM Datafeed documentation; product capabilities to Brisken's product decks.</div>
+    <div class="trust">SAP Co-Innovation Partner &middot; listed on the SAP Store &middot; built on SAP BTP &middot; ISO 27001 / SOC 1 Type II</div>
+    <div class="footer-bottom">
+      <div>Brisken LLC &middot; governed, no-code financial-data orchestration for SAP</div>
+      <div>Last updated: 2026-06-18</div>
+    </div>
+  </footer>
+
+</main>
+</body>
+</html>

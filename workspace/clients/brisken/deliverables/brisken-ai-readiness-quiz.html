@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Treasury AI-Readiness Check &middot; Brisken</title>
+<!-- deliverable-allow: dark-mode-toggle, copy-clipboard, keyboard-search | reason: booth kiosk quiz, not a doc/dashboard; fixed Brisken-branded single-purpose touch UI that resets per visitor, no code/command blocks to copy and nothing to search, runs offline on the booth iPad -->
+<style>
+  :root{
+    --navy:#04162f; --navy-2:#072142; --card:#0c2a52; --line:rgba(255,255,255,.12);
+    --ink:#eaf2ff; --muted:#9db8de; --cyan:#2bc6e6; --cyan-2:#13a7c7; --green:#34d399;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; height:100%;}
+  body{
+    font-family:var(--font); color:var(--ink);
+    background:radial-gradient(1200px 800px at 70% -10%, #0a2c57 0%, var(--navy) 55%, #020e20 100%);
+    min-height:100%; display:flex; align-items:center; justify-content:center; padding:28px;
+  }
+  .wrap{width:100%; max-width:720px;}
+  .brand{display:flex; align-items:center; gap:12px; margin-bottom:22px;}
+  .cube{width:26px; height:26px; border-radius:7px; flex:none;
+    background:linear-gradient(135deg, var(--cyan) 0%, var(--cyan-2) 100%);
+    box-shadow:0 4px 16px rgba(43,198,230,.4);}
+  .wordmark{font-size:23px; font-weight:700; letter-spacing:-.02em;}
+  .wordmark span{color:var(--cyan);}
+  .card{background:linear-gradient(180deg, var(--card) 0%, var(--navy-2) 100%);
+    border:1px solid var(--line); border-radius:20px; padding:30px 28px 26px;
+    box-shadow:0 24px 70px rgba(0,0,0,.45);}
+  .eyebrow{font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--cyan); font-weight:600;}
+  h1{font-size:27px; line-height:1.18; margin:10px 0 8px; letter-spacing:-.02em;}
+  .sub{color:var(--muted); font-size:15.5px; line-height:1.55; margin:0 0 22px;}
+  .progress{display:flex; gap:6px; margin-bottom:20px;}
+  .pip{height:5px; border-radius:3px; flex:1; background:rgba(255,255,255,.12);}
+  .pip.on{background:var(--cyan);}
+  .q{font-size:20px; font-weight:600; line-height:1.35; margin:0 0 18px;}
+  .opts{display:flex; flex-direction:column; gap:11px;}
+  .opt{display:block; width:100%; text-align:left; cursor:pointer;
+    background:rgba(255,255,255,.04); border:1.5px solid var(--line); color:var(--ink);
+    border-radius:14px; padding:17px 18px; font-size:16.5px; line-height:1.4; font-family:inherit;
+    transition:transform .08s ease, border-color .12s ease, background .12s ease;}
+  .opt:active{transform:scale(.985);}
+  .opt:hover{border-color:rgba(43,198,230,.6); background:rgba(43,198,230,.08);}
+  .btn{display:inline-flex; align-items:center; justify-content:center; gap:9px; cursor:pointer;
+    background:linear-gradient(135deg, var(--cyan) 0%, var(--cyan-2) 100%); color:#04162f;
+    border:none; border-radius:999px; padding:16px 30px; font-size:16.5px; font-weight:700;
+    font-family:inherit; box-shadow:0 8px 24px rgba(43,198,230,.35);}
+  .btn:active{transform:translateY(1px);}
+  .btn.ghost{background:transparent; color:var(--cyan); box-shadow:none; border:1.5px solid var(--line); font-weight:600;}
+  .center{text-align:center;}
+  .ring{width:128px; height:128px; margin:6px auto 14px; position:relative;}
+  .ring svg{transform:rotate(-90deg);}
+  .ring .val{position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:30px; font-weight:700;}
+  .tier{font-size:24px; font-weight:700; margin:4px 0 2px;}
+  .tierline{color:var(--muted); font-size:14px; letter-spacing:.04em; text-transform:uppercase; margin-bottom:14px;}
+  .result-msg{font-size:16px; line-height:1.6; color:#dbe8fb; margin:0 0 18px;}
+  .bench{background:rgba(43,198,230,.09); border:1px solid rgba(43,198,230,.28); border-radius:14px;
+    padding:15px 17px; font-size:15px; line-height:1.5; color:#e6f6fb; margin-bottom:22px;}
+  .bench b{color:var(--cyan);}
+  .cta{display:flex; flex-direction:column; gap:11px; margin-top:6px;}
+  .foot{margin-top:20px; text-align:center; color:var(--muted); font-size:12.5px; line-height:1.5;}
+  .foot a{color:var(--cyan); text-decoration:none;}
+  .hidden{display:none;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><div class="cube"></div><div class="wordmark">brisken<span>.</span></div></div>
+
+  <div class="card">
+    <!-- INTRO -->
+    <section id="intro">
+      <div class="eyebrow">Booth #2 &middot; 60 seconds</div>
+      <h1>How AI-ready is your treasury?</h1>
+      <p class="sub">Five quick questions on how your team gets data into SAP and how much of it still happens by hand. You will get a score, where you sit against other attendees, and where the easy wins are.</p>
+      <button class="btn" onclick="start()">Start the check</button>
+    </section>
+
+    <!-- QUIZ -->
+    <section id="quiz" class="hidden">
+      <div class="progress" id="pips"></div>
+      <p class="q" id="qtext"></p>
+      <div class="opts" id="opts"></div>
+    </section>
+
+    <!-- RESULT -->
+    <section id="result" class="hidden center">
+      <div class="ring">
+        <svg width="128" height="128" viewBox="0 0 128 128">
+          <circle cx="64" cy="64" r="56" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="12"/>
+          <circle id="arc" cx="64" cy="64" r="56" fill="none" stroke="var(--cyan)" stroke-width="12"
+            stroke-linecap="round" stroke-dasharray="351.86" stroke-dashoffset="351.86"/>
+        </svg>
+        <div class="val"><span id="scoreval">0</span><span style="font-size:16px;color:var(--muted)">/15</span></div>
+      </div>
+      <div class="tier" id="tier"></div>
+      <div class="tierline">Treasury AI-readiness</div>
+      <p class="result-msg" id="rmsg"></p>
+      <div class="bench" id="bench"></div>
+      <div class="cta">
+        <button class="btn" onclick="talk()">Talk it through at Booth #2</button>
+        <button class="btn ghost" onclick="reset()">Start over for the next person</button>
+      </div>
+      <div class="foot">See it run on your own SAP data: <a href="https://rome2026.brisken.com">rome2026.brisken.com</a></div>
+    </section>
+  </div>
+</div>
+
+<script>
+var QUESTIONS = [
+  { q:"How does market and reference data (rates, prices, curves) get into your SAP today?",
+    a:["Someone keys it in by hand","A custom script or macro we maintain","Middleware or a third-party tool","A governed automated feed, no manual step"] },
+  { q:"How do you process incoming remittance advices and bank files?",
+    a:["Manual re-keying into SAP","Mostly manual, some templates","Partly automated","AI reads and posts them through a governed gate"] },
+  { q:"How much of your treasury team's week goes to manual data handling versus analysis and decisions?",
+    a:["Most of it","About half","A small but real chunk","Very little, the data flows itself"] },
+  { q:"Where are you on S/4HANA and treasury modernization?",
+    a:["No active plan","Evaluating options","Migration underway","Live on S/4HANA"] },
+  { q:"Are you using AI or automation in treasury operations today?",
+    a:["Not yet","Exploring or piloting","A few processes in production","Across the core flows"] }
+];
+var TIERS = [
+  { min:0,  name:"Manual-heavy",
+    msg:"Your team is carrying a lot of manual data work. That is exactly the load Brisken's OnePilot lifts: market data, trades, bank files and remittances into SAP, governed, no code." },
+  { min:6,  name:"In transition",
+    msg:"You have automated part of it. The gaps that remain, the manual feeds and the re-keying, are where OnePilot closes the loop on your own SAP data." },
+  { min:11, name:"AI-ready",
+    msg:"You are ahead of most treasury teams. The frontier now is governance and a full audit trail on every automated flow, which is where Brisken's OnePilot and its AI layer go furthest." }
+];
+var KEY="brisken_quiz_scores_rome2026";
+var idx=0, score=0;
+var qsec=document.getElementById('quiz'), intro=document.getElementById('intro'), res=document.getElementById('result');
+
+function start(){ idx=0; score=0; intro.classList.add('hidden'); res.classList.add('hidden'); qsec.classList.remove('hidden'); render(); }
+function render(){
+  var pips=""; for(var i=0;i<QUESTIONS.length;i++){ pips+='<div class="pip'+(i<=idx?' on':'')+'"></div>'; }
+  document.getElementById('pips').innerHTML=pips;
+  document.getElementById('qtext').textContent=(idx+1)+". "+QUESTIONS[idx].q;
+  var o=""; QUESTIONS[idx].a.forEach(function(t,i){ o+='<button class="opt" onclick="pick('+i+')">'+t+'</button>'; });
+  document.getElementById('opts').innerHTML=o;
+}
+function pick(v){ score+=v; idx++; if(idx<QUESTIONS.length){ render(); } else { finish(); } }
+function finish(){
+  qsec.classList.add('hidden'); res.classList.remove('hidden');
+  var tier=TIERS[0]; for(var i=0;i<TIERS.length;i++){ if(score>=TIERS[i].min) tier=TIERS[i]; }
+  document.getElementById('tier').textContent=tier.name;
+  document.getElementById('rmsg').textContent=tier.msg;
+  // animated ring + count
+  var pct=score/15, circ=351.86;
+  var arc=document.getElementById('arc');
+  setTimeout(function(){ arc.style.transition="stroke-dashoffset 900ms ease"; arc.style.strokeDashoffset=(circ*(1-pct)).toFixed(1); },60);
+  var sv=document.getElementById('scoreval'), n=0;
+  var iv=setInterval(function(){ n++; sv.textContent=n; if(n>=score) clearInterval(iv); }, 70); if(score===0) sv.textContent=0;
+  // benchmark from prior local takers
+  var prior=[]; try{ prior=JSON.parse(localStorage.getItem(KEY)||"[]"); }catch(e){ prior=[]; }
+  var b=document.getElementById('bench');
+  if(prior.length>=3){
+    var below=prior.filter(function(s){ return s<score; }).length;
+    var ahead=Math.round(below/prior.length*100);
+    b.innerHTML="You are ahead of <b>"+ahead+"%</b> of the "+prior.length+" people who have taken this at our booth.";
+  } else {
+    b.innerHTML="You are one of the first to take this at our booth today. Come back later to see where the room landed.";
+  }
+  prior.push(score); try{ localStorage.setItem(KEY, JSON.stringify(prior)); }catch(e){}
+}
+function talk(){ document.getElementById('rmsg').textContent="Great, come find Dirk or the team at Booth #2 and we will show you exactly where the time goes back."; }
+function reset(){ start(); }
+</script>
+</body>
+</html>

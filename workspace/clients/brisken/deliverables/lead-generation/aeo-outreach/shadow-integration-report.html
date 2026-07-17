@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- deliverable-allow: copy-clipboard | reason: linear research report, no code/command blocks to copy -->
+<!-- deliverable-allow: keyboard-search | reason: single linear page; native browser find is sufficient, no filterable dataset UI -->
+<!-- BYLINE: Dirk to name the real Brisken SAP-treasury expert before publish; author is set to the Brisken organization until then (E-E-A-T, do not invent a person). -->
+<!-- PUBLISH GATE: hosting on a Brisken property + go-live are Dirk-gated (owned property). This file is ready-to-publish, not published. -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Shadow Integration Report: how SAP treasury teams really move their data</title>
+<meta name="description" content="Brisken research: 71% of US SAP-treasury job roles (N=41) still hand-build or hand-run the data plumbing into SAP. The method, the dataset, and what it means for treasury teams.">
+<meta name="author" content="Brisken">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Brisken Research">
+<meta property="og:title" content="The Shadow Integration Report: 71% of US SAP-treasury roles still hand-run the data plumbing">
+<meta property="og:description" content="A read of 41 US SAP-treasury job ads. 7 in 10 describe building or hand-running the integrations and manual data work that move financial data into SAP.">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="The Shadow Integration Report (Brisken Research)">
+<meta name="twitter:description" content="71% of US SAP-treasury roles (N=41) still hand-build or hand-run the data plumbing into SAP. Method and dataset inside.">
+<script>(function(){var t=localStorage.getItem('theme');
+  var d=document.documentElement;
+  d.setAttribute('data-theme',
+    t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');
+})();</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Dataset",
+  "name": "Shadow Integration Benchmark (US SAP-treasury job ads)",
+  "description": "A hand-coded read of 41 US public job ads for SAP corporate-treasury, TRM, cash-management and FSCM roles, each coded on three yes/no signals: names a market-data or trading vendor whose feed must reach SAP; describes building or maintaining integrations or doing manual data work; references an S/4HANA migration or SAP implementation.",
+  "creator": { "@type": "Organization", "name": "Brisken" },
+  "dateModified": "2026-06-17",
+  "spatialCoverage": "United States",
+  "variableMeasured": [
+    "Share of roles describing integration or manual data work into SAP",
+    "Share of roles tied to an S/4HANA migration or implementation",
+    "Share of roles naming a specific market-data or trading vendor"
+  ],
+  "measurementTechnique": "Manual full-text reading of public job ads with a documented three-signal coding rubric and a quoted-phrase evidence standard.",
+  "size": "41 roles"
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "The Shadow Integration Report: how SAP treasury teams really move their data",
+  "description": "71% of US SAP-treasury roles (N=41) still hand-build or hand-run the data plumbing into SAP.",
+  "author": { "@type": "Organization", "name": "Brisken" },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Brisken",
+    "description": "SAP Co-Innovation Partner; governed, no-code financial-data orchestration for SAP."
+  },
+  "dateModified": "2026-06-17",
+  "about": ["SAP treasury", "SAP TRM", "market data integration", "S/4HANA migration", "treasury automation"],
+  "isBasedOn": { "@type": "Dataset", "name": "Shadow Integration Benchmark (US SAP-treasury job ads)" }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "How common is manual integration work in SAP treasury roles?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "In a read of 41 US SAP-treasury job ads, 71% described building or maintaining integrations between external systems and SAP, or doing the manual data work (data loads, manual entry, reconciliation, spreadsheets, payment-file fixes). The plumbing that moves market data, trades, bank files and remittances into SAP is still hand-built or hand-run in roughly 7 of 10 roles."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How many SAP treasury roles are tied to an S/4HANA migration?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "34% of the 41 US SAP-treasury roles referenced an active S/4HANA migration, an ECC-to-S/4 move, or an SAP implementation. A migration forces a re-plumb of the treasury data feeds, which is why the migration window is the moment teams re-evaluate whether to keep hand-building integrations or move to a governed hub."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What is a shadow integration in SAP treasury?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A shadow integration is any data feed into SAP that someone built by hand and no one maintains: a custom market-data script, a spreadsheet upload of rates, a manual trade re-key, a payment-file fix. It works until a vendor changes a field or the author leaves. The job-ad evidence shows this is the default state, not the exception, in SAP treasury teams."
+      }
+    }
+  ]
+}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+  :root, [data-theme="light"] {
+    --navy: #00396f; --teal: #0e7c86; --teal-strong: #0b626a; --teal-bg: #e4f3f4;
+    --approved: #1e8e5a;
+    --paper: #f4f7fb; --surface: #ffffff; --surface-2: #eef3fa;
+    --mist: #e2e9f2; --mist-strong: #c8d5e5;
+    --text: #0a1a2f; --muted: #56657c; --heading: #00396f;
+    --bg: var(--paper); --border: var(--mist); --border-strong: var(--mist-strong);
+    --accent: var(--teal); --accent-strong: var(--teal-strong); --accent-bg: var(--teal-bg);
+    --brand-ink: #003a96; --brand-cyan: #00b8ce;
+    --radius: 3px; --radius-pill: 999px;
+    --shadow: 0 1px 2px rgba(10,26,47,.05), 0 10px 30px rgba(10,26,47,.06);
+    --font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+    --font-body: "IBM Plex Sans", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  [data-theme="dark"] {
+    --navy: #0b4a8c; --teal: #3fb9c4; --teal-strong: #6ad3dc; --teal-bg: #0c2e36;
+    --approved: #34b879;
+    --paper: #081320; --surface: #0e2036; --surface-2: #0b1a2e;
+    --mist: #1e3550; --mist-strong: #2e4865;
+    --text: #e8eef6; --muted: #9db0c8; --heading: #dbe8fa;
+    --brand-ink: #e9f1fb; --brand-cyan: #2fc6d6;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 30px rgba(0,0,0,.34);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { font-family: var(--font-body); background: var(--bg); color: var(--text); line-height: 1.65; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 24px; }
+  a { color: var(--teal-strong); }
+  [data-theme="dark"] a { color: var(--teal-strong); }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+  h1 { font-family: var(--font-display); font-size: clamp(28px, 5vw, 44px); line-height: 1.12; letter-spacing: -.02em; color: var(--heading); }
+  h2 { font-family: var(--font-display); font-size: clamp(21px, 3.4vw, 28px); line-height: 1.2; letter-spacing: -.01em; color: var(--heading); margin-bottom: 14px; }
+  h3 { font-size: 17px; color: var(--heading); margin-bottom: 6px; }
+  p { margin-bottom: 14px; }
+  section { scroll-margin-top: 72px; }
+
+  /* Nav */
+  .site-nav { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between;
+    padding: 13px 24px; background: color-mix(in srgb, var(--surface) 88%, transparent);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
+  .nav-left { display: flex; align-items: center; gap: 9px; text-decoration: none; }
+  .brand-cube { width: 22px; height: 22px; flex: none; }
+  .nav-logo { font-family: var(--font-display); font-weight: 700; font-size: 20px; letter-spacing: -.018em; color: var(--brand-ink); line-height: 1; }
+  .nav-product { font-family: var(--font-mono); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted);
+    font-weight: 500; padding-left: 9px; margin-left: 1px; border-left: 1px solid var(--border-strong); }
+  .nav-right { display: flex; align-items: center; gap: 14px; }
+  .nav-status { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+  .nav-theme { border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); border-radius: var(--radius-pill);
+    width: 34px; height: 34px; cursor: pointer; font-size: 14px; line-height: 1; display: inline-flex; align-items: center; justify-content: center;
+    transition: border-color .12s, color .12s; }
+  .nav-theme:hover { border-color: var(--teal); color: var(--teal); }
+
+  /* Hero */
+  .hero { padding: 64px 0 36px; }
+  .eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--teal-strong); margin-bottom: 16px; display: inline-block; }
+  .hero-sub { font-size: 18px; color: var(--muted); max-width: 640px; margin-top: 16px; }
+
+  /* Stat band */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden; margin: 32px 0 8px; }
+  .stat { background: var(--surface); padding: 24px 20px; }
+  .stat .v { font-family: var(--font-display); font-size: 40px; font-weight: 700; color: var(--teal-strong); line-height: 1; letter-spacing: -.02em; }
+  .stat.lead .v { color: var(--navy); }
+  [data-theme="dark"] .stat.lead .v { color: var(--teal-strong); }
+  .stat .k { font-size: 13.5px; color: var(--muted); margin-top: 8px; }
+  .stat .n { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-top: 10px; }
+  .stat-foot { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); margin-bottom: 40px; }
+
+  /* Sections */
+  .section { padding: 30px 0; border-top: 1px solid var(--border); }
+  .section:first-of-type { border-top: none; }
+  ul.clean { list-style: none; margin: 0 0 14px; }
+  ul.clean li { position: relative; padding-left: 20px; margin-bottom: 9px; }
+  ul.clean li::before { content: ""; position: absolute; left: 2px; top: 10px; width: 6px; height: 6px; border-radius: 50%; background: var(--teal); }
+
+  /* Q&A blocks */
+  .qa { border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 22px; margin-bottom: 16px; background: var(--surface); box-shadow: var(--shadow); }
+  .qa q { display: block; font-weight: 600; color: var(--heading); font-size: 16px; margin-bottom: 8px; quotes: none; }
+  .qa q::before, .qa q::after { content: ""; }
+  .qa .ans { color: var(--text); }
+  .qa .tag { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-top: 10px; display: block; }
+
+  /* Callout */
+  .callout { border-left: 3px solid var(--teal); background: var(--teal-bg); padding: 16px 20px; border-radius: 0 var(--radius) var(--radius) 0; margin: 6px 0 16px; }
+  [data-theme="dark"] .callout { background: var(--surface-2); }
+  .master { font-family: var(--font-display); font-size: 19px; color: var(--heading); font-weight: 600; }
+
+  .caveats li { color: var(--muted); }
+
+  /* Method table */
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 16px; font-size: 14.5px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+
+  /* Footer */
+  .footer { border-top: 1px solid var(--border); margin-top: 36px; padding: 30px 0 50px; }
+  .footer .byline { font-size: 14px; color: var(--muted); margin-bottom: 10px; }
+  .trust { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); letter-spacing: .03em; margin-bottom: 14px; }
+  .footer-bottom { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; font-size: 12.5px; color: var(--muted); }
+
+  @media (max-width: 620px) { .stats { grid-template-columns: 1fr; } }
+
+  @media print {
+    .site-nav { display: none !important; }
+    body { background: #fff; color: #000; }
+    .qa, .callout { box-shadow: none; }
+    h2 { page-break-before: always; }
+    h2:first-of-type { page-break-before: avoid; }
+    .hero { padding-top: 12px; }
+  }
+</style>
+</head>
+<body id="top">
+
+<nav class="site-nav">
+  <a class="nav-left" href="#top" aria-label="Brisken Research, back to top">
+    <svg class="brand-cube" viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M16 3 L28 9.5 V22.5 L16 29 L4 22.5 V9.5 Z" fill="none" stroke="var(--brand-cyan)" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M16 3 L16 16 M16 16 L28 9.5 M16 16 L4 9.5" fill="none" stroke="var(--brand-cyan)" stroke-width="2" stroke-linejoin="round"/>
+    </svg>
+    <span class="nav-logo">brisken</span>
+    <span class="nav-product">Research</span>
+  </a>
+  <div class="nav-right">
+    <span class="nav-status">Shadow Integration &middot; Issue 01</span>
+    <button class="nav-theme" onclick="(function(){
+      var d=document.documentElement;
+      var c=d.getAttribute('data-theme')==='dark'?'light':'dark';
+      d.setAttribute('data-theme',c);
+      localStorage.setItem('theme',c);
+    })()" aria-label="Toggle theme">&#9788;/&#9790;</button>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <header class="hero">
+    <span class="eyebrow">The Shadow Integration Report &middot; Issue 01</span>
+    <h1>7 in 10 US SAP-treasury roles still hand-run the data plumbing into SAP.</h1>
+    <p class="hero-sub">We read 41 US public job ads for SAP treasury, TRM, cash-management and FSCM roles, and coded each on whether the work is building or hand-running the integrations and manual data movement that feed SAP. Here is what the market is actually hiring for.</p>
+
+    <div class="stats">
+      <div class="stat lead">
+        <div class="v">71%</div>
+        <div class="k">describe building or hand-running integrations into SAP, or manual data work</div>
+        <div class="n">29 of 41</div>
+      </div>
+      <div class="stat">
+        <div class="v">34%</div>
+        <div class="k">are tied to an active S/4HANA migration or SAP implementation</div>
+        <div class="n">14 of 41</div>
+      </div>
+      <div class="stat">
+        <div class="v">22%</div>
+        <div class="k">name a specific market-data or trading vendor whose feed must reach SAP (a floor)</div>
+        <div class="n">9 of 41</div>
+      </div>
+    </div>
+    <div class="stat-foot">US-only sample, N=41, read 2026-06-17. Source dataset and method below.</div>
+  </header>
+
+  <section class="section">
+    <h2>What we found</h2>
+    <p>The headline is the 71%. Across 41 US SAP-treasury job ads, 29 describe staff who build or maintain the interfaces between external systems and SAP, or who do the data work by hand: loading rates, keying trades, reconciling, fixing payment files. That is the shadow integration in plain sight, written into the job description.</p>
+    <p>The 34% migration share is the timing read, not a second version of the headline. One in three of these roles sits inside an active S/4HANA move, and a migration is the one event that forces a treasury team to re-plumb its data feeds. The hand-built integration that "works for now" becomes a decision the moment the platform underneath it changes.</p>
+    <p>The 22% vendor figure is the soft one, and we publish it only as a floor. Outside the big consultancies, in-house ads rarely name the market-data or trading vendor in the post even when the team clearly uses one; a skills line reading "Bloomberg preferred" is the usual form. So 22% is the share that names the vendor in the ad text, not the share that uses one, which is far higher.</p>
+  </section>
+
+  <section class="section">
+    <h2>How we measured it</h2>
+    <p>Population: public US job ads for SAP corporate-treasury, TRM, cash-management and FSCM roles, across in-house, consulting, government and staffing employers. We excluded non-SAP FX-trader roles, market-data-ops roles with no SAP, and general SAP-finance roles with no treasury scope. Each ad was read in full and coded on three yes/no signals.</p>
+    <table>
+      <tr><th>Signal</th><th>Coded yes when the ad</th></tr>
+      <tr><td>Integration / manual</td><td>describes building or maintaining interfaces between external systems and SAP, or manual data work (loads, entry, reconciliation, spreadsheets, payment-file fixes)</td></tr>
+      <tr><td>Migration</td><td>references an S/4HANA migration, an ECC-to-S/4 move, or an SAP implementation or transformation</td></tr>
+      <tr><td>Vendor named</td><td>names a specific market-data or trading vendor whose feed must reach SAP (Bloomberg, Refinitiv/LSEG, 360T, FXall, FX GO, CME, OANDA, ICE)</td></tr>
+    </table>
+    <p>Evidence standard: every coded "yes" is backed by a quoted phrase from the ad. Nothing was inferred without a quote. Every row carries a real source URL; the full dataset with sources is the Shadow Integration Benchmark.</p>
+  </section>
+
+  <section class="section caveats">
+    <h2>What this number is not</h2>
+    <p>A benchmark is only worth as much as the caveats it concedes up front:</p>
+    <ul class="clean">
+      <li>The sample carries some consulting weight. Big consultancies templatize the full stack, which pulls the averages up; an in-house-only cut would read lower, especially on the vendor figure. We added in-house corporates and staffing roles specifically to reduce that skew, and the headline fell from an earlier 81% to 71% as we did, which is the honest direction.</li>
+      <li>The vendor-named 22% is a floor, not a usage rate. Treat it as "at least this many name the vendor in the ad."</li>
+      <li>About 27% of rows (11 of 41) were coded from a search-result snippet of the live or cached ad, because the job board was JavaScript-only or access-walled. No code was inferred from a snippet without a quoted phrase.</li>
+      <li>Some sectors returned no quotable US ad on fetchable boards (energy and utility in-house treasury sat behind walled internal systems). Absence of a quotable ad is a coverage gap, not a measured zero.</li>
+    </ul>
+  </section>
+
+  <section class="section">
+    <h2>The questions a buyer actually asks</h2>
+    <div class="qa">
+      <q>How common is manual integration work in SAP treasury roles?</q>
+      <div class="ans">In a read of 41 US SAP-treasury job ads, 71% described building or maintaining integrations between external systems and SAP, or doing the manual data work (data loads, manual entry, reconciliation, spreadsheets, payment-file fixes). The plumbing that moves market data, trades, bank files and remittances into SAP is still hand-built or hand-run in roughly 7 of 10 roles.</div>
+      <span class="tag">Extractable answer &middot; 64 words</span>
+    </div>
+    <div class="qa">
+      <q>How many SAP treasury roles are tied to an S/4HANA migration?</q>
+      <div class="ans">34% of the 41 US SAP-treasury roles referenced an active S/4HANA migration, an ECC-to-S/4 move, or an SAP implementation. A migration forces a re-plumb of the treasury data feeds, which is why the migration window is the moment teams re-evaluate whether to keep hand-building integrations or move to a governed hub.</div>
+      <span class="tag">Extractable answer &middot; 52 words</span>
+    </div>
+    <div class="qa">
+      <q>What is a shadow integration in SAP treasury?</q>
+      <div class="ans">A shadow integration is any data feed into SAP that someone built by hand and no one maintains: a custom market-data script, a spreadsheet upload of rates, a manual trade re-key, a payment-file fix. It works until a vendor changes a field or the author leaves. The job-ad evidence shows this is the default state, not the exception.</div>
+      <span class="tag">Extractable answer &middot; 58 words</span>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>What it means for treasury teams</h2>
+    <p>If most SAP-treasury roles are still defined by hand-built integrations, then the integration itself, not the strategy work, is where the team's time goes. That is the case for treating the plumbing as something you buy governed rather than rebuild per feed: a market-data hub that ingests a provider once and distributes it into SAP TRM with an audit trail, or trade capture that lands a venue deal in SAP without the re-key. The migration window is when that choice is cheapest to make, because the feeds are already being rebuilt.</p>
+    <div class="callout">
+      <span class="master">Replace your shadow integrations with governed orchestration.</span>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="byline">Brisken Research. Method and dataset open for inspection; the full 41-row benchmark with source URLs is available on request.</div>
+    <div class="trust">SAP Co-Innovation Partner &middot; listed on the SAP Store &middot; built on SAP BTP &middot; ISO 27001 / SOC 1 Type II</div>
+    <div class="footer-bottom">
+      <div>Brisken LLC &middot; governed, no-code financial-data orchestration for SAP</div>
+      <div>Last updated: 2026-06-17</div>
+    </div>
+  </footer>
+
+</main>
+</body>
+</html>

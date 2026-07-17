@@ -1,4 +1,4 @@
-# Rome 2026 · Partner and SAP Personal Outreach Pack for Dirk (v1, 2026-07-10)
+# Rome 2026 · Partner and SAP Personal Outreach Pack for Dirk (v2, 2026-07-11)
 
 The 17 partner, systems-integrator and SAP contacts you flagged for personal
 outreach on the master sheet ("personal outreach DN", "DN follow up on ICD
@@ -18,7 +18,9 @@ buried; the offer of a call stands." Nothing after that.
 
 **LinkedIn** runs under the separate Planner task (Rome Tier 2 warm-engaged:
 LinkedIn + Sales Nav). URLs are on file for Richter, Szczecina, Reinsfelder,
-Koekkoek, Brueckner and Mehlkopf; the rest need a lookup first.
+Koekkoek and Mehlkopf; the rest need a lookup first. Brueckner has a URL on
+file too but stays off the LinkedIn touch: Dirk is already in direct
+conversation with him.
 
 ## Not in this pack
 
@@ -29,23 +31,26 @@ Koekkoek, Brueckner and Mehlkopf; the rest need a lookup first.
 - **Andriy Sharandakov (LeverX)**: already in conversation. He replied
   warmly on 07-06 and you moved to set a call ("Let's talk next week").
   Nothing to send; the thread is yours until that call lands.
-- **Dan Staniford + Sebastian Ramos (Tradeweb / ICD)**: you emailed them
-  2026-07-01 in the thread "Technical discussion Integration of Metro - ICD
-  investment Dashboard" and are awaiting a reply. No new opener. If the
-  thread is still quiet around July 15, reply inside it with:
-  > Dan, Sebastian, a quick nudge on the technical-discussion note from the
-  > first of July. Whenever there is a view on timing from your side, we
-  > will fit around it. Dirk
+- **The ICD Dashboard cluster** (SAP: Roman Brueckner, Jeffrey Lasecki,
+  Sherief Hamid; ICD / Tradeweb: Dan Staniford, Sebastian Ramos): pulled
+  from this pack on Dirk's direction 2026-07-11. He is sending the ICD
+  Dashboard integration outreach himself, to ICD and SAP together, and it
+  stays OUTSIDE the event comms; it continues his 2026-07-01 thread
+  "Technical discussion Integration of Metro - ICD investment Dashboard".
+  Roman needs no email at all (they are already speaking: the 3 July
+  alignment call plus the SAP Press book kickoff). Tracked as its own
+  Planner task, "Reach out to ICD and the SAP treasury contacts on the ICD
+  Dashboard integration" (assigned to Dirk); the three individual drafts
+  were removed from Dirk's Outlook the same day.
 
-That leaves **11 notes to send** below.
+That leaves **10 notes to send** below.
 
 ## Suggested order
 
 1. Reinsfelder, Koekkoek, Diet (warmest booth conversations)
 2. Richter, Szczecina, Kiosses, Meyerhoff (booth conversations)
 3. Kulkarni, Bali (attended Rome, not at our stand)
-4. Mehlkopf, Brueckner (SAP, booth); Lasecki and Hamid once you fill
-   the ICD state line marked [NEEDS YOU]
+4. Mehlkopf (SAP, booth)
 
 ---
 
@@ -138,20 +143,28 @@ That leaves **11 notes to send** below.
 ## 5. KPMG · Jean-Michele Szczecina
 
 - **To:** jszczecina@kpmg.com
-- **Subject:** Following up from the Rome conference
-- **Basis:** at the booth (Switzerland, Senior Manager).
+- **Subject:** Unser Wiedersehen in Rom
+- **Basis:** at the booth (Switzerland, Senior Manager). Dirk's 2026-07-12
+  note: he knows Jean-Michele personally and from the past, so the message
+  must be personal, and it is one he flagged for German. Rewritten in German,
+  per Du, opened as a reunion rather than a first meeting, and modelled on the
+  approved Reinsfelder note (1). Two things are yours: if it should be per Sie,
+  say so and I flip it; and if there is a concrete shared reference from before
+  you want in the opener, give me the line and it slots in.
 
 **The note**
 > Jean-Michele,
 >
-> Good to meet at our booth in Rome.
+> schön, dich in Rom wiedergesehen zu haben.
 >
-> KPMG's treasury advisory crosses our product work often, and a known face
-> on each side makes those moments easier. This note is mainly to keep a
-> direct line open for whenever a client situation touches market data,
-> connectivity or AI around SAP treasury.
+> Lass uns den Kontakt diesmal nicht bis zur nächsten Konferenz einschlafen
+> lassen. Wenn bei KPMG oder euren Mandanten etwas in Richtung Marktdaten,
+> Bankanbindung oder KI im SAP-Treasury ansteht, ruf einfach durch; umgekehrt
+> halte ich es genauso.
 >
-> Best regards,
+> Nach dem Sommer telefonieren wir mal in Ruhe.
+>
+> Beste Grüße
 > Dirk
 
 ## 6. Nagarro · Christos Kiosses
@@ -260,67 +273,6 @@ That leaves **11 notes to send** below.
 > Best regards,
 > Dirk
 
-## 11. SAP · Roman Brueckner
-
-- **To:** roman.brueckner@sap.com
-- **Subject:** ICD Dashboard: picking the thread back up
-- **Basis:** at the booth; your sheet note reads "DN follow up on ICD
-  Dashboard". The line about the technical discussion refers to your 07-01
-  email to Tradeweb/ICD (on the sheet's outreach log).
-
-**The note**
-> Roman,
->
-> Good to talk in Rome. I do not want the ICD Dashboard topic to sit until
-> autumn, so a quick line: the technical discussion on the integration side
-> is in motion, and I would like to keep you in the loop as it firms up.
->
-> If a short call in the coming weeks is useful, my calendar is flexible.
->
-> Best regards,
-> Dirk
-
-## 12. SAP · Jeffrey Lasecki
-
-- **To:** jeffrey.lasecki@sap.com
-- **Subject:** ICD Dashboard follow-up
-- **Basis:** your sheet note reads "DN follow up on ICD Dashboard". He was
-  not at our stand, so the note claims no conversation. **[NEEDS YOU]**
-  below: one sentence only you can supply on the state or the question you
-  want to put to him.
-
-**The note**
-> Jeffrey,
->
-> I wanted to follow up with you on the ICD Dashboard. [NEEDS YOU: one
-> sentence on where the topic stands or what you want from him.]
->
-> Given your North America treasury seat, I wanted you in this conversation
-> directly. If a call is easier, I will set one up.
->
-> Best regards,
-> Dirk
-
-## 13. SAP · Sherief Hamid
-
-- **To:** sherief.hamid@sap.com
-- **Subject:** Following up: ICD Dashboard
-- **Basis:** your sheet note reads "DN follow up on ICD Dashboard". Not at
-  our stand, no recorded prior contact; same **[NEEDS YOU]** slot as
-  Lasecki.
-
-**The note**
-> Sherief,
->
-> A follow-up on the ICD Dashboard. [NEEDS YOU: one sentence on where the
-> topic stands or what you want from him.]
->
-> Happy to do this over a short call if that is easier; otherwise this
-> thread works.
->
-> Best regards,
-> Dirk
-
 ---
 
-Last updated: 2026-07-10.
+Last updated: 2026-07-11.

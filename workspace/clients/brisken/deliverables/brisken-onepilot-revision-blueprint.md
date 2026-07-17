@@ -130,6 +130,14 @@ The fix is altitude, not content. Nothing built gets discarded; the
 SAP-treasury spine drops one level so the platform story can sit above
 it (AEO/outbound reconcile §2).
 
+OnePilot holds ONE definition at every altitude (the framework / Universal
+UI, vision §7); what changes by altitude is which layer sits in the
+foreground, not what the word means. The three bands below are the same
+OnePilot and the same TreasuryCentral at three zoom levels, not three
+separate products: the platform altitude foregrounds the framework, the
+edition altitude foregrounds TreasuryCentral, the product altitude
+foregrounds the apps.
+
 1. **OnePilot, the platform story (new headline).** The Universal UI:
    one composable AI-native cockpit where a user assembles the spaces,
    apps and data their job needs; agents act across all of it within the
@@ -180,6 +188,16 @@ the report link the cluster pages already carry resolves to a real
 on-site story. Without (a) the cluster pages stay orphaned at any
 altitude.
 
+> Reversal (fit memo §4), governs the Title, Meta and Hero blocks below: on
+> the homepage and AEO root, do NOT lead with the Universal-UI options listed
+> here. The reconciled call keeps the homepage on the SAP-data wedge (the named
+> signal into SAP, governed, no code; TreasuryCentral as OnePilot scoped to the
+> treasurer) and relocates the Universal-UI headline to its own platform/vision
+> page one click away. The Universal-UI title/meta/hero options below are
+> RETAINED only as that platform page's headline, REJECTED for the homepage.
+> The rest of §8.C (hierarchy, platform map, AEO re-nesting, retiring "the AI
+> layer") stands and is wedge-independent.
+
 **Title (line 7).** Current: "Brisken TreasuryCentral, a financial-data
 platform for SAP, AI native". Target options:
 
@@ -203,7 +221,10 @@ twitter:description (17); these currently repeat the same inversion.
 
 **Hero (lines 814-816).** Current badge "Modern financial-data platform
 for SAP. AI native.", H1 "Financial Data. Solved. End to End.", intro
-closing "TreasuryCentral takes them off your team." Target: lead with
+closing "TreasuryCentral takes them off your team." Per the reversal
+callout above, the "lead with the platform" target is the platform/vision
+page's hero, NOT the homepage hero; the homepage hero stays on the SAP-data
+wedge. Target (platform page): lead with
 the platform. H1 toward "OnePilot, the Universal UI" or the cover-line
 "One surface for the whole working day, assembled by you, run with AI"
 (vision §1); intro resolves to OnePilot and the relief theme, with
