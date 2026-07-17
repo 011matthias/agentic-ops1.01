@@ -120,3 +120,28 @@ def test_advise_pins_under_allow_seam():
     proc = _run("tools/scorers/PINS.json", tool="Write",
                 env={"SCORER_LOCK_ALLOW": "1"})
     assert _classify(proc) == "advise"
+
+
+# --- path traversal must not defeat the lock -------------------------------
+
+def test_deny_traversal_to_existing_scorer():
+    # ../ that resolves back onto the real locked scorer must DENY, not pass
+    proc = run_hook(
+        "scorer-lock-gate.py",
+        {"tool_name": "Edit",
+         "tool_input": {"file_path":
+                        f"{REPO}/platform/../tools/scorers/page-weight.py"}},
+        cwd=REPO,
+    )
+    assert _classify(proc) == "deny"
+
+
+def test_deny_traversal_to_pins():
+    proc = run_hook(
+        "scorer-lock-gate.py",
+        {"tool_name": "Write",
+         "tool_input": {"file_path":
+                        f"{REPO}/a/b/../../tools/scorers/PINS.json"}},
+        cwd=REPO,
+    )
+    assert _classify(proc) == "deny"

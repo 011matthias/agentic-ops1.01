@@ -59,8 +59,8 @@ def glob_to_regex(pattern: str) -> re.Pattern:
 
 def match_one(pattern: str, rel_path: str) -> bool:
     """Does one git-style glob match a repo-relative posix path?"""
-    rel = rel_path.replace("\\", "/").lstrip("/")
-    return bool(glob_to_regex(pattern).match(rel))
+    rel = str(rel_path).replace("\\", "/").lstrip("/")
+    return bool(glob_to_regex(str(pattern)).match(rel))
 
 
 def matches_any(patterns: list[str], rel_path: str) -> bool:

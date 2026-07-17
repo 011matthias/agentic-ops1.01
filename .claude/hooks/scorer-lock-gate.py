@@ -67,13 +67,19 @@ def advise(text: str) -> None:
 def rel_to_repo(abspath: str) -> str | None:
     """Repo-relative posix path, or None when the target is outside the repo."""
     p = abspath.replace("\\", "/")
+    # Collapse ../ and ./ BEFORE the repo-prefix check: a traversal path
+    # (<repo>/x/../../tools/scorers/page-weight.py) would otherwise miss
+    # SCORER_RE while the OS resolves it to the real locked scorer.
+    p = os.path.normpath(p).replace("\\", "/")
     if not p.lower().startswith(REPO_POSIX_LOWER + "/"):
         return None
     rel = p[len(REPO_POSIX) + 1:]
-    # Collapse redundant separators / "." segments so `tools//scorers/x.py`
-    # and `tools/./scorers/x.py` cannot dodge the match (mirrors the
-    # file-placement-gate double-slash hardening).
-    return "/".join(seg for seg in rel.split("/") if seg not in ("", "."))
+    # Redundant separators / "." are gone via normpath; any residual ".."
+    # after normalization traverses out of a resolvable path - untrusted.
+    segs = [seg for seg in rel.split("/") if seg not in ("", ".")]
+    if ".." in segs:
+        return None
+    return "/".join(segs)
 
 
 def main() -> int:

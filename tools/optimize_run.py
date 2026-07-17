@@ -122,7 +122,7 @@ def state_path(repo: str) -> str:
     return os.path.join(repo, ".claude", "optimize", "run.json")
 
 
-def load_state(repo: str) -> dict | None:
+def load_state(repo: str, corrupt_ok: bool = False) -> dict | None | str:
     p = state_path(repo)
     if not os.path.isfile(p):
         return None
@@ -130,8 +130,11 @@ def load_state(repo: str) -> dict | None:
         with open(p, encoding="utf-8") as f:
             return json.load(f)
     except Exception:
+        if corrupt_ok:
+            return "corrupt"  # let cmd_stop unlock without hand-editing
         die(f"run state {p} is unparseable; repair or delete it (that file "
-            "is engine-owned - its corruption is a harness event)")
+            "is engine-owned - its corruption is a harness event). To clear "
+            "the lock, run `uv run tools/optimize_run.py stop`.")
 
 
 def save_state(repo: str, state: dict) -> None:
@@ -169,6 +172,15 @@ def append_tsv(repo: str, state: dict, row: list[str]) -> None:
     with open(path, "a", encoding="utf-8", newline="\n") as f:
         f.write("\t".join(clean) + "\n")
     state["tsv_lines"], state["tsv_sha256"] = tsv_anchors(path)
+
+
+def last_tsv_row(repo: str, state: dict) -> list[str] | None:
+    """The last DATA row of results.tsv (the durable journal), or None if
+    only the header exists. Used by resume to reconcile the run-state cache
+    to the committed journal instead of destroying committed history."""
+    with open(tsv_path(repo, state["tag"]), encoding="utf-8") as f:
+        rows = [ln for ln in f.read().splitlines() if ln.strip()]
+    return rows[-1].split("\t") if len(rows) > 1 else None
 
 
 def parse_manifest(repo: str, tag: str) -> dict:
@@ -242,6 +254,26 @@ def validate_manifest(repo: str, tag: str, meta: dict) -> dict:
         if not os.path.isfile(os.path.join(repo, *gf.split("/"))):
             die(f"guard_files entry not found: {gf}")
 
+    # Auto-derive the guard SCRIPT files from the guard commands so locking
+    # never depends on the author remembering to list them in guard_files.
+    # A guard whose implementation sits inside the agent-writable asset scope
+    # could be edited to always pass, so refuse that manifest outright.
+    _GUARD_SCRIPT_EXT = (".py", ".js", ".cjs", ".mjs", ".ts", ".sh")
+    for gcmd in guards:
+        for tok in shlex.split(gcmd, posix=True):
+            t = tok.replace("\\", "/")
+            if not t.lower().endswith(_GUARD_SCRIPT_EXT):
+                continue
+            if not os.path.isfile(os.path.join(repo, *t.split("/"))):
+                continue
+            if gl.matches_any(assets, t):
+                die(f"guard script {t!r} sits inside the asset scope - it "
+                    "would be agent-writable and could be neutered mid-run; "
+                    "move it out of the asset globs or optimize a different "
+                    "asset")
+            if t not in guard_files:
+                guard_files.append(t)
+
     budgets = dict(meta.get("budgets") or {})
     budgets.setdefault("rounds", 10)
     budgets.setdefault("wall_clock_minutes", 240)
@@ -263,6 +295,7 @@ def validate_manifest(repo: str, tag: str, meta: dict) -> dict:
         "direction": direction,
         "assets": assets,
         "guards": guards,
+        "guard_files": guard_files,
         "locked": [f"docs/optimize/{tag}/RUN.md",
                    f"docs/optimize/{tag}/results.tsv", *guard_files],
         "budgets": budgets,
@@ -376,6 +409,11 @@ def verify_harness_hashes(repo: str, state: dict) -> None:
     if live_manifest != state["manifest_sha"]:
         die("manifest (RUN.md) hash drift mid-run - the instructions file is "
             "locked for the duration of the run.")
+    for gf, pinned in state.get("guard_shas", {}).items():
+        if blob_sha_of(repo, gf) != pinned:
+            die(f"guard script {gf} changed mid-run - guards are locked for "
+                "the run's duration (a mutated guard could rubber-stamp a "
+                "broken change).")
 
 
 def check_budgets(state: dict) -> str | None:
@@ -451,7 +489,7 @@ def cmd_start(tag: str) -> int:
     state.update({
         "started_at": _now().isoformat(timespec="seconds"),
         "round": 0, "best_score": None, "consecutive_non_keeps": 0,
-        "rework_count": 0,
+        "rework_count": 0, "pending_rework": None,
     })
     score, status = run_scorer(repo, state, "r0.log")
     if status != "ok":
@@ -474,6 +512,8 @@ def cmd_start(tag: str) -> int:
     state.update({
         "scorer_sha": blob_sha_of(repo, state["scorer"]),
         "manifest_sha": blob_sha_of(repo, state["manifest"]),
+        "guard_shas": {gf: blob_sha_of(repo, gf)
+                       for gf in state.get("guard_files", [])},
         "tsv_lines": 1, "tsv_sha256": tsv_anchors(tsvp)[1],
     })
     state["best_score"] = score
@@ -513,6 +553,11 @@ def cmd_round(desc: str, simplification: bool, rework: bool,
         die("--desc is required: one-sentence hypothesis for the journal")
 
     if not rework:
+        if state.get("pending_rework") and head_sha(repo) == state["pending_rework"]:
+            die(f"r{state['round'] + 1} is a parked guard_fail awaiting a fix - "
+                "edit the assets and run `round --rework --desc \"...\"`, not a "
+                "plain round (a plain round here would journal a second "
+                "experiment on top of the parked one).")
         if head_sha(repo) != state["base_sha"]:
             die("HEAD != last kept state - the tree drifted (crash?). "
                 "Run `resume`.")
@@ -520,6 +565,7 @@ def cmd_round(desc: str, simplification: bool, rework: bool,
         if stop_reason:
             die(f"{stop_reason} - `stop` the run "
                 f"(or raise the budget in a NEW run)")
+        state["pending_rework"] = None
     verify_harness_hashes(repo, state)
     verify_tsv(repo, state)
 
@@ -543,6 +589,7 @@ def cmd_round(desc: str, simplification: bool, rework: bool,
             state["round"] = n
             state["consecutive_non_keeps"] += 1
             state["rework_count"] = 0
+            state["pending_rework"] = None
             save_state(repo, state)
             print(f"r{n}: DISCARDED (rework attempts exhausted)")
             return 0
@@ -580,16 +627,21 @@ def cmd_round(desc: str, simplification: bool, rework: bool,
         state["base_sha"] = exp_sha
         state["consecutive_non_keeps"] = 0
         state["rework_count"] = 0
+        state["pending_rework"] = None
         delta = f"{score - prior_best:+g}"
     else:
         if verdict == "guard_fail" and \
                 state["rework_count"] < int(state["budgets"]["max_rework_attempts"]):
-            # leave the experiment commit in place for the in-round rework
+            # Park the experiment commit for an in-round rework. The marker
+            # makes the parked state distinguishable from a crash so `resume`
+            # cannot destroy it (a clean tree at exp_sha is otherwise identical).
+            state["pending_rework"] = exp_sha
             save_state(repo, state)
             return 0
         git(repo, "reset", "--hard", state["base_sha"])
         state["consecutive_non_keeps"] += 1
         state["rework_count"] = 0
+        state["pending_rework"] = None
         delta = "NA"
 
     score_txt = "NA" if score is None else f"{score}"
@@ -620,23 +672,58 @@ def cmd_resume() -> int:
     if current_branch(repo) != state["branch"]:
         git(repo, "checkout", state["branch"])
 
+    # A deliberately-parked guard_fail experiment (awaiting `round --rework`)
+    # leaves HEAD at the experiment commit with a clean tree - byte-identical
+    # to a crash, EXCEPT for this marker. Never destroy a parked experiment.
+    pend = state.get("pending_rework")
+    if pend and head_sha(repo) == pend:
+        cap = state["budgets"]["max_rework_attempts"]
+        print(f"parked guard_fail at r{state['round'] + 1} awaiting "
+              f"`round --rework --desc \"...\"` "
+              f"({state['rework_count']}/{cap} used); nothing to recover.")
+        return 0
+
     if git(repo, "status", "--porcelain").stdout.strip():
         print("dirty tree from interrupted round - restoring last kept state")
         git(repo, "reset", "--hard", state["base_sha"])
     elif head_sha(repo) != state["base_sha"]:
         n = state["round"] + 1
-        print(f"interrupted between experiment commit and journal - "
-              f"logging r{n} as crash and restoring")
-        interrupted = head_sha(repo)[:7]
-        git(repo, "reset", "--hard", state["base_sha"])
-        append_tsv(repo, state, [str(n), interrupted, "NA", "NA", "crash",
-                                 "interrupted (resume recovery)"])
-        git(repo, "add", "--", f"docs/optimize/{state['tag']}/results.tsv")
-        git(repo, "commit", "-m",
-            f"experiment({state['tag']}): r{n} journal (crash/interrupted)")
-        state["base_sha"] = head_sha(repo)
-        state["round"] = n
-        state["consecutive_non_keeps"] += 1
+        row = last_tsv_row(repo, state)
+        if row is not None and row[0] == str(n):
+            # The round-n journal commit COMPLETED but save_state did not run
+            # (crash in the commit->save_state window). The committed journal
+            # is the durable record; reconcile the cache to it instead of
+            # `git reset` destroying a kept, guard-passed win.
+            verdict = row[4]
+            print(f"crash after r{n} journal committed ({verdict}) - adopting "
+                  "the durable journal, no work lost")
+            state["base_sha"] = head_sha(repo)
+            state["round"] = n
+            state["tsv_lines"], state["tsv_sha256"] = tsv_anchors(
+                tsv_path(repo, state["tag"]))
+            if verdict == "keep":
+                state["best_score"] = float(row[2])
+                state["consecutive_non_keeps"] = 0
+            else:
+                state["consecutive_non_keeps"] += 1
+            state["rework_count"] = 0
+            state["pending_rework"] = None
+        else:
+            # A dangling experiment commit with NO journal row (crash in the
+            # experiment-commit -> journal-commit window): reset and log crash.
+            print(f"interrupted between experiment commit and journal - "
+                  f"logging r{n} as crash and restoring")
+            interrupted = head_sha(repo)[:7]
+            git(repo, "reset", "--hard", state["base_sha"])
+            append_tsv(repo, state, [str(n), interrupted, "NA", "NA", "crash",
+                                     "interrupted (resume recovery)"])
+            git(repo, "add", "--", f"docs/optimize/{state['tag']}/results.tsv")
+            git(repo, "commit", "-m",
+                f"experiment({state['tag']}): r{n} journal (crash/interrupted)")
+            state["base_sha"] = head_sha(repo)
+            state["round"] = n
+            state["consecutive_non_keeps"] += 1
+            state["pending_rework"] = None
 
     verify_harness_hashes(repo, state)
     verify_tsv(repo, state)
@@ -657,9 +744,15 @@ def cmd_resume() -> int:
 
 def cmd_stop(reason: str) -> int:
     repo = repo_root()
-    state = load_state(repo)
+    state = load_state(repo, corrupt_ok=True)
     if state is None:
         die("no active run to stop")
+    if state == "corrupt":
+        os.remove(state_path(repo))
+        print("run state was unparseable; state file removed, locks OFF (no "
+              "final journal row). If a stray optimize/<tag> branch remains, "
+              "delete it manually.")
+        return 0
     if current_branch(repo) != state["branch"]:
         if git(repo, "checkout", state["branch"], check=False).returncode != 0:
             # Run branch is gone: nothing to journal onto. Unlock anyway -

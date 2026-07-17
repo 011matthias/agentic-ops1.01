@@ -245,12 +245,106 @@ def test_active_scope_allow_downgrades_to_advise(state_file):
     assert _classify(proc) == "advise"
 
 
+def test_active_deny_traversal_to_locked_machinery(state_file):
+    # asset scope is workspace/demo/**; escape back into locked machinery
+    proc = run_hook(
+        GATE,
+        {"tool_name": "Write",
+         "tool_input": {"file_path":
+                        f"{REPO}/workspace/demo/../../.claude/hooks/x.py"}},
+        cwd=REPO, env=_env(state_file),
+    )
+    assert _classify(proc) == "deny"
+
+
+def test_active_deny_traversal_to_run_state(state_file):
+    proc = run_hook(
+        GATE,
+        {"tool_name": "Write",
+         "tool_input": {"file_path":
+                        f"{REPO}/workspace/demo/../../.claude/optimize/run.json"}},
+        cwd=REPO, env=_env(state_file),
+    )
+    assert _classify(proc) == "deny"
+
+
+def test_active_deny_traversal_out_of_scope(state_file):
+    proc = run_hook(
+        GATE,
+        {"tool_name": "Edit",
+         "tool_input": {"file_path":
+                        f"{REPO}/workspace/demo/../../platform/src/app/page.tsx"}},
+        cwd=REPO, env=_env(state_file),
+    )
+    assert _classify(proc) == "deny"
+
+
+def test_always_deny_traversal_shell_redirect_to_scorer(no_state):
+    proc = _shell("echo x > sub/../tools/scorers/page-weight.py", no_state)
+    assert _classify(proc) == "deny"
+
+
+def test_traversal_escaping_repo_is_out_of_scope(state_file):
+    # ../ that leaves the repo entirely -> None -> out-of-repo -> PASS
+    proc = run_hook(
+        GATE,
+        {"tool_name": "Write",
+         "tool_input": {"file_path": f"{REPO}/../sibling/x.txt"}},
+        cwd=REPO, env=_env(state_file),
+    )
+    assert _classify(proc) == "pass"
+
+
 def test_active_star_does_not_cross_directories(tmp_path):
     state = dict(ACTIVE_STATE, assets=["workspace/demo/*.html"])
     p = tmp_path / "run.json"
     p.write_text(json.dumps(state), encoding="utf-8")
     assert _classify(_file("workspace/demo/sub/x.html", str(p))) == "deny"
     assert _classify(_file("workspace/demo/x.html", str(p))) == "pass"
+
+
+# --- malformed-but-parseable state must ASK, never fail-open ALLOW ----------
+
+def test_malformed_assets_state_asks(tmp_path):
+    p = tmp_path / "run.json"
+    p.write_text('{"tag":"t1","assets":[123],"locked":[]}', encoding="utf-8")
+    assert _classify(_file("platform/src/x.ts", str(p))) == "ask"
+
+
+def test_null_assets_state_asks(tmp_path):
+    p = tmp_path / "run.json"
+    p.write_text('{"tag":"t1","assets":null,"locked":[]}', encoding="utf-8")
+    assert _classify(_file("platform/src/x.ts", str(p))) == "ask"
+
+
+def test_nonlist_locked_state_asks(tmp_path):
+    p = tmp_path / "run.json"
+    p.write_text('{"tag":"t1","assets":["a/**"],"locked":"oops"}',
+                 encoding="utf-8")
+    assert _classify(_file("platform/src/x.ts", str(p))) == "ask"
+
+
+# --- shell arm mirrors the write arm's out-of-scope deny --------------------
+
+def test_active_shell_denies_out_of_scope_redirect(state_file):
+    proc = _shell("echo x > platform/src/app/page.tsx", state_file)
+    assert _classify(proc) == "deny"
+
+
+def test_active_shell_allows_in_scope_redirect(state_file):
+    proc = _shell("echo x > workspace/demo/out.txt", state_file)
+    assert _classify(proc) == "pass"
+
+
+def test_active_shell_out_of_scope_scope_allow_downgrades(state_file):
+    proc = _shell("echo x > platform/src/app/page.tsx", state_file,
+                  OPTIMIZE_SCOPE_ALLOW="1")
+    assert _classify(proc) == "advise"
+
+
+def test_active_shell_cp_out_of_scope_denies(state_file):
+    proc = _shell("cp /tmp/evil.txt platform/src/config.ts", state_file)
+    assert _classify(proc) == "deny"
 
 
 # --- active run, shell arm ---------------------------------------------------

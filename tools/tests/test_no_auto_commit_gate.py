@@ -145,3 +145,23 @@ def test_ps_git_exe_push_main_asks(tmp_path):
 def test_ps_npm_cmd_build_not_ship_class(tmp_path):
     # Negative FP pin: a normalized npm build is still not ship-class.
     assert _allowed(_run('& "$nodeDir\\npm.cmd" run build 2>&1', NO_AUTH, tmp_path, branch="feature"))
+
+
+# --- optimize engine exemption (a ship verb inside --desc must not trip) ----
+
+def test_optimize_engine_round_desc_mentioning_ship_verb_is_allowed(tmp_path):
+    cmd = ('uv run tools/optimize_run.py round '
+           '--desc "revert the git push --force change"')
+    assert _allowed(_run(cmd, NO_AUTH, tmp_path, branch="optimize/t1"))
+
+
+def test_optimize_engine_start_is_allowed(tmp_path):
+    assert _allowed(_run("uv run tools/optimize_run.py start t1", NO_AUTH,
+                         tmp_path, branch="optimize/t1"))
+
+
+def test_real_git_push_still_gated_alongside_engine_exemption(tmp_path):
+    # the exemption is program-scoped; a bare ship command is unaffected
+    assert permission_decision(
+        _run("git push origin main", NO_AUTH, tmp_path, branch="feature").stdout
+    ) == "ask"
