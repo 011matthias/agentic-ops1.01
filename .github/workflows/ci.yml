@@ -45,7 +45,7 @@ jobs:
       - name: tools/INDEX.md membership
         run: uv run tools/check-index.py
       - name: Run enforcement-layer test suite
-        run: uv run --no-project --with pytest pytest tools/tests
+        run: uv run --no-project --with pytest --with python-pptx pytest tools/tests
 
   secrets:
     name: Secret scan (gitleaks)

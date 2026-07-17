@@ -1,0 +1,93 @@
+# Market Data Hub for Commodities — replacement proposal (pilot deck).
+# Sources: [CUR] = current Dirk-kept deck (mirror brisken-mdh-commodities.pptx),
+# [REF] = reference donor text kept, [T1/T2] = 2026-07-17 transcripts.
+# BTP default: omitted; platform line uses Dirk's own "on SAP's own cloud"
+# phrasing ([CUR] s7) pending his opt-in (plan Open Item 1).
+deck: mdh-commodities
+output: "Brisken - Market Data Hub Commodities 2026-08 PROPOSAL"
+slides:
+  - pattern: cover
+    patch:
+      cover-title: {runs: {"Solutions Overview": "Market Data Hub for Commodities"}}
+
+  - pattern: short-version
+    patch:
+      sv-rows:
+        paras:
+          - "What it is: one governed price curve for every commodity you trade, assembled from every component that moves it."
+          - "What it replaces: curves built by hand, differing desk to desk."
+          - "What you get: risk and trading priced off the same governed curve, with a full audit trail."
+          - "Who it is for: treasury and trading teams on SAP with commodity exposure."
+      sv-handoff: {set: "The next page is one price, followed from the ground to the desk."}
+
+  - pattern: problem
+    patch:
+      pb-headline: {set: "Every commodity price has a dozen moving parts. Someone builds the curve by hand."}
+      pb-body:
+        paras:
+          - "Components and sources: freight, storage, quality, local taxes, provider feeds."
+          - "The manual middle: collecting components, adjusting by port and tenor, reconciling by hand."
+          - "Risk and trading: prices that differ desk to desk."
+
+  - pattern: value-3cards
+    patch:
+      vp-title: {runs: {"Market Data Hub": "Market Data Hub for Commodities"}}
+      vp-kicker: {set: "ONE GOVERNED CURVE"}
+      vp-card-main:
+        paras:
+          - "Composite by design"
+          - "Transportation, storage, quality and local taxes, combined into one price per tenor."
+      vp-card-top:
+        paras:
+          - "Location matters"
+          - "The same commodity differs by delivery point, as storage, port fees and the local market differ."
+      vp-card-bottom:
+        paras:
+          - "Governed end to end"
+          - "Every price is validated, checked for anomalies and logged: versioned, approved, and audited."
+
+  - pattern: func-diagram-mdh
+    patch:
+      fd-header:
+        runs:
+          "BRISKEN OnePilot – Market Data Hub": "BRISKEN OnePilot – Market Data Hub for Commodities"
+          "SAP Business Technology Platform": "on SAP's own cloud"
+      fd-src-2: {set: "Forward views"}
+      fd-src-4: {set: "Components from the ground"}
+      fd-dest-list:
+        paras:
+          - "Risk management"
+          - "Trading desk"
+          - "SAP Treasury"
+          - "Any downstream system"
+
+  - pattern: usecase
+    patch:
+      uc-title: {set: "Commodity Price Curves"}
+      uc-logo-name: {runs: {"Bank Statement Generator": "Market Data Hub"}}
+      uc-logo-image: {from_shape: [value-3cards, vp-logo]}
+      uc-col1-body:
+        outline:
+          - [0, "Description"]
+          - [1, "A curve on a timeline: today's spot price, then 30, 60 and 90 days, out to a year."]
+          - [1, "Composite by design: transportation, storage, quality and local taxes, combined into one price per tenor."]
+          - [0, ""]
+          - [0, "Challenges & Business Drivers"]
+          - [1, "The same commodity differs by delivery point, as storage, port fees and the local market differ."]
+          - [1, "The curve is built by hand; prices differ desk to desk."]
+      uc-col2-body:
+        outline:
+          - [0, "Composite by design"]
+          - [1, "Combine transportation, storage, quality and local taxes into one price per tenor."]
+          - [0, "Location and tenor aware"]
+          - [1, "Spot and 30, 60, 90-day tenors, priced per delivery point."]
+          - [0, "Governed end to end"]
+          - [1, "Every price validated on the way in; anomalies flagged for approval."]
+          - [1, "Every change versioned, approved, and audited."]
+
+  - pattern: platform-context
+    patch:
+      pc-app-mdh: {highlight: true}
+      pc-caption: {set: "Market Data Hub for Commodities runs as an application inside TreasuryCentral, on the OnePilot platform. OnePilot runs in production at chemicals, agricultural and financial-services customers."}
+
+  - pattern: contact

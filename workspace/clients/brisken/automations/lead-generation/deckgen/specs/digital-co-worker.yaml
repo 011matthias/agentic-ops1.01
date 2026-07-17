@@ -1,0 +1,125 @@
+# Digital Co-Worker — where the use cases live (deck-foundation-v2).
+# Sources: [CUR] = current Dirk-kept DCW deck (cur_dcw), [REF] = reference donor
+# text kept (donors 18/19/21/22/26), [T] = 2026-07-17 owner transcripts (use
+# cases hang off the Digital Worker; func diagram = generalized PROCESS edition).
+# BTP: omitted per standing directive; platform line uses Dirk's own
+# "on SAP's own cloud" phrasing ([CUR] s10).
+# Chemicals-customer example anonymized per 2026-07-10 directive.
+deck: digital-co-worker
+output: "Brisken - Digital Co-Worker 2026-08 PROPOSAL"
+slides:
+  - pattern: cover
+    patch:
+      cover-title: {runs: {"Solutions Overview": "Digital Co-Worker"}}
+
+  - pattern: short-version
+    patch:
+      sv-rows:
+        paras:
+          - "What it is: an AI co-worker for every person on your team; it does the busywork across your systems, in chat or in the background."
+          - "What it replaces: the manual middle of every request: read, check, open the system, key in, write back."
+          - "What you get: less busywork, more judgment; every step checked and logged."
+          - "Who it is for: every person on your team, inside your SAP landscape."
+      sv-handoff: {set: "Then four real requests, followed end to end."}
+
+  - pattern: problem
+    patch:
+      pb-headline: {set: "Real work is a dozen small steps across a dozen systems."}
+      pb-body:
+        paras:
+          - "A request arrives: an email, a message, a form."
+          - "The manual middle: read it, check the balance, open the system, key in the record, write back."
+          - "Your systems: SAP, email, files."
+
+  # Dirk's own DCW features slide, kept verbatim (donor 18).
+  # ChatGPT scrub for proposal consistency with the Overview revision (Dirk's
+  # own line generalized; flagged in the report — his call to restore)
+  - pattern: features-dcw
+    patch:
+      feat-body: {sub: {", such as ChatGPT)": ")"}}
+
+  # Generalized PROCESS edition [T]: sources = inputs/triggers, destinations =
+  # outcomes. Governance list stays donor.
+  - pattern: func-diagram-dcw
+    patch:
+      fd-header:
+        runs:
+          "SAP Business Technology Platform": "on SAP's own cloud"
+      fd-src-1: {set: "Emails / Requests"}
+      fd-src-2: {set: "Remittance advices / Invoices"}
+      fd-src-3: {set: "Funding requests"}
+      fd-src-4: {set: "Bank statements"}
+      fd-src-5: {set: "Any document, any trigger"}
+      fd-dest-list:
+        paras:
+          - "SAP postings"
+          - "Memo records"
+          - "Confirmations"
+          - "Replies"
+          - "Any downstream system"
+
+  # Use case 1 — chemicals customer, anonymized [T] + [CUR] s5.
+  - pattern: usecase
+    patch:
+      uc-title: {set: "Intercompany Funding Request"}
+      uc-logo-name: {runs: {"Bank Statement Generator": "Digital Co-Worker"}}
+      uc-col1-body:
+        outline:
+          - [0, "Description"]
+          - [1, "A funding request arrives by email at a chemicals customer."]
+          - [1, "The Digital Worker reads it, summarizes it, and suggests the posting."]
+          - [1, "A memo record is created, the cash position updates, and a confirmation goes back."]
+          - [0, ""]
+          - [0, "Challenges & Business Drivers"]
+          - [1, "The request is unstructured email; a person would read it and key it in."]
+          - [1, "The steps span several systems: email, SAP, the cash position."]
+      uc-col2-body:
+        outline:
+          - [0, "Reads, checks, executes, confirms"]
+          - [1, "Reads the request, pulls what it needs from your systems, and carries out each step."]
+          - [1, "Confirms the result in chat and suggests the next action."]
+          - [0, "Chat-like interaction"]
+          - [1, "Dynamic, chat-like interaction with your digital co-worker."]
+          - [0, "Governed end to end"]
+          - [1, "Every action checked and logged: audit trail, segregation of duty, anomaly alerts."]
+          - [1, "Approvals where you want them; a person in the loop for the moves that matter."]
+
+  # Use case 2 — Dirk's own Remittance Advice Gate one-pager, verbatim (donor 26).
+  - pattern: usecase-remit
+
+  # Use case 3 — internal demo, labeled as such [T].
+  - pattern: usecase
+    patch:
+      # short title (long titles collide with the logo group top-right);
+      # the internal-demo labeling lives in Description + Challenges
+      uc-title: {set: "Cash-Management Assistant"}
+      uc-logo-name: {runs: {"Bank Statement Generator": "Digital Co-Worker"}}
+      uc-col1-body:
+        outline:
+          - [0, "Description"]
+          - [1, "Our internal demo: cash positioning with the Digital Worker, in chat."]
+          - [1, "It pulls the cash position, suggests payment requests, and answers follow-ups in plain language."]
+          - [0, ""]
+          - [0, "Challenges & Business Drivers"]
+          - [1, "Cash decisions need timely information, pulled from several systems."]
+          - [1, "Shown as a working demo, not a customer deployment."]
+      uc-col2-body:
+        outline:
+          - [0, "Conversational"]
+          - [1, "You ask in plain language; it answers in chat and shows the result."]
+          - [0, "Cash positioning"]
+          - [1, "Pulls the cash position on request."]
+          - [0, "Payment request suggestions"]
+          - [1, "Suggests payment requests from the position; the moves that matter wait for a person to sign off."]
+          - [0, "Governed end to end"]
+          - [1, "Every step checked and logged, with a full audit trail."]
+
+  # Use case 4 — Dirk's own Cash Flow & Exposure Hub one-pager, verbatim (donor 22).
+  - pattern: usecase-cashflow
+
+  - pattern: platform-context
+    patch:
+      pc-app-dw: {highlight: true}
+      pc-caption: {set: "The Digital Worker is the AI application inside TreasuryCentral, on the OnePilot platform. Its use cases run in production at chemicals and agricultural customers."}
+
+  - pattern: contact

@@ -1,0 +1,77 @@
+# Smart Trading replacement proposal deck (deck-foundation-v2).
+# Sources: [CUR] = current Dirk-kept Smart Trading deck (cur_st, 11 slides),
+# [REF] = reference donor text kept (library slides 15/16/21).
+# Product rename confirmed: donor "Trade Automation" becomes "Smart Trading".
+# Platform line reuses Dirk's own "on SAP's own cloud" phrasing ([CUR] s4/s9).
+# Stopwatch numbers only as sourced in [CUR] s6 (ACT / LSEG named in-sentence).
+deck: smart-trading
+output: "Brisken - Smart Trading 2026-08 PROPOSAL"
+slides:
+  - pattern: cover
+    patch:
+      cover-title: {runs: {"Solutions Overview": "Smart Trading"}}
+
+  - pattern: short-version
+    patch:
+      sv-rows:
+        paras:
+          - "What it is: every trade, from the decision to the booked deal in SAP. Automated, on your own system, nothing to rebuild."
+          - "What it replaces: the manual middle; re-keying tickets, chasing approvals, building deal entries by hand."
+          - "What you get: the trade flows from the venue into SAP Treasury on its own, checked and logged."
+          - "Who it is for: teams that trade and book in SAP."
+      sv-handoff: {set: "Then the same trade on our clock."}
+
+  - pattern: problem
+    patch:
+      pb-headline: {set: "You trade. You book in SAP. Today a person joins the two by hand."}
+      pb-body:
+        paras:
+          - "Your trading venues: 360T, FXall, Bloomberg, Citi Pulse, BidFX."
+          - "The manual middle: re-keying tickets, chasing approvals, building deal entries by hand."
+          - "Booked in SAP: treasury, accounting, analytics."
+          - "Manual FX execution: 10 to 15 min per trade (The Association of Corporate Treasurers). Spot FX automation now ~90% (LSEG)."
+
+  - pattern: features-st
+    patch:
+      feat-product-name: {runs: {"Trade Automation": "Smart Trading"}}
+
+  - pattern: func-diagram-st
+    patch:
+      fd-header:
+        runs:
+          "BRISKEN OnePilot – Trade Automation": "BRISKEN OnePilot – Smart Trading"
+          "SAP Business Technology Platform": "on SAP's own cloud"
+      fd-product-label: {runs: {"Trade Automation": "Smart Trading"}}
+
+  - pattern: usecase
+    patch:
+      uc-title: {set: "One FX Trade, End to End"}
+      uc-logo-name: {runs: {"Bank Statement Generator": "Smart Trading"}}
+      uc-col1-body:
+        outline:
+          - [0, "Description"]
+          - [1, "One FX trade, end to end: the decision from your SAP positions, the request sent to the venue, approval under your rules, execution on your own platforms, integration matched and shaped for SAP, and the deal booked in SAP by itself."]
+          - [1, "Each step runs on its own or waits for a person; everything is logged."]
+          - [0, ""]
+          - [0, "Challenges & Business Drivers"]
+          - [1, "You trade. You book in SAP. Today a person joins the two by hand."]
+          - [1, "Re-keying tickets, chasing approvals, building deal entries by hand; a trade that is not done until someone books it."]
+      uc-col2-body:
+        outline:
+          - [0, "Trading venue agnostic"]
+          - [1, "Integrate with any trading platform and trading venue: FX, derivatives, investments, securities, OTC commodity swaps."]
+          - [0, "Trading system agnostic"]
+          - [1, "Integrate with any trade station, order management system (OMS), or treasury management system (TMS)."]
+          - [1, "Send the finished trade into SAP Treasury, or into the treasury system you already use."]
+          - [0, "Confirmations and master data"]
+          - [1, "Custodian and counterparty confirmations and matching."]
+          - [1, "Security class master validation and automatic creation."]
+          - [0, "Controls built in"]
+          - [1, "Full audit trail, four-eye sign-off, automatic error checks, ISO 27001 and SOC 1."]
+
+  - pattern: platform-context
+    patch:
+      pc-app-st: {highlight: true}
+      pc-caption: {set: "Smart Trading runs as an application inside TreasuryCentral, on the OnePilot platform. OnePilot runs in production at chemicals, agricultural and financial-services customers."}
+
+  - pattern: contact
