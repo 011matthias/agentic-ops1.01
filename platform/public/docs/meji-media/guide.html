@@ -248,9 +248,9 @@ em {
 
 /* Guide sidebar */
 .guide-sidebar {
-    position: fixed; top: var(--header-height); left: 0; width: 220px;
+    position: fixed; top: var(--header-height); left: 0; width: 200px;
     height: calc(100vh - var(--header-height)); overflow-y: auto;
-    background: var(--nav-bg); border-right: 1px solid var(--border);
+    background: var(--surface); border-right: 1px solid var(--border);
     padding: 16px 0; z-index: 50; transition: transform .25s, background .2s;
 }
 .guide-sidebar ul { list-style: none; padding: 0; }
@@ -264,7 +264,20 @@ em {
 .guide-sidebar a.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
 .guide-sidebar .sidebar-group { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text3); padding: 12px 16px 4px; }
 
-.guide-content { margin-left: 220px; }
+.guide-content { max-width: 960px; margin: 0 auto; padding: 40px 24px 80px; }
+
+.hero {
+  background: linear-gradient(135deg, #059669, var(--blue));
+  border-radius: 16px;
+  padding: 48px 40px;
+  color: #fff;
+  margin-bottom: 40px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.12);
+}
+.hero h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; color: #fff; margin-bottom: 10px; border: none; padding: 0; }
+.hero p { color: rgba(255,255,255,.88); font-size: 15px; max-width: 760px; margin: 0; }
+@media (max-width: 768px) { .hero { padding: 32px 24px; } }
+
 
 .guide-hamburger {
     display: none; position: fixed; bottom: 20px; left: 20px; z-index: 60;
@@ -361,10 +374,10 @@ if (saved) {
 <button class="guide-hamburger" id="guideHamburger" onclick="toggleSidebar()">&#9776;</button>
 
 <div class="guide-content">
-<h1>Meji Media &ndash; Automated Follow-Up System</h1>
-<blockquote>
+<div class="hero">
+<h2>Automated Follow-Up System &ndash; Complete Guide</h2>
 <p>Your automated follow-up system is live and running. This guide explains how it works, what you&rsquo;ll see, and how to make changes.</p>
-</blockquote>
+</div>
 <p><strong>In this guide:</strong> <a href="#how-it-works--the-big-picture">How It Works</a> &middot; <a href="#your-google-sheet--what-youll-see">Your Google Sheet</a> &middot; <a href="#email-templates">Email Templates</a> &middot; <a href="#lead-scoring--priority">Lead Scoring</a> &middot; <a href="#follow-up-cadence">Follow-Up Cadence</a> &middot; <a href="#ab-testing">A/B Testing</a> &middot; <a href="#what-you-can-configure">What You Can Configure</a> &middot; <a href="#troubleshooting--quick-reference">Troubleshooting</a> &middot; <a href="#key-contacts">Key Contacts</a> &middot; <a href="#a0-mysql-enquiry-poller">A0: MySQL Enquiry Poller</a> &middot; <a href="#a1-enquiry-follow-up-sequence">A1: Follow-Up Sequence</a> &middot; <a href="#a2-reply-detection--stop">A2: Reply Detection</a> &middot; <a href="#a3-scheduled-follow-up-steps">A3: Follow-Up Steps</a> &middot; <a href="#ab-testing-guide">A/B Testing Guide</a></p>
 
 <h2 id="what-we-built">What We Built</h2>
