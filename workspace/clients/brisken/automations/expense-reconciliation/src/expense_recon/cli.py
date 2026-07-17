@@ -46,7 +46,10 @@ The config is a JSON file (stdlib only — no YAML dep) of the shape:
       "hosting": {                             # optional (8.4) — content-address
         "root": "receipt-store",               #   filename-only receipts and
         "receipts_dir": "receipts"             #   carry a stable URL into 8.5
-      }
+      },
+      "matching": {                            # optional (2026-07-17) — load
+        "tuning_path": "match-tuning.json"     #   MatchingConfig tunables from
+      }                                        #   a file (the optimize asset)
     }
 
 What this slice does NOT do (deferred):
@@ -440,13 +443,23 @@ def reconcile(
 
     # PR 2c: learned vendor aliases + per-merchant FX feed match scoring /
     # tie-break (never bucket membership). Empty memory => default config.
+    # 2026-07-17: an optional matching.tuning_path loads the file-tunable
+    # scalars (MatchingConfig.from_file); learned memory merges on top.
     if match_memory is None:
         match_memory = _load_match_memory(cfg, config_dir)
     match_cfg = None
-    if match_memory:
+    tuning_path = (cfg.get("matching") or {}).get("tuning_path")
+    if tuning_path:
         from .matching.deterministic import MatchingConfig
 
-        match_cfg = MatchingConfig(
+        match_cfg = MatchingConfig.from_file(config_dir / tuning_path)
+    if match_memory:
+        from dataclasses import replace
+
+        from .matching.deterministic import MatchingConfig
+
+        match_cfg = replace(
+            match_cfg or MatchingConfig(),
             vendor_aliases=match_memory.vendor_aliases,
             merchant_fx=dict(match_memory.merchant_fx),
         )
@@ -1048,6 +1061,13 @@ def main(argv: list[str] | None = None) -> int:
         from .calibrate import main as calibrate_main
 
         return calibrate_main(argv[1:])
+
+    # `expense-recon label propose|accept|check` — ground-truth pairing
+    # labels for matcher calibration (optimize-loop prep).
+    if argv and argv[0] == "label":
+        from .labeling import main as label_main
+
+        return label_main(argv[1:])
 
     # `expense-recon memory list|forget|reset` — inspect / correct the
     # cross-run learning store (Phase 2 escape hatch, 2d).

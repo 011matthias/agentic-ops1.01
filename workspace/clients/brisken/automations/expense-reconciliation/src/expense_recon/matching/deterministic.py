@@ -163,6 +163,20 @@ _DEFAULT_FX_RATE_BANDS: dict[tuple[str, str], tuple[Decimal, Decimal]] = {
     ("DKK", "USD"): (Decimal("0.13"), Decimal("0.18")),
 }
 
+# File-loadable tunables (MatchingConfig.from_dict), grouped by type.
+_TUNABLE_DECIMAL = frozenset({
+    "amount_exact_tolerance", "amount_probable_tolerance_pct",
+})
+_TUNABLE_INT = frozenset({
+    "date_exact_window_days", "date_probable_window_days",
+    "fx_date_window_days",
+})
+_TUNABLE_FLOAT = frozenset({
+    "high_confidence", "probable_confidence", "possible_confidence",
+    "blend_amount_weight", "blend_date_weight", "blend_vendor_weight",
+})
+_TUNABLE_BOOL = frozenset({"card_scoping"})
+
 
 @dataclass(frozen=True)
 class MatchingConfig:
@@ -224,6 +238,64 @@ class MatchingConfig:
     # pre-2026-06-16 cross-card behaviour.
     card_scoping: bool = True
 
+    # ── Review-triage blend weights (2026-07-17, optimize-loop prep) ──
+    # Weights for the 0-100 workbench sort score (_blend_score). They
+    # order the review queue only; bucket membership stays deterministic
+    # via match_type / confidence. Externalized so the tuning file can
+    # move them without a code change.
+    blend_amount_weight: float = 0.55
+    blend_date_weight: float = 0.30
+    blend_vendor_weight: float = 0.15
+
+    @classmethod
+    def from_dict(cls, data: Mapping) -> "MatchingConfig":
+        """Build a config from a tuning dict (the optimize-loop asset).
+
+        Only the scalar tunables and fx_rate_bands are file-loadable;
+        learned memory (vendor_aliases / merchant_fx) is runtime state
+        and is merged by the caller via dataclasses.replace. Unknown
+        keys raise: a typo silently reverting to a default would make a
+        tuning run measure nothing.
+        """
+        kwargs: dict = {}
+        for key, value in data.items():
+            if key in _TUNABLE_DECIMAL:
+                kwargs[key] = Decimal(str(value))
+            elif key in _TUNABLE_INT:
+                kwargs[key] = int(value)
+            elif key in _TUNABLE_FLOAT:
+                kwargs[key] = float(value)
+            elif key in _TUNABLE_BOOL:
+                kwargs[key] = bool(value)
+            elif key == "fx_rate_bands":
+                bands: dict[tuple[str, str], tuple[Decimal, Decimal]] = {}
+                for pair, (lo, hi) in value.items():
+                    from_ccy, _, to_ccy = pair.partition(":")
+                    if not from_ccy or not to_ccy:
+                        raise ValueError(
+                            f"fx_rate_bands key {pair!r} must be 'FROM:TO'"
+                        )
+                    bands[(from_ccy, to_ccy)] = (
+                        Decimal(str(lo)), Decimal(str(hi))
+                    )
+                kwargs[key] = bands
+            else:
+                raise ValueError(
+                    f"unknown matching-tuning key {key!r} "
+                    f"(tunables: {sorted(_TUNABLE_DECIMAL | _TUNABLE_INT | _TUNABLE_FLOAT | _TUNABLE_BOOL | {'fx_rate_bands'})})"
+                )
+        return cls(**kwargs)
+
+    @classmethod
+    def from_file(cls, path: "str | Path") -> "MatchingConfig":
+        """Load the tuning JSON (see config/match-tuning.json)."""
+        import json
+        from pathlib import Path as _Path
+
+        return cls.from_dict(
+            json.loads(_Path(path).read_text(encoding="utf-8"))
+        )
+
     def fx_band(
         self, from_ccy: str, to_ccy: str
     ) -> tuple[Decimal, Decimal] | None:
@@ -253,7 +325,8 @@ class MatchingConfig:
 
 
 def _blend_score(
-    amount_score: float, date_score: float, vendor_score: float
+    amount_score: float, date_score: float, vendor_score: float,
+    cfg: MatchingConfig,
 ) -> int:
     """Blend the three matching signals into a 0-100 triage score.
 
@@ -261,9 +334,12 @@ def _blend_score(
     fuzzy vendor agreement (a corroborator, not a gate; bank exports
     truncate vendor names). Sorts the review workbench so the weakest
     matches surface first; it does NOT change which bucket a pair lands
-    in (that stays deterministic via match_type / confidence).
+    in (that stays deterministic via match_type / confidence). Weights
+    live on MatchingConfig (default 0.55/0.30/0.15).
     """
-    s = 0.55 * amount_score + 0.30 * date_score + 0.15 * vendor_score
+    s = (cfg.blend_amount_weight * amount_score
+         + cfg.blend_date_weight * date_score
+         + cfg.blend_vendor_weight * vendor_score)
     return max(0, min(100, round(s * 100.0)))
 
 
@@ -327,7 +403,7 @@ def _match_on_amount(
             confidence=cfg.possible_confidence,
             reason=reason,
             requires_review=True,
-            score=_blend_score(amount_score, 0.5, vendor_score),
+            score=_blend_score(amount_score, 0.5, vendor_score, cfg),
             amount_score=amount_score,
             date_score=0.5,
             vendor_score=vendor_score,
@@ -355,7 +431,7 @@ def _match_on_amount(
             match_type=MatchType.EXACT,
             confidence=cfg.high_confidence,
             reason=reason,
-            score=_blend_score(amount_score, date_score, vendor_score),
+            score=_blend_score(amount_score, date_score, vendor_score, cfg),
             amount_score=amount_score,
             date_score=date_score,
             vendor_score=vendor_score,
@@ -378,7 +454,7 @@ def _match_on_amount(
             confidence=cfg.probable_confidence,
             reason=reason,
             requires_review=True,
-            score=_blend_score(amount_score, date_score, vendor_score),
+            score=_blend_score(amount_score, date_score, vendor_score, cfg),
             amount_score=amount_score,
             date_score=date_score,
             vendor_score=vendor_score,
@@ -525,7 +601,7 @@ def match_one(
                 f"date diff {date_diff}d, {rate_note}. Requires FX judgment."
             ),
             requires_review=True,
-            score=_blend_score(amount_score, date_score, vendor_score),
+            score=_blend_score(amount_score, date_score, vendor_score, cfg),
             amount_score=amount_score,
             date_score=date_score,
             vendor_score=vendor_score,
