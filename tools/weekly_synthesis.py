@@ -9,7 +9,8 @@ Composes the existing detectors (friction-watch signals + corrected backlog
 counts + synthesis-cadence staleness + an ops-health sensor for the nightly
 repo-sweep: heartbeat, lingering sweep PRs, close-candidate worktrees, stale
 branches + an asset census) into one plain-text report and emails it via
-tools/send_email.py (Resend; non-default User-Agent contract lives there). WRITES NO FILE by design -- 52 dated digests/year
+tools/send_email.py (Graph-primary from the user's own mailbox to itself;
+Resend fallback). WRITES NO FILE by design -- 52 dated digests/year
 restating an email is exactly the rule_no_file_bloat W1 clutter class; the
 record is the inbox + Task Scheduler history.
 
@@ -38,8 +39,11 @@ client branch that predates this tool). Refresh the sensor code with
 `git -C <worktree> pull --ff-only`. Registration is a machine-state action:
 executed by the user (or with explicit per-action approval), never silently.
 
-Env: RESEND_API_KEY (a FRESH key -- the old plaintext re_B7qD1off_... in the
-paused routine config is flagged for rotation, never reuse), BRIEFING_TO.
+Env: none required -- send_email.py resolves Graph creds from the primary
+clone's Brisken context .env and defaults the recipient to the sender's own
+mailbox; BRIEFING_TO overrides the recipient. (RESEND_API_KEY only matters
+for the fallback path; the old plaintext re_B7qD1off_... key is flagged for
+rotation, never reuse.)
 Exit 1 in --scheduled mode when the send fails, so LastTaskResult goes red.
 """
 from __future__ import annotations
