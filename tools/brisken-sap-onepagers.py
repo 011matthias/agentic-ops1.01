@@ -362,7 +362,6 @@ def body_treasurycentral():
     nodes = ["Cash", "Investments", "Debt", "FX", "Market Data", "Governance"]
     cx, cy = 75.0, 37.0
     rx, ry = 56.0, 28.0
-    core_r = 18.0
     node_html, spokes = "", ""
     for i, name in enumerate(nodes):
         ang = -90 + i * 60
