@@ -38,7 +38,9 @@ this table is the index, not a second record.
 | Run history + doctor pre-flight | done | BLUEPRINT slice 5/5b |
 | COA pre-write validation gate | live (Fly, per-entity) | BLUEPRINT 4.11 (PR #202/#203/#205) |
 | Export idempotency (4.8) | not-started | BLUEPRINT Phase 5 (gap) |
-| Match ground-truth labeling (`label propose/accept/check`) | done | `labeling.py`; optimize-loop prep — labels per month-bundle in gitignored context; PDF-statement configs light E1 evidence (29/45 AUTO on 2026-03) |
+| Match ground-truth labeling (`label propose/accept/check`) | done | `labeling.py`; optimize-loop prep — labels per month-bundle in gitignored context |
+| Label fixture: 6 production-shape bundles (CSV stmt + ER PDF) | done (2026-07-17) | `context/.../csv/by-month/`: labels.csv per month, `label check` OK on all 6; 141/218 labeled (95 confirmed / 46 no_charge), 77 excluded as ambiguous; decisions corroborated offline via 2026 stmt-PDF FX originals + payment-mode card refs |
+| ER-PDF ingest hardening (ISO-ccy amounts, inline rows, per-token format) | done (PR #263) | `expense_report_pdf.py`; all 6 real ERs parse to-the-cent vs printed totals |
 
 ## Open decisions / gates
 

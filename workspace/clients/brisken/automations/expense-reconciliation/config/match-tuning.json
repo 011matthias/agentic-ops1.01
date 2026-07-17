@@ -1,0 +1,19 @@
+{
+  "amount_exact_tolerance": "0.00",
+  "amount_probable_tolerance_pct": "0.20",
+  "date_exact_window_days": 1,
+  "date_probable_window_days": 5,
+  "high_confidence": 0.99,
+  "probable_confidence": 0.85,
+  "possible_confidence": 0.60,
+  "fx_date_window_days": 5,
+  "fx_rate_bands": {
+    "BRL:USD": ["0.15", "0.26"],
+    "EUR:USD": ["1.00", "1.45"],
+    "DKK:USD": ["0.13", "0.18"]
+  },
+  "card_scoping": true,
+  "blend_amount_weight": 0.55,
+  "blend_date_weight": 0.30,
+  "blend_vendor_weight": 0.15
+}
