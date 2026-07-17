@@ -55,7 +55,8 @@ When no honest number exists yet (goal-md protocol):
 
 ```yaml
 ---
-tag: <dirname>
+tag: <dirname>             # unique forever; starts with the project slug
+project: <slug>            # grouping key for optimize_overview.py (see below)
 goal: >
   One sentence: what number moves, and any hard floor that must not break.
 scorer: tools/scorers/<name>.py
@@ -82,3 +83,39 @@ stop:
 Prose: why this run, what a reviewer should look at, optional action
 catalog (prioritized hypothesis menu with expected impact).
 ```
+
+## Many projects, one oversight surface
+
+The engine allows ONE active run per checkout (`.claude/optimize/run.json`
+is a singleton) and all journals share the flat `docs/optimize/<tag>/`
+namespace. Scaling to a multitude of projects is a naming convention plus
+worktrees plus one derived tool - no engine changes:
+
+1. **Namespace by project.** Every manifest carries `project: <slug>`
+   (client slug, `sys`, `platform`, `local-web`) and its `tag` starts with
+   that slug (`brisken-recon-v1`, `local-web-physio-weight`). Tags are
+   unique forever - a closed run's directory on main IS the historical
+   record, and the engine refuses reused tags (fresh-branch rule), so
+   version the tag (`-v2`) instead of recycling it.
+2. **One worktree per concurrent run.** Parallel runs across projects
+   each get their own worktree: `git worktree add --detach
+   ../agentic-ops1-opt-<tag> origin/main`, then write the manifest and
+   `start <tag>` inside it (the engine creates `optimize/<tag>` from
+   there; state and locks are per-worktree). Never two runs in one
+   checkout. Caveat: the Write/Edit-layer lock hooks cover the primary
+   checkout; in worktrees the engine-layer locks (per-round hash
+   re-verification, dirty-tree recovery) are the enforcement - they held
+   under a live tamper test 2026-07-17.
+3. **Oversee from one place:** `uv run tools/optimize_overview.py
+   [--project SLUG]` derives the fleet view live - journaled runs on the
+   current checkout grouped by `project:`, ACTIVE runs found via
+   `git worktree list` + their run state, and a WARNINGS section for runs
+   that died without `stop` (resume or stop them) and closed runs missing
+   `SUMMARY.md`. There is deliberately no hand-maintained index file; a
+   derived view cannot rot.
+4. **Lifecycle hygiene.** A run ends in exactly one of two states: shipped
+   (PR from `optimize/<tag>` with manifest + results.tsv + SUMMARY.md,
+   then delete the worktree and branch) or dead-end (same PR, journal
+   only - a documented dead end prevents re-running the same
+   experiments). INTERRUPTED in the overview is a defect to clear, not a
+   third state.
