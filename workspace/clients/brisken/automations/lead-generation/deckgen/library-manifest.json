@@ -1,0 +1,230 @@
+{
+  "reference_slides": 31,
+  "library_slides": 34,
+  "patterns": {
+    "cover": {
+      "donor": 1,
+      "roles": [
+        "cover-title",
+        "cover-logo"
+      ]
+    },
+    "about": {
+      "donor": 3,
+      "roles": [
+        "about-headline",
+        "about-eyebrow"
+      ]
+    },
+    "clients": {
+      "donor": 4,
+      "roles": []
+    },
+    "suite-hub": {
+      "donor": 6,
+      "roles": [
+        "hub-headline",
+        "hub-body"
+      ]
+    },
+    "ecosystem": {
+      "donor": 7,
+      "roles": []
+    },
+    "custom-dev": {
+      "donor": 8,
+      "roles": []
+    },
+    "func-diagram-platform": {
+      "donor": 9,
+      "roles": [
+        "fdp-header"
+      ]
+    },
+    "transition": {
+      "donor": 10,
+      "roles": [
+        "transition-title"
+      ]
+    },
+    "value-3cards": {
+      "donor": 11,
+      "roles": [
+        "vp-title",
+        "vp-kicker",
+        "vp-card-main",
+        "vp-card-top",
+        "vp-card-bottom",
+        "vp-hero",
+        "vp-logo"
+      ]
+    },
+    "features": {
+      "donor": 12,
+      "roles": [
+        "feat-body",
+        "feat-header",
+        "feat-logo-caption"
+      ]
+    },
+    "func-diagram-mdh": {
+      "donor": 13,
+      "roles": [
+        "fd-header",
+        "fd-gov-title",
+        "fd-gov-list",
+        "fd-src-1",
+        "fd-src-2",
+        "fd-src-3",
+        "fd-src-4",
+        "fd-src-5",
+        "fd-dest-title",
+        "fd-dest-list",
+        "fd-title"
+      ]
+    },
+    "features-st": {
+      "donor": 15,
+      "roles": [
+        "feat-body",
+        "feat-header",
+        "feat-product-name",
+        "feat-logo-caption"
+      ]
+    },
+    "func-diagram-st": {
+      "donor": 16,
+      "roles": [
+        "fd-header",
+        "fd-gov-title",
+        "fd-gov-list",
+        "fd-src-1",
+        "fd-src-2",
+        "fd-src-3",
+        "fd-src-4",
+        "fd-dest-title",
+        "fd-dest-list",
+        "fd-title",
+        "fd-product-label"
+      ]
+    },
+    "features-dcw": {
+      "donor": 18,
+      "roles": [
+        "feat-body",
+        "feat-header",
+        "feat-product-name",
+        "feat-logo-caption"
+      ]
+    },
+    "func-diagram-dcw": {
+      "donor": 19,
+      "roles": [
+        "fd-header",
+        "fd-gov-title",
+        "fd-gov-list",
+        "fd-src-1",
+        "fd-src-2",
+        "fd-src-3",
+        "fd-src-4",
+        "fd-src-5",
+        "fd-dest-title",
+        "fd-dest-list",
+        "fd-title"
+      ]
+    },
+    "usecase": {
+      "donor": 21,
+      "roles": [
+        "uc-title",
+        "uc-col1-head",
+        "uc-col1-body",
+        "uc-col2-head",
+        "uc-col2-body",
+        "uc-logo-name",
+        "uc-logo-image"
+      ]
+    },
+    "usecase-cashflow": {
+      "donor": 22,
+      "roles": []
+    },
+    "usecase-bankfee": {
+      "donor": 23,
+      "roles": []
+    },
+    "usecase-credit": {
+      "donor": 24,
+      "roles": []
+    },
+    "usecase-esg": {
+      "donor": 25,
+      "roles": []
+    },
+    "usecase-remit": {
+      "donor": 26,
+      "roles": []
+    },
+    "success-fsi": {
+      "donor": 28,
+      "roles": [
+        "ss-title",
+        "ss-sub",
+        "ss-highlight"
+      ]
+    },
+    "success-agri": {
+      "donor": 29,
+      "roles": [
+        "ss-title",
+        "ss-sub",
+        "ss-highlight"
+      ]
+    },
+    "success-chem": {
+      "donor": 30,
+      "roles": [
+        "ss-title",
+        "ss-sub",
+        "ss-highlight"
+      ]
+    },
+    "contact": {
+      "donor": 31,
+      "roles": []
+    },
+    "short-version": {
+      "donor": 32,
+      "roles": [
+        "sv-eyebrow",
+        "sv-rows",
+        "sv-handoff"
+      ],
+      "authored": true
+    },
+    "problem": {
+      "donor": 33,
+      "roles": [
+        "pb-eyebrow",
+        "pb-headline",
+        "pb-body"
+      ],
+      "authored": true
+    },
+    "platform-context": {
+      "donor": 34,
+      "roles": [
+        "pc-title",
+        "pc-onepilot",
+        "pc-tc",
+        "pc-app-mdh",
+        "pc-app-st",
+        "pc-app-dw",
+        "pc-uc-strip",
+        "pc-caption"
+      ],
+      "authored": true,
+      "note": "compose highlights one pc-app-* box (cyan fill, white text)"
+    }
+  }
+}

@@ -1,0 +1,188 @@
+# OnePilot Solutions Overview 2026 — proposed revision of Dirk's own deck.
+# Most slides are donor keeps (pattern with no patch = ship reference slide
+# verbatim). Patches: platform language (no BTP per Dirk directive), product
+# renames (Trade Automation -> Smart Trading, Digital Workforce -> Digital
+# Worker), the authored hierarchy slide (donor 34, no highlight), a new
+# Intercompany Funding Request one-pager on the usecase donor, and Digital
+# Worker re-attribution on the success stories. Dividers are donor-10
+# transition duplicates with the product-name run patched.
+# DROPPED vs the plan: suite-hub (donor 6, "SAP BTP" in body) and
+# func-diagram-platform (donor 9, "SAP Business Technology Platform") —
+# both donors carry banned terms in text, and both patterns expose no
+# roles in library-manifest.json, so no spec patch can reach the text.
+# Restore them once the manifest names those shapes.
+deck: overview-revision
+output: "Brisken - OnePilot Solutions Overview 2026-08 PROPOSAL"
+slides:
+  # 1 — cover: donor 1 already reads "OnePilot Solutions Overview"
+  - pattern: cover
+
+  # 2 — the short version
+  - pattern: short-version
+    patch:
+      sv-rows:
+        paras:
+          - "What it is: the OnePilot platform and the applications that run on it, in one tour."
+          - "What it replaces: a dozen separate product pitches."
+          - "What you get: the platform, three applications, four working use cases, and the customers running them."
+          - "Who it is for: treasury and finance teams on SAP."
+      sv-handoff: {set: "Start with who we are; the platform follows."}
+
+  # 3 — divider: About
+  - pattern: transition
+    patch:
+      transition-title: {runs: {"OnePilot": "About", "Market Data Hub": " "}}
+
+  # 4 — about Brisken (kept; Dirk's own solutions roster stays)
+  - pattern: about
+
+  # 5 — client logo wall (kept)
+  - pattern: clients
+
+  # 6 — divider: The Platform
+  - pattern: transition
+    patch:
+      transition-title: {runs: {"Market Data Hub": "The Platform"}}
+
+  # 6b — central-hub slide (restored; BTP text patched to Dirk's own phrasing)
+  - pattern: suite-hub
+    patch:
+      hub-body: {sub: {"Running on the SAP BTP and": "Running on SAP's own cloud and"}}
+
+  # 7 — ecosystem donut (kept)
+  - pattern: ecosystem
+
+  # 8 — the hierarchy slide (authored donor 34, no highlight)
+  - pattern: platform-context
+    patch:
+      pc-caption: {set: "TreasuryCentral is the screen your team works in. It sits on OnePilot, the platform. Inside it run the applications: Market Data Hub, Smart Trading, and the Digital Worker, the AI. The use cases below hang off the Digital Worker."}
+
+  # 8b — platform functional overview (restored; BTP bar patched)
+  - pattern: func-diagram-platform
+    patch:
+      fdp-header: {runs: {"SAP Business Technology Platform": "on SAP's own cloud"}}
+
+  # 9 — divider: Market Data Hub (donor 10 text unchanged)
+  - pattern: transition
+
+  # 10 — MDH value prop (kept)
+  - pattern: value-3cards
+
+  # 11 — MDH functional diagram (BTP run only)
+  - pattern: func-diagram-mdh
+    patch:
+      fd-header:
+        runs:
+          "SAP Business Technology Platform": "on SAP's own cloud"
+
+  # 12 — divider: Smart Trading
+  - pattern: transition
+    patch:
+      transition-title: {runs: {"Market Data Hub": "Smart Trading"}}
+
+  # 13 — Smart Trading features (product name rename)
+  - pattern: features-st
+    patch:
+      feat-product-name: {runs: {"Trade Automation": "Smart Trading"}}
+
+  # 14 — Smart Trading functional diagram (header rename + BTP run)
+  - pattern: func-diagram-st
+    patch:
+      fd-header:
+        runs:
+          "BRISKEN OnePilot – Trade Automation": "BRISKEN OnePilot – Smart Trading"
+          "SAP Business Technology Platform": "on SAP's own cloud"
+      fd-product-label: {runs: {"Trade Automation": "Smart Trading"}}
+
+  # 15 — divider: Digital Worker
+  - pattern: transition
+    patch:
+      transition-title: {runs: {"Market Data Hub": "Digital Worker"}}
+
+  # 16 — Digital Worker features (kept; ChatGPT name-drop removed)
+  - pattern: features-dcw
+    patch:
+      feat-body: {sub: {", such as ChatGPT": ""}}
+
+  # 17 — Digital Worker functional diagram (generalized process sources + BTP run)
+  - pattern: func-diagram-dcw
+    patch:
+      fd-header:
+        runs:
+          "SAP Business Technology Platform": "on SAP's own cloud"
+      fd-src-1: {set: "Emails / Requests"}
+      fd-src-2: {set: "Remittance advices / Invoices"}
+      fd-src-3: {set: "Funding requests"}
+      fd-src-4: {set: "Bank statements"}
+      fd-src-5: {set: "Any document, any trigger"}
+
+  # 18 — divider: Digital Worker Use Cases
+  - pattern: transition
+    patch:
+      transition-title: {runs: {"Market Data Hub": "Digital Worker Use Cases"}}
+
+  # 19 — Intercompany Funding Request (repurposed usecase donor)
+  - pattern: usecase
+    patch:
+      uc-title: {set: "Intercompany Funding Request"}
+      uc-logo-name: {runs: {"Bank Statement Generator": "Digital Co-Worker"}}
+      uc-col1-body:
+        outline:
+          - [0, "Description"]
+          - [1, "A funding request arrives by email. The Digital Worker reads it, summarizes it, and suggests the next step."]
+          - [1, "It creates the memo record, checks the cash position, and sends the confirmation."]
+          - [0, ""]
+          - [0, "Challenges & Business Drivers"]
+          - [1, "The request arrives as an unstructured email."]
+          - [1, "Handling it touches several systems."]
+      uc-col2-body:
+        outline:
+          - [0, "Reads, checks, executes, confirms"]
+          - [1, "The Digital Worker reads the request, checks the cash position, executes the steps, and confirms back."]
+          - [0, "Governed end to end"]
+          - [1, "Every step validated, logged, and auditable."]
+
+  # 20 — Remittance Advice Gate (kept)
+  - pattern: usecase-remit
+
+  # 21 — Cash Flow & Exposure Hub (kept)
+  - pattern: usecase-cashflow
+
+  # 22 — divider: Success Stories
+  - pattern: transition
+    patch:
+      transition-title: {runs: {"Market Data Hub": "Success Stories"}}
+
+  # 23 — FSI success story (kept, platform-level)
+  - pattern: success-fsi
+
+  # 24 — agricultural success story (Digital Worker re-attribution)
+  - pattern: success-agri
+    patch:
+      ss-sub:
+        sub:
+          "AI + OnePilot Deployment": "Digital Worker deployment"
+          "powered by ChatGPT": "powered by AI"
+
+  # 25 — chemicals success story (Digital Worker re-attribution)
+  - pattern: success-chem
+    patch:
+      ss-sub:
+        sub:
+          "AI + OnePilot Deployment": "Digital Worker deployment"
+          "powered by ChatGPT": "powered by AI"
+
+  # 26 — contact (kept)
+  - pattern: contact
+
+  # 27 — appendix A1: custom & legacy applications (kept)
+  - pattern: custom-dev
+
+  # 28 — appendix: Bank Fee Portal (kept)
+  - pattern: usecase-bankfee
+
+  # 29 — appendix: Credit Data Hub (kept)
+  - pattern: usecase-credit
+
+  # 30 — appendix: ESG Data Hub (kept)
+  - pattern: usecase-esg

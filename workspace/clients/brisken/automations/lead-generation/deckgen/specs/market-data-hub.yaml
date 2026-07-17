@@ -1,0 +1,125 @@
+# Market Data Hub: full solution deck, "show the machine" voice.
+# Sources: [CUR] = current Dirk-kept Market Data Hub deck (13 slides; sN = its
+# slide N), [LIB] = library donor text kept verbatim (value cards, functional
+# diagram, kicker), [PILOT] = specs/mdh-commodities.yaml (Commodity Price
+# Curves cross-sell one-pager copied verbatim).
+# BTP default: omitted; the diagram header uses Dirk's own "on SAP's own
+# cloud" phrasing ([CUR] s3).
+deck: market-data-hub
+output: "Brisken - Market Data Hub 2026-08 PROPOSAL"
+slides:
+  - pattern: cover
+    patch:
+      cover-title: {runs: {"Solutions Overview": "Market Data Hub"}}
+
+  - pattern: short-version
+    patch:
+      sv-rows:
+        paras:
+          - "What it is: every rate and reference you rely on, from any source to every system. Curated once, governed end to end."
+          - "What it replaces: rates lined up by hand from a dozen places; re-keying, fixing formats, chasing bad values, reconciling by hand."
+          - "What you get: one governed layer for SAP Treasury, with a full audit trail on every change."
+          - "Who it is for: treasury teams on SAP. The hub sits inside your landscape, not beside it."
+      sv-handoff: {set: "The next page is where you are today."}
+
+  - pattern: problem
+    patch:
+      pb-headline: {set: "Your rates live in a dozen places. Someone lines them up by hand (kind of)."}
+      pb-body:
+        paras:
+          - "Your sources: Bloomberg, Refinitiv, 360T, OANDA, central banks, websites, anywhere."
+          - "The manual middle: re-keying rates, fixing formats, chasing bad values, reconciling by hand, fearing month-end."
+          - "Your systems: SAP, analytics, non-SAP apps, everywhere."
+          - "Sound familiar? Late nights stitching rates together, a month-end everyone dreads, and reports that never stay final."
+
+  # Donor cards + kicker are Dirk's own MDH value prop; kept unpatched.
+  - pattern: value-3cards
+
+  # Donor IS the MDH functional overview; sources/destinations stay donor.
+  - pattern: func-diagram-mdh
+    patch:
+      fd-header:
+        runs:
+          "SAP Business Technology Platform": "on SAP's own cloud"
+
+  - pattern: usecase
+    patch:
+      uc-title: {set: "FX & Interest Rates into SAP"}
+      uc-logo-name: {runs: {"Bank Statement Generator": "Market Data Hub"}}
+      uc-logo-image: {from_shape: [value-3cards, vp-logo]}
+      uc-col1-body:
+        outline:
+          - [0, "Description"]
+          - [1, "Pull data from any source: market data providers, central banks, government agencies, websites, or your own systems. Any protocol, on a schedule or on demand."]
+          - [1, "Push the curated data into SAP ECC and S/4HANA, or any non-SAP system, database, website or analytics tool."]
+          - [0, ""]
+          - [0, "Challenges & Business Drivers"]
+          - [1, "Rates live in a dozen places; someone lines them up by hand."]
+          - [1, "Re-keying rates, fixing formats, chasing bad values, reconciling by hand, fearing month-end."]
+      uc-col2-body:
+        outline:
+          - [0, "Any source, any system"]
+          - [1, "Connect any provider or feed, with nothing to swap out. Add or drop a source any time."]
+          - [1, "Any protocol you use: API, ODATA, SFTP, email, Excel add-in. Push it or let them pull it."]
+          - [0, "On a schedule or on demand"]
+          - [1, "Each step runs on a schedule or on demand, on its own or with a person in the loop. Everything is logged."]
+          - [0, "Calculated rates"]
+          - [1, "Calculations, date shifts, inversion, triangulation of rates, interpolation, averages, your own formula libraries."]
+          - [1, "Shaped exactly how each system needs it."]
+
+  - pattern: usecase
+    patch:
+      uc-title: {set: "Anomaly Catch & Governed Change"}
+      uc-logo-name: {runs: {"Bank Statement Generator": "Market Data Hub"}}
+      uc-logo-image: {from_shape: [value-3cards, vp-logo]}
+      uc-col1-body:
+        outline:
+          - [0, "Description"]
+          - [1, "Every value is checked as it arrives: anomaly detection, completeness, accuracy and timeliness. Bad data is caught before it moves anywhere."]
+          - [1, "A full audit trail on every change, segregation of duty, and alerts when something looks off."]
+          - [0, ""]
+          - [0, "Challenges & Business Drivers"]
+          - [1, "Chasing bad values and reconciling by hand; a month-end everyone dreads."]
+          - [1, "Reports that never stay final."]
+      uc-col2-body:
+        outline:
+          - [0, "Automatic checks"]
+          - [1, "Odd or bad data is caught before it reaches a system."]
+          - [0, "Segregation of duty"]
+          - [1, "The changes that matter need a second person."]
+          - [0, "A full audit trail"]
+          - [1, "Every value and every change is recorded, end to end."]
+          - [0, "Alerts on exceptions"]
+          - [1, "You hear about the odd one out; the rest just runs."]
+
+  # Cross-sell one-pager, copied verbatim from [PILOT] slide 6.
+  - pattern: usecase
+    patch:
+      uc-title: {set: "Commodity Price Curves"}
+      uc-logo-name: {runs: {"Bank Statement Generator": "Market Data Hub"}}
+      uc-logo-image: {from_shape: [value-3cards, vp-logo]}
+      uc-col1-body:
+        outline:
+          - [0, "Description"]
+          - [1, "A curve on a timeline: today's spot price, then 30, 60 and 90 days, out to a year."]
+          - [1, "Composite by design: transportation, storage, quality and local taxes, combined into one price per tenor."]
+          - [0, ""]
+          - [0, "Challenges & Business Drivers"]
+          - [1, "The same commodity differs by delivery point, as storage, port fees and the local market differ."]
+          - [1, "The curve is built by hand; prices differ desk to desk."]
+      uc-col2-body:
+        outline:
+          - [0, "Composite by design"]
+          - [1, "Combine transportation, storage, quality and local taxes into one price per tenor."]
+          - [0, "Location and tenor aware"]
+          - [1, "Spot and 30, 60, 90-day tenors, priced per delivery point."]
+          - [0, "Governed end to end"]
+          - [1, "Every price validated on the way in; anomalies flagged for approval."]
+          - [1, "Every change versioned, approved, and audited."]
+
+  - pattern: platform-context
+    patch:
+      pc-app-mdh: {highlight: true}
+      pc-caption: {set: "Market Data Hub runs as an application inside TreasuryCentral, on the OnePilot platform. OnePilot runs in production at chemicals, agricultural and financial-services customers."}
+
+  - pattern: contact
