@@ -15,12 +15,12 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import os
 import re
 from collections import Counter, defaultdict
 from pathlib import Path
 
+from .identity import contact_id_for, natural_key
 from .web.service import now_iso
 from .web.store import ContactStore
 
@@ -40,12 +40,79 @@ _DATE_RE = re.compile(r"(\d{4}-\d{2}-\d{2})")
 # the event hash every run and break idempotency.
 EVENT_WEEK_TS = "2026-06-24T00:00:00+00:00"
 
+# The booth follow-up wave date, used when a post_event_outreach cell names no date.
+POST_EVENT_DATE = "2026-07-08"
+
 # Tier -> suppression reason for the exclusion tiers.
 TIER_SUPPRESS = {
     "STOP": "stop", "DUPLICATE": "duplicate", "TEST": "test",
     "ORGANISER": "organiser", "OWN_TEAM": "own_team",
     "UNREACHABLE": "unreachable", "ANON": "anon",
 }
+
+# Fields the app owns once a contact exists: a scheduled sheet re-sync
+# (preserve_app_fields=True) must not overwrite the operator's own pipeline
+# work. Identity / classification / provenance / suppression stay
+# sheet-authoritative; these do not.
+APP_OWNED_ON_RESYNC = ("next_step", "next_step_due")
+
+# --- Iteration 2 classifiers: real status the raw log misses -----------------
+
+# Dirk personally reached the contact (relationship touch, not a campaign send).
+# From dirk_notes markers, OR an if_we_know_them note that names Dirk with an
+# engagement verb ("Met at TAC Brussels 2024 (Dirk personally engaged)").
+_DIRK_NOTE_RE = re.compile(
+    r"personal.*(?:outreach|dn)|individual outreach|dn[\s:]*personal|personally engaged",
+    re.I,
+)
+_DIRK_IWK_RE = re.compile(r"dirk", re.I)
+_DIRK_IWK_VERB_RE = re.compile(
+    r"know|knew|met|meet|spoke|speak|talk|contact|reach|engag|relationship|introduc|connect",
+    re.I,
+)
+
+# Deliberate, revisitable holds (GA general-awareness cohort, or an explicit
+# next_step hold) -> off the active board but distinct from consent-suppressed.
+_HELD_NEXT_RE = re.compile(r"on hold|do not send|excluded|covered by", re.I)
+# Transient holds stay ACTIVE (surfaced via the next_step / dangling bucket).
+_TRANSIENT_NEXT_RE = re.compile(
+    r"ooo until|ooo auto|awaiting.*decision|scheduling in progress", re.I
+)
+
+
+def is_held(row: dict) -> bool:
+    """A deliberate, revisitable hold: the GA cohort or an explicit next_step
+    hold. Transient holds (OOO, awaiting-decision, scheduling) stay active."""
+    tier = (str(row.get("Tier") or "")).strip().upper()
+    dn = (str(row.get("dirk_notes") or "")).strip().upper()
+    ns = str(row.get("next_step") or "").strip()
+    if tier == "GA" or dn == "GA":
+        return True
+    if _HELD_NEXT_RE.search(ns) and not _TRANSIENT_NEXT_RE.search(ns):
+        return True
+    return False
+
+
+def dirk_touch(row: dict) -> tuple[str, str] | None:
+    """If Dirk personally reached this contact, return (channel, detail).
+    Channel is inferred from the note (linkedin / meeting / email)."""
+    dn = _s(row.get("dirk_notes"))
+    iwk = _s(row.get("if_we_know_them"))
+    note = None
+    if dn and _DIRK_NOTE_RE.search(dn):
+        note = dn
+    elif iwk and _DIRK_IWK_RE.search(iwk) and _DIRK_IWK_VERB_RE.search(iwk):
+        note = iwk
+    if not note:
+        return None
+    low = note.lower()
+    if "linkedin" in low:
+        channel = "linkedin"
+    elif any(w in low for w in ("met ", "meet", "meeting", "call", "spoke", "conversation")):
+        channel = "meeting"
+    else:
+        channel = "email"
+    return channel, note
 
 
 def _s(v) -> str | None:
@@ -70,25 +137,6 @@ def _ts(datestr: str | None) -> str | None:
     return f"{datestr}T00:00:00+00:00" if datestr else None
 
 
-def natural_key(email: str | None, first: str | None, last: str | None,
-                company: str | None, ordinal: int | None = None) -> str:
-    if email:
-        return email.strip().lower()
-    # No email: key on identity plus the stable sheet row ordinal, so two
-    # anonymous booth taps (blank name/company) never merge into one contact.
-    # Losing distinct booth records (under-merge) is worse than over-splitting,
-    # which the same-name duplicate report surfaces for review.
-    parts = [first or "", last or "", company or ""]
-    if ordinal is not None:
-        parts.append(f"#{ordinal}")
-    basis = "|".join(parts).strip().lower()
-    return "anon:" + hashlib.sha1(basis.encode("utf-8")).hexdigest()[:16]
-
-
-def contact_id_for(nk: str) -> str:
-    return hashlib.sha1(nk.encode("utf-8")).hexdigest()[:16]
-
-
 def suppression(row: dict) -> tuple[int, str | None]:
     """Collapse Tier=STOP, stop=X, and the two *_status 'do not contact' text
     values (plus the exclusion tiers) into one suppressed flag + reason."""
@@ -104,6 +152,10 @@ def suppression(row: dict) -> tuple[int, str | None]:
         return 1, "do_not_contact"
     if tier in TIER_SUPPRESS:
         return 1, TIER_SUPPRESS[tier]
+    # Held ranks below consent + the exclusion tiers (those are stronger and
+    # permanent); a GA / next_step hold is a revisitable off-board reason.
+    if is_held(row):
+        return 1, "held"
     return 0, None
 
 
@@ -121,14 +173,14 @@ def classify_log_line(line: str) -> tuple[str, str, str]:
     return (ch, "outbound", "note")
 
 
-# Fields the APP owns once a contact exists: a continuous re-sync from the sheet
-# must never clobber the pipeline work Dirk does inside the Lead Desk. The sheet
-# stays authoritative for identity / classification / provenance / suppression;
-# the app owns the active next-step (its inline-edit surface) and the judgment
-# fields migrate never maps anyway (BANT, demo_date, dirk_verdict, persona,
-# signal, notes). These are dropped from the UPSERT for a contact that already
-# exists; a brand-new contact still gets them on first import.
-APP_OWNED_ON_RESYNC = ("next_step", "next_step_due")
+_EWAVE_RE = re.compile(r"\bE[123]\b", re.IGNORECASE)
+
+
+def is_during_event(text: str) -> bool:
+    """True for a during-event E-wave reference (E1/E2/E3). Graph is the
+    authoritative source for these (see ground.py), so the sheet must not
+    duplicate them into the timeline."""
+    return bool(_EWAVE_RE.search(text or ""))
 
 
 def import_workbook(store: ContactStore, xlsx: Path, campaign: str, report: dict,
@@ -150,6 +202,7 @@ def import_workbook(store: ContactStore, xlsx: Path, campaign: str, report: dict
     name_groups: dict[str, list[str]] = defaultdict(list)
     events_added = 0
     contacts = 0
+    sheet_diffs: list[dict] = []   # app-owned fields where the sheet now differs
 
     for ordinal, r in enumerate(it):
         if all(c is None for c in r):
@@ -161,6 +214,12 @@ def import_workbook(store: ContactStore, xlsx: Path, campaign: str, report: dict
         email_l = email.lower() if email else None
         nk = natural_key(email, first, last, company, ordinal)
         cid = contact_id_for(nk)
+
+        # A merged-away duplicate stays a tombstone: never resurrect it as a
+        # fresh active contact on the next sync.
+        _prior = store.get_contact_by_key(nk)
+        if _prior is not None and _prior["merged_into"]:
+            continue
 
         rowdict = {h: col(r, h) for h in header}
         supp, reason = suppression(rowdict)
@@ -174,6 +233,10 @@ def import_workbook(store: ContactStore, xlsx: Path, campaign: str, report: dict
             "country": _s(col(r, "country")), "linkedin_url": _s(col(r, "linkedin_url")),
             "tier": _s(col(r, "Tier")), "tier_reason": _s(col(r, "Tier_reason")),
             "lead_type": _s(col(r, "lead_type")),
+            # Sheet's human status, stored for DISPLAY only (owner 2026-07-15).
+            # Sheet-authoritative on re-sync; deliberately NOT in
+            # APP_OWNED_ON_RESYNC and NOT mapped into stage.
+            "outreach_status": _s(col(r, "email outreach_status")),
             "suppressed": supp, "suppress_reason": reason,
             "suppressed_at": now if supp else None,
             "suppressed_by": "import" if supp else None,
@@ -190,8 +253,19 @@ def import_workbook(store: ContactStore, xlsx: Path, campaign: str, report: dict
             "crm_last_activity": _s(col(r, "crm_last_activity")),
             "dirk_notes": _s(col(r, "dirk_notes")),
         }
-        if preserve_app_fields and store.get_contact_by_key(nk) is not None:
-            # Existing contact on a re-sync: keep the app's pipeline fields.
+        # Sheet-follows-app re-sync: once a contact exists, keep the app's own
+        # pipeline fields (next_step) rather than letting the sheet reset them.
+        # But if the sheet now carries a DIFFERENT non-empty value for one of
+        # those fields, record it so the operator sees "sheet differs" rather
+        # than the edit vanishing silently.
+        existing_row = store.get_contact_by_key(nk) if preserve_app_fields else None
+        if existing_row is not None:
+            for fld in APP_OWNED_ON_RESYNC:
+                sheet_val = str(data.get(fld) or "").strip()
+                board_val = str(existing_row[fld] or "").strip()
+                if sheet_val and sheet_val != board_val:
+                    sheet_diffs.append({"contact_id": cid, "field": fld,
+                                        "sheet": sheet_val, "board": board_val})
             data = {k: v for k, v in data.items() if k not in APP_OWNED_ON_RESYNC}
         store.upsert_contact(data, now)
         contacts += 1
@@ -219,6 +293,12 @@ def import_workbook(store: ContactStore, xlsx: Path, campaign: str, report: dict
                     has_out = True
                 if direction == "inbound":
                     has_in = True
+                # During-event (E1/E2/E3) is grounded from the mailboxes
+                # (ground.py); do not duplicate it from the sheet. has_out/has_in
+                # above still register the activity so the summary-date gap-fill
+                # below stays quiet for these contacts.
+                if is_during_event(line):
+                    continue
                 if store.add_event(
                     contact_id=cid, ts=_ts(d) or EVENT_WEEK_TS, channel=ch, direction=direction,
                     type=typ, detail=line, source="import", campaign=campaign, now=now,
@@ -238,9 +318,35 @@ def import_workbook(store: ContactStore, xlsx: Path, campaign: str, report: dict
                                campaign=campaign, now=now):
                 events_added += 1
 
+        # Dirk personal touch -> one outbound 'touch' event (reaches >= 'sent').
+        # Stable ext_key so a re-run is a no-op even if the note text changes.
+        touch = dirk_touch(rowdict)
+        if touch:
+            ch, detail = touch
+            if store.add_event(contact_id=cid, ts=_ts(last_out) or EVENT_WEEK_TS,
+                               channel=ch, direction="outbound", type="touch",
+                               detail=detail, source="import",
+                               ext_key=f"dirk-touch-{cid}", campaign=campaign, now=now):
+                events_added += 1
+
+        # Post-event follow-up phase: kept DISTINCT from during-event (E1/E2/E3),
+        # which is grounded from the mailbox (see ground.py). The sheet's
+        # post_event_outreach column is Dirk's tracking of the booth follow-up wave.
+        pe = _s(col(r, "post_event_outreach"))
+        if pe:
+            pe_date = _date(pe) or POST_EVENT_DATE
+            if store.add_event(contact_id=cid, ts=_ts(pe_date) or EVENT_WEEK_TS,
+                               channel="email", direction="outbound", type="sent",
+                               subject="Post-event follow-up", detail=f"Post-event: {pe}",
+                               source="sheet-postevent", ext_key=f"pe-{cid}",
+                               campaign=campaign, now=now):
+                events_added += 1
+
     report["contacts"] = contacts
     report["events_from_sheet"] = events_added
     report["fuzzy_dups"] = {k: v for k, v in name_groups.items() if len(set(v)) > 1}
+    report["sheet_diffs"] = sheet_diffs
+    report["sheet_diff_count"] = len(sheet_diffs)
     return email_index
 
 
@@ -300,14 +406,20 @@ def main(argv: list[str] | None = None) -> int:
         rows = store.board_rows(args.campaign)
         stages = Counter(r["stage"] for r in rows)
         supp = sum(1 for r in rows if r["suppressed"])
+        supp_reasons = Counter(r["suppress_reason"] for r in rows if r["suppressed"])
+        reached_dirk = sum(
+            1 for r in rows if not r["suppressed"] and r["stage"] == "sent"
+            and r["has_touch"] and not r["has_campaign_send"]
+        )
         total_events = store.count_events()
 
     print(f"DB: {db}")
     print(f"contacts upserted: {report.get('contacts')}")
-    print(f"suppressed: {supp}")
+    print(f"suppressed: {supp}  ({dict(supp_reasons)})")
     print(f"events (sheet): {report.get('events_from_sheet')} | "
           f"(send-logs): {report.get('events_from_send_logs', 0)} | total in db: {total_events}")
     print(f"stage distribution: {dict(stages)}")
+    print(f"reached (Dirk personal touch, no campaign send): {reached_dirk}")
     dups = report.get("fuzzy_dups") or {}
     if dups:
         print(f"POSSIBLE DUPLICATES (same name, different key), {len(dups)}:")

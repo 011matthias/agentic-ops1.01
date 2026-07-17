@@ -9,9 +9,11 @@ WORKDIR /app
 COPY pyproject.toml ./
 COPY src ./src
 
-# Install the package plus the web extra into the system environment so the
-# lead-desk-web console script is on PATH.
-RUN uv pip install --system --no-cache ".[web]"
+# Install the package plus the web + capture extras into the system
+# environment so the lead-desk-web console script is on PATH and the in-app
+# cloud worker (4d) has httpx for Graph capture. The Windows-only COM worker
+# extra stays out of the image on purpose.
+RUN uv pip install --system --no-cache ".[web,capture]"
 
 ENV LEAD_DESK_DATA=/data
 EXPOSE 8080

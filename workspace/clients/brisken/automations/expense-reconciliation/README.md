@@ -205,6 +205,86 @@ uv run expense-recon doctor --config run.json                  # pre-flight conf
 uv run expense-recon calibrate --config run.json               # matcher metrics, no xlsx
 ```
 
+## Testing mode (hosted, 2026-07-15)
+
+While the tool is in testing, the hosted app (`brisken-expense-recon.fly.dev`)
+runs a **role-split intake model** so Chris can use it without triggering
+the pipeline:
+
+- **User (Chris)** logs in with `EXPENSE_RECON_ACCESS_CODE` and only
+  *uploads* documents (statement + optional receipts + a card picker).
+  Nothing runs; the upload is saved and appears as "Received".
+- **Operator (dev)** logs in with `EXPENSE_RECON_OPERATOR_CODE`, runs the
+  pipeline from the intake queue, reviews, and **Publishes** the run back;
+  the user then sees it as "Ready to review" and reviews it (no LLM
+  involved in review). Operator-only surface: intake queue, run, Compare,
+  Memory, publish.
+- The server stays **API-free**: `tools/brisken-recon-notify.py` (run
+  dev-side, `--once` after a publish or on a scheduled task) polls
+  `/api/operator/state` and sends the Graph mails (new upload -> matthias;
+  run ready -> Chris + matthias; new feedback -> matthias). No Graph creds
+  on the box.
+- **Anchored feedback**: every logged-in page carries the double-click
+  widget (same pattern as the OnePilot prototype). A reviewer double-clicks
+  any spot, or uses the floating Feedback button, and the note lands in
+  `/data/feedback.jsonl` attributed to the session role, page, and run id.
+  Operators read it at `/feedback-log` (nav tab) or `/feedback.jsonl`.
+
+Card presets for the simplified upload live in `/data/cards.json` (env
+`EXPENSE_RECON_CARDS`; shape in `examples/cards.example.json`); unset =>
+a plain card-name text box (fail-open).
+
+**Deploy** (Band-3, explicit order only):
+
+```bash
+fly secrets set EXPENSE_RECON_OPERATOR_CODE=<op> EXPENSE_RECON_ACCESS_CODE=<user> --stage
+# author + upload /data/cards.json (real card list), then:
+flyctl deploy   # from this module dir; the DB self-migrates on first open
+```
+
+Notifier env (dev-side, gitignored `../../context/.env`):
+`BRISKEN_TENANT_ID`, `BRISKEN_GRAPH_CLIENT_ID`, `BRISKEN_GRAPH_CLIENT_SECRET`,
+`EXPENSE_RECON_OPERATOR_CODE`, and `EXPENSE_RECON_NOTIFY_USER` (Chris's
+email; the ready-ping is dev-copy-only until set).
+
+## Browser UI (review workbench)
+
+Chris does not have to hand-edit a JSON config or read the xlsx. The
+same pipeline is wrapped in a web app (hosted per "Testing mode" above,
+or run locally on loopback):
+
+```bash
+cd workspace/clients/brisken/automations/expense-reconciliation
+uv sync --extra web                     # installs the web dependencies
+uv run expense-recon-web                # opens http://127.0.0.1:8000
+uv run expense-recon-web --port 9000 --data ./runs   # alternate port + data dir
+```
+
+It binds to loopback (127.0.0.1) only, so it is reachable from the
+browser on that machine and nowhere else; every statement, receipt, and
+generated report stays on the machine running the server. To turn on AI
+categorization and FX judgment, set `OPENAI_API_KEY` in the server's
+environment before launching (the keyword fallback runs without it).
+
+What it does:
+
+1. Upload one card statement (`.csv` / `.xlsx`) and the receipts CSV.
+   The statement column map is auto-detected (the `inspect` heuristic);
+   override a field only if the guess is wrong.
+2. The run goes through the exact CLI pipeline (`cli.reconcile`): ingest,
+   categorize, deterministic match, LLM judgment for FX / ambiguous.
+3. The review workbench shows every transaction with its candidate
+   receipt(s), match type, confidence, and per-line category. Chris can
+   confirm a match, reject it, pick the right receipt among candidates,
+   and reclassify a line's category. Each edit persists (SQLite) and the
+   summary updates live.
+4. Download the xlsx report with her decisions and reclassifications
+   applied.
+
+Runs persist under the data dir (`recon-web-data/` by default): the
+SQLite db plus a per-run folder with the uploads and the generated
+report. Journal POSTING to Zoho (4b) stays gated, same as the CLI.
+
 `calibrate` runs the matcher and prints calibration metrics — the
 distinct-transaction outcome split, the reconciliation invariant, the
 receipt double-binding check, the FX-pair-vs-foreign-receipt

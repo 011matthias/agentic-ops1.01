@@ -31,7 +31,17 @@ from decimal import Decimal, InvalidOperation
 
 
 REQUIRED_KEYS: tuple[str, ...] = ("transaction_date", "amount", "vendor")
-OPTIONAL_KEYS: tuple[str, ...] = ("posting_date", "transaction_currency")
+# L5 (2026-07-15): original_amount / original_currency / fx_rate let a
+# tabular statement carry per-charge foreign-currency detail (BRL on the
+# USD card), the same fields the Chase PDF parser populates. The matcher
+# already consumes them (deterministic.py FX-detail path).
+OPTIONAL_KEYS: tuple[str, ...] = (
+    "posting_date",
+    "transaction_currency",
+    "original_amount",
+    "original_currency",
+    "fx_rate",
+)
 
 
 class StatementParseError(ValueError):
@@ -56,11 +66,16 @@ class ParseIssue:
     issue came from when a run ingests multiple files. `line_number`
     follows the same convention as `StatementParseError.line_number`
     (header is row 1, data starts at row 2).
+
+    `severity`: "error" (a row failed to parse) or "warning" (advisory,
+    e.g. a mapped column is formula-derived, L6). Strict mode raises
+    only on errors; warnings never abort a run.
     """
 
     file_name: str
     line_number: int
     message: str
+    severity: str = "error"
 
     def to_error(self) -> StatementParseError:
         return StatementParseError(

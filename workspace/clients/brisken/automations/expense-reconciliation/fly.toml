@@ -1,0 +1,40 @@
+# Fly.io config for the hosted Brisken expense-reconciliation workbench.
+# Frankfurt (EU) for data residency. Scales to zero when idle; a request
+# cold-starts it. The run database + receipt files live on the recon_data
+# volume mounted at /data. Access is gated by EXPENSE_RECON_ACCESS_CODE
+# (set as a Fly secret, never committed).
+app = "brisken-expense-recon"
+primary_region = "fra"
+
+[build]
+
+[env]
+  EXPENSE_RECON_WEB_DATA = "/data"
+  # Phase-5 COA gate: per-entity provisioning file on the /data volume
+  # (coa_provision.py). Inert until the file is present (fail-open, no-op),
+  # so this is safe to ship ahead of the upload. Upload coa-provision.json +
+  # zoho-books-coa.json to /data to activate; the next run picks them up.
+  EXPENSE_RECON_COA_PROVISION = "/data/coa-provision.json"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "15s"
+    method = "get"
+    path = "/healthz"
+
+[mounts]
+  source = "recon_data"
+  destination = "/data"
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

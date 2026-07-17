@@ -16,3 +16,5 @@ build/
 examples/report.xlsx
 examples/*report*.xlsx
 examples/report-llm.xlsx
+examples/reconciled.csv
+examples/zoho-journal.csv

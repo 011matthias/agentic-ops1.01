@@ -5,3 +5,4 @@ tests/
 *.sqlite
 data/
 .venv/
+worker/

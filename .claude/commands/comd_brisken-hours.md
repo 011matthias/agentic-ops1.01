@@ -88,7 +88,7 @@ commit. For each row:
 - **Date** = the day the work happened.
 - **Start / End** = a conservative window grounded in the commit times and the
   checkpoint mtime. Never overlap an already-logged row (check the prior rows in
-  `--status` / the tab).
+  `--status` / the tab). A session is typically 1 to 4 hours.
 - **Task** = COMPACT, lowercase, ~4 to 8 words, human voice, like
   "expandable cards, bigger hero, dns recon" — NOT a 15-word laundry list.
   No em-dashes, no `--`, no `->`, no parenthetical pile-ups, no slash-runs

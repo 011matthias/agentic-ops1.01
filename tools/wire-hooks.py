@@ -107,10 +107,15 @@ CANONICAL_HOOKS = {
                     "command": _cmd(".claude/hooks/file-placement-gate.py"),
                     "timeout": 10000,
                 },
+                {
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/scorer-lock-gate.py"),
+                    "timeout": 10000,
+                },
             ],
         },
         {
-            "matcher": "Bash",
+            "matcher": "Bash|PowerShell",
             "hooks": [
                 {
                     "type": "command",
@@ -147,7 +152,7 @@ CANONICAL_HOOKS = {
             ],
         },
         {
-            "matcher": "Bash",
+            "matcher": "Bash|PowerShell",
             "hooks": [
                 {
                     "type": "command",
@@ -193,10 +198,31 @@ CANONICAL_HOOKS = {
             "matcher": "",
             "hooks": [
                 {
+                    # Warn when a live sibling session shares THIS working tree
+                    # (shared HEAD/index/stash -> concurrent-commit collisions).
+                    # Silent unless a sibling is detected. A .claude/hooks gate
+                    # (unlike the two tools/ scripts below), so it IS part of
+                    # EXPECTED_HOOK_SCRIPTS. See rule/memory
+                    # feedback_worktree_for_concurrent_sessions.
+                    "type": "command",
+                    "command": _cmd(".claude/hooks/sibling-session-gate.py"),
+                    "timeout": 10000,
+                },
+                {
                     "type": "command",
                     "command": _cmd("tools/friction-watch.py", "--once-per-day --quiet"),
                     "timeout": 10000,
-                }
+                },
+                {
+                    # Auto-surface stale/malformed per-project status files so
+                    # currency does not depend on remembering to run --check.
+                    # Fail-open, exit 0 always; advises at most once per day.
+                    # tools/ script (not a .claude/hooks gate), like friction-watch
+                    # -- not part of EXPECTED_HOOK_SCRIPTS. See rule_project_status.md.
+                    "type": "command",
+                    "command": _cmd("tools/project_status.py", "--sweep-stale --once-per-day"),
+                    "timeout": 10000,
+                },
             ],
         }
     ],
@@ -217,6 +243,8 @@ EXPECTED_HOOK_SCRIPTS = {
     "gate-skip-detector.py",
     "session-pressure-meter.py",
     "stop-b1-gate.py",
+    "sibling-session-gate.py",
+    "scorer-lock-gate.py",
 }
 
 # Canonical hook count, derived so the assertion strings can never drift out

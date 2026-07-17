@@ -8,7 +8,7 @@
 
 **HTML deliverables MUST NOT include:**
 - Emoji icons in sidebar/left-nav. Plain text labels only. Reason: client directive 2026-05-08 ("ERADICATE THE EMOJIS FROM THE WEBSITE LEFT SIDE NAVIGATION BAR"). Applies retroactively to existing pages, not just new ones.
-- Any form of em-dash. Banned: `—` (U+2014), `&mdash;` entity, AND `--` as a typographic substitute. Reason: client directive 2026-05-08 ("NO MORE EM DASHES EITHER ... DO NOT REPLACE EM DASHES WITH DOUBLE DASHES"). Use commas, semicolons, colons, or split into separate sentences. This is stricter than the "max 2" rule in the PDF voice pass below; for HTML it is zero.
+- Any form of em-dash. Banned: `—` (U+2014), `&mdash;` entity, AND `--` as a typographic substitute. Reason: client directive 2026-05-08 ("NO MORE EM DASHES EITHER ... DO NOT REPLACE EM DASHES WITH DOUBLE DASHES"). Use commas, semicolons, colons, or split into separate sentences. For HTML it is zero.
 - Stale or fabricated dates. Every date stamp must reflect the actual day the document was prepared or last updated. Update `Last updated:` footers on every meaningful edit.
 
 **HTML structural validation.** Before deploying any self-contained HTML, run `uv run tools/validate-html.py {files}`. Fix all failures before deploy. For multi-page sets, run in directory mode to check cross-page consistency. This is a B2 gate extension — failing validation = do not deploy.
@@ -26,7 +26,7 @@ Video scripts must read like a human speaking, not like written technical notes.
 **Rules for `SAY:` lines:**
 
 1. **Use specific terminology and abbreviations confidently.** Don't strip them out — they signal expertise and shorthand complex ideas. The goal is comprehension by the listener, not removal of jargon.
-2. **Any abbreviation or domain-specific term needs a 3-8 word inline gloss the first time it appears**, unless it's as universal as: AI, API, UI, URL, HTML, CSS, JS, JSON, XML, SQL, OS, CSV, HTTP, HTTPS, PDF, TCP, IP, DNS, CRM, CEO, CTO, CFO, COO, CMO, VP, B2B, B2C, KPI, ROI, IT, HR, PR, QA, UX, EU, US, UK, USA, EMEA, APAC, FAQ, AM, PM, TBD, OK.
+2. **Any abbreviation or domain-specific term needs a 3-8 word inline gloss the first time it appears**, unless it is in the universal-exemption set (the canonical list lives in [[rule_human_communication]] §7 and is enforced by `tools/validate-proposal.py`).
 3. **The gloss embeds naturally right after the term** — listener hears the abbreviation AND its meaning in one sentence:
    - "the SKU, the product code each supplier uses to identify an item"
    - "FAISS or sqlite-vec, two libraries for fast similarity search"
@@ -71,17 +71,10 @@ Wait for the user's pick. Do not assume. If the chosen format doesn't fit the co
 
 **Step 6. Voice pass against banned constructions:**
 
-- No "not just X but Y" constructions
-- No three-part lists where two work; vary sentence shape
-- No "it's important to note", "keep in mind", "worth mentioning", meta-commentary about the writing
-- Em-dashes (and `&mdash;`, `--`): zero in HTML deliverables per the "MUST NOT include" rule above. For markdown drafts and PDFs, still keep to zero or one. The "max 2" framing is retired.
-- No corporate-thesaurus: robust, leverage, ensure, facilitate, comprehensive, streamline, optimize, holistic, drive, unlock
-- No sentence-opening adverbs (Notably, Importantly, Interestingly)
-- No "in summary", "in conclusion", "to summarize"
-- No section intros that summarize what the section is about to say
-- Contractions in prose, full forms in table cells
-- Specificity over abstraction
-- No performed humanness either (no "Honestly,", "Look,", "Here's the thing")
+- Enumerated voice bans per [[rule_anti_slop]] (corporate thesaurus, meta-phrases, "not just X but Y", sentence-opening adverbs, performed-humanness, three-part lists where two work, empty section intros).
+- Em-dashes (and `&mdash;`, `--`): zero in HTML deliverables per the "MUST NOT include" rule above. For markdown drafts and PDFs, keep to zero or one.
+- Contractions in prose, full forms in table cells.
+- Specificity over abstraction.
 
 **Step 7. Draft-review gate — non-negotiable.** Show the user the markdown draft AND the list of facts that couldn't be cleanly sourced. Wait for review. Catching issues in markdown is fast; regenerating PDFs is slow.
 

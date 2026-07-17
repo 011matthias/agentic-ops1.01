@@ -13,6 +13,7 @@
         {% if c.tier %}<span class="badge tier">{{ c.tier }}</span>{% endif %}
         <span class="badge stage-{{ c.stage }}">{{ c.stage }}</span>
         <span class="muted">{{ c.status }}</span>
+        {% if c.outreach_status %}<span class="badge" title="The master sheet's own status column (display only; does not drive the derived stage)">Sheet: {{ c.outreach_status }}</span>{% endif %}
         {% if c.suppressed %}<span class="badge suppressed">suppressed: {{ c.suppress_reason }}</span>{% endif %}
       </div>
     </div>
@@ -23,6 +24,83 @@
       {% if c.phone %}<div>{{ c.phone }}</div>{% endif %}
       {% if c.country %}<div>{{ c.country }}</div>{% endif %}
       <div>{{ c.lead_type or '' }}{% if c.source %} &middot; {{ c.source }}{% endif %}</div>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="border-left:4px solid var(--accent);">
+  <div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px;">
+    <h2>Context brief</h2>
+    <button type="button" class="btn btn-small btn-secondary" onclick="copyBrief(this)">Copy</button>
+  </div>
+  <div id="ctx-brief" style="font-size:13.5px; line-height:1.6;">
+    <div><strong>Who:</strong> {{ c.job_title or 'role unknown' }}{% if c.company %} at {{ c.company }}{% endif %}{% if c.persona %} &middot; {{ c.persona }}{% endif %}.</div>
+    <div><strong>Why now:</strong> {{ c.signal or c.tier_reason or 'no public trigger on file' }}.</div>
+    <div><strong>Relationship:</strong> {{ c.if_we_know_them or 'no prior relationship noted' }}{% if c.dirk_notes %} &middot; {{ c.dirk_notes }}{% endif %}.</div>
+    <div><strong>History:</strong> {% if view.phases.during_event.any %}E-waves {{ view.phases.during_event.waves|join(', ') }}{% if view.phases.during_event.replied %}, replied {{ view.phases.during_event.replied }}{% endif %}{% elif view.phases.post_event.any %}post-event follow-up {{ view.phases.post_event.sent }}{% else %}no outreach on record{% endif %}.</div>
+    <div><strong>Ask:</strong> {{ c.next_step or 'no next step set' }}.</div>
+  </div>
+</div>
+
+{% if view.merge_candidates %}
+<div class="card" style="border-left:4px solid var(--orange);">
+  <h2>Possible duplicates</h2>
+  <div class="muted" style="font-size:12px; margin-bottom:8px;">Same last name + company. Merging folds the other contact's timeline and enrollments into THIS contact and leaves it as a suppressed duplicate.</div>
+  <table>
+    <thead><tr><th>Name</th><th>Company</th><th>Email</th><th></th></tr></thead>
+    <tbody>
+    {% for m in view.merge_candidates %}
+      <tr>
+        <td><a href="/contacts/{{ m.contact_id }}">{{ m.first_name }} {{ m.last_name }}</a></td>
+        <td>{{ m.company or '' }}</td><td>{{ m.email or '' }}</td>
+        <td><form method="post" action="/contacts/{{ m.contact_id }}/merge" style="margin:0;" onsubmit="return confirm('Merge {{ m.first_name }} {{ m.last_name }} INTO this contact? The other row becomes a suppressed duplicate. This cannot be undone.');">
+          <input type="hidden" name="survivor" value="{{ c.contact_id }}">
+          <button class="btn btn-small btn-secondary" type="submit">Merge into this</button>
+        </form></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if c.recommended and c.recommended.needed %}
+<div class="card" style="border-left:4px solid var(--accent);">
+  <div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px;">
+    <strong>Action needed</strong>
+    <span class="muted" style="font-size:13px;">{{ c.recommended.status }}</span>
+  </div>
+  <div style="font-size:15px; font-weight:600; margin-top:6px;">{{ c.recommended.action }}</div>
+  <div class="muted" style="margin-top:6px;">{{ c.recommended.reason }}</div>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>Outreach phases</h2>
+  <div class="muted" style="font-size:12.5px; margin-bottom:8px;">During-event and post-event outreach are tracked separately and never merged.</div>
+  <div class="grid2">
+    <div>
+      <div style="font-weight:600;">During-event (E1/E2/E3)</div>
+      <div class="muted" style="font-size:12px;">grounded in the mailbox (Sent Items)</div>
+      {% if view.phases.during_event.any or view.phases.during_event.replied %}
+      <div class="inline" style="margin-top:6px;">
+        {% for w in view.phases.during_event.waves %}<span class="badge tier">{{ w }}</span>{% endfor %}
+        {% if view.phases.during_event.replied %}<span class="badge stage-replied">replied</span>{% endif %}
+      </div>
+      <div class="muted" style="font-size:12px; margin-top:4px;">{% if view.phases.during_event.any %}last sent {{ view.phases.during_event.last }}{% else %}reply on record, no grounded wave{% endif %}{% if view.phases.during_event.replied %} &middot; replied {{ view.phases.during_event.replied }}{% endif %}</div>
+      {% else %}
+      <div class="muted" style="margin-top:6px;">No E-wave send on record</div>
+      {% endif %}
+    </div>
+    <div>
+      <div style="font-weight:600;">Post-event follow-up</div>
+      <div class="muted" style="font-size:12px;">from the master sheet (booth follow-up)</div>
+      {% if view.phases.post_event.any %}
+      <div class="inline" style="margin-top:6px;"><span class="badge stage-sent">sent {{ view.phases.post_event.sent }}</span></div>
+      {% if view.phases.post_event.detail %}<div class="muted" style="font-size:12px; margin-top:4px;">{{ view.phases.post_event.detail }}</div>{% endif %}
+      {% else %}
+      <div class="muted" style="margin-top:6px;">No post-event follow-up on record</div>
+      {% endif %}
     </div>
   </div>
 </div>
@@ -65,48 +143,55 @@
   </div>
 </div>
 
+{% if request.query_params.get('stale') %}
+<div class="card" style="border-left:4px solid var(--orange); background:var(--orange-bg);">
+  <strong>Not saved.</strong> This contact was changed (a sheet sync or another editor) since you opened the form. The current values are loaded below; re-apply your edit and save again.
+</div>
+{% endif %}
+
 <form method="post" action="/contacts/{{ c.contact_id }}/fields">
   <input type="hidden" name="_managed_flags" value="bant_need bant_authority bant_timeline bant_budget in_our_booth scanned_at_booth fob_encoded no_show sponsor_opt_in">
+  <input type="hidden" name="updated_at" value="{{ c.updated_at }}">
   <div class="card">
     <h2>Identity</h2>
     <div class="grid2">
-      <div><label>First name</label><input type="text" name="first_name" value="{{ c.first_name or '' }}"></div>
-      <div><label>Last name</label><input type="text" name="last_name" value="{{ c.last_name or '' }}"></div>
+      <div><label for="f_first_name">First name</label><input id="f_first_name" type="text" name="first_name" value="{{ c.first_name or '' }}"></div>
+      <div><label for="f_last_name">Last name</label><input id="f_last_name" type="text" name="last_name" value="{{ c.last_name or '' }}"></div>
     </div>
     <div class="grid2">
-      <div><label>Company</label><input type="text" name="company" value="{{ c.company or '' }}"></div>
-      <div><label>Job title</label><input type="text" name="job_title" value="{{ c.job_title or '' }}"></div>
+      <div><label for="f_company">Company</label><input id="f_company" type="text" name="company" value="{{ c.company or '' }}"></div>
+      <div><label for="f_job_title">Job title</label><input id="f_job_title" type="text" name="job_title" value="{{ c.job_title or '' }}"></div>
     </div>
     <div class="grid2">
-      <div><label>Email</label><input type="text" name="email" value="{{ c.email or '' }}"></div>
-      <div><label>Alt email</label><input type="text" name="alt_email" value="{{ c.alt_email or '' }}"></div>
+      <div><label for="f_email">Email</label><input id="f_email" type="text" name="email" value="{{ c.email or '' }}"></div>
+      <div><label for="f_alt_email">Alt email</label><input id="f_alt_email" type="text" name="alt_email" value="{{ c.alt_email or '' }}"></div>
     </div>
     <div class="grid2">
-      <div><label>Phone</label><input type="text" name="phone" value="{{ c.phone or '' }}"></div>
-      <div><label>Country</label><input type="text" name="country" value="{{ c.country or '' }}"></div>
+      <div><label for="f_phone">Phone</label><input id="f_phone" type="text" name="phone" value="{{ c.phone or '' }}"></div>
+      <div><label for="f_country">Country</label><input id="f_country" type="text" name="country" value="{{ c.country or '' }}"></div>
     </div>
-    <label>LinkedIn URL</label><input type="text" name="linkedin_url" value="{{ c.linkedin_url or '' }}">
+    <label for="f_linkedin_url">LinkedIn URL</label><input id="f_linkedin_url" type="text" name="linkedin_url" value="{{ c.linkedin_url or '' }}">
   </div>
 
   <div class="card">
     <h2>Classification</h2>
     <div class="grid2">
-      <div><label>Tier</label>
-        <input type="text" name="tier" value="{{ c.tier or '' }}" list="tier-vocab">
+      <div><label for="f_tier">Tier</label>
+        <input id="f_tier" type="text" name="tier" value="{{ c.tier or '' }}" list="tier-vocab">
         <datalist id="tier-vocab">{% for t in view.tier_vocab %}<option value="{{ t }}">{% endfor %}</datalist>
       </div>
-      <div><label>Lead type</label><input type="text" name="lead_type" value="{{ c.lead_type or '' }}"></div>
+      <div><label for="f_lead_type">Lead type</label><input id="f_lead_type" type="text" name="lead_type" value="{{ c.lead_type or '' }}"></div>
     </div>
-    <label>Tier reason</label><input type="text" name="tier_reason" value="{{ c.tier_reason or '' }}">
+    <label for="f_tier_reason">Tier reason</label><input id="f_tier_reason" type="text" name="tier_reason" value="{{ c.tier_reason or '' }}">
     <div class="grid2">
-      <div><label>Persona</label><input type="text" name="persona" value="{{ c.persona or '' }}"></div>
-      <div><label>Signal (public trigger)</label><input type="text" name="signal" value="{{ c.signal or '' }}"></div>
+      <div><label for="f_persona">Persona</label><input id="f_persona" type="text" name="persona" value="{{ c.persona or '' }}"></div>
+      <div><label for="f_signal">Signal (public trigger)</label><input id="f_signal" type="text" name="signal" value="{{ c.signal or '' }}"></div>
     </div>
     <div class="grid2">
-      <div><label>CRM owner</label><input type="text" name="crm_owner" value="{{ c.crm_owner or '' }}"></div>
-      <div><label>Brisken customer</label><input type="text" name="brisken_customer" value="{{ c.brisken_customer or '' }}"></div>
+      <div><label for="f_crm_owner">CRM owner</label><input id="f_crm_owner" type="text" name="crm_owner" value="{{ c.crm_owner or '' }}"></div>
+      <div><label for="f_brisken_customer">Brisken customer</label><input id="f_brisken_customer" type="text" name="brisken_customer" value="{{ c.brisken_customer or '' }}" placeholder="existing account? name or yes/no"></div>
     </div>
-    <label>If we know them</label><input type="text" name="if_we_know_them" value="{{ c.if_we_know_them or '' }}">
+    <label for="f_if_we_know_them">How we know them <span class="muted">(relationship note)</span></label><input id="f_if_we_know_them" type="text" name="if_we_know_them" value="{{ c.if_we_know_them or '' }}" placeholder="e.g. met at TAC Brussels 2024; Dirk engaged">
   </div>
 
   <div class="card">
@@ -114,19 +199,19 @@
     <div class="grid4">
       <label class="inline" style="color:var(--text); margin:0;"><input type="checkbox" name="in_our_booth" value="1" style="width:auto;" {% if c.in_our_booth %}checked{% endif %}> In our booth</label>
       <label class="inline" style="color:var(--text); margin:0;"><input type="checkbox" name="scanned_at_booth" value="1" style="width:auto;" {% if c.scanned_at_booth %}checked{% endif %}> Scanned at booth</label>
-      <label class="inline" style="color:var(--text); margin:0;"><input type="checkbox" name="fob_encoded" value="1" style="width:auto;" {% if c.fob_encoded %}checked{% endif %}> Fob encoded</label>
+      <label class="inline" style="color:var(--text); margin:0;" title="An RFID badge/fob was written for them at the booth"><input type="checkbox" name="fob_encoded" value="1" style="width:auto;" {% if c.fob_encoded %}checked{% endif %}> Fob encoded <span class="muted">(badge/RFID)</span></label>
       <label class="inline" style="color:var(--text); margin:0;"><input type="checkbox" name="no_show" value="1" style="width:auto;" {% if c.no_show %}checked{% endif %}> No show</label>
     </div>
     <div class="grid4" style="margin-top:8px;">
       <label class="inline" style="color:var(--text); margin:0;"><input type="checkbox" name="sponsor_opt_in" value="1" style="width:auto;" {% if c.sponsor_opt_in %}checked{% endif %}> Sponsor opt-in</label>
     </div>
     <div class="grid2">
-      <div><label>Attendee type</label><input type="text" name="attendee_type" value="{{ c.attendee_type or '' }}"></div>
-      <div><label>Source</label><input type="text" name="source" value="{{ c.source or '' }}"></div>
+      <div><label for="f_attendee_type">Attendee type</label><input id="f_attendee_type" type="text" name="attendee_type" value="{{ c.attendee_type or '' }}"></div>
+      <div><label for="f_source">Source</label><input id="f_source" type="text" name="source" value="{{ c.source or '' }}"></div>
     </div>
     <div class="grid2">
-      <div><label>Booth registered at</label><input type="text" name="booth_registered_at" value="{{ c.booth_registered_at or '' }}"></div>
-      <div><label>CRM last activity</label><input type="text" name="crm_last_activity" value="{{ c.crm_last_activity or '' }}"></div>
+      <div><label for="f_booth_registered_at">Booth registered at <span class="muted">(date)</span></label><input id="f_booth_registered_at" type="text" name="booth_registered_at" value="{{ c.booth_registered_at or '' }}" placeholder="YYYY-MM-DD"></div>
+      <div><label for="f_crm_last_activity">CRM last activity <span class="muted">(date)</span></label><input id="f_crm_last_activity" type="text" name="crm_last_activity" value="{{ c.crm_last_activity or '' }}" placeholder="YYYY-MM-DD"></div>
     </div>
   </div>
 
@@ -140,24 +225,66 @@
       <label class="inline" style="color:var(--text); margin:0;"><input type="checkbox" name="bant_budget" value="1" style="width:auto;" {% if c.bant_budget %}checked{% endif %}> Budget</label>
     </div>
     <div class="grid2">
-      <div><label>Demo date (sets stage to booked)</label><input type="date" name="demo_date" value="{{ (c.demo_date or '')[:10] }}"></div>
-      <div><label>Dirk verdict</label><select name="dirk_verdict">
+      <div><label for="f_demo_date">Demo date <span class="muted">(sets stage to booked; clearing un-books)</span></label><input id="f_demo_date" type="date" name="demo_date" value="{{ (c.demo_date or '')[:10] }}"></div>
+      <div><label for="f_dirk_verdict">Dirk verdict</label><select id="f_dirk_verdict" name="dirk_verdict">
         {% for opt in ['', 'pending', 'accepted', 'rejected'] %}<option value="{{ opt }}" {% if c.dirk_verdict==opt %}selected{% endif %}>{{ opt or '(none)' }}</option>{% endfor %}
       </select></div>
     </div>
     <div class="grid2">
-      <div><label>Next step</label><input type="text" name="next_step" value="{{ c.next_step or '' }}"></div>
-      <div><label>Next step due</label><input type="date" name="next_step_due" value="{{ (c.next_step_due or '')[:10] }}"></div>
+      <div><label for="f_next_step">Next step <span class="muted">(your manual note)</span></label><input id="f_next_step" type="text" name="next_step" value="{{ c.next_step or '' }}"></div>
+      <div><label for="f_next_step_due">Next step due</label><input id="f_next_step_due" type="date" name="next_step_due" value="{{ (c.next_step_due or '')[:10] }}"></div>
     </div>
     <div class="grid2">
-      <div><label>Demo owner</label><input type="text" name="demo_owner" value="{{ c.demo_owner or '' }}"></div>
+      <div><label for="f_demo_owner">Demo owner</label><input id="f_demo_owner" type="text" name="demo_owner" value="{{ c.demo_owner or '' }}"></div>
       <div></div>
     </div>
-    <label>Notes</label><textarea name="notes" rows="2">{{ c.notes or '' }}</textarea>
-    <label>Dirk notes</label><textarea name="dirk_notes" rows="2">{{ c.dirk_notes or '' }}</textarea>
-    <div style="margin-top:10px;"><button class="btn btn-small" type="submit">Save all fields</button></div>
+    <label for="f_notes">Notes</label><textarea id="f_notes" name="notes" rows="2">{{ c.notes or '' }}</textarea>
+    <label for="f_dirk_notes">Dirk notes</label><textarea id="f_dirk_notes" name="dirk_notes" rows="2">{{ c.dirk_notes or '' }}</textarea>
+  </div>
+
+  <div class="save-bar">
+    <span class="muted" style="margin-right:auto;">Edits across all four cards save together.</span>
+    <button class="btn" type="submit">Save all fields</button>
   </div>
 </form>
+
+{% if view.cadences %}
+<div class="card">
+  <h2>Cadence</h2>
+  {% for cd in view.cadences %}
+  <div style="border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:8px;">
+    <div class="inline" style="flex-wrap:wrap;">
+      <strong>{{ cd.campaign.name }}</strong>
+      <span class="badge tier">{{ cd.enrollment.degree or 'unclassified' }}</span>
+      <span class="badge {% if cd.state.state == 'active' %}stage-sent{% elif cd.state.state.startswith('stopped') %}suppressed{% elif cd.state.state == 'done' %}stage-booked{% else %}stage-sourced{% endif %}">{{ cd.state.state }}</span>
+      {% if cd.state.steps_total %}<span class="mono" style="font-size:12px;">step {{ cd.state.steps_done }}/{{ cd.state.steps_total }}</span>{% endif %}
+      {% if cd.state.next_due %}<span class="muted">next touch {{ cd.state.next_due }}{% if cd.state.next_step %} ({{ cd.state.next_step.channel }}){% endif %}</span>{% endif %}
+    </div>
+    {% if cd.state.state == 'active' and cd.state.next_step and cd.state.next_step.channel == 'linkedin' %}
+    <form method="post" action="/enrollments/{{ cd.enrollment.enrollment_id }}/steps/{{ cd.state.next_step.step_no }}/done" style="margin-top:8px;">
+      <button class="btn btn-small btn-secondary" type="submit">Mark LinkedIn step done</button>
+    </form>
+    {% endif %}
+    {% if cd.attempts %}
+    <table style="margin-top:8px;">
+      <thead><tr><th>Step</th><th>Status</th><th>Template</th><th>Resolved</th><th>Failure</th></tr></thead>
+      <tbody>
+      {% for a in cd.attempts %}
+        <tr>
+          <td>{{ a.step_no }}</td>
+          <td><span class="badge {% if a.status == 'sent' %}stage-booked{% elif a.status in ('stalled', 'parked', 'failed') %}suppressed{% else %}stage-sent{% endif %}">{{ a.status }}</span></td>
+          <td class="mono" style="font-size:11.5px;">{{ a.template_key }} v{{ a.template_version }}</td>
+          <td class="mono" style="font-size:11.5px;">{{ (a.resolved_at or '')[:16] }}</td>
+          <td class="muted" style="font-size:12px;">{{ a.failure_reason or '' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
 
 <div class="card scroll-x">
   <h2>Timeline ({{ view.events|length }} events)</h2>
@@ -180,4 +307,15 @@
     </tbody>
   </table>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function copyBrief(btn) {
+    var t = document.getElementById('ctx-brief').innerText;
+    navigator.clipboard.writeText(t).then(function () {
+      var o = btn.textContent; btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = o; }, 1200);
+    });
+  }
+</script>
 {% endblock %}

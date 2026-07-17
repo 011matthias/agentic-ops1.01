@@ -69,3 +69,54 @@ def test_out_of_scope_path_is_clean_json():
     proc = run_tool(str(REPO / "tools" / "INDEX.md"), "--format", "json")
     assert proc.returncode == 0
     assert json.loads(proc.stdout)["total"] == 0
+
+
+def _run_fixture(tmp_path) -> dict:
+    """Run a copy of the tool against a synthetic .claude/skills tree under tmp."""
+    tool_copy_dir = tmp_path / "tools"
+    tool_copy_dir.mkdir(exist_ok=True)
+    (tool_copy_dir / "check-skill-map.py").write_text(
+        TOOL.read_text(encoding="utf-8"), encoding="utf-8")
+    proc = subprocess.run(
+        [sys.executable, str(tool_copy_dir / "check-skill-map.py"), "--format", "json"],
+        capture_output=True, text=True, encoding="utf-8", cwd=str(tmp_path),
+    )
+    return json.loads(proc.stdout)
+
+
+def test_pack_consumed_stub_module_not_flagged(tmp_path):
+    # C1: a pack spine routes into a consolidation stub's module via a cross-skill
+    # link; the module is reachable even though the stub's own SKILL.md never
+    # names it. A genuine orphan (referenced by no spine anywhere) still fires.
+    skills = tmp_path / ".claude" / "skills"
+    pack = skills / "skil_pack"
+    pack.mkdir(parents=True)
+    (pack / "SKILL.md").write_text(
+        "# Pack\n\nLoad `../skil_stub/modules/THING.md` for the detail.\n", encoding="utf-8")
+    stub = skills / "skil_stub"
+    (stub / "modules").mkdir(parents=True)
+    (stub / "SKILL.md").write_text("# Stub\n\nConsolidated into skil_pack.\n", encoding="utf-8")
+    (stub / "modules" / "THING.md").write_text("detail\n", encoding="utf-8")
+    (stub / "modules" / "ORPHAN.md").write_text("nobody references me\n", encoding="utf-8")
+
+    msgs = [h["message"] for h in _run_fixture(tmp_path)["hits"]]
+    assert not any("THING.md exists but" in m for m in msgs), msgs   # reachable via pack
+    assert any("ORPHAN.md exists but" in m for m in msgs), msgs       # genuine orphan
+
+
+def test_illustrative_paths_skipped_real_drift_still_flagged(tmp_path):
+    # C2: @-prefix imports, `Example:` lines, and fenced code blocks are
+    # illustrative, not repo pointers; a plain-prose dead pointer still fires.
+    skills = tmp_path / ".claude" / "skills"
+    sk = skills / "skil_demo"
+    sk.mkdir(parents=True)
+    (sk / "SKILL.md").write_text(
+        "# Demo\n\n"
+        "Import with `@docs/file.md`.\n"            # @-prefix -> skipped
+        "Example: `commands/ghost.md`.\n"           # Example: line -> skipped
+        "```\n`fenced/ghost.md`\n```\n"             # fenced block -> skipped
+        "Load `modules/real-ghost.md` now.\n",      # plain prose, missing -> flagged
+        encoding="utf-8")
+    dead = [h["message"] for h in _run_fixture(tmp_path)["hits"]
+            if h["category"] == "dead-pointer"]
+    assert len(dead) == 1 and "real-ghost.md" in dead[0], dead

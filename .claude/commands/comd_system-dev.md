@@ -164,6 +164,15 @@ For each approved improvement:
 3. **Read the appropriate guide** — SKILL-GUIDE.md, COMMAND-GUIDE.md, or AGENT-GUIDE.md
 4. **Create the primitive** following conventions exactly
 5. **Verify** the primitive works against the original friction scenario
+6. **Behavioral eval gate (agent-affecting changes only).** If the change
+   touches `.claude/agents/agnt_*.md`, `.claude/rules/rule_behaviors.md`, or
+   a feedback memory consumed by an evaluated agent, run the before/after
+   eval: `uv run tools/eval-agents.py run --repo <base-worktree> --label base`,
+   then `... run --label head` from this branch, then
+   `uv run tools/eval-agents.py compare <base-run-dir> <head-run-dir>`.
+   Paste the compare table into the PR body. A green→red fixture is a
+   regression: re-run that fixture with `--n 3`; if ≤1/3 pass, the change
+   does not merge without an explicit user waiver.
 
 ## Phase 6: Register
 
@@ -171,7 +180,7 @@ After all primitives are created:
 
 1. **Update CLAUDE.md** — Add new skills/commands/agents to the appropriate sections
 2. **Update MEMORY.md** — If any critical patterns were discovered, add them (with dedup check)
-3. **Report rules-LOC** via `uv run tools/anneal-metrics.py` — the rule files total far exceeds the legacy "under 500" figure this step once asserted (and DECISION-TREE's 250). Treat the budget-vs-actual gap as a toolkit-drift FINDING for this session (resolve by consolidation, or set a realistic budget with the user), not a silent number to rewrite here.
+3. **Report rules-LOC** via `uv run tools/anneal-metrics.py` — there is no repo-wide LOC budget (the legacy "under 500" and DECISION-TREE's "250" both contradicted the ~2.2k real total and were retired 2026-06-18). The discipline is a per-file soft ceiling (~250 lines) plus "no duplicated bans across rules"; the tool surfaces per-file overages (split candidates) as an advisory, not as drift. Treat a NEW duplicated ban or a freshly oversized rule file as the finding to resolve by consolidation.
 
 ## Phase 6.5: Convergence Measurement
 

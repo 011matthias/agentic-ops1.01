@@ -1,8 +1,8 @@
 # Fly.io config for the hosted Brisken Lead Desk.
-# Frankfurt (EU) for data residency (lead PII). One machine stays warm so the
-# in-app daily sheet->DB sync scheduler runs on time (scale-to-zero would pause
-# it). The SQLite database lives on the lead_desk_data volume mounted at /data.
-# Access is gated by per-user codes in LEAD_DESK_ACCESS_CODES (a Fly secret).
+# Frankfurt (EU) for data residency (lead PII). Scales to zero when idle;
+# a request cold-starts it. The SQLite database lives on the lead_desk_data
+# volume mounted at /data. Access is gated by per-user codes in
+# LEAD_DESK_ACCESS_CODES (set as a Fly secret, never committed).
 app = "brisken-lead-desk"
 primary_region = "fra"
 
@@ -10,12 +10,18 @@ primary_region = "fra"
 
 [env]
   LEAD_DESK_DATA = "/data"
+  # 4d: opt-in switch for the in-app cloud worker (Graph capture + dormant
+  # sender). Only the hosted app sets this; dev/test never do.
+  LEAD_DESK_CLOUD_WORKER = "1"
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = false
+  auto_stop_machines = true
   auto_start_machines = true
+  # 4d: keep one machine alive so the cloud worker tick + the daily sheet-sync
+  # actually run around the clock (scale-to-zero silently paused both whenever
+  # nobody had the board open).
   min_machines_running = 1
 
   [[http_service.checks]]

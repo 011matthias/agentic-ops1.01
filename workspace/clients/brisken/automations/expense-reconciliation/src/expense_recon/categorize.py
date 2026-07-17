@@ -29,6 +29,7 @@ from __future__ import annotations
 import re
 from dataclasses import replace
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from .llm.client import (
     ClassificationResult,
@@ -42,6 +43,9 @@ from .matching.types import (
     LineItem,
     Receipt,
 )
+
+if TYPE_CHECKING:
+    from .learning import MerchantCategoryLookup
 
 
 STUB_LINE_REASON = "[STUB-KEYWORD] line-item keyword match (slice-1 placeholder)"
@@ -171,6 +175,7 @@ def categorize_receipts(
     *,
     client: LLMClient | None = None,
     chart_of_accounts: list[str] | None = None,
+    learned: "MerchantCategoryLookup | None" = None,
 ) -> list[Receipt]:
     """Return a new list of receipts with line_items carrying
     Categorization results per LD-2.
@@ -185,29 +190,49 @@ def categorize_receipts(
     keyword stub ignores it (no account mapping). Ignored entirely
     without an LLM client.
 
+    `learned` (Phase 2) is a cross-run memory of confirmed
+    merchant->category decisions. It is consulted ONLY on the weak
+    vendor-fallback path (a receipt with no usable line items); a
+    confident line read always wins. None / empty => behaviour unchanged.
+
     Pure function; does not mutate inputs.
     """
-    return [_categorize_one(r, client, chart_of_accounts) for r in receipts]
+    return [_categorize_one(r, client, chart_of_accounts, learned) for r in receipts]
 
 
 def _categorize_one(
     receipt: Receipt,
     client: LLMClient | None,
     chart_of_accounts: list[str] | None,
+    learned: "MerchantCategoryLookup | None" = None,
 ) -> Receipt:
     """Apply the LD-2 tier rules to a single receipt."""
 
     if receipt.line_items and not _all_vague(receipt.line_items):
+        # LINE path (Tier 1). A confident line read ALWAYS wins; memory is
+        # never consulted here, so a learned merchant->category can never
+        # preempt a good line read (Phase 2 invariant: fallback, not override).
         if client is not None:
             categorized = _classify_lines_via_llm(
                 receipt.line_items, client, chart_of_accounts
             )
         else:
             categorized = tuple(_classify_line_keyword(li) for li in receipt.line_items)
-        return replace(receipt, line_items=categorized)
+        return _carry_zoho_account(replace(receipt, line_items=categorized))
 
-    # No usable line items → vendor fallback (Tier 2 or Tier 3).
+    # No usable line items → the weak path that today re-pays for a vendor
+    # guess and lands Tier-2. Memory FALLBACK first: a confirmed
+    # merchant->category recalled from a prior month upgrades it to Tier-1
+    # LEARNED and skips the LLM/keyword vendor call (the deterministic-first
+    # win). Only here, never above the line path.
     synthesized = _synthesize_total_line(receipt)
+    learned_cat = _learned_categorization(receipt, learned)
+    if learned_cat is not None:
+        return _carry_zoho_account(
+            replace(
+                receipt, line_items=(replace(synthesized, categorization=learned_cat),)
+            )
+        )
     if client is not None:
         classified = _classify_vendor_via_llm(
             synthesized, receipt.detected_vendor, receipt.detected_total,
@@ -215,7 +240,58 @@ def _categorize_one(
         )
     else:
         classified = _classify_vendor_keyword(synthesized, receipt.detected_vendor)
-    return replace(receipt, line_items=(classified,))
+    return _carry_zoho_account(replace(receipt, line_items=(classified,)))
+
+
+def _carry_zoho_account(receipt: Receipt) -> Receipt:
+    """Carry the Zoho Expense GL category onto each line's categorization as
+    the posting account (Dirk 2026-06-16: Zoho expenses arrive pre-classified,
+    so Zoho's account is authoritative for posting; the tool's own AI category
+    is the verify pass shown alongside it). Only `zoho_account` is set from the
+    report; the AI/keyword category (our 8) is left untouched so the reviewer
+    sees both. No-op when the receipt carries no Zoho category."""
+    if not receipt.zoho_category:
+        return receipt
+    new_items = []
+    for li in receipt.line_items:
+        cat = li.categorization
+        if cat is not None:
+            new_items.append(
+                replace(li, categorization=replace(cat, zoho_account=receipt.zoho_category))
+            )
+        else:
+            new_items.append(li)
+    return replace(receipt, line_items=tuple(new_items))
+
+
+def _learned_categorization(
+    receipt: Receipt, learned: "MerchantCategoryLookup | None"
+) -> Categorization | None:
+    """A Tier-1 LEARNED categorization for this receipt's merchant, or None
+    when there is no learned mapping. The provenance reasoning carries the
+    month of the confirming decision so the workbench can show it; rows
+    seeded from Zoho Books posting history (L2, source_run "zoho-seed:*")
+    name that history instead of a reviewer decision."""
+    if learned is None or not receipt.detected_vendor:
+        return None
+    hit = learned.get(receipt.legal_entity_id, receipt.detected_vendor)
+    if hit is None or not hit.category:
+        return None
+    if hit.source_run and hit.source_run.startswith("zoho-seed"):
+        provenance = "from your Zoho Books posting history"
+    else:
+        when = hit.last_confirmed_at[:7] if hit.last_confirmed_at else None
+        provenance = (
+            f"learned from your {when} decision" if when
+            else "learned from your confirmed decision"
+        )
+    return Categorization(
+        category=hit.category,
+        zoho_account=hit.zoho_account,
+        confidence=1.0,
+        source=ClassificationSource.LEARNED,
+        reasoning=provenance,
+    )
 
 
 # ── LLM-path implementations (slice 2) ──────────────────────────────

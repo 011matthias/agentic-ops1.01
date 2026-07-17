@@ -112,8 +112,27 @@ platform:
         32 tests green (9 matcher + 9 csv + 14 xlsx). Branch 3 of the resume tree fired (neither Dirk's
         §38 sign-off nor Chris's real data has moved since the 2026-05-25 checkpoint).
 
-# Placeholder — platform instance(s) will be populated after the stack decision lands
-instances: []
+# Deployed automation instances (Fly apps). The expense-recon platform instance
+# is still gated on the §38 stack decision; the Lead Desk (p2 lead-gen tracker)
+# is live.
+instances:
+  - id: "lead-desk"
+    kind: "fly-app"
+    project: "lead-generation (p2) — Rome 2026 tracker"
+    app: "brisken-lead-desk"
+    url: "https://brisken-lead-desk.fly.dev"
+    region: "fra"                      # EU (lead PII)
+    machine: "2869e67c347558"
+    volume: "lead_desk_data (/data, SQLite; holds PII, never committed)"
+    scale: "scale-to-zero"
+    code: "automations/lead-desk/ (FastAPI + Jinja + SQLite; cloned from expense-recon stack)"
+    gate: "server-side HMAC cookie, per-user codes (matthias/dirk/chris) in Fly secret LEAD_DESK_ACCESS_CODES"
+    secrets: "LEAD_DESK_AUTH_SECRET (cookie HMAC), LEAD_DESK_INGEST_SECRET (POST /events); values in gitignored .scratch/ld_secrets.env"
+    data_model: "contacts + append-only outreach_events; pipeline stage DERIVED via SQL views, never stamped"
+    deployed: "2026-07-12"
+    iteration_2: "2026-07-12 — stage reflects real status (Reached (Dirk) touches + Held cohort); 290 contacts, 193 events"
+    pr: "https://github.com/011matthias/agentic-ops1.01/pull/213"
+    phase_2: "cloud auto-capture of Dirk's mailbox via Graph (Mail.Read + Calendars.Read, RBAC-scoped) -> POST /events; GATED on Brisken IT (see automations/lead-desk/PHASE2-IT-REQUEST.md)"
 
 # Lead-nurturing project state preserved verbatim from the previous infrastructure.yaml
 # (pre-2026-05-24). Do not delete: the swap history in PROJECT-BOUNDARIES.md has reversed

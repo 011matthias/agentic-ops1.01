@@ -73,10 +73,10 @@ Required: `id`, `name`, `type`, `stage` (spec|build|test|live), `orchestrator`, 
 
 ## Primitives
 
-- **Commands** (29) — Your interface. Type `/command` to invoke.
-- **Skills** (51) — Domain expertise. Auto-load by context (e.g., Make.com work loads make-pack).
+- **Commands** (31) — Your interface. Type `/command` to invoke.
+- **Skills** (35) — Domain expertise (first-party `skil_` dirs; ~11 are pack-consolidation stubs hosting modules for make-pack/n8n-pack), plus vendored plugin skills. Auto-load by context (e.g., Make.com work loads make-pack).
 - **Agents** (12) — Specialists in `.claude/agents/`, spawned internally by commands (build-orchestrator, implementation-agent, testing-agent, bug-fixer, deployer, api-fetcher, and others).
-- **Rules** (12) — Always-on constraints in `.claude/rules/` (behaviors, session start, session pressure, plus the hard-constraint standards). Orchestrator detection deferred to build-time.
+- **Rules** (16) — Always-on constraints in `.claude/rules/` (behaviors, session start, session pressure, plus the hard-constraint standards). Orchestrator detection deferred to build-time.
 
 ## Parallel Sessions
 

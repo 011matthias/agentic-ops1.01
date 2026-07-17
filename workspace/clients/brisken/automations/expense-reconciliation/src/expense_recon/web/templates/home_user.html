@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h1 data-i18n="uh_title">Send your documents</h1>
+  <p class="muted" data-i18n="uh_sub">Upload the bank statement and the receipts file for a month. We prepare your review and let you know by email when it is ready; you do not need to wait here.</p>
+
+  {% if error %}
+  <div class="alert">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" action="/intakes" enctype="multipart/form-data"
+        onsubmit="var b=this.querySelector('button[type=submit]'); b.disabled=true; b.textContent=document.documentElement.getAttribute('data-lang')==='pt'?'Enviando...':'Sending...';">
+    <div class="grid">
+      <div>
+        <label for="statement" data-i18n="uh_stmt">Bank statement (.csv, .xlsx or .pdf)</label>
+        <input type="file" id="statement" name="statement" accept=".csv,.xlsx,.xlsm,.pdf" required>
+        <p class="muted" style="margin:4px 0 0; font-size:12px;" data-i18n="uh_stmt_hint">From the bank's website: the monthly statement PDF, or an activity export.</p>
+      </div>
+      <div>
+        <label for="receipts" data-i18n="uh_rcpt">Receipts: Zoho Expense report PDF or CSV. You can add it later.</label>
+        <input type="file" id="receipts" name="receipts" accept=".csv,.pdf">
+        <p class="muted" style="margin:4px 0 0; font-size:12px;" data-i18n="uh_rcpt_hint">From Zoho Expense: the expense report PDF (the ER-... document), or a CSV export.</p>
+      </div>
+    </div>
+    <div class="grid">
+      <div>
+        {% if cards %}
+        <label for="card_key" data-i18n="uh_card">Which card is this statement from?</label>
+        <select id="card_key" name="card_key" required>
+          <option value="" disabled selected data-i18n="uh_card_pick">Pick a card</option>
+          {% for c in cards %}
+          <option value="{{ c.key }}">{{ c.label }}</option>
+          {% endfor %}
+        </select>
+        {% else %}
+        <label for="card_name" data-i18n="uh_card_name">Which card is this statement from? (name it)</label>
+        <input type="text" id="card_name" name="card_name" placeholder="Corporate card 2838" required>
+        {% endif %}
+      </div>
+      <div>
+        <label for="month" data-i18n="uh_month">Which month is this? (optional)</label>
+        <input type="month" id="month" name="month">
+      </div>
+    </div>
+    <div style="margin-top:18px;">
+      <button class="btn" type="submit" data-i18n="uh_send">Send documents</button>
+    </div>
+    <p class="muted" style="margin-top:10px; font-size:12px;" data-i18n="uh_reassure">We check the files and prepare your review. The status appears below.</p>
+  </form>
+</div>
+
+{% if intakes %}
+<div class="card">
+  <h2 data-i18n="uh_docs">Your documents</h2>
+  <table>
+    <thead>
+      <tr><th data-i18n="uh_col_what">What</th><th data-i18n="uh_col_sent">Sent</th><th data-i18n="uh_col_status">Status</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for i in intakes %}
+      <tr>
+        <td>{{ i.label }}{% if not i.receipts_name %} <span class="badge pending" data-i18n="uh_wait_rcpt">waiting for receipts</span>{% endif %}</td>
+        <td class="muted">{{ i.created_at[:10] }}</td>
+        <td>
+          {% if i.status == "received" %}<span class="badge pending" data-i18n="uh_st_received">Received</span>
+          {% elif i.status == "processing" %}<span class="badge review" data-i18n="uh_st_processing">In progress</span>
+          {% else %}<span class="badge reconciled" data-i18n="uh_st_ready">Ready to review</span>{% endif %}
+        </td>
+        <td class="right">
+          {% if i.status == "ready" and i.run_id %}
+          <a class="btn btn-small" href="/runs/{{ i.run_id }}" data-i18n="uh_open">Open review</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% if i.status == "received" %}
+      <tr>
+        <td colspan="4" style="padding-top:0;">
+          <details>
+            <summary class="muted" style="cursor:pointer; font-size:13px;" data-i18n="uh_swap">Sent the wrong file? Replace it here.</summary>
+            <form method="post" action="/intakes/{{ i.intake_id }}/files" enctype="multipart/form-data"
+                  style="margin-top:8px;"
+                  onsubmit="var b=this.querySelector('button[type=submit]'); b.disabled=true; b.textContent=document.documentElement.getAttribute('data-lang')==='pt'?'Enviando...':'Sending...';">
+              <div class="grid">
+                <div>
+                  <label for="swap-stmt-{{ i.intake_id }}" data-i18n="uh_swap_stmt">New bank statement (leave empty to keep the current one)</label>
+                  <input type="file" id="swap-stmt-{{ i.intake_id }}" name="statement" accept=".csv,.xlsx,.xlsm,.pdf">
+                </div>
+                <div>
+                  <label for="swap-rcpt-{{ i.intake_id }}" data-i18n="uh_swap_rcpt">New receipts file (leave empty to keep the current one)</label>
+                  <input type="file" id="swap-rcpt-{{ i.intake_id }}" name="receipts" accept=".csv,.pdf">
+                </div>
+              </div>
+              <div style="margin-top:8px;">
+                <button class="btn btn-secondary btn-small" type="submit" data-i18n="uh_swap_send">Replace</button>
+              </div>
+            </form>
+          </details>
+        </td>
+      </tr>
+      {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if published_runs %}
+<div class="card">
+  <h2 data-i18n="uh_ready">Ready for review</h2>
+  <table>
+    <thead>
+      <tr><th data-i18n="uh_col_run">Reconciliation</th><th data-i18n="uh_col_when">When</th><th class="right" data-i18n="uh_col_charges">Charges</th><th class="right" data-i18n="uh_col_matched">Matched</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for r in published_runs %}
+      <tr>
+        <td>{{ r.label }}</td>
+        <td class="muted">{{ r.published_at[:10] if r.published_at else r.created_at[:10] }}</td>
+        <td class="right">{{ r.summary.get("n_transactions", "") }}</td>
+        <td class="right">{{ r.summary.get("n_matched", "") }}</td>
+        <td class="right"><a class="btn btn-secondary btn-small" href="/runs/{{ r.run_id }}" data-i18n="uh_open_short">Open</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

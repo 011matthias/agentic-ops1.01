@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Reconciling - {{ label }}{% endblock %}
+{% block content %}
+<style>
+  .spinner {
+    width: 16px; height: 16px; border: 3px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 0.8s linear infinite; display: inline-block;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .stepper { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 16px; }
+  .step { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); }
+  .step .mark { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--border); display: inline-block; text-align: center; line-height: 13px; font-size: 11px; }
+  .step.done { color: var(--text); }
+  .step.done .mark { border-color: var(--green); color: var(--green); }
+  .step.active { color: var(--heading); font-weight: 600; }
+</style>
+<div class="card" data-job-id="{{ job_id }}">
+  <h1>Reconciling {{ label }}</h1>
+  <p class="muted">Matching charges to receipts and categorizing line items. This can take a moment when AI categorization is on. Keep this tab open while the run is in progress (the server may pause if nobody is watching).</p>
+  <div class="stepper" id="stepper">
+    <span class="step" data-stage="reading"><span class="mark"></span>Reading statement</span>
+    <span class="step" data-stage="receipts"><span class="mark"></span>Reading receipts</span>
+    <span class="step" data-stage="categorizing"><span class="mark"></span>Categorizing</span>
+    <span class="step" data-stage="matching"><span class="mark"></span>Matching</span>
+    <span class="step" data-stage="judging"><span class="mark"></span>Judging FX</span>
+    <span class="step" data-stage="saving"><span class="mark"></span>Saving</span>
+  </div>
+  <div style="display:flex; align-items:center; gap:12px; margin-top:14px;">
+    <div class="spinner" id="run-spinner"></div>
+    <span class="muted" id="run-stage">Working...</span>
+  </div>
+  <div id="run-error" class="alert" style="display:none; margin-top:16px;"></div>
+  <p style="margin-top:18px;"><a class="btn btn-secondary" href="/">Cancel and start over</a></p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const JOB_ID = "{{ job_id }}";
+  const STAGES = ["reading", "receipts", "categorizing", "matching", "judging", "saving"];
+  function renderStage(stage) {
+    const idx = STAGES.indexOf(stage);
+    if (idx < 0) return;
+    document.querySelectorAll(".step").forEach(function (el, i) {
+      el.classList.remove("active", "done");
+      const mark = el.querySelector(".mark");
+      if (i < idx) { el.classList.add("done"); mark.textContent = "✓"; }
+      else if (i === idx) { el.classList.add("active"); mark.textContent = ""; }
+      else { mark.textContent = ""; }
+    });
+    const labels = {
+      reading: "Reading the statement...",
+      receipts: "Reading the receipts...",
+      categorizing: "Categorizing line items...",
+      matching: "Matching charges to receipts...",
+      judging: "Judging the foreign-currency pairs...",
+      saving: "Saving the run..."
+    };
+    document.getElementById("run-stage").textContent = labels[stage] || "Working...";
+  }
+  async function poll() {
+    try {
+      const res = await fetch(`/jobs/${JOB_ID}`);
+      if (res.ok) {
+        const job = await res.json();
+        if (job.stage) { renderStage(job.stage); }
+        if (job.status === "done" && job.run_id) {
+          window.location = `/runs/${job.run_id}`;
+          return;
+        }
+        if (job.status === "error") {
+          const box = document.getElementById("run-error");
+          box.style.display = "";
+          box.textContent = "Reconciliation failed: " + (job.error || "unknown error");
+          document.getElementById("run-stage").textContent = "Failed.";
+          document.getElementById("run-spinner").style.display = "none";
+          return;
+        }
+      }
+    } catch (e) { /* transient network error; keep polling */ }
+    setTimeout(poll, 1000);
+  }
+  poll();
+</script>
+{% endblock %}

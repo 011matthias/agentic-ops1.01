@@ -5,6 +5,8 @@
 
 This document is binding. Any future session working in this client folder must read it before touching any spec, code, or infrastructure. Because the active/paused assignment has changed several times, the **Swap history** section at the bottom is the single source of truth for which project is live right now. Do not infer it from file presence; read the ledger.
 
+**Per-workstream status:** the moving parts of each project (and where each element stands) live in `status/` — one file per workstream plus `status/p2-lead-gen-general.md` for shared lead-gen context. This file stays the cross-project active/paused index; `status/` is the level of detail beneath it. See `.claude/rules/rule_project_status.md`.
+
 ---
 
 ## Active project

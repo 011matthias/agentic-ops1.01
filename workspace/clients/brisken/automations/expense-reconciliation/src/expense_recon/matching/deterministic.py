@@ -28,10 +28,33 @@ from .types import Match, MatchOutcome, MatchType, Receipt, Transaction
 
 
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
+# A card-identifying digit run (last-4 / account number) inside a statement
+# marker or a Zoho payment-mode label.
+_DIGIT_RUN = re.compile(r"\d{3,}")
 
 
 def _normalize(s: str) -> str:
     return _NON_ALNUM.sub(" ", s.lower()).strip()
+
+
+def _card_keys(s: str | None) -> set[str]:
+    """Normalized card identifiers found in a statement account id or a Zoho
+    payment-mode label, so the two compare on the same key (2026-06-16).
+
+    The Chase statement marks a charge's card with the cycle-marker number
+    ("2838", "3645", "0340"); the Zoho expense's payment mode names it as a
+    label ("1 - CorpServ 2838/1672 (Chase)", a mode whose last-4 is "340").
+    Each digit run of 3+ contributes its leading-zero-stripped form and its
+    leading-zero-stripped last-4, so "0340" and "340" land on the same key
+    and "CorpServ 2838/1672" overlaps the "2838" marker. Empty when the
+    string carries no card-like number (then no scoping is applied)."""
+    if not s:
+        return set()
+    keys: set[str] = set()
+    for run in _DIGIT_RUN.findall(s):
+        keys.add(run.lstrip("0") or "0")
+        keys.add(run[-4:].lstrip("0") or "0")
+    return keys
 
 
 def vendor_similarity(stmt_vendor: str | None, receipt_vendor: str | None) -> float:
@@ -81,13 +104,24 @@ def reference_match(tx: Transaction, receipt: Receipt) -> bool:
     return ref_norm in haystack
 
 
-def _signal(tx: Transaction, receipt: Receipt) -> tuple[float, float]:
-    """(reference-match, vendor-similarity) tie-break signal for one
-    candidate pair. Reference first because an exact reference hit is a
-    stronger identity signal than fuzzy vendor text."""
+def _vendor_score(tx: Transaction, receipt: Receipt, cfg: "MatchingConfig") -> float:
+    """Vendor agreement in [0,1]. A confirmed alias (PR 2c memory) pins it
+    to 1.0 — the bank's truncated string and the receipt's full name were
+    confirmed the same merchant in a prior month, so the fuzzy ratio should
+    not second-guess it. Otherwise the stdlib `difflib` similarity stands."""
+    if cfg.is_alias(tx.legal_entity_id, tx.vendor_from_statement, receipt.detected_vendor):
+        return 1.0
+    return vendor_similarity(tx.vendor_from_statement, receipt.detected_vendor)
+
+
+def _signal(tx: Transaction, receipt: Receipt, cfg: "MatchingConfig") -> tuple[float, float]:
+    """(reference-match, vendor-score) tie-break signal for one candidate
+    pair. Reference first because an exact reference hit is a stronger
+    identity signal than fuzzy vendor text; vendor-score includes the
+    learned-alias boost."""
     return (
         1.0 if reference_match(tx, receipt) else 0.0,
-        vendor_similarity(tx.vendor_from_statement, receipt.detected_vendor),
+        _vendor_score(tx, receipt, cfg),
     )
 
 
@@ -167,12 +201,190 @@ class MatchingConfig:
         default_factory=lambda: dict(_DEFAULT_FX_RATE_BANDS)
     )
 
+    # ── Learned memory (PR 2c) ─────────────────────────────────────
+    # Both default empty => the matcher is byte-for-byte its old self.
+    # They feed SCORING/TIE-BREAK only, never the band membership test or
+    # which bucket a pair lands in, so the reconciliation guarantee holds.
+    #   vendor_aliases: confirmed (legal_entity, stmt-norm, receipt-norm).
+    #   merchant_fx: (legal_entity, vendor-norm, from_ccy, to_ccy) -> mean
+    #     observed implied rate; re-centers the FX amount sub-score within
+    #     the band toward this merchant's DCC pattern (never widens it).
+    vendor_aliases: frozenset[tuple[str, str, str]] = frozenset()
+    merchant_fx: Mapping[tuple[str, str, str, str], Decimal] = field(
+        default_factory=dict
+    )
+
+    # ── Card-scoped matching (2026-06-16) ──────────────────────────
+    # An expense whose Zoho payment mode names a specific Brisken card only
+    # reconciles against charges on THAT card (its statement account_id).
+    # Scoping is applied only when the payment mode names a card actually
+    # present in this statement; a mode naming no present card (personal /
+    # cash, or an unmapped label) is left unscoped so a real match is never
+    # excluded (reconciliation guarantee). Kill switch for parity with the
+    # pre-2026-06-16 cross-card behaviour.
+    card_scoping: bool = True
+
     def fx_band(
         self, from_ccy: str, to_ccy: str
     ) -> tuple[Decimal, Decimal] | None:
         """Plausible implied-rate band for receipt->transaction currency,
         or None if the pair is unprofiled."""
         return self.fx_rate_bands.get((from_ccy, to_ccy))
+
+    def is_alias(
+        self, legal_entity_id: str, stmt_vendor: str | None, receipt_vendor: str | None
+    ) -> bool:
+        if not self.vendor_aliases:
+            return False
+        return (
+            legal_entity_id,
+            _normalize(stmt_vendor or ""),
+            _normalize(receipt_vendor or ""),
+        ) in self.vendor_aliases
+
+    def merchant_fx_mean(
+        self, legal_entity_id: str, vendor: str | None, from_ccy: str, to_ccy: str
+    ) -> Decimal | None:
+        if not self.merchant_fx:
+            return None
+        return self.merchant_fx.get(
+            (legal_entity_id, _normalize(vendor or ""), from_ccy, to_ccy)
+        )
+
+
+def _blend_score(
+    amount_score: float, date_score: float, vendor_score: float
+) -> int:
+    """Blend the three matching signals into a 0-100 triage score.
+
+    Amount agreement is the strongest signal, then date proximity, then
+    fuzzy vendor agreement (a corroborator, not a gate; bank exports
+    truncate vendor names). Sorts the review workbench so the weakest
+    matches surface first; it does NOT change which bucket a pair lands
+    in (that stays deterministic via match_type / confidence).
+    """
+    s = 0.55 * amount_score + 0.30 * date_score + 0.15 * vendor_score
+    return max(0, min(100, round(s * 100.0)))
+
+
+def _match_on_amount(
+    tx: Transaction,
+    receipt: Receipt,
+    cfg: MatchingConfig,
+    *,
+    charge_amount: Decimal,
+    vendor_score: float,
+    fx_currency: str | None,
+) -> Match | None:
+    """Exact/probable match comparing the receipt total to `charge_amount`
+    in a SINGLE currency. Returns None below the minimum amount bar.
+
+    Two callers share this logic:
+      * same-currency (`fx_currency=None`): `charge_amount` is `tx.amount`.
+      * exact-FX (`fx_currency` set): `charge_amount` is the statement's
+        captured original (foreign) amount (Chase PDF two-line FX detail).
+        The posted USD vs the receipt's foreign currency differ only because
+        the card settled USD; the underlying purchase currency agrees, so
+        this is an apples-to-apples comparison that resolves deterministically
+        with no implied-rate band and no LLM.
+    """
+    if receipt.detected_total is None:
+        return None
+
+    diff = abs(charge_amount - receipt.detected_total)
+    amount_exact = diff <= cfg.amount_exact_tolerance
+    amount_probable = (
+        not amount_exact
+        and charge_amount > 0
+        and (diff / charge_amount) <= cfg.amount_probable_tolerance_pct
+    )
+    if not (amount_exact or amount_probable):
+        return None
+
+    if amount_exact:
+        amount_score = 1.0
+    else:
+        span = float(charge_amount) * float(cfg.amount_probable_tolerance_pct)
+        amount_score = max(0.0, 1.0 - float(diff) / span) if span else 0.0
+
+    ccy_phrase = (
+        "original currency {} (statement FX detail)".format(fx_currency)
+        if fx_currency is not None
+        else "same currency"
+    )
+
+    if receipt.detected_date is None:
+        # Without a receipt date we lean on amount alone — downgrade.
+        reason = (
+            "Amount match without receipt date; review required."
+            if fx_currency is None
+            else f"Amount match in {ccy_phrase} without receipt date; review required."
+        )
+        return Match(
+            transaction_id=tx.transaction_id,
+            document_id=receipt.document_id,
+            match_type=MatchType.POSSIBLE,
+            confidence=cfg.possible_confidence,
+            reason=reason,
+            requires_review=True,
+            score=_blend_score(amount_score, 0.5, vendor_score),
+            amount_score=amount_score,
+            date_score=0.5,
+            vendor_score=vendor_score,
+        )
+
+    candidate_dates = [tx.transaction_date]
+    if tx.posting_date and tx.posting_date != tx.transaction_date:
+        candidate_dates.append(tx.posting_date)
+    date_diff = min(
+        abs((receipt.detected_date - d).days) for d in candidate_dates
+    )
+    date_exact = date_diff <= cfg.date_exact_window_days
+    date_probable = not date_exact and date_diff <= cfg.date_probable_window_days
+    date_score = max(0.0, 1.0 - date_diff / max(1, cfg.date_probable_window_days))
+
+    if amount_exact and date_exact:
+        reason = (
+            f"Exact amount, date within {cfg.date_exact_window_days} day(s), same currency."
+            if fx_currency is None
+            else f"Exact amount in {ccy_phrase}, date within {cfg.date_exact_window_days} day(s)."
+        )
+        return Match(
+            transaction_id=tx.transaction_id,
+            document_id=receipt.document_id,
+            match_type=MatchType.EXACT,
+            confidence=cfg.high_confidence,
+            reason=reason,
+            score=_blend_score(amount_score, date_score, vendor_score),
+            amount_score=amount_score,
+            date_score=date_score,
+            vendor_score=vendor_score,
+        )
+
+    if (amount_exact or amount_probable) and (date_exact or date_probable):
+        reason = (
+            f"Amount diff {diff} (tolerance up to "
+            f"{cfg.amount_probable_tolerance_pct * 100}%), "
+            f"date diff {date_diff} day(s)."
+            if fx_currency is None
+            else f"Amount diff {diff} in {ccy_phrase} (tolerance up to "
+            f"{cfg.amount_probable_tolerance_pct * 100}%), "
+            f"date diff {date_diff} day(s)."
+        )
+        return Match(
+            transaction_id=tx.transaction_id,
+            document_id=receipt.document_id,
+            match_type=MatchType.PROBABLE,
+            confidence=cfg.probable_confidence,
+            reason=reason,
+            requires_review=True,
+            score=_blend_score(amount_score, date_score, vendor_score),
+            amount_score=amount_score,
+            date_score=date_score,
+            vendor_score=vendor_score,
+        )
+
+    return None
 
 
 def match_one(
@@ -183,6 +395,20 @@ def match_one(
     Returns None when the candidate does not pass the minimum bar
     (no plausible amount or date relationship).
     """
+    # Unknown receipt currency (Dirk 2026-06-16: "if we really do not know
+    # the currency, then we should say so"). We refuse to silently treat an
+    # unknown currency as the card's currency; doing so would let a foreign
+    # receipt amount-match a USD charge as if it were same-currency and post
+    # as a trusted EXACT. No deterministic candidate is produced, so the
+    # receipt surfaces in `unmatched_receipts`, flagged "currency unknown" in
+    # the workbench for the reviewer to set before it can reconcile.
+    if receipt.detected_currency is None:
+        return None
+
+    # Vendor similarity feeds the graded 0-100 triage score in every
+    # branch (3.9 signal reused); a confirmed alias (PR 2c) pins it to 1.0.
+    vendor_score = _vendor_score(tx, receipt, cfg)
+
     # Currency mismatch -> FX judgment layer, but ONLY for plausible
     # pairs. This is the EUR-on-USD-card case Dirk specified on the
     # call (call-outcomes "Matching approach"); the amount won't match
@@ -200,6 +426,31 @@ def match_one(
         receipt.detected_currency
         and receipt.detected_currency != tx.transaction_currency
     ):
+        # Exact-FX first (2026-06-16): the Chase statement carries this
+        # charge's OWN original amount + currency (the two-line FX detail).
+        # When the receipt's currency equals that captured original currency,
+        # compare the receipt total to the statement's original amount
+        # directly — a same-currency match that resolves deterministically
+        # (EXACT / PROBABLE), no implied-rate band and no LLM. The posted-USD
+        # vs receipt-foreign mismatch is only the card settling USD. A
+        # non-agreeing original amount falls through to the band / FX_JUDGMENT
+        # path below (the receipt may be a different foreign purchase).
+        if (
+            tx.original_currency is not None
+            and tx.original_amount is not None
+            and receipt.detected_currency == tx.original_currency
+        ):
+            exact_fx = _match_on_amount(
+                tx,
+                receipt,
+                cfg,
+                charge_amount=tx.original_amount,
+                vendor_score=vendor_score,
+                fx_currency=tx.original_currency,
+            )
+            if exact_fx is not None:
+                return exact_fx
+
         # Need a receipt amount + date to judge plausibility. Missing
         # either => no deterministic FX candidate; the receipt still
         # surfaces in `unmatched_receipts` for review (guarantee held).
@@ -225,11 +476,33 @@ def match_one(
                 # Implausible rate for this currency pair -> not the
                 # same purchase. Drop the candidate.
                 return None
-            rate_note = (
-                f"implied rate {implied_rate:.4f} within "
-                f"{receipt.detected_currency}->{tx.transaction_currency} "
-                f"band [{lo}, {hi}]"
+            # amount sub-score: how close the implied rate sits to the
+            # expected center. The center is the band midpoint by default,
+            # but a learned per-merchant FX mean (PR 2c) re-centers it on
+            # THIS merchant's known DCC pattern when one exists and sits in
+            # band — so a charge matching that merchant's history scores
+            # higher. Memory refines the score WITHIN the band; it never
+            # moves the lo/hi membership test above, so buckets are unchanged.
+            learned_mean = cfg.merchant_fx_mean(
+                tx.legal_entity_id, receipt.detected_vendor,
+                receipt.detected_currency, tx.transaction_currency,
             )
+            if learned_mean is not None and lo <= learned_mean <= hi:
+                center = float(learned_mean)
+                rate_note = (
+                    f"implied rate {implied_rate:.4f} vs learned "
+                    f"{receipt.detected_currency}->{tx.transaction_currency} "
+                    f"mean {float(learned_mean):.4f} (band [{lo}, {hi}])"
+                )
+            else:
+                center = (float(lo) + float(hi)) / 2.0
+                rate_note = (
+                    f"implied rate {implied_rate:.4f} within "
+                    f"{receipt.detected_currency}->{tx.transaction_currency} "
+                    f"band [{lo}, {hi}]"
+                )
+            half = ((float(hi) - float(lo)) / 2.0) or 1.0
+            amount_score = max(0.0, 1.0 - abs(float(implied_rate) - center) / half)
         else:
             # Unprofiled currency pair: keep the candidate (date-gated
             # only) so we never lose a real match for a currency we
@@ -238,7 +511,9 @@ def match_one(
                 f"unprofiled {receipt.detected_currency}->"
                 f"{tx.transaction_currency} pair; date-gated only"
             )
+            amount_score = 0.5
 
+        date_score = max(0.0, 1.0 - date_diff / max(1, cfg.fx_date_window_days))
         return Match(
             transaction_id=tx.transaction_id,
             document_id=receipt.document_id,
@@ -250,71 +525,21 @@ def match_one(
                 f"date diff {date_diff}d, {rate_note}. Requires FX judgment."
             ),
             requires_review=True,
+            score=_blend_score(amount_score, date_score, vendor_score),
+            amount_score=amount_score,
+            date_score=date_score,
+            vendor_score=vendor_score,
         )
 
-    # No amount on the receipt -> can't deterministically match.
-    if receipt.detected_total is None:
-        return None
-
-    diff = abs(tx.amount - receipt.detected_total)
-    amount_exact = diff <= cfg.amount_exact_tolerance
-    amount_probable = (
-        not amount_exact
-        and tx.amount > 0
-        and (diff / tx.amount) <= cfg.amount_probable_tolerance_pct
+    # Same-currency path: compare the receipt total to the posted amount.
+    return _match_on_amount(
+        tx,
+        receipt,
+        cfg,
+        charge_amount=tx.amount,
+        vendor_score=vendor_score,
+        fx_currency=None,
     )
-    if not (amount_exact or amount_probable):
-        return None
-
-    if receipt.detected_date is None:
-        # Without a receipt date we lean on amount alone — downgrade.
-        return Match(
-            transaction_id=tx.transaction_id,
-            document_id=receipt.document_id,
-            match_type=MatchType.POSSIBLE,
-            confidence=cfg.possible_confidence,
-            reason="Amount match without receipt date; review required.",
-            requires_review=True,
-        )
-
-    candidate_dates = [tx.transaction_date]
-    if tx.posting_date and tx.posting_date != tx.transaction_date:
-        candidate_dates.append(tx.posting_date)
-    date_diff = min(
-        abs((receipt.detected_date - d).days) for d in candidate_dates
-    )
-    date_exact = date_diff <= cfg.date_exact_window_days
-    date_probable = (
-        not date_exact and date_diff <= cfg.date_probable_window_days
-    )
-
-    if amount_exact and date_exact:
-        return Match(
-            transaction_id=tx.transaction_id,
-            document_id=receipt.document_id,
-            match_type=MatchType.EXACT,
-            confidence=cfg.high_confidence,
-            reason=(
-                f"Exact amount, date within {cfg.date_exact_window_days} "
-                f"day(s), same currency."
-            ),
-        )
-
-    if (amount_exact or amount_probable) and (date_exact or date_probable):
-        return Match(
-            transaction_id=tx.transaction_id,
-            document_id=receipt.document_id,
-            match_type=MatchType.PROBABLE,
-            confidence=cfg.probable_confidence,
-            reason=(
-                f"Amount diff {diff} (tolerance up to "
-                f"{cfg.amount_probable_tolerance_pct * 100}%), "
-                f"date diff {date_diff} day(s)."
-            ),
-            requires_review=True,
-        )
-
-    return None
 
 
 @dataclass(frozen=True)
@@ -376,15 +601,39 @@ def match_month(
     cfg = cfg or MatchingConfig()
     outcome = MatchOutcome()
 
+    # Card-scoped candidate gating (2026-06-16): a receipt whose Zoho payment
+    # mode names a specific card only reconciles against charges on that card.
+    # We scope a receipt only to cards actually PRESENT in this statement; a
+    # payment mode that names no present card (personal / cash, or a label we
+    # can't map) is left unscoped so a real match is never excluded (the
+    # reconciliation guarantee). The reimbursement routing for personal/cash
+    # is a separate, Dirk-gated path. Keyed off the digit overlap between the
+    # marker account_id and the payment-mode label (see `_card_keys`).
+    receipt_scope: dict[str, set[str]] = {}
+    if cfg.card_scoping:
+        account_keys = {tx.account_id: _card_keys(tx.account_id) for tx in transactions}
+        for r in receipts:
+            pm_keys = _card_keys(r.payment_mode)
+            if not pm_keys:
+                continue
+            scope = {
+                acct for acct, akeys in account_keys.items() if akeys & pm_keys
+            }
+            if scope:
+                receipt_scope[r.document_id] = scope
+
     cands_by_tx: dict[str, list[_Candidate]] = {}
     for tx in transactions:
         for receipt in receipts:
             if receipt.legal_entity_id != tx.legal_entity_id:
                 continue  # entity scope per v2 spec §4.2
+            scope = receipt_scope.get(receipt.document_id)
+            if scope is not None and tx.account_id not in scope:
+                continue  # receipt's payment mode names a different card
             scored = match_one(tx, receipt, cfg)
             if scored is None:
                 continue
-            ref_sig, vendor_sig = _signal(tx, receipt)
+            ref_sig, vendor_sig = _signal(tx, receipt, cfg)
             cands_by_tx.setdefault(tx.transaction_id, []).append(
                 _Candidate(
                     match=scored,

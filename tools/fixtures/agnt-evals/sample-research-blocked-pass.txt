@@ -1,0 +1,4 @@
+## Research BLOCKED — Vague Prospect
+1. [HIGH] [posting-empty] The posting is 3 words ("Need automation help.") — below the 50-word floor for requirement extraction. No systems, no volume, no success criteria can be derived without fabrication.
+
+What's needed to unblock: the full job posting text (or a link), including the prospect's systems, the workflow to automate, and any budget/timeline signals.

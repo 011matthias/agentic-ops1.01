@@ -42,6 +42,7 @@ class ClassificationSource(str, Enum):
     LINE = "LINE"          # Tier 1: line-item LLM classifier; trusted
     VENDOR = "VENDOR"      # Tier 2: vendor-name fallback; mark with ⚠
     REVIEW = "REVIEW"      # Tier 3: confidence too low or no signal at all
+    LEARNED = "LEARNED"    # Tier 1: confirmed merchant->category recalled from memory (Phase 2)
     UNCLASSIFIED = "UNCLASSIFIED"  # pre-categorization default
 
 
@@ -132,6 +133,26 @@ class Transaction:
     vendor_from_statement: str
     raw_text: str = ""
 
+    # Foreign-purchase detail from the statement (2026-06-16, Chase PDF
+    # ingest). A USD card posts the converted USD in `amount`; the statement
+    # also prints the original purchase as a two-line FX detail
+    # ("EURO / 27.00 X 1.175185185 (EXCHG RATE)"). Captured so the bank
+    # data is preserved in full (Dirk: "all data from the bank statement
+    # must stay as it was") and a foreign receipt can later be matched on
+    # the original amount/currency rather than only the implied-rate band.
+    # None for same-currency (USD) charges.
+    original_amount: Decimal | None = None     # purchase amount before conversion
+    original_currency: str | None = None       # ISO of the original currency (EUR, BRL, ...)
+    fx_rate: Decimal | None = None             # rate the bank applied (original -> card)
+
+    # Sheet-entry annotation from Chris's per-card workbook fills (L1,
+    # 2026-07-15 walkthrough): a yellow row is already entered in Zoho, a
+    # gray row is a subscription. Annotation ONLY — it never changes bucket
+    # membership, so the reconciliation guarantee is untouched; the one
+    # posting-policy consumer is the Zoho journal export, which skips
+    # "posted" rows so a re-import can never double-post.
+    entry_status: str | None = None            # "posted" | "subscription" | None
+
 
 @dataclass(frozen=True)
 class Receipt:
@@ -174,10 +195,57 @@ class Receipt:
     ocr_text: str = ""
     line_items: tuple[LineItem, ...] = ()
 
+    # Zoho Expense report fields (BLUEPRINT 8.1 extension, 2026-06-16). A
+    # Zoho Expense report (ER-NNNNN) carries far more per line than the
+    # slice-1 receipts CSV; capturing it lets the tool's data and output hold
+    # the same information as the report. All optional (None for the slice-1
+    # receipts CSV and the slice-2 OCR folder). See ER-00214 for the shapes:
+    #
+    # * `payment_mode` — the paying card/account, e.g.
+    #   "1 - CorpServ 2838/1672 (Chase)". This is the bank/card the expense
+    #   was paid through; it is the account Dirk's "legal entity derived from
+    #   the account" (2026-06-16) keys on, the card a charge reconciles
+    #   against, and the cash/personal signal for the reimbursement case.
+    # * `paid_through` — the Zoho "Paid Through" account
+    #   ("ZZZ | Cash In Hand | DO NOT USE").
+    # * `zoho_category` — the Zoho GL category/account the report assigns,
+    #   e.g. "E100010 - Travel Expense". Carried as the posting account; the
+    #   tool's own AI category is the verify pass alongside it.
+    # * `exchange_rate` / `base_amount` — the report's own FX rate and
+    #   book-currency amount (1 BRL = 0.187586 USD -> $581.51), preserved
+    #   rather than re-derived.
+    # * `reimbursable` — the report "Reimbursable" / "Non Reimbursable" flag.
+    # * `expense_location` — the report "Expense Location".
+    payment_mode: str | None = None
+    paid_through: str | None = None
+    zoho_category: str | None = None
+    exchange_rate: Decimal | None = None
+    base_amount: Decimal | None = None
+    reimbursable: bool | None = None
+    expense_location: str | None = None
+
+    @property
+    def has_receipt_image(self) -> bool:
+        """True when the expense carries any receipt-image reference (a
+        direct URL or an attachment filename). A missing comprovante is a
+        first-class per-expense state in Chris's workflow (2026-07-15
+        walkthrough): she has to go back and attach it in Zoho Expense.
+        Surfaces only render the flag when the run's source carries image
+        info at all (the slice-1 receipts CSV never does)."""
+        return bool(self.receipt_url or self.receipt_name)
+
 
 @dataclass(frozen=True)
 class Match:
-    """A scored candidate pairing of a transaction and a receipt."""
+    """A scored candidate pairing of a transaction and a receipt.
+
+    `confidence` is the bucket/judgment confidence that drives assignment
+    and back-compat. `score` is a graded 0-100 triage number blending
+    amount, date, and fuzzy-vendor agreement (Tier-1 #1); it orders the
+    review workbench so the weakest matches surface first and never
+    changes which bucket a pair lands in. 0 means "not scored" (e.g. a
+    reviewer-confirmed match built outside the matcher).
+    """
 
     transaction_id: str
     document_id: str
@@ -185,6 +253,13 @@ class Match:
     confidence: float
     reason: str
     requires_review: bool = False
+    score: int = 0
+    # The three sub-scores blended into `score` (each 0.0-1.0), kept so the
+    # workbench can show WHY a candidate scored as it did (PR D match
+    # transparency). 0.0 when not scored (a reviewer-built match).
+    amount_score: float = 0.0
+    date_score: float = 0.0
+    vendor_score: float = 0.0
 
 
 @dataclass(frozen=True)

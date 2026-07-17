@@ -7,9 +7,14 @@ unearned paragraph teaches the reader to skim, and in client-facing
 context it reads as AI-generated even when the underlying judgment
 is human-quality.
 
-This rule supersedes the older PDF voice pass in
-`rule_deliverables.md` (still valid, but narrower) by stating the
-general principle and routing the specific bans to it.
+This rule is the canonical home for the enumerated voice bans (the
+corporate-thesaurus words, banned meta-phrases, "not just X but Y",
+performed-humanness, sentence-opening adverbs). The surface rules
+reuse this list by cross-reference and add only their surface-specific
+deltas: [[rule_deliverables]] (HTML/PDF), [[rule_platform_standards]]
+§2 (marketing site), [[rule_human_communication]] §2 (outbound). It
+supersedes the older PDF voice pass in `rule_deliverables.md` (still
+valid, narrower).
 
 ## What counts as slop (banned)
 
@@ -29,9 +34,9 @@ the same information density, collapse them.
 **Empty section intros.** Do not start a section by summarizing what
 the section is about to say. Just start it.
 
-**Hedging / buffer language.** "It's worth noting", "to be clear",
-"keep in mind", "worth mentioning", "as you can see", and similar
-meta-commentary about the writing itself. Cut.
+**Hedging / buffer language.** "It's worth noting", "it's important
+to note", "to be clear", "keep in mind", "worth mentioning", "as you
+can see", and similar meta-commentary about the writing itself. Cut.
 
 **Corporate thesaurus.** Banned verbs: robust, leverage, ensure,
 facilitate, comprehensive, streamline, optimize, holistic, drive,
@@ -56,6 +61,20 @@ body sentence. The H3 adds no signal.
 **Closing meta-summary.** "In summary", "in conclusion", "to
 summarize", "the bottom line". The last sentence of the section IS
 the close; do not announce it.
+
+**Invented or padded sections (IA-level slop).** The prose bans above
+have a structural sibling: a *section* the content does not support is
+slop at the information-architecture level. A stat band with no real
+metric, an evidence block with no real proof, a three-card row padded
+to three for symmetry. Structure follows content: a section exists
+because the content earns it, never because "a page like this usually
+has one." Thin content is a signal to surface and ask, not a gap to
+fill with an invented claim, metric, testimonial, or logo. This is the
+IA-derivation-time catch; B4 and `validate-output.py` `unsourced-claim`
+are the downstream backstop. Source: 2026-06-17 content-adaptive
+prototype work (Brisken OnePilot hero `81%` off n=21, `#why-now`
+three-symmetric-card row); operationalized in the `skil_prototype`
+front end.
 
 ## What is NOT slop (allowed)
 

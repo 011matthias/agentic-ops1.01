@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+{% block title %}{{ campaign.name }} - Campaign - Lead Desk{% endblock %}
+{% block content %}
+<div style="margin-bottom:10px;"><a href="/campaigns">&larr; Campaigns</a> &middot; <a href="/?campaign={{ campaign.campaign_id }}">Board</a></div>
+
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+    <div>
+      <h1>{{ campaign.name }} <span class="badge {% if campaign.status == 'sending' %}stage-booked{% elif campaign.status == 'approved' %}stage-sent{% elif campaign.status == 'paused' %}suppressed{% elif campaign.status == 'done' %}stage-sourced{% else %}stage-sourced{% endif %}">{{ 'sending (LIVE)' if campaign.status == 'sending' else campaign.status }}</span></h1>
+      <div class="muted mono" style="font-size:12px;">{{ campaign.campaign_id }}</div>
+      <div class="muted" style="margin-top:6px;">
+        From {{ campaign.from_address }}{% if campaign.cc_address %} &middot; CC {{ campaign.cc_address }}{% endif %} &middot; BCC Zoho dropbox &middot;
+        cap {{ campaign.daily_cap }}/day &middot; throttle {{ campaign.throttle_seconds }}s+{{ campaign.jitter_seconds }}s
+      </div>
+    </div>
+    <div class="inline">
+      {% if campaign.status == 'sending' %}
+      <form method="post" action="/campaigns/{{ campaign.campaign_id }}/pause" style="margin:0;">
+        <button class="btn btn-small" type="submit" style="background:var(--red);">Pause sending</button>
+      </form>
+      {% elif campaign.status == 'paused' %}
+      <form method="post" action="/campaigns/{{ campaign.campaign_id }}/resume" style="margin:0;">
+        <button class="btn btn-small" type="submit">Resume sending</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>1. Upload contacts (CSV / XLSX)</h2>
+  <p class="muted">Headers matched case-insensitively (email, first_name, last_name, company, job_title, linkedin_url, ...). An optional <span class="mono">degree</span> column assigns warmness manually. Existing contacts are adopted with their full history, never duplicated. Uploads are inert until approval.</p>
+  <form method="post" action="/campaigns/{{ campaign.campaign_id }}/upload" enctype="multipart/form-data" class="row-actions">
+    <div style="min-width:280px;"><input type="file" name="file" accept=".csv,.xlsx" required></div>
+    <button class="btn btn-small" type="submit">Upload &amp; classify</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>2. Warmness rules (first match wins)</h2>
+  <table>
+    <thead><tr><th>Priority</th><th>Degree</th><th>Rule</th><th>Predicate</th></tr></thead>
+    <tbody>
+    {% for r in rules %}
+      <tr><td>{{ r.priority }}</td><td><span class="badge tier">{{ r.degree }}</span></td><td>{{ r.label }}</td><td class="mono" style="font-size:11px;">{{ r.predicate }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <details style="margin-top:10px;">
+    <summary class="muted" style="cursor:pointer;">Edit rules (JSON)</summary>
+    <form method="post" action="/campaigns/{{ campaign.campaign_id }}/rules">
+      <textarea name="rules_json" rows="8">{{ rules | tojson(indent=1) }}</textarea>
+      <div style="margin-top:8px;" class="inline">
+        <button class="btn btn-small" type="submit">Save rules</button>
+      </div>
+    </form>
+  </details>
+  <form method="post" action="/campaigns/{{ campaign.campaign_id }}/reclassify" style="margin-top:10px;">
+    <button class="btn btn-secondary btn-small" type="submit">Re-run rules on unapproved rows</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>3. Sequences per degree</h2>
+  <p class="muted">Steps, one per line: <span class="mono">channel template_key day_offset</span> (offset = days after the previous step actually completed; step 1 counts from approval). LinkedIn steps become manual board tasks. Editing a sequence on an approved campaign revokes the approval.</p>
+  <div class="grid2">
+  {% for degree in degrees %}
+    {% set seq = (sequences | selectattr('degree', 'equalto', degree) | list | first) %}
+    <div style="border:1px solid var(--border); border-radius:10px; padding:12px;">
+      <h2 style="margin-bottom:6px;">{{ degree }}
+        {% if seq %}<span class="muted" style="font-weight:400;">({{ seq.send_mode }})</span>{% endif %}
+      </h2>
+      <form method="post" action="/campaigns/{{ campaign.campaign_id }}/sequences">
+        <input type="hidden" name="degree" value="{{ degree }}">
+        <label>Name</label><input type="text" name="name" value="{{ seq.name if seq else '' }}">
+        <label>Send mode</label>
+        <select name="send_mode">
+          {% for m in send_modes %}
+          <option value="{{ m }}" {% if seq and seq.send_mode == m %}selected{% elif not seq and degree == 'warm' and m == 'draft-dirk' %}selected{% endif %}>{{ m }}{% if m == 'draft-dirk' %} (staged in Dirk's Drafts, he clicks send){% endif %}</option>
+          {% endfor %}
+        </select>
+        <label>Steps</label>
+        <textarea name="steps" rows="4" placeholder="email {{ degree }}-e1 0&#10;email {{ degree }}-e2 4&#10;linkedin {{ degree }}-li1 2">{% if seq %}{% for s in seq.steps %}{{ s.channel }} {{ s.template_key }} {{ s.day_offset }}
+{% endfor %}{% endif %}</textarea>
+        <div style="margin-top:8px;"><button class="btn btn-small" type="submit">Save sequence</button></div>
+      </form>
+    </div>
+  {% endfor %}
+  </div>
+</div>
+
+<div class="card">
+  <h2>4. Templates</h2>
+  <p class="muted">Merge vars: <span class="mono">{{ '{{first_name}} {{last_name}} {{company}} {{job_title}} {{country}} {{tier}}' }}</span>. Saving creates a new version; approved campaigns keep sending their pinned version until re-approved.</p>
+  {% if templates_ %}
+  <table>
+    <thead><tr><th>Key</th><th>v</th><th>Channel</th><th>Subject</th><th>Pinned here</th></tr></thead>
+    <tbody>
+    {% for t in templates_ %}
+      <tr>
+        <td class="mono">{{ t.template_key }}</td>
+        <td>{{ t.version }}</td>
+        <td>{{ t.channel }}</td>
+        <td>{{ t.subject or '' }}</td>
+        <td>{% if pins.get(t.template_key) %}v{{ pins[t.template_key] }}{% else %}-{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  <details style="margin-top:10px;">
+    <summary class="muted" style="cursor:pointer;">New template / new version</summary>
+    <form method="post" action="/templates">
+      <input type="hidden" name="campaign" value="{{ campaign.campaign_id }}">
+      <div class="grid2">
+        <div><label>Template key</label><input type="text" name="template_key" placeholder="cold-e1" required></div>
+        <div><label>Channel</label><select name="channel"><option>email</option><option>linkedin</option></select></div>
+      </div>
+      <label>Subject (email only)</label><input type="text" name="subject" placeholder="Worth fifteen minutes, {{ '{{first_name}}' }}?">
+      <label>Body</label><textarea name="body" rows="8" required></textarea>
+      <div style="margin-top:8px;"><button class="btn btn-small" type="submit">Save as new version</button></div>
+    </form>
+  </details>
+</div>
+
+<div class="card scroll-x">
+  <h2>5. Enrolled contacts ({{ enrollments|length }})</h2>
+  <table>
+    <thead><tr><th>Name</th><th>Company</th><th>Email</th><th>Degree</th><th>Why</th><th>Approved</th><th></th></tr></thead>
+    <tbody>
+    {% for e in enrollments %}
+      <tr class="{% if e.suppressed %}suppressed{% endif %}">
+        <td><a href="/contacts/{{ e.contact_id }}">{{ e.first_name }} {{ e.last_name }}</a></td>
+        <td>{{ e.company or '' }}</td>
+        <td class="mono" style="font-size:11.5px;">{{ e.email or '-' }}</td>
+        <td>
+          <form method="post" action="/enrollments/{{ e.enrollment_id }}/degree" style="margin:0;" class="inline">
+            <input type="hidden" name="campaign" value="{{ campaign.campaign_id }}">
+            <select name="degree" onchange="this.form.submit()" style="width:auto; font-size:12px;">
+              <option value="" {% if not e.degree %}selected{% endif %}>-</option>
+              {% for d in degrees %}<option value="{{ d }}" {% if e.degree == d %}selected{% endif %}>{{ d }}</option>{% endfor %}
+            </select>
+          </form>
+        </td>
+        <td class="muted" style="font-size:12px;">{{ e.degree_rule or '' }}{% if e.degree_source == 'manual' %} (manual){% endif %}</td>
+        <td class="mono" style="font-size:11.5px;">{{ (e.enrollment_approved_at or '')[:10] or 'pending' }}</td>
+        <td>
+          {% if not e.enrollment_approved_at %}
+          <form method="post" action="/enrollments/{{ e.enrollment_id }}/remove" style="margin:0;">
+            <input type="hidden" name="campaign" value="{{ campaign.campaign_id }}">
+            <button class="btn btn-secondary btn-small" type="submit">Remove</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="muted">Nobody enrolled yet - upload a list above.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if attempts %}
+<div class="card scroll-x" id="attempts">
+  <h2>Send attempts</h2>
+  <table>
+    <thead><tr><th>Attempt</th><th>Status</th><th>To</th><th>Subject</th><th>Tries</th><th>Failure</th><th></th></tr></thead>
+    <tbody>
+    {% for a in attempts %}
+      <tr>
+        <td class="mono" style="font-size:11px;">{{ a.attempt_key }}</td>
+        <td><span class="badge {% if a.status == 'sent' %}stage-booked{% elif a.status in ('stalled', 'parked', 'failed') %}suppressed{% else %}stage-sent{% endif %}">{{ a.status }}</span></td>
+        <td class="mono" style="font-size:11.5px;">{{ a.to_addr or '' }}</td>
+        <td>{{ a.rendered_subject or '' }}</td>
+        <td>{{ a.attempt_count }}</td>
+        <td class="muted" style="font-size:12px;">{{ a.failure_reason or '' }}</td>
+        <td class="inline">
+          {% if a.status in ('stalled', 'parked', 'failed') %}
+          <form method="post" action="/attempts/retry" style="margin:0;">
+            <input type="hidden" name="attempt_key" value="{{ a.attempt_key }}">
+            <input type="hidden" name="campaign" value="{{ campaign.campaign_id }}">
+            <button class="btn btn-secondary btn-small" type="submit">Retry</button>
+          </form>
+          <form method="post" action="/attempts/mark-sent" style="margin:0;">
+            <input type="hidden" name="attempt_key" value="{{ a.attempt_key }}">
+            <input type="hidden" name="campaign" value="{{ campaign.campaign_id }}">
+            <button class="btn btn-secondary btn-small" type="submit" title="assert the mail did go out">Mark sent</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>6. Approval {% if campaign.status == 'approved' %}<span class="badge stage-booked">approved {{ (campaign.approved_at or '')[:10] }} by {{ campaign.approved_by }}</span>{% elif campaign.status == 'done' %}<span class="badge stage-sourced">closed record</span>{% endif %}</h2>
+
+  {% if campaign.status == 'done' %}
+  <div style="padding:10px 14px; border:1px solid var(--border); border-radius:10px; background:var(--bg);">
+    <strong>Closed record.</strong> This campaign is marked <span class="mono">done</span>: it holds the historical roster and is not a sending draft, so there is nothing to approve and nothing sends from here. To run a new campaign, create one from the Campaigns page.
+  </div>
+  {% else %}
+
+  {% if report.errors %}
+  <div style="padding:10px 14px; border:1px solid var(--red); border-radius:10px; background:var(--red-bg); margin-bottom:10px;">
+    <strong style="color:var(--red);">Blocking issues:</strong>
+    <ul style="margin:6px 0 0;">{% for e in report.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+  {% if report.warnings %}
+  <div style="padding:10px 14px; border:1px solid var(--orange); border-radius:10px; background:var(--orange-bg); margin-bottom:10px;">
+    <ul style="margin:0;">{% for w in report.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
+  {% if report.samples %}
+  <h2 style="margin-top:14px;">Rendered copy (first real contact per degree)</h2>
+  {% for degree, s in report.samples.items() %}
+  <details style="margin-bottom:8px;">
+    <summary style="cursor:pointer;"><strong>{{ degree }}</strong> - {{ s.cohort_size }} contact(s), {{ s.steps|length }} step(s), {{ s.sequence.send_mode }}</summary>
+    {% for rs in s.steps %}
+    <div style="border:1px solid var(--border); border-radius:10px; padding:12px; margin:8px 0;">
+      <div class="muted" style="font-size:12px;">Step {{ rs.step.step_no }} &middot; {{ rs.step.channel }} &middot; {{ rs.step.template_key }} v{{ rs.template_version }} &middot; +{{ rs.step.day_offset }}d</div>
+      {% if rs.subject %}<div style="margin-top:6px;"><strong>{{ rs.subject }}</strong></div>{% endif %}
+      <pre style="white-space:pre-wrap; font-family:inherit; margin:6px 0 0;">{{ rs.body }}</pre>
+    </div>
+    {% endfor %}
+  </details>
+  {% endfor %}
+  {% endif %}
+
+  {% if report.ok and campaign.status == 'draft' %}
+  <div style="padding:12px 14px; border:1px solid var(--green); border-radius:10px; background:var(--green-bg); margin-top:10px;">
+    <p style="margin:0 0 10px;">{{ report.scope_text }}</p>
+    <p style="margin:0 0 10px;" class="muted">Approving only FREEZES the copy + list. Sending stays OFF until you press Start sending in the next step.</p>
+    <form method="post" action="/campaigns/{{ campaign.campaign_id }}/approve" class="row-actions">
+      <div style="min-width:220px;"><label>Type the campaign id to confirm</label>
+        <input type="text" name="confirm" placeholder="{{ campaign.campaign_id }}" autocomplete="off"></div>
+      <button class="btn btn-small" type="submit">Approve: freeze copy + list</button>
+    </form>
+  </div>
+  {% elif campaign.status in ('approved', 'sending', 'paused') %}
+  {% set pending = enrollments | rejectattr('enrollment_approved_at') | list %}
+  <p class="muted">Copy + list frozen. New uploads stay inert until you approve the additions (button appears below when pending rows exist).</p>
+  {% if pending %}
+  <form method="post" action="/campaigns/{{ campaign.campaign_id }}/approve" class="row-actions" style="margin-bottom:10px;">
+    <div style="min-width:220px;"><label>{{ pending|length }} pending addition(s) - type the id to approve them</label>
+      <input type="text" name="confirm" placeholder="{{ campaign.campaign_id }}" autocomplete="off"></div>
+    <button class="btn btn-small" type="submit">Approve additions</button>
+  </form>
+  {% endif %}
+  {% endif %}
+  {% endif %}{# /status == 'done' #}
+</div>
+
+{% if campaign.status in ('approved', 'sending', 'paused') %}
+<div class="card">
+  <h2>7. Sending gate</h2>
+  {% if campaign.status == 'approved' %}
+  <div style="padding:12px 14px; border:1px solid var(--orange); border-radius:10px; background:var(--orange-bg);">
+    <p style="margin:0 0 6px;"><strong>Sending is OFF.</strong> The campaign is approved and frozen, but the worker will not send a single email until you confirm here.</p>
+    <p style="margin:0 0 10px;" class="muted">{{ report.scope_text }}</p>
+    <form method="post" action="/campaigns/{{ campaign.campaign_id }}/start-sending" class="row-actions">
+      <div style="min-width:220px;"><label>Type the campaign id to confirm sending</label>
+        <input type="text" name="confirm" placeholder="{{ campaign.campaign_id }}" autocomplete="off"></div>
+      <button class="btn btn-small" type="submit" style="background:var(--green);">Start sending</button>
+    </form>
+  </div>
+  {% elif campaign.status == 'sending' %}
+  <div style="padding:12px 14px; border:1px solid {% if kill_switch %}var(--red){% else %}var(--green){% endif %}; border-radius:10px; background:{% if kill_switch %}var(--red-bg){% else %}var(--green-bg){% endif %};">
+    {% if kill_switch %}
+    <p style="margin:0 0 10px;"><strong>Sending is HALTED by the global kill switch.</strong> The status is 'sending' but the worker claims nothing while the kill switch is on. Turn it off on the Campaigns page to actually resume.</p>
+    {% else %}
+    <p style="margin:0 0 10px;"><strong>Sending is LIVE.</strong> The worker is claiming due steps for this campaign. Pause to stop, or use the global kill switch on the Campaigns page.</p>
+    {% endif %}
+    <form method="post" action="/campaigns/{{ campaign.campaign_id }}/pause" style="margin:0;">
+      <button class="btn btn-small" type="submit" style="background:var(--red);">Pause sending</button>
+    </form>
+  </div>
+  {% elif campaign.status == 'paused' %}
+  <div style="padding:12px 14px; border:1px solid var(--red); border-radius:10px; background:var(--red-bg);">
+    <p style="margin:0 0 10px;"><strong>Paused.</strong> No sends until you resume.</p>
+    <form method="post" action="/campaigns/{{ campaign.campaign_id }}/resume" style="margin:0;">
+      <button class="btn btn-small" type="submit">Resume sending</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

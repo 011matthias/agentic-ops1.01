@@ -12,10 +12,31 @@ One database (default ``lead-desk.sqlite`` under the data dir) holds:
                       these rows. A correction is a new ``note`` event, never
                       an edit.
 * ``state``           small key/value store (delta tokens for the cloud
-                      poller, misc runtime state).
+                      poller, kill switch, worker heartbeat).
+
+Campaign-engine tables (iteration 3):
+
+* ``campaigns``       one row per campaign; approval freezes copy + list.
+* ``templates``       versioned message copy; editing INSERTs a new version.
+* ``sequences``       one cadence per (campaign, warmness degree).
+* ``sequence_steps``  ordered steps: channel, template, day offset from the
+                      PREVIOUS step's actual completion.
+* ``degree_rules``    data-driven warmness classification (first match wins).
+* ``enrollments``     contact x campaign membership + degree; inert until
+                      approved.
+* ``send_attempts``   the outbox lock table (leases). NEVER pipeline truth:
+                      a send is real only when its 'sent' event lands.
+* ``campaign_template_pins``  which template version an approval froze.
+
+RESERVED ext_key NAMESPACE: cadence events carry
+``ext_key = 'cadence:{enrollment_id}:{step_no}'``. The event-hash basis
+(contact, type, ext_key) then admits at most ONE 'sent' event per
+enrollment-step, ever - the structural double-send backstop. External
+ingest (POST /events) must reject payloads claiming this prefix.
 
 Two SQL VIEWS derive from the log: ``contact_stage`` (sourced..accepted) and
-``contact_activity`` (last inbound/outbound timestamp).
+``contact_activity`` (last inbound/outbound timestamp);
+``enrollment_progress`` derives cadence progress per enrollment.
 
 Opened per operation as a context manager, mirroring the expense-recon
 ``RunStore`` precedent.
@@ -29,9 +50,31 @@ from pathlib import Path
 CHANNELS = ("email", "linkedin", "meeting", "call")
 DIRECTIONS = ("outbound", "inbound")
 EVENT_TYPES = (
-    "sent", "reply", "invite", "bounce", "note", "booked", "held", "accepted"
+    "sent", "touch", "reply", "invite", "bounce", "note", "booked", "held", "accepted",
+    # compensating events (reverse a milestone; the stage view reads the latest)
+    "unbooked", "unaccepted",
 )
-SOURCES = ("graph-auto", "manual", "import")
+SOURCES = ("graph-auto", "manual", "import", "worker-auto")
+
+# Warmness degrees (cold -> warm). Each degree maps to one sequence per
+# campaign; 'warm' steps default to draft-dirk mode (he clicks send).
+DEGREES = ("cold", "cold_touched", "warm")
+
+# How an email step executes: auto-send from matthias.silva@ (CC Dirk) vs a
+# ready draft loaded into Dirk's mailbox (his click is the gate on his name).
+SEND_MODES = ("auto-matthias", "draft-dirk")
+
+# draft: editable, nothing sends. approved: copy+list FROZEN but still NOT
+# sending (the second gate). sending: a human pressed "Start sending" - the
+# worker claims only from here. paused: sending halted. done: finished.
+CAMPAIGN_STATUSES = ("draft", "approved", "sending", "paused", "done")
+
+# Reserved ext_key prefix for cadence-emitted events (see module docstring).
+CADENCE_PREFIX = "cadence:"
+
+
+def attempt_key_for(enrollment_id: int, step_no: int) -> str:
+    return f"{CADENCE_PREFIX}{enrollment_id}:{step_no}"
 
 # Pipeline stages, lowest to highest. Derived from the event log + judgment.
 STAGES = ("sourced", "sent", "replied", "qualifying", "booked", "held", "accepted")
@@ -42,6 +85,7 @@ CONTACT_COLUMNS = (
     "first_name", "last_name", "company", "job_title",
     "email", "alt_email", "phone", "country", "linkedin_url",
     "tier", "tier_reason", "lead_type", "persona", "signal",
+    "outreach_status",
     "suppressed", "suppress_reason", "suppressed_at", "suppressed_by",
     "crm_owner", "demo_owner", "next_step", "next_step_due",
     "source", "in_our_booth", "scanned_at_booth", "if_we_know_them",
@@ -49,6 +93,7 @@ CONTACT_COLUMNS = (
     "fob_encoded", "booth_registered_at", "crm_last_activity",
     "bant_need", "bant_authority", "bant_timeline", "bant_budget",
     "demo_date", "dirk_verdict", "dirk_notes", "notes",
+    "merged_into",
 )
 
 _SCHEMA = """
@@ -135,26 +180,150 @@ CREATE INDEX IF NOT EXISTS ix_events_contact ON outreach_events(contact_id, ts);
 CREATE INDEX IF NOT EXISTS ix_events_type    ON outreach_events(campaign, type, direction);
 CREATE INDEX IF NOT EXISTS ix_contacts_camp  ON contacts(campaign, suppressed, tier);
 
-CREATE VIEW IF NOT EXISTS contact_activity AS
+CREATE TABLE IF NOT EXISTS campaigns (
+    campaign_id   TEXT PRIMARY KEY,
+    name          TEXT NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'draft',
+    from_address  TEXT NOT NULL DEFAULT 'matthias.silva@brisken.com',
+    cc_address    TEXT NOT NULL DEFAULT 'dirk.neumann@brisken.com',
+    bcc_address   TEXT NOT NULL DEFAULT 's9hitl_pv69mu@mails4.zohocrm.com',
+    send_window   TEXT NOT NULL DEFAULT '{"days":[0,1,2,3,4],"start":"08:30","end":"17:30","tz":"Europe/Berlin"}',
+    daily_cap     INTEGER NOT NULL DEFAULT 40,
+    throttle_seconds INTEGER NOT NULL DEFAULT 12,
+    jitter_seconds   INTEGER NOT NULL DEFAULT 4,
+    approved_at   TEXT,
+    approved_by   TEXT,
+    approved_contacts_hash TEXT,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS templates (
+    template_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    template_key  TEXT NOT NULL,
+    version       INTEGER NOT NULL,
+    channel       TEXT NOT NULL CHECK (channel IN ('email', 'linkedin')),
+    subject       TEXT,
+    body          TEXT NOT NULL,
+    created_at    TEXT NOT NULL,
+    created_by    TEXT,
+    UNIQUE(template_key, version)
+);
+
+CREATE TABLE IF NOT EXISTS sequences (
+    sequence_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+    campaign_id   TEXT NOT NULL REFERENCES campaigns(campaign_id),
+    degree        TEXT NOT NULL,
+    name          TEXT NOT NULL,
+    send_mode     TEXT NOT NULL DEFAULT 'auto-matthias',
+    UNIQUE(campaign_id, degree)
+);
+
+CREATE TABLE IF NOT EXISTS sequence_steps (
+    step_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    sequence_id   INTEGER NOT NULL REFERENCES sequences(sequence_id),
+    step_no       INTEGER NOT NULL,
+    channel       TEXT NOT NULL CHECK (channel IN ('email', 'linkedin')),
+    template_key  TEXT NOT NULL,
+    day_offset    INTEGER NOT NULL,
+    UNIQUE(sequence_id, step_no)
+);
+
+CREATE TABLE IF NOT EXISTS degree_rules (
+    rule_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    campaign_id TEXT NOT NULL REFERENCES campaigns(campaign_id),
+    priority    INTEGER NOT NULL,
+    degree      TEXT NOT NULL,
+    predicate   TEXT NOT NULL,
+    label       TEXT NOT NULL,
+    UNIQUE(campaign_id, priority)
+);
+
+CREATE TABLE IF NOT EXISTS enrollments (
+    enrollment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    contact_id    TEXT NOT NULL REFERENCES contacts(contact_id),
+    campaign_id   TEXT NOT NULL REFERENCES campaigns(campaign_id),
+    degree        TEXT,
+    degree_source TEXT NOT NULL DEFAULT 'rules',
+    degree_rule   TEXT,
+    approved_at   TEXT,
+    approved_by   TEXT,
+    enrolled_at   TEXT NOT NULL,
+    enrolled_by   TEXT,
+    UNIQUE(contact_id, campaign_id)
+);
+
+-- Operational lock/queue state ONLY, never pipeline truth. attempt_key is
+-- PRIMARY KEY, so exactly one row per enrollment-step can ever exist.
+CREATE TABLE IF NOT EXISTS send_attempts (
+    attempt_key   TEXT PRIMARY KEY,
+    enrollment_id INTEGER NOT NULL REFERENCES enrollments(enrollment_id),
+    step_no       INTEGER NOT NULL,
+    status        TEXT NOT NULL,
+    send_mode     TEXT,
+    lease_id      TEXT,
+    lease_expires TEXT,
+    worker_id     TEXT,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    to_addr       TEXT,
+    rendered_subject TEXT,
+    rendered_body TEXT,
+    template_key  TEXT,
+    template_version INTEGER,
+    internet_message_id TEXT,
+    entry_id      TEXT,
+    claimed_at    TEXT,
+    resolved_at   TEXT,
+    failure_reason TEXT
+);
+
+CREATE TABLE IF NOT EXISTS campaign_template_pins (
+    campaign_id  TEXT NOT NULL REFERENCES campaigns(campaign_id),
+    template_key TEXT NOT NULL,
+    version      INTEGER NOT NULL,
+    PRIMARY KEY (campaign_id, template_key)
+);
+
+CREATE INDEX IF NOT EXISTS ix_events_extkey  ON outreach_events(ext_key);
+CREATE INDEX IF NOT EXISTS ix_enroll_camp    ON enrollments(campaign_id);
+CREATE INDEX IF NOT EXISTS ix_attempts_enrl  ON send_attempts(enrollment_id, step_no);
+"""
+
+# ---------------------------------------------------------------------------
+# Derived VIEWS live here, NOT in _SCHEMA, and are (re)created by the
+# migration runner below rather than by ``CREATE VIEW IF NOT EXISTS``. The
+# old bootstrap used IF NOT EXISTS, which froze a view's definition on the
+# already-deployed prod DB: editing the SQL never reached production because
+# the view already existed. The runner drops + recreates them from these
+# definitions whenever SCHEMA_VERSION advances, so a definition change here
+# actually lands on the prod volume. Keep each as the single source of truth.
+_VIEWS = {
+    "contact_activity": """
+CREATE VIEW contact_activity AS
 SELECT c.contact_id,
   (SELECT MAX(e.ts) FROM outreach_events e
      WHERE e.contact_id = c.contact_id AND e.direction = 'outbound') AS last_out,
   (SELECT MAX(e.ts) FROM outreach_events e
      WHERE e.contact_id = c.contact_id AND e.direction = 'inbound')  AS last_in
-FROM contacts c;
-
-CREATE VIEW IF NOT EXISTS contact_stage AS
+FROM contacts c
+""",
+    "contact_stage": """
+CREATE VIEW contact_stage AS
 SELECT c.contact_id,
   CASE
     WHEN c.dirk_verdict = 'accepted'
-      OR EXISTS (SELECT 1 FROM outreach_events e WHERE e.contact_id = c.contact_id AND e.type = 'accepted')
+      OR (SELECT e.type FROM outreach_events e
+          WHERE e.contact_id = c.contact_id AND e.type IN ('accepted', 'unaccepted')
+          ORDER BY e.ts DESC, e.event_id DESC LIMIT 1) = 'accepted'
       THEN 'accepted'
     WHEN EXISTS (SELECT 1 FROM outreach_events e WHERE e.contact_id = c.contact_id AND e.type = 'held')
       THEN 'held'
-    WHEN c.demo_date IS NOT NULL AND c.demo_date != ''
-      OR EXISTS (SELECT 1 FROM outreach_events e WHERE e.contact_id = c.contact_id AND e.type = 'booked')
+    WHEN (c.demo_date IS NOT NULL AND c.demo_date != '')
+      OR (SELECT e.type FROM outreach_events e
+          WHERE e.contact_id = c.contact_id AND e.type IN ('booked', 'unbooked')
+          ORDER BY e.ts DESC, e.event_id DESC LIMIT 1) = 'booked'
       THEN 'booked'
-    WHEN (c.bant_need + c.bant_authority + c.bant_timeline) > 0
+    WHEN (c.bant_need + c.bant_authority + c.bant_timeline + c.bant_budget) > 0
       AND EXISTS (SELECT 1 FROM outreach_events e
                   WHERE e.contact_id = c.contact_id AND e.direction = 'inbound' AND e.type = 'reply')
       THEN 'qualifying'
@@ -162,12 +331,97 @@ SELECT c.contact_id,
                  WHERE e.contact_id = c.contact_id AND e.direction = 'inbound' AND e.type = 'reply')
       THEN 'replied'
     WHEN EXISTS (SELECT 1 FROM outreach_events e
-                 WHERE e.contact_id = c.contact_id AND e.direction = 'outbound' AND e.type IN ('sent', 'invite'))
+                 WHERE e.contact_id = c.contact_id AND e.direction = 'outbound' AND e.type IN ('sent', 'invite', 'touch'))
       THEN 'sent'
     ELSE 'sourced'
   END AS stage
-FROM contacts c;
-"""
+FROM contacts c
+""",
+    "enrollment_progress": """
+CREATE VIEW enrollment_progress AS
+SELECT en.enrollment_id, en.contact_id, en.campaign_id,
+  (SELECT COUNT(*) FROM outreach_events e
+     WHERE e.contact_id = en.contact_id
+       AND e.ext_key LIKE 'cadence:' || en.enrollment_id || ':%') AS steps_done,
+  (SELECT MAX(e.ts) FROM outreach_events e
+     WHERE e.contact_id = en.contact_id
+       AND e.ext_key LIKE 'cadence:' || en.enrollment_id || ':%') AS last_step_ts,
+  EXISTS (SELECT 1 FROM outreach_events e
+     WHERE e.contact_id = en.contact_id AND e.direction = 'inbound'
+       AND e.type = 'reply' AND e.ts >= en.enrolled_at)           AS replied,
+  EXISTS (SELECT 1 FROM outreach_events e
+     WHERE e.contact_id = en.contact_id AND e.type = 'bounce')    AS bounced
+FROM enrollments en
+""",
+}
+
+
+def _refresh_views_sql(*names: str) -> list[str]:
+    """DROP + CREATE statements that make the named views match ``_VIEWS``.
+    A migration uses this so an existing prod DB picks up a view-definition
+    change (``CREATE VIEW IF NOT EXISTS`` never refreshes an existing view)."""
+    out: list[str] = []
+    for n in names:
+        out.append(f"DROP VIEW IF EXISTS {n}")
+        out.append(_VIEWS[n].strip())
+    return out
+
+
+def _add_column(table: str, col: str, decl: str):
+    """A replay-safe ADD COLUMN migration step: SQLite has no
+    ``ADD COLUMN IF NOT EXISTS``, so guard on table_info. Idempotent even if a
+    DB's user_version is ever rolled back and the migration replays."""
+    def _step(conn) -> None:
+        existing = {r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        if col not in existing:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+    return _step
+
+
+# Ordered schema migrations. Each key N holds the steps that move a DB from
+# user_version N-1 to N; a step is either a raw SQL string or a callable(conn).
+# All steps are replay-safe (DROP...IF EXISTS / guarded ADD COLUMN). BUMP
+# SCHEMA_VERSION and append a new entry whenever a _VIEWS definition changes or
+# a column is added, so the change reaches the deployed prod DB.
+_MIGRATIONS: dict[int, list] = {
+    # v1: establish the runner and refresh all three derived views so future
+    # definition edits reach the prod volume (whose views were frozen by the
+    # old CREATE VIEW IF NOT EXISTS bootstrap).
+    1: _refresh_views_sql("contact_activity", "contact_stage", "enrollment_progress"),
+    # v2: the sheet's human status column, stored for display only (owner 2026
+    # -07-15: display-only, no stage mapping). Sheet-authoritative on re-sync;
+    # NOT in migrate.APP_OWNED_ON_RESYNC. Lives only here (not in _SCHEMA) so a
+    # fresh DB gets it via this migration and an existing DB via the ALTER.
+    2: [_add_column("contacts", "outreach_status", "TEXT")],
+    # v3: refresh contact_stage - qualifying now counts bant_budget in the BANT
+    # sum, and booked/accepted read the LATEST booked/unbooked (accepted/
+    # unaccepted) event so clearing a demo_date / verdict actually reverses.
+    3: _refresh_views_sql("contact_stage"),
+    # v4: merge-duplicate tombstone pointer. A merged loser stays as a
+    # suppressed 'duplicate' row pointing at its survivor, so the next sheet
+    # sync cannot resurrect it as a fresh active contact.
+    4: [_add_column("contacts", "merged_into", "TEXT")],
+}
+
+# Highest applied migration. On a fresh DB the runner applies 1..N in order;
+# on the prod DB it applies only the entries above its current user_version.
+SCHEMA_VERSION = max(_MIGRATIONS)
+
+
+# Suppression reasons, most-restrictive first (permanent consent blocks, then
+# exclusion tiers, then the revisitable hold). Used when a merge unions two
+# contacts' suppression onto the survivor.
+_SUPPRESS_PRIORITY = (
+    "no_consent", "stop", "do_not_contact", "bounced",
+    "duplicate", "test", "organiser", "own_team", "unreachable", "anon", "held",
+)
+
+
+def _stronger_suppress_reason(a: str | None, b: str | None) -> str | None:
+    for r in _SUPPRESS_PRIORITY:
+        if a == r or b == r:
+            return r
+    return a or b
 
 
 def event_hash(contact_id, ts, channel, type_, detail, ext_key=None) -> str:
@@ -188,6 +442,10 @@ class ContactStore:
         self.conn = sqlite3.connect(str(self.db_path))
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON")
+        # Wait up to 5s for a competing write instead of erroring immediately;
+        # matters at cold boot when several threadpool connections open at once
+        # and the migration runner briefly holds the write lock.
+        self.conn.execute("PRAGMA busy_timeout = 5000")
         self._init_schema()
 
     def __enter__(self) -> "ContactStore":
@@ -202,6 +460,37 @@ class ContactStore:
     def _init_schema(self) -> None:
         self.conn.executescript(_SCHEMA)
         self.conn.commit()
+        self._run_migrations()
+
+    def _run_migrations(self) -> None:
+        """Apply pending schema migrations exactly once, gated on
+        ``PRAGMA user_version``.
+
+        Views and future column adds live in ``_MIGRATIONS`` (NOT in
+        per-connect DDL): running DROP VIEW / ALTER TABLE on every connect
+        would race the concurrent threadpool connections a scale-to-zero
+        machine opens at cold boot. The version guard means the DDL runs
+        only until one connection advances user_version to SCHEMA_VERSION;
+        every later connect is a single PRAGMA read and returns. BEGIN
+        IMMEDIATE serialises the first-boot race: a loser blocks, then
+        re-reads the (now current) version inside the lock and skips."""
+        if self.conn.execute("PRAGMA user_version").fetchone()[0] >= SCHEMA_VERSION:
+            return
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            version = self.conn.execute("PRAGMA user_version").fetchone()[0]
+            for target in range(version + 1, SCHEMA_VERSION + 1):
+                for stmt in _MIGRATIONS[target]:
+                    if callable(stmt):
+                        stmt(self.conn)
+                    else:
+                        self.conn.execute(stmt)
+                # user_version takes no bind parameter; target is a trusted int.
+                self.conn.execute(f"PRAGMA user_version = {target}")
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
 
     # -- contacts ---------------------------------------------------------
 
@@ -237,10 +526,50 @@ class ContactStore:
         addr = (addr or "").strip().lower()
         if not addr:
             return None
-        return self.conn.execute(
+        row = self.conn.execute(
             "SELECT * FROM contacts WHERE lower(email) = ? OR lower(alt_email) = ? LIMIT 1",
             (addr, addr),
         ).fetchone()
+        # Follow a merge tombstone to the survivor, so an event captured for a
+        # merged loser's address lands on the surviving contact's timeline.
+        if row is not None and row["merged_into"]:
+            survivor = self.get_contact(row["merged_into"])
+            if survivor is not None:
+                return survivor
+        return row
+
+    def merge_contacts(self, survivor_id: str, loser_id: str, now: str) -> dict:
+        """Fold ``loser`` into ``survivor``: repoint the loser's events +
+        enrollments, union suppression most-restrictively, and leave the loser
+        as a suppressed 'duplicate' tombstone pointing at the survivor (so the
+        next sheet sync cannot resurrect it). Returns a small result dict."""
+        survivor = self.get_contact(survivor_id)
+        loser = self.get_contact(loser_id)
+        if survivor is None or loser is None or survivor_id == loser_id:
+            return {"ok": False, "error": "bad survivor/loser"}
+        moved = self.conn.execute(
+            "UPDATE outreach_events SET contact_id = ? WHERE contact_id = ?",
+            (survivor_id, loser_id)).rowcount
+        self.conn.execute(
+            "UPDATE OR IGNORE enrollments SET contact_id = ? WHERE contact_id = ?",
+            (survivor_id, loser_id))
+        self.conn.execute("DELETE FROM enrollments WHERE contact_id = ?", (loser_id,))
+        # most-restrictive suppression wins on the survivor
+        reason = _stronger_suppress_reason(
+            survivor["suppress_reason"] if survivor["suppressed"] else None,
+            loser["suppress_reason"] if loser["suppressed"] else None)
+        if reason and not survivor["suppressed"]:
+            self.conn.execute(
+                "UPDATE contacts SET suppressed = 1, suppress_reason = ?, "
+                "suppressed_at = ?, suppressed_by = 'merge', updated_at = ? WHERE contact_id = ?",
+                (reason, now, now, survivor_id))
+        self.conn.execute(
+            "UPDATE contacts SET suppressed = 1, suppress_reason = 'duplicate', "
+            "merged_into = ?, updated_at = ? WHERE contact_id = ?",
+            (survivor_id, now, loser_id))
+        self.conn.commit()
+        return {"ok": True, "events_moved": moved,
+                "survivor": survivor_id, "loser": loser_id}
 
     def update_fields(self, contact_id: str, fields: dict, now: str) -> None:
         cols = [c for c in fields if c in CONTACT_COLUMNS
@@ -271,7 +600,11 @@ class ContactStore:
         return self.conn.execute(
             """
             SELECT c.*, s.stage AS stage, a.last_out AS last_out, a.last_in AS last_in,
-                   (SELECT COUNT(*) FROM outreach_events e WHERE e.contact_id = c.contact_id) AS event_count
+                   (SELECT COUNT(*) FROM outreach_events e WHERE e.contact_id = c.contact_id) AS event_count,
+                   EXISTS (SELECT 1 FROM outreach_events e WHERE e.contact_id = c.contact_id
+                           AND e.direction = 'outbound' AND e.type = 'touch') AS has_touch,
+                   EXISTS (SELECT 1 FROM outreach_events e WHERE e.contact_id = c.contact_id
+                           AND e.direction = 'outbound' AND e.type IN ('sent', 'invite')) AS has_campaign_send
             FROM contacts c
             JOIN contact_stage s ON s.contact_id = c.contact_id
             LEFT JOIN contact_activity a ON a.contact_id = c.contact_id
@@ -330,3 +663,394 @@ class ContactStore:
             (key, value, now),
         )
         self.conn.commit()
+
+    def state_keys_with_prefix(self, prefix: str) -> list[str]:
+        """State keys starting with ``prefix`` ('%'/'_' in prefix are escaped)."""
+        esc = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        rows = self.conn.execute(
+            "SELECT key FROM state WHERE key LIKE ? ESCAPE '\\' ORDER BY key",
+            (esc + "%",),
+        ).fetchall()
+        return [r["key"] for r in rows]
+
+    def delete_state(self, key: str) -> bool:
+        """Remove one state row. Returns True if a row was deleted."""
+        cur = self.conn.execute("DELETE FROM state WHERE key = ?", (key,))
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def campaign_ids(self) -> set[str]:
+        rows = self.conn.execute("SELECT campaign_id FROM campaigns").fetchall()
+        return {r["campaign_id"] for r in rows}
+
+    # -- campaigns ---------------------------------------------------------
+
+    def create_campaign(self, campaign_id: str, name: str, now: str, **opts) -> None:
+        cols = ["campaign_id", "name", "created_at", "updated_at"]
+        vals = [campaign_id, name, now, now]
+        for k in ("status", "from_address", "cc_address", "bcc_address",
+                  "send_window", "daily_cap", "throttle_seconds", "jitter_seconds"):
+            if k in opts and opts[k] not in (None, ""):
+                cols.append(k)
+                vals.append(opts[k])
+        self.conn.execute(
+            f"INSERT OR IGNORE INTO campaigns ({', '.join(cols)}) "
+            f"VALUES ({', '.join('?' for _ in cols)})",
+            vals,
+        )
+        self.conn.commit()
+
+    def get_campaign(self, campaign_id: str) -> sqlite3.Row | None:
+        return self.conn.execute(
+            "SELECT * FROM campaigns WHERE campaign_id = ?", (campaign_id,)
+        ).fetchone()
+
+    def list_campaigns(self) -> list[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT * FROM campaigns ORDER BY created_at DESC"
+        ).fetchall()
+
+    def update_campaign(self, campaign_id: str, fields: dict, now: str) -> None:
+        cols = [c for c in fields if c in (
+            "name", "status", "from_address", "cc_address", "bcc_address",
+            "send_window", "daily_cap", "throttle_seconds", "jitter_seconds",
+            "approved_at", "approved_by", "approved_contacts_hash",
+        )]
+        if not cols:
+            return
+        set_clause = ", ".join(f"{c} = ?" for c in cols) + ", updated_at = ?"
+        self.conn.execute(
+            f"UPDATE campaigns SET {set_clause} WHERE campaign_id = ?",
+            [fields[c] for c in cols] + [now, campaign_id],
+        )
+        self.conn.commit()
+
+    # -- templates (versioned; editing inserts a new version) --------------
+
+    def save_template(self, template_key: str, channel: str, subject: str | None,
+                      body: str, by: str | None, now: str) -> int:
+        """Insert the next version for the key and return the version number."""
+        row = self.conn.execute(
+            "SELECT COALESCE(MAX(version), 0) AS v FROM templates WHERE template_key = ?",
+            (template_key,),
+        ).fetchone()
+        version = int(row["v"]) + 1
+        self.conn.execute(
+            "INSERT INTO templates (template_key, version, channel, subject, body, created_at, created_by) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (template_key, version, channel, subject, body, now, by),
+        )
+        self.conn.commit()
+        return version
+
+    def get_template(self, template_key: str, version: int | None = None) -> sqlite3.Row | None:
+        if version is None:
+            return self.conn.execute(
+                "SELECT * FROM templates WHERE template_key = ? ORDER BY version DESC LIMIT 1",
+                (template_key,),
+            ).fetchone()
+        return self.conn.execute(
+            "SELECT * FROM templates WHERE template_key = ? AND version = ?",
+            (template_key, version),
+        ).fetchone()
+
+    def list_templates(self) -> list[sqlite3.Row]:
+        """Latest version per template_key."""
+        return self.conn.execute(
+            "SELECT t.* FROM templates t JOIN (SELECT template_key, MAX(version) AS v "
+            "FROM templates GROUP BY template_key) m "
+            "ON m.template_key = t.template_key AND m.v = t.version "
+            "ORDER BY t.template_key"
+        ).fetchall()
+
+    # -- sequences + steps --------------------------------------------------
+
+    def upsert_sequence(self, campaign_id: str, degree: str, name: str,
+                        send_mode: str, steps: list[dict]) -> int:
+        """Replace the sequence definition for (campaign, degree) atomically.
+        ``steps``: [{step_no, channel, template_key, day_offset}]. Allowed only
+        pre-approval (service enforces)."""
+        cur = self.conn.execute(
+            "INSERT INTO sequences (campaign_id, degree, name, send_mode) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(campaign_id, degree) DO UPDATE SET name = excluded.name, "
+            "send_mode = excluded.send_mode",
+            (campaign_id, degree, name, send_mode),
+        )
+        row = self.conn.execute(
+            "SELECT sequence_id FROM sequences WHERE campaign_id = ? AND degree = ?",
+            (campaign_id, degree),
+        ).fetchone()
+        seq_id = int(row["sequence_id"])
+        self.conn.execute("DELETE FROM sequence_steps WHERE sequence_id = ?", (seq_id,))
+        for s in steps:
+            self.conn.execute(
+                "INSERT INTO sequence_steps (sequence_id, step_no, channel, template_key, day_offset) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (seq_id, s["step_no"], s["channel"], s["template_key"], s["day_offset"]),
+            )
+        self.conn.commit()
+        return seq_id
+
+    def delete_sequence(self, campaign_id: str, degree: str) -> None:
+        row = self.conn.execute(
+            "SELECT sequence_id FROM sequences WHERE campaign_id = ? AND degree = ?",
+            (campaign_id, degree),
+        ).fetchone()
+        if row is None:
+            return
+        self.conn.execute("DELETE FROM sequence_steps WHERE sequence_id = ?", (row["sequence_id"],))
+        self.conn.execute("DELETE FROM sequences WHERE sequence_id = ?", (row["sequence_id"],))
+        self.conn.commit()
+
+    def get_sequence(self, campaign_id: str, degree: str) -> dict | None:
+        row = self.conn.execute(
+            "SELECT * FROM sequences WHERE campaign_id = ? AND degree = ?",
+            (campaign_id, degree),
+        ).fetchone()
+        if row is None:
+            return None
+        steps = self.conn.execute(
+            "SELECT * FROM sequence_steps WHERE sequence_id = ? ORDER BY step_no",
+            (row["sequence_id"],),
+        ).fetchall()
+        return {**dict(row), "steps": [dict(s) for s in steps]}
+
+    def sequences_for_campaign(self, campaign_id: str) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT * FROM sequences WHERE campaign_id = ? ORDER BY degree", (campaign_id,)
+        ).fetchall()
+        out = []
+        for row in rows:
+            steps = self.conn.execute(
+                "SELECT * FROM sequence_steps WHERE sequence_id = ? ORDER BY step_no",
+                (row["sequence_id"],),
+            ).fetchall()
+            out.append({**dict(row), "steps": [dict(s) for s in steps]})
+        return out
+
+    # -- degree rules --------------------------------------------------------
+
+    def replace_rules(self, campaign_id: str, rules: list[dict]) -> None:
+        """``rules``: [{priority, degree, predicate(json str), label}]."""
+        self.conn.execute("DELETE FROM degree_rules WHERE campaign_id = ?", (campaign_id,))
+        for r in rules:
+            self.conn.execute(
+                "INSERT INTO degree_rules (campaign_id, priority, degree, predicate, label) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (campaign_id, r["priority"], r["degree"], r["predicate"], r["label"]),
+            )
+        self.conn.commit()
+
+    def get_rules(self, campaign_id: str) -> list[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT * FROM degree_rules WHERE campaign_id = ? ORDER BY priority",
+            (campaign_id,),
+        ).fetchall()
+
+    # -- enrollments ---------------------------------------------------------
+
+    def enroll(self, contact_id: str, campaign_id: str, by: str | None, now: str) -> bool:
+        """Idempotent membership insert. Returns True when newly enrolled."""
+        cur = self.conn.execute(
+            "INSERT OR IGNORE INTO enrollments (contact_id, campaign_id, enrolled_at, enrolled_by) "
+            "VALUES (?, ?, ?, ?)",
+            (contact_id, campaign_id, now, by),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def enroll_campaign_contacts(self, campaign_id: str, by: str | None, now: str) -> int:
+        """Enroll every contact tagged with this campaign that is not yet
+        enrolled (idempotent). Mirrors the per-row enroll in uploads.py so a
+        sheet sync makes synced leads visible on the board. Returns the number
+        newly enrolled. No-op when the campaign row does not exist (FK)."""
+        if self.get_campaign(campaign_id) is None:
+            return 0
+        cur = self.conn.execute(
+            "INSERT OR IGNORE INTO enrollments (contact_id, campaign_id, enrolled_at, enrolled_by) "
+            "SELECT c.contact_id, ?, ?, ? FROM contacts c "
+            "WHERE c.campaign = ? "
+            "AND NOT EXISTS (SELECT 1 FROM enrollments en "
+            "                WHERE en.contact_id = c.contact_id AND en.campaign_id = ?)",
+            (campaign_id, now, by, campaign_id, campaign_id),
+        )
+        self.conn.commit()
+        return cur.rowcount
+
+    def get_enrollment(self, enrollment_id: int) -> sqlite3.Row | None:
+        return self.conn.execute(
+            "SELECT * FROM enrollments WHERE enrollment_id = ?", (enrollment_id,)
+        ).fetchone()
+
+    def find_enrollment(self, contact_id: str, campaign_id: str) -> sqlite3.Row | None:
+        return self.conn.execute(
+            "SELECT * FROM enrollments WHERE contact_id = ? AND campaign_id = ?",
+            (contact_id, campaign_id),
+        ).fetchone()
+
+    def enrollments_for_campaign(self, campaign_id: str) -> list[sqlite3.Row]:
+        """Enrollment x contact x derived progress, one row per enrolled contact."""
+        return self.conn.execute(
+            """
+            SELECT en.enrollment_id, en.degree, en.degree_source, en.degree_rule,
+                   en.approved_at AS enrollment_approved_at, en.enrolled_at,
+                   c.*, s.stage AS stage, a.last_out, a.last_in,
+                   ep.steps_done, ep.last_step_ts,
+                   ep.replied AS cadence_replied, ep.bounced AS cadence_bounced
+            FROM enrollments en
+            JOIN contacts c        ON c.contact_id = en.contact_id
+            JOIN contact_stage s   ON s.contact_id = c.contact_id
+            LEFT JOIN contact_activity a     ON a.contact_id = c.contact_id
+            LEFT JOIN enrollment_progress ep ON ep.enrollment_id = en.enrollment_id
+            WHERE en.campaign_id = ?
+            ORDER BY c.company, c.last_name
+            """,
+            (campaign_id,),
+        ).fetchall()
+
+    def set_degree(self, enrollment_id: int, degree: str | None, source: str,
+                   rule_label: str | None) -> None:
+        self.conn.execute(
+            "UPDATE enrollments SET degree = ?, degree_source = ?, degree_rule = ? "
+            "WHERE enrollment_id = ?",
+            (degree, source, rule_label, enrollment_id),
+        )
+        self.conn.commit()
+
+    def approve_pending_enrollments(self, campaign_id: str, by: str, now: str) -> int:
+        cur = self.conn.execute(
+            "UPDATE enrollments SET approved_at = ?, approved_by = ? "
+            "WHERE campaign_id = ? AND approved_at IS NULL",
+            (now, by, campaign_id),
+        )
+        self.conn.commit()
+        return cur.rowcount
+
+    def remove_enrollment(self, enrollment_id: int) -> None:
+        self.conn.execute("DELETE FROM enrollments WHERE enrollment_id = ?", (enrollment_id,))
+        self.conn.commit()
+
+    # -- template pins ---------------------------------------------------------
+
+    def pin_templates(self, campaign_id: str, pins: dict[str, int]) -> None:
+        self.conn.execute(
+            "DELETE FROM campaign_template_pins WHERE campaign_id = ?", (campaign_id,)
+        )
+        for key, version in pins.items():
+            self.conn.execute(
+                "INSERT INTO campaign_template_pins (campaign_id, template_key, version) "
+                "VALUES (?, ?, ?)",
+                (campaign_id, key, version),
+            )
+        self.conn.commit()
+
+    def get_pins(self, campaign_id: str) -> dict[str, int]:
+        rows = self.conn.execute(
+            "SELECT template_key, version FROM campaign_template_pins WHERE campaign_id = ?",
+            (campaign_id,),
+        ).fetchall()
+        return {r["template_key"]: int(r["version"]) for r in rows}
+
+    # -- send attempts (outbox lock table) --------------------------------------
+
+    def get_attempt(self, attempt_key: str) -> sqlite3.Row | None:
+        return self.conn.execute(
+            "SELECT * FROM send_attempts WHERE attempt_key = ?", (attempt_key,)
+        ).fetchone()
+
+    def attempts_for_campaign(self, campaign_id: str, statuses: tuple[str, ...] | None = None) -> list[sqlite3.Row]:
+        q = (
+            "SELECT sa.*, en.campaign_id, en.contact_id FROM send_attempts sa "
+            "JOIN enrollments en ON en.enrollment_id = sa.enrollment_id "
+            "WHERE en.campaign_id = ?"
+        )
+        args: list = [campaign_id]
+        if statuses:
+            q += f" AND sa.status IN ({', '.join('?' for _ in statuses)})"
+            args.extend(statuses)
+        return self.conn.execute(q + " ORDER BY sa.claimed_at", args).fetchall()
+
+    def try_lease(self, *, attempt_key: str, enrollment_id: int, step_no: int,
+                  send_mode: str, lease_id: str, lease_expires: str, worker_id: str,
+                  to_addr: str | None, rendered_subject: str | None, rendered_body: str,
+                  template_key: str, template_version: int, now: str,
+                  max_attempts: int = 3) -> bool:
+        """Take the per-step lock (committed immediately - the attempt_key
+        PRIMARY KEY is the atomicity guarantee across connections).
+
+        Insert when no row exists; re-lease only a 'queued' row (transient
+        retry) under the attempt cap. Every other status (leased, sent,
+        drafted, parked, stalled, failed) is not claimable here."""
+        cur = self.conn.execute(
+            "INSERT OR IGNORE INTO send_attempts "
+            "(attempt_key, enrollment_id, step_no, status, send_mode, lease_id, lease_expires, "
+            " worker_id, attempt_count, to_addr, rendered_subject, rendered_body, "
+            " template_key, template_version, claimed_at) "
+            "VALUES (?, ?, ?, 'leased', ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)",
+            (attempt_key, enrollment_id, step_no, send_mode, lease_id, lease_expires,
+             worker_id, to_addr, rendered_subject, rendered_body,
+             template_key, template_version, now),
+        )
+        if cur.rowcount > 0:
+            self.conn.commit()
+            return True
+        cur = self.conn.execute(
+            "UPDATE send_attempts SET status = 'leased', send_mode = ?, lease_id = ?, "
+            "lease_expires = ?, worker_id = ?, attempt_count = attempt_count + 1, "
+            "to_addr = ?, rendered_subject = ?, rendered_body = ?, "
+            "template_key = ?, template_version = ?, claimed_at = ?, failure_reason = NULL "
+            "WHERE attempt_key = ? AND status = 'queued' AND attempt_count < ?",
+            (send_mode, lease_id, lease_expires, worker_id, to_addr, rendered_subject,
+             rendered_body, template_key, template_version, now, attempt_key, max_attempts),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def update_attempt(self, attempt_key: str, fields: dict) -> None:
+        cols = [c for c in fields if c in (
+            "status", "lease_id", "lease_expires", "worker_id", "attempt_count",
+            "internet_message_id", "entry_id", "resolved_at", "failure_reason",
+        )]
+        if not cols:
+            return
+        set_clause = ", ".join(f"{c} = ?" for c in cols)
+        self.conn.execute(
+            f"UPDATE send_attempts SET {set_clause} WHERE attempt_key = ?",
+            [fields[c] for c in cols] + [attempt_key],
+        )
+        self.conn.commit()
+
+    def find_attempt_by_imid(self, internet_message_id: str) -> sqlite3.Row | None:
+        if not internet_message_id:
+            return None
+        return self.conn.execute(
+            "SELECT * FROM send_attempts WHERE internet_message_id = ? LIMIT 1",
+            (internet_message_id,),
+        ).fetchone()
+
+    def expire_leases(self, now: str) -> int:
+        """Flip expired leases to 'stalled' (surfaced for a human; never auto
+        re-leased: at-most-once beats at-least-once for real email)."""
+        cur = self.conn.execute(
+            "UPDATE send_attempts SET status = 'stalled' "
+            "WHERE status = 'leased' AND lease_expires < ?",
+            (now,),
+        )
+        self.conn.commit()
+        return cur.rowcount
+
+    def cadence_sends_today(self, campaign_id: str, day_prefix: str) -> int:
+        """Cap accounting: today's landed cadence sends + outstanding leases."""
+        landed = self.conn.execute(
+            "SELECT COUNT(*) FROM outreach_events e "
+            "JOIN enrollments en ON e.ext_key LIKE 'cadence:' || en.enrollment_id || ':%' "
+            "WHERE en.campaign_id = ? AND e.type = 'sent' AND e.ts LIKE ?",
+            (campaign_id, day_prefix + "%"),
+        ).fetchone()[0]
+        outstanding = self.conn.execute(
+            "SELECT COUNT(*) FROM send_attempts sa "
+            "JOIN enrollments en ON en.enrollment_id = sa.enrollment_id "
+            "WHERE en.campaign_id = ? AND sa.status = 'leased'",
+            (campaign_id,),
+        ).fetchone()[0]
+        return int(landed) + int(outstanding)

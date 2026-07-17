@@ -69,6 +69,15 @@ try:
 except Exception:
     session_state = None
 
+# Shared PowerShell/.cmd normalizer (matching view only; fail-open identity).
+# Closes the recorded live bypass: `& "$nodeDir\vercel.cmd" deploy --prod`
+# never hit `\bvercel\s+deploy\b` because after `vercel` came `.cmd`.
+try:
+    from _shell import normalize_command
+except Exception:
+    def normalize_command(c: str) -> str:
+        return c
+
 HOOK_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hook-log.txt")
 
 # Ship-class shell command patterns. Matched against the FULL command string
@@ -402,7 +411,12 @@ def main() -> None:
     if not cmd:
         sys.exit(0)
 
-    ship_tag = detect_ship_class(cmd)
+    # Detection runs on the normalized view (PowerShell call operator,
+    # .cmd/.exe stems, backslash paths); the ORIGINAL string is kept for
+    # logging and the prototype-scope git inspection.
+    view = normalize_command(cmd)
+
+    ship_tag = detect_ship_class(view)
     if not ship_tag:
         # Not a ship-class command -> let it run silently.
         sys.exit(0)
@@ -417,7 +431,7 @@ def main() -> None:
     # Autonomous lane: reversible / unmerged feature-branch work (commit,
     # non-main non-force push, gh pr create). Runs without an explicit order.
     # See rule_no_auto_commit.md "Autonomous lane".
-    if is_autonomous_lane(cmd, ship_tag):
+    if is_autonomous_lane(view, ship_tag):
         log(f"allow:{ship_tag} band=autonomous (feature-branch, no order needed)")
         sys.exit(0)
 
@@ -426,7 +440,7 @@ def main() -> None:
     # falls through to the explicit-order scan below, which preserves a manual
     # override ("merge anyway") and otherwise ASKs.
     if ship_tag == "gh-pr-merge":
-        verdict = ci_is_green(cmd)
+        verdict = ci_is_green(view)
         if verdict is True:
             log(f"allow:{ship_tag} band=auto-merge ci=green")
             sys.exit(0)

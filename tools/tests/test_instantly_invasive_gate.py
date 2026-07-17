@@ -131,3 +131,72 @@ def test_build_py_passes(tmp_path):
 def test_running_instantly_test_file_does_not_ask(tmp_path):
     p = _run("uv run python -m pytest tools/tests/test_instantly_invasive_gate.py", tmp_path)
     assert p.returncode == 0 and p.stdout.strip() == ""
+
+
+# --- 2026-06-18: curl body flag implies POST with no -X. A body-bearing curl
+# (register #11/#177 follow-up) was slipping through as a read. ---
+def test_curl_data_implicit_post_to_pause_asks(tmp_path):
+    p = _run("curl --data '{}' https://api.instantly.ai/api/v2/campaigns/123/pause", tmp_path)
+    assert permission_decision(p.stdout) == "ask"
+
+
+def test_curl_short_d_file_implicit_post_asks(tmp_path):
+    p = _run("curl -d @body.json https://api.instantly.ai/api/v2/campaigns/123/activate", tmp_path)
+    assert permission_decision(p.stdout) == "ask"
+
+
+def test_curl_form_upload_import_asks(tmp_path):
+    p = _run("curl -F file=@leads.csv https://api.instantly.ai/api/v2/leads/import", tmp_path)
+    assert permission_decision(p.stdout) == "ask"
+
+
+def test_curl_data_to_read_path_still_passes(tmp_path):
+    # read-path short-circuit precedes the method check: a body POST to a read
+    # endpoint still allows, so the new clause adds no read-path false positive.
+    p = _run("curl --data '{}' https://api.instantly.ai/api/v2/leads/list", tmp_path)
+    assert p.returncode == 0 and p.stdout.strip() == ""
+
+
+# --- 2026-07-10: PowerShell spellings + Layer-A compound-command reorder ----
+
+def test_ps_invoke_restmethod_post_asks(tmp_path):
+    p = _run(
+        "Invoke-RestMethod -Uri https://api.instantly.ai/api/v2/campaigns/x/activate "
+        "-Method Post",
+        tmp_path,
+    )
+    assert permission_decision(p.stdout) == "ask"
+
+
+def test_ps_irm_get_passes(tmp_path):
+    p = _run("irm https://api.instantly.ai/api/v2/accounts", tmp_path)
+    assert p.returncode == 0 and p.stdout.strip() == ""
+
+
+def test_ps_method_post_to_read_path_passes(tmp_path):
+    p = _run(
+        "Invoke-RestMethod -Uri https://api.instantly.ai/api/v2/campaigns/analytics "
+        "-Method Post -Body $b",
+        tmp_path,
+    )
+    assert p.returncode == 0 and p.stdout.strip() == ""
+
+
+def test_compound_read_then_activate_asks(tmp_path):
+    # The 2026-07-10 audit hole: a read path ANYWHERE in the command used to
+    # short-circuit the whole gate, so read-then-activate one-liners passed.
+    p = _run(
+        "curl https://api.instantly.ai/api/v2/campaigns/analytics && "
+        "curl -X POST https://api.instantly.ai/api/v2/campaigns/x/activate -d '{}'",
+        tmp_path,
+    )
+    assert permission_decision(p.stdout) == "ask"
+
+
+def test_ps_body_alone_not_mutating(tmp_path):
+    # -Body without -Method does not imply POST in PowerShell.
+    p = _run(
+        "Invoke-RestMethod -Uri https://api.instantly.ai/api/v2/accounts -Body $b",
+        tmp_path,
+    )
+    assert p.returncode == 0 and p.stdout.strip() == ""

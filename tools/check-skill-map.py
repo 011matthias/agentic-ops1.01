@@ -52,10 +52,30 @@ SKIP_PREFIXES = ("context/", "handover/", "docs/client/", "app/", "src/",
 # (marketing pack etc.) follow their own internal conventions.
 FIRST_PARTY_PREFIX = "skil_"
 
+# A consolidation pack (make-pack / n8n-pack / trigger-pack) routes into the
+# modules of its stub skills via a cross-skill link (../make-mcp-tools-expert/
+# modules/NAME.md). The stub's OWN SKILL.md does not name those modules, so the
+# reverse check would false-positive without this. We collect every basename any
+# spine references this way; a genuine orphan, referenced by no spine anywhere,
+# still fires.
+CROSS_SKILL_MODULE_REF = re.compile(r"/(?:modules|references|components)/([A-Za-z0-9._-]+\.md)")
+
+# Vendored Claude Code guide docs (skil_meta-builder): documentation ABOUT how to
+# build skills/hooks/plugins. Their backtick paths are illustrative examples
+# (`@docs/file.md`, `commands/hello.md`, `foo/CLAUDE.md`), never repo pointers, so
+# the forward check skips them. The reverse check still flags them if unwired.
+EXAMPLE_PATH_DOCS = {
+    "MEMORY-GUIDE.md", "PLUGINS-GUIDE.md", "SKILL-GUIDE.md", "HOOKS-GUIDE.md",
+    "MCP-GUIDE.md", "SETTINGS-GUIDE.md", "OUTPUT-STYLES-GUIDE.md",
+    "COMMAND-GUIDE.md", "AGENT-GUIDE.md", "DECISION-TREE.md",
+}
+
 
 def looks_like_path(s: str) -> bool:
     s = s.strip()
-    if not s or " " in s or s.startswith(("http", "--", "-", "/")):
+    # `@`-prefixed tokens are Claude import-syntax examples (`@docs/file.md`),
+    # never a repo file on disk.
+    if not s or " " in s or s.startswith(("http", "--", "-", "/", "@")):
         return False
     if s.startswith(SKIP_PREFIXES):
         return False
@@ -68,7 +88,21 @@ def skill_md_files(skill_dir: Path) -> list[Path]:
     return sorted(p for p in skill_dir.rglob("*.md") if p.is_file())
 
 
-def audit_skill(skill_dir: Path) -> list[dict]:
+def collect_cross_skill_refs(skill_dirs: list[Path]) -> set[str]:
+    """Module/reference basenames any spine routes into via a cross-skill link
+    (a pack -> its consolidation stub's modules, e.g. make-pack ->
+    ../make-mcp-tools-expert/modules/NAME.md). Those modules are reachable even
+    though the stub's own SKILL.md does not name them. A genuine orphan, which no
+    spine references anywhere, is absent from this set and still fires."""
+    referenced: set[str] = set()
+    for sd in skill_dirs:
+        spine = sd / "SKILL.md"
+        if spine.is_file():
+            referenced.update(CROSS_SKILL_MODULE_REF.findall(spine.read_text(encoding="utf-8")))
+    return referenced
+
+
+def audit_skill(skill_dir: Path, cross_skill_refs: frozenset[str] = frozenset()) -> list[dict]:
     hits: list[dict] = []
     spine = skill_dir / "SKILL.md"
     spine_text = spine.read_text(encoding="utf-8") if spine.is_file() else ""
@@ -76,10 +110,20 @@ def audit_skill(skill_dir: Path) -> list[dict]:
         return [{"line": 0, "category": "no-spine", "severity": "HIGH",
                  "message": f"{skill_dir.name}: no SKILL.md", "snippet": str(skill_dir)}]
 
-    # 1. forward: named paths resolve
+    # 1. forward: named paths resolve. Illustrative examples are skipped (fenced
+    # code blocks, `Example:` lines, and the vendored guide docs whose backtick
+    # paths are documentation samples) so the gate flags real routing drift only.
     for md in skill_md_files(skill_dir):
+        if skill_dir.name == "skil_meta-builder" and md.name in EXAMPLE_PATH_DOCS:
+            continue
         text = md.read_text(encoding="utf-8")
+        in_fence = False
         for i, line in enumerate(text.splitlines(), 1):
+            if line.lstrip().startswith("```"):
+                in_fence = not in_fence
+                continue
+            if in_fence or "Example:" in line:
+                continue
             for cand in BACKTICK.findall(line):
                 cand = cand.strip()
                 if not looks_like_path(cand):
@@ -92,10 +136,11 @@ def audit_skill(skill_dir: Path) -> list[dict]:
                         "snippet": line.strip()[:120],
                     })
 
-    # 2. reverse: every module/reference/component reachable from the spine
+    # 2. reverse: every module/reference/component reachable from the spine OR
+    # from a pack spine that consumes this skill's modules (cross_skill_refs).
     for sub in SKILL_DIRS:
         for f in sorted((skill_dir / sub).glob("*.md")) if (skill_dir / sub).is_dir() else []:
-            if f.name not in spine_text:
+            if f.name not in spine_text and f.name not in cross_skill_refs:
                 hits.append({
                     "line": 0, "category": "unreachable-module", "severity": "MEDIUM",
                     "message": f"{sub}/{f.name} exists but SKILL.md never references it",
@@ -146,9 +191,16 @@ def main() -> int:
         skill_dirs = sorted(p for p in SKILLS.iterdir()
                             if p.is_dir() and p.name.startswith(FIRST_PARTY_PREFIX))
 
+    # Cross-skill module references are collected from ALL first-party spines (not
+    # just the scanned subset) so a pack spine consuming a stub's modules is seen
+    # even when scanning a single skill by path.
+    all_first_party = sorted(p for p in SKILLS.iterdir()
+                             if p.is_dir() and p.name.startswith(FIRST_PARTY_PREFIX))
+    cross_skill_refs = frozenset(collect_cross_skill_refs(all_first_party))
+
     hits: list[dict] = []
     for sd in skill_dirs:
-        hits += audit_skill(sd)
+        hits += audit_skill(sd, cross_skill_refs)
 
     if args.format == "json":
         by_cat: dict[str, int] = {}

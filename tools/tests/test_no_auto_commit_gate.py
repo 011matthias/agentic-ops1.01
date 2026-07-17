@@ -112,3 +112,36 @@ def test_D_merge_missing_transcript_defaults_ask(tmp_path):
     # Non-green merge + no transcript -> floor -> ASK. CI forced red to stay
     # hermetic (no live `gh` call).
     assert permission_decision(_run("gh pr merge 99 --squash", "", tmp_path, branch="feature", ci="red").stdout) == "ask"
+
+
+# --- 2026-07-10: PowerShell / .cmd spellings (normalized matching view) -----
+# Recorded live bypasses: `& "$nodeDir\vercel.cmd" deploy --prod` ran through
+# the PowerShell tool unseen. Detection now runs on _shell.normalize_command.
+
+def test_ps_call_operator_vercel_cmd_deploy_asks(tmp_path):
+    p = _run(
+        '& "$nodeDir\\vercel.cmd" deploy --prod --yes --cwd platform 2>&1 '
+        "| Select-Object -Last 8",
+        NO_AUTH, tmp_path, branch="feature",
+    )
+    assert permission_decision(p.stdout) == "ask"
+
+
+def test_ps_bare_vercel_cmd_deploy_asks(tmp_path):
+    p = _run("vercel.cmd deploy --yes", NO_AUTH, tmp_path, branch="feature")
+    assert permission_decision(p.stdout) == "ask"
+
+
+def test_ps_flyctl_exe_deploy_asks(tmp_path):
+    p = _run('& "$d\\flyctl.exe" deploy', NO_AUTH, tmp_path, branch="feature")
+    assert permission_decision(p.stdout) == "ask"
+
+
+def test_ps_git_exe_push_main_asks(tmp_path):
+    p = _run("git.exe push origin main", NO_AUTH, tmp_path, branch="feature")
+    assert permission_decision(p.stdout) == "ask"
+
+
+def test_ps_npm_cmd_build_not_ship_class(tmp_path):
+    # Negative FP pin: a normalized npm build is still not ship-class.
+    assert _allowed(_run('& "$nodeDir\\npm.cmd" run build 2>&1', NO_AUTH, tmp_path, branch="feature"))

@@ -25,6 +25,7 @@ from __future__ import annotations
 import csv
 from collections.abc import Mapping
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 from ..matching.types import Transaction
@@ -63,8 +64,9 @@ def parse_statement_csv(
     transactions, issues = parse_statement_csv_tolerant(
         path, column_map, account_id, legal_entity_id, account_card_currency
     )
-    if issues:
-        raise issues[0].to_error()
+    hard = [i for i in issues if i.severity == "error"]
+    if hard:
+        raise hard[0].to_error()
     return transactions
 
 
@@ -123,6 +125,24 @@ def parse_statement_csv_tolerant(
                     raw_cur = (row.get(column_map["transaction_currency"]) or "").strip()
                     if raw_cur:
                         tx_currency = raw_cur.upper()
+
+                # L5: optional per-charge FX detail (BRL on the USD card),
+                # symmetric with the xlsx sibling and the Chase PDF fields.
+                original_amount: Decimal | None = None
+                if "original_amount" in column_map:
+                    raw_orig_amt = (row.get(column_map["original_amount"]) or "").strip()
+                    if raw_orig_amt:
+                        original_amount = parse_amount(raw_orig_amt)
+                original_currency: str | None = None
+                if "original_currency" in column_map:
+                    raw_orig_cur = (row.get(column_map["original_currency"]) or "").strip()
+                    if raw_orig_cur:
+                        original_currency = raw_orig_cur.upper()
+                fx_rate: Decimal | None = None
+                if "fx_rate" in column_map:
+                    raw_rate = (row.get(column_map["fx_rate"]) or "").strip()
+                    if raw_rate:
+                        fx_rate = parse_amount(raw_rate)
             except (KeyError, ValueError) as exc:
                 issues.append(
                     ParseIssue(
@@ -145,6 +165,9 @@ def parse_statement_csv_tolerant(
                     account_card_currency=account_card_currency.upper(),
                     vendor_from_statement=vendor,
                     raw_text=str(row),
+                    original_amount=original_amount,
+                    original_currency=original_currency,
+                    fx_rate=fx_rate,
                 )
             )
 
