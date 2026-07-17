@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meji Media &ndash; Where the ROI Comes From</title>
+<style>
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+    h2 { page-break-before: always; }
+    h2:first-of-type { page-break-before: avoid; }
+}
+
+:root {
+  --header-height: 72px;
+  --sidebar-width: 200px;
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface2: #f1f5f9;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --text2: #475569;
+  --text3: #94a3b8;
+  --blue: #2563eb;
+  --blue-light: #dbeafe;
+  --blue-dark: #1e40af;
+  --green: #16a34a;
+  --green-light: #dcfce7;
+  --amber: #d97706;
+  --amber-light: #fef3c7;
+  --purple: #7c3aed;
+  --purple-light: #ede9fe;
+  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05);
+  --shadow-md: 0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.05);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,.1), 0 4px 6px rgba(0,0,0,.05);
+  --nav-bg: #ffffff;
+}
+[data-theme="dark"] {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface2: #0f172a;
+  --border: #334155;
+  --text: #f1f5f9;
+  --text2: #94a3b8;
+  --text3: #475569;
+  --blue: #3b82f6;
+  --blue-light: #1e3a5f;
+  --blue-dark: #93c5fd;
+  --green: #22c55e;
+  --green-light: #14532d;
+  --amber: #f59e0b;
+  --amber-light: #451a03;
+  --purple: #a78bfa;
+  --purple-light: #2e1065;
+  --shadow: 0 1px 3px rgba(0,0,0,.3);
+  --shadow-md: 0 4px 6px rgba(0,0,0,.4);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,.5);
+  --nav-bg: #1e293b;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.6;
+  min-height: 100vh;
+  transition: background .2s, color .2s;
+  padding-top: var(--header-height);
+}
+
+/* Sidebar */
+.sidebar {
+  position: fixed; top: var(--header-height); left: 0;
+  width: var(--sidebar-width); height: calc(100vh - var(--header-height));
+  background: var(--surface); border-right: 1px solid var(--border);
+  z-index: 50; overflow-y: auto; transition: transform .25s ease;
+}
+.sidebar-nav { list-style: none; padding: 12px 0; }
+.sidebar-nav li { margin: 0; }
+.sidebar-nav a {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 20px; font-size: 13px; font-weight: 500;
+  color: var(--text2); text-decoration: none;
+  border-left: 3px solid transparent;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.sidebar-nav a:hover { background: var(--surface2); color: var(--text); }
+.sidebar-nav a.active {
+  background: var(--blue-light); color: var(--blue-dark);
+  border-left-color: var(--blue); font-weight: 700;
+}
+.sidebar-backdrop {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.4); z-index: 140;
+}
+.sidebar-backdrop.active { display: block; }
+.hamburger {
+  display: none; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  font-size: 18px; color: var(--text2); line-height: 1;
+}
+
+/* Header */
+.header {
+  background: var(--nav-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 24px;
+  padding-left: calc(var(--sidebar-width) + 24px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 1000;
+  box-shadow: var(--shadow);
+  transition: background .2s;
+}
+.page-layout { margin-left: var(--sidebar-width); }
+.header-left { display: flex; align-items: center; gap: 16px; }
+.header-logo {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 18px; letter-spacing: -0.025em;
+}
+.header-logo svg { flex-shrink: 0; }
+.header-logo .logo-text { font-weight: 700; color: var(--text); }
+.header-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.header-title h1 { font-size: 18px; font-weight: 700; color: var(--text); }
+.header-title p { font-size: 13px; color: var(--text2); margin-top: 1px; }
+.header-right { display: flex; align-items: center; gap: 12px; }
+
+.theme-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text2);
+  display: flex; align-items: center; gap: 6px;
+  transition: background .15s;
+}
+.theme-btn:hover { background: var(--border); }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.badge-green { background: var(--green-light); color: var(--green); }
+.badge-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.5; } }
+
+/* Main */
+.main { max-width: 960px; margin: 0 auto; padding: 40px 24px 80px; }
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); z-index: 200; }
+  .sidebar.open { transform: translateX(0); }
+  .header { padding-left: 24px; }
+  .page-layout { margin-left: 0; }
+  .hamburger { display: block; }
+}
+
+/* Hero */
+.hero {
+  background: linear-gradient(135deg, var(--blue), var(--purple));
+  border-radius: 16px;
+  padding: 48px 40px;
+  color: #fff;
+  margin-bottom: 40px;
+  box-shadow: var(--shadow-lg);
+}
+.hero h2 { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+.hero p { font-size: 16px; opacity: .9; max-width: 640px; line-height: 1.5; }
+.hero-stats {
+  display: flex; gap: 32px; margin-top: 24px; flex-wrap: wrap;
+}
+.hero-stat { text-align: left; }
+.hero-stat-value { font-size: 24px; font-weight: 800; }
+.hero-stat-label { font-size: 12px; opacity: .8; text-transform: uppercase; letter-spacing: .05em; }
+
+/* Section */
+.section { margin-bottom: 40px; }
+.section-title {
+  font-size: 13px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--text3); margin-bottom: 16px;
+}
+.prose-box {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 24px; line-height: 1.7;
+}
+.prose-box p { margin-bottom: 12px; }
+.prose-box p:last-child { margin-bottom: 0; }
+.prose-box strong { color: var(--text); }
+
+/* Cards grid */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  transition: box-shadow .15s, transform .15s;
+  color: inherit;
+  display: block;
+}
+.card-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 800; margin-bottom: 12px;
+}
+.card-icon-blue { background: var(--blue-light); color: var(--blue); }
+.card-icon-green { background: var(--green-light); color: var(--green); }
+.card-icon-amber { background: var(--amber-light); color: var(--amber); }
+.card-icon-purple { background: var(--purple-light); color: var(--purple); }
+.card h3 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.card p { font-size: 13px; color: var(--text2); line-height: 1.5; margin-bottom: 8px; }
+.card p:last-child { margin-bottom: 0; }
+.card-tag {
+  display: inline-block;
+  font-size: 11px; font-weight: 600; padding: 2px 8px;
+  border-radius: 20px; margin-top: 4px;
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.card-tag-live { background: var(--green-light); color: var(--green); }
+.card-tag-build { background: var(--amber-light); color: var(--amber); }
+.card-tag-open { background: var(--purple-light); color: var(--purple); }
+
+/* Row list (protection layer) */
+.auto-list { display: flex; flex-direction: column; gap: 12px; }
+.auto-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.auto-id {
+  font-size: 13px; font-weight: 800; color: var(--green);
+  background: var(--green-light);
+  border-radius: 8px;
+  padding: 6px 12px;
+  white-space: nowrap;
+}
+.auto-info { flex: 1; }
+.auto-info h4 { font-size: 15px; font-weight: 600; }
+.auto-info p { font-size: 13px; color: var(--text2); margin-top: 2px; }
+.auto-status {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 20px;
+  font-size: 12px; font-weight: 600;
+  background: var(--green-light); color: var(--green);
+  white-space: nowrap;
+}
+.auto-status.amber { background: var(--amber-light); color: var(--amber); }
+
+/* Timeline */
+.timeline { position: relative; padding-left: 28px; }
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 8px; top: 4px; bottom: 4px;
+  width: 2px;
+  background: var(--border);
+}
+.timeline-item { position: relative; margin-bottom: 20px; }
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -24px; top: 6px;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--blue);
+  border: 2px solid var(--surface);
+}
+.timeline-date { font-size: 12px; font-weight: 700; color: var(--text3); margin-bottom: 2px; text-transform: uppercase; letter-spacing: .04em; }
+.timeline-text { font-size: 15px; font-weight: 600; color: var(--text); }
+.timeline-detail { font-size: 14px; color: var(--text2); margin-top: 2px; }
+
+/* Footer */
+.footer {
+  text-align: center;
+  padding: 32px 24px;
+  font-size: 13px;
+  color: var(--text3);
+  border-top: 1px solid var(--border);
+}
+.footer a { color: var(--blue); text-decoration: none; }
+.footer a:hover { text-decoration: underline; }
+
+/* Responsive */
+@media (max-width: 640px) {
+  .header { padding: 16px 20px; flex-wrap: wrap; gap: 8px; }
+  .hero { padding: 32px 24px; }
+  .hero h2 { font-size: 22px; }
+  .hero-stats { gap: 20px; }
+  .main { padding: 24px 16px 60px; }
+  .auto-item { flex-wrap: wrap; }
+}
+</style>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
+<!-- deliverable-allow: copy-clipboard,keyboard-search | reason: Meji doc-site convention (see .deliverable-config.yaml); the 7 prior narrative pages omit copy-to-clipboard and Ctrl+K. This page is narrative prose with no shell commands or large code blocks; native Ctrl+F suffices. Add site-wide or not at all, never per-page. -->
+</head>
+<body>
+
+<!-- Sidebar backdrop (mobile) -->
+<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
+
+<!-- Sidebar navigation -->
+<nav class="sidebar" id="sidebar">
+  <ul class="sidebar-nav">
+    <li><a href="#section-goal" data-section="section-goal">The Goal</a></li>
+    <li><a href="#section-routes" data-section="section-routes">Three Routes</a></li>
+    <li><a href="#section-accounts" data-section="section-accounts">Named Accounts</a></li>
+    <li><a href="#section-protect" data-section="section-protect">What Protects It</a></li>
+    <li><a href="#section-timeline" data-section="section-timeline">Timeline</a></li>
+  </ul>
+</nav>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-left">
+    <button class="hamburger" id="hamburgerBtn" onclick="toggleSidebar()">&#9776;</button>
+    <div class="header-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></div>
+    <div class="header-title">
+      <h1>Meji Media</h1>
+      <p>Where the ROI Comes From</p>
+    </div>
+    <span style="color:var(--border);font-size:20px;margin:0 4px;">|</span>
+    <nav style="display:flex;gap:4px;">
+      <a href="/docs/meji-media/" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Hub</a>
+      <a href="/docs/meji-media/roi-plan" style="font-size:13px;font-weight:700;padding:6px 12px;border-radius:6px;background:var(--blue-light);color:var(--blue);text-decoration:none;">ROI Plan</a>
+      <a href="/docs/meji-media/guide" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Guide</a>
+      <a href="/docs/meji-media/system-overview" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Overview</a>
+      <a href="/docs/meji-media/scaling" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Scaling</a>
+      <a href="/docs/meji-media/volume-forecast" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Volume</a>
+    </nav>
+  </div>
+  <div class="header-right">
+    <span class="badge badge-green"><span class="badge-dot"></span> Live</span>
+    <button class="theme-btn" onclick="toggleTheme()">
+      <span id="theme-icon">&#9790;</span> Theme
+    </button>
+  </div>
+</header>
+
+<!-- Main Content -->
+<div class="page-layout">
+<div class="main">
+
+  <!-- Hero -->
+  <div class="hero">
+    <h2>Where the return comes from</h2>
+    <p>The goal you set is 5 to 10 big corporate clients that book more than once a year. The real prize is repeat accounts, not one-off bookings. This page lays out the three routes aimed at that, and the work running in the background so none of it drains on the way.</p>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <div class="hero-stat-value">8</div>
+        <div class="hero-stat-label">Live opportunities to date</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value">&pound;20k+</div>
+        <div class="hero-stat-label">Per repeat account, a year</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value">September</div>
+        <div class="hero-stat-label">The read on the whole engagement</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- The Goal -->
+  <div class="section" id="section-goal">
+    <div class="section-title">The Goal</div>
+    <div class="prose-box">
+      <p>In your words: <strong>5 to 10 big corporate clients that do multiple events through the year.</strong> That reframes success from counting bookings to winning accounts that come back. Polestar rebooking year on year is the model for it.</p>
+      <p>The money follows from your own figures: a typical contract runs <strong>&pound;2,000 to &pound;15,000 per event</strong>, and a multi-event client is <strong>&pound;20,000 or more across a year</strong>. A handful of those accounts is a six-figure annual line, which is why the build favours a small number of high-value, repeat-buying accounts over raw volume.</p>
+      <p>September into the Christmas season is the window we both set as the point to judge the whole engagement on.</p>
+    </div>
+  </div>
+
+  <!-- Three Routes -->
+  <div class="section" id="section-routes">
+    <div class="section-title">Three Routes to That Goal</div>
+    <div class="cards">
+      <div class="card">
+        <div class="card-icon card-icon-green">1</div>
+        <h3>Warm re-engagement</h3>
+        <p>The proven converter. Your past attendees already know you, so this is where replies and bookings actually land; Four Car Audio is the most recent, revived by an automated follow-up.</p>
+        <p>Its one limit is that it sends from a single mailbox. A second warm sender before the season would let the best-converting campaign reach more people, and remove the single point of failure at the same time.</p>
+        <span class="card-tag card-tag-live">Live, converting</span>
+      </div>
+      <div class="card">
+        <div class="card-icon card-icon-blue">2</div>
+        <h3>September corporate</h3>
+        <p>The volume route, aimed at the &pound;2k to &pound;15k per-event contracts. Corporate buying is seasonal and switches on in the autumn, so this is timed for a 1 September start.</p>
+        <p>The copy you approved is locked, and the UK-wide target list is in build now so it is ready when the window opens.</p>
+        <span class="card-tag card-tag-build">In build for September</span>
+      </div>
+      <div class="card">
+        <div class="card-icon card-icon-purple">3</div>
+        <h3>Referral partners</h3>
+        <p>The quiet multiplier, and the one route not built out yet. The event agencies pulled for you each sit on a roster of corporate clients, so one referral relationship can keep sending work our way rather than paying per contact the way cold does.</p>
+        <p>A handful of those relationships is worth more than a large cold list. It is the route with the most upside still untapped.</p>
+        <span class="card-tag card-tag-open">Ready to turn on</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Named Accounts -->
+  <div class="section" id="section-accounts">
+    <div class="section-title">The Named-Account Layer</div>
+    <div class="prose-box">
+      <p>Your 12 named accounts, plus 14 similar companies we sourced, are the <strong>&pound;20k-plus-a-year targets</strong> that sit across all three routes. Each comes with a named decision-maker and the research behind them, worked by name rather than by list. You are running the 12 through HubSpot with that research behind you.</p>
+      <p>This is the sharpest end of the goal: the exact repeat-buying accounts the whole engagement is pointed at.</p>
+    </div>
+  </div>
+
+  <!-- What Protects It -->
+  <div class="section" id="section-protect">
+    <div class="section-title">What Protects the Pipeline</div>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:16px;">None of the routes above matter if the sending quietly degrades. Four things run in the background to stop that.</p>
+    <div class="auto-list">
+      <div class="auto-item">
+        <div class="auto-id">Uptime</div>
+        <div class="auto-info">
+          <h4>Sender monitoring</h4>
+          <p>A daily health sweep catches a disconnected mailbox or a stalled reply within hours. When the warm sender dropped after a login change, it was found the same afternoon and back the next day, so the campaign lost about a day rather than weeks of silence.</p>
+        </div>
+        <div class="auto-status"><span class="badge-dot"></span> Live</div>
+      </div>
+      <div class="auto-item">
+        <div class="auto-id">Hygiene</div>
+        <div class="auto-info">
+          <h4>List verification</h4>
+          <p>Every list is run through address verification and security-gateway screening before it loads, which is what has kept bounces under the safety line all month.</p>
+        </div>
+        <div class="auto-status"><span class="badge-dot"></span> Live</div>
+      </div>
+      <div class="auto-item">
+        <div class="auto-id">Capacity</div>
+        <div class="auto-info">
+          <h4>Inbound headroom</h4>
+          <p>A second enquiry address is warming for the September peak, so the daily follow-up volume never rides on one inbox at the busiest time of year.</p>
+        </div>
+        <div class="auto-status amber"><span class="badge-dot" style="background:var(--amber)"></span> Warming</div>
+      </div>
+      <div class="auto-item">
+        <div class="auto-id">Trust</div>
+        <div class="auto-info">
+          <h4>Domain anti-spoofing</h4>
+          <p>The sending domains are being tightened so nobody else can send email that looks like it comes from your address, which otherwise drags down how your genuine mail is treated. The Christmas cold domain is locked down; the corporate domain is next.</p>
+        </div>
+        <div class="auto-status amber"><span class="badge-dot" style="background:var(--amber)"></span> In progress</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Timeline -->
+  <div class="section" id="section-timeline">
+    <div class="section-title">The Read Ahead</div>
+    <div class="timeline">
+      <div class="timeline-item">
+        <div class="timeline-date">Now, through July</div>
+        <div class="timeline-text">Warm working, foundations laid</div>
+        <div class="timeline-detail">Warm re-engagement running and converting; the September corporate list and the referral option being prepared. Most of the July work is one-time build that does not repeat, so cost per contact keeps falling as sending grows.</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-date">September to October</div>
+        <div class="timeline-text">Corporate enters its buying window</div>
+        <div class="timeline-detail">The volume route goes live into the season it is built for, with the approved copy and a clean UK-wide list. This is where a real corporate return should first show.</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-date">Through the Christmas season</div>
+        <div class="timeline-text">The fullest read</div>
+        <div class="timeline-detail">Warm and corporate both land in the peak. This is the point to judge the whole engagement on, measured in pounds against the repeat-account goal.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Footer -->
+<footer class="footer" style="margin-left:var(--sidebar-width);">
+  <p>Prepared for Meji Media by <a href="https://unpauseai.com" target="_blank" rel="noopener">UnpauseAI</a></p>
+  <p style="margin-top:4px;">Last updated: 17 July 2026</p>
+</footer>
+</div><!-- /page-layout -->
+
+<script>
+function toggleTheme() {
+  var html = document.documentElement;
+  var current = html.getAttribute('data-theme');
+  var next = current === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('theme', next);
+  document.getElementById('theme-icon').innerHTML = next === 'dark' ? '&#9788;' : '&#9790;';
+}
+
+// Restore theme icon to match booted theme
+(function(){
+  var t = document.documentElement.getAttribute('data-theme');
+  if (t === 'dark') document.getElementById('theme-icon').innerHTML = '&#9788;';
+})();
+
+// Sidebar
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarBackdrop').classList.toggle('active');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarBackdrop').classList.remove('active');
+}
+
+// Active section highlight via IntersectionObserver
+(function() {
+  var sections = document.querySelectorAll('[id^="section-"]');
+  var navLinks = document.querySelectorAll('.sidebar-nav a');
+  if (!sections.length) return;
+  var observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting) {
+        navLinks.forEach(function(link) { link.classList.remove('active'); });
+        var activeLink = document.querySelector('.sidebar-nav a[data-section="' + entry.target.id + '"]');
+        if (activeLink) activeLink.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -60% 0px', threshold: 0 });
+  sections.forEach(function(section) { observer.observe(section); });
+  navLinks.forEach(function(link) {
+    link.addEventListener('click', function() {
+      if (window.innerWidth <= 768) closeSidebar();
+    });
+  });
+})();
+</script>
+
+</body>
+</html>
