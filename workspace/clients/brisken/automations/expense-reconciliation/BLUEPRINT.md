@@ -281,7 +281,7 @@ files each run"). Path A keeps every shipped component and changes the
 EDGES of the pipeline: where expenses enter, how receipts are
 addressed, and that the tool persists its inputs in its own tables
 instead of recomputing from loose files. Rationale of record:
-[`2026-06-11-path-recommendation.md`](../../context/expense-reports/2026-06-11-path-recommendation.md).
+[`2026-06-11-path-recommendation.md`](../../context/expense-reconciliation/expense-reports/2026-06-11-path-recommendation.md).
 
 **Unchanged (built, green, untouched by Path A):** the deterministic
 matcher + LD-5 params, the FX bands, the reconciliation guarantee, the

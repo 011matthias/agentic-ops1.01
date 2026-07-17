@@ -14,7 +14,7 @@ systems:
   - instantly                  # dedicated Brisken workspace, to be provisioned
   - neverbounce
   - google-sheets              # lead tracker v1
-last_changes: "Strategy hardening 2026-06-12 (owner): (1) COLD EMAIL RETIRED. Brisken already ran ~150 mailboxes / ~2M cold emails over an extended period for 0 leads; the buy is too high-risk to grant a meeting cold. Track B (cold email, Instantly, lookalike domains, warm-up) is dropped. (2) Product focus narrows 8->3: Market Data Hub + Trade Automation + OnePilot platform; the other 5 apps become subfunctions/proof under the OnePilot story (Remittance/Calvin kept as the best forwardable proof asset, not a standalone campaign). (3) The motion is demand-gen + borrowed-trust + a precision-LinkedIn tail, spine = a trigger-detection radar (context/lead-generation/targeting-radar.md). Diagnosis: Brisken has a discovery problem, not a closing problem (>90% close); the metric is warm triggered at-bats/month. (4) NEW disposition ICP: data-vendor users (Bloomberg/Refinitiv/360T/FXall/OANDA/CME + SAP) = proven pain, not firmographic guess; routes the product (market data->MDH, trading venue->Trade). (5) SAP co-sell + active vendor referral moved OFF the critical path (slow, Brisken-driven); Store-AEO + SAP-partner badge + reverse-sourced vendor signal are the dependable near-term levers."
+last_changes: "Strategy hardening 2026-06-12 (owner): (1) COLD EMAIL RETIRED. Brisken already ran ~150 mailboxes / ~2M cold emails over an extended period for 0 leads; the buy is too high-risk to grant a meeting cold. Track B (cold email, Instantly, lookalike domains, warm-up) is dropped. (2) Product focus narrows 8->3: Market Data Hub + Trade Automation + OnePilot platform; the other 5 apps become subfunctions/proof under the OnePilot story (Remittance/Calvin kept as the best forwardable proof asset, not a standalone campaign). (3) The motion is demand-gen + borrowed-trust + a precision-LinkedIn tail, spine = a trigger-detection radar (context/lead-generation/targeting/targeting-radar.md). Diagnosis: Brisken has a discovery problem, not a closing problem (>90% close); the metric is warm triggered at-bats/month. (4) NEW disposition ICP: data-vendor users (Bloomberg/Refinitiv/360T/FXall/OANDA/CME + SAP) = proven pain, not firmographic guess; routes the product (market data->MDH, trading venue->Trade). (5) SAP co-sell + active vendor referral moved OFF the critical path (slow, Brisken-driven); Store-AEO + SAP-partner badge + reverse-sourced vendor signal are the dependable near-term levers."
 red_team_hardening_2026-06-16: "Applied the cheap red-team fixes (owner directive: build to presentable, no Dirk contact yet). Attribution window 12mo->18mo from demo date + dated account-lock list (findings A+B). Radar §6 retagged to §5 (Colgate/Corteva A1, rest B; vendor-unconfirmed != proven pain). Kill gates G1 wk4/G2 wk8/G3 wk12 added to orchestration §5.1 + the deck. Deck close-rate transfer fixed (funnel terminus, stat-card, honest-expectations population-split); 'Agreed' -> 'your offer as we understood it'. The pre-outreach Dirk email (the highest-ER fix) is deliberately NOT drafted; held for the present-to-Dirk step."
 next_steps:
   - "Lane 1 (autonomous, now): run the targeting radar -- vendor-tag + trigger-verify the 7 JOB-signal accounts with public evidence; rank into tiers"
@@ -22,6 +22,8 @@ next_steps:
   - "Lane 1 (autonomous): draft the AEO substrate (~25-30 problem queries + Q&A page + Store-review seeding plan) and Dirk's enabler pack (co-sell business case + vendor-relationship matrix)"
   - "Dirk go-live gate (compressed 5-min y/n): sending identity; which vendor relationships are live; go-ahead + ~$99/mo Sales Nav seat; demo owner per product + weekly capacity"
   - "On go-live: precision LinkedIn into the triggered cohort via the reachable persona; AEO + Store reviews compound underneath; first held MDH demo = the BANT unit"
+  - "Spine sync (autonomous): adopt 'Smart Trading (BST)' for Trade Automation in new copy; add the 'SAP T&WCM Rome 24-25 Jun' CTA to triggered-cohort outreach; upgrade MDH teardown/ABM 1-pager to named logos (now cleared). See catalog 'Spine reconciliation (2026-06-17)'"
+  - "Dirk confirm (gates site re-cut): is TreasuryCentral the umbrella with OnePilot as the AI layer inside it, or peers? Does the public 5-product roster drop our other apps to subfunctions or just off the Rome deck? Do NOT re-skin the OnePilot-as-platform assets until answered"
 ---
 
 # p2: BANT Lead Generation for Brisken
@@ -45,7 +47,7 @@ ICP, public buying signal, message angle, and product-demo CTA. Eight
 core campaigns (the 7 apps + the AI Digital Workforce) plus OnePilot
 for FSI as a parallel banking track. The campaign library (per-product
 ICP/signal/angle design) lives in
-`context/lead-generation/brisken-product-catalog.md`.
+`context/lead-generation/evidence/brisken-product-catalog.md`.
 
 Dirk offered, relayed by owner 2026-06-11: **$300 per BANT-qualified
 lead plus a commission on closed deals** for Brisken's B2-enterprise
@@ -56,7 +58,7 @@ first-year subscription value (SaaS norm; see negotiation-benchmarks).
 Nothing in this spec overrides what Dirk actually said.
 
 What Brisken sells (full catalog distilled to
-`context/lead-generation/brisken-product-catalog.md` from 6 client
+`context/lead-generation/evidence/brisken-product-catalog.md` from 6 client
 decks, 2026-06-12): the **OnePilot platform** (no-code orchestration
 Framework on SAP BTP) with seven apps (Market Data Hub, Trade
 Automation, Cash Flow & Exposure Hub, Credit Data Hub, Bank Fee Portal,
@@ -153,7 +155,7 @@ anchors on concrete accounts, not concept.
 
 **Campaign library (2026-06-12):** the eight core campaigns and their
 starting ICP / signal / angle design are tabled in
-`context/lead-generation/brisken-product-catalog.md`. The account
+`context/lead-generation/evidence/brisken-product-catalog.md`. The account
 profile, personas, and intent triggers below are the parameters for
 the treasury-DATA campaigns (Market Data Hub, Trade Automation, Cash
 Flow & Exposure Hub), which share the evidence-pack account list; each
@@ -188,7 +190,7 @@ which is exactly what MDH / Trade Automation remove. The vendor signal
 also routes the product (market-data vendors -> Market Data Hub; trading
 venues -> Trade Automation) and supplies the message hook. Detection
 method, vendor->product routing, scoring tiers, and the live list are in
-`context/lead-generation/targeting-radar.md`. This axis is NOT
+`context/lead-generation/targeting/targeting-radar.md`. This axis is NOT
 website-technographic (terminals don't show in Enlyft/TheirStack); it is
 sourced from job-post tool mentions, employee profiles, vendor case
 studies, and 10-K/earnings language.
@@ -206,7 +208,7 @@ finance stack.
 - AFP / EuroFinance / SAP Sapphire / ASUG treasury-session presenters
 
 **Universe size (sourced 2026-06-11, full table + caveats in
-`context/lead-generation/evidence-pack-2026-06-11.md`):** the named
+`context/lead-generation/evidence/evidence-pack-2026-06-11.md`):** the named
 SAP TRM install base is small; Enlyft 628 global / ~182 US
 (indicative), TheirStack 297 global / ~55 US (job-signal floor),
 and skews mega-cap. The practical universe is two rings: (1) existing

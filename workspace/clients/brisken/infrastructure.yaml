@@ -4,6 +4,7 @@ type: client
 # Functional spec v2: workspace/clients/brisken/specs/1-spec/p1-expense-reconciliation-functional-spec.md
 # v1 (Dirk's original 2026-05-14): workspace/clients/brisken/reference/2026-05-14-functional-spec-original.md
 # Authority on what is active vs paused: workspace/clients/brisken/PROJECT-BOUNDARIES.md
+# Where generated files go (project-sorted placement rule): workspace/clients/brisken/FILE-PLACEMENT.md
 
 platform:
   active_project: "expense-reconciliation (p1)"

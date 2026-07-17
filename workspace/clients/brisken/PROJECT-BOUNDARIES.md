@@ -39,7 +39,7 @@ Sessions that name Brisken default to this project unless they explicitly state 
 
 - Status: active, pre-terms. Registered per owner directive 2026-06-11: Dirk offered $300 per BANT-qualified lead + a commission on closed deals (offer relayed by owner; verbatim terms not yet captured; see spec Phase 0). No spend and no outbound contact until terms are settled with Dirk.
 - DIRECTION (owner, 2026-06-12): Brisken does NOT want new clients for the treasury CONSULTING business (SAP Treasury Consulting / RAPSODY / Treasury Assessment). p2 sells the OnePilot PRODUCT suite (subscriptions) + AI Digital Workforce. The offer and CTA shift from a consulting engagement to a product demo. Architecture: one shared engine runs a SEPARATE CAMPAIGN PER PRODUCT (own ICP, signal, angle, product-demo CTA); 8 core campaigns (7 apps + Digital Workforce) + OnePilot for FSI as a parallel banking track. No single wedge.
-- What Brisken sells (full catalog from 6 client decks, 2026-06-12, distilled to `context/lead-generation/brisken-product-catalog.md`): the OnePilot platform (Framework + 7 apps) + AI Digital Workforce + the now-out-of-scope consulting; HQ Houston, TX, USA. OnePilot for FSI (banking orchestration) is a separate, larger expansion ICP.
+- What Brisken sells (full catalog from 6 client decks, 2026-06-12, distilled to `context/lead-generation/evidence/brisken-product-catalog.md`): the OnePilot platform (Framework + 7 apps) + AI Digital Workforce + the now-out-of-scope consulting; HQ Houston, TX, USA. OnePilot for FSI (banking orchestration) is a separate, larger expansion ICP.
 - Spec: `specs/1-spec/p2-bant-lead-generation.md` (plan + ICP; binding for this project).
 - Code (when implementation starts): `automations/lead-generation/`
 - Context: `context/lead-generation/` (terms, ICP data, evidence pack, product catalog)
@@ -101,15 +101,22 @@ If a session writes a spec whose ID falls in another project's namespace, it has
 
 ## File path rules
 
+**Where generated files go:** `FILE-PLACEMENT.md` (client-specific placement
+rule) is the source of truth for sorting any newly generated Brisken file into
+the project-based structure. Read it before writing a file whose home is not
+obvious. The table below is the quick path-ownership reference.
+
 | Path | Belongs to | Notes |
 |---|---|---|
 | `specs/1-spec/p1-*.md` | Expense reconciliation (active) | New specs for the active project go here. v2 functional spec lives at `specs/1-spec/p1-expense-reconciliation-functional-spec.md`. |
 | `specs/1-spec/p2-*.md` | BANT lead generation (active) | Registered 2026-06-11; plan + ICP spec |
 | `context/lead-generation/` | BANT lead generation | Terms, ICP data, evidence pack |
+| `context/expense-reconciliation/` | Expense reconciliation (active) | p1 working context: bank/card statements (`expense-reports/`), receipt images + tickets (`receipts/`), the 2026-05-20 recon call briefs. Reorganised 2026-06-20 (sort-by-project): consolidated the former `context/expense-reports/` + the p1 items out of `context/drafts/`. |
+| `deliverables/lead-generation/` | BANT lead generation | p2 client-facing deliverables, sub-grouped `onepilot/` · `rome-2026/` · `aeo-outreach/` · `strategy/`. Reorganised 2026-06-20 (sort-by-project); was a flat `deliverables/` pile. p1 ships via the hosted Fly workbench, so it has no static deliverables folder. |
 | `specs/1-spec/a*.md`, `app*.md` | Lead nurturing (paused) | Frozen; no edits while paused |
 | `automations/expense-reconciliation/` | Expense reconciliation | Created when implementation starts |
 | `automations/lead-nurturing/` | Lead nurturing | Only if that project resumes |
-| `context/drafts/` | Either project | Filename must indicate the project |
+| `context/drafts/` | Lead nurturing (paused) | Now holds only `getting-started-and-effort-to-dirk.md` (the paused project's plan); p1 drafts were moved to `context/expense-reconciliation/` on 2026-06-20. |
 | `reference/2026-04-10-call-transcript.md` | Lead nurturing (paused) | Primary source; never delete |
 | `reference/2026-05-14-functional-spec-original.md` | Expense reconciliation (active) | Dirk's v1 functional document, primary source; never edit (revisions go into v2 in `specs/1-spec/`) |
 | `reference/2026-05-20-call-transcript.md` | Expense reconciliation (active) | Primary source; full call transcript with Part 1 and Part 2; never delete |
@@ -140,7 +147,7 @@ A boundary violation (cross-project edit, shared infrastructure, ID-namespace co
 
 The authority on which project is live. Read top entry for current state.
 
-- 2026-06-12: **p2 redirected from treasury consulting to OnePilot products, per-product campaign model.** Owner directive (two steps): (1) Brisken does not want new clients for the treasury consulting business (SAP Treasury Consulting / RAPSODY / Treasury Assessment); p2 now sells the OnePilot product suite (SaaS subscriptions) + AI Digital Workforce, offer/CTA shifts from a consulting engagement to a product demo. (2) Architecture is one shared engine running a separate campaign per product (8 core campaigns + OnePilot for FSI parallel track), not a single wedge. Deep scan of 6 client product decks distilled to `context/lead-generation/brisken-product-catalog.md` (incl. the per-product campaign library); the p2 spec and the Dirk-facing strategy deck (HTML + PDF) were reframed the same day. Expense reconciliation unchanged; lead nurturing stays paused.
+- 2026-06-12: **p2 redirected from treasury consulting to OnePilot products, per-product campaign model.** Owner directive (two steps): (1) Brisken does not want new clients for the treasury consulting business (SAP Treasury Consulting / RAPSODY / Treasury Assessment); p2 now sells the OnePilot product suite (SaaS subscriptions) + AI Digital Workforce, offer/CTA shifts from a consulting engagement to a product demo. (2) Architecture is one shared engine running a separate campaign per product (8 core campaigns + OnePilot for FSI parallel track), not a single wedge. Deep scan of 6 client product decks distilled to `context/lead-generation/evidence/brisken-product-catalog.md` (incl. the per-product campaign library); the p2 spec and the Dirk-facing strategy deck (HTML + PDF) were reframed the same day. Expense reconciliation unchanged; lead nurturing stays paused.
 - 2026-06-11: **Third project registered: `p2` BANT lead generation (active, pre-terms).** Owner directive: Dirk offered $300 per BANT-qualified lead + commission on closed deals for Brisken's B2-enterprise SAP Treasury business. Plan approved by owner (evidence pack before terms call; book-meetings-only qualification; LinkedIn-first channel mix while email warms). Expense reconciliation unchanged; lead nurturing stays paused; p2 is outbound generation, not a resumption of a0-a6.
 - 2026-05-25: **Build began.** Per Dirk's directive (north star: Chris's reconciliation grind days -> minutes; begin building now), Phase 4 deterministic matching engine shipped at `automations/expense-reconciliation/`. 9 tests green. Phase 4 was promoted ahead of Phase 0 because it is the value-prop core, is stack-independent, and de-risks the LLM judgment layer sizing before §38 lands. Active project unchanged.
 - 2026-05-24: **Functional spec revision landed.** Dirk's 2026-05-14 v1 functional document preserved verbatim at `reference/2026-05-14-functional-spec-original.md`. Revised v2 spec written to `specs/1-spec/p1-expense-reconciliation-functional-spec.md` against the 2026-05-20 call outcomes. v2 is binding for build decisions; v1 stays read-only as primary source. Active project unchanged.

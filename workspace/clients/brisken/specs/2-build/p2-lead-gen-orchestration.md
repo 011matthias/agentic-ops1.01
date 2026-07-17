@@ -14,7 +14,7 @@ systems:
   - google-sheets              # lead tracker (single source of truth)
   # RETIRED 2026-06-12 - cold-email stack (instantly, neverbounce, lookalike domains, mailboxes, warm-up):
   # Brisken's own ~150-mailbox / ~2M-email campaign returned 0 leads. Channel dropped, not deferred.
-last_changes: "2026-06-17: Dirk granted Brisken's LinkedIn Sales Navigator seat + company-page Super Admin; the ~$99/mo seat-provisioning cost is moot (we use Brisken's seat), so gate 3 narrows to green-light-to-contact + sending identity. ICP + list-building in Sales Nav is now autonomous (granted for leads/ICP/lists; sourcing, not contact). 2026-06-12 (later, hardening): COLD EMAIL RETIRED (Brisken's own ~150-mailbox/~2M-email campaign = 0 leads). Engine respine: spine is now the trigger-detection radar (context/lead-generation/targeting-radar.md) with a 3-axis ICP (SAP fit x data-vendor-USER disposition x live trigger); the only direct-outreach channel is precision LinkedIn; SAP co-sell + active vendor referral moved off the critical path. See section 0. Earlier 2026-06-12: added section 9 (force multipliers) + section 10 (go-forward, campaign 1 = MDH). Sections 2-3 and 7 below predate the respine; section 0 supersedes their cold-email parts."
+last_changes: "2026-06-17: Dirk granted Brisken's LinkedIn Sales Navigator seat + company-page Super Admin; the ~$99/mo seat-provisioning cost is moot (we use Brisken's seat), so gate 3 narrows to green-light-to-contact + sending identity. ICP + list-building in Sales Nav is now autonomous (granted for leads/ICP/lists; sourcing, not contact). 2026-06-12 (later, hardening): COLD EMAIL RETIRED (Brisken's own ~150-mailbox/~2M-email campaign = 0 leads). Engine respine: spine is now the trigger-detection radar (context/lead-generation/targeting/targeting-radar.md) with a 3-axis ICP (SAP fit x data-vendor-USER disposition x live trigger); the only direct-outreach channel is precision LinkedIn; SAP co-sell + active vendor referral moved off the critical path. See section 0. Earlier 2026-06-12: added section 9 (force multipliers) + section 10 (go-forward, campaign 1 = MDH). Sections 2-3 and 7 below predate the respine; section 0 supersedes their cold-email parts."
 next_steps:
   - "Dirk gate 1: which of the 6 data-vendor relationships are active (co-marketing/referral vs technical only). Unlocks Way 2."
   - "Dirk gate 2: sending identity (whose name and domain front the outreach)."
@@ -27,7 +27,7 @@ next_steps:
 
 The plan + ICP live in `specs/1-spec/p2-bant-lead-generation.md`; the
 per-product campaign library + sourceability verdicts live in
-`context/lead-generation/brisken-product-catalog.md`. This doc locks
+`context/lead-generation/evidence/brisken-product-catalog.md`. This doc locks
 HOW the engine runs and what it takes to reach the first BANT lead.
 
 ## 0. Strategy hardening (owner, 2026-06-12) — supersedes the cold-email parts below
@@ -42,7 +42,7 @@ warmth, not volume.
   campaign returned 0 leads. A system that touches the SAP money core
   does not earn a meeting cold. Track B (section 2/3/timeline below),
   Instantly, lookalike domains, and warm-up are dropped, not deferred.
-- **Spine = the trigger-detection radar** (`context/lead-generation/targeting-radar.md`).
+- **Spine = the trigger-detection radar** (`context/lead-generation/targeting/targeting-radar.md`).
   A 3-axis ICP: SAP fit x **data-vendor-user disposition** (proven pain,
   the sharpener) x live trigger. The radar ranks the universe and feeds
   every other move.
@@ -301,7 +301,7 @@ Owner greenlit running both data-vendor plays 2026-06-12.
 **Now (autonomous, zero-spend, no contact):**
 
 - Base list: the 24 verified SAP-treasury accounts in
-  `context/lead-generation/evidence-pack-2026-06-11.md`; first cohort
+  `context/lead-generation/evidence/evidence-pack-2026-06-11.md`; first cohort
   is the 7 JOB-signal accounts (Corteva, Toyota, J&J, Ford, Colgate,
   Amtrak, Penn Turnpike).
 - Rank for MDH by the data-vendor signal ("uses Bloomberg / Refinitiv /

@@ -23,6 +23,15 @@
         {
           "term": "Business Technology Platform",
           "source": "same directive, spelled out; caught on a video end card 2026-07-09"
+        },
+        {
+          "term": "Evonik",
+          "source": "Dirk email 2026-07-10: 'We cannot mention EVONIK in the pptx'. His fix anonymizes: 'Customer Team' prose, 'German Chemical Group' chip label. Purge shipped to SharePoint 2026-07-11."
+        },
+        {
+          "term": "RWZ",
+          "pattern": "\\bRWZ\\b",
+          "source": "same fix: Dirk's Zalando edit removed RWZ together with Evonik; both customer names banned in client-facing material"
         }
       ],
       "exempt": [
