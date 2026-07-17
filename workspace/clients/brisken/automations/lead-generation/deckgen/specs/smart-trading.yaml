@@ -15,7 +15,7 @@ slides:
     patch:
       sv-rows:
         paras:
-          - "What it is: every trade, from the decision to the booked deal in SAP. Automated, on your own system, nothing to rebuild."
+          - "What it is: Brisken Smart Trading (BST): every trade, from the decision to the booked deal in SAP. Automated, on your own system, nothing to rebuild."
           - "What it replaces: the manual middle; re-keying tickets, chasing approvals, building deal entries by hand."
           - "What you get: the trade flows from the venue into SAP Treasury on its own, checked and logged."
           - "Who it is for: teams that trade and book in SAP."
@@ -43,6 +43,7 @@ slides:
           "SAP Business Technology Platform": "on SAP's own cloud"
       fd-product-label: {runs: {"Trade Automation": "Smart Trading"}}
 
+  # UC1 — the flagship FX journey, elaborated with the six concrete steps.
   - pattern: usecase
     patch:
       uc-title: {set: "One FX Trade, End to End"}
@@ -50,28 +51,86 @@ slides:
       uc-col1-body:
         outline:
           - [0, "Description"]
-          - [1, "One FX trade, end to end: the decision from your SAP positions, the request sent to the venue, approval under your rules, execution on your own platforms, integration matched and shaped for SAP, and the deal booked in SAP by itself."]
+          - [1, "A dealer agrees an FX trade on the venue: 360T, FXall, Bloomberg FX GO, Citi Pulse or BidFX. From that moment Smart Trading carries it the rest of the way."]
+          - [1, "The exposure is read from your SAP positions, the request goes to the venue, approval runs under your own rules, the fill comes back and is matched, then shaped for SAP, and the deal books itself in SAP Treasury."]
           - [1, "Each step runs on its own or waits for a person; everything is logged."]
           - [0, ""]
           - [0, "Challenges & Business Drivers"]
-          - [1, "You trade. You book in SAP. Today a person joins the two by hand."]
-          - [1, "Re-keying tickets, chasing approvals, building deal entries by hand; a trade that is not done until someone books it."]
+          - [1, "You trade, then you book in SAP. Today a person joins the two by hand: re-keying the ticket, chasing the approval, building the deal entry."]
+          - [1, "Manual FX execution runs 10 to 15 minutes a trade (The Association of Corporate Treasurers); spot FX is now about 90% automated across the market (LSEG). The trade is not done until someone books it."]
       uc-col2-body:
         outline:
           - [0, "Trading venue agnostic"]
-          - [1, "Integrate with any trading platform and trading venue: FX, derivatives, investments, securities, OTC commodity swaps."]
+          - [1, "Any trading platform or venue: FX, derivatives, investments, securities, OTC commodity swaps."]
           - [0, "Trading system agnostic"]
-          - [1, "Integrate with any trade station, order management system (OMS), or treasury management system (TMS)."]
-          - [1, "Send the finished trade into SAP Treasury, or into the treasury system you already use."]
+          - [1, "Any trade station, order management system (OMS), or treasury management system (TMS)."]
+          - [1, "Sends the finished trade into SAP Treasury, or into the treasury system you already run."]
           - [0, "Confirmations and master data"]
-          - [1, "Custodian and counterparty confirmations and matching."]
+          - [1, "Custodian and counterparty confirmation and matching."]
           - [1, "Security class master validation and automatic creation."]
           - [0, "Controls built in"]
-          - [1, "Full audit trail, four-eye sign-off, automatic error checks, ISO 27001 and SOC 1."]
+          - [1, "Full audit trail, four-eye sign-off, automatic error checks; ISO 27001 and SOC 1."]
+
+  # UC2 — beyond FX. Grounded in the financial-services customer base (10
+  # customers, 3 on active cloud subscription). Capability sourced from the
+  # reference features list (FX/Derivatives/Investments/Securities Master Data;
+  # security class master validation and automatic creation).
+  - pattern: usecase
+    patch:
+      # short title so it clears the top-right logo lockup (QA 2026-07-17)
+      uc-title: {set: "Derivatives and Securities"}
+      uc-logo-name: {runs: {"Bank Statement Generator": "Smart Trading"}}
+      uc-col1-body:
+        outline:
+          - [0, "Description"]
+          - [1, "A treasury trades more than FX: interest-rate swaps, money-market deposits, bonds and other securities, each with its own booking rules."]
+          - [1, "Before an instrument can book, its security master has to exist. Smart Trading validates the security class and creates the master record as the trade flows, then enriches the position for analytics and controls."]
+          - [0, ""]
+          - [0, "Challenges & Business Drivers"]
+          - [1, "New instruments stall at master-data setup; a missing security class blocks the booking."]
+          - [1, "Position, analytics and controls all read the same record, so a gap in one shows up everywhere."]
+      uc-col2-body:
+        outline:
+          - [0, "Every instrument class"]
+          - [1, "FX, derivatives, money-market and securities, from one flow."]
+          - [0, "Security master, built as it trades"]
+          - [1, "Security class validated and the master record created automatically; no manual setup step."]
+          - [0, "Enriched for what comes next"]
+          - [1, "Data validated and enriched for position management, analytics and controls."]
+          - [0, "One status monitor"]
+          - [1, "A single monitor shows the state of every step in the straight-through flow."]
+
+  # UC3 — OTC commodity swaps + confirmations. Grounded in the commodity (7)
+  # and oil & gas (5) customer base. Capability sourced from the reference
+  # (OTC Commodity Swaps; Custodian and Counterparty Confirmations and Matching).
+  - pattern: usecase
+    patch:
+      # short title so it clears the top-right logo lockup (QA 2026-07-17)
+      uc-title: {set: "OTC Commodity Swaps"}
+      uc-logo-name: {runs: {"Bank Statement Generator": "Smart Trading"}}
+      uc-col1-body:
+        outline:
+          - [0, "Description"]
+          - [1, "A commodity or energy treasury runs OTC commodity swaps and hedges alongside its physical book."]
+          - [1, "Smart Trading takes each swap from execution through custodian and counterparty confirmation and matching, then books the hedge into SAP against the exposure it offsets."]
+          - [0, ""]
+          - [0, "Challenges & Business Drivers"]
+          - [1, "Confirmations arrive from several counterparties in several formats; matching is manual and slow."]
+          - [1, "A hedge that is not booked and matched on time leaves the exposure open on the books."]
+      uc-col2-body:
+        outline:
+          - [0, "Confirmation and matching"]
+          - [1, "Custodian and counterparty confirmations received, read and matched automatically."]
+          - [0, "Booked against the exposure"]
+          - [1, "The hedge books into SAP Treasury and lines up with the position it offsets."]
+          - [0, "Any venue, any counterparty"]
+          - [1, "Venue and counterparty agnostic; nothing to rebuild when you add one."]
+          - [0, "Governed end to end"]
+          - [1, "Full audit trail, four-eye sign-off, anomaly alerts."]
 
   - pattern: platform-context
     patch:
       pc-app-st: {highlight: true}
-      pc-caption: {set: "Smart Trading runs as an application inside TreasuryCentral, on the OnePilot platform. OnePilot runs in production at chemicals, agricultural and financial-services customers."}
+      pc-caption: {set: "Brisken Smart Trading (BST) runs as an application inside TreasuryCentral, the shipped edition of OnePilot. OnePilot runs in production across chemicals, food & drink, financial-services, oil & gas, agricultural and commodity treasuries."}
 
   - pattern: contact

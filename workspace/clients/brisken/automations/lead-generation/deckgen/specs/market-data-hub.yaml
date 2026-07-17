@@ -67,9 +67,11 @@ slides:
           - [1, "Calculations, date shifts, inversion, triangulation of rates, interpolation, averages, your own formula libraries."]
           - [1, "Shaped exactly how each system needs it."]
 
+  # Title shortened from "Anomaly Catch & Governed Change" so it clears the
+  # top-right logo lockup (aesthetic review 2026-07-17, high).
   - pattern: usecase
     patch:
-      uc-title: {set: "Anomaly Catch & Governed Change"}
+      uc-title: {set: "Anomaly Catch and Governance"}
       uc-logo-name: {runs: {"Bank Statement Generator": "Market Data Hub"}}
       uc-logo-image: {from_shape: [value-3cards, vp-logo]}
       uc-col1-body:
@@ -117,9 +119,37 @@ slides:
           - [1, "Every price validated on the way in; anomalies flagged for approval."]
           - [1, "Every change versioned, approved, and audited."]
 
+  # UC4 — credit & counterparty data. Grounded in the financial-services base
+  # (10 customers). Capability sourced from the reference Credit Data Hub
+  # one-pager (multi-provider, API + PDF, into SAP Credit Management).
+  - pattern: usecase
+    patch:
+      uc-title: {set: "Credit and Counterparty Data"}
+      uc-logo-name: {runs: {"Bank Statement Generator": "Market Data Hub"}}
+      uc-logo-image: {from_shape: [value-3cards, vp-logo]}
+      uc-col1-body:
+        outline:
+          - [0, "Description"]
+          - [1, "A treasury tracks credit ratings and limits for its banks, customers and counterparties, pulled from several agencies."]
+          - [1, "Some agencies deliver by API, others only a PDF report. Market Data Hub collects both, extracts the ratings into structured data, and feeds SAP Credit Management."]
+          - [0, ""]
+          - [0, "Challenges & Business Drivers"]
+          - [1, "Ratings arrive in mixed formats, API and PDF; someone re-keys them into the system by hand."]
+          - [1, "A stale or missing rating means a limit decision made on old data."]
+      uc-col2-body:
+        outline:
+          - [0, "Any provider, any format"]
+          - [1, "Collect credit data from any agency or source, by API or from a PDF."]
+          - [0, "Unstructured to structured"]
+          - [1, "Read the report, extract the rating, score and attributes into clean data."]
+          - [0, "Into SAP Credit Management"]
+          - [1, "Feed SAP Credit Management, or any credit-risk or analytics system."]
+          - [0, "Governed end to end"]
+          - [1, "Validated, versioned and audited, with an alert when a rating changes."]
+
   - pattern: platform-context
     patch:
       pc-app-mdh: {highlight: true}
-      pc-caption: {set: "Market Data Hub runs as an application inside TreasuryCentral, on the OnePilot platform. OnePilot runs in production at chemicals, agricultural and financial-services customers."}
+      pc-caption: {set: "Market Data Hub runs as an application inside TreasuryCentral, the shipped edition of OnePilot. OnePilot runs in production across financial-services, chemicals, food & drink, oil & gas, commodity and agricultural treasuries."}
 
   - pattern: contact

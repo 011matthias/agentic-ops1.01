@@ -61,6 +61,7 @@ slides:
           - "SAP Treasury"
           - "Any downstream system"
 
+  # UC1 — building the curve. The composite worked one-pager.
   - pattern: usecase
     patch:
       uc-title: {set: "Commodity Price Curves"}
@@ -69,25 +70,54 @@ slides:
       uc-col1-body:
         outline:
           - [0, "Description"]
-          - [1, "A curve on a timeline: today's spot price, then 30, 60 and 90 days, out to a year."]
-          - [1, "Composite by design: transportation, storage, quality and local taxes, combined into one price per tenor."]
+          - [1, "Follow one price. Start with today's spot, then build the curve out along the timeline: 30, 60 and 90 days, out to a year."]
+          - [1, "Composite by design: the underlying quote plus freight, storage, quality adjustments and local taxes, combined into one governed price per tenor, per delivery point."]
           - [0, ""]
           - [0, "Challenges & Business Drivers"]
-          - [1, "The same commodity differs by delivery point, as storage, port fees and the local market differ."]
-          - [1, "The curve is built by hand; prices differ desk to desk."]
+          - [1, "The same commodity prices differently by delivery point, as freight, storage, port fees and the local market all differ."]
+          - [1, "Today the curve is built by hand in spreadsheets, so prices differ desk to desk and no one can show how a number was reached."]
       uc-col2-body:
         outline:
           - [0, "Composite by design"]
-          - [1, "Combine transportation, storage, quality and local taxes into one price per tenor."]
+          - [1, "Combine the base quote, freight, storage, quality and local taxes into one price per tenor."]
           - [0, "Location and tenor aware"]
           - [1, "Spot and 30, 60, 90-day tenors, priced per delivery point."]
+          - [0, "Built from any source"]
+          - [1, "Provider feeds, exchange quotes, freight and storage rates, internal spreadsheets, on schedule or on demand."]
           - [0, "Governed end to end"]
-          - [1, "Every price validated on the way in; anomalies flagged for approval."]
-          - [1, "Every change versioned, approved, and audited."]
+          - [1, "Every input validated on the way in, anomalies flagged for approval, every change versioned and audited."]
+
+  # UC2 — using the curve. A distinct downstream workflow: daily settlement /
+  # mark-to-market prices feeding SAP valuation and exposure. Grounded in the
+  # commodity (7) + oil & gas (5) customer base.
+  - pattern: usecase
+    patch:
+      uc-title: {set: "Valuation and Exposure Prices"}
+      uc-logo-name: {runs: {"Bank Statement Generator": "Market Data Hub"}}
+      uc-logo-image: {from_shape: [value-3cards, vp-logo]}
+      uc-col1-body:
+        outline:
+          - [0, "Description"]
+          - [1, "Once the curve exists, risk and the desk need settlement and mark-to-market prices every day, tied to the positions they value."]
+          - [1, "Market Data Hub collects end-of-day and settlement prices from the exchanges and providers, governs them, and feeds SAP for position valuation and exposure management."]
+          - [0, ""]
+          - [0, "Challenges & Business Drivers"]
+          - [1, "Valuation runs off prices pulled by hand from several venues; a late or wrong price moves the day's P&L."]
+          - [1, "Risk, trading and accounting each source their own price, so the numbers disagree."]
+      uc-col2-body:
+        outline:
+          - [0, "Settlement and mark-to-market"]
+          - [1, "End-of-day and settlement prices collected from exchanges and providers, on schedule."]
+          - [0, "Priced to the position"]
+          - [1, "The governed price feeds SAP position valuation and exposure management."]
+          - [0, "One price, everywhere"]
+          - [1, "Risk, trading and accounting value off the same governed number."]
+          - [0, "Governed end to end"]
+          - [1, "Every price validated on the way in, versioned and audited."]
 
   - pattern: platform-context
     patch:
       pc-app-mdh: {highlight: true}
-      pc-caption: {set: "Market Data Hub for Commodities runs as an application inside TreasuryCentral, on the OnePilot platform. OnePilot runs in production at chemicals, agricultural and financial-services customers."}
+      pc-caption: {set: "Market Data Hub for Commodities runs as an application inside TreasuryCentral, the shipped edition of OnePilot. OnePilot runs in production across commodity, oil & gas, chemicals, food & drink, financial-services and agricultural treasuries."}
 
   - pattern: contact

@@ -1,7 +1,7 @@
 # Digital Co-Worker — where the use cases live (deck-foundation-v2).
 # Sources: [CUR] = current Dirk-kept DCW deck (cur_dcw), [REF] = reference donor
 # text kept (donors 18/19/21/22/26), [T] = 2026-07-17 owner transcripts (use
-# cases hang off the Digital Worker; func diagram = generalized PROCESS edition).
+# cases hang off the Digital Co-Worker; func diagram = generalized PROCESS edition).
 # BTP: omitted per standing directive; platform line uses Dirk's own
 # "on SAP's own cloud" phrasing ([CUR] s10).
 # Chemicals-customer example anonymized per 2026-07-10 directive.
@@ -58,7 +58,9 @@ slides:
           - "Replies"
           - "Any downstream system"
 
-  # Use case 1 — chemicals customer, anonymized [T] + [CUR] s5.
+  # Use case 1 — chemicals customer, anonymized [T] + [CUR] s5. This is the
+  # real "funding request powered by AI" deployment (reference success story,
+  # slide 30). Chemicals: 6 customers, 5 on active cloud subscription.
   - pattern: usecase
     patch:
       uc-title: {set: "Intercompany Funding Request"}
@@ -66,28 +68,57 @@ slides:
       uc-col1-body:
         outline:
           - [0, "Description"]
-          - [1, "A funding request arrives by email at a chemicals customer."]
-          - [1, "The Digital Worker reads it, summarizes it, and suggests the posting."]
-          - [1, "A memo record is created, the cash position updates, and a confirmation goes back."]
+          - [1, "At a chemicals group, subsidiaries email the in-house bank to ask for funding. Today a treasury analyst reads each request and keys it in."]
+          - [1, "The Digital Co-Worker reads the email, pulls out amount, currency, entity and value date, checks the group cash position and the intercompany limit, drafts the funding memo in SAP, and routes it for approval. On sign-off it posts and confirms back to the requester."]
           - [0, ""]
           - [0, "Challenges & Business Drivers"]
-          - [1, "The request is unstructured email; a person would read it and key it in."]
-          - [1, "The steps span several systems: email, SAP, the cash position."]
+          - [1, "The request is free-text email; the work spans email, SAP in-house cash and the live cash position."]
+          - [1, "Volume spikes at month-end, and every step today waits on a person."]
       uc-col2-body:
         outline:
           - [0, "Reads, checks, executes, confirms"]
           - [1, "Reads the request, pulls what it needs from your systems, and carries out each step."]
           - [1, "Confirms the result in chat and suggests the next action."]
           - [0, "Chat-like interaction"]
-          - [1, "Dynamic, chat-like interaction with your digital co-worker."]
+          - [1, "Ask it anything about the request in plain language; it answers in chat."]
           - [0, "Governed end to end"]
           - [1, "Every action checked and logged: audit trail, segregation of duty, anomaly alerts."]
           - [1, "Approvals where you want them; a person in the loop for the moves that matter."]
 
   # Use case 2 — Dirk's own Remittance Advice Gate one-pager, verbatim (donor 26).
+  # The real "remittance powered by AI" deployment (reference success story,
+  # slide 29, agricultural customer).
   - pattern: usecase-remit
 
-  # Use case 3 — internal demo, labeled as such [T].
+  # Use case 3 — bank statement intake. Grounded in the logistics (5) +
+  # high-volume treasury base; capability from the reference Bank Statement
+  # Generator one-pager (donor 21), re-voiced for the Digital Co-Worker.
+  - pattern: usecase
+    patch:
+      uc-title: {set: "Bank Statement Intake"}
+      uc-logo-name: {runs: {"Bank Statement Generator": "Digital Co-Worker"}}
+      uc-col1-body:
+        outline:
+          - [0, "Description"]
+          - [1, "A logistics group banks with dozens of institutions; several send statements the SAP bank-connectivity channel never sees, each in its own format."]
+          - [1, "The Digital Co-Worker reads a statement in any format, PDF, CSV or a proprietary line-item report, turns it into camt.053 or MT940, and delivers it to SAP cash management in time for the day's cash operations."]
+          - [0, ""]
+          - [0, "Challenges & Business Drivers"]
+          - [1, "Statements sit in a mailbox or a data lake, outside the SAP landscape, in formats that are hard to read."]
+          - [1, "Cash operations wait on these statements, so a late or missed one holds up the whole day."]
+      uc-col2-body:
+        outline:
+          - [0, "Format agnostic"]
+          - [1, "Reads line-item reports and statements in any format; generates camt.05x, MT94x or any target format."]
+          - [0, "Target system agnostic"]
+          - [1, "Delivers to SAP cash management, treasury or ERP; SAP and non-SAP, cloud and on-premise."]
+          - [0, "On time, every day"]
+          - [1, "Out-of-the-box connectivity, data validation, and a status monitor for completeness and timeliness."]
+          - [0, "Governed end to end"]
+          - [1, "Every statement validated and logged, with alerts on anything missing or odd."]
+
+  # Use case 4 — internal demo, labeled as such [T]. The conversational,
+  # interactive use case: distinct from the document-in/SAP-out ones above.
   - pattern: usecase
     patch:
       # short title (long titles collide with the logo group top-right);
@@ -97,29 +128,31 @@ slides:
       uc-col1-body:
         outline:
           - [0, "Description"]
-          - [1, "Our internal demo: cash positioning with the Digital Worker, in chat."]
-          - [1, "It pulls the cash position, suggests payment requests, and answers follow-ups in plain language."]
+          - [1, "Our internal demo: cash positioning with the Digital Co-Worker, entirely in chat."]
+          - [1, "You ask where the cash is; it pulls the position across accounts, suggests payment requests from it, and answers follow-ups in plain language. The moves that matter wait for a person to sign off."]
           - [0, ""]
           - [0, "Challenges & Business Drivers"]
-          - [1, "Cash decisions need timely information, pulled from several systems."]
-          - [1, "Shown as a working demo, not a customer deployment."]
+          - [1, "Cash decisions need timely information, pulled from several systems at once."]
+          - [1, "Shown here as a working demo, not a customer deployment."]
       uc-col2-body:
         outline:
           - [0, "Conversational"]
           - [1, "You ask in plain language; it answers in chat and shows the result."]
           - [0, "Cash positioning"]
-          - [1, "Pulls the cash position on request."]
+          - [1, "Pulls the position across your accounts on request, no report to run."]
           - [0, "Payment request suggestions"]
           - [1, "Suggests payment requests from the position; the moves that matter wait for a person to sign off."]
           - [0, "Governed end to end"]
           - [1, "Every step checked and logged, with a full audit trail."]
 
-  # Use case 4 — Dirk's own Cash Flow & Exposure Hub one-pager, verbatim (donor 22).
+  # Use case 5 — Dirk's own Cash Flow & Exposure Hub one-pager, verbatim (donor 22).
+  # Reads as the food & drink / FX-exposure setting (6 customers on active
+  # cloud subscription); the reference text stays verbatim for maximum fidelity.
   - pattern: usecase-cashflow
 
   - pattern: platform-context
     patch:
       pc-app-dw: {highlight: true}
-      pc-caption: {set: "The Digital Worker is the AI application inside TreasuryCentral, on the OnePilot platform. Its use cases run in production at chemicals and agricultural customers."}
+      pc-caption: {set: "The AI Digital Workforce is the AI application inside TreasuryCentral, the shipped edition of OnePilot. Its use cases run in production at chemicals and agricultural customers."}
 
   - pattern: contact
