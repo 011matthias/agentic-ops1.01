@@ -1,28 +1,36 @@
 ---
-description: Autonomous hill-climb loop; iterate an asset against a locked scorer, keep winners, revert losers, journal every round (Karpathy auto-research pattern)
-argument-hint: {scorer} {asset...} [--rounds N] [--goal SCORE]
+description: Autonomous hill-climb loop; iterate an asset against a locked scorer inside a locked run manifest, keep winners, revert losers, journal every round (Karpathy auto-research pattern)
+argument-hint: "{scorer} {asset...} [--rounds N] [--goal SCORE] | resume | stop"
 ---
 
 # Optimize
 
-Run the three-part auto-research loop: a locked SCORER (the honest number),
-an ASSET the agent may freely mutate, and a JOURNAL of every experiment.
-This is the maximization counterpart to skil_build-test-fix's convergence
-loop: build-test-fix iterates until something WORKS; optimize iterates a
-working asset until it scores BETTER.
+Run the three-surface auto-research loop: locked INSTRUCTIONS (the run
+manifest), a locked SCORER (the honest number), and the ASSET - the only
+thing you may mutate. The mechanics (branch, commit, score, guards,
+keep/revert, journal) are executed by `tools/optimize_run.py`, not by you:
+you contribute hypotheses and edits. This is the maximization counterpart
+to skil_build-test-fix's convergence loop: build-test-fix iterates until
+something WORKS; optimize iterates a working asset until it scores BETTER.
+
+Rule: `rule_optimize_loop.md`. Enforcement: `optimize-run-gate.py` (file
+ACL while a run is active) + `scorer-lock-gate.py` + `tools/scorers/
+PINS.json` (hash pins, re-verified every round).
 
 ## Context
 
 - Arguments: $ARGUMENTS
-- Scorer contract + lock semantics: `tools/scorers/README.md`
-- Enforcement: `scorer-lock-gate.py` denies agent edits to existing scorers
+- Scorer contract + pins: `tools/scorers/README.md`
+- Field recipes + constructed metrics: `docs/optimize/RECIPES.md`
+- Engine: `uv run tools/optimize_run.py {start|round|resume|stop|status}`
 
-## Parse Arguments
+## Step 0: Resume check
 
-- **`{scorer}`** (required): a registered `tools/scorers/{name}.py`
-- **`{asset...}`** (required): the file(s) the loop is allowed to mutate
-- **`--rounds N`** (optional, default 10): experiment budget
-- **`--goal SCORE`** (optional): stop early when the score passes this value
+If `.claude/optimize/run.json` exists, a run is active and the repo is
+partially locked. NEVER start over it. `uv run tools/optimize_run.py
+status`, then either continue its loop (Step 4), `resume` after a crash,
+or `stop` it. Denied writes during a run are the gate working, not a bug;
+the outs are `stop` or a user-ordered `OPTIMIZE_SCOPE_ALLOW=1`.
 
 ## Step 1: Fit check (hard gate)
 
@@ -38,57 +46,105 @@ surface (real sends, live campaigns, production mutations). Optimizing
 against live-system feedback is out of scope; rule_instantly_invasive and
 the Graph invasive-action gate apply unchanged.
 
-## Step 2: Pin the harness
+No registered scorer fits? That is the constructed-metric case: build the
+fitness script FIRST as its own PR (RECIPES.md protocol: dual-score when
+the instrument is unreliable; held-out score-floor guard for every
+constructed benchmark), get it pinned, THEN return here. The engine
+structurally refuses unpinned scorers.
 
-1. Record the scorer path AND its content hash (`git hash-object`). Every
-   subsequent score MUST come from this exact scorer; if the hash changes
-   mid-run, abort and surface it.
-2. Confirm a clean working tree for the asset files (commit or stash noise
-   first) so revert = `git checkout -- {asset}` is exact.
-3. Run the scorer once. This is the BASELINE. A failed baseline run
-   (non-zero exit) means the harness is broken; fix the harness first,
-   never start the loop on a guessed score.
+## Step 2: Setup interview (Karpathy protocol)
 
-## Step 3: The loop (per round, up to N)
+1. Agree a run tag with the user (short slug; `optimize/<tag>` must be a
+   fresh branch).
+2. Write the manifest `docs/optimize/<tag>/RUN.md` - YAML frontmatter:
+   `tag`, `goal`, `scorer`, `scorer_args`, `direction`, `assets` (globs -
+   your ONLY writable surface once locked), `guards` + `guard_files`
+   (correctness commands; a guard fail discards even a score win),
+   `budgets` (`rounds`, `wall_clock_minutes`, `score_timeout_seconds`,
+   `max_rework_attempts`), `mode` (`converge` | `continuous` |
+   `supervised`), `stop` (`goal_score`, `consecutive_reverts`). Copy the
+   nearest skeleton from RECIPES.md. CLI args seed this: `{scorer}
+   {asset...} [--rounds N] [--goal SCORE]`.
+3. Confirm the manifest with the user (they are approving the lock scope),
+   then proceed.
+
+## Step 3: Lock-on
+
+`uv run tools/optimize_run.py start <tag>`. The engine validates the
+manifest against PINS and the scorer header, scores the BASELINE and runs
+the guards BEFORE creating anything (a broken harness leaves no branch, no
+state), then creates `optimize/<tag>`, commits the manifest, writes
+`results.tsv`, and arms the file ACL. State plainly what is now locked and
+what the baseline is. A failed baseline means fix the harness first; never
+start a loop on a guessed score.
+
+## Step 4: The loop (per round)
+
+Read `git log --oneline -5` and the tail of `results.tsv` first - git is
+your memory; do not re-run a journaled dead end.
 
 1. **One hypothesis.** State in one sentence what change should move the
    score and why.
-2. **One change.** Apply it to the asset only. Never touch the scorer, the
-   journal's past rounds, or files outside the declared asset set.
-3. **Re-score** with the pinned scorer. Non-zero exit = the change broke
-   the asset; treat as a loss.
-4. **Keep or revert.** Better than the current best -> keep, this is the
-   new baseline. Equal or worse -> revert to the last kept state.
-5. **Journal the round** (see format below) BEFORE starting the next one.
+2. **One change.** Edit asset files only. The gate denies everything else.
+3. **Execute:** `uv run tools/optimize_run.py round --desc "<hypothesis>"`.
+   The engine commits, scores under timeout, runs guards, keeps or reverts,
+   and journals - in that order, deterministically.
+4. **Read the verdict** and act on it:
+   - `KEEP` - new baseline; next hypothesis.
+   - `DISCARD` - data point, not a failure; next hypothesis.
+   - `CRASH` - read `docs/optimize/<tag>/logs/r<N>.log`. Dumb typo: fix
+     and re-run the round. Fundamentally broken idea: move on.
+   - `guard failed` - you may fix WITHIN the round: edit assets, then
+     `round --rework --desc "..."` (capped by `max_rework_attempts`).
+5. The engine announces `GOAL REACHED` / `ROUNDS EXHAUSTED` /
+   `WALL-CLOCK EXHAUSTED` / `PLATEAU`. Obey them per mode (Step 6).
 
-A reverted experiment is a data point, not a failure: the
-rule_behaviors 3-iteration escalation applies to HARNESS errors (scorer
-crashes, revert failures), not to losing hypotheses. Stop conditions:
-`--goal` reached, round budget exhausted, or 5 consecutive reverts with no
-remaining distinct hypotheses (diminishing returns; note it and stop).
+A reverted experiment is a data point, not a failure: the rule_behaviors
+3-iteration escalation applies to HARNESS errors (engine aborts, scorer
+crashes on the baseline, hash drift), not to losing hypotheses.
 
-## Step 4: Journal
+## Step 5: Keep/revert judgment (simplicity criterion)
 
-One file per run: `docs/optimize/{YYYY-MM-DD}-{target}.md`. Append-only
-during the run. Frontmatter: scorer path + hash, asset list, baseline,
-goal, rounds budget. Then one row per round:
+All else being equal, simpler is better. A small improvement that adds
+ugly complexity is not worth it; conversely, removing something and
+getting equal or better results is a great outcome - that is a
+simplification win. Weigh the complexity cost against the improvement
+magnitude: a tiny gain from hacky code is a discard (`round --discard
+--desc "why"`); an equal score from strictly simpler code is a keep
+(`round --simplification --desc "..."`).
 
-```
-| # | Hypothesis | Change | Before | After | Verdict |
-|---|------------|--------|--------|-------|---------|
-| 1 | inline critical CSS to drop render-blocking sheet | moved styles.css into <head> | 48211 | 41902 | KEPT |
-```
+## Step 6: Modes and stopping
 
-Close with: final score vs baseline, kept-change summary, and what a human
-should review.
+- **converge** (default): stop at goal, any budget, or plateau -
+  `uv run tools/optimize_run.py stop --reason "<which>"`.
+- **continuous**: NEVER-STOP semantics within budget. Once looping, do not
+  pause to ask "should I keep going?" - the user may be asleep and expects
+  you to continue until stopped. PLATEAU is a journal event, not a stop:
+  think harder, re-read the asset for new angles, combine previous
+  near-misses. Across sessions, drive with `/loop` + `resume`; the run
+  state and locks persist. The session-pressure rule WINS over NEVER-STOP:
+  at Critical pressure, checkpoint and end the SESSION - the RUN persists
+  and resumes.
+- **supervised**: present each hypothesis and wait for the user's ack
+  before `round` (for sensitive assets that pass the fit check but warrant
+  a human per experiment).
 
-## Step 5: Ship
+## Step 7: Close
 
-Kept winners ship through the normal chain (rule_no_auto_commit): commit on
-a feature branch with the journal, push, PR; the PR body cites baseline ->
-final score so the reviewer sees the measured delta, and CI-green
-auto-merge applies as usual. If nothing beat the baseline, commit only the
-journal; a documented dead end prevents re-running the same experiments.
+`stop` writes the final journal row and unlocks. Then write
+`docs/optimize/<tag>/SUMMARY.md` FROM the TSV: final vs baseline score,
+kept changes with their deltas, dead ends worth remembering, and what a
+human should review. (SUMMARY.md is written after unlock; during the run
+it would be a locked-path write.)
+
+## Step 8: Ship
+
+The run branch already exists - ship through the normal chain
+(rule_no_auto_commit): push, PR; the body cites baseline -> final so the
+reviewer sees the measured delta; CI-green auto-merge applies as usual.
+The manifest + results.tsv + SUMMARY.md ship in the same PR. If nothing
+beat the baseline, ship the journal anyway - a documented dead end
+prevents re-running the same experiments.
 
 ## Good first targets (fit-checked)
 
