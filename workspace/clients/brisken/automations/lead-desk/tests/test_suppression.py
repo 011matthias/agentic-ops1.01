@@ -61,12 +61,14 @@ def test_log_line_classification():
 
 # --- Iteration 2: held + Dirk-touch classifiers ------------------------------
 
-def test_ga_tier_is_held():
-    assert suppression({"Tier": "GA"}) == (1, "held")
+def test_ga_tier_stays_active():
+    # Owner directive 2026-07-17: GA is an outreach cohort with its own wave,
+    # not a hold. GA contacts stay in the active pipeline.
+    assert suppression({"Tier": "GA"}) == (0, None)
 
 
-def test_ga_dirk_note_is_held():
-    assert is_held({"dirk_notes": "GA"}) is True
+def test_ga_dirk_note_not_held():
+    assert is_held({"dirk_notes": "GA"}) is False
 
 
 def test_next_step_hold_is_held():
@@ -83,7 +85,7 @@ def test_transient_hold_stays_active():
 
 
 def test_consent_beats_held():
-    # A GA contact who is also stop=X keeps the stronger, permanent consent reason.
+    # A GA contact who is also stop=X is consent-suppressed like any tier.
     assert suppression({"Tier": "GA", "stop": "X"}) == (1, "stop")
     # An exclusion tier also outranks a held signal.
     assert suppression({"Tier": "ANON", "next_step": "On hold: excluded"}) == (1, "anon")

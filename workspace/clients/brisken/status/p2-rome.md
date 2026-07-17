@@ -4,7 +4,7 @@ workstream: p2-rome
 group: lead-generation
 spec: p2
 state: active
-updated: 2026-06-20
+updated: 2026-07-17
 general_ref: status/p2-lead-gen-general.md
 ---
 
@@ -23,7 +23,8 @@ is in `status/p2-lead-gen-general.md`.
 | Rome 2026 one-pager | done | Built (md + pdf) | Use as the forwardable invite asset | none | `deliverables/lead-generation/rome-2026/brisken-rome-2026-onepager.pdf` |
 | Invite company list | in-progress | Wave list assembled (xlsx) | Tier + verify against the radar | none | `deliverables/lead-generation/rome-2026/brisken-rome-2026-invite-companies.xlsx` |
 | Event CTA in outreach | in-progress | CTA defined for the triggered cohort | Wire into LinkedIn copy on go-live | Dirk sending identity | `specs/1-spec/p2-bant-lead-generation.md` next_steps |
-| Post-event follow-up | not-started | Not designed yet | Draft the post-Rome BANT follow-up | Event date | TA Cook 2026 context |
+| Post-event follow-up | in-progress | Sequencing set (owner 2026-07-17): T3 + GA initial waves go out first, then per-tier follow-up on every contact that did not respond to their tier's outreach | Get T3 + GA waves out, then draft per-tier non-responder follow-up | T3 + GA sends | Lead Desk board (brisken-lead-desk.fly.dev) |
+| GA cohort in Lead Desk | active | 40 GA contacts moved from "Held" to the active pipeline (owner 2026-07-17); they receive their own GA outreach wave | Prepare the GA wave | none | `automations/lead-desk` migrate.py `is_held` change |
 
 ## Open decisions / gates
 

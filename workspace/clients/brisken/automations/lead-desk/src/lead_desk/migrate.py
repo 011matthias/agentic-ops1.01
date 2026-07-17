@@ -71,8 +71,11 @@ _DIRK_IWK_VERB_RE = re.compile(
     re.I,
 )
 
-# Deliberate, revisitable holds (GA general-awareness cohort, or an explicit
-# next_step hold) -> off the active board but distinct from consent-suppressed.
+# Deliberate, revisitable holds (an explicit next_step hold) -> off the active
+# board but distinct from consent-suppressed. NOTE: tier='GA' is NOT a hold
+# (owner directive 2026-07-17): the GA general-audience cohort stays in the
+# active pipeline to receive its own GA outreach wave; once T3 + GA are out,
+# per-tier non-responder follow-up starts.
 _HELD_NEXT_RE = re.compile(r"on hold|do not send|excluded|covered by", re.I)
 # Transient holds stay ACTIVE (surfaced via the next_step / dangling bucket).
 _TRANSIENT_NEXT_RE = re.compile(
@@ -81,13 +84,10 @@ _TRANSIENT_NEXT_RE = re.compile(
 
 
 def is_held(row: dict) -> bool:
-    """A deliberate, revisitable hold: the GA cohort or an explicit next_step
-    hold. Transient holds (OOO, awaiting-decision, scheduling) stay active."""
-    tier = (str(row.get("Tier") or "")).strip().upper()
-    dn = (str(row.get("dirk_notes") or "")).strip().upper()
+    """A deliberate, revisitable hold: an explicit next_step hold. Transient
+    holds (OOO, awaiting-decision, scheduling) stay active. GA is an active
+    outreach tier, not a hold."""
     ns = str(row.get("next_step") or "").strip()
-    if tier == "GA" or dn == "GA":
-        return True
     if _HELD_NEXT_RE.search(ns) and not _TRANSIENT_NEXT_RE.search(ns):
         return True
     return False
@@ -153,7 +153,7 @@ def suppression(row: dict) -> tuple[int, str | None]:
     if tier in TIER_SUPPRESS:
         return 1, TIER_SUPPRESS[tier]
     # Held ranks below consent + the exclusion tiers (those are stronger and
-    # permanent); a GA / next_step hold is a revisitable off-board reason.
+    # permanent); a next_step hold is a revisitable off-board reason.
     if is_held(row):
         return 1, "held"
     return 0, None
