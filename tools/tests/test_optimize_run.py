@@ -16,8 +16,6 @@ import sys
 import time
 from pathlib import Path
 
-import pytest
-
 from hooklib import REPO
 
 ENGINE = REPO / "tools" / "optimize_run.py"
@@ -94,7 +92,6 @@ def make_repo(tmp_path: Path, numbers=("5", "4"), guard=False,
     (repo / "docs" / "optimize" / "t1" / "RUN.md").write_text(
         manifest, encoding="utf-8")
 
-    _git(repo.parent / "repo", "init", "-q", "-b", "main") if False else None
     subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
     _git(repo, "config", "user.email", "test@test.local")
     _git(repo, "config", "user.name", "Engine Test")
