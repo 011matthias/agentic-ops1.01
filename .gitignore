@@ -152,3 +152,7 @@ workspace/projects/local-web/.critique/
 # Confidential third-party client material (ConVista/Jochen treasury assessments:
 # STAEDTLER, CITTI, Nagarro, Alfred Ritter internals + audio briefings). Never commit.
 workspace/clients/Jochen Projekt/
+
+# optimize-loop run state + per-run scorer logs (rule_optimize_loop.md)
+/.claude/optimize/
+docs/optimize/*/logs/
