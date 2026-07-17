@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Timeline | AI Cold Email Tool | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+
+/* Access Gate */
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+
+/* Navigation */
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+
+/* Sidebar */
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+
+/* Main Content */
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+
+/* Hero */
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 580px; margin: 0 auto 32px; line-height: 1.6; }
+.stats-row { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
+.stat-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 24px; text-align: center; min-width: 140px;
+    transition: transform .15s, box-shadow .15s;
+}
+.stat-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.stat-value { font-size: 24px; font-weight: 800; color: var(--blue); }
+.stat-label { font-size: 12px; color: var(--text2); font-weight: 500; margin-top: 2px; }
+
+/* Sections */
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+
+/* Callout */
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+
+/* Timeline Phase Cards */
+.phase-card {
+    border-radius: 12px; padding: 24px; border: 1px solid var(--border);
+    margin-bottom: 24px; transition: transform .15s, box-shadow .15s;
+}
+.phase-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.phase-blue { background: var(--blue-bg); border-color: color-mix(in srgb, var(--blue) 20%, var(--border)); }
+.phase-purple { background: var(--purple-bg); border-color: color-mix(in srgb, var(--purple) 20%, var(--border)); }
+.phase-green { background: var(--green-bg); border-color: color-mix(in srgb, var(--green) 20%, var(--border)); }
+.phase-orange { background: var(--orange-bg); border-color: color-mix(in srgb, var(--orange) 20%, var(--border)); }
+
+.phase-header { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+.phase-days {
+    font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 20px;
+    white-space: nowrap; flex-shrink: 0;
+}
+.phase-blue .phase-days { background: var(--blue); color: #fff; }
+.phase-purple .phase-days { background: var(--purple); color: #fff; }
+.phase-green .phase-days { background: var(--green); color: #fff; }
+.phase-orange .phase-days { background: var(--orange); color: #fff; }
+
+.phase-title { font-size: 17px; font-weight: 700; }
+.phase-blue .phase-title { color: var(--blue-dark); }
+.phase-purple .phase-title { color: var(--purple-dark); }
+.phase-green .phase-title { color: var(--green-dark); }
+.phase-orange .phase-title { color: var(--orange-dark); }
+
+.phase-items { list-style: none; padding: 0; margin: 0 0 16px 0; }
+.phase-items li {
+    font-size: 13px; padding: 5px 0; color: var(--text);
+    display: flex; align-items: flex-start; gap: 10px;
+    border-bottom: 1px solid var(--border);
+}
+.phase-items li:last-child { border-bottom: none; }
+.phase-items li::before { content: ''; width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; margin-top: 6px; }
+.phase-blue .phase-items li::before { background: var(--blue); }
+.phase-purple .phase-items li::before { background: var(--purple); }
+.phase-green .phase-items li::before { background: var(--green); }
+.phase-orange .phase-items li::before { background: var(--orange); }
+
+.phase-checkpoint {
+    font-size: 13px; padding: 10px 14px; border-radius: 8px;
+    font-style: italic; margin-top: 4px;
+}
+.phase-blue .phase-checkpoint { background: var(--blue-light); color: var(--blue-dark); }
+.phase-purple .phase-checkpoint { background: var(--purple-light); color: var(--purple-dark); }
+.phase-green .phase-checkpoint { background: var(--green-light); color: var(--green-dark); }
+.phase-orange .phase-checkpoint { background: var(--orange-light); color: var(--orange-dark); }
+.phase-checkpoint strong { font-style: normal; }
+
+/* Phase connector arrow */
+.phase-arrow { text-align: center; color: var(--text2); font-size: 22px; margin: 4px 0; line-height: 1; }
+
+/* After delivery */
+.after-box {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px; margin-top: 8px;
+}
+
+/* CTA */
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+
+/* Footer */
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); }
+
+/* Tablet */
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+
+/* Mobile */
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .hero h1 { font-size: 24px; }
+    .stats-row { gap: 8px; }
+    .stat-card { min-width: 100px; padding: 12px 16px; }
+    .stat-value { font-size: 20px; }
+}
+</style>
+<script>
+(function(){var t=localStorage.getItem('jaret-cold-email-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<!-- Access Gate -->
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared for your team. Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/jaret-ai-cold-email-tool/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">AI Cold Email Tool</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/jaret-ai-cold-email-tool/">Overview</a>
+        <a href="/clients/jaret-ai-cold-email-tool/solution">Solution</a>
+        <a href="/clients/jaret-ai-cold-email-tool/workflow">Workflow</a>
+        <a href="/clients/jaret-ai-cold-email-tool/timeline" class="active">Timeline</a>
+        <a href="/clients/jaret-ai-cold-email-tool/investment">Investment</a>
+        <a href="/clients/jaret-ai-cold-email-tool/faq">FAQ</a>
+        <a href="/clients/jaret-ai-cold-email-tool/onboarding">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">Timeline sections</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#phase-1" class="step-link active"><span class="step-num">1</span> Phase 1: Lead Pipeline</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#phase-2" class="step-link"><span class="step-num">2</span> Phase 2: AI Engine</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#phase-3" class="step-link"><span class="step-num">3</span> Phase 3: Email Delivery</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#phase-4" class="step-link"><span class="step-num">4</span> Phase 4: Testing + Handoff</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#after-delivery" class="step-link"><span class="step-num">5</span> What Happens After</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<!-- Hero -->
+<section class="hero">
+    <div class="hero-badge">&#128197; PROJECT TIMELINE</div>
+    <h1>14-Day Delivery Schedule</h1>
+    <p class="hero-sub">Four phases, each with a clear checkpoint before moving on. You'll see progress at every step, not just at the end.</p>
+    <div class="stats-row">
+        <div class="stat-card"><div class="stat-value">14</div><div class="stat-label">Days total</div></div>
+        <div class="stat-card"><div class="stat-value">4</div><div class="stat-label">Phases</div></div>
+        <div class="stat-card"><div class="stat-value">4</div><div class="stat-label">Checkpoints</div></div>
+    </div>
+</section>
+
+<!-- Phase 1 -->
+<h2 id="phase-1">Phase 1: Lead Scraping Pipeline</h2>
+
+<div class="phase-card phase-blue">
+    <div class="phase-header">
+        <span class="phase-days">Days 1 - 3</span>
+        <span class="phase-title">Lead Scraping Pipeline</span>
+    </div>
+    <ul class="phase-items">
+        <li>Set up n8n instance (cloud or your server)</li>
+        <li>Build Apollo.io API integration with search filters</li>
+        <li>Data normalization and dedup logic</li>
+        <li>Google Sheets output with lead tracking columns</li>
+    </ul>
+    <div class="phase-checkpoint"><strong>Checkpoint:</strong> You'll see leads flowing into your sheet from Apollo before we move to the AI stage.</div>
+</div>
+
+<div class="phase-arrow">&#8595;</div>
+
+<!-- Phase 2 -->
+<h2 id="phase-2">Phase 2: AI Personalization Engine</h2>
+
+<div class="phase-card phase-purple">
+    <div class="phase-header">
+        <span class="phase-days">Days 4 - 7</span>
+        <span class="phase-title">AI Personalization Engine</span>
+    </div>
+    <ul class="phase-items">
+        <li>OpenAI API integration for company research</li>
+        <li>Prompt engineering for email personalization</li>
+        <li>Template system with dynamic field injection</li>
+        <li>A/B subject line generation</li>
+    </ul>
+    <div class="phase-checkpoint"><strong>Checkpoint:</strong> You'll review sample personalized emails before we connect to Instantly.</div>
+</div>
+
+<div class="phase-arrow">&#8595;</div>
+
+<!-- Phase 3 -->
+<h2 id="phase-3">Phase 3: Email Delivery + Deliverability</h2>
+
+<div class="phase-card phase-green">
+    <div class="phase-header">
+        <span class="phase-days">Days 8 - 10</span>
+        <span class="phase-title">Email Delivery + Deliverability</span>
+    </div>
+    <ul class="phase-items">
+        <li>Instantly.ai API integration</li>
+        <li>Campaign enrollment automation</li>
+        <li>Warm-up schedule configuration</li>
+        <li>Bounce and reply handling</li>
+    </ul>
+    <div class="phase-checkpoint"><strong>Checkpoint:</strong> Test campaign with 10-20 real leads. You'll review delivery rates before the full batch goes out.</div>
+</div>
+
+<div class="phase-arrow">&#8595;</div>
+
+<!-- Phase 4 -->
+<h2 id="phase-4">Phase 4: Testing + Handoff</h2>
+
+<div class="phase-card phase-orange">
+    <div class="phase-header">
+        <span class="phase-days">Days 11 - 14</span>
+        <span class="phase-title">Testing + Handoff</span>
+    </div>
+    <ul class="phase-items">
+        <li>End-to-end testing with a full batch (50+ leads)</li>
+        <li>Error scenario testing (API failures, invalid data, rate limits)</li>
+        <li>Loom walkthrough recording (15-20 min)</li>
+        <li>Written documentation</li>
+        <li>Final handoff: you run it independently</li>
+    </ul>
+    <div class="phase-checkpoint"><strong>Checkpoint:</strong> Full pipeline runs without intervention. You've tested it yourself before we close out.</div>
+</div>
+
+<!-- After Delivery -->
+<h2 id="after-delivery">What Happens After</h2>
+
+<div class="after-box">
+    <p>After handoff, the workflow is yours. You can adjust Apollo search filters, modify email templates, change sending schedules, and add new Instantly campaigns without touching the n8n nodes.</p>
+    <p style="margin-bottom: 0;">If something breaks or you want to extend the pipeline (reply detection, CRM integration, lead scoring), that's a separate conversation. No lock-in.</p>
+</div>
+
+<div class="cta-section">
+    <h2>See the full cost breakdown</h2>
+    <p>Fixed price, payment after you've tested the pipeline yourself.</p>
+    <a href="/clients/jaret-ai-cold-email-tool/investment" class="cta-btn">View Investment &#8594;</a>
+</div>
+
+<footer class="footer">
+    <p>Prepared by UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+// Access gate
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='jaret-2026'){
+        localStorage.setItem('jaret-cold-email-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.';
+    }
+}
+(function(){if(localStorage.getItem('jaret-cold-email-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+
+// Theme toggle
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('jaret-cold-email-theme',t);
+}
+
+// Sidebar active state
+(function(){
+    var links=document.querySelectorAll('.step-link');
+    var sections=[];
+    links.forEach(function(l){
+        var id=l.getAttribute('href');
+        if(id&&id.startsWith('#')){
+            var el=document.querySelector(id);
+            if(el)sections.push({el:el,link:l});
+        }
+    });
+    if(!sections.length)return;
+    var observer=new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+            if(e.isIntersecting){
+                links.forEach(function(l){l.classList.remove('active')});
+                sections.forEach(function(s){
+                    if(s.el===e.target)s.link.classList.add('active');
+                });
+            }
+        });
+    },{rootMargin:'-80px 0px -60% 0px'});
+    sections.forEach(function(s){observer.observe(s.el)});
+})();
+</script>
+</body>
+</html>

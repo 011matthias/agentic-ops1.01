@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Workflow | B2B Marketing Automation | UnpauseAI</title>
+<script>
+(function(){var t=localStorage.getItem('soren-b2b-marketing-automation-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+.page-intro {
+    padding: 40px 0 32px; border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.page-intro h1 { font-size: 28px; font-weight: 800; color: var(--text-strong); margin-bottom: 10px; }
+.page-intro p { font-size: 16px; color: var(--text2); max-width: 560px; margin: 0; line-height: 1.6; }
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+.callout.purple { border-color: var(--purple); background: var(--purple-bg); }
+.callout.purple .callout-title, .callout.purple p { color: var(--purple-dark); }
+.code-block {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px 20px; font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 13px; line-height: 1.7; color: var(--text); margin: 20px 0; overflow-x: auto;
+}
+.code-block .code-label { font-weight: 700; color: var(--blue); min-width: 160px; display: inline-block; }
+.code-block .code-str { color: var(--green); }
+.code-block .code-num { color: var(--purple); }
+.code-block .code-null { color: var(--text2); font-style: italic; }
+.code-block .code-comment { color: var(--text2); font-style: italic; }
+.stage-label {
+    display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 10px;
+    border-radius: 4px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: .04em;
+}
+.stage-label.blue { background: var(--blue-light); color: var(--blue-dark); }
+.stage-label.purple { background: var(--purple-light); color: var(--purple-dark); }
+.stage-label.green { background: var(--green-light); color: var(--green-dark); }
+.stage-label.orange { background: var(--orange-light); color: var(--orange-dark); }
+.flow-diagram {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px; margin: 24px 0;
+}
+.flow-step {
+    display: flex; align-items: flex-start; gap: 16px; padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+}
+.flow-step:last-child { border-bottom: none; padding-bottom: 0; }
+.flow-step:first-child { padding-top: 0; }
+.flow-icon {
+    width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    font-size: 16px; flex-shrink: 0; margin-top: 2px; color: #fff;
+}
+.flow-icon.blue { background: var(--blue); }
+.flow-icon.green { background: var(--green); }
+.flow-icon.purple { background: var(--purple); }
+.flow-icon.orange { background: var(--orange); }
+.flow-body { flex: 1; }
+.flow-title { font-size: 14px; font-weight: 700; color: var(--text-strong); margin-bottom: 2px; }
+.flow-sub { font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+.flow-desc { font-size: 13px; color: var(--text); line-height: 1.5; }
+.flow-arrow { text-align: center; color: var(--text2); font-size: 18px; padding: 4px 0; }
+.score-calc {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px 20px; margin: 16px 0; font-size: 14px;
+}
+.score-calc .score-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--border); }
+.score-calc .score-row:last-child { border-bottom: none; font-weight: 700; }
+.score-calc .score-row .score-signal { color: var(--text); }
+.score-calc .score-row .score-pts { color: var(--blue); font-weight: 700; font-family: monospace; }
+table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px; }
+thead th {
+    background: var(--th-bg); color: #fff; text-align: left;
+    padding: 10px 14px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+}
+tbody td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: var(--surface2); }
+.badge {
+    display: inline-block; padding: 2px 9px; border-radius: 20px;
+    font-size: 11px; font-weight: 700;
+}
+.badge-blue { background: var(--blue-light); color: var(--blue-dark); }
+.badge-green { background: var(--green-light); color: var(--green-dark); }
+.badge-orange { background: var(--orange-light); color: var(--orange-dark); }
+.badge-purple { background: var(--purple-light); color: var(--purple-dark); }
+.badge-red { background: #fee2e2; color: #991b1b; }
+.badge-gray { background: var(--surface2); color: var(--text2); }
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); margin-top: 24px; }
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    table { font-size: 13px; }
+}
+</style>
+</head>
+<body>
+
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared for you. Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+        </button>
+        <a href="/clients/soren-b2b-marketing-automation/" class="nav-logo">
+            <span class="logo-bold">Unpause</span><span class="logo-accent">AI</span>
+        </a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">B2B Marketing Automation</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/soren-b2b-marketing-automation/">Overview</a>
+        <a href="/clients/soren-b2b-marketing-automation/solution">Solution</a>
+        <a href="/clients/soren-b2b-marketing-automation/workflow" class="active">Workflow</a>
+        <a href="/clients/soren-b2b-marketing-automation/timeline">Timeline</a>
+        <a href="/clients/soren-b2b-marketing-automation/investment">Investment</a>
+        <a href="/clients/soren-b2b-marketing-automation/faq">FAQ</a>
+        <a href="/clients/soren-b2b-marketing-automation/onboarding">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<aside class="sidebar">
+    <div class="sidebar-label">On this page</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#pipeline-overview" class="step-link active"><span class="step-num">1</span> Pipeline Overview</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#example-linkedin" class="step-link"><span class="step-num">2</span> Example: LinkedIn Lead</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#example-apollo" class="step-link"><span class="step-num">3</span> Example: Apollo Import</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#scoring-model" class="step-link"><span class="step-num">4</span> Scoring Model</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#error-handling" class="step-link"><span class="step-num">5</span> Error Handling</a>
+        </li>
+    </ul>
+</aside>
+
+<div class="main-content">
+<div class="content-inner">
+
+<div class="page-intro">
+    <h1>Data in Motion</h1>
+    <p>Two worked examples showing exactly what happens to a lead at every stage. Real data formats, actual scoring math, and every failure mode handled. For the architecture decisions behind this, see the <a href="/clients/soren-b2b-marketing-automation/solution">Solution page</a>.</p>
+</div>
+
+<h2 id="pipeline-overview">Pipeline Overview</h2>
+<p>Five stages. Each one has a defined input, a defined output, and a log entry. If anything breaks, it surfaces immediately.</p>
+
+<div class="flow-diagram">
+    <div class="flow-step">
+        <div class="flow-icon blue">1</div>
+        <div class="flow-body">
+            <div class="flow-title">Capture</div>
+            <div class="flow-sub">Make.com webhooks</div>
+            <div class="flow-desc">Each source has its own webhook. LinkedIn replies via HeyReach, Apollo list imports, web form submissions, Reddit keyword matches. Failures on one channel don't affect the others.</div>
+        </div>
+    </div>
+    <div class="flow-step">
+        <div class="flow-icon blue">2</div>
+        <div class="flow-body">
+            <div class="flow-title">Normalize + Deduplicate</div>
+            <div class="flow-sub">Make.com data transform + CRM lookup</div>
+            <div class="flow-desc">Map source-specific fields to the canonical schema (see <a href="/clients/soren-b2b-marketing-automation/solution#data-architecture">Solution: Data Architecture</a>). Check CRM for existing record by email. Duplicates merge engagement data instead of creating new contacts.</div>
+        </div>
+    </div>
+    <div class="flow-step">
+        <div class="flow-icon purple">3</div>
+        <div class="flow-body">
+            <div class="flow-title">Enrich</div>
+            <div class="flow-sub">Apollo API via Make.com</div>
+            <div class="flow-desc">Fill missing fields: company size, industry, seniority, title. Leads that Apollo can't match get flagged as <code>enrichment_status: "partial"</code> and routed to a review queue.</div>
+        </div>
+    </div>
+    <div class="flow-step">
+        <div class="flow-icon orange">4</div>
+        <div class="flow-body">
+            <div class="flow-title">Score</div>
+            <div class="flow-sub">n8n code node</div>
+            <div class="flow-desc">Engagement signals + firmographic data produce a 0-100 score. Weights are stored in a Google Sheet so you can adjust them without editing the workflow.</div>
+        </div>
+    </div>
+    <div class="flow-step">
+        <div class="flow-icon green">5</div>
+        <div class="flow-body">
+            <div class="flow-title">Route</div>
+            <div class="flow-sub">n8n conditional branch</div>
+            <div class="flow-desc">Hot (80+): instant Slack alert + CRM priority flag. Warm (50-79): 5-touch nurture sequence. Cool (20-49): weekly digest. Cold (0-19): archive with quarterly re-score.</div>
+        </div>
+    </div>
+</div>
+
+<h2 id="example-linkedin">Worked Example: LinkedIn Lead via HeyReach</h2>
+<p>A prospect accepts a LinkedIn connection request from one of Soren's outreach campaigns. Here's exactly what happens, with the actual data at each stage.</p>
+
+<h3><span class="stage-label blue">Stage 1: Capture</span> HeyReach fires a webhook</h3>
+<p>When the prospect accepts the connection request, HeyReach sends this payload to the Make.com webhook:</p>
+
+<div class="code-block">
+{<br>
+&nbsp;&nbsp;<span class="code-label">"event":</span> <span class="code-str">"connection_accepted"</span>,<br>
+&nbsp;&nbsp;<span class="code-label">"prospect":</span> {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-label">"firstName":</span> <span class="code-str">"Jane"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-label">"lastName":</span> <span class="code-str">"Chen"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-label">"email":</span> <span class="code-str">"jane.chen@acme.io"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-label">"companyName":</span> <span class="code-str">"Acme Corp"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-label">"title":</span> <span class="code-str">"VP Marketing"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-label">"linkedinUrl":</span> <span class="code-str">"linkedin.com/in/janechen"</span><br>
+&nbsp;&nbsp;},<br>
+&nbsp;&nbsp;<span class="code-label">"campaign":</span> {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-label">"id":</span> <span class="code-str">"camp_saas_vp_q2"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-label">"name":</span> <span class="code-str">"SaaS VP Outreach Q2"</span><br>
+&nbsp;&nbsp;},<br>
+&nbsp;&nbsp;<span class="code-label">"timestamp":</span> <span class="code-str">"2026-04-01T10:23:14Z"</span><br>
+}
+</div>
+
+<h3><span class="stage-label blue">Stage 2: Normalize</span> Map to canonical schema</h3>
+<p>Make.com maps the HeyReach fields to the standard lead format. <code>prospect.firstName</code> becomes <code>first_name</code>. <code>prospect.companyName</code> becomes <code>company</code>. The source channel is set to <code>linkedin_heyreach</code> based on the webhook endpoint.</p>
+<p>Before writing to CRM, Make.com checks if <code>jane.chen@acme.io</code> already exists. It doesn't, so the record proceeds to enrichment.</p>
+
+<h3><span class="stage-label purple">Stage 3: Enrich</span> Apollo fills the gaps</h3>
+<p>HeyReach gave us a name, title, and company. But we don't have company size, industry, or seniority level. Make.com sends the email to Apollo's <code>/v1/people/match</code> endpoint:</p>
+
+<div class="code-block">
+<span class="code-comment">// Apollo API response (relevant fields)</span><br>
+{<br>
+&nbsp;&nbsp;<span class="code-label">"person":</span> {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-label">"title":</span> <span class="code-str">"VP of Marketing"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-label">"seniority":</span> <span class="code-str">"vp"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-label">"organization":</span> {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-label">"name":</span> <span class="code-str">"Acme Corp"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-label">"estimated_num_employees":</span> <span class="code-num">340</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-label">"industry":</span> <span class="code-str">"Computer Software"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-label">"short_description":</span> <span class="code-str">"B2B SaaS platform for..."</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;}<br>
+}
+</div>
+
+<p>Now we have everything needed for scoring. The normalized record looks like this:</p>
+
+<div class="code-block">
+{<br>
+&nbsp;&nbsp;<span class="code-label">"email":</span> <span class="code-str">"jane.chen@acme.io"</span>,<br>
+&nbsp;&nbsp;<span class="code-label">"first_name":</span> <span class="code-str">"Jane"</span>,<br>
+&nbsp;&nbsp;<span class="code-label">"last_name":</span> <span class="code-str">"Chen"</span>,<br>
+&nbsp;&nbsp;<span class="code-label">"company":</span> <span class="code-str">"Acme Corp"</span>,<br>
+&nbsp;&nbsp;<span class="code-label">"title":</span> <span class="code-str">"VP of Marketing"</span>,<br>
+&nbsp;&nbsp;<span class="code-label">"company_size":</span> <span class="code-num">340</span>,<br>
+&nbsp;&nbsp;<span class="code-label">"industry":</span> <span class="code-str">"Computer Software"</span>,<br>
+&nbsp;&nbsp;<span class="code-label">"seniority":</span> <span class="code-str">"vp"</span>,<br>
+&nbsp;&nbsp;<span class="code-label">"source_channel":</span> <span class="code-str">"linkedin_heyreach"</span>,<br>
+&nbsp;&nbsp;<span class="code-label">"capture_ts":</span> <span class="code-str">"2026-04-01T10:23:14Z"</span>,<br>
+&nbsp;&nbsp;<span class="code-label">"enrichment_status":</span> <span class="code-str">"complete"</span>,<br>
+&nbsp;&nbsp;<span class="code-label">"lead_score":</span> <span class="code-null">null</span><br>
+}
+</div>
+
+<h3><span class="stage-label orange">Stage 4: Score</span> Engagement + firmographic math</h3>
+<p>Make.com fires the enriched record to n8n via webhook. The scoring code node calculates:</p>
+
+<div class="score-calc">
+    <div style="font-weight:700;margin-bottom:8px;color:var(--text-strong)">Engagement Score</div>
+    <div class="score-row"><span class="score-signal">LinkedIn connection accepted</span><span class="score-pts">+15</span></div>
+    <div class="score-row"><span class="score-signal">Part of active campaign sequence</span><span class="score-pts">+5</span></div>
+    <div class="score-row"><span class="score-signal">Engagement subtotal</span><span class="score-pts">= 20</span></div>
+</div>
+
+<div class="score-calc">
+    <div style="font-weight:700;margin-bottom:8px;color:var(--text-strong)">Firmographic Score</div>
+    <div class="score-row"><span class="score-signal">VP-level seniority</span><span class="score-pts">+20</span></div>
+    <div class="score-row"><span class="score-signal">Company size 200-500 (target range)</span><span class="score-pts">+10</span></div>
+    <div class="score-row"><span class="score-signal">Software industry (target vertical)</span><span class="score-pts">+15</span></div>
+    <div class="score-row"><span class="score-signal">Firmographic subtotal</span><span class="score-pts">= 45</span></div>
+</div>
+
+<div class="score-calc" style="border-color:var(--orange);border-width:2px">
+    <div class="score-row" style="border:none"><span class="score-signal" style="font-weight:700">Total Lead Score</span><span class="score-pts" style="font-size:18px;color:var(--orange)">65 / 100</span></div>
+</div>
+
+<h3><span class="stage-label green">Stage 5: Route</span> Classification: Warm</h3>
+<p>Score of 65 falls in the Warm band (50-79). n8n triggers:</p>
+<ul>
+    <li>CRM record created with score 65 and <code>pipeline_stage: "nurture"</code></li>
+    <li>5-touch email sequence starts. Day 1: personalized intro referencing the LinkedIn connection. Day 3 and Day 7: follow-ups if no reply</li>
+    <li>If Jane replies to any email, the sequence stops and she gets reclassified as Hot automatically</li>
+    <li>Added to the weekly team digest under "New warm leads this week"</li>
+</ul>
+
+<div class="callout">
+    <div class="callout-title">Why not Hot?</div>
+    <p>Jane's engagement score is only 20 because she accepted a connection request but hasn't replied to a message yet. If she replies to the first nurture email, the engagement score jumps by +20 (message reply signal), pushing her total to 85. That crosses the Hot threshold and triggers the instant Slack alert.</p>
+</div>
+
+<h2 id="example-apollo">Worked Example: Apollo Prospecting Import</h2>
+<p>A different path through the same pipeline. Soren's team exports a prospecting list from Apollo. These leads come pre-enriched but with zero engagement signals.</p>
+
+<h3><span class="stage-label blue">Stage 1: Capture</span> Scheduled Apollo pull</h3>
+<p>Make.com polls Apollo's saved search API on a daily schedule. New contacts since the last run get pulled in batch. Today's batch includes:</p>
+
+<div class="code-block">
+{<br>
+&nbsp;&nbsp;<span class="code-label">"email":</span> <span class="code-str">"mark.hoffmann@nordtech.de"</span>,<br>
+&nbsp;&nbsp;<span class="code-label">"first_name":</span> <span class="code-str">"Mark"</span>,<br>
+&nbsp;&nbsp;<span class="code-label">"last_name":</span> <span class="code-str">"Hoffmann"</span>,<br>
+&nbsp;&nbsp;<span class="code-label">"title":</span> <span class="code-str">"Marketing Manager"</span>,<br>
+&nbsp;&nbsp;<span class="code-label">"seniority":</span> <span class="code-str">"manager"</span>,<br>
+&nbsp;&nbsp;<span class="code-label">"organization":</span> {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-label">"name":</span> <span class="code-str">"NordTech Solutions"</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-label">"estimated_num_employees":</span> <span class="code-num">85</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-label">"industry":</span> <span class="code-str">"Information Technology"</span><br>
+&nbsp;&nbsp;}<br>
+}
+</div>
+
+<h3><span class="stage-label blue">Stage 2: Normalize</span> Already structured</h3>
+<p>Apollo data maps cleanly to the canonical schema. The source channel is set to <code>apollo_import</code>. Deduplication check passes. No existing record found.</p>
+
+<h3><span class="stage-label purple">Stage 3: Enrich</span> Skipped</h3>
+<p>Apollo contacts arrive pre-enriched. The enrichment step detects that company_size, industry, and seniority are already filled. It sets <code>enrichment_status: "complete"</code> and passes through without making an API call. No wasted Apollo credits.</p>
+
+<h3><span class="stage-label orange">Stage 4: Score</span> High firmographic, zero engagement</h3>
+
+<div class="score-calc">
+    <div style="font-weight:700;margin-bottom:8px;color:var(--text-strong)">Engagement Score</div>
+    <div class="score-row"><span class="score-signal">No interaction yet (prospecting import)</span><span class="score-pts">+0</span></div>
+    <div class="score-row"><span class="score-signal">Engagement subtotal</span><span class="score-pts">= 0</span></div>
+</div>
+
+<div class="score-calc">
+    <div style="font-weight:700;margin-bottom:8px;color:var(--text-strong)">Firmographic Score</div>
+    <div class="score-row"><span class="score-signal">Manager-level seniority</span><span class="score-pts">+10</span></div>
+    <div class="score-row"><span class="score-signal">Company size 50-200</span><span class="score-pts">+10</span></div>
+    <div class="score-row"><span class="score-signal">IT industry (adjacent vertical)</span><span class="score-pts">+10</span></div>
+    <div class="score-row"><span class="score-signal">Firmographic subtotal</span><span class="score-pts">= 30</span></div>
+</div>
+
+<div class="score-calc" style="border-color:var(--text2);border-width:2px">
+    <div class="score-row" style="border:none"><span class="score-signal" style="font-weight:700">Total Lead Score</span><span class="score-pts" style="font-size:18px;color:var(--text2)">30 / 100</span></div>
+</div>
+
+<h3><span class="stage-label green">Stage 5: Route</span> Classification: Cool</h3>
+<p>Score of 30 falls in the Cool band (20-49). n8n triggers:</p>
+<ul>
+    <li>CRM record created with score 30 and <code>pipeline_stage: "drip"</code></li>
+    <li>Added to the weekly digest under "New cool leads"</li>
+    <li>Enters long-term drip: one email every 2 weeks with relevant content</li>
+    <li>If Mark opens and clicks a drip email, engagement score updates (+15 for open+click), potentially moving him to Warm</li>
+</ul>
+
+<div class="callout purple">
+    <div class="callout-title">Apollo imports start Cool by design</div>
+    <p>Prospecting imports have zero engagement signal. They haven't interacted with anything yet. The pipeline puts them in a low-touch drip until they show interest, then escalates automatically. This keeps your team focused on leads that are already engaging rather than chasing cold lists.</p>
+</div>
+
+<h2 id="scoring-model">Scoring Model</h2>
+<p>The score combines two dimensions. Each runs 0-50. The total is 0-100. All weights are stored in a Google Sheet that you can edit without touching the n8n workflow.</p>
+
+<h3>Engagement signals</h3>
+<table>
+    <thead>
+        <tr>
+            <th>Signal</th>
+            <th>Points</th>
+            <th>Source</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>Web form submission</td>
+            <td><strong>+25</strong></td>
+            <td>Direct intent signal</td>
+        </tr>
+        <tr>
+            <td>Email reply</td>
+            <td><strong>+20</strong></td>
+            <td>IMAP polling via n8n</td>
+        </tr>
+        <tr>
+            <td>LinkedIn message reply</td>
+            <td><strong>+20</strong></td>
+            <td>HeyReach webhook</td>
+        </tr>
+        <tr>
+            <td>Email open + link click</td>
+            <td><strong>+15</strong></td>
+            <td>Email tracking pixel + link redirect</td>
+        </tr>
+        <tr>
+            <td>LinkedIn connection accept</td>
+            <td><strong>+15</strong></td>
+            <td>HeyReach webhook</td>
+        </tr>
+        <tr>
+            <td>Part of active campaign</td>
+            <td><strong>+5</strong></td>
+            <td>HeyReach campaign metadata</td>
+        </tr>
+    </tbody>
+</table>
+
+<p>Engagement signals stack. A lead that accepts a connection (+15), is in a campaign (+5), and replies to a message (+20) scores 40/50 on engagement alone.</p>
+
+<h3>Firmographic signals</h3>
+<table>
+    <thead>
+        <tr>
+            <th>Signal</th>
+            <th>Points</th>
+            <th>Source</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>C-level title (CEO, CMO, CRO)</td>
+            <td><strong>+25</strong></td>
+            <td>Apollo enrichment</td>
+        </tr>
+        <tr>
+            <td>VP-level title</td>
+            <td><strong>+20</strong></td>
+            <td>Apollo enrichment</td>
+        </tr>
+        <tr>
+            <td>Director-level title</td>
+            <td><strong>+15</strong></td>
+            <td>Apollo enrichment</td>
+        </tr>
+        <tr>
+            <td>Manager-level title</td>
+            <td><strong>+10</strong></td>
+            <td>Apollo enrichment</td>
+        </tr>
+        <tr>
+            <td>Target industry match</td>
+            <td><strong>+15</strong></td>
+            <td>Apollo enrichment</td>
+        </tr>
+        <tr>
+            <td>Adjacent industry</td>
+            <td><strong>+10</strong></td>
+            <td>Apollo enrichment</td>
+        </tr>
+        <tr>
+            <td>Company size 200-500 (sweet spot)</td>
+            <td><strong>+10</strong></td>
+            <td>Apollo enrichment</td>
+        </tr>
+        <tr>
+            <td>Company size 50-200 or 500+</td>
+            <td><strong>+5</strong></td>
+            <td>Apollo enrichment</td>
+        </tr>
+    </tbody>
+</table>
+
+<h3>Routing thresholds</h3>
+<table>
+    <thead>
+        <tr>
+            <th>Score</th>
+            <th>Band</th>
+            <th>What Happens</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>80-100</strong></td>
+            <td><span class="badge badge-red">Hot</span></td>
+            <td>Instant Slack alert with contact details and CRM link. Priority flag in CRM. Calendar booking link attached for immediate outreach.</td>
+        </tr>
+        <tr>
+            <td><strong>50-79</strong></td>
+            <td><span class="badge badge-orange">Warm</span></td>
+            <td>5-touch nurture sequence (Day 1, 3, 7, 14, 21). Auto-stops on reply. Reclassifies to Hot if engagement score crosses threshold.</td>
+        </tr>
+        <tr>
+            <td><strong>20-49</strong></td>
+            <td><span class="badge badge-blue">Cool</span></td>
+            <td>Weekly digest email to your team. Bi-weekly content drip to the lead. Re-scores on any new engagement.</td>
+        </tr>
+        <tr>
+            <td><strong>0-19</strong></td>
+            <td><span class="badge badge-gray">Cold</span></td>
+            <td>Archived in CRM. Quarterly batch re-score checks if ICP definition changed. No active outreach.</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="callout green">
+    <div class="callout-title">Thresholds are yours to tune</div>
+    <p>80, 50, and 20 are starting points calibrated for a typical B2B pipeline. After 2-3 weeks of data, you'll see where your natural breakpoints are. Changing them is one edit in the Google Sheet. The n8n workflow reads the sheet at the start of every scoring run.</p>
+</div>
+
+<h2 id="error-handling">Error Handling</h2>
+<p>Every external system in this pipeline can fail. Here's what happens when each one does.</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Scenario</th>
+            <th>Detection</th>
+            <th>Response</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>Apollo API rate limit (429)</strong></td>
+            <td>HTTP status code check in Make.com</td>
+            <td>Queue remaining leads with exponential backoff. Process the batch over minutes instead of seconds. Already-processed leads aren't affected.</td>
+        </tr>
+        <tr>
+            <td><strong>Apollo enrichment fails (person not found)</strong></td>
+            <td>Empty <code>person</code> object or 404 response</td>
+            <td>Set <code>enrichment_status: "partial"</code>. Lead proceeds to scoring with available data. Daily digest lists partial records for manual review.</td>
+        </tr>
+        <tr>
+            <td><strong>HeyReach webhook payload malformed</strong></td>
+            <td>JSON parse error in Make.com</td>
+            <td>Log the raw payload to a Google Sheets "errors" tab. Send Slack notification with the webhook timestamp so you can investigate. No data loss.</td>
+        </tr>
+        <tr>
+            <td><strong>CRM duplicate detected</strong></td>
+            <td>Email match on existing CRM contact</td>
+            <td>Don't create a new record. Instead, update the existing contact's engagement data and recalculate the score. This prevents duplicates and keeps scoring accurate.</td>
+        </tr>
+        <tr>
+            <td><strong>n8n scoring node exception</strong></td>
+            <td>Code node throws an error</td>
+            <td>Lead gets routed to manual review queue with the error message attached. Slack alert to you. The error doesn't block other leads in the same batch.</td>
+        </tr>
+        <tr>
+            <td><strong>Make.com scenario timeout (40s limit)</strong></td>
+            <td>Execution exceeds time limit</td>
+            <td>Scenario splits into sub-scenarios for large batches. Each sub-scenario handles a chunk of leads independently. If one chunk times out, the rest still process.</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="callout orange">
+    <div class="callout-title">Nothing fails silently</div>
+    <p>Every error condition logs to a Google Sheet and fires a Slack notification. If you wake up to 3 error notifications, you know exactly what happened and where. If you wake up to zero, everything processed normally. The pipeline never stops running because one lead has bad data.</p>
+</div>
+
+<section class="cta-section">
+    <h2>See the Build Timeline</h2>
+    <p>The Timeline page shows how this gets built in phases, with specific deliverables at each milestone.</p>
+    <a href="/clients/soren-b2b-marketing-automation/timeline" class="cta-btn">View Timeline &rarr;</a>
+</section>
+
+<div class="footer">
+    <p>Prepared by UnpauseAI for Soren's B2B marketing automation project.</p>
+</div>
+
+</div>
+</div>
+
+<script>
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('soren-b2b-marketing-automation-theme',t);
+}
+
+var links = document.querySelectorAll('.step-link');
+var sections = [];
+links.forEach(function(a) {
+    var id = a.getAttribute('href').replace('#','');
+    var el = document.getElementById(id);
+    if (el) sections.push({ el: el, link: a });
+});
+
+function updateActive() {
+    var scrollY = window.scrollY + 120;
+    var active = sections[0];
+    for (var i = 0; i < sections.length; i++) {
+        if (sections[i].el.offsetTop <= scrollY) active = sections[i];
+    }
+    links.forEach(function(l) { l.classList.remove('active'); });
+    if (active) active.link.classList.add('active');
+}
+window.addEventListener('scroll', updateActive);
+updateActive();
+
+links.forEach(function(a) {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        var id = this.getAttribute('href').replace('#','');
+        var el = document.getElementById(id);
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+        document.querySelector('.sidebar').classList.remove('open');
+    });
+});
+
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='soren-2026'){
+        localStorage.setItem('soren-b2b-marketing-automation-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.';
+    }
+}
+(function(){if(localStorage.getItem('soren-b2b-marketing-automation-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+</script>
+</body>
+</html>

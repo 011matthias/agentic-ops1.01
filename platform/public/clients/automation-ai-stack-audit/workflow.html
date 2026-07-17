@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stack Audit Proposal &ndash; Architecture | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+.access-gate {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: var(--bg); z-index: 2000;
+    display: flex; align-items: center; justify-content: center;
+}
+.access-box {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    padding: 48px 40px; text-align: center; max-width: 400px; width: 90%;
+    box-shadow: 0 4px 24px rgba(0,0,0,.08);
+}
+.access-box h2 { font-size: 20px; color: var(--text-strong); margin-bottom: 8px; border: none; margin-top: 0; padding-bottom: 0; }
+.access-box p { font-size: 14px; color: var(--text2); margin-bottom: 24px; }
+.access-input {
+    width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 14px; background: var(--bg); color: var(--text); margin-bottom: 12px;
+    outline: none; transition: border-color .15s;
+}
+.access-input:focus { border-color: var(--blue); }
+.access-btn {
+    width: 100%; padding: 10px 14px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-btn:hover { background: var(--blue-dark); }
+.access-error { font-size: 13px; color: #ef4444; margin-top: 8px; display: none; }
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 560px; margin: 0 auto 0; line-height: 1.6; }
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+
+/* Phase Flow */
+.phase-flow {
+    display: flex; gap: 0; margin: 32px 0; align-items: stretch;
+}
+.phase-card {
+    flex: 1; padding: 20px 16px; border: 1px solid var(--border);
+    background: var(--surface); position: relative;
+    transition: transform .15s, box-shadow .15s;
+}
+.phase-card:first-child { border-radius: 10px 0 0 10px; }
+.phase-card:last-child { border-radius: 0 10px 10px 0; }
+.phase-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); z-index: 1; }
+.phase-arrow {
+    display: flex; align-items: center; color: var(--text2); font-size: 18px;
+    padding: 0 2px; flex-shrink: 0; align-self: center;
+}
+.phase-num {
+    display: inline-block; width: 28px; height: 28px; border-radius: 50%;
+    background: var(--blue); color: #fff; font-size: 13px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; margin-bottom: 10px;
+}
+.phase-num.p2 { background: var(--purple); }
+.phase-num.p3 { background: var(--orange); }
+.phase-num.p4 { background: var(--green); }
+.phase-title { font-size: 14px; font-weight: 700; color: var(--text-strong); margin-bottom: 4px; }
+.phase-sub { font-size: 11px; color: var(--text2); margin-bottom: 10px; }
+.phase-items { list-style: none; padding: 0; }
+.phase-items li { font-size: 12px; color: var(--text); padding: 3px 0; display: flex; align-items: center; gap: 6px; }
+.phase-items li::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--blue); flex-shrink: 0; }
+.phase-card:nth-child(3) .phase-items li::before { background: var(--purple); }
+.phase-card:nth-child(5) .phase-items li::before { background: var(--orange); }
+.phase-card:nth-child(7) .phase-items li::before { background: var(--green); }
+
+table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+th { background: var(--th-bg); color: #fff; text-align: left; padding: 10px 14px; font-weight: 600; }
+td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:nth-child(even) td { background: var(--surface); }
+tr:hover td { background: var(--blue-bg); }
+
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; }
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .phase-flow { flex-direction: column; }
+    .phase-card { border-radius: 10px !important; }
+    .phase-arrow { display: none; }
+    .hero h1 { font-size: 24px; }
+}
+</style>
+<script>
+(function(){
+    var t = localStorage.getItem('stackaudit-theme');
+    if (t === 'dark') document.documentElement.setAttribute('data-theme','dark');
+})();
+</script>
+</head>
+<body>
+
+<!-- Access Gate -->
+<div class="access-gate" id="accessGate">
+    <div class="access-box">
+        <h2>Stack Audit Proposal</h2>
+        <p>This proposal is private. Enter the access code to continue.</p>
+        <input type="password" class="access-input" id="accessInput" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+        <button class="access-btn" onclick="checkAccess()">View Proposal</button>
+        <div class="access-error" id="accessError">Incorrect code. Please try again.</div>
+    </div>
+</div>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/automation-ai-stack-audit/index.html" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent"> | AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Stack Audit Proposal</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/automation-ai-stack-audit/index.html">Overview</a>
+        <a href="/clients/automation-ai-stack-audit/solution.html">Solution</a>
+        <a href="/clients/automation-ai-stack-audit/workflow.html" class="active">Architecture</a>
+        <a href="/clients/automation-ai-stack-audit/timeline.html">Timeline</a>
+        <a href="/clients/automation-ai-stack-audit/investment.html">Investment</a>
+        <a href="/clients/automation-ai-stack-audit/faq.html">FAQ</a>
+        <a href="/clients/automation-ai-stack-audit/onboarding.html">Get Started</a>
+        <a href="/clients/automation-ai-stack-audit/brief.html">Your Stack</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">Architecture sections</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#how-the-audit-works" class="step-link active"><span class="step-num">1</span> How the Audit Works</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#what-we-look-for" class="step-link"><span class="step-num">2</span> What We Look For</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#cross-system-view" class="step-link"><span class="step-num">3</span> Cross-System View</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#download" class="step-link"><span class="step-num">4</span> Audit Checklist</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<section class="hero">
+    <div class="hero-badge">Audit Architecture</div>
+    <h1>How the Audit Actually Works</h1>
+    <p class="hero-sub">Four phases over 5 to 7 days. Each phase builds on the previous one. We don't start reporting until we've traced the full picture.</p>
+</section>
+
+<!-- Phase Flow -->
+<h2 id="how-the-audit-works">How the Audit Works</h2>
+<p>The audit runs in four sequential phases. We don't skip to recommendations before we've traced the actual data flows, because the most impactful findings almost always come from the connections between systems rather than the systems themselves.</p>
+
+<div class="phase-flow">
+    <div class="phase-card">
+        <div class="phase-num">1</div>
+        <div class="phase-title">Discovery</div>
+        <div class="phase-sub">Day 1</div>
+        <ul class="phase-items">
+            <li>System access setup</li>
+            <li>Stack inventory</li>
+            <li>Initial scan pass</li>
+            <li>Scope confirmation</li>
+        </ul>
+    </div>
+    <div class="phase-arrow">&#8250;</div>
+    <div class="phase-card">
+        <div class="phase-num p2">2</div>
+        <div class="phase-title">Deep Analysis</div>
+        <div class="phase-sub">Days 2&ndash;4</div>
+        <ul class="phase-items">
+            <li>Workflow tracing</li>
+            <li>AI pipeline testing</li>
+            <li>Integration probing</li>
+            <li>Cross-system mapping</li>
+        </ul>
+    </div>
+    <div class="phase-arrow">&#8250;</div>
+    <div class="phase-card">
+        <div class="phase-num p3">3</div>
+        <div class="phase-title">Synthesis</div>
+        <div class="phase-sub">Day 5</div>
+        <ul class="phase-items">
+            <li>Pattern identification</li>
+            <li>Dependency mapping</li>
+            <li>Risk classification</li>
+            <li>Priority ordering</li>
+        </ul>
+    </div>
+    <div class="phase-arrow">&#8250;</div>
+    <div class="phase-card">
+        <div class="phase-num p4">4</div>
+        <div class="phase-title">Reporting</div>
+        <div class="phase-sub">Days 6&ndash;7</div>
+        <ul class="phase-items">
+            <li>Issue inventory</li>
+            <li>Architecture diagrams</li>
+            <li>Recommendations</li>
+            <li>Walkthrough call</li>
+        </ul>
+    </div>
+</div>
+
+<!-- What We Look For -->
+<h2 id="what-we-look-for">What We Look For</h2>
+<p>Each area has specific failure patterns we check for. These aren't generic best-practice checklists. They're the actual issues we encounter when building and maintaining these systems.</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Area</th>
+            <th>What We Check</th>
+            <th>Common Issues Found</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>n8n Workflows</strong></td>
+            <td>Trigger reliability, error handling, data routing, module configuration</td>
+            <td>Silent failures, missing error paths, hardcoded values, timeout gaps</td>
+        </tr>
+        <tr>
+            <td><strong>Make.com Scenarios</strong></td>
+            <td>Scenario structure, filter logic, data store usage, webhook configuration</td>
+            <td>Over-complex scenarios, missing retries, data store bottlenecks</td>
+        </tr>
+        <tr>
+            <td><strong>AI and Chatbot</strong></td>
+            <td>Prompt design, response quality, conversation flow, fallback handling</td>
+            <td>Generic prompts, no context window management, missing edge case handling</td>
+        </tr>
+        <tr>
+            <td><strong>Integrations</strong></td>
+            <td>API auth patterns, data format validation, webhook security</td>
+            <td>Expired tokens, unvalidated payloads, missing retry logic</td>
+        </tr>
+        <tr>
+            <td><strong>Python and Django</strong></td>
+            <td>AI integration code, API endpoint design, error handling patterns</td>
+            <td>Hardcoded credentials, missing rate limiting, synchronous AI calls blocking requests</td>
+        </tr>
+    </tbody>
+</table>
+
+<!-- Cross-System View -->
+<h2 id="cross-system-view">The Cross-System View</h2>
+<p>Most auditors review one system in isolation. We trace data flows across systems. If your n8n workflow triggers an AI call, we check both the workflow logic and the AI integration on the other end. If your chatbot sends data to a CRM, we verify the data format, the auth pattern, and whether it actually arrives correctly.</p>
+
+<p>This cross-system tracing is what surfaces the category of issue that individual audits miss entirely: the failures that live in the handoff between two systems that are both individually "working."</p>
+
+<div class="callout green">
+    <div class="callout-title">A concrete example</div>
+    <p>An n8n workflow can execute without errors and a Django endpoint can respond with 200 OK, but the payload format between them can be wrong in a way that causes silent data loss downstream. Neither system reports a failure. Only a cross-system trace catches it.</p>
+</div>
+
+<div class="callout orange">
+    <div class="callout-title">Why sequencing matters</div>
+    <p>We don't begin the synthesis phase until the deep analysis is complete. Premature pattern identification leads to confirmation bias, where you find what you expected rather than what's actually there. The 5-7 day timeline reflects the actual work required, not a padded estimate.</p>
+</div>
+
+<h2 id="download" style="scroll-margin-top:80px;">Audit Checklist</h2>
+<p>Download our audit checklist template. It covers all four zones (automation, AI/chatbot, integrations, architecture) with 38 check items categorized by severity. Use it as a preview of what the audit covers, or as a starting point for your own internal review.</p>
+<div style="text-align:center; margin: 24px 0;">
+    <a href="/clients/automation-ai-stack-audit/audit-checklist.json" download="automation-ai-stack-audit-checklist.json" style="display:inline-flex; align-items:center; gap:8px; padding:12px 24px; background:var(--blue); color:#fff; border-radius:8px; font-weight:600; font-size:14px; text-decoration:none; transition:background .15s;">
+        Download Checklist (.json)
+    </a>
+    <p style="font-size:12px; color:var(--text2); margin-top:8px;">38 items across 4 audit zones, ready to import or customize</p>
+</div>
+
+<footer class="footer" style="border-top: 1px solid var(--border); padding: 24px 0 40px; margin-top: 48px;">
+    <p>Built and maintained by <a href="https://unpauseai.com" target="_blank" rel="noopener">UnpauseAI</a></p>
+    <p style="margin-top:4px;"><a href="https://unpauseai.com/privacy">Privacy Policy</a> &middot; <a href="https://unpauseai.com/terms">Terms of Service</a></p>
+    <p style="margin-top:4px; font-size: 12px;">Last updated: March 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+var ACCESS_KEY = 'access_stackaudit';
+var ACCESS_CODE = 'stackaudit-2026';
+
+function checkAccess() {
+    var val = document.getElementById('accessInput').value.trim();
+    if (val === ACCESS_CODE) {
+        localStorage.setItem(ACCESS_KEY, '1');
+        document.getElementById('accessGate').style.display = 'none';
+    } else {
+        document.getElementById('accessError').style.display = 'block';
+    }
+}
+
+(function() {
+    if (localStorage.getItem(ACCESS_KEY) === '1') {
+        document.getElementById('accessGate').style.display = 'none';
+    }
+})();
+
+function toggleTheme() {
+    var el = document.documentElement;
+    var t = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    el.setAttribute('data-theme', t);
+    localStorage.setItem('stackaudit-theme', t);
+}
+</script>
+
+</body>
+</html>

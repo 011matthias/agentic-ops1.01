@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Menovia Onboarding Checklist | UnpauseAI</title>
+<style>
+@page {
+    size: A4;
+    margin: 2cm;
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #1a1a1a; background: #fff; line-height: 1.65; font-size: 14px;
+    max-width: 700px; margin: 0 auto; padding: 40px 20px;
+}
+
+/* --- Header --- */
+.pdf-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-bottom: 20px; border-bottom: 2px solid #2563eb; margin-bottom: 32px;
+}
+.pdf-logo {
+    display: flex; align-items: center; gap: 10px;
+}
+.pdf-logo svg { flex-shrink: 0; }
+.pdf-logo-text { font-size: 20px; letter-spacing: -0.025em; }
+.pdf-logo-bold { font-weight: 700; color: #1a1a1a; }
+.pdf-logo-accent { font-weight: 700; color: #2563eb; }
+.pdf-contact {
+    text-align: right; font-size: 12px; color: #6b7280; line-height: 1.5;
+}
+
+.pdf-title {
+    text-align: center; margin-bottom: 32px;
+}
+.pdf-title h1 {
+    font-size: 28px; font-weight: 800; color: #111827; margin-bottom: 8px;
+}
+.pdf-title p {
+    font-size: 14px; color: #6b7280; max-width: 480px; margin: 0 auto;
+}
+.pdf-badge {
+    display: inline-block; background: #ecfdf5; color: #059669;
+    border-radius: 20px; padding: 4px 14px; font-size: 11px;
+    font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+    margin-bottom: 12px;
+}
+
+/* --- Sections --- */
+h2 {
+    font-size: 20px; color: #1e40af; border-bottom: 2px solid #2563eb;
+    padding-bottom: 6px; margin-top: 36px; margin-bottom: 16px;
+    page-break-after: avoid;
+}
+h3 {
+    font-size: 16px; color: #6b7280; margin-top: 24px; margin-bottom: 10px;
+    page-break-after: avoid;
+}
+p { margin-bottom: 14px; }
+strong { color: #111827; }
+a { color: #2563eb; }
+ul, ol { padding-left: 22px; margin-bottom: 14px; }
+li { margin-bottom: 5px; }
+
+/* --- Checkbox items --- */
+.check-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px 0; border-bottom: 1px solid #e5e7eb;
+}
+.check-box {
+    width: 18px; height: 18px; border: 2px solid #1e40af;
+    border-radius: 3px; flex-shrink: 0; margin-top: 2px;
+}
+.check-content { flex: 1; }
+.check-title { font-size: 15px; font-weight: 700; color: #111827; margin-bottom: 2px; }
+.check-desc { font-size: 13px; color: #6b7280; margin-bottom: 4px; }
+.check-steps { font-size: 12px; color: #1a1a1a; line-height: 1.6; }
+.check-steps ol { padding-left: 18px; margin: 4px 0 0; }
+
+/* --- Fill lines --- */
+.fill-line {
+    display: block; width: 100%;
+    border-bottom: 1px solid #9ca3af;
+    min-height: 28px; margin: 4px 0;
+}
+.fill-line-short {
+    display: inline-block; width: 200px;
+    border-bottom: 1px solid #9ca3af;
+    min-height: 24px; margin: 0 8px;
+}
+
+/* --- Tables --- */
+table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 13px; }
+th {
+    background: #1e40af; color: #fff; text-align: left;
+    padding: 8px 12px; font-weight: 600;
+}
+td {
+    padding: 8px 12px; border-bottom: 1px solid #e5e7eb; vertical-align: top;
+}
+tr:nth-child(even) td { background: #f8fafc; }
+
+/* --- Callout --- */
+.callout {
+    border-left: 4px solid #2563eb; background: #eff6ff;
+    padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 18px 0;
+    page-break-inside: avoid;
+}
+.callout-green { border-color: #059669; background: #ecfdf5; }
+.callout-title { font-size: 12px; font-weight: 700; color: #1e40af; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout-green .callout-title { color: #047857; }
+.callout p { margin: 0; font-size: 13px; color: #1e40af; }
+.callout-green p { color: #047857; }
+
+/* --- Contact cards --- */
+.contact-row { display: flex; gap: 12px; margin: 16px 0; }
+.contact-box {
+    flex: 1; border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px;
+    page-break-inside: avoid;
+}
+.contact-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #6b7280; margin-bottom: 6px; }
+
+/* --- Page breaks --- */
+.page-break { page-break-before: always; }
+
+/* --- Footer --- */
+.pdf-footer {
+    margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb;
+    text-align: center; font-size: 12px; color: #6b7280;
+}
+
+@media print {
+    body { padding: 0; }
+    .page-break { page-break-before: always; }
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="pdf-header">
+    <div class="pdf-logo">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="36" height="36"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg>
+        <span class="pdf-logo-text"><span class="pdf-logo-bold">Unpause</span><span class="pdf-logo-accent">AI</span></span>
+    </div>
+    <div class="pdf-contact">
+        Nicolas Neumann<br>
+        nicolas.neumann@unpauseai.com
+    </div>
+</div>
+
+<!-- Title -->
+<div class="pdf-title">
+    <div class="pdf-badge">Onboarding</div>
+    <h1>Menovia Onboarding Checklist</h1>
+    <p>Everything we need to get started. Complete this checklist before or during our kickoff call.</p>
+</div>
+
+<!-- Section 1: Tool Access & Credentials -->
+<h2>1. Tool Access &amp; Credentials</h2>
+<p>For each tool, provide the required credentials. Share all credentials securely (e.g., password manager link, encrypted email).</p>
+
+<div class="check-item">
+    <div class="check-box"></div>
+    <div class="check-content">
+        <div class="check-title">Zoho CRM</div>
+        <div class="check-desc">We need: Admin API credentials (Client ID, Client Secret, Refresh Token)</div>
+        <div class="check-steps">
+            <ol>
+                <li>Go to <a href="https://api-console.zoho.eu/">api-console.zoho.eu</a></li>
+                <li>Click Add Client and select Self Client</li>
+                <li>Enter the scope: ZohoCRM.modules.ALL</li>
+                <li>Generate the authorization code and exchange it for a refresh token</li>
+                <li>Share the Client ID, Client Secret, and Refresh Token</li>
+            </ol>
+        </div>
+    </div>
+</div>
+
+<div class="check-item">
+    <div class="check-box"></div>
+    <div class="check-content">
+        <div class="check-title">Brevo</div>
+        <div class="check-desc">We need: SMTP credentials + API key</div>
+        <div class="check-steps">
+            <ol>
+                <li>Go to <a href="https://app.brevo.com/">app.brevo.com</a></li>
+                <li>Navigate to Settings &rarr; SMTP &amp; API</li>
+                <li>Click Generate a new API key</li>
+                <li>Share the API key and SMTP credentials (server, port, login, password)</li>
+            </ol>
+        </div>
+    </div>
+</div>
+
+<div class="check-item">
+    <div class="check-box"></div>
+    <div class="check-content">
+        <div class="check-title">Cal.com</div>
+        <div class="check-desc">We need: API key + event type ID</div>
+        <div class="check-steps">
+            <ol>
+                <li>Go to <a href="https://app.cal.com/settings/developer/api-keys">app.cal.com/settings/developer/api-keys</a></li>
+                <li>Click Create new key</li>
+                <li>Also share the URL of the event type for patient bookings</li>
+            </ol>
+        </div>
+    </div>
+</div>
+
+<div class="check-item">
+    <div class="check-box"></div>
+    <div class="check-content">
+        <div class="check-title">Typeform or Tally</div>
+        <div class="check-desc">We need: Form webhook URL or API key</div>
+        <div class="check-steps">
+            <ol>
+                <li>Create your intake form (we can help design the questions)</li>
+                <li>Go to Connect &rarr; Webhooks</li>
+                <li>Share the webhook URL or an API key</li>
+            </ol>
+        </div>
+    </div>
+</div>
+
+<div class="check-item">
+    <div class="check-box"></div>
+    <div class="check-content">
+        <div class="check-title">Intercom</div>
+        <div class="check-desc">We need: App ID + API token. Important: requires EU workspace setup.</div>
+        <div class="check-steps">
+            <ol>
+                <li>Go to <a href="https://app.intercom.com/">app.intercom.com</a></li>
+                <li>Navigate to Settings &rarr; Developers</li>
+                <li>Create a new app or use existing credentials</li>
+                <li>Share the App ID and API token</li>
+            </ol>
+        </div>
+    </div>
+</div>
+
+<div class="check-item">
+    <div class="check-box"></div>
+    <div class="check-content">
+        <div class="check-title">Mollie</div>
+        <div class="check-desc">We need: API key (test + live)</div>
+        <div class="check-steps">
+            <ol>
+                <li>Go to <a href="https://my.mollie.com/">my.mollie.com</a></li>
+                <li>Navigate to Developers &rarr; API keys</li>
+                <li>Copy both the Test API key and the Live API key</li>
+            </ol>
+        </div>
+    </div>
+</div>
+
+<div class="check-item">
+    <div class="check-box"></div>
+    <div class="check-content">
+        <div class="check-title">MessageBird</div>
+        <div class="check-desc">We need: API key + originator number</div>
+        <div class="check-steps">
+            <ol>
+                <li>Go to <a href="https://dashboard.messagebird.com/">dashboard.messagebird.com</a></li>
+                <li>Navigate to Developers &rarr; API access &rarr; Create new key</li>
+                <li>Also share the originator phone number for SMS</li>
+            </ol>
+        </div>
+    </div>
+</div>
+
+<!-- Section 2: Account Setup -->
+<div class="page-break"></div>
+<h2>2. Account Setup</h2>
+<p>For each tool, mark whether you already have an account or need to create one.</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Tool</th>
+            <th>Have it</th>
+            <th>Need to create</th>
+            <th>Not sure</th>
+            <th>Notes</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>Zoho CRM</strong></td>
+            <td><div class="check-box" style="width:14px;height:14px;border-width:1.5px;display:inline-block"></div></td>
+            <td><div class="check-box" style="width:14px;height:14px;border-width:1.5px;display:inline-block"></div></td>
+            <td><div class="check-box" style="width:14px;height:14px;border-width:1.5px;display:inline-block"></div></td>
+            <td>EU data centre required</td>
+        </tr>
+        <tr>
+            <td><strong>Brevo</strong></td>
+            <td><div class="check-box" style="width:14px;height:14px;border-width:1.5px;display:inline-block"></div></td>
+            <td><div class="check-box" style="width:14px;height:14px;border-width:1.5px;display:inline-block"></div></td>
+            <td><div class="check-box" style="width:14px;height:14px;border-width:1.5px;display:inline-block"></div></td>
+            <td>Free tier available</td>
+        </tr>
+        <tr>
+            <td><strong>Cal.com</strong></td>
+            <td><div class="check-box" style="width:14px;height:14px;border-width:1.5px;display:inline-block"></div></td>
+            <td><div class="check-box" style="width:14px;height:14px;border-width:1.5px;display:inline-block"></div></td>
+            <td><div class="check-box" style="width:14px;height:14px;border-width:1.5px;display:inline-block"></div></td>
+            <td>EU hosting option</td>
+        </tr>
+        <tr>
+            <td><strong>Typeform / Tally</strong></td>
+            <td><div class="check-box" style="width:14px;height:14px;border-width:1.5px;display:inline-block"></div></td>
+            <td><div class="check-box" style="width:14px;height:14px;border-width:1.5px;display:inline-block"></div></td>
+            <td><div class="check-box" style="width:14px;height:14px;border-width:1.5px;display:inline-block"></div></td>
+            <td>Tally is free</td>
+        </tr>
+        <tr>
+            <td><strong>Intercom</strong></td>
+            <td><div class="check-box" style="width:14px;height:14px;border-width:1.5px;display:inline-block"></div></td>
+            <td><div class="check-box" style="width:14px;height:14px;border-width:1.5px;display:inline-block"></div></td>
+            <td><div class="check-box" style="width:14px;height:14px;border-width:1.5px;display:inline-block"></div></td>
+            <td>Must select EU workspace</td>
+        </tr>
+        <tr>
+            <td><strong>Mollie</strong></td>
+            <td><div class="check-box" style="width:14px;height:14px;border-width:1.5px;display:inline-block"></div></td>
+            <td><div class="check-box" style="width:14px;height:14px;border-width:1.5px;display:inline-block"></div></td>
+            <td><div class="check-box" style="width:14px;height:14px;border-width:1.5px;display:inline-block"></div></td>
+            <td>KvK required for live</td>
+        </tr>
+        <tr>
+            <td><strong>MessageBird</strong></td>
+            <td><div class="check-box" style="width:14px;height:14px;border-width:1.5px;display:inline-block"></div></td>
+            <td><div class="check-box" style="width:14px;height:14px;border-width:1.5px;display:inline-block"></div></td>
+            <td><div class="check-box" style="width:14px;height:14px;border-width:1.5px;display:inline-block"></div></td>
+            <td>Originator number needed</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="callout callout-green">
+    <div class="callout-title">DNS / Domain verification</div>
+    <p>We will need to verify your sending domain in Brevo for email deliverability. This requires adding DNS records (SPF, DKIM, DMARC) to <strong>menovia.nl</strong>. We will provide the exact records during onboarding.</p>
+</div>
+
+<!-- Section 3: Content & Brand -->
+<div class="page-break"></div>
+<h2>3. Content &amp; Brand</h2>
+
+<h3>Email templates needed (Dutch)</h3>
+<p>All patient-facing content should be in Dutch. We can draft templates based on your existing communications.</p>
+<ul>
+    <li>Booking confirmation</li>
+    <li>Booking reminder (24h before)</li>
+    <li>Payment link / deposit request</li>
+    <li>Appointment reminders (24h, 6h, 1h before treatment)</li>
+    <li>Blood kit tracking updates</li>
+    <li>Treatment plan summary</li>
+    <li>Aftercare check-ins (1 week, 1 month, 3 months)</li>
+</ul>
+
+<h3>SMS content</h3>
+<p>Appointment reminders via MessageBird:</p>
+<ul>
+    <li>24 hours before appointment</li>
+    <li>6 hours before appointment</li>
+    <li>1 hour before appointment</li>
+</ul>
+
+<h3>Brand assets</h3>
+<div class="check-item">
+    <div class="check-box"></div>
+    <div class="check-content">
+        <div class="check-title">Logo (SVG or high-res PNG)</div>
+        <div class="check-desc">Transparent background preferred</div>
+    </div>
+</div>
+<div class="check-item">
+    <div class="check-box"></div>
+    <div class="check-content">
+        <div class="check-title">Brand colors</div>
+        <div class="check-desc">Primary: <span class="fill-line-short"></span> Secondary: <span class="fill-line-short"></span></div>
+    </div>
+</div>
+<div class="check-item">
+    <div class="check-box"></div>
+    <div class="check-content">
+        <div class="check-title">Tone of voice guidelines</div>
+        <div class="check-desc">Any examples of how you communicate with patients</div>
+    </div>
+</div>
+
+<h3>Screening form questions</h3>
+<p>List the patient intake / eligibility questions (not clinical assessments):</p>
+<span class="fill-line"></span>
+<span class="fill-line"></span>
+<span class="fill-line"></span>
+<span class="fill-line"></span>
+<span class="fill-line"></span>
+
+<!-- Section 4: Configuration -->
+<div class="page-break"></div>
+<h2>4. Configuration</h2>
+
+<h3>Package definitions</h3>
+<p>Confirm or adjust treatment packages and pricing:</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Package</th>
+            <th>Monthly Price</th>
+            <th>Features</th>
+            <th>Deposit Amount</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>Basic</strong></td>
+            <td><span class="fill-line-short"></span></td>
+            <td><span class="fill-line-short"></span></td>
+            <td><span class="fill-line-short"></span></td>
+        </tr>
+        <tr>
+            <td><strong>Plus</strong></td>
+            <td><span class="fill-line-short"></span></td>
+            <td><span class="fill-line-short"></span></td>
+            <td><span class="fill-line-short"></span></td>
+        </tr>
+        <tr>
+            <td><strong>Complete</strong></td>
+            <td><span class="fill-line-short"></span></td>
+            <td><span class="fill-line-short"></span></td>
+            <td><span class="fill-line-short"></span></td>
+        </tr>
+    </tbody>
+</table>
+
+<h3>CRM pipeline stages</h3>
+<p>Default stages (mark any changes):</p>
+<ol>
+    <li><strong>Intake</strong> -- new patient inquiry received</li>
+    <li><strong>Booked</strong> -- consultation appointment scheduled</li>
+    <li><strong>Testing</strong> -- blood work or diagnostic tests in progress</li>
+    <li><strong>Active Treatment</strong> -- patient is undergoing treatment</li>
+    <li><strong>Aftercare</strong> -- post-treatment follow-up and monitoring</li>
+</ol>
+<p>Changes / additions:</p>
+<span class="fill-line"></span>
+<span class="fill-line"></span>
+
+<h3>Notification rules</h3>
+<table>
+    <thead>
+        <tr>
+            <th>Event</th>
+            <th>Who to notify</th>
+            <th>Channel (Email / SMS / Both)</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>New patient inquiry</td>
+            <td><span class="fill-line-short"></span></td>
+            <td><span class="fill-line-short"></span></td>
+        </tr>
+        <tr>
+            <td>Appointment booked</td>
+            <td><span class="fill-line-short"></span></td>
+            <td><span class="fill-line-short"></span></td>
+        </tr>
+        <tr>
+            <td>Payment received</td>
+            <td><span class="fill-line-short"></span></td>
+            <td><span class="fill-line-short"></span></td>
+        </tr>
+        <tr>
+            <td>Screening form submitted</td>
+            <td><span class="fill-line-short"></span></td>
+            <td><span class="fill-line-short"></span></td>
+        </tr>
+        <tr>
+            <td>Patient no-show</td>
+            <td><span class="fill-line-short"></span></td>
+            <td><span class="fill-line-short"></span></td>
+        </tr>
+    </tbody>
+</table>
+
+<h3>Scheduling (Cal.com)</h3>
+<table>
+    <thead>
+        <tr>
+            <th>Setting</th>
+            <th>Your answer</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>Availability hours</td>
+            <td><span class="fill-line-short"></span></td>
+        </tr>
+        <tr>
+            <td>Buffer time between appointments</td>
+            <td><span class="fill-line-short"></span></td>
+        </tr>
+        <tr>
+            <td>Timezone</td>
+            <td>Europe/Amsterdam (CET/CEST)</td>
+        </tr>
+        <tr>
+            <td>Minimum notice to book</td>
+            <td><span class="fill-line-short"></span></td>
+        </tr>
+        <tr>
+            <td>Maximum advance booking</td>
+            <td><span class="fill-line-short"></span></td>
+        </tr>
+    </tbody>
+</table>
+
+<!-- Section 5: Communication -->
+<div class="page-break"></div>
+<h2>5. Communication</h2>
+
+<h3>Key contacts</h3>
+<div class="contact-row">
+    <div class="contact-box">
+        <div class="contact-label">Clinical Lead</div>
+        <p>Name: <span class="fill-line-short"></span></p>
+        <p>Email: <span class="fill-line-short"></span></p>
+        <p>Phone: <span class="fill-line-short"></span></p>
+    </div>
+    <div class="contact-box">
+        <div class="contact-label">Technical Lead</div>
+        <p>Name: <span class="fill-line-short"></span></p>
+        <p>Email: <span class="fill-line-short"></span></p>
+        <p>Phone: <span class="fill-line-short"></span></p>
+    </div>
+    <div class="contact-box">
+        <div class="contact-label">Admin / Operations</div>
+        <p>Name: <span class="fill-line-short"></span></p>
+        <p>Email: <span class="fill-line-short"></span></p>
+        <p>Phone: <span class="fill-line-short"></span></p>
+    </div>
+</div>
+
+<h3>Communication preferences</h3>
+<table>
+    <thead>
+        <tr>
+            <th>Setting</th>
+            <th>Options</th>
+            <th>Your choice</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>Communication channel</td>
+            <td>Email / Slack / WhatsApp / Other</td>
+            <td><span class="fill-line-short"></span></td>
+        </tr>
+        <tr>
+            <td>Weekly check-in day</td>
+            <td>Monday - Friday</td>
+            <td><span class="fill-line-short"></span></td>
+        </tr>
+        <tr>
+            <td>Weekly check-in time</td>
+            <td>Morning / Afternoon</td>
+            <td><span class="fill-line-short"></span></td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="callout">
+    <div class="callout-title">Project timeline</div>
+    <p><strong>Phase 1</strong> (Weeks 1-4): Core infrastructure, CRM setup, intake form, booking flow, payment integration. <strong>Phase 2</strong> (Weeks 5-7): Communication automations, aftercare sequences, reporting dashboard, go-live.</p>
+</div>
+
+<!-- Footer -->
+<div class="pdf-footer">
+    <p>UnpauseAI &middot; Custom Automation Solutions &middot; nicolas.neumann@unpauseai.com</p>
+</div>
+
+<script>
+// Auto-print when ?print parameter is present
+(function(){
+    if (window.location.search.indexOf('print') !== -1) {
+        window.addEventListener('load', function() {
+            setTimeout(function() { window.print(); }, 500);
+        });
+    }
+})();
+</script>
+</body>
+</html>

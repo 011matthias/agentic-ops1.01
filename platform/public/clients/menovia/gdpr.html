@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Menovia &ndash; GDPR Compliance | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+    h2 { page-break-before: always; }
+    h2:first-of-type { page-break-before: avoid; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+
+/* ─── Navigation ─── */
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+
+/* ─── Sidebar ─── */
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+
+/* ─── Main Content ─── */
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+
+/* ─── Hero ─── */
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--green-bg); color: var(--green); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 560px; margin: 0 auto 32px; line-height: 1.6; }
+.stats-row { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
+.stat-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 24px; text-align: center; min-width: 140px;
+    transition: transform .15s, box-shadow .15s;
+}
+.stat-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.stat-value { font-size: 24px; font-weight: 800; color: var(--green); }
+.stat-label { font-size: 12px; color: var(--text2); font-weight: 500; margin-top: 2px; }
+
+/* ─── Section styling ─── */
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+
+/* ─── Callout ─── */
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+
+/* ─── Infographic: 3-zone ─── */
+.zones { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin: 32px 0; }
+.zone {
+    border-radius: 12px; padding: 20px; border: 1px solid var(--border);
+    transition: transform .15s, box-shadow .15s;
+}
+.zone:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.zone-blue { background: var(--blue-bg); border-color: color-mix(in srgb, var(--blue) 20%, var(--border)); }
+.zone-purple { background: var(--purple-bg); border-color: color-mix(in srgb, var(--purple) 20%, var(--border)); }
+.zone-green { background: var(--green-bg); border-color: color-mix(in srgb, var(--green) 20%, var(--border)); }
+.zone-icon { font-size: 28px; margin-bottom: 8px; }
+.zone-title { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
+.zone-blue .zone-title { color: var(--blue-dark); }
+.zone-purple .zone-title { color: var(--purple-dark); }
+.zone-green .zone-title { color: var(--green-dark); }
+.zone-sub { font-size: 11px; color: var(--text2); margin-bottom: 12px; }
+.zone-items { list-style: none; padding: 0; }
+.zone-items li {
+    font-size: 13px; padding: 5px 0; color: var(--text);
+    display: flex; align-items: center; gap: 8px;
+}
+.zone-items li::before { content: ''; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.zone-blue .zone-items li::before { background: var(--blue); }
+.zone-purple .zone-items li::before { background: var(--purple); }
+.zone-green .zone-items li::before { background: var(--green); }
+.zone-arrows {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin: -8px 0 16px; color: var(--text2); font-size: 13px;
+}
+.zone-arrows svg { flex-shrink: 0; }
+
+.gdpr-bar {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--green-bg); border: 1px solid color-mix(in srgb, var(--green) 20%, var(--border));
+    border-radius: 10px; padding: 14px 20px; margin-top: 16px;
+}
+.gdpr-bar-icon { font-size: 20px; flex-shrink: 0; }
+.gdpr-bar-text { font-size: 13px; color: var(--green-dark); }
+.gdpr-bar-text strong { color: var(--green-dark); }
+
+/* ─── Solution Cards ─── */
+.solution-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 24px 0; }
+.sol-card {
+    display: flex; gap: 12px; padding: 16px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--surface);
+    transition: transform .15s, box-shadow .15s;
+    text-decoration: none; color: inherit;
+}
+.sol-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); text-decoration: none; }
+.sol-num {
+    width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; background: var(--blue-light); color: var(--blue); flex-shrink: 0;
+}
+.sol-info { flex: 1; }
+.sol-title { font-size: 14px; font-weight: 600; color: var(--text-strong); margin-bottom: 2px; }
+.sol-desc { font-size: 12px; color: var(--text2); line-height: 1.5; }
+
+/* ─── Timeline Strip ─── */
+.timeline-strip { display: flex; gap: 16px; margin: 24px 0; }
+.tl-card {
+    flex: 1; padding: 20px; border-radius: 10px; border: 1px solid var(--border);
+    border-left: 4px solid var(--blue); background: var(--surface);
+    transition: transform .15s, box-shadow .15s;
+}
+.tl-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.tl-card.phase2 { border-left-color: var(--green); }
+.tl-badge {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    padding: 3px 10px; border-radius: 20px; margin-bottom: 8px;
+}
+.tl-card .tl-badge { background: var(--blue-light); color: var(--blue); }
+.tl-card.phase2 .tl-badge { background: var(--green-light); color: var(--green); }
+.tl-title { font-size: 15px; font-weight: 600; color: var(--text-strong); margin-bottom: 4px; }
+.tl-price { font-size: 12px; color: var(--text2); margin-bottom: 10px; }
+.tl-items { list-style: none; padding: 0; }
+.tl-items li { font-size: 12px; color: var(--text); padding: 2px 0; display: flex; align-items: center; gap: 6px; }
+.tl-items li::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--blue); flex-shrink: 0; }
+.tl-card.phase2 .tl-items li::before { background: var(--green); }
+
+/* ─── Investment ─── */
+.invest-total {
+    text-align: center; padding: 24px; border-radius: 12px;
+    background: var(--surface); border: 1px solid var(--border); margin: 24px 0;
+}
+.invest-amount { font-size: 36px; font-weight: 800; color: var(--blue); }
+.invest-label { font-size: 13px; color: var(--text2); margin-top: 4px; }
+.invest-note { font-size: 13px; color: var(--text2); text-align: center; margin-top: 12px; }
+
+/* ─── CTA ─── */
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+.cta-secondary {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: var(--text2); font-size: 13px; font-weight: 500; margin-left: 16px;
+    cursor: pointer; background: none; border: 1px solid var(--border); padding: 10px 20px;
+    border-radius: 8px; transition: background .15s;
+}
+.cta-secondary:hover { background: var(--surface2); }
+
+/* ─── Table ─── */
+table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+th { background: var(--th-bg); color: #fff; text-align: left; padding: 10px 14px; font-weight: 600; }
+td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:nth-child(even) td { background: var(--surface); }
+tr:hover td { background: var(--blue-bg); }
+
+/* ─── Status badges ─── */
+.badge-ready {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    padding: 2px 8px; border-radius: 12px;
+    background: var(--green-light); color: var(--green-dark);
+}
+.badge-setup {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    padding: 2px 8px; border-radius: 12px;
+    background: var(--blue-light); color: var(--blue-dark);
+}
+
+/* ─── Hosting locations grid ─── */
+.hosting-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 24px 0; }
+.hosting-card {
+    padding: 16px 20px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--surface); display: flex; flex-direction: column; gap: 4px;
+}
+.hosting-tool { font-size: 14px; font-weight: 700; color: var(--text-strong); }
+.hosting-loc { font-size: 12px; color: var(--green-dark); font-weight: 600; }
+.hosting-note { font-size: 12px; color: var(--text2); }
+
+/* ─── Role cards ─── */
+.role-row { display: flex; gap: 12px; margin: 20px 0; }
+.role-card {
+    flex: 1; padding: 18px 20px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--surface);
+}
+.role-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text2); margin-bottom: 4px; }
+.role-name { font-size: 15px; font-weight: 700; color: var(--text-strong); margin-bottom: 6px; }
+.role-desc { font-size: 13px; color: var(--text2); line-height: 1.5; }
+
+/* ─── Footer ─── */
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; }
+
+/* ─── Mobile ─── */
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .zones { grid-template-columns: 1fr; }
+    .solution-grid { grid-template-columns: 1fr; }
+    .timeline-strip { flex-direction: column; }
+    .hosting-grid { grid-template-columns: 1fr; }
+    .role-row { flex-direction: column; }
+    .hero h1 { font-size: 24px; }
+    .stats-row { gap: 8px; }
+    .stat-card { min-width: 100px; padding: 12px 16px; }
+    .stat-value { font-size: 20px; }
+}
+</style>
+<script>
+(function(){var t=localStorage.getItem('menovia-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/menovia/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Menovia</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/menovia/">Overview</a>
+        <a href="/clients/menovia/solution">Solution</a>
+        <a href="/clients/menovia/gdpr" class="active">GDPR</a>
+        <a href="/clients/menovia/timeline">Timeline</a>
+        <a href="/clients/menovia/investment">Investment</a>
+        <a href="/clients/menovia/workflow">Workflow</a>
+        <a href="/clients/menovia/onboarding">Onboarding</a>
+        <a href="/clients/menovia/faq">FAQ</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<style>
+@keyframes navpulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .4; }
+}
+</style>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">On this page</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#compliance" class="step-link active"><span class="step-num">1</span> Compliance Matrix</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#hosting" class="step-link"><span class="step-num">2</span> Data Hosting</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#consent" class="step-link"><span class="step-num">3</span> Consent Flows</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#processing" class="step-link"><span class="step-num">4</span> Data Processing</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#retention" class="step-link"><span class="step-num">5</span> Retention Policy</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#medical" class="step-link"><span class="step-num">6</span> Medical Data</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<!-- Hero -->
+<section class="hero" id="top">
+    <div class="hero-badge">&#128737;&#65039; GDPR Compliance</div>
+    <h1>GDPR Compliance</h1>
+    <p class="hero-sub">How we ensure your patient data stays safe, stays in Europe, and stays compliant with Dutch and EU privacy regulations.</p>
+    <div class="stats-row">
+        <div class="stat-card"><div class="stat-value">8</div><div class="stat-label">Tools Assessed</div></div>
+        <div class="stat-card"><div class="stat-value">100%</div><div class="stat-label">EU Hosting Available</div></div>
+        <div class="stat-card"><div class="stat-value">8</div><div class="stat-label">DPAs Available</div></div>
+        <div class="stat-card"><div class="stat-value">EEA</div><div class="stat-label">Data Residency</div></div>
+    </div>
+</section>
+
+<!-- Section 1: Compliance Matrix -->
+<h2 id="compliance">Compliance Matrix</h2>
+<p>Every tool in the proposed stack has been evaluated against GDPR requirements. The table below summarises EU data hosting capability, DPA availability, consent obligations, and current setup status.</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Tool</th>
+            <th>EU Data Hosting</th>
+            <th>DPA Available</th>
+            <th>Consent Required</th>
+            <th>Status</th>
+            <th>Notes</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>Zoho CRM</strong></td>
+            <td>Yes (EU data centre)</td>
+            <td>Yes</td>
+            <td>Yes (patient personal data)</td>
+            <td><span class="badge-ready">Ready</span></td>
+            <td>EU data centre, selected at account level</td>
+        </tr>
+        <tr>
+            <td><strong>n8n Cloud</strong></td>
+            <td>Yes (EU option)</td>
+            <td>Yes</td>
+            <td>N/A (data processor)</td>
+            <td><span class="badge-ready">Ready</span></td>
+            <td>EU region, selected at workspace setup</td>
+        </tr>
+        <tr>
+            <td><strong>Mollie</strong></td>
+            <td>Yes (Netherlands)</td>
+            <td>Yes</td>
+            <td>N/A (payment processor)</td>
+            <td><span class="badge-ready">Ready</span></td>
+            <td>Dutch company, NL-based</td>
+        </tr>
+        <tr>
+            <td><strong>Brevo</strong></td>
+            <td>Yes (EU servers)</td>
+            <td>Yes</td>
+            <td>Yes (marketing emails)</td>
+            <td><span class="badge-ready">Ready</span></td>
+            <td>French company, EU servers</td>
+        </tr>
+        <tr>
+            <td><strong>MessageBird</strong></td>
+            <td>Yes (Netherlands)</td>
+            <td>Yes</td>
+            <td>Yes (SMS comms)</td>
+            <td><span class="badge-ready">Ready</span></td>
+            <td>Amsterdam HQ</td>
+        </tr>
+        <tr>
+            <td><strong>Cal.com</strong></td>
+            <td>Yes (EU option)</td>
+            <td>Yes</td>
+            <td>Yes (booking data)</td>
+            <td><span class="badge-ready">Ready</span></td>
+            <td>EU hosting available</td>
+        </tr>
+        <tr>
+            <td><strong>Intercom</strong></td>
+            <td>Yes (EU workspace)</td>
+            <td>Yes</td>
+            <td>Yes (chat + support)</td>
+            <td><span class="badge-setup">Setup needed</span></td>
+            <td>Requires EU workspace config</td>
+        </tr>
+        <tr>
+            <td><strong>Typeform</strong></td>
+            <td>Yes (EU option)</td>
+            <td>Yes</td>
+            <td>Yes (form submissions)</td>
+            <td><span class="badge-ready">Ready</span></td>
+            <td>EU data residency option</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="callout green">
+    <div class="callout-title">One configuration task</div>
+    <p>Intercom requires an EU workspace to be selected during account setup. This is a one-time configuration step and is handled as part of the onboarding phase.</p>
+</div>
+
+<!-- Section 2: EU Data Hosting -->
+<h2 id="hosting">EU Data Hosting</h2>
+<p>All tools in the stack were selected specifically for their EU data hosting capability. No personal data leaves the European Economic Area under normal operating conditions. EU hosting is configured for each tool during project setup as part of Phase 1.</p>
+
+<div class="hosting-grid">
+    <div class="hosting-card">
+        <div class="hosting-tool">Zoho CRM</div>
+        <div class="hosting-loc">&#127757; EU Data Centre</div>
+        <div class="hosting-note">EU region selected at account level. DPA available on request.</div>
+    </div>
+    <div class="hosting-card">
+        <div class="hosting-tool">n8n Cloud</div>
+        <div class="hosting-loc">&#127757; EU Region</div>
+        <div class="hosting-note">EU region selected during workspace setup. DPA included.</div>
+    </div>
+    <div class="hosting-card">
+        <div class="hosting-tool">Mollie</div>
+        <div class="hosting-loc">&#127757; Netherlands</div>
+        <div class="hosting-note">Dutch company &mdash; NL-based by default</div>
+    </div>
+    <div class="hosting-card">
+        <div class="hosting-tool">MessageBird</div>
+        <div class="hosting-loc">&#127757; Amsterdam, Netherlands</div>
+        <div class="hosting-note">Dutch company &mdash; HQ and data in Amsterdam</div>
+    </div>
+    <div class="hosting-card">
+        <div class="hosting-tool">Brevo</div>
+        <div class="hosting-loc">&#127757; EU (France)</div>
+        <div class="hosting-note">French company. EU servers by default. DPA available.</div>
+    </div>
+    <div class="hosting-card">
+        <div class="hosting-tool">Cal.com</div>
+        <div class="hosting-loc">&#127757; EU region</div>
+        <div class="hosting-note">EU data residency option at workspace level</div>
+    </div>
+    <div class="hosting-card">
+        <div class="hosting-tool">Intercom</div>
+        <div class="hosting-loc">&#127757; EU workspace</div>
+        <div class="hosting-note">EU workspace configuration required at setup</div>
+    </div>
+    <div class="hosting-card">
+        <div class="hosting-tool">Typeform</div>
+        <div class="hosting-loc">&#127757; EU region</div>
+        <div class="hosting-note">EU data residency selected in account settings</div>
+    </div>
+</div>
+
+<p>Primary hosting locations across the stack are the <strong>Netherlands</strong>, <strong>Germany</strong>, and <strong>France</strong> &mdash; all within the EEA. Two tools (Mollie and MessageBird) are Dutch companies with data stored in the Netherlands by default, with no additional configuration required.</p>
+
+<!-- Section 3: Consent Flows -->
+<h2 id="consent">Consent Flows</h2>
+<p>Every data collection point in the patient journey records explicit consent before any personal data is stored or processed. Consent timestamps and source are logged in Zoho CRM for audit trail purposes.</p>
+
+<h3>Consent touchpoints</h3>
+<ul>
+    <li><strong>Screening form</strong> &mdash; checkbox consent with timestamp recorded before submission is accepted</li>
+    <li><strong>Booking form</strong> &mdash; separate consent field for appointment data processing, distinct from screening consent</li>
+    <li><strong>Email opt-in</strong> &mdash; double opt-in flow via Brevo; marketing emails only sent after confirmation link is clicked</li>
+    <li><strong>SMS opt-in</strong> &mdash; explicit consent captured at intake; recorded in CRM before any SMS is sent</li>
+    <li><strong>Intercom chat</strong> &mdash; consent banner displayed before the chat widget collects any personal data</li>
+</ul>
+
+<div class="callout">
+    <div class="callout-title">Audit trail</div>
+    <p>All consent records &mdash; including the source form, timestamp, and consent text version &mdash; are stored as structured fields in Zoho CRM. This gives you a queryable audit trail if consent is ever challenged.</p>
+</div>
+
+<h3>Consent withdrawal</h3>
+<p>Withdrawal of consent is handled per channel. Email unsubscribes are processed by Brevo and synced to the CRM. SMS opt-out keywords are handled by MessageBird. A patient record in the CRM reflects the current consent status across all channels at any time.</p>
+
+<!-- Section 4: Data Processing -->
+<h2 id="processing">Data Processing Agreements</h2>
+<p>A Data Processing Agreement (DPA) is required from every tool vendor before that tool is used to process personal data. The roles within the system are clearly defined.</p>
+
+<div class="role-row">
+    <div class="role-card">
+        <div class="role-label">Data Controller</div>
+        <div class="role-name">Menovia</div>
+        <div class="role-desc">Determines the purpose and means of processing patient personal data. Responsible for the lawful basis and consent management.</div>
+    </div>
+    <div class="role-card">
+        <div class="role-label">Data Processors</div>
+        <div class="role-name">Tool vendors</div>
+        <div class="role-desc">Zoho, Brevo, MessageBird, Cal.com, Intercom, Typeform, Mollie &mdash; each processes data on behalf of Menovia under a DPA.</div>
+    </div>
+    <div class="role-card">
+        <div class="role-label">Sub-processor</div>
+        <div class="role-name">n8n</div>
+        <div class="role-desc">Processes data in transit between systems as an automation layer. Acts as a sub-processor to Menovia with its own DPA and EU data residency.</div>
+    </div>
+</div>
+
+<h3>DPA checklist</h3>
+<ul>
+    <li>Zoho CRM &mdash; DPA available, covers EU data centre selection</li>
+    <li>n8n Cloud &mdash; DPA available, covers sub-processor obligations</li>
+    <li>Mollie &mdash; DPA available, PCI DSS compliant for payment data</li>
+    <li>Brevo &mdash; DPA available, covers email marketing processing</li>
+    <li>MessageBird &mdash; DPA available, covers SMS communication data</li>
+    <li>Cal.com &mdash; DPA available, covers scheduling and booking data</li>
+    <li>Intercom &mdash; DPA available, covers chat and support data</li>
+    <li>Typeform &mdash; DPA available, covers form submission data</li>
+</ul>
+
+<p>A complete DPA checklist document, with links to each vendor's current DPA and instructions for countersigning where required, is provided as part of the project handover package.</p>
+
+<!-- Section 5: Retention Policy -->
+<h2 id="retention">Retention Policy</h2>
+<p>Data retention is defined per data category, aligned with Dutch legal requirements and GDPR's storage limitation principle. Retaining data longer than necessary is treated as a compliance risk, not a convenience.</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Data Category</th>
+            <th>Retention Period</th>
+            <th>Managed By</th>
+            <th>Notes</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>Patient contact records</strong></td>
+            <td>Duration of care + legal minimum</td>
+            <td>Zoho CRM</td>
+            <td>Aligned with Dutch healthcare retention rules</td>
+        </tr>
+        <tr>
+            <td><strong>Marketing consent</strong></td>
+            <td>Until withdrawal</td>
+            <td>Brevo + Zoho CRM</td>
+            <td>Unsubscribe removes from all marketing lists</td>
+        </tr>
+        <tr>
+            <td><strong>Payment data</strong></td>
+            <td>Per PCI DSS requirements</td>
+            <td>Mollie</td>
+            <td>Card data never stored in CRM or automation layer</td>
+        </tr>
+        <tr>
+            <td><strong>Appointment records</strong></td>
+            <td>Duration of care relationship</td>
+            <td>Cal.com + Zoho CRM</td>
+            <td>Historical booking data retained for continuity of care</td>
+        </tr>
+        <tr>
+            <td><strong>Chat logs</strong></td>
+            <td>Configurable</td>
+            <td>Intercom</td>
+            <td>Retention period set in Intercom workspace settings</td>
+        </tr>
+        <tr>
+            <td><strong>Form submissions</strong></td>
+            <td>Until processed and synced</td>
+            <td>Typeform</td>
+            <td>Raw submissions deleted after CRM sync is confirmed</td>
+        </tr>
+        <tr>
+            <td><strong>SMS records</strong></td>
+            <td>90 days</td>
+            <td>MessageBird</td>
+            <td>Message logs retained for delivery confirmation only</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="callout">
+    <div class="callout-title">Automated deletion</div>
+    <p>Where technically supported, n8n workflows can be configured to trigger automated deletion of records at the end of their retention period. This reduces the manual compliance burden on your team.</p>
+</div>
+
+<!-- Section 6: Medical Data Separation -->
+<h2 id="medical">Medical Data Separation</h2>
+
+<div class="callout green">
+    <div class="callout-title">Critical separation principle</div>
+    <p><strong>Medical data never enters the automation system.</strong> Medical records stay exclusively in your NEN 7510-certified Electronic Health Record system. This separation is fundamental to the architecture, not an afterthought.</p>
+</div>
+
+<p>The automation system operates exclusively on <strong>operational data</strong>: contact information, appointment scheduling, payment status, and communication preferences. None of these data categories constitute medical data under Dutch or EU law.</p>
+
+<h3>What the automation system handles</h3>
+<ul>
+    <li>Patient name, email address, phone number</li>
+    <li>Appointment date, time, and status</li>
+    <li>Payment confirmation (reference number only &mdash; no card data)</li>
+    <li>Communication preferences and consent flags</li>
+    <li>Screening form responses (eligibility questions, not clinical assessments)</li>
+</ul>
+
+<h3>What stays exclusively in the EHR</h3>
+<ul>
+    <li>Clinical diagnoses and treatment records</li>
+    <li>Prescription history</li>
+    <li>Lab results and test outcomes</li>
+    <li>Physician consultation notes</li>
+    <li>Any data that constitutes a special category under GDPR Article 9</li>
+</ul>
+
+<div class="callout">
+    <div class="callout-title">NEN 7510 boundary</div>
+    <p>The handoff point between the automation system and the EHR is a notification only: "Patient X has booked an appointment." No clinical data crosses this boundary in either direction. The physician retrieves clinical context from the EHR directly, as they do today.</p>
+</div>
+
+<p>This architecture means the automation system never processes special category data under GDPR Article 9. The legal basis for processing operational data is straightforward contract performance and legitimate interest, with no requirement for explicit medical consent for the automation layer itself.</p>
+
+<!-- Footer / CTA -->
+<section class="cta-section">
+    <h2>Questions about compliance?</h2>
+    <p>We are happy to walk through any aspect of the GDPR approach in more detail.</p>
+    <a href="mailto:nicolas.neumann@unpauseai.com" class="cta-btn">Get in touch</a>
+    <button class="cta-secondary" onclick="window.print()">&#128196; Download PDF</button>
+</section>
+
+<footer class="footer" style="border-top: 1px solid var(--border); padding: 24px 0 40px;">
+    <p>Built and maintained by <a href="https://unpauseai.com" target="_blank" rel="noopener">UnpauseAI</a></p>
+    <p style="margin-top:4px;"><a href="https://unpauseai.com/privacy">Privacy Policy</a> &middot; <a href="https://unpauseai.com/terms">Terms of Service</a></p>
+    <p style="margin-top:4px; font-size: 12px;">Last updated: March 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+function toggleTheme() {
+    var el = document.documentElement;
+    var t = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    el.setAttribute('data-theme', t);
+    localStorage.setItem('menovia-theme', t);
+}
+
+// Active sidebar tracking
+var links = document.querySelectorAll('.step-link');
+var sections = [];
+links.forEach(function(a) {
+    var id = a.getAttribute('href').replace('#','');
+    var el = document.getElementById(id);
+    if (el) sections.push({ el: el, link: a });
+});
+
+function updateActive() {
+    var scrollY = window.scrollY + 120;
+    var active = sections[0];
+    for (var i = 0; i < sections.length; i++) {
+        if (sections[i].el.offsetTop <= scrollY) active = sections[i];
+    }
+    links.forEach(function(l) { l.classList.remove('active'); });
+    if (active) active.link.classList.add('active');
+}
+window.addEventListener('scroll', updateActive);
+updateActive();
+
+// Smooth scroll
+links.forEach(function(a) {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        var id = this.getAttribute('href').replace('#','');
+        var el = document.getElementById(id);
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+        document.querySelector('.sidebar').classList.remove('open');
+    });
+});
+</script>
+<!-- Access Gate -->
+<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
+  <div style="text-align:center;max-width:360px;padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg>
+      <span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span>
+    </div>
+    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Menovia Proposal</h2>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Enter your access code to continue.</p>
+    <div style="display:flex;gap:8px;">
+      <input id="auth-input" type="password" placeholder="Access code" autocomplete="off" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;" onkeydown="if(event.key==='Enter')checkAuth()" />
+      <button onclick="checkAuth()" style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">Enter</button>
+    </div>
+    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Incorrect code. Please try again.</p>
+  </div>
+</div>
+<script>
+var MENOVIA_CODE='menovia-pja';
+function checkAuth(){var v=document.getElementById('auth-input').value;if(v===MENOVIA_CODE){localStorage.setItem('menovia-access','granted');var g=document.getElementById('auth-gate');g.style.opacity='0';setTimeout(function(){g.style.display='none'},300)}else{document.getElementById('auth-error').style.display='block';document.getElementById('auth-input').value='';document.getElementById('auth-input').focus()}}
+(function(){if(localStorage.getItem('menovia-access')==='granted'){document.getElementById('auth-gate').style.display='none'}else{var i=document.getElementById('auth-input');if(i)i.focus()}})();
+</script>
+</body>
+</html>

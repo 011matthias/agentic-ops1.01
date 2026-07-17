@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solution | Fitness Coach n8n CRM | UnpauseAI</title>
+<script>
+(function(){var t=localStorage.getItem('fitness-coach-n8n-crm-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 580px; margin: 0 auto 32px; line-height: 1.6; }
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+.callout.purple { border-color: var(--purple); background: var(--purple-bg); }
+.callout.purple .callout-title, .callout.purple p { color: var(--purple-dark); }
+.zones { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 32px 0; }
+.zones-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin: 32px 0; }
+.zone {
+    border-radius: 12px; padding: 20px; border: 1px solid var(--border);
+    transition: transform .15s, box-shadow .15s;
+}
+.zone:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.zone-blue { background: var(--blue-bg); border-color: color-mix(in srgb, var(--blue) 20%, var(--border)); }
+.zone-green { background: var(--green-bg); border-color: color-mix(in srgb, var(--green) 20%, var(--border)); }
+.zone-purple { background: var(--purple-bg); border-color: color-mix(in srgb, var(--purple) 20%, var(--border)); }
+.zone-orange { background: var(--orange-bg); border-color: color-mix(in srgb, var(--orange) 20%, var(--border)); }
+.zone-title { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
+.zone-blue .zone-title { color: var(--blue-dark); }
+.zone-green .zone-title { color: var(--green-dark); }
+.zone-purple .zone-title { color: var(--purple-dark); }
+.zone-orange .zone-title { color: var(--orange-dark); }
+.zone-sub { font-size: 11px; color: var(--text2); margin-bottom: 12px; font-style: italic; }
+.zone-items { list-style: none; padding: 0; margin: 0; }
+.zone-items li {
+    font-size: 13px; padding: 5px 0; color: var(--text);
+    display: flex; align-items: flex-start; gap: 8px; border-bottom: 1px solid var(--border);
+}
+.zone-items li:last-child { border-bottom: none; }
+.zone-items li::before { content: ''; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-top: 6px; }
+.zone-blue .zone-items li::before { background: var(--blue); }
+.zone-green .zone-items li::before { background: var(--green); }
+.zone-purple .zone-items li::before { background: var(--purple); }
+.zone-orange .zone-items li::before { background: var(--orange); }
+.phase-header {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
+}
+.phase-badge {
+    display: inline-flex; align-items: center;
+    padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700;
+    letter-spacing: .03em; text-transform: uppercase; flex-shrink: 0;
+}
+.phase-badge-free { background: var(--green-bg); color: var(--green-dark); border: 1px solid color-mix(in srgb, var(--green) 30%, var(--border)); }
+.phase-badge-paid { background: var(--blue-bg); color: var(--blue-dark); border: 1px solid color-mix(in srgb, var(--blue) 30%, var(--border)); }
+.stage-pipeline {
+    display: flex; gap: 0; margin: 24px 0; flex-wrap: wrap;
+}
+.stage-item {
+    flex: 1; min-width: 100px; padding: 10px 14px; background: var(--surface);
+    border: 1px solid var(--border); font-size: 12px; font-weight: 600;
+    color: var(--text2); text-align: center; position: relative;
+}
+.stage-item:first-child { border-radius: 8px 0 0 8px; }
+.stage-item:last-child { border-radius: 0 8px 8px 0; }
+.stage-item.active { background: var(--blue-light); color: var(--blue-dark); border-color: var(--blue); }
+.stage-item + .stage-item { border-left: none; }
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); margin-top: 24px; }
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .zones { grid-template-columns: 1fr; }
+    .zones-3 { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 24px; }
+    .stage-pipeline { flex-direction: column; }
+    .stage-item:first-child { border-radius: 8px 8px 0 0; }
+    .stage-item:last-child { border-radius: 0 0 8px 8px; }
+    .stage-item + .stage-item { border-left: 1px solid var(--border); border-top: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared for you. Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+        </button>
+        <a href="/clients/fitness-coach-n8n-crm/" class="nav-logo">
+            <span class="logo-bold">Unpause</span><span class="logo-accent">AI</span>
+        </a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Fitness Coach</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/fitness-coach-n8n-crm/">Overview</a>
+        <a href="/clients/fitness-coach-n8n-crm/solution" class="active">Solution</a>
+        <a href="/clients/fitness-coach-n8n-crm/workflow">Workflow</a>
+        <a href="/clients/fitness-coach-n8n-crm/timeline">Timeline</a>
+        <a href="/clients/fitness-coach-n8n-crm/investment">Investment</a>
+        <a href="/clients/fitness-coach-n8n-crm/faq">FAQ</a>
+        <a href="/clients/fitness-coach-n8n-crm/onboarding">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<aside class="sidebar">
+    <div class="sidebar-label">On this page</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#phase-0" class="step-link active"><span class="step-num">1</span> Phase 0</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#phase-1" class="step-link"><span class="step-num">2</span> Phase 1</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#phase-2" class="step-link"><span class="step-num">3</span> Phase 2</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#phase-3" class="step-link"><span class="step-num">4</span> Phase 3</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#integrations" class="step-link"><span class="step-num">5</span> Integrations</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#expansion" class="step-link"><span class="step-num">6</span> Expansion</a>
+        </li>
+    </ul>
+</aside>
+
+<div class="main-content">
+<div class="content-inner">
+
+<section class="hero" id="hero">
+    <div class="hero-badge">Technical Solution</div>
+    <h1>How Your System Works</h1>
+    <p class="hero-sub">Four phases, each one independently useful. Start free, expand when ready.</p>
+</section>
+
+<h2 id="phase-0">Phase 0: Lead Capture + CRM Pipeline (FREE)</h2>
+
+<div class="phase-header">
+    <span class="phase-badge phase-badge-free">Free delivery</span>
+    <span style="font-size:13px;color:var(--text2)">You'll have this running before you spend anything.</span>
+</div>
+
+<p>When someone interacts with your Instagram or fills out a Meta ad form, a webhook fires to n8n. That's the starting point for everything else.</p>
+
+<p>n8n captures the lead data, checks for duplicates against existing entries, and logs it into a Google Sheets CRM. Each record gets a timestamp, the lead source (Instagram or Meta Ads), and the contact's info written in automatically. You don't need to touch it.</p>
+
+<p>The CRM pipeline tracks every lead through five stages:</p>
+
+<div class="stage-pipeline">
+    <div class="stage-item active">New Lead</div>
+    <div class="stage-item">Contacted</div>
+    <div class="stage-item">Replied</div>
+    <div class="stage-item">Call Booked</div>
+    <div class="stage-item">Closed</div>
+</div>
+
+<p>You'll have a single view of every person who's shown interest in your fitness coaching business and exactly where they stand in the process. No spreadsheet maintenance. No manual data entry. Leads just appear.</p>
+
+<div class="callout green">
+    <div class="callout-title">Delivered free</div>
+    <p>This phase ships at no cost. You'll see leads flowing in from Instagram and Meta Ads before spending anything on the rest of the system.</p>
+</div>
+
+<h2 id="phase-1">Phase 1: Outreach + Supervisor Layer</h2>
+
+<div class="phase-header">
+    <span class="phase-badge phase-badge-paid">Paid phase</span>
+    <span style="font-size:13px;color:var(--text2)">Nothing goes out without your approval.</span>
+</div>
+
+<p>When a new lead arrives, n8n drafts a personalized first message. It uses the person's profile and how they found you to shape the tone and content. Someone who clicked a fat-loss ad gets a different opener than someone who found you through an organic Instagram post.</p>
+
+<p>Before anything is sent, you get a WhatsApp notification with the drafted message. You can approve it, edit it, or reject it. That's the supervisor layer you described in your brief. It starts with full approval on every message.</p>
+
+<p>Over time, once you trust the output quality, you can reduce the approval burden. We can configure n8n to only flag messages where the AI's confidence score is below a threshold, or only require approval for cold outreach while follow-ups go out automatically. You decide when you're ready for that. The system won't change behavior until you do.</p>
+
+<div class="callout">
+    <div class="callout-title">The supervisor layer is the foundation</div>
+    <p>Every other automation in this system respects it. Nothing goes to a lead unless you've seen it first. That's not a temporary constraint we'll remove later; it's a design principle.</p>
+</div>
+
+<h2 id="phase-2">Phase 2: Follow-up + Daily Reporting</h2>
+
+<p>The system tracks every conversation and flags leads that need follow-up based on time gaps. If someone replied three days ago and hasn't heard back since, you get a WhatsApp reminder. Not a list to check, a specific notification with the person's name and what they said.</p>
+
+<p>No leads fall through the cracks because n8n is watching the timeline, not you.</p>
+
+<h3>Daily summary</h3>
+<p>Every morning, you get a report delivered via WhatsApp (or email if you prefer). It covers:</p>
+<ul>
+    <li>New leads captured the previous day and which source they came from</li>
+    <li>Messages sent and whether they were approved, edited, or rejected</li>
+    <li>Replies received and what stage each conversation is at</li>
+    <li>Calls booked and synced to Google Calendar</li>
+    <li>Follow-ups flagged as overdue</li>
+</ul>
+<p>It's a one-minute read. You start each day knowing exactly what's in motion in your fitness coaching business without opening a spreadsheet or digging through DMs.</p>
+
+<h2 id="phase-3">Phase 3: Meta Ads Tracking</h2>
+
+<p>n8n pulls data from the Meta Ads API on a scheduled basis: spend, leads generated, cost per lead, and performance broken down by ad set. This gets written into a Google Sheets dashboard you can check any time.</p>
+
+<p>Weekly, the system flags what's performing well and what isn't. You'll see simple observations: this ad set generated 12 leads at $4.20 each, that one generated 3 leads at $18.50 each. The suggestion will be direct: increase budget on the winner, pause or review the weak performer.</p>
+
+<p>Over time, this data feeds back into the outreach quality. When n8n knows which ad sets tend to bring in leads who convert, it can factor that into how it drafts the initial message. The tracking and the outreach aren't separate pipelines; they inform each other.</p>
+
+<div class="callout orange">
+    <div class="callout-title">This is where the system pays for itself</div>
+    <p>One paused underperforming ad set will likely cover the cost of the entire retainer. Most accounts have at least one ad set that's been running on autopilot without anyone checking its cost per lead. This phase makes that visible.</p>
+</div>
+
+<h2 id="integrations">Integration Map</h2>
+
+<p>Six tools make up the full stack. Here's what each one does inside the system.</p>
+
+<div class="zones">
+    <div class="zone zone-purple">
+        <div class="zone-title">Instagram</div>
+        <div class="zone-sub">Lead source</div>
+        <ul class="zone-items">
+            <li>Organic DM interactions trigger lead capture</li>
+            <li>Source tagged on every CRM record</li>
+            <li>Profile data used to personalize outreach message</li>
+        </ul>
+    </div>
+    <div class="zone zone-orange">
+        <div class="zone-title">Meta Ads</div>
+        <div class="zone-sub">Lead source + performance data</div>
+        <ul class="zone-items">
+            <li>Lead form submissions fire webhook to n8n</li>
+            <li>Ad set and campaign data pulled via Meta Ads API</li>
+            <li>Weekly cost-per-lead reporting per ad set</li>
+        </ul>
+    </div>
+    <div class="zone zone-green">
+        <div class="zone-title">Google Sheets</div>
+        <div class="zone-sub">CRM + ads dashboard</div>
+        <ul class="zone-items">
+            <li>CRM with 5-stage pipeline, source, and timestamps</li>
+            <li>Duplicate detection before each new entry</li>
+            <li>Ads performance dashboard updated on schedule</li>
+        </ul>
+    </div>
+    <div class="zone zone-blue">
+        <div class="zone-title">WhatsApp</div>
+        <div class="zone-sub">Approvals + notifications + reports</div>
+        <ul class="zone-items">
+            <li>Approval requests for each drafted outreach message</li>
+            <li>Follow-up reminders when leads go quiet</li>
+            <li>Daily morning summary report</li>
+        </ul>
+    </div>
+    <div class="zone zone-green">
+        <div class="zone-title">Google Calendar</div>
+        <div class="zone-sub">Call booking sync</div>
+        <ul class="zone-items">
+            <li>Call bookings logged automatically when stage moves to "Call Booked"</li>
+            <li>Availability used to suggest times during outreach</li>
+            <li>Cancellations and reschedules trigger CRM update</li>
+        </ul>
+    </div>
+    <div class="zone zone-purple">
+        <div class="zone-title">Email</div>
+        <div class="zone-sub">Outreach + follow-ups</div>
+        <ul class="zone-items">
+            <li>Alternative outreach channel when WhatsApp isn't appropriate</li>
+            <li>Follow-up sequences when leads go cold</li>
+            <li>Daily report delivery if you prefer email over WhatsApp</li>
+        </ul>
+    </div>
+</div>
+
+<h2 id="expansion">Second Business Expansion</h2>
+
+<p>Your system is built for your fitness coaching business first. That's where the CRM lives, that's where the outreach logic is tuned, and that's where the ad tracking is pointed.</p>
+
+<p>When you're ready to expand into your second business, the same n8n instance handles both. You don't need a new setup. We'll add a separate pipeline in Google Sheets, separate notification routing in WhatsApp, and separate tracking logic for that business's lead sources. The infrastructure doesn't change; we're just adding lanes.</p>
+
+<p>The retainer covers this. When you're ready, we add it.</p>
+
+<div class="callout green">
+    <div class="callout-title">One infrastructure, two businesses</div>
+    <p>This is one of the clearer advantages of building on n8n rather than point-to-point tools. Adding a second business isn't a new project; it's a configuration change on top of something that's already working.</p>
+</div>
+
+<section class="cta-section">
+    <h2>Want to see the workflow?</h2>
+    <p>The step-by-step flow for each phase, from webhook trigger through to WhatsApp notification.</p>
+    <a href="/clients/fitness-coach-n8n-crm/workflow" class="cta-btn">View Workflow &rarr;</a>
+</section>
+
+<div class="footer">
+    <p>Prepared by UnpauseAI &middot; <a href="mailto:nicolas.neumann@unpauseai.com">nicolas.neumann@unpauseai.com</a> &middot; 2026</p>
+</div>
+
+</div>
+</div>
+
+<script>
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('fitness-coach-n8n-crm-theme',t);
+}
+
+var links = document.querySelectorAll('.step-link');
+var sections = [];
+links.forEach(function(a) {
+    var id = a.getAttribute('href').replace('#','');
+    var el = document.getElementById(id);
+    if (el) sections.push({ el: el, link: a });
+});
+
+function updateActive() {
+    var scrollY = window.scrollY + 120;
+    var active = sections[0];
+    for (var i = 0; i < sections.length; i++) {
+        if (sections[i].el.offsetTop <= scrollY) active = sections[i];
+    }
+    links.forEach(function(l) { l.classList.remove('active'); });
+    if (active) active.link.classList.add('active');
+}
+window.addEventListener('scroll', updateActive);
+updateActive();
+
+links.forEach(function(a) {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        var id = this.getAttribute('href').replace('#','');
+        var el = document.getElementById(id);
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+        document.querySelector('.sidebar').classList.remove('open');
+    });
+});
+
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='fitness-2026'){
+        localStorage.setItem('fitness-coach-n8n-crm-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.';
+    }
+}
+(function(){if(localStorage.getItem('fitness-coach-n8n-crm-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+</script>
+</body>
+</html>

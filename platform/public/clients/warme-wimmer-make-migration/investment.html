@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Investment | Make.com Migration Proposal | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+
+/* Access Gate */
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+
+/* Navigation */
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+
+/* Sidebar */
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+
+/* Main Content */
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+
+/* Hero */
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 560px; margin: 0 auto 32px; line-height: 1.6; }
+.stats-row { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
+.stat-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 24px; text-align: center; min-width: 140px;
+    transition: transform .15s, box-shadow .15s;
+}
+.stat-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.stat-value { font-size: 24px; font-weight: 800; color: var(--blue); }
+.stat-label { font-size: 12px; color: var(--text2); font-weight: 500; margin-top: 2px; }
+
+/* Sections */
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+
+/* Callout */
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+
+/* Table */
+table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+th { background: var(--th-bg); color: #fff; text-align: left; padding: 10px 14px; font-weight: 600; }
+td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:nth-child(even) td { background: var(--surface); }
+tr:hover td { background: var(--blue-bg); }
+.table-footnote { font-size: 12px; color: var(--text2); margin-top: 8px; font-style: italic; }
+
+/* Rate display */
+.rate-display {
+    text-align: center; padding: 32px 24px; border-radius: 12px;
+    background: var(--surface); border: 1px solid var(--border); margin: 24px 0;
+}
+.rate-display .rate-value { font-size: 48px; font-weight: 800; color: var(--blue); line-height: 1; }
+.rate-display .rate-label { font-size: 14px; color: var(--text2); margin-top: 8px; }
+.rate-display .rate-note { font-size: 13px; color: var(--text2); margin-top: 16px; max-width: 400px; margin-left: auto; margin-right: auto; }
+
+/* Includes grid */
+.includes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 24px 0; }
+.include-card {
+    padding: 16px 20px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--surface); display: flex; gap: 12px; align-items: flex-start;
+}
+.include-icon { font-size: 20px; flex-shrink: 0; margin-top: 2px; }
+.include-title { font-size: 14px; font-weight: 600; color: var(--text-strong); margin-bottom: 4px; }
+.include-desc { font-size: 12px; color: var(--text2); line-height: 1.5; }
+
+/* Estimate row */
+.estimate-row {
+    display: flex; gap: 12px; margin: 24px 0; flex-wrap: wrap;
+}
+.estimate-card {
+    flex: 1; min-width: 160px; padding: 20px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--surface); text-align: center;
+}
+.estimate-card .e-val { font-size: 22px; font-weight: 800; color: var(--blue); }
+.estimate-card .e-label { font-size: 12px; color: var(--text2); margin-top: 4px; }
+.estimate-card .e-sub { font-size: 11px; color: var(--text2); margin-top: 6px; font-style: italic; }
+
+/* Highlight row in table */
+.highlight-row td { background: var(--blue-bg) !important; font-weight: 600; color: var(--text-strong); }
+
+/* CTA */
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+
+/* Footer */
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); }
+
+/* Tablet */
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+
+/* Mobile */
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .includes-grid { grid-template-columns: 1fr; }
+    .estimate-row { flex-direction: column; }
+    .hero h1 { font-size: 24px; }
+    .stats-row { gap: 8px; }
+    .stat-card { min-width: 100px; padding: 12px 16px; }
+    .stat-value { font-size: 20px; }
+}
+</style>
+<script>
+(function(){var t=localStorage.getItem('warme-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<!-- Access Gate -->
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared specifically for your team. Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/warme-wimmer-make-migration/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Make.com Migration</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/warme-wimmer-make-migration/">Overview</a>
+        <a href="/clients/warme-wimmer-make-migration/solution">Solution</a>
+        <a href="/clients/warme-wimmer-make-migration/timeline">Timeline</a>
+        <a href="/clients/warme-wimmer-make-migration/investment" class="active">Investment</a>
+        <a href="/clients/warme-wimmer-make-migration/faq">FAQ</a>
+        <a href="/clients/warme-wimmer-make-migration/onboarding">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">Investment</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#rate" class="step-link active"><span class="step-num">1</span> The Rate</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#why-above" class="step-link"><span class="step-num">2</span> Why Above Range</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#estimate" class="step-link"><span class="step-num">3</span> Monthly Estimate</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#whats-included" class="step-link"><span class="step-num">4</span> What's Included</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#comparison" class="step-link"><span class="step-num">5</span> Comparison</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#post-migration" class="step-link"><span class="step-num">6</span> After Migration</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<!-- Hero -->
+<section class="hero" id="rate">
+    <div class="hero-badge">Investment</div>
+    <h1>Pricing and Rate Breakdown</h1>
+    <p class="hero-sub">Your posting lists $15-25/hr. My rate is $30/hr. Here's the honest case for why that gap is worth it for this project.</p>
+    <div class="stats-row">
+        <div class="stat-card"><div class="stat-value">$30</div><div class="stat-label">Hourly Rate</div></div>
+        <div class="stat-card"><div class="stat-value">~20</div><div class="stat-label">Hrs/Week (Migration)</div></div>
+        <div class="stat-card"><div class="stat-value">0</div><div class="stat-label">Weeks Ramp-Up</div></div>
+        <div class="stat-card"><div class="stat-value">DE</div><div class="stat-label">Germany-Based</div></div>
+    </div>
+</section>
+
+<!-- Why Above Range -->
+<h2 id="why-above">Why $30/hr on a $15-25/hr listing</h2>
+
+<p>Your listing is clear about the budget range. I want to be equally clear about the rate, rather than dancing around it.</p>
+
+<div class="callout orange">
+    <div class="callout-title">Three reasons for the gap</div>
+    <p>First: Germany-based. I'm in the same timezone as your office in Grobenzell, which means real-time coordination during business hours, no async delays on urgent fixes. Second: direct experience with Hero Software and LexOffice. Most Make.com specialists have never touched these systems; I have. That's weeks of ramp-up time I'm not billing for. Third: migration carries more risk than a fresh build. Preserving your existing logic, coordinating webhook cutovers, and avoiding data loss requires care that greenfield work doesn't.</p>
+</div>
+
+<p>The rate isn't a negotiating position. It reflects what this project actually requires. That said, the hours aren't fixed. Once the migration is complete and the scenarios are stable, we can dial back to whatever your actual maintenance needs are, which is often far less than 20 hours per week.</p>
+
+<div class="callout green">
+    <div class="callout-title">How the hours adjust over time</div>
+    <p>Migration phase: higher intensity, roughly 20 hrs/week for 4-5 weeks. Stabilization phase: monitoring and fixes, around 5-10 hrs/week. Ongoing maintenance: change requests and optimizations, billed at actual hours with no retainer requirement unless you prefer one.</p>
+</div>
+
+<!-- Monthly Estimate -->
+<h2 id="estimate">Monthly estimate</h2>
+
+<p>The numbers below are estimates based on a typical migration of this scope. Actual hours depend on how many scenarios exist in your current account and their complexity.</p>
+
+<div class="estimate-row">
+    <div class="estimate-card">
+        <div class="e-val">~80 hrs</div>
+        <div class="e-label">Migration Phase</div>
+        <div class="e-sub">~20 hrs/week over 4 weeks</div>
+    </div>
+    <div class="estimate-card">
+        <div class="e-val">~$2,400</div>
+        <div class="e-label">Per Month (Migration)</div>
+        <div class="e-sub">At $30/hr, 80 hrs/month</div>
+    </div>
+    <div class="estimate-card">
+        <div class="e-val">Flexible</div>
+        <div class="e-label">Post-Migration</div>
+        <div class="e-sub">Billed at actual hours</div>
+    </div>
+</div>
+
+<p>The audit in week 1 will give us a much more precise picture of the scenario inventory. If your account has fewer scenarios than a typical migration, the hours will be lower. If there are complex data store dependencies or custom webhook configurations, they'll be higher. I'll flag that early, not at the invoice stage.</p>
+
+<!-- What's Included -->
+<h2 id="whats-included">What's included</h2>
+
+<p>Every hour billed covers one or more of these activities. Nothing in the list below is treated as an add-on.</p>
+
+<div class="includes-grid">
+    <div class="include-card">
+        <div class="include-icon">&#128196;</div>
+        <div>
+            <div class="include-title">Full Audit Documentation</div>
+            <div class="include-desc">Every scenario documented: trigger type, systems connected, data stores used, known edge cases, and migration risk level. Delivered as a structured report before migration begins.</div>
+        </div>
+    </div>
+    <div class="include-card">
+        <div class="include-icon">&#128260;</div>
+        <div>
+            <div class="include-title">Migration Execution</div>
+            <div class="include-desc">Re-creation of each scenario in the new account, re-authentication of all API connections, and coordination with your sysadmin for webhook URL cutovers.</div>
+        </div>
+    </div>
+    <div class="include-card">
+        <div class="include-icon">&#9989;</div>
+        <div>
+            <div class="include-title">Parallel Validation</div>
+            <div class="include-desc">Where possible, old and new scenarios run side by side before the old account is decommissioned. Data mismatches get caught before they become problems.</div>
+        </div>
+    </div>
+    <div class="include-card">
+        <div class="include-icon">&#128202;</div>
+        <div>
+            <div class="include-title">Error Monitoring Setup</div>
+            <div class="include-desc">Alerting configured on critical scenarios so silent failures get caught. You won't find out about a broken automation from a customer complaint.</div>
+        </div>
+    </div>
+    <div class="include-card">
+        <div class="include-icon">&#128295;</div>
+        <div>
+            <div class="include-title">Ongoing Maintenance</div>
+            <div class="include-desc">Change requests, API updates, new scenario builds. Long-term ownership, not a one-off handoff. You get a single point of contact who knows your stack.</div>
+        </div>
+    </div>
+    <div class="include-card">
+        <div class="include-icon">&#128172;</div>
+        <div>
+            <div class="include-title">German-Language Coordination</div>
+            <div class="include-desc">Can work directly with your office team in German if that's easier for day-to-day communication. No need to translate technical details through a relay.</div>
+        </div>
+    </div>
+</div>
+
+<!-- Comparison -->
+<h2 id="comparison">How this compares to other options</h2>
+
+<p>Three realistic ways you could approach this migration, with honest trade-offs for each.</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Approach</th>
+            <th>Typical Rate</th>
+            <th>Ramp-Up Time</th>
+            <th>Risk Level</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>Generalist Make.com freelancer</strong><br><span style="font-size:12px;color:var(--text2)">No Hero Software or LexOffice background</span></td>
+            <td>$15-25/hr<br><a href="https://www.upwork.com/hire/make-com-freelancers/" target="_blank" rel="noopener" style="font-size:11px">Upwork market rate</a></td>
+            <td>2-4 weeks learning Hero and LexOffice APIs, GoBD requirements, and your existing scenario logic</td>
+            <td>Higher. Unfamiliar systems mean more debugging time and a greater chance of missing a dependency during cutover.</td>
+        </tr>
+        <tr>
+            <td><strong>Automation agency</strong><br><span style="font-size:12px;color:var(--text2)">Team-based, project-managed delivery</span></td>
+            <td>$50-100/hr<br><a href="https://www.clutch.co/it-services/marketing-automation" target="_blank" rel="noopener" style="font-size:11px">Clutch agency rates</a></td>
+            <td>1-2 weeks for onboarding and handoff between team members</td>
+            <td>Lower execution risk, but higher cost and less continuity. You're rarely working with the same person twice.</td>
+        </tr>
+        <tr class="highlight-row">
+            <td><strong>This proposal (specialist)</strong><br><span style="font-size:12px;color:var(--text-strong)">Germany-based, direct system experience</span></td>
+            <td>$30/hr</td>
+            <td>None. Hero Software and LexOffice experience is current, not theoretical.</td>
+            <td>Lower. Same timezone means real-time coordination during cutovers. Direct experience means fewer unknowns.</td>
+        </tr>
+    </tbody>
+</table>
+
+<p class="table-footnote">Rate data sourced from Upwork freelancer search (Make.com category, March 2026) and Clutch.co agency listings (marketing automation, Germany-relevant agencies). Ramp-up estimates based on typical onboarding timelines for unfamiliar API stacks.</p>
+
+<!-- Post-Migration -->
+<h2 id="post-migration">After the migration is done</h2>
+
+<p>Once all scenarios are live in the new account and the old account is decommissioned, the engagement shifts. You're not locked into a retainer.</p>
+
+<ul>
+    <li><strong>Change requests:</strong> Billed at $30/hr, scoped before work starts. Small changes (a field mapping, a filter condition) are usually under 1 hour.</li>
+    <li><strong>New scenario builds:</strong> Same rate. New automations follow the same methodology: design, test, document, monitor.</li>
+    <li><strong>Optimization:</strong> If a scenario is running inefficiently (too many operations, slow execution), I'll flag it and fix it as part of ongoing maintenance.</li>
+    <li><strong>No minimum hours:</strong> Some months will be quiet. You pay for what's actually done.</li>
+</ul>
+
+<div class="callout green">
+    <div class="callout-title">The goal is stability, not dependency</div>
+    <p>The documentation delivered at the end of migration is yours. If you ever want to bring this in-house or hand it to another contractor, you'll have everything they need to pick it up without starting from scratch.</p>
+</div>
+
+<!-- CTA -->
+<section class="cta-section">
+    <h2>Questions about the rate or scope?</h2>
+    <p>The FAQ page covers the most common questions. Or reply on Upwork directly.</p>
+    <a href="/clients/warme-wimmer-make-migration/faq" class="cta-btn">Read the FAQ</a>
+</section>
+
+<footer class="footer">
+    <p>Prepared by <strong>UnpauseAI</strong> &middot; <a href="mailto:nico@unpauseai.com">nico@unpauseai.com</a> &middot; 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+// Access gate
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='warme-2026'){
+        localStorage.setItem('warme-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.';
+    }
+}
+(function(){if(localStorage.getItem('warme-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+
+// Theme toggle
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('warme-theme',t);
+}
+
+// Sidebar active state
+(function(){
+    var links=document.querySelectorAll('.step-link');
+    var sections=[];
+    links.forEach(function(l){
+        var id=l.getAttribute('href');
+        if(id&&id.startsWith('#')){
+            var el=document.querySelector(id);
+            if(el)sections.push({el:el,link:l});
+        }
+    });
+    if(!sections.length)return;
+    var observer=new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+            if(e.isIntersecting){
+                links.forEach(function(l){l.classList.remove('active')});
+                sections.forEach(function(s){
+                    if(s.el===e.target)s.link.classList.add('active');
+                });
+            }
+        });
+    },{rootMargin:'-80px 0px -60% 0px'});
+    sections.forEach(function(s){observer.observe(s.el)});
+})();
+</script>
+</body>
+</html>

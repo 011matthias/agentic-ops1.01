@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solution | Accessibility Audit Pipeline | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+
+/* Access Gate */
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+
+/* Navigation */
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+
+/* Sidebar */
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+
+/* Main Content */
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+
+/* Page Header */
+.page-header {
+    padding: 32px 0 28px; border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.page-header .hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 12px;
+}
+.page-header h1 { font-size: 28px; font-weight: 800; color: var(--text-strong); margin-bottom: 8px; line-height: 1.2; }
+.page-header p { font-size: 15px; color: var(--text2); max-width: 580px; margin: 0; }
+
+/* Sections */
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text-strong); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+
+/* Callout */
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+
+/* Flow Diagram */
+.flow-diagram {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px; margin: 24px 0;
+}
+.flow-step {
+    display: flex; align-items: flex-start; gap: 16px; padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+}
+.flow-step:last-child { border-bottom: none; padding-bottom: 0; }
+.flow-step:first-child { padding-top: 0; }
+.flow-num {
+    width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; background: var(--blue); color: #fff;
+    flex-shrink: 0; margin-top: 2px;
+}
+.flow-body { flex: 1; }
+.flow-title { font-size: 14px; font-weight: 700; color: var(--text-strong); margin-bottom: 4px; }
+.flow-desc { font-size: 13px; color: var(--text2); line-height: 1.5; }
+.flow-arrow {
+    text-align: center; font-size: 18px; color: var(--text2); padding: 4px 0;
+    line-height: 1;
+}
+
+/* 3-Zone */
+.zones { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin: 32px 0; }
+.zone {
+    border-radius: 12px; padding: 20px; border: 1px solid var(--border);
+    transition: transform .15s, box-shadow .15s;
+}
+.zone:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.zone-blue { background: var(--blue-bg); border-color: color-mix(in srgb, var(--blue) 20%, var(--border)); }
+.zone-purple { background: var(--purple-bg); border-color: color-mix(in srgb, var(--purple) 20%, var(--border)); }
+.zone-green { background: var(--green-bg); border-color: color-mix(in srgb, var(--green) 20%, var(--border)); }
+.zone-orange { background: var(--orange-bg); border-color: color-mix(in srgb, var(--orange) 20%, var(--border)); }
+.zone-icon { font-size: 28px; margin-bottom: 8px; }
+.zone-title { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
+.zone-blue .zone-title { color: var(--blue-dark); }
+.zone-purple .zone-title { color: var(--purple-dark); }
+.zone-green .zone-title { color: var(--green-dark); }
+.zone-orange .zone-title { color: var(--orange-dark); }
+.zone-sub { font-size: 11px; color: var(--text2); margin-bottom: 12px; }
+.zone-items { list-style: none; padding: 0; }
+.zone-items li {
+    font-size: 13px; padding: 5px 0; color: var(--text);
+    display: flex; align-items: center; gap: 8px;
+}
+.zone-items li::before { content: ''; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.zone-blue .zone-items li::before { background: var(--blue); }
+.zone-purple .zone-items li::before { background: var(--purple); }
+.zone-green .zone-items li::before { background: var(--green); }
+.zone-orange .zone-items li::before { background: var(--orange); }
+
+/* Table */
+table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 13px; }
+th { background: var(--th-bg); color: #fff; text-align: left; padding: 10px 14px; font-weight: 600; }
+td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:nth-child(even) td { background: var(--surface); }
+tr:hover td { background: var(--blue-bg); }
+
+/* Download Button */
+.download-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 24px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s;
+}
+.download-btn:hover { background: var(--blue-dark); transform: translateY(-1px); text-decoration: none; }
+
+/* Footer */
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); }
+
+/* Tablet */
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+
+/* Mobile */
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .zones { grid-template-columns: 1fr; }
+    table { font-size: 12px; }
+    th, td { padding: 7px 10px; }
+}
+</style>
+<script>
+(function(){var t=localStorage.getItem('accessibility-audit-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<!-- Access Gate -->
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared for your agency. Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/accessibility-audit-cold-email/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Clickworthy Digital Marketing</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/accessibility-audit-cold-email/">Overview</a>
+        <a href="/clients/accessibility-audit-cold-email/solution" class="active">Solution</a>
+        <a href="/clients/accessibility-audit-cold-email/timeline">Timeline</a>
+        <a href="/clients/accessibility-audit-cold-email/investment">Investment</a>
+        <a href="/clients/accessibility-audit-cold-email/faq">FAQ</a>
+        <a href="/clients/accessibility-audit-cold-email/onboarding">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">Solution sections</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#hosting" class="step-link active"><span class="step-num">1</span> n8n Self-Hosting</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#audit-engine" class="step-link"><span class="step-num">2</span> Audit Engine</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#results" class="step-link"><span class="step-num">3</span> Results Processing</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#email-integration" class="step-link"><span class="step-num">4</span> Email Integration</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#error-handling" class="step-link"><span class="step-num">5</span> Error Handling</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#download" class="step-link"><span class="step-num">6</span> Download</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<!-- Page Header -->
+<div class="page-header" id="hosting">
+    <div class="hero-badge">TECHNICAL SOLUTION</div>
+    <h1>How the Pipeline Works</h1>
+    <p>Five components working together: n8n orchestration, axe-core auditing, Google Sheets data layer, Instantly.ai email trigger, and error handling at every step.</p>
+</div>
+
+<!-- n8n Self-Hosting -->
+<h2 id="hosting-detail" style="scroll-margin-top:80px">n8n Self-Hosting on NameHero</h2>
+<p>n8n runs on your NameHero server, which means the workflow data stays in your environment. There's no third-party cloud cost for n8n itself -- you own the instance.</p>
+
+<div class="flow-diagram">
+    <div class="flow-step">
+        <div class="flow-num">1</div>
+        <div class="flow-body">
+            <div class="flow-title">SSH access to NameHero server</div>
+            <div class="flow-desc">Node.js 18+ required. I'll verify the Node version during setup and install or request an upgrade if needed.</div>
+        </div>
+    </div>
+    <div class="flow-arrow">&#8595;</div>
+    <div class="flow-step">
+        <div class="flow-num">2</div>
+        <div class="flow-body">
+            <div class="flow-title">n8n installed via npm, configured with PM2</div>
+            <div class="flow-desc">PM2 keeps n8n running as a background process and restarts it automatically if the server reboots.</div>
+        </div>
+    </div>
+    <div class="flow-arrow">&#8595;</div>
+    <div class="flow-step">
+        <div class="flow-num">3</div>
+        <div class="flow-body">
+            <div class="flow-title">Reverse proxy via .htaccess or subdomain</div>
+            <div class="flow-desc">Exposes the n8n web UI at a URL on your domain so you can access the workflow editor without SSH.</div>
+        </div>
+    </div>
+    <div class="flow-arrow">&#8595;</div>
+    <div class="flow-step">
+        <div class="flow-num">4</div>
+        <div class="flow-body">
+            <div class="flow-title">SSL certificate configured</div>
+            <div class="flow-desc">NameHero includes Let's Encrypt SSL. I'll configure it for the n8n subdomain so the web UI is served over HTTPS.</div>
+        </div>
+    </div>
+</div>
+
+<div class="callout orange">
+    <div class="callout-title">SHARED HOSTING CAVEAT</div>
+    <p>NameHero Silver NVMe is shared hosting. Running headless Chrome (Puppeteer) on shared hosting can hit process limits or be restricted by the hosting provider. I'll test this during setup (Days 1-2). If the server can't run Puppeteer reliably, the fallback is a lightweight cloud function (AWS Lambda or Google Cloud Function) that handles just the auditing step, with n8n still orchestrating everything else from NameHero. This adds a small per-URL cost but keeps the architecture clean.</p>
+</div>
+
+<!-- axe-core Audit Engine -->
+<h2 id="audit-engine">axe-core Audit Engine</h2>
+<p>axe-core is the industry-standard open-source accessibility testing library. It's what most accessibility auditing tools are built on top of -- I'm using it directly so you get the full ruleset without a markup layer in between.</p>
+
+<div class="flow-diagram">
+    <div class="flow-step">
+        <div class="flow-num">1</div>
+        <div class="flow-body">
+            <div class="flow-title">n8n Code node launches Puppeteer in headless mode</div>
+            <div class="flow-desc">Puppeteer spins up a headless Chrome instance for each URL. It's the same engine as a real browser.</div>
+        </div>
+    </div>
+    <div class="flow-arrow">&#8595;</div>
+    <div class="flow-step">
+        <div class="flow-num">2</div>
+        <div class="flow-body">
+            <div class="flow-title">Navigates to target URL with 15-second timeout</div>
+            <div class="flow-desc">If the page doesn't load within 15 seconds, the URL is marked as TIMEOUT and the pipeline moves on.</div>
+        </div>
+    </div>
+    <div class="flow-arrow">&#8595;</div>
+    <div class="flow-step">
+        <div class="flow-num">3</div>
+        <div class="flow-body">
+            <div class="flow-title">Injects axe-core library into the page DOM</div>
+            <div class="flow-desc">axe-core is loaded into the live page context so it can analyze the actual rendered DOM, not just the raw HTML source.</div>
+        </div>
+    </div>
+    <div class="flow-arrow">&#8595;</div>
+    <div class="flow-step">
+        <div class="flow-num">4</div>
+        <div class="flow-body">
+            <div class="flow-title">Runs WCAG 2.1 AA ruleset analysis</div>
+            <div class="flow-desc">axe-core tests the page against the full WCAG 2.1 AA standard. It checks color contrast, image alt text, form labels, ARIA usage, keyboard navigation, and more.</div>
+        </div>
+    </div>
+    <div class="flow-arrow">&#8595;</div>
+    <div class="flow-step">
+        <div class="flow-num">5</div>
+        <div class="flow-body">
+            <div class="flow-title">Captures violation array: rule ID, impact level, affected elements</div>
+            <div class="flow-desc">Each violation includes the rule ID (e.g. color-contrast), impact level (critical/serious/moderate/minor), and the specific DOM elements that failed.</div>
+        </div>
+    </div>
+    <div class="flow-arrow">&#8595;</div>
+    <div class="flow-step">
+        <div class="flow-num">6</div>
+        <div class="flow-body">
+            <div class="flow-title">Returns structured results to n8n for processing</div>
+            <div class="flow-desc">The Code node returns a clean object: pass/fail status, total violation count, and the top 3 violation types by frequency. n8n takes it from there.</div>
+        </div>
+    </div>
+</div>
+
+<h3>Bot Detection Handling</h3>
+<p>Some sites block headless browsers. The engine has three layers of protection to reduce blocks and handle them gracefully when they happen.</p>
+
+<div class="zones">
+    <div class="zone zone-blue">
+        <div class="zone-icon">&#127760;</div>
+        <div class="zone-title">User-Agent Rotation</div>
+        <ul class="zone-items">
+            <li>Randomized user-agent strings</li>
+            <li>Avoids pattern-based blocking</li>
+            <li>Different browser signatures per request</li>
+        </ul>
+    </div>
+    <div class="zone zone-purple">
+        <div class="zone-icon">&#128084;</div>
+        <div class="zone-title">Stealth Mode</div>
+        <ul class="zone-items">
+            <li>puppeteer-extra-plugin-stealth</li>
+            <li>Bypasses common bot detection</li>
+            <li>Handles JavaScript challenges</li>
+        </ul>
+    </div>
+    <div class="zone zone-green">
+        <div class="zone-icon">&#128218;</div>
+        <div class="zone-title">Graceful Fallback</div>
+        <ul class="zone-items">
+            <li>15-second timeout per URL</li>
+            <li>Blocked sites marked "unable to audit"</li>
+            <li>Error logged with reason</li>
+            <li>Pipeline continues to next URL</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Results Processing -->
+<h2 id="results">Results Processing</h2>
+<p>For each URL, the workflow writes results back to the same row in your Google Sheet. Pass means zero WCAG 2.1 AA violations were detected. Fail includes the total error count and the top 3 error types by frequency -- so you can see at a glance what the most common issues are across your prospect list.</p>
+
+<p>The sheet updates in place. No duplicate rows, no separate output sheet -- the status column and audit columns update on the same row as the input data.</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Company</th>
+            <th>URL</th>
+            <th>Status</th>
+            <th>Error Count</th>
+            <th>Top Error 1</th>
+            <th>Top Error 2</th>
+            <th>Top Error 3</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>Acme Corp</strong></td>
+            <td>acme.com</td>
+            <td><strong style="color:var(--orange-dark)">FAIL</strong></td>
+            <td>23</td>
+            <td>color-contrast</td>
+            <td>image-alt</td>
+            <td>link-name</td>
+        </tr>
+        <tr>
+            <td><strong>Beta LLC</strong></td>
+            <td>beta.io</td>
+            <td><strong style="color:var(--green-dark)">PASS</strong></td>
+            <td>0</td>
+            <td>--</td>
+            <td>--</td>
+            <td>--</td>
+        </tr>
+        <tr>
+            <td><strong>Gamma Inc</strong></td>
+            <td>gamma.co</td>
+            <td><strong style="color:var(--text2)">BLOCKED</strong></td>
+            <td>--</td>
+            <td>Unable to audit</td>
+            <td>--</td>
+            <td>--</td>
+        </tr>
+    </tbody>
+</table>
+
+<!-- Instantly.ai Email Integration -->
+<h2 id="email-integration">Instantly.ai Email Integration</h2>
+<p>Failed audits are the only URLs that trigger outreach. The IF node in n8n checks the audit status and routes FAIL rows to the Instantly.ai API. Pass, blocked, and timeout rows are skipped entirely -- your outreach list stays clean.</p>
+
+<div class="flow-diagram">
+    <div class="flow-step">
+        <div class="flow-num">1</div>
+        <div class="flow-body">
+            <div class="flow-title">IF node checks audit status (FAIL only)</div>
+            <div class="flow-desc">Any status other than FAIL is filtered out at this step. Only confirmed accessibility failures get sent to Instantly.</div>
+        </div>
+    </div>
+    <div class="flow-arrow">&#8595;</div>
+    <div class="flow-step">
+        <div class="flow-num">2</div>
+        <div class="flow-body">
+            <div class="flow-title">Maps contact email, company name, audit summary to Instantly API payload</div>
+            <div class="flow-desc">The payload includes the recipient's email, company name, error count, and top violation type. These can be used as merge fields in your Instantly email template.</div>
+        </div>
+    </div>
+    <div class="flow-arrow">&#8595;</div>
+    <div class="flow-step">
+        <div class="flow-num">3</div>
+        <div class="flow-body">
+            <div class="flow-title">POST to Instantly.ai campaign endpoint via API key</div>
+            <div class="flow-desc">The n8n HTTP Request node sends a POST to the Instantly leads endpoint, adding the contact to your specified campaign.</div>
+        </div>
+    </div>
+    <div class="flow-arrow">&#8595;</div>
+    <div class="flow-step">
+        <div class="flow-num">4</div>
+        <div class="flow-body">
+            <div class="flow-title">Response logged: campaign ID, timestamp, recipient</div>
+            <div class="flow-desc">Instantly returns a confirmation response. The campaign ID and a timestamp are captured for the email tracking log.</div>
+        </div>
+    </div>
+    <div class="flow-arrow">&#8595;</div>
+    <div class="flow-step">
+        <div class="flow-num">5</div>
+        <div class="flow-body">
+            <div class="flow-title">Second Google Sheet records all triggered emails</div>
+            <div class="flow-desc">A separate sheet tab logs every triggered outreach: company name, email address, audit date, campaign ID, and timestamp. This is your sending record.</div>
+        </div>
+    </div>
+</div>
+
+<div class="callout">
+    <div class="callout-title">INSTANTLY API PLAN NOTE</div>
+    <p>The Instantly.ai API is available on Growth plans and above. The integration uses the campaign/lead endpoints. Different Instantly plan tiers may have different rate limits on API calls. Worth verifying your plan supports the volume you need before going live.</p>
+</div>
+
+<!-- Error Handling -->
+<h2 id="error-handling">Error Handling</h2>
+<p>Every failure mode is caught, logged, and skipped. The pipeline never stops mid-run because one URL had an issue.</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Error Type</th>
+            <th>What Happens</th>
+            <th>Sheet Status</th>
+            <th>Pipeline Impact</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><strong>URL timeout (15s)</strong></td>
+            <td>Logged, skipped</td>
+            <td>TIMEOUT</td>
+            <td>Continues</td>
+        </tr>
+        <tr>
+            <td><strong>Bot detection block</strong></td>
+            <td>Retry with stealth, then skip</td>
+            <td>BLOCKED</td>
+            <td>Continues</td>
+        </tr>
+        <tr>
+            <td><strong>DNS failure</strong></td>
+            <td>Logged</td>
+            <td>DNS_ERROR</td>
+            <td>Continues</td>
+        </tr>
+        <tr>
+            <td><strong>Instantly API error</strong></td>
+            <td>Retry once, then log</td>
+            <td>FAIL_EMAIL</td>
+            <td>Continues</td>
+        </tr>
+        <tr>
+            <td><strong>Google Sheets rate limit</strong></td>
+            <td>Batch writes with delay</td>
+            <td>N/A</td>
+            <td>Pauses briefly</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="callout green">
+    <div class="callout-title">NOTHING STOPS THE RUN</div>
+    <p>Every error type is caught and logged. A single failed URL never stops the remaining 499. The email log sheet gives you full visibility into what was sent, what wasn't, and why.</p>
+</div>
+
+<!-- Download -->
+<h2 id="download">Download Workflow</h2>
+<p>Starter workflow skeleton with all nodes, error handling, and sticky note documentation. Import into n8n to see the structure before we start building.</p>
+
+<p style="margin-bottom: 20px;">
+    <a href="accessibility-audit-cold-email-workflow.json" class="download-btn">&#8595; Download n8n Workflow JSON</a>
+</p>
+
+<p style="font-size: 13px; color: var(--text2);">This is a skeleton -- it won't run without your credentials (Google Sheets OAuth, Instantly API key, and NameHero connection). It's meant to show the node structure and logic before you commit.</p>
+
+<footer class="footer">
+    <p>Prepared for <strong>Clickworthy Digital Marketing</strong> by UnpauseAI &middot; <a href="mailto:nico@unpauseai.com">nico@unpauseai.com</a> &middot; 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+// Access gate
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='accessibility-2026'){
+        localStorage.setItem('accessibility-audit-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.';
+    }
+}
+(function(){if(localStorage.getItem('accessibility-audit-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+
+// Theme toggle
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('accessibility-audit-theme',t);
+}
+
+// Sidebar active state
+(function(){
+    var links=document.querySelectorAll('.step-link');
+    var sections=[];
+    links.forEach(function(l){
+        var id=l.getAttribute('href');
+        if(id&&id.startsWith('#')){
+            var el=document.querySelector(id);
+            if(el)sections.push({el:el,link:l});
+        }
+    });
+    if(!sections.length)return;
+    var observer=new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+            if(e.isIntersecting){
+                links.forEach(function(l){l.classList.remove('active')});
+                sections.forEach(function(s){
+                    if(s.el===e.target)s.link.classList.add('active');
+                });
+            }
+        });
+    },{rootMargin:'-80px 0px -60% 0px'});
+    sections.forEach(function(s){observer.observe(s.el)});
+})();
+</script>
+</body>
+</html>

@@ -13,7 +13,6 @@ sent: null
 value_estimate: "EUR 850 audit + EUR 1,900 rebuild + EUR 600/mo"
 timeline: "2-3 weeks to verified rebuild, then ongoing"
 tags: [instantly, deliverability, lead-automation, facebook-lead-ads, google-sheets, spf-dkim-dmarc, email]
-access_code: "volabyg-2026"
 deliverables:
   letter: true
   video: true

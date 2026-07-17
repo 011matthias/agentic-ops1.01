@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alpha Research &ndash; FAQ | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 560px; margin: 0 auto; line-height: 1.6; }
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+.callout.purple { border-color: var(--purple); background: var(--purple-bg); }
+.callout.purple .callout-title, .callout.purple p { color: var(--purple-dark); }
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; }
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .hero h1 { font-size: 24px; }
+}
+
+/* FAQ Accordion Styles */
+.faq-item {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 12px;
+    background: var(--surface);
+    transition: box-shadow .15s, border-color .15s;
+}
+.faq-item:hover {
+    box-shadow: var(--card-shadow);
+    border-color: var(--blue);
+}
+.faq-item summary {
+    padding: 16px 20px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-strong);
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: color .15s;
+    user-select: none;
+}
+.faq-item summary::-webkit-details-marker { display: none; }
+.faq-item summary::before {
+    content: '';
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: all .2s;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M2 4l3 3 3-3' fill='none' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center center no-repeat;
+}
+.faq-item[open] summary::before {
+    border-color: var(--blue);
+    background-color: var(--blue);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M2 6l3-3 3 3' fill='none' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.faq-item summary:hover { color: var(--blue); }
+.faq-item .faq-answer {
+    padding: 0 20px 20px 52px;
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--text);
+}
+.faq-item .faq-answer p { margin-bottom: 10px; font-size: 14px; }
+.faq-item .faq-answer p:last-child { margin-bottom: 0; }
+.faq-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: 6px;
+    font-size: 11px; font-weight: 700;
+    background: var(--blue-light); color: var(--blue);
+    flex-shrink: 0;
+}
+</style>
+<script>
+(function(){var t=localStorage.getItem('alpha-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/alpha-research/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">Alpha Research</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/alpha-research/">Overview</a>
+        <a href="/clients/alpha-research/brief">Brief</a>
+        <a href="/clients/alpha-research/solution">Solution</a>
+        <a href="/clients/alpha-research/workflow">Workflow</a>
+        <a href="/clients/alpha-research/timeline">Timeline</a>
+        <a href="/clients/alpha-research/investment">Investment</a>
+        <a href="/clients/alpha-research/faq" class="active">FAQ</a>
+        <a href="/clients/alpha-research/onboarding">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">FAQ sections</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#scope" class="step-link active"><span class="step-num">1</span> Scope</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#technical" class="step-link"><span class="step-num">2</span> Technical</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#delivery" class="step-link"><span class="step-num">3</span> Delivery</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#risk" class="step-link"><span class="step-num">4</span> Risk</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<!-- Hero -->
+<section class="hero" id="top">
+    <div class="hero-badge">FAQ</div>
+    <h1>Frequently Asked Questions</h1>
+    <p class="hero-sub">Honest answers to the questions we would ask if we were hiring for this project. Click any question to expand.</p>
+</section>
+
+<!-- Scope -->
+<h2 id="scope">Scope</h2>
+
+<details class="faq-item">
+    <summary><span class="faq-num">1</span> Why are you proposing to combine both jobs into one system?</summary>
+    <div class="faq-answer">
+        <p>Both share infrastructure: company registry, cloud storage, error handling, and the LLM extraction pattern. Building separately means duplicate storage logic, duplicate error handling, and two places to debug.</p>
+        <p>Combined means one system with two exportable workflow templates. You still get two independent n8n workflows, but they share a single company registry, a single storage layer, and a single error handling pattern.</p>
+    </div>
+</details>
+
+<details class="faq-item">
+    <summary><span class="faq-num">2</span> Can you handle 300+ companies?</summary>
+    <div class="faq-answer">
+        <p>Yes. The dispatcher pattern batches companies into groups of 10-20. Each batch runs independently. Failed companies don't block others.</p>
+        <p>We test with 5-10 companies during build, then scale to the full list during the tuning phase. The architecture is designed for this from day one, not bolted on later.</p>
+    </div>
+</details>
+
+<details class="faq-item">
+    <summary><span class="faq-num">3</span> What if I only want the web scraping pipeline, not the thesis/news part?</summary>
+    <div class="faq-answer">
+        <p>The workflows are separate n8n templates. You can run Workflow 1 (scraping) independently. The shared infrastructure (registry, storage) works for both but doesn't require both.</p>
+    </div>
+</details>
+
+<!-- Technical -->
+<h2 id="technical">Technical</h2>
+
+<details class="faq-item">
+    <summary><span class="faq-num">4</span> How do you handle JavaScript-rendered pages?</summary>
+    <div class="faq-answer">
+        <p>n8n has no native headless browser. We use an external browser API (ScrapingBee, Bright Data, or Apify) via the HTTP Request node. These services handle CAPTCHAs, proxy rotation, and browser fingerprinting.</p>
+        <p>Cost is approximately $0.001-0.01 per page, depending on the provider and complexity of the target site.</p>
+    </div>
+</details>
+
+<details class="faq-item">
+    <summary><span class="faq-num">5</span> What AI model do you use?</summary>
+    <div class="faq-answer">
+        <p>Claude (Anthropic) for document link extraction, thesis synthesis, and relevance scoring. The prompt is customizable per use case.</p>
+        <p>Model choice is configurable in the workflow. You can swap to GPT-4o or others if preferred. The extraction logic is prompt-driven, not model-locked.</p>
+    </div>
+</details>
+
+<details class="faq-item">
+    <summary><span class="faq-num">6</span> How does the HITL approval work technically?</summary>
+    <div class="faq-answer">
+        <p>The n8n Wait node pauses the execution. An HTML email is sent with signed Approve/Reject URLs (webhook endpoints with JWT tokens). Clicking either button hits the webhook, which resumes the paused execution.</p>
+        <p>There is a 7-day timeout with a day-3 reminder email. If no action is taken within 7 days, the execution expires without modifying any files.</p>
+    </div>
+</details>
+
+<details class="faq-item">
+    <summary><span class="faq-num">7</span> What happens if my n8n instance restarts while a Wait node is active?</summary>
+    <div class="faq-answer">
+        <p>n8n persists execution state to its database. On restart, paused executions resume from saved state. The wait timeout resets, so the approval window effectively extends.</p>
+    </div>
+</details>
+
+<!-- Delivery -->
+<h2 id="delivery">Delivery</h2>
+
+<details class="faq-item">
+    <summary><span class="faq-num">8</span> What do I actually receive?</summary>
+    <div class="faq-answer">
+        <p>Two n8n workflow JSON files (importable into any n8n instance), a configured Google Sheets template (company registry), cloud storage folder structure, error handling documentation, and an operations guide.</p>
+        <p>Everything is yours to own and modify. No proprietary dependencies, no ongoing license fees.</p>
+    </div>
+</details>
+
+<details class="faq-item">
+    <summary><span class="faq-num">9</span> Do I need my own n8n instance?</summary>
+    <div class="faq-answer">
+        <p>Yes. Either n8n Cloud (from $20/month) or self-hosted. The workflows are standard n8n JSON, compatible with any n8n installation.</p>
+    </div>
+</details>
+
+<details class="faq-item">
+    <summary><span class="faq-num">10</span> Can I modify the workflows after delivery?</summary>
+    <div class="faq-answer">
+        <p>Yes, they are standard n8n workflows. No proprietary code, no lock-in. Every node is documented with sticky notes explaining what it does and why.</p>
+    </div>
+</details>
+
+<!-- Risk -->
+<h2 id="risk">Risk</h2>
+
+<details class="faq-item">
+    <summary><span class="faq-num">11</span> What if the scraping breaks when a company redesigns their site?</summary>
+    <div class="faq-answer">
+        <p>Expected for web scraping. The error handler logs failures with details about what broke. Per-company retry runs automatically on the next scheduled execution.</p>
+        <p>For JS-heavy sites, the browser API handles most structural changes. For major redesigns, the site type config in Google Sheets is updated. That is typically a 5-minute fix.</p>
+    </div>
+</details>
+
+<details class="faq-item">
+    <summary><span class="faq-num">12</span> What if the AI extraction accuracy is poor for certain site types?</summary>
+    <div class="faq-answer">
+        <p>The prompt is tuned per-site-type during Phase 3 (tuning). We test accuracy against known document pages and adjust until classification confidence exceeds 85%.</p>
+        <p>Edge cases get site-specific prompt overrides stored in the company registry. This means you can fine-tune extraction for any individual company without affecting the rest.</p>
+    </div>
+</details>
+
+<details class="faq-item">
+    <summary><span class="faq-num">13</span> What's your Upwork track record?</summary>
+    <div class="faq-answer">
+        <p>New on the platform, but we run production automation systems processing thousands of operations monthly for existing clients.</p>
+        <p>The live demo on the <a href="/clients/alpha-research/workflow">Workflow page</a> proves the technical capability directly. We prefer demonstrating competence over describing it.</p>
+    </div>
+</details>
+
+<!-- CTA -->
+<section class="cta-section">
+    <h2>Ready to get started?</h2>
+    <p>The Onboarding page has everything needed to kick off: access requirements, timeline, and a quick-start form.</p>
+    <a href="/clients/alpha-research/onboarding" class="cta-btn">View Onboarding &rarr;</a>
+</section>
+
+<footer class="footer" style="border-top: 1px solid var(--border); padding: 24px 0 40px;">
+    <p>Built and maintained by <a href="https://unpauseai.com" target="_blank" rel="noopener">UnpauseAI</a></p>
+    <p style="margin-top:4px;"><a href="https://unpauseai.com/privacy">Privacy Policy</a> &middot; <a href="https://unpauseai.com/terms">Terms of Service</a></p>
+    <p style="margin-top:4px; font-size: 12px;">Last updated: March 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+function toggleTheme() {
+    var el = document.documentElement;
+    var t = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    el.setAttribute('data-theme', t);
+    localStorage.setItem('alpha-theme', t);
+}
+
+var links = document.querySelectorAll('.step-link');
+var sections = [];
+links.forEach(function(a) {
+    var id = a.getAttribute('href').replace('#','');
+    var el = document.getElementById(id);
+    if (el) sections.push({ el: el, link: a });
+});
+
+function updateActive() {
+    var scrollY = window.scrollY + 120;
+    var active = sections[0];
+    for (var i = 0; i < sections.length; i++) {
+        if (sections[i].el.offsetTop <= scrollY) active = sections[i];
+    }
+    links.forEach(function(l) { l.classList.remove('active'); });
+    if (active) active.link.classList.add('active');
+}
+window.addEventListener('scroll', updateActive);
+updateActive();
+
+links.forEach(function(a) {
+    a.addEventListener('click', function(e) {
+        e.preventDefault();
+        var id = this.getAttribute('href').replace('#','');
+        var el = document.getElementById(id);
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+        document.querySelector('.sidebar').classList.remove('open');
+    });
+});
+</script>
+
+<!-- Access Gate -->
+<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
+  <div style="text-align:center;max-width:360px;padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg>
+      <span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span>
+    </div>
+    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Alpha Research Proposal</h2>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Enter your access code to continue.</p>
+    <div style="display:flex;gap:8px;">
+      <input id="auth-input" type="password" placeholder="Access code" autocomplete="off" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;" onkeydown="if(event.key==='Enter')checkAuth()" />
+      <button onclick="checkAuth()" style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">Enter</button>
+    </div>
+    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Incorrect code. Please try again.</p>
+  </div>
+</div>
+<script>
+var AR_CODE='alpha-2026';
+function checkAuth(){var v=document.getElementById('auth-input').value;if(v===AR_CODE){localStorage.setItem('alpha-access','granted');var g=document.getElementById('auth-gate');g.style.opacity='0';setTimeout(function(){g.style.display='none'},300)}else{document.getElementById('auth-error').style.display='block';document.getElementById('auth-input').value='';document.getElementById('auth-input').focus()}}
+(function(){if(localStorage.getItem('alpha-access')==='granted'){document.getElementById('auth-gate').style.display='none'}else{var i=document.getElementById('auth-input');if(i)i.focus()}})();
+</script>
+</body>
+</html>

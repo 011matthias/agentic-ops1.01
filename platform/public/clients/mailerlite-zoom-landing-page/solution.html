@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solution | Zoom Signup Flow | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08); --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3); --th-bg: #1e3a5f;
+}
+@media print { .site-nav,.sidebar,.mobile-nav-toggle,.cta-section,.access-gate{display:none!important} .main-content{margin-left:0!important} body{padding-top:0!important} }
+*{box-sizing:border-box;margin:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--text);background:var(--bg);line-height:1.65;font-size:15px;transition:background .2s,color .2s}
+.access-gate{position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;transition:opacity .3s}
+.access-gate.hidden{opacity:0;pointer-events:none}
+.access-gate h2{font-size:20px;color:var(--text-strong)}
+.access-gate p{font-size:14px;color:var(--text2);max-width:360px;text-align:center}
+.access-gate input{padding:10px 16px;border:2px solid var(--border);border-radius:8px;font-size:15px;width:240px;background:var(--surface);color:var(--text);outline:none;transition:border-color .15s}
+.access-gate input:focus{border-color:var(--blue)}
+.access-gate button{padding:10px 24px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transition:background .15s}
+.access-gate button:hover{background:var(--blue-dark)}
+.access-gate .error{color:#ef4444;font-size:13px;min-height:20px}
+.site-nav{position:fixed;top:0;left:0;right:0;z-index:1000;background:var(--nav-bg);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:56px;box-shadow:var(--card-shadow);transition:background .2s}
+.nav-left{display:flex;align-items:center;gap:12px}
+.nav-logo{display:flex;align-items:center;gap:6px;font-size:15px;text-decoration:none}
+.nav-logo .logo-bold{font-weight:700;color:var(--text)}
+.nav-logo .logo-accent{font-weight:700;color:var(--blue)}
+.nav-sep{color:var(--border);font-size:18px}
+.nav-client{font-size:14px;font-weight:600;color:var(--text)}
+.nav-links{display:flex;gap:2px}
+.nav-links a{font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;transition:background .15s,color .15s}
+.nav-links a:hover{background:var(--surface2);color:var(--text)}
+.nav-links a.active{background:var(--blue-light);color:var(--blue);font-weight:700}
+.nav-right{display:flex;align-items:center;gap:8px}
+.nav-status{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;background:var(--blue-light);color:var(--blue)}
+@keyframes navpulse{0%,100%{opacity:1}50%{opacity:.4}}
+.nav-theme{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px;color:var(--text2);transition:background .15s}
+.nav-theme:hover{background:var(--border)}
+.sidebar{position:fixed;top:56px;left:0;width:220px;height:calc(100vh - 56px);overflow-y:auto;background:var(--nav-bg);border-right:1px solid var(--border);padding:20px 0;z-index:50;transition:transform .25s,background .2s}
+.sidebar-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);padding:0 16px;margin-bottom:12px}
+.step-list{list-style:none;padding:0}
+.step-item{position:relative}
+.step-link{display:flex;align-items:center;gap:10px;padding:8px 16px;font-size:13px;font-weight:500;color:var(--text2);text-decoration:none;transition:all .15s;border-left:3px solid transparent}
+.step-link:hover{background:var(--surface2);color:var(--text)}
+.step-link.active{background:var(--blue-light);color:var(--blue-dark);border-left-color:var(--blue);font-weight:700}
+.step-num{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border:2px solid var(--border);color:var(--text2);flex-shrink:0;transition:all .15s}
+.step-link.active .step-num{border-color:var(--blue);background:var(--blue);color:#fff}
+.step-line{position:absolute;left:26px;top:38px;width:2px;height:calc(100% - 30px);background:var(--border)}
+.step-item:last-child .step-line{display:none}
+.main-content{margin-left:220px;padding:56px 0 0 0}
+.content-inner{max-width:800px;margin:0 auto;padding:40px 30px 60px}
+.hero{text-align:center;padding:48px 0 40px;border-bottom:1px solid var(--border);margin-bottom:48px}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;background:var(--blue-bg);color:var(--blue);border-radius:20px;padding:6px 16px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:16px}
+.hero h1{font-size:32px;font-weight:800;color:var(--text-strong);margin-bottom:12px;line-height:1.2}
+.hero-sub{font-size:16px;color:var(--text2);max-width:580px;margin:0 auto 0;line-height:1.6}
+h2{font-size:22px;color:var(--blue-dark);border-bottom:2px solid var(--blue);padding-bottom:8px;margin-top:56px;margin-bottom:20px;scroll-margin-top:80px}
+h3{font-size:17px;color:var(--text2);margin-top:28px;margin-bottom:12px;scroll-margin-top:80px}
+p{margin-bottom:16px;color:var(--text)}
+a{color:var(--blue);text-decoration:none}
+a:hover{text-decoration:underline}
+strong{color:var(--text-strong)}
+ul,ol{padding-left:24px;margin-bottom:16px}
+li{margin-bottom:6px}
+.callout{border-left:4px solid var(--blue);background:var(--blue-bg);padding:16px 20px;border-radius:0 8px 8px 0;margin:24px 0}
+.callout-title{font-size:13px;font-weight:700;color:var(--blue-dark);margin-bottom:4px;text-transform:uppercase;letter-spacing:.03em}
+.callout p{margin:0;color:var(--blue-dark);font-size:14px}
+.callout.green{border-color:var(--green);background:var(--green-bg)}
+.callout.green .callout-title,.callout.green p{color:var(--green-dark)}
+.callout.orange{border-color:var(--orange);background:var(--orange-bg)}
+.callout.orange .callout-title,.callout.orange p{color:var(--orange-dark)}
+.callout.purple{border-color:var(--purple);background:var(--purple-bg)}
+.callout.purple .callout-title,.callout.purple p{color:var(--purple-dark)}
+.flow-diagram{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin:24px 0}
+.flow-step{display:flex;align-items:flex-start;gap:16px;padding:12px 0;border-bottom:1px solid var(--border)}
+.flow-step:last-child{border-bottom:none;padding-bottom:0}
+.flow-step:first-child{padding-top:0}
+.flow-num{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;background:var(--blue);color:#fff;flex-shrink:0;margin-top:2px}
+.flow-body{flex:1}
+.flow-title{font-size:14px;font-weight:700;color:var(--text-strong);margin-bottom:4px}
+.flow-desc{font-size:13px;color:var(--text2);line-height:1.5}
+.flow-arrow{text-align:center;font-size:18px;color:var(--text2);padding:4px 0;line-height:1}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px}
+th{background:var(--th-bg);color:#fff;text-align:left;padding:10px 14px;font-weight:600}
+td{padding:9px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+tr:nth-child(even) td{background:var(--surface)}
+tr:hover td{background:var(--blue-bg)}
+.footer{text-align:center;color:var(--text2);font-size:13px;padding:20px 0 40px;border-top:1px solid var(--border)}
+.cta-section{text-align:center;padding:40px 0;margin-top:48px;border-top:1px solid var(--border)}
+.cta-section h2{border:none;text-align:center;margin-top:0}
+.cta-section p{color:var(--text2);margin-bottom:24px}
+.cta-btn{display:inline-flex;align-items:center;gap:8px;background:var(--blue);color:#fff;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;transition:background .15s,transform .15s,box-shadow .15s;box-shadow:0 2px 8px rgba(37,99,235,.3)}
+.cta-btn:hover{background:var(--blue-dark);transform:translateY(-1px);box-shadow:0 4px 12px rgba(37,99,235,.4);text-decoration:none}
+@media(max-width:1100px){.nav-links a{font-size:12px;padding:5px 8px}.nav-status{display:none}}
+.mobile-nav-toggle{display:none;background:none;border:none;cursor:pointer;padding:8px;color:var(--text)}
+@media(max-width:768px){.sidebar{transform:translateX(-100%);width:260px}.sidebar.open{transform:translateX(0);box-shadow:4px 0 12px rgba(0,0,0,.1)}.main-content{margin-left:0!important}.mobile-nav-toggle{display:block}.nav-links{display:none}.hero h1{font-size:24px}}
+</style>
+<script>(function(){var t=localStorage.getItem('mailerlite-zoom-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})()</script>
+</head>
+<body>
+
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared for you. Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/mailerlite-zoom-landing-page/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">MailerLite Zoom Signup</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/mailerlite-zoom-landing-page/">Overview</a>
+        <a href="/clients/mailerlite-zoom-landing-page/solution" class="active">Solution</a>
+        <a href="/clients/mailerlite-zoom-landing-page/timeline">Timeline</a>
+        <a href="/clients/mailerlite-zoom-landing-page/investment">Investment</a>
+        <a href="/clients/mailerlite-zoom-landing-page/faq">FAQ</a>
+        <a href="/clients/mailerlite-zoom-landing-page/onboarding">Onboarding</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<aside class="sidebar">
+    <div class="sidebar-label">Solution details</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#domain-auth" class="step-link active"><span class="step-num">1</span> Domain Auth</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#landing-page" class="step-link"><span class="step-num">2</span> Landing Page</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#stripe" class="step-link"><span class="step-num">3</span> Stripe Payment</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#gdpr" class="step-link"><span class="step-num">4</span> GDPR Consent</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#automation" class="step-link"><span class="step-num">5</span> Email Automation</a>
+        </li>
+    </ul>
+</aside>
+
+<div class="main-content">
+<div class="content-inner">
+
+<section class="hero">
+    <div class="hero-badge">Technical Solution</div>
+    <h1>How Each Component Works</h1>
+    <p class="hero-sub">Five components, all native to MailerLite. No third-party connectors, no custom code, no ongoing maintenance fees.</p>
+</section>
+
+<h2 id="domain-auth">Domain Authentication</h2>
+<p>Domain authentication tells email providers that MailerLite is authorized to send emails on behalf of your domain. Without it, your Zoom confirmation emails are more likely to land in spam.</p>
+
+<h3>What Gets Configured</h3>
+<table>
+    <tr><th>Record Type</th><th>Purpose</th><th>Where It Goes</th></tr>
+    <tr><td><strong>DKIM</strong></td><td>Cryptographic signature proving the email came from your domain</td><td>CNAME record at your DNS registrar</td></tr>
+    <tr><td><strong>SPF</strong></td><td>Declares MailerLite as an authorized sender for your domain</td><td>TXT record at your DNS registrar</td></tr>
+    <tr><td><strong>DMARC</strong></td><td>Policy telling receivers what to do with unauthenticated emails</td><td>TXT record at your DNS registrar</td></tr>
+</table>
+
+<div class="callout">
+    <div class="callout-title">How it works</div>
+    <p>MailerLite generates the exact record values. I copy them into your DNS settings, click "Verify" in MailerLite, and confirm all three pass. DNS propagation usually takes 5-30 minutes, sometimes up to 24 hours.</p>
+</div>
+
+<h2 id="landing-page">Landing Page Template</h2>
+<p>MailerLite's drag-and-drop page builder creates the landing page. The page is saved as a reusable template so you can duplicate it for each new Zoom session.</p>
+
+<h3>Page Structure</h3>
+<div class="flow-diagram">
+    <div class="flow-step">
+        <div class="flow-num" style="background:var(--purple)">H</div>
+        <div class="flow-body">
+            <div class="flow-title">Hero Section</div>
+            <div class="flow-desc">Session title, date, time, and a brief description. Your logo and brand colors. Clear call-to-action button scrolling to the signup form.</div>
+        </div>
+    </div>
+    <div class="flow-arrow">&#8595;</div>
+    <div class="flow-step">
+        <div class="flow-num" style="background:var(--green)">D</div>
+        <div class="flow-body">
+            <div class="flow-title">Session Details</div>
+            <div class="flow-desc">What the session covers, who it is for, and what attendees will learn. Bullet points or short paragraphs. Keeps the page informative without being overwhelming.</div>
+        </div>
+    </div>
+    <div class="flow-arrow">&#8595;</div>
+    <div class="flow-step">
+        <div class="flow-num" style="background:var(--orange)">F</div>
+        <div class="flow-body">
+            <div class="flow-title">Signup Form + Payment</div>
+            <div class="flow-desc">Name, email, terms checkbox, and Stripe payment block. Everything in one section so users complete the full flow without navigating away.</div>
+        </div>
+    </div>
+    <div class="flow-arrow">&#8595;</div>
+    <div class="flow-step">
+        <div class="flow-num" style="background:var(--blue)">T</div>
+        <div class="flow-body">
+            <div class="flow-title">Thank You / Confirmation</div>
+            <div class="flow-desc">After submission, a confirmation message appears on screen. The automated email with the Zoom link fires simultaneously.</div>
+        </div>
+    </div>
+</div>
+
+<div class="callout green">
+    <div class="callout-title">Template reuse</div>
+    <p>The entire page is saved as a MailerLite template. Duplicating it for a new session takes about 5 minutes: change the title, date, and Zoom link. The form, payment block, and automation stay connected.</p>
+</div>
+
+<h2 id="stripe">Stripe Payment Integration</h2>
+<p>MailerLite has a native Stripe integration on the Growing Business and Advanced plans. No Zapier, no Make.com, no middleware.</p>
+
+<h3>How It Connects</h3>
+<ol>
+    <li>Connect your Stripe account to MailerLite via the Integrations page (one-click OAuth)</li>
+    <li>Create a product in Stripe with the session price (e.g., $29.99 per session)</li>
+    <li>Add a Stripe payment block to the landing page</li>
+    <li>Select the product from the dropdown</li>
+</ol>
+
+<p>Stripe handles all payment processing, receipts, and refunds through their dashboard. MailerLite records the payment event and triggers the automation.</p>
+
+<div class="callout orange">
+    <div class="callout-title">Plan requirement</div>
+    <p>Stripe integration requires MailerLite Growing Business ($18/mo) or Advanced plan. If you are on the Free plan, this is the one upgrade needed. The Growing Business plan also removes MailerLite branding from your landing pages.</p>
+</div>
+
+<h2 id="gdpr">GDPR Consent Setup</h2>
+<p>MailerLite has built-in GDPR compliance tools. The signup form includes a required consent checkbox that cannot be pre-checked, meeting the "active consent" requirement.</p>
+
+<h3>What Gets Configured</h3>
+<table>
+    <tr><th>Element</th><th>How It Works</th></tr>
+    <tr><td><strong>Terms checkbox</strong></td><td>Required field. User cannot submit without checking. Label text links to your terms page.</td></tr>
+    <tr><td><strong>Terms popup</strong></td><td>Clicking the terms link opens a popup overlay with the full terms text, so users do not leave the page.</td></tr>
+    <tr><td><strong>Consent record</strong></td><td>MailerLite automatically stores: IP address, timestamp, subscription source, and the exact consent text shown.</td></tr>
+    <tr><td><strong>Consent audit</strong></td><td>Each subscriber's profile shows their full consent history, downloadable for compliance audits.</td></tr>
+</table>
+
+<div class="callout purple">
+    <div class="callout-title">Your responsibility</div>
+    <p>You provide the terms and conditions text. I configure the checkbox, popup display, and link. If you do not have terms written yet, I can point you to template resources, but drafting legal text is outside this scope.</p>
+</div>
+
+<h2 id="automation">Email Automation</h2>
+<p>A MailerLite automation workflow fires when someone completes the signup form. The email is sent immediately with no manual step in between.</p>
+
+<h3>Automation Flow</h3>
+<div class="flow-diagram">
+    <div class="flow-step">
+        <div class="flow-num">1</div>
+        <div class="flow-body">
+            <div class="flow-title">Trigger: Form submitted</div>
+            <div class="flow-desc">The automation starts when a subscriber joins through the landing page form. This is a native MailerLite trigger with no delay.</div>
+        </div>
+    </div>
+    <div class="flow-arrow">&#8595;</div>
+    <div class="flow-step">
+        <div class="flow-num">2</div>
+        <div class="flow-body">
+            <div class="flow-title">Action: Send confirmation email</div>
+            <div class="flow-desc">Branded email template with: session title, date, time, your Zoom meeting link, and an "Add to Calendar" link. Sent from your authenticated domain.</div>
+        </div>
+    </div>
+    <div class="flow-arrow">&#8595;</div>
+    <div class="flow-step">
+        <div class="flow-num">3</div>
+        <div class="flow-body">
+            <div class="flow-title">Subscriber tagged and grouped</div>
+            <div class="flow-desc">The subscriber is added to a MailerLite group for this specific session. Useful for sending reminder emails or post-session follow-ups later.</div>
+        </div>
+    </div>
+</div>
+
+<div class="callout green">
+    <div class="callout-title">Reminder emails (optional add-on)</div>
+    <p>The automation can include a reminder email 24 hours before the session and another 1 hour before. This is a simple extension of the same workflow if you want it.</p>
+</div>
+
+<div class="cta-section">
+    <h2>See the delivery schedule</h2>
+    <p>The timeline page shows the 4-day breakdown from DNS setup to handoff.</p>
+    <a href="/clients/mailerlite-zoom-landing-page/timeline" class="cta-btn">View Timeline &#8594;</a>
+</div>
+
+<footer class="footer">
+    <p>Prepared by <strong>UnpauseAI</strong> &middot; <a href="mailto:nico@unpauseai.com">nico@unpauseai.com</a> &middot; 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+function checkAccess(){var c=document.getElementById('accessCode').value.trim().toLowerCase();if(c==='mailerlite-2026'){localStorage.setItem('mailerlite-zoom-access','granted');document.getElementById('accessGate').classList.add('hidden')}else{document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.'}}
+(function(){if(localStorage.getItem('mailerlite-zoom-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+function toggleTheme(){var h=document.documentElement;var t=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',t);localStorage.setItem('mailerlite-zoom-theme',t)}
+(function(){var links=document.querySelectorAll('.step-link');var sections=[];links.forEach(function(l){var id=l.getAttribute('href');if(id&&id.startsWith('#')){var el=document.querySelector(id);if(el)sections.push({el:el,link:l})}});if(!sections.length)return;var observer=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){links.forEach(function(l){l.classList.remove('active')});sections.forEach(function(s){if(s.el===e.target)s.link.classList.add('active')})}})},{rootMargin:'-80px 0px -60% 0px'});sections.forEach(function(s){observer.observe(s.el)})})();
+</script>
+</body>
+</html>

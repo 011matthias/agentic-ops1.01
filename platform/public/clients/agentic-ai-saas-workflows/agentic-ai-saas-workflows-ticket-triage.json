@@ -1,0 +1,398 @@
+{
+  "name": "Support Ticket Triage - Starter",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ticket-triage",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [260, 340],
+      "webhookId": "ticket-triage-webhook"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-ticket",
+              "name": "ticket",
+              "value": "={{ $json.body.ticket }}",
+              "type": "string"
+            },
+            {
+              "id": "field-sender",
+              "name": "sender",
+              "value": "={{ $json.body.sender }}",
+              "type": "string"
+            },
+            {
+              "id": "field-subject",
+              "name": "subject",
+              "value": "={{ $json.body.subject }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Extract Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [480, 340]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-3-5-haiku-20241022\",\n  \"max_tokens\": 512,\n  \"system\": \"You are a support ticket classifier for a SaaS company. Analyze the ticket and return a JSON object with these fields:\\n\\n- category: one of \\\"billing\\\", \\\"technical\\\", \\\"feature_request\\\", \\\"account\\\", \\\"general\\\"\\n- priority: one of \\\"P1\\\" (urgent, service down), \\\"P2\\\" (high, major feature broken), \\\"P3\\\" (medium, minor issue), \\\"P4\\\" (low, question or suggestion)\\n- escalation_tier: one of \\\"tier_0\\\" (auto-resolve, known issue with clear fix), \\\"tier_1\\\" (needs human review with AI-suggested response), \\\"tier_2\\\" (engineering escalation, likely a bug or infrastructure issue)\\n- confidence: float 0.0 to 1.0 indicating classification confidence\\n- suggested_response: a helpful 2-3 sentence response to the customer\\n- reasoning: brief explanation of why this classification was chosen\\n\\nReturn ONLY valid JSON, no markdown formatting.\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Classify this support ticket:\\n\\n{{ $json.ticket }}\"\n    }\n  ]\n}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Claude API - Classify",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [740, 340]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Claude API response and extract classification JSON\nconst response = $input.first().json;\nconst textContent = response.content[0].text;\n\nlet parsed;\ntry {\n  // Handle potential markdown code fence wrapping\n  let cleaned = textContent.trim();\n  if (cleaned.startsWith('```')) {\n    cleaned = cleaned.replace(/^```(?:json)?\\s*\\n?/, '').replace(/\\n?```\\s*$/, '');\n  }\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  return [{\n    json: {\n      error: 'Failed to parse Claude response',\n      raw_response: textContent\n    }\n  }];\n}\n\n// Merge classification with original ticket metadata\nconst prevData = $('Extract Fields').first().json;\n\nreturn [{\n  json: {\n    ticket: prevData.ticket,\n    sender: prevData.sender,\n    subject: prevData.subject,\n    category: parsed.category,\n    priority: parsed.priority,\n    escalation_tier: parsed.escalation_tier,\n    confidence: parsed.confidence,\n    suggested_response: parsed.suggested_response,\n    reasoning: parsed.reasoning,\n    classified_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "a1b2c3d4-0004-4000-8000-000000000004",
+      "name": "Parse Classification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [980, 340]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "rules": [
+            {
+              "outputIndex": 0,
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.priority }}",
+                    "rightValue": "P1",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "outputIndex": 1,
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.priority }}",
+                    "rightValue": "P2",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ],
+          "fallbackOutput": 2
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0005-4000-8000-000000000005",
+      "name": "Priority Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [1220, 340]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \":rotating_light: *{{ $json.priority }} Support Ticket*\\n*Subject:* {{ $json.subject }}\\n*From:* {{ $json.sender }}\\n*Category:* {{ $json.category }}\\n*Escalation:* {{ $json.escalation_tier }}\\n*Confidence:* {{ $json.confidence }}\\n\\n*Ticket:*\\n> {{ $json.ticket }}\\n\\n*Suggested Response:*\\n{{ $json.suggested_response }}\"\n}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "a1b2c3d4-0006-4000-8000-000000000006",
+      "name": "Slack Alert - Urgent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \":warning: *{{ $json.priority }} Support Ticket*\\n*Subject:* {{ $json.subject }}\\n*From:* {{ $json.sender }}\\n*Category:* {{ $json.category }}\\n\\n*Suggested Response:*\\n{{ $json.suggested_response }}\"\n}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "a1b2c3d4-0007-4000-8000-000000000007",
+      "name": "Slack Alert - High",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 340]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.CRM_API_URL }}/tickets/update",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"sender\": \"{{ $json.sender }}\",\n  \"subject\": \"{{ $json.subject }}\",\n  \"category\": \"{{ $json.category }}\",\n  \"priority\": \"{{ $json.priority }}\",\n  \"escalation_tier\": \"{{ $json.escalation_tier }}\",\n  \"suggested_response\": \"{{ $json.suggested_response }}\",\n  \"classified_at\": \"{{ $json.classified_at }}\"\n}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "a1b2c3d4-0008-4000-8000-000000000008",
+      "name": "CRM Update",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1500, 520]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ category: $json.category, priority: $json.priority, escalation_tier: $json.escalation_tier, confidence: $json.confidence, suggested_response: $json.suggested_response, reasoning: $json.reasoning, classified_at: $json.classified_at }) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "content-type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "a1b2c3d4-0009-4000-8000-000000000009",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1760, 340]
+    },
+    {
+      "parameters": {
+        "content": "## INPUT ZONE\nWebhook receives support tickets via POST and extracts fields for downstream processing.",
+        "height": 300,
+        "width": 460,
+        "color": 4
+      },
+      "id": "a1b2c3d4-0010-4000-8000-000000000010",
+      "name": "Sticky Note - Input",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [180, 200]
+    },
+    {
+      "parameters": {
+        "content": "## AI CLASSIFICATION\nClaude 3.5 Haiku classifies ticket by category, priority, and escalation tier. Code node parses the structured JSON response.",
+        "height": 300,
+        "width": 500,
+        "color": 6
+      },
+      "id": "a1b2c3d4-0011-4000-8000-000000000011",
+      "name": "Sticky Note - AI",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [660, 200]
+    },
+    {
+      "parameters": {
+        "content": "## ROUTING\nSwitch node routes tickets by priority:\n- P1 (urgent) -> Slack alert + CRM\n- P2 (high) -> Slack alert + CRM\n- P3/P4 (normal) -> CRM only",
+        "height": 300,
+        "width": 240,
+        "color": 5
+      },
+      "id": "a1b2c3d4-0012-4000-8000-000000000012",
+      "name": "Sticky Note - Routing",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1140, 200]
+    },
+    {
+      "parameters": {
+        "content": "## OUTPUT\nSlack notifications for urgent/high tickets. CRM update for all tickets. Webhook response returns classification result.",
+        "height": 500,
+        "width": 540,
+        "color": 2
+      },
+      "id": "a1b2c3d4-0013-4000-8000-000000000013",
+      "name": "Sticky Note - Output",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1420, 80]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Fields": {
+      "main": [
+        [
+          {
+            "node": "Claude API - Classify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude API - Classify": {
+      "main": [
+        [
+          {
+            "node": "Parse Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Classification": {
+      "main": [
+        [
+          {
+            "node": "Priority Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Priority Router": {
+      "main": [
+        [
+          {
+            "node": "Slack Alert - Urgent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack Alert - High",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CRM Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack Alert - Urgent": {
+      "main": [
+        [
+          {
+            "node": "CRM Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack Alert - High": {
+      "main": [
+        [
+          {
+            "node": "CRM Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CRM Update": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "AI Support"
+    }
+  ]
+}

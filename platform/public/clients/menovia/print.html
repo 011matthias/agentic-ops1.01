@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Proposal for Menovia – UnpauseAI (Print Version)</title>
+  <style>
+    @page {
+      margin: 2cm;
+      size: A4;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #1a1a1a;
+      line-height: 1.6;
+      font-size: 12pt;
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+
+    h1 {
+      font-size: 24pt;
+      color: #1e40af;
+      margin-bottom: 8px;
+    }
+
+    h2 {
+      font-size: 16pt;
+      color: #1e40af;
+      border-bottom: 2px solid #2563eb;
+      padding-bottom: 4px;
+      margin-top: 32px;
+      page-break-after: avoid;
+    }
+
+    h3 {
+      font-size: 13pt;
+      color: #374151;
+      margin-top: 20px;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    ul, ol {
+      margin: 8px 0;
+      padding-left: 24px;
+    }
+
+    li {
+      margin-bottom: 4px;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 12px 0;
+      font-size: 11pt;
+    }
+
+    th {
+      background: #1e40af;
+      color: white;
+      padding: 8px 12px;
+      text-align: left;
+    }
+
+    td {
+      padding: 6px 12px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    tr:nth-child(even) td {
+      background: #f8fafc;
+    }
+
+    .back-link {
+      display: block;
+      margin-bottom: 20px;
+      color: #2563eb;
+      font-size: 13px;
+      text-decoration: none;
+    }
+
+    .back-link:hover {
+      text-decoration: underline;
+    }
+
+    .print-button {
+      display: inline-block;
+      margin-bottom: 24px;
+      padding: 8px 18px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .print-button:hover {
+      background: #1e40af;
+    }
+
+    .header-block {
+      margin-bottom: 40px;
+    }
+
+    .header-block .brand {
+      font-size: 11pt;
+      font-weight: 700;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+
+    .header-block .subtitle {
+      font-size: 15pt;
+      color: #374151;
+      margin-top: 4px;
+      font-weight: 400;
+    }
+
+    .header-block .date {
+      font-size: 11pt;
+      color: #6b7280;
+      margin-top: 12px;
+    }
+
+    .zone-table td:first-child {
+      font-weight: 600;
+      color: #1e40af;
+      white-space: nowrap;
+      width: 160px;
+    }
+
+    .investment-highlight {
+      background: #eff6ff;
+      border-left: 4px solid #2563eb;
+      padding: 16px 20px;
+      margin: 16px 0;
+      border-radius: 0 6px 6px 0;
+    }
+
+    .investment-highlight .total {
+      font-size: 18pt;
+      font-weight: 700;
+      color: #1e40af;
+    }
+
+    .investment-highlight .breakdown {
+      font-size: 11pt;
+      color: #374151;
+      margin-top: 6px;
+    }
+
+    .footer {
+      margin-top: 48px;
+      padding-top: 16px;
+      border-top: 1px solid #e5e7eb;
+      font-size: 10pt;
+      color: #6b7280;
+    }
+
+    .footer strong {
+      color: #1a1a1a;
+    }
+
+    .phase-header {
+      background: #eff6ff;
+      padding: 10px 14px;
+      border-radius: 6px;
+      margin-top: 20px;
+      margin-bottom: 8px;
+    }
+
+    .phase-header strong {
+      color: #1e40af;
+    }
+
+    @media print {
+      .back-link,
+      .print-button,
+      .print-trigger {
+        display: none !important;
+      }
+
+      h2 {
+        page-break-before: always;
+      }
+
+      h2:first-of-type {
+        page-break-before: avoid;
+      }
+
+      .header-block {
+        page-break-after: avoid;
+      }
+
+      .investment-highlight {
+        page-break-inside: avoid;
+      }
+
+      table {
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <a href="/clients/menovia/" class="back-link">&#8592; Back to proposal</a>
+  <button class="print-button" onclick="window.print()">Print this page</button>
+
+  <!-- Header -->
+  <div class="header-block">
+    <div class="brand">UnpauseAI</div>
+    <h1>Proposal for Menovia</h1>
+    <div class="subtitle">Patient Journey Automation</div>
+    <div class="date">March 2026</div>
+  </div>
+
+  <!-- 1. Executive Summary -->
+  <h2>1. Executive Summary</h2>
+  <p>Menovia is building a digital menopause clinic and needs automation infrastructure to support the full patient journey — from first contact to confirmed appointment and follow-up care.</p>
+  <p>This proposal covers 8–10 workflows connecting 7 integrations across intake, booking, payments, communications, and CRM. The build is scoped at 4–7 weeks and is designed to be GDPR-compliant, EU-hosted, and built on n8n.</p>
+  <ul>
+    <li><strong>8–10 workflows</strong> covering the full patient journey</li>
+    <li><strong>7 integrations</strong>: Zoho CRM, Cal.com, Mollie, Brevo, MessageBird, Intercom, Typeform</li>
+    <li><strong>4–7 weeks</strong> to production</li>
+    <li><strong>GDPR-compliant</strong> by design — EU hosting, DPAs, consent tracking</li>
+    <li><strong>n8n-based</strong> — open-core, no per-operation pricing</li>
+  </ul>
+
+  <!-- 2. How It Works -->
+  <h2>2. How It Works</h2>
+  <p>The automation system is structured in three zones:</p>
+  <table class="zone-table">
+    <tbody>
+      <tr>
+        <td>Data In</td>
+        <td>Patient data enters through intake forms (Typeform), chat (Intercom), and manual entry. Webhooks and scheduled polls keep everything in sync in real time.</td>
+      </tr>
+      <tr>
+        <td>Automation</td>
+        <td>n8n processes each event: validating data, routing decisions, triggering the right sequence — booking confirmation, payment link, Dutch SMS reminder, or CRM update.</td>
+      </tr>
+      <tr>
+        <td>Results</td>
+        <td>Patients receive timely, personalised communications. The team sees a clean CRM with full patient history. No manual data entry, no missed follow-ups.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- 3. Solution Overview -->
+  <h2>3. Solution Overview</h2>
+
+  <h3>1. Patient Intake Flow</h3>
+  <p>Typeform intake form submits via webhook to n8n, which validates the data, checks for duplicates, creates or updates a contact in Zoho CRM, and sends a confirmation email via Brevo — all within seconds of submission.</p>
+
+  <h3>2. Booking and Payment</h3>
+  <p>Cal.com handles appointment scheduling with automated availability logic. Mollie generates payment links sent directly to the patient. Booking confirmation and payment status are written back to the CRM automatically.</p>
+
+  <h3>3. Communication Sequences</h3>
+  <p>Email and SMS sequences in Dutch are triggered by patient journey milestones: intake complete, appointment booked, payment received, appointment reminder (24h and 2h prior), and post-appointment follow-up. Brevo handles email; MessageBird handles SMS.</p>
+
+  <h3>4. CRM as Central Hub</h3>
+  <p>Zoho CRM is the single source of truth for every patient record. All workflow outcomes — intake status, appointment dates, payment state, communication history — are written to CRM fields so the Menovia team has a live dashboard without touching any underlying tools.</p>
+
+  <h3>5. Intercom Integration</h3>
+  <p>Intercom handles live chat and FAQ deflection. When a patient chats in, n8n checks whether they already exist in Zoho CRM and links the conversation. Support agents see full context without switching tabs.</p>
+
+  <h3>6. GDPR by Design</h3>
+  <p>Every tool in the stack hosts data in the EU. Consent is captured at intake and logged with a timestamp. Data retention policies are configured per tool. DPAs are in place or available for all providers. See the GDPR Compliance Matrix below.</p>
+
+  <!-- 4. Your Starter Template -->
+  <h2>4. Your Starter Template</h2>
+  <p>As part of this proposal, UnpauseAI is providing a free n8n intake workflow template that you can import and run immediately. This gives Menovia a working foundation before any paid work begins.</p>
+  <p>The template covers:</p>
+  <ul>
+    <li>Webhook receiver for Typeform submissions</li>
+    <li>Data validation (required fields, format checks)</li>
+    <li>Consent logging with timestamp to a data store</li>
+    <li>Zoho CRM contact creation (or update if duplicate)</li>
+    <li>Confirmation email via Brevo</li>
+    <li>24-hour appointment reminder trigger setup</li>
+  </ul>
+  <p>The template is pre-wired for the Menovia use case and requires only API keys to activate. It is designed to be extended — each node is labelled, commented, and ready for the full build.</p>
+
+  <!-- 5. GDPR Compliance Matrix -->
+  <h2>5. GDPR Compliance Matrix</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Tool</th>
+        <th>EU Hosting</th>
+        <th>DPA</th>
+        <th>Consent Required</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Zoho CRM</td>
+        <td>Yes (EU DC)</td>
+        <td>Yes</td>
+        <td>Patient data</td>
+        <td>Ready</td>
+      </tr>
+      <tr>
+        <td>n8n Cloud</td>
+        <td>Yes (EU)</td>
+        <td>Yes</td>
+        <td>Processor</td>
+        <td>Ready</td>
+      </tr>
+      <tr>
+        <td>Mollie</td>
+        <td>Yes (NL)</td>
+        <td>Yes</td>
+        <td>Payment</td>
+        <td>Ready</td>
+      </tr>
+      <tr>
+        <td>Brevo</td>
+        <td>Yes (EU)</td>
+        <td>Yes</td>
+        <td>Marketing</td>
+        <td>Ready</td>
+      </tr>
+      <tr>
+        <td>MessageBird</td>
+        <td>Yes (NL)</td>
+        <td>Yes</td>
+        <td>SMS</td>
+        <td>Ready</td>
+      </tr>
+      <tr>
+        <td>Cal.com</td>
+        <td>Yes (EU)</td>
+        <td>Yes</td>
+        <td>Booking</td>
+        <td>Ready</td>
+      </tr>
+      <tr>
+        <td>Intercom</td>
+        <td>Yes (EU WS)</td>
+        <td>Yes</td>
+        <td>Chat/support</td>
+        <td>Setup needed</td>
+      </tr>
+      <tr>
+        <td>Typeform</td>
+        <td>Yes (EU)</td>
+        <td>Yes</td>
+        <td>Forms</td>
+        <td>Ready</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- 6. Timeline -->
+  <h2>6. Timeline</h2>
+
+  <div class="phase-header">
+    <strong>Phase 1: Core Patient Journey (Weeks 1–4) — EUR 3,500</strong>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Week</th>
+        <th>Deliverables</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Week 1</td>
+        <td>CRM setup and field configuration, n8n Cloud instance provisioned, first intake workflow live</td>
+      </tr>
+      <tr>
+        <td>Week 2</td>
+        <td>Cal.com booking integration, Mollie payment links, Brevo and MessageBird email/SMS setup</td>
+      </tr>
+      <tr>
+        <td>Week 3</td>
+        <td>Full communication sequences built, Dutch content finalised, reminder logic end-to-end</td>
+      </tr>
+      <tr>
+        <td>Week 4</td>
+        <td>End-to-end testing across all workflows, edge case handling, team walkthrough session</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="phase-header">
+    <strong>Phase 2: Compliance and Handover (Weeks 5–7) — EUR 2,000</strong>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Week</th>
+        <th>Deliverables</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Week 5</td>
+        <td>GDPR audit across all tools, consent capture verification, data retention policies configured</td>
+      </tr>
+      <tr>
+        <td>Week 6</td>
+        <td>Intercom EU workspace setup, Dutch chat content finalised, EHR integration assessment</td>
+      </tr>
+      <tr>
+        <td>Week 7</td>
+        <td>Full documentation package, training session with team, handover complete</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- 7. Investment -->
+  <h2>7. Investment</h2>
+
+  <div class="investment-highlight">
+    <div class="total">EUR 5,500 total</div>
+    <div class="breakdown">Phase 1 (Weeks 1–4): EUR 3,500 &nbsp;|&nbsp; Phase 2 (Weeks 5–7): EUR 2,000</div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Item</th>
+        <th>Amount</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Phase 1: Core Patient Journey</td>
+        <td>EUR 3,500</td>
+        <td>Intake, booking, payments, comms sequences</td>
+      </tr>
+      <tr>
+        <td>Phase 2: Compliance and Handover</td>
+        <td>EUR 2,000</td>
+        <td>GDPR audit, Intercom, documentation, training</td>
+      </tr>
+      <tr>
+        <td><strong>Total</strong></td>
+        <td><strong>EUR 5,500</strong></td>
+        <td>Fixed price, no surprises</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Tool Costs (paid by Menovia)</h3>
+  <p>Estimated EUR 100–250/month depending on patient volume and tier selection. All tools have free tiers or low-cost starter plans to begin.</p>
+
+  <h3>Market Comparison</h3>
+  <p>Dutch digital agencies typically price equivalent automation infrastructure at EUR 12,000–18,000. This proposal delivers the same outcome at a fraction of the cost because UnpauseAI focuses exclusively on automation — no design, no strategy retainer, no account management overhead.</p>
+
+  <!-- 8. About UnpauseAI -->
+  <h2>8. About UnpauseAI</h2>
+  <p>UnpauseAI builds automation infrastructure for growing businesses. We connect the tools teams already use and make them work together — so operations scale without adding headcount.</p>
+  <ul>
+    <li>Automations in production today, handling thousands of operations monthly</li>
+    <li>Specialists in n8n and Make.com — both open-core platforms with EU data options</li>
+    <li>Based in Europe, GDPR-aware by default on every project</li>
+    <li>Small, focused team — you work directly with the builders, not account managers</li>
+  </ul>
+
+  <!-- Footer -->
+  <div class="footer">
+    <strong>UnpauseAI</strong><br />
+    nicolas.neumann@unpauseai.com &nbsp;&middot;&nbsp; unpauseai.com/clients/menovia
+  </div>
+
+  <script>
+    window.addEventListener('load', function () {
+      if (window.location.search.indexOf('print') !== -1) {
+        setTimeout(function () {
+          window.print();
+        }, 500);
+      }
+    });
+  </script>
+
+</body>
+</html>

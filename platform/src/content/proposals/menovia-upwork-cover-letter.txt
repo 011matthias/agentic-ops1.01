@@ -1,0 +1,22 @@
+Hi,
+
+I read your project brief in detail, all 8 pages. Three things stood out:
+
+1) You have already documented your workflows across 15+ chapters and selected your toolstack (Zoho, n8n, Mollie, Brevo, MessageBird, Cal.com). You do not need discovery. You need someone who can take your documentation and build the system.
+
+2) GDPR compliance is not optional. Every tool needs EU data hosting, DPAs, and proper consent tracking. I verified your entire proposed toolstack: all tools support EU hosting and provide DPAs. No US-only services.
+
+3) You need a system your team can operate after handover. Not a black box.
+
+This is exactly what we do. We build automation infrastructure on n8n for clients with documented workflows. Our systems are in production today, handling thousands of automated operations monthly.
+
+I put together a detailed proposal for you with a concrete timeline, fixed pricing, and a GDPR compliance matrix for your full toolstack:
+
+[PROPOSAL LINK HERE - replace with unpauseai.com/proposals/menovia-patient-journey-automation after deploy]
+
+I also built a sample Patient Intake Workflow in n8n that you can import and test. It covers form submission, GDPR consent logging, CRM contact creation, and confirmation email. It is yours to keep regardless.
+
+Available to start immediately. Happy to walk you through the template on a 20-minute call.
+
+Arthur
+UnpauseAI

@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solution | AI Lead Generation System</title>
+<script>
+(function(){var t=localStorage.getItem('n8n-ai-lead-gen-followup-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+.access-gate{position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;transition:opacity .3s}
+.access-gate.hidden{opacity:0;pointer-events:none}
+.access-gate h2{font-size:20px;color:var(--text-strong)}
+.access-gate p{font-size:14px;color:var(--text2);max-width:360px;text-align:center}
+.access-gate input{padding:10px 16px;border:2px solid var(--border);border-radius:8px;font-size:15px;width:240px;background:var(--surface);color:var(--text);outline:none}
+.access-gate input:focus{border-color:var(--blue)}
+.access-gate button{padding:10px 24px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
+.access-gate .error{color:#ef4444;font-size:13px;min-height:20px}
+@media print{.site-nav,.sidebar,.mobile-nav-toggle,.access-gate{display:none!important}.main-content{margin-left:0!important}}
+*{box-sizing:border-box;margin:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--text);background:var(--bg);line-height:1.65;font-size:15px;transition:background .2s,color .2s}
+a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+.site-nav{position:fixed;top:0;left:0;right:0;z-index:1000;background:var(--nav-bg);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px;height:56px;box-shadow:var(--card-shadow);transition:background .2s}
+.nav-left{display:flex;align-items:center;gap:12px}
+.nav-logo{display:flex;align-items:center;gap:6px;font-size:15px;text-decoration:none}
+.nav-logo .logo-bold{font-weight:700;color:var(--text)}.nav-logo .logo-accent{font-weight:700;color:var(--blue)}
+.nav-sep{color:var(--border);font-size:18px}.nav-client{font-size:14px;font-weight:600;color:var(--text)}
+.nav-links{display:flex;gap:2px}
+.nav-links a{font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;transition:background .15s,color .15s}
+.nav-links a:hover{background:var(--surface2);color:var(--text)}
+.nav-links a.active{background:var(--blue-light);color:var(--blue);font-weight:700}
+.nav-right{display:flex;align-items:center;gap:8px}
+.nav-status{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;background:var(--blue-light);color:var(--blue)}
+@keyframes navpulse{0%,100%{opacity:1}50%{opacity:.4}}
+.nav-theme{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:13px;color:var(--text2);transition:background .15s}
+.nav-theme:hover{background:var(--border)}
+.mobile-nav-toggle{display:none;background:none;border:none;cursor:pointer;padding:8px;color:var(--text)}
+.sidebar{position:fixed;top:56px;left:0;width:220px;height:calc(100vh - 56px);overflow-y:auto;background:var(--nav-bg);border-right:1px solid var(--border);padding:20px 0;z-index:50;transition:transform .25s,background .2s}
+.sidebar-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);padding:0 16px;margin-bottom:12px}
+.step-list{list-style:none;padding:0}.step-item{position:relative}
+.step-link{display:flex;align-items:center;gap:10px;padding:8px 16px;font-size:13px;font-weight:500;color:var(--text2);text-decoration:none;transition:all .15s;border-left:3px solid transparent}
+.step-link:hover{background:var(--surface2);color:var(--text)}
+.step-link.active{background:var(--blue-light);color:var(--blue-dark);border-left-color:var(--blue);font-weight:700}
+.step-num{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;border:2px solid var(--border);color:var(--text2);flex-shrink:0;transition:all .15s}
+.step-link.active .step-num{border-color:var(--blue);background:var(--blue);color:#fff}
+.step-line{position:absolute;left:26px;top:38px;width:2px;height:calc(100% - 30px);background:var(--border)}
+.step-item:last-child .step-line{display:none}
+.main-content{margin-left:220px;padding:56px 0 0 0}
+.content-inner{max-width:800px;margin:0 auto;padding:40px 30px 60px}
+.hero{text-align:center;padding:48px 0 40px;border-bottom:1px solid var(--border);margin-bottom:48px}
+.hero h1{font-size:30px;font-weight:800;color:var(--text-strong);margin-bottom:12px;line-height:1.2}
+.hero-sub{font-size:16px;color:var(--text2);max-width:560px;margin:0 auto;line-height:1.6}
+h2{font-size:22px;color:var(--blue-dark);border-bottom:2px solid var(--blue);padding-bottom:8px;margin-top:56px;margin-bottom:20px;scroll-margin-top:80px}
+h3{font-size:17px;color:var(--text-strong);margin-top:28px;margin-bottom:12px;scroll-margin-top:80px}
+p{margin-bottom:16px;color:var(--text)}
+strong{color:var(--text-strong)}
+ul,ol{padding-left:24px;margin-bottom:16px}li{margin-bottom:6px}
+.callout{border-left:4px solid var(--blue);background:var(--blue-bg);padding:16px 20px;border-radius:0 8px 8px 0;margin:24px 0}
+.callout-title{font-size:13px;font-weight:700;color:var(--blue-dark);margin-bottom:4px;text-transform:uppercase;letter-spacing:.03em}
+.callout p{margin:0;color:var(--blue-dark);font-size:14px}
+.callout.green{border-color:var(--green);background:var(--green-bg)}.callout.green .callout-title,.callout.green p{color:var(--green-dark)}
+.callout.orange{border-color:var(--orange);background:var(--orange-bg)}.callout.orange .callout-title,.callout.orange p{color:var(--orange-dark)}
+.callout.purple{border-color:var(--purple);background:var(--purple-bg)}.callout.purple .callout-title,.callout.purple p{color:var(--purple-dark)}
+table.detail{width:100%;border-collapse:collapse;margin:20px 0;font-size:14px}
+table.detail th{background:var(--th-bg);color:#fff;text-align:left;padding:10px 14px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+table.detail td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+table.detail tr:last-child td{border-bottom:none}
+table.detail tr:hover td{background:var(--surface2)}
+.pipeline{display:flex;gap:0;margin:24px 0;flex-wrap:wrap}
+.pipe-stage{flex:1;min-width:140px;padding:20px 16px;border:1px solid var(--border);background:var(--surface);text-align:center;position:relative}
+.pipe-stage:first-child{border-radius:12px 0 0 12px}
+.pipe-stage:last-child{border-radius:0 12px 12px 0}
+.pipe-stage:not(:last-child)::after{content:"";position:absolute;right:-8px;top:50%;transform:translateY(-50%);width:0;height:0;border:8px solid transparent;border-left:8px solid var(--blue);z-index:1}
+.pipe-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin-bottom:6px}
+.pipe-title{font-size:14px;font-weight:700;color:var(--text-strong)}
+.pipe-desc{font-size:12px;color:var(--text2);margin-top:4px}
+.code-block{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;font-family:'SF Mono',Consolas,monospace;font-size:13px;line-height:1.5;overflow-x:auto;margin:16px 0;color:var(--text)}
+.cta-btn{display:inline-flex;align-items:center;gap:8px;background:var(--blue);color:#fff;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;transition:background .15s,transform .15s;box-shadow:0 2px 8px rgba(37,99,235,.3)}
+.cta-btn:hover{background:var(--blue-dark);transform:translateY(-1px);text-decoration:none}
+.footer{text-align:center;color:var(--text2);font-size:13px;padding:20px 0 40px;border-top:1px solid var(--border);margin-top:24px}
+@media(max-width:1100px){.nav-links a{font-size:12px;padding:5px 8px}.nav-status{display:none}}
+@media(max-width:768px){.sidebar{transform:translateX(-100%);width:260px}.sidebar.open{transform:translateX(0);box-shadow:4px 0 12px rgba(0,0,0,.1)}.main-content{margin-left:0!important}.mobile-nav-toggle{display:block}.nav-links{display:none}.hero h1{font-size:24px}.pipeline{flex-direction:column}.pipe-stage{border-radius:8px!important}.pipe-stage:not(:last-child)::after{display:none}}
+</style>
+</head>
+<body>
+
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h14M3 10h14M3 14h14"/></svg>
+        </button>
+        <a href="/clients/n8n-ai-lead-gen-followup/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">AI Lead Generation</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/n8n-ai-lead-gen-followup/">Overview</a>
+        <a href="/clients/n8n-ai-lead-gen-followup/solution" class="active">Solution</a>
+        <a href="/clients/n8n-ai-lead-gen-followup/workflow">Workflow</a>
+        <a href="/clients/n8n-ai-lead-gen-followup/timeline">Timeline</a>
+        <a href="/clients/n8n-ai-lead-gen-followup/investment">Investment</a>
+        <a href="/clients/n8n-ai-lead-gen-followup/faq">FAQ</a>
+        <a href="/clients/n8n-ai-lead-gen-followup/onboarding">Get Started</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<aside class="sidebar">
+    <div class="sidebar-label">On this page</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#pipeline-overview" class="step-link active"><span class="step-num">1</span> Pipeline Overview</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#stage-1-source" class="step-link"><span class="step-num">2</span> Source</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#stage-2-store" class="step-link"><span class="step-num">3</span> Store</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#stage-3-qualify" class="step-link"><span class="step-num">4</span> Qualify</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#stage-4-outreach" class="step-link"><span class="step-num">5</span> Outreach</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#stage-5-follow-up" class="step-link"><span class="step-num">6</span> Follow-Up</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#error-handling" class="step-link"><span class="step-num">7</span> Error Handling</a>
+        </li>
+    </ul>
+</aside>
+
+<div class="main-content">
+<div class="content-inner">
+
+<section class="hero">
+    <h1>Solution Architecture</h1>
+    <p class="hero-sub">A 5-stage pipeline built in n8n. Leads flow from sourcing through qualification to personalized outreach and automatic follow-up.</p>
+</section>
+
+<h2 id="pipeline-overview">Pipeline Overview</h2>
+
+<p>The system is five stages connected by n8n workflows. Each stage does one job, passes its output to the next, and handles its own errors. If one source goes down, the rest keep working. If an email bounces, the follow-up sequence adjusts.</p>
+
+<div class="pipeline">
+    <div class="pipe-stage">
+        <div class="pipe-label">Stage 1</div>
+        <div class="pipe-title">Source</div>
+        <div class="pipe-desc">Find leads</div>
+    </div>
+    <div class="pipe-stage">
+        <div class="pipe-label">Stage 2</div>
+        <div class="pipe-title">Store</div>
+        <div class="pipe-desc">Deduplicate + save</div>
+    </div>
+    <div class="pipe-stage">
+        <div class="pipe-label">Stage 3</div>
+        <div class="pipe-title">Qualify</div>
+        <div class="pipe-desc">Score 0-100</div>
+    </div>
+    <div class="pipe-stage">
+        <div class="pipe-label">Stage 4</div>
+        <div class="pipe-title">Outreach</div>
+        <div class="pipe-desc">AI-personalized email</div>
+    </div>
+    <div class="pipe-stage">
+        <div class="pipe-label">Stage 5</div>
+        <div class="pipe-title">Follow-Up</div>
+        <div class="pipe-desc">2-3 auto messages</div>
+    </div>
+</div>
+
+<h2 id="stage-1-source">Stage 1: Lead Sourcing</h2>
+
+<p>The sourcing workflow runs on a configurable schedule (daily, twice daily, or weekly). It pulls from multiple channels and normalizes every lead into the same structure before passing it downstream.</p>
+
+<h3>Channels for F&amp;B</h3>
+
+<table class="detail">
+    <thead><tr><th>Source</th><th>Method</th><th>What It Catches</th></tr></thead>
+    <tbody>
+        <tr>
+            <td><strong>Google Maps API</strong></td>
+            <td>n8n HTTP Request node with Places API. Search by category ("restaurant", "caterer", "food truck") within a geographic radius.</td>
+            <td>New restaurants, bakeries, caterers, food trucks within your target area. Includes name, address, phone, rating, website URL.</td>
+        </tr>
+        <tr>
+            <td><strong>Yelp Fusion API</strong></td>
+            <td>n8n HTTP Request node. Business search endpoint filtered by category and location.</td>
+            <td>Businesses with Yelp presence. Includes review count, rating, price range, and whether they've claimed their listing (a signal of business activity).</td>
+        </tr>
+        <tr>
+            <td><strong>Industry directories</strong></td>
+            <td>n8n HTML Extract node or RSS feed. Targeted scraping with rate limiting and caching.</td>
+            <td>Niche F&amp;B listings that don't show up on Google Maps. Local food blogs, chamber of commerce listings, supplier directories.</td>
+        </tr>
+        <tr>
+            <td><strong>Social signals</strong></td>
+            <td>RSS feeds from relevant hashtags, local business Facebook groups, or Google Alerts via n8n.</td>
+            <td>Newly opened businesses, businesses posting about expansion, or those actively looking for services.</td>
+        </tr>
+    </tbody>
+</table>
+
+<h3>Normalized Lead Schema</h3>
+
+<p>Every source produces different data. The sourcing workflow normalizes it into a single structure before anything else touches it:</p>
+
+<div class="code-block">{
+  "business_name": "Rosie's BBQ Champaign",
+  "business_type": "Restaurant - BBQ",
+  "location": "Champaign, IL",
+  "phone": "+1-217-555-0142",
+  "email": "info@rosiesbbq.com",
+  "website": "https://rosiesbbq.com",
+  "source": "google_maps",
+  "source_id": "ChIJ...",
+  "rating": 4.3,
+  "review_count": 187,
+  "sourced_at": "2026-03-29T14:00:00Z"
+}</div>
+
+<h2 id="stage-2-store">Stage 2: Storage + Deduplication</h2>
+
+<p>New leads hit the storage layer, which does three things before writing to your Google Sheet or Airtable:</p>
+
+<ol>
+    <li><strong>Duplicate check.</strong> Match against existing records on business name + location (fuzzy match) and phone/email (exact match). If a lead already exists, the record is updated with any new data but not duplicated.</li>
+    <li><strong>Field validation.</strong> Missing email? Flag it but still store the lead. Missing name? Reject. The validation rules are configurable so you can tighten or loosen them as your pipeline matures.</li>
+    <li><strong>Enrichment.</strong> If we have a website URL but no email, n8n can scrape the contact page for a public email address. This runs as a sub-workflow so it doesn't slow down the main pipeline.</li>
+</ol>
+
+<div class="callout">
+    <div class="callout-title">Why Google Sheets or Airtable?</div>
+    <p>You mentioned both in your posting. Google Sheets is simpler: no learning curve, everyone on your team can already use it, and n8n's Google Sheets nodes are reliable. Airtable gives you relational views, better filtering, and native status tracking. I'd recommend starting with Google Sheets and migrating to Airtable only if you outgrow it. The n8n workflow stays the same either way since the data schema is identical.</p>
+</div>
+
+<h2 id="stage-3-qualify">Stage 3: Lead Qualification</h2>
+
+<p>Not every lead is worth an email. A closed restaurant with no website and 2 Yelp reviews is a different prospect than a busy caterer with 200 reviews and an active Instagram. The qualification stage assigns a score so you can focus effort where it counts.</p>
+
+<h3>Scoring Factors</h3>
+
+<table class="detail">
+    <thead><tr><th>Factor</th><th>Weight</th><th>What It Measures</th></tr></thead>
+    <tbody>
+        <tr>
+            <td><strong>Online presence</strong></td>
+            <td>25 points</td>
+            <td>Has website (10), has social profiles (10), website loads and is maintained (5)</td>
+        </tr>
+        <tr>
+            <td><strong>Review activity</strong></td>
+            <td>25 points</td>
+            <td>Review count above threshold (15), average rating above 3.5 (10)</td>
+        </tr>
+        <tr>
+            <td><strong>Business type fit</strong></td>
+            <td>20 points</td>
+            <td>Matches your target categories. Catering (20), restaurant (15), food truck (10), other F&amp;B (5)</td>
+        </tr>
+        <tr>
+            <td><strong>Location match</strong></td>
+            <td>15 points</td>
+            <td>Within primary radius (15), within secondary radius (8), outside target area (0)</td>
+        </tr>
+        <tr>
+            <td><strong>Growth signals</strong></td>
+            <td>15 points</td>
+            <td>Recently opened (10), hiring (5), expanding to new location (5), active social posting (5). Capped at 15.</td>
+        </tr>
+    </tbody>
+</table>
+
+<p>The scoring weights are configurable. If you find that online presence matters more than location for your business, you adjust the weights in the n8n workflow config. No code changes needed.</p>
+
+<div class="callout green">
+    <div class="callout-title">AI-assisted qualification</div>
+    <p>For leads with enough data (website URL, business description), the AI component can evaluate the lead beyond rule-based scoring. It reads the business profile and assesses factors like growth trajectory, service alignment, and outreach receptiveness. Try the <a href="/clients/n8n-ai-lead-gen-followup/workflow">live demo on the Workflow page</a> to see this in action.</p>
+</div>
+
+<h2 id="stage-4-outreach">Stage 4: Personalized Outreach</h2>
+
+<p>Here's where the AI earns its keep. Instead of a generic template with {first_name} placeholders, the outreach workflow generates a unique email for each lead by feeding the lead's profile into an AI prompt.</p>
+
+<h3>What the AI knows about each lead</h3>
+
+<ul>
+    <li>Business name and type (from sourcing)</li>
+    <li>Location and proximity to your area (from sourcing)</li>
+    <li>Rating, review count, and review themes (from sourcing + enrichment)</li>
+    <li>Website content summary (from enrichment sub-workflow)</li>
+    <li>Qualification score and reasoning (from Stage 3)</li>
+</ul>
+
+<h3>What it generates</h3>
+
+<p>A 3-4 paragraph email that reads like you spent five minutes looking at their business before writing it. It mentions something specific: their cuisine, a recent expansion, their high review count, or a service they offer that relates to what you do. The tone is conversational, not salesy.</p>
+
+<h3>Sending infrastructure</h3>
+
+<p>The outreach workflow connects to your email provider (Gmail, SMTP, or a transactional service like SendGrid). Rate limiting is built in to stay under provider limits and avoid spam flags. The default is 30 emails per hour, configurable per provider.</p>
+
+<div class="callout orange">
+    <div class="callout-title">CAN-SPAM compliance</div>
+    <p>Every outreach email includes an opt-out mechanism. When a recipient opts out, their record is flagged in your sheet and excluded from all future outreach and follow-ups. The system also respects reply detection: if someone replies (even negatively), the sequence stops.</p>
+</div>
+
+<h2 id="stage-5-follow-up">Stage 5: Follow-Up Sequence</h2>
+
+<p>Most leads won't respond to the first email. That's normal. The follow-up sequence sends 2-3 additional messages over a configurable window (default: 3, 7, and 14 days after the initial outreach).</p>
+
+<h3>Sequence logic</h3>
+
+<table class="detail">
+    <thead><tr><th>Follow-Up</th><th>Timing</th><th>Content Approach</th><th>Stop Conditions</th></tr></thead>
+    <tbody>
+        <tr>
+            <td><strong>Follow-up 1</strong></td>
+            <td>Day 3</td>
+            <td>Short, references the original email. "Just wanted to make sure this didn't get buried." Adds one new piece of value.</td>
+            <td>Reply received, opt-out clicked, or email bounced</td>
+        </tr>
+        <tr>
+            <td><strong>Follow-up 2</strong></td>
+            <td>Day 7</td>
+            <td>Different angle. If the first email was about their business, this one is about a result or case study.</td>
+            <td>Same as above</td>
+        </tr>
+        <tr>
+            <td><strong>Follow-up 3</strong></td>
+            <td>Day 14</td>
+            <td>Final touch. Brief, low-pressure. "No worries if this isn't a fit. Just wanted to leave the door open."</td>
+            <td>Same as above, plus: sequence complete</td>
+        </tr>
+    </tbody>
+</table>
+
+<p>The follow-up content can be AI-generated (referencing the original outreach context) or template-based with merge fields. I'd recommend AI-generated for the first two and a simple template for the final one.</p>
+
+<h2 id="error-handling">Error Handling</h2>
+
+<p>Every stage has its own error path. When something breaks, the system logs it, skips the problematic record, and continues processing the rest of the batch.</p>
+
+<table class="detail">
+    <thead><tr><th>Error Type</th><th>What Happens</th><th>How You Know</th></tr></thead>
+    <tbody>
+        <tr>
+            <td><strong>API rate limit</strong></td>
+            <td>n8n retries with exponential backoff (1s, 2s, 4s). After 3 retries, the batch pauses and resumes on next scheduled run.</td>
+            <td>Error counter in your dashboard sheet. Automated alert if 3+ failures in a row.</td>
+        </tr>
+        <tr>
+            <td><strong>Email bounce</strong></td>
+            <td>Lead marked as "undeliverable" in your sheet. Excluded from future outreach. Follow-up sequence stops.</td>
+            <td>Bounce count visible in your sheet. Weekly summary includes bounce rate.</td>
+        </tr>
+        <tr>
+            <td><strong>Invalid data</strong></td>
+            <td>Lead stored with a "needs_review" flag. Skipped by outreach until manually reviewed or enrichment fills the gap.</td>
+            <td>"Needs Review" filter in your sheet shows flagged records.</td>
+        </tr>
+        <tr>
+            <td><strong>Source unavailable</strong></td>
+            <td>That source is skipped for this run. Other sources continue normally. Next run retries.</td>
+            <td>Source health column in your dashboard sheet shows last successful pull date per source.</td>
+        </tr>
+        <tr>
+            <td><strong>AI generation failure</strong></td>
+            <td>Falls back to template-based email with merge fields. The lead still gets outreach, just less personalized.</td>
+            <td>Fallback count in your sheet. If AI failure rate exceeds 10%, automated alert.</td>
+        </tr>
+    </tbody>
+</table>
+
+<div style="text-align:center;margin-top:48px">
+    <a href="/clients/n8n-ai-lead-gen-followup/workflow" class="cta-btn">See the Workflow + Live Demo &rarr;</a>
+</div>
+
+<div class="footer">
+    <p>Prepared by <a href="mailto:nicolas.neumann@unpauseai.com">UnpauseAI</a> &middot; 2026</p>
+</div>
+
+</div>
+</div>
+
+<script>
+function checkAccess(){var c=document.getElementById('accessCode').value.trim().toLowerCase();if(c==='leadgen-2026'){document.getElementById('accessGate').classList.add('hidden');localStorage.setItem('n8n-ai-lead-gen-followup-access','granted')}else{document.getElementById('accessError').textContent='Incorrect code. Check your Upwork message.'}}
+if(localStorage.getItem('n8n-ai-lead-gen-followup-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}
+function toggleTheme(){var h=document.documentElement;var t=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',t);localStorage.setItem('n8n-ai-lead-gen-followup-theme',t)}
+var links=document.querySelectorAll('.step-link');var sections=[];
+links.forEach(function(a){var id=a.getAttribute('href').replace('#','');var el=document.getElementById(id);if(el)sections.push({el:el,link:a})});
+function updateActive(){var scrollY=window.scrollY+120;var active=sections[0];for(var i=0;i<sections.length;i++){if(sections[i].el.offsetTop<=scrollY)active=sections[i]}links.forEach(function(l){l.classList.remove('active')});if(active)active.link.classList.add('active')}
+window.addEventListener('scroll',updateActive);
+</script>
+</body>
+</html>

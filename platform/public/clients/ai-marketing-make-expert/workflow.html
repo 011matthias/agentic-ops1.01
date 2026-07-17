@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Build Methodology | AI Marketing System | UnpauseAI</title>
+<style>
+:root {
+    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+    --th-bg: #1e40af;
+}
+[data-theme="dark"] {
+    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
+    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+    --th-bg: #1e3a5f;
+}
+@media print {
+    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section, .access-gate { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    body { padding-top: 0 !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+    transition: background .2s, color .2s;
+}
+.access-gate {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; transition: opacity .3s;
+}
+.access-gate.hidden { opacity: 0; pointer-events: none; }
+.access-gate h2 { font-size: 20px; color: var(--text-strong); }
+.access-gate p { font-size: 14px; color: var(--text2); max-width: 360px; text-align: center; }
+.access-gate input {
+    padding: 10px 16px; border: 2px solid var(--border); border-radius: 8px;
+    font-size: 15px; width: 240px; background: var(--surface); color: var(--text);
+    outline: none; transition: border-color .15s;
+}
+.access-gate input:focus { border-color: var(--blue); }
+.access-gate button {
+    padding: 10px 24px; background: var(--blue); color: #fff; border: none;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: background .15s;
+}
+.access-gate button:hover { background: var(--blue-dark); }
+.access-gate .error { color: #ef4444; font-size: 13px; min-height: 20px; }
+.site-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--nav-bg); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+}
+.nav-left { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
+.nav-logo .logo-bold { font-weight: 700; color: var(--text); }
+.nav-logo .logo-accent { font-weight: 700; color: var(--blue); }
+.nav-sep { color: var(--border); font-size: 18px; }
+.nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
+.nav-links { display: flex; gap: 2px; }
+.nav-links a {
+    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+}
+.nav-links a:hover { background: var(--surface2); color: var(--text); }
+.nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
+.nav-right { display: flex; align-items: center; gap: 8px; }
+.nav-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    background: var(--blue-light); color: var(--blue);
+}
+@keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.nav-theme {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 13px; color: var(--text2); transition: background .15s;
+}
+.nav-theme:hover { background: var(--border); }
+.sidebar {
+    position: fixed; top: 56px; left: 0; width: 220px;
+    height: calc(100vh - 56px); overflow-y: auto;
+    background: var(--nav-bg); border-right: 1px solid var(--border);
+    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+}
+.sidebar-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+}
+.step-list { list-style: none; padding: 0; }
+.step-item { position: relative; }
+.step-link {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 16px; font-size: 13px; font-weight: 500;
+    color: var(--text2); text-decoration: none; transition: all .15s;
+    border-left: 3px solid transparent;
+}
+.step-link:hover { background: var(--surface2); color: var(--text); }
+.step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.step-num {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+    flex-shrink: 0; transition: all .15s;
+}
+.step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
+.step-line {
+    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+    background: var(--border);
+}
+.step-item:last-child .step-line { display: none; }
+.main-content { margin-left: 220px; padding: 56px 0 0 0; }
+.content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
+.hero {
+    text-align: center; padding: 48px 0 40px;
+    border-bottom: 1px solid var(--border); margin-bottom: 48px;
+}
+.hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue); border-radius: 20px;
+    padding: 6px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 16px;
+}
+.hero h1 { font-size: 32px; font-weight: 800; color: var(--text-strong); margin-bottom: 12px; line-height: 1.2; }
+.hero-sub { font-size: 16px; color: var(--text2); max-width: 560px; margin: 0 auto 32px; line-height: 1.6; }
+.stats-row { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
+.stat-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 24px; text-align: center; min-width: 140px;
+    transition: transform .15s, box-shadow .15s;
+}
+.stat-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.stat-value { font-size: 24px; font-weight: 800; color: var(--blue); }
+.stat-label { font-size: 12px; color: var(--text2); font-weight: 500; margin-top: 2px; }
+h2 {
+    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+}
+h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
+p { margin-bottom: 16px; color: var(--text); }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--text-strong); }
+ul, ol { padding-left: 24px; margin-bottom: 16px; }
+li { margin-bottom: 6px; }
+.callout {
+    border-left: 4px solid var(--blue); background: var(--blue-bg);
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+}
+.callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
+.callout.green { border-color: var(--green); background: var(--green-bg); }
+.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
+.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
+.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
+.zones { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin: 32px 0; }
+.zone {
+    border-radius: 12px; padding: 20px; border: 1px solid var(--border);
+    transition: transform .15s, box-shadow .15s;
+}
+.zone:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.zone-blue { background: var(--blue-bg); border-color: color-mix(in srgb, var(--blue) 20%, var(--border)); }
+.zone-purple { background: var(--purple-bg); border-color: color-mix(in srgb, var(--purple) 20%, var(--border)); }
+.zone-green { background: var(--green-bg); border-color: color-mix(in srgb, var(--green) 20%, var(--border)); }
+.zone-icon { font-size: 28px; margin-bottom: 8px; }
+.zone-title { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
+.zone-blue .zone-title { color: var(--blue-dark); }
+.zone-purple .zone-title { color: var(--purple-dark); }
+.zone-green .zone-title { color: var(--green-dark); }
+.zone-sub { font-size: 11px; color: var(--text2); margin-bottom: 12px; }
+.zone-items { list-style: none; padding: 0; }
+.zone-items li {
+    font-size: 13px; padding: 5px 0; color: var(--text);
+    display: flex; align-items: center; gap: 8px;
+}
+.zone-items li::before { content: ''; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.zone-blue .zone-items li::before { background: var(--blue); }
+.zone-purple .zone-items li::before { background: var(--purple); }
+.zone-green .zone-items li::before { background: var(--green); }
+.solution-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 24px 0; }
+.sol-card {
+    display: flex; gap: 12px; padding: 16px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--surface);
+    transition: transform .15s, box-shadow .15s;
+    text-decoration: none; color: inherit;
+}
+.sol-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); text-decoration: none; }
+.sol-num {
+    width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; background: var(--blue-light); color: var(--blue); flex-shrink: 0;
+}
+.sol-info { flex: 1; }
+.sol-title { font-size: 14px; font-weight: 600; color: var(--text-strong); margin-bottom: 2px; }
+.sol-desc { font-size: 12px; color: var(--text2); line-height: 1.5; }
+.timeline-strip { display: flex; gap: 16px; margin: 24px 0; }
+.tl-card {
+    flex: 1; padding: 20px; border-radius: 10px; border: 1px solid var(--border);
+    border-left: 4px solid var(--blue); background: var(--surface);
+    transition: transform .15s, box-shadow .15s;
+}
+.tl-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
+.tl-card.phase2 { border-left-color: var(--purple); }
+.tl-card.phase3 { border-left-color: var(--green); }
+.tl-card.phase4 { border-left-color: var(--orange); }
+.tl-badge {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    padding: 3px 10px; border-radius: 20px; margin-bottom: 8px;
+}
+.tl-card .tl-badge { background: var(--blue-light); color: var(--blue); }
+.tl-card.phase2 .tl-badge { background: var(--purple-light); color: var(--purple); }
+.tl-card.phase3 .tl-badge { background: var(--green-light); color: var(--green); }
+.tl-card.phase4 .tl-badge { background: var(--orange-light); color: var(--orange); }
+.tl-title { font-size: 15px; font-weight: 600; color: var(--text-strong); margin-bottom: 4px; }
+.tl-price { font-size: 12px; color: var(--text2); margin-bottom: 10px; }
+.tl-items { list-style: none; padding: 0; }
+.tl-items li { font-size: 12px; color: var(--text); padding: 2px 0; display: flex; align-items: center; gap: 6px; }
+.tl-items li::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--blue); flex-shrink: 0; }
+.tl-card.phase2 .tl-items li::before { background: var(--purple); }
+.tl-card.phase3 .tl-items li::before { background: var(--green); }
+.tl-card.phase4 .tl-items li::before { background: var(--orange); }
+.cta-section {
+    text-align: center; padding: 40px 0; margin-top: 48px;
+    border-top: 1px solid var(--border);
+}
+.cta-section h2 { border: none; text-align: center; margin-top: 0; }
+.cta-section p { color: var(--text2); margin-bottom: 24px; }
+.cta-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--blue); color: #fff; padding: 12px 28px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: background .15s, transform .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(37,99,235,.3);
+}
+.cta-btn:hover { background: var(--blue-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,.4); text-decoration: none; }
+table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+th { background: var(--th-bg); color: #fff; text-align: left; padding: 10px 14px; font-weight: 600; }
+td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:nth-child(even) td { background: var(--surface); }
+tr:hover td { background: var(--blue-bg); }
+.footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; border-top: 1px solid var(--border); }
+@media (max-width: 1100px) {
+    .nav-links a { font-size: 12px; padding: 5px 8px; }
+    .nav-status { display: none; }
+}
+.mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); width: 260px; }
+    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+    .main-content { margin-left: 0 !important; }
+    .mobile-nav-toggle { display: block; }
+    .nav-links { display: none; }
+    .zones { grid-template-columns: 1fr; }
+    .solution-grid { grid-template-columns: 1fr; }
+    .timeline-strip { flex-direction: column; }
+    .hero h1 { font-size: 24px; }
+    .stats-row { gap: 8px; }
+    .stat-card { min-width: 100px; padding: 12px 16px; }
+    .stat-value { font-size: 20px; }
+}
+/* Gate check list */
+.gate-list { list-style: none; padding: 0; margin: 20px 0; }
+.gate-list li {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px 16px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface); margin-bottom: 8px; font-size: 14px; color: var(--text);
+}
+.gate-check {
+    width: 20px; height: 20px; border-radius: 50%; background: var(--green); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; flex-shrink: 0; margin-top: 1px;
+}
+/* Doc table */
+.doc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 24px 0; }
+.doc-card {
+    padding: 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface);
+}
+.doc-card-title { font-size: 13px; font-weight: 700; color: var(--text-strong); margin-bottom: 8px; }
+.doc-card ul { padding-left: 18px; margin: 0; }
+.doc-card li { font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+</style>
+<script>
+(function(){var t=localStorage.getItem('aimarketing-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+</script>
+</head>
+<body>
+
+<!-- Access Gate -->
+<div class="access-gate" id="accessGate">
+    <h2>Proposal Access</h2>
+    <p>This proposal was prepared specifically for your team. Enter the access code from your Upwork message to continue.</p>
+    <input type="text" id="accessCode" placeholder="Access code" onkeydown="if(event.key==='Enter')checkAccess()">
+    <button onclick="checkAccess()">Continue</button>
+    <div class="error" id="accessError"></div>
+</div>
+
+<!-- Navigation -->
+<nav class="site-nav">
+    <div class="nav-left">
+        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <a href="/clients/ai-marketing-make-expert/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+        <span class="nav-sep">|</span>
+        <span class="nav-client">AI Marketing System</span>
+    </div>
+    <div class="nav-links">
+        <a href="/clients/ai-marketing-make-expert/">Overview</a>
+        <a href="/clients/ai-marketing-make-expert/solution">Solution</a>
+        <a href="/clients/ai-marketing-make-expert/workflow" class="active">Workflow</a>
+        <a href="/clients/ai-marketing-make-expert/timeline">Timeline</a>
+        <a href="/clients/ai-marketing-make-expert/investment">Investment</a>
+        <a href="/clients/ai-marketing-make-expert/faq">FAQ</a>
+        <a href="/clients/ai-marketing-make-expert/onboarding">Onboarding</a>
+        <a href="/clients/ai-marketing-make-expert/brief">Brief</a>
+    </div>
+    <div class="nav-right">
+        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+    </div>
+</nav>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+    <div class="sidebar-label">On this page</div>
+    <ul class="step-list">
+        <li class="step-item">
+            <a href="#methodology" class="step-link active"><span class="step-num">1</span> Methodology</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#testing-gates" class="step-link"><span class="step-num">2</span> Test Gates</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#error-handling" class="step-link"><span class="step-num">3</span> Error Handling</a>
+            <div class="step-line"></div>
+        </li>
+        <li class="step-item">
+            <a href="#documentation" class="step-link"><span class="step-num">4</span> Documentation</a>
+        </li>
+    </ul>
+</aside>
+
+<!-- Main Content -->
+<div class="main-content">
+<div class="content-inner">
+
+<!-- Hero -->
+<section class="hero" id="methodology">
+    <div class="hero-badge">Build Methodology</div>
+    <h1>How We'll Build Noah's System</h1>
+    <p class="hero-sub">Spec-driven. One scenario at a time. Test gate before every handoff. No scenario N+1 without a passing scenario N.</p>
+    <div class="stats-row">
+        <div class="stat-card"><div class="stat-value">16</div><div class="stat-label">Scenarios, In Order</div></div>
+        <div class="stat-card"><div class="stat-value">5</div><div class="stat-label">Test Gates Per Scenario</div></div>
+        <div class="stat-card"><div class="stat-value">Weekly</div><div class="stat-label">Check-in Cadence</div></div>
+        <div class="stat-card"><div class="stat-value">0</div><div class="stat-label">Shortcuts on Error Handling</div></div>
+    </div>
+</section>
+
+<!-- Methodology -->
+<h2 id="methodology">Our Build Methodology</h2>
+
+<p>Your 1,300+ paragraph system design document is the specification. We don't reinterpret it or improvise around it - we implement against it. The prompts you wrote, the JSON schemas you defined, the guardrail specs you laid out: those are the source of truth. Our job is to translate them into working Make.com scenarios.</p>
+
+<div class="callout green">
+    <div class="callout-title">Why this matters for your project</div>
+    <p>Most freelancers who build Make.com automations treat the client's description as a rough brief and fill in the gaps themselves. Your system doesn't have gaps to fill - it has a design document. We treat that as a spec, not a starting point for creative interpretation.</p>
+</div>
+
+<p>The build follows three principles:</p>
+
+<ul>
+    <li><strong>Scenario-by-scenario delivery.</strong> We complete and test each scenario before starting the next. You can see working output at every stage, not just at the end.</li>
+    <li><strong>Weekly check-in cadence.</strong> Every week: what shipped, what's being tested, what's next. You're never in the dark about where we are in the sequence.</li>
+    <li><strong>No deferred error handling.</strong> Error routers, retry logic, and dead letter logging get built into every scenario from the start - not bolted on at the end when something breaks in production.</li>
+</ul>
+
+<p>This isn't a methodology we invented for this proposal. It's how we build every multi-scenario system. The alternative - building all 16 scenarios in a batch and testing at the end - produces a debugging nightmare that nobody wants at week 15.</p>
+
+<!-- Test Gates -->
+<h2 id="testing-gates">Test Gates</h2>
+
+<p>Before we connect scenario N+1, scenario N has to pass five criteria. All five. Not four out of five.</p>
+
+<ul class="gate-list">
+    <li>
+        <div class="gate-check">1</div>
+        <div><strong>Runs successfully with test data from the KB.</strong> We use real records from your Google Sheets knowledge base as test inputs - not synthetic data we made up. If the scenario can't handle your actual data format, we catch it here.</div>
+    </li>
+    <li>
+        <div class="gate-check">2</div>
+        <div><strong>JSON output matches the expected schema.</strong> For any scenario that produces Claude API output, we validate the parsed JSON against the schema defined in your design doc. Field names, types, required fields - all checked. A Claude response that compiles but drifts from the schema fails this gate.</div>
+    </li>
+    <li>
+        <div class="gate-check">3</div>
+        <div><strong>Error handler catches all known failure modes.</strong> We deliberately trigger the error paths: bad API key, rate limit response, malformed JSON from Claude, empty data set, missing KB row. Each one has to route to the error handler correctly before we move on.</div>
+    </li>
+    <li>
+        <div class="gate-check">4</div>
+        <div><strong>Rate limits respected, verified via execution log timing.</strong> For data ingestion scenarios hitting Google Ads, Meta, and LinkedIn, we check the execution log to confirm request spacing matches the platform's documented limits. This is especially important for multi-client loops where one slow client can push all subsequent requests into a rate limit window.</div>
+    </li>
+    <li>
+        <div class="gate-check">5</div>
+        <div><strong>Documentation updated before moving on.</strong> Environment variables added this session, webhook URLs generated, API connection names, blueprint JSON exported - all logged before scenario N+1 starts. Documentation written after the fact is always incomplete.</div>
+    </li>
+</ul>
+
+<div class="callout orange">
+    <div class="callout-title">On the "runs successfully" criterion</div>
+    <p>A scenario that runs without throwing an error is not the same as a scenario that produces correct output. We check both. An incorrectly parsed Claude response that still passes through the Make.com flow is a silent failure - the worst kind for a system that's supposed to make autonomous decisions.</p>
+</div>
+
+<!-- Error Handling -->
+<h2 id="error-handling">Error Handling Patterns</h2>
+
+<p>Every scenario has an error router on every module that touches an external API. Not just on the final output module - on every step that can fail. Here's what that looks like in practice for your system.</p>
+
+<h3>API Rate Limit Detection and Retry</h3>
+<p>Google Ads, Meta, and LinkedIn all return 429 errors when rate limited. We handle these with exponential backoff in Make.com: catch the 429 in the error router, wait (starting at 5 seconds, doubling on each retry), retry up to three times, then route to the dead letter store if all three fail. This runs inside the scenario itself - you don't need a separate retry scenario.</p>
+
+<h3>Claude Response Validation</h3>
+<p>Claude's API responses aren't always clean JSON. Sometimes the model wraps output in markdown fences even when instructed not to. Sometimes it adds commentary before the JSON object. We handle this with a three-step parse chain in Make.com: strip markdown fences, attempt JSON parse, validate against the schema. If the parse fails, we retry the Claude API call once with an error correction prompt. If the second attempt also fails, we route to the dead letter store and send a Slack alert. We never pass a failed parse downstream - that's how silent errors enter the system.</p>
+
+<h3>Dead Letter Logging</h3>
+<p>Failed runs don't just disappear. Every error gets written to a dedicated data store with: scenario name, client ID, timestamp, error type, the input payload that caused the failure, and the full error message. This gives us a complete debugging record without having to reconstruct what happened from Make.com's execution history (which has retention limits and isn't always readable under pressure).</p>
+
+<h3>Slack Notification on Critical Failures</h3>
+<p>Critical failures - anything that affects a client's ad spend, campaign status, or scheduled deliverable - trigger a Slack alert. Non-critical failures (a single analytics pull that failed and will retry at the next scheduled run) log to the dead letter store but don't page. We'll agree on the threshold for "critical" during setup so you're not getting noise alerts for transient API timeouts.</p>
+
+<div class="zones">
+    <div class="zone zone-blue">
+        <div class="zone-title">Transient Failures</div>
+        <div class="zone-sub">Auto-retry</div>
+        <ul class="zone-items">
+            <li>429 rate limit responses</li>
+            <li>Timeout errors</li>
+            <li>Temporary API outages</li>
+            <li>Claude JSON parse failure (1 retry)</li>
+        </ul>
+    </div>
+    <div class="zone zone-purple">
+        <div class="zone-title">Logged Failures</div>
+        <div class="zone-sub">Dead letter store</div>
+        <ul class="zone-items">
+            <li>All retries exhausted</li>
+            <li>Malformed input data</li>
+            <li>Missing KB config row</li>
+            <li>Schema validation failure</li>
+        </ul>
+    </div>
+    <div class="zone zone-green">
+        <div class="zone-title">Critical Alerts</div>
+        <div class="zone-sub">Slack notification</div>
+        <ul class="zone-items">
+            <li>Ad write operation failure</li>
+            <li>Campaign status change error</li>
+            <li>Guardrail trigger event</li>
+            <li>Phase 2 approval timeout</li>
+        </ul>
+    </div>
+</div>
+
+<!-- Documentation -->
+<h2 id="documentation">Documentation as a Deliverable</h2>
+
+<p>Documentation isn't something we do at the end. It's updated every week as part of the delivery. By the time we reach week 16, you have a complete operational record of every scenario - not a rushed summary written during handoff.</p>
+
+<h3>What gets documented per scenario</h3>
+
+<div class="doc-grid">
+    <div class="doc-card">
+        <div class="doc-card-title">Configuration</div>
+        <ul>
+            <li>All environment variables added</li>
+            <li>API connection names in Make.com</li>
+            <li>Webhook URLs generated</li>
+            <li>Data store names and structure</li>
+            <li>Google Sheets tab and column references</li>
+        </ul>
+    </div>
+    <div class="doc-card">
+        <div class="doc-card-title">Test Results</div>
+        <ul>
+            <li>Test data used (KB row IDs)</li>
+            <li>Output samples from passing runs</li>
+            <li>Error paths verified</li>
+            <li>Rate limit timing from execution log</li>
+            <li>Schema validation pass/fail record</li>
+        </ul>
+    </div>
+    <div class="doc-card">
+        <div class="doc-card-title">Operational Notes</div>
+        <ul>
+            <li>Known limitations or edge cases</li>
+            <li>Retry limits and backoff settings</li>
+            <li>Dead letter store location</li>
+            <li>Slack alert configuration</li>
+            <li>Schedule and trigger configuration</li>
+        </ul>
+    </div>
+    <div class="doc-card">
+        <div class="doc-card-title">Blueprint Export</div>
+        <ul>
+            <li>JSON blueprint exported at completion</li>
+            <li>Stored in shared tracking doc</li>
+            <li>Re-exported at every major milestone</li>
+            <li>Versioned so rollback is possible</li>
+            <li>Importable to a fresh Make.com org</li>
+        </ul>
+    </div>
+</div>
+
+<div class="callout">
+    <div class="callout-title">Why blueprint exports matter</div>
+    <p>Make.com doesn't have native version control. If a scenario gets edited incorrectly - or if you ever need to move to a different Make.com organization - blueprint exports are your backup. We export after every scenario is completed and after every integration test. You'll always have a known-good restore point.</p>
+</div>
+
+<p>Documentation is maintained in a shared tracking doc that both of us can see. It's not something we send you at the end of the project. It's live throughout the build. That means you can review what was deployed at any time, not just during our weekly check-in.</p>
+
+<section class="cta-section">
+    <h2>See the week-by-week breakdown</h2>
+    <p>The Timeline page has the full week-by-week plan: which scenarios ship when, what each week produces, and how the two phases connect.</p>
+    <a href="/clients/ai-marketing-make-expert/timeline" class="cta-btn">View Timeline &rarr;</a>
+</section>
+
+<footer class="footer">
+    <p>Prepared by <strong>UnpauseAI</strong> &middot; <a href="mailto:nico@unpauseai.com">nico@unpauseai.com</a> &middot; 2026</p>
+</footer>
+
+</div>
+</div>
+
+<script>
+function checkAccess(){
+    var code=document.getElementById('accessCode').value.trim().toLowerCase();
+    if(code==='aimarketing-2026'){
+        localStorage.setItem('aimarketing-access','granted');
+        document.getElementById('accessGate').classList.add('hidden');
+    } else {
+        document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.';
+    }
+}
+(function(){if(localStorage.getItem('aimarketing-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
+function toggleTheme(){
+    var h=document.documentElement;
+    var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
+    h.setAttribute('data-theme',t);
+    localStorage.setItem('aimarketing-theme',t);
+}
+// Sidebar active section tracking
+(function(){
+    var links=document.querySelectorAll('.step-link');
+    var sections=Array.from(links).map(function(l){return document.querySelector(l.getAttribute('href'))}).filter(Boolean);
+    function onScroll(){
+        var top=window.scrollY+100;
+        var active=sections[0];
+        sections.forEach(function(s){if(s.offsetTop<=top)active=s;});
+        links.forEach(function(l){
+            l.classList.toggle('active',l.getAttribute('href')==='#'+active.id);
+        });
+    }
+    window.addEventListener('scroll',onScroll,{passive:true});
+    onScroll();
+})();
+</script>
+</body>
+</html>

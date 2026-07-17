@@ -13,7 +13,6 @@ sent: null
 value_estimate: "$33.85/hr on site, $36/hr in letter (owner-set split); typical list-to-launch cycle 2-4h"
 timeline: "ongoing; first cycle within 2-3 days of access"
 tags: [cold-outreach, lead-generation, apollo, instantly, smartlead, clay, sales-navigator, lead-lists, icp, campaign-ops]
-access_code: ""
 deliverables:
   letter: true
   video: true

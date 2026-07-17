@@ -13,7 +13,6 @@ sent: "2026-05-18"
 value_estimate: "$2,500 core phase, $4,000 full build, optional monthly retainer"
 timeline: "Core phase 2 weeks, full build 4 to 5 weeks"
 tags: [n8n, python, ai, llm, customer-support, ecommerce, erp-integration, amazon-sp-api, email-automation, german, wismo]
-access_code: "ai-shipment-support-bot-2026"
 deliverables:
   letter: true
   video: true
