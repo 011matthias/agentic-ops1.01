@@ -30,7 +30,7 @@ def test_report_sections_local_mode():
     r = ws.build_report(scheduled=False)
     assert r["backlog"]["total_rows"] > 0
     text = ws.render_text(r)
-    for section in ("SIGNALS", "BACKLOG", "CADENCE", "ASSETS"):
+    for section in ("SIGNALS", "BACKLOG", "CADENCE", "OPS", "ASSETS"):
         assert section in text, f"missing section {section}"
     assert "hook-contained" in text
     assert "sensor commit" in text
@@ -43,7 +43,7 @@ def test_json_contract():
     )
     assert proc.returncode == 0, proc.stderr
     r = json.loads(proc.stdout)
-    for k in ("date", "mode", "signals", "backlog", "cadence", "assets"):
+    for k in ("date", "mode", "signals", "backlog", "cadence", "ops", "assets"):
         assert k in r, f"missing key {k}"
     assert r["mode"] == "local"
 
@@ -94,3 +94,25 @@ def test_print_registration_golden_substrings():
 def test_registration_targets_pinned_worktree_not_primary_clone():
     assert "agentic-ops1-cadence" in ws.REGISTRATION
     assert "Repo\\agentic-ops1\"" not in ws.REGISTRATION
+
+
+def test_parse_sweep_log_last_stamp():
+    log = ("[2026-07-16 03:30] === agentic-ops1 (policy=pr) ===\n"
+           "[2026-07-16 03:30]   clean; nothing to sweep\n"
+           "[2026-07-17 02:59] === agentic-ops1 (policy=pr) ===\n"
+           "[2026-07-17 02:59]   skip: newest change 1m ago (< quiesce 120m)\n")
+    last = ws.parse_sweep_log_last_stamp(log)
+    assert last is not None
+    assert last.strftime("%Y-%m-%d %H:%M") == "2026-07-17 02:59"
+    assert ws.parse_sweep_log_last_stamp("") is None
+    assert ws.parse_sweep_log_last_stamp("no stamps here") is None
+
+
+def test_sweep_heartbeat_alert_thresholds():
+    dt = ws.datetime.datetime
+    now = dt(2026, 7, 17, 12, 0)
+    assert ws.sweep_heartbeat_alert(dt(2026, 7, 15, 13, 0), now) is None  # 47h
+    alert = ws.sweep_heartbeat_alert(dt(2026, 7, 15, 11, 0), now)  # 49h
+    assert alert is not None and "stale" in alert
+    missing = ws.sweep_heartbeat_alert(None, now)
+    assert missing is not None and "missing" in missing

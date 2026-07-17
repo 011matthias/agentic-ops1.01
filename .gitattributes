@@ -1,0 +1,13 @@
+# merge=union applies only to LOCAL merges -- GitHub's server-side PR merge
+# ignores merge drivers. That is fine: the nightly sweep's conflict self-heal
+# (tools/repo-sweep.py) runs `git merge origin/main` locally on the sweep
+# branch, where these rules take effect, then pushes the healed result.
+#
+# Scope deliberately narrow: append-only ledger tables ONLY. Never add code,
+# YAML/JSON, or narrative prose here -- union silently interleaves text.
+# Session files carry YAML frontmatter counters that union can duplicate;
+# `repo-sweep.py --normalize-sessions` recomputes them from the body.
+docs/friction-register.md merge=union
+docs/anneal-ledger.md merge=union
+docs/INDEX.md merge=union
+docs/sessions/*.md merge=union
