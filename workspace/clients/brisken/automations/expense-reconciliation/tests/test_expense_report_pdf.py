@@ -157,6 +157,71 @@ TOTAL USD
 Total Expense Amount 999.00
 """
 
+# ISO-code-prefixed originals with US-format numbers (2026-07-17 real
+# by-month bug, ER-00214 BRL / ER-00181 DKK): "BRL3,099.99" carries no
+# symbol, so the old symbol-only money regex saw only the converted
+# "$581.51" line and read the conversion as the original. Also covers
+# the "Expense Location :" meta variant (normalized to Location).
+ISO_PREFIXED = """Expense Report
+ER-90008
+EXPENSE SUMMARY
+
+E100010 - Travel Expense
+S.No Expense Details Merchant Amount Amount (USD)
+1. 03/14/2026
+Fan purchase
+Ref# : 795234
+Payment Mode : Credit Card
+Expense Location : Recife, Brazil
+MAGAZINE
+LUIZA S/A
+BRL3,099.99
+1 BRL = 0.187586 USD
+$581.51
+Non Reimbursable
+2. 10/02/2024
+Hostel
+Payment Mode : Credit Card
+Cabinn Metro DKK35.00
+1 DKK = 0.148401 USD
+$5.19
+Sub Total $586.70
+REPORT SUMMARY BY CURRENCY
+TOTAL BRL DKK
+Total Expense Amount 3,099.99 35.00
+Non Reimbursable Amount (-) 3,099.99 (-) 0.00
+"""
+
+# Inline numbered rows (2026-07-17 real by-month bug, one row silently
+# dropped in 4 of 6 reports): a numbered row may carry merchant +
+# amounts on the date line itself ("3. 05/17/2026 FLiX $155.61
+# $155.61"), including the FX form with the merchant continuing on the
+# line after a page break ("11. 06/27/2025 TARTUFI & €215,00 $251.99"
+# / page header / "PANE, BURRO ET. NERO").
+INLINE_ROWS = """Expense Report
+ER-90009
+EXPENSE SUMMARY
+
+E100010 - Travel Expense
+S.No Expense Details Merchant Amount Amount (USD)
+1. 05/16/2026
+Train
+Payment Mode : Credit Card
+DB €111,99
+1 EUR = 1.163307 USD
+$130.28
+2. 05/17/2026 FLiX $155.61 $155.61
+3
+S.No Expense Details Merchant Amount Amount (USD)
+Buss
+3. 06/27/2025 TARTUFI & €215,00 $251.99
+PANE, BURRO ET. NERO
+Sub Total $537.88
+REPORT SUMMARY BY CURRENCY
+TOTAL EUR USD
+Total Expense Amount 326,99 155.61
+"""
+
 
 def test_single_currency_report_parses_clean():
     receipts, issues = _parse(SINGLE_CCY)
@@ -230,6 +295,95 @@ def test_printed_total_mismatch_surfaces_as_issue():
     receipts, issues = _parse(MISMATCHED_TOTAL)
     assert len(receipts) == 1  # the row itself parsed fine
     assert any("does not match" in i.message for i in issues)
+
+
+def test_iso_prefixed_amounts_keep_original_currency():
+    receipts, issues = _parse(ISO_PREFIXED)
+    assert issues == []
+    fan, hostel = receipts
+
+    # BRL3,099.99 (US-format, no symbol) is the ORIGINAL; $581.51 is
+    # the report's conversion and lands in base_amount.
+    assert fan.detected_currency == "BRL"
+    assert fan.detected_total == Decimal("3099.99")
+    assert fan.base_amount == Decimal("581.51")
+    assert fan.exchange_rate == Decimal("0.187586")
+    assert fan.detected_vendor == "MAGAZINE LUIZA S/A"
+    # "Expense Location :" normalizes to the Location meta.
+    assert fan.expense_location == "Recife, Brazil"
+
+    assert hostel.detected_currency == "DKK"
+    assert hostel.detected_total == Decimal("35.00")
+    assert hostel.base_amount == Decimal("5.19")
+    assert hostel.detected_vendor == "Cabinn Metro"
+
+
+def test_inline_numbered_rows_are_not_dropped():
+    receipts, issues = _parse(INLINE_ROWS)
+    assert issues == []
+    assert len(receipts) == 3
+
+    train, bus, tartufi = receipts
+    assert train.detected_total == Decimal("111.99")
+    assert train.detected_currency == "EUR"
+
+    # "2. 05/17/2026 FLiX $155.61 $155.61" -- inline dual-column row,
+    # merchant continues after the page break ("Buss").
+    assert bus.detected_date == date(2026, 5, 17)
+    assert bus.detected_total == Decimal("155.61")
+    assert bus.detected_currency == "USD"
+    assert bus.base_amount == Decimal("155.61")
+    assert "FLiX" in (bus.detected_vendor or "")
+
+    # Inline FX row: EUR original + USD conversion on the date line.
+    assert tartufi.detected_total == Decimal("215.00")
+    assert tartufi.detected_currency == "EUR"
+    assert tartufi.base_amount == Decimal("251.99")
+    for frag in ("TARTUFI &", "PANE, BURRO ET. NERO"):
+        assert frag in (tartufi.detected_vendor or "")
+
+
+def test_bare_date_with_trailing_text_is_content_not_a_row():
+    # A continuation line that happens to start with a date must not
+    # open a new row (only the NUMBERED form may carry inline content).
+    text = """Expense Report
+ER-90010
+EXPENSE SUMMARY
+
+1. 07/01/2026
+Refund note
+Payment Mode : Cash
+06/30/2026 store credit memo
+Vendor Y $10.00
+Sub Total $10.00
+REPORT SUMMARY BY CURRENCY
+TOTAL USD
+Total Expense Amount 10.00
+"""
+    receipts, issues = _parse(text)
+    assert issues == []
+    assert len(receipts) == 1
+    assert receipts[0].detected_total == Decimal("10.00")
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("60.85", "60.85"),        # US decimal
+        ("3,099.99", "3099.99"),   # US thousands + decimal
+        ("10,943.33", "10943.33"),
+        ("18,50", "18.50"),        # EU decimal comma
+        ("1.950,00", "1950.00"),   # EU thousands + decimal
+        ("1,950", "1950"),         # bare groups-of-3: thousands
+        ("1.950", "1950"),
+        ("35.00", "35.00"),
+        ("0,00", "0.00"),
+    ],
+)
+def test_parse_amount_sniffs_format_per_token(raw, expected):
+    from expense_recon.ingest.expense_report_pdf import _parse_amount
+
+    assert _parse_amount(raw) == Decimal(expected)
 
 
 def test_report_number_variants():
