@@ -123,19 +123,22 @@ body {
 .hamburger { display: none; background: none; border: none; color: var(--text); font-size: 22px; cursor: pointer; padding: 0 6px; }
 
 .page-layout { margin-left: var(--sidebar-width); }
-.main { max-width: 920px; margin: 0 auto; padding: 32px 32px 80px; }
+.main { max-width: 960px; margin: 0 auto; padding: 40px 24px 80px; }
 
 .hero {
-  background: linear-gradient(135deg, var(--purple-light), var(--blue-light));
-  border-radius: 14px; padding: 28px 32px; margin-bottom: 28px;
-  border: 1px solid var(--border);
+  background: linear-gradient(135deg, var(--purple), var(--blue));
+  border-radius: 16px;
+  padding: 48px 40px;
+  color: #fff;
+  margin-bottom: 40px;
+  box-shadow: var(--shadow-lg);
 }
-.hero h2 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: var(--text); margin-bottom: 10px; }
-.hero p { color: var(--text2); font-size: 15px; max-width: 760px; }
-.hero-meta { display: flex; gap: 24px; margin-top: 18px; font-size: 13px; color: var(--text2); flex-wrap: wrap; }
-.hero-meta strong { color: var(--text); font-weight: 600; }
+.hero h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; color: #fff; margin-bottom: 10px; }
+.hero p { color: rgba(255,255,255,.88); font-size: 15px; max-width: 760px; }
+.hero-meta { display: flex; gap: 24px; margin-top: 18px; font-size: 13px; color: rgba(255,255,255,.75); flex-wrap: wrap; }
+.hero-meta strong { color: #fff; font-weight: 600; }
 
-.section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px 28px; margin-bottom: 18px; box-shadow: var(--shadow); scroll-margin-top: calc(var(--header-height) + 16px); }
+.section { margin-bottom: 40px; }
 .section-title { font-size: 18px; font-weight: 700; letter-spacing: -0.015em; color: var(--text); margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
 .section h3 { font-size: 16px; font-weight: 600; color: var(--text); margin: 18px 0 8px; }
 .section h4 { font-size: 14px; font-weight: 600; color: var(--text); margin: 14px 0 6px; }
@@ -248,15 +251,16 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
       <p>Volume Forecast (11 Years of Data)</p>
     </div>
     <span style="color:var(--border);font-size:20px;margin:0 4px;">|</span>
-    <nav style="display:flex;gap:4px;">
-      <a href="/docs/meji-media/" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Hub</a>
-      <a href="/docs/meji-media/roi-plan" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">ROI Plan</a>
-      <a href="/docs/meji-media/guide" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Guide</a>
-      <a href="/docs/meji-media/ab-testing" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">A/B Testing</a>
-      <a href="/docs/meji-media/lead-scoring" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Scoring</a>
-      <a href="/docs/meji-media/system-overview" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Overview</a>
-      <a href="/docs/meji-media/scaling" style="font-size:13px;font-weight:500;padding:6px 12px;border-radius:6px;color:var(--text2);text-decoration:none;">Scaling</a>
-      <a href="/docs/meji-media/volume-forecast" style="font-size:13px;font-weight:700;padding:6px 12px;border-radius:6px;background:var(--purple-light);color:var(--purple);text-decoration:none;">Volume</a>
+    <nav style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;" aria-label="Meji Media docs">
+      <a href="/docs/meji-media/" style="font-size:13px;font-weight:500;padding:6px 10px;border-radius:6px;color:var(--text2);text-decoration:none;white-space:nowrap;"><span style="opacity:.5;font-weight:600;margin-right:3px;">1</span>Hub</a>
+      <a href="/docs/meji-media/roi-plan" style="font-size:13px;font-weight:500;padding:6px 10px;border-radius:6px;color:var(--text2);text-decoration:none;white-space:nowrap;"><span style="opacity:.5;font-weight:600;margin-right:3px;">2</span>ROI Plan</a>
+      <a href="/docs/meji-media/system-overview" style="font-size:13px;font-weight:500;padding:6px 10px;border-radius:6px;color:var(--text2);text-decoration:none;white-space:nowrap;margin-left:14px;"><span style="opacity:.5;font-weight:600;margin-right:3px;">3</span>System</a>
+      <a href="/docs/meji-media/build-plan" style="font-size:13px;font-weight:500;padding:6px 10px;border-radius:6px;color:var(--text2);text-decoration:none;white-space:nowrap;"><span style="opacity:.5;font-weight:600;margin-right:3px;">4</span>Build</a>
+      <a href="/docs/meji-media/guide" style="font-size:13px;font-weight:500;padding:6px 10px;border-radius:6px;color:var(--text2);text-decoration:none;white-space:nowrap;"><span style="opacity:.5;font-weight:600;margin-right:3px;">5</span>Guide</a>
+      <a href="/docs/meji-media/lead-scoring" style="font-size:13px;font-weight:500;padding:6px 10px;border-radius:6px;color:var(--text2);text-decoration:none;white-space:nowrap;margin-left:14px;"><span style="opacity:.5;font-weight:600;margin-right:3px;">6</span>Scoring</a>
+      <a href="/docs/meji-media/ab-testing" style="font-size:13px;font-weight:500;padding:6px 10px;border-radius:6px;color:var(--text2);text-decoration:none;white-space:nowrap;"><span style="opacity:.5;font-weight:600;margin-right:3px;">7</span>A/B Tests</a>
+      <a href="/docs/meji-media/volume-forecast" style="font-size:13px;font-weight:700;padding:6px 10px;border-radius:6px;background:var(--blue-light);color:var(--blue);text-decoration:none;white-space:nowrap;margin-left:14px;"><span style="opacity:.5;font-weight:600;margin-right:3px;">8</span>Volume</a>
+      <a href="/docs/meji-media/scaling" style="font-size:13px;font-weight:500;padding:6px 10px;border-radius:6px;color:var(--text2);text-decoration:none;white-space:nowrap;"><span style="opacity:.5;font-weight:600;margin-right:3px;">9</span>Scaling</a>
     </nav>
   </div>
   <div class="header-right">
@@ -421,7 +425,7 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
 
 <footer class="footer" style="margin-left:var(--sidebar-width);">
   <p>Built and maintained by <a href="https://unpauseai.com" target="_blank" rel="noopener">UnpauseAI</a></p>
-  <p style="margin-top:4px;">Last updated: 8 May 2026 &middot; Data source: live MySQL archive, read-only</p>
+  <p style="margin-top:4px;">Last updated: 17 July 2026 &middot; Data source: live MySQL archive, read-only</p>
 </footer>
 </div><!-- /page-layout -->
 
