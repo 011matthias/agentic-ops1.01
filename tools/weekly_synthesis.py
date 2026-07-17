@@ -166,17 +166,24 @@ def ops_health(scheduled: bool) -> dict:
         blocks = [b for b in _git(["worktree", "list", "--porcelain"])
                   .strip().split("\n\n") if b]
         for b in blocks:
-            path = head = None
+            path = head = branch = None
             for ln in b.splitlines():
                 if ln.startswith("worktree "):
                     path = ln[len("worktree "):]
                 elif ln.startswith("HEAD "):
                     head = ln[len("HEAD "):]
+                elif ln.startswith("branch "):
+                    branch = ln[len("branch "):]
             if not path or not head:
                 continue
             if os.path.normcase(path) in (os.path.normcase(str(REPO)),
                                           os.path.normcase(CADENCE_WORKTREE)):
-                continue  # primary clone / pinned-by-design
+                continue  # the running copy / pinned-by-design
+            if branch in ("refs/heads/main", "refs/heads/master",
+                          "refs/heads/sys/cadence-pin"):
+                continue  # a clean main checkout is normal state, not a
+                # close candidate (the primary clone seen from the cadence
+                # worktree lands here)
             merged = subprocess.run(
                 ["git", "-C", str(REPO), "merge-base", "--is-ancestor",
                  head, "origin/main"], capture_output=True).returncode == 0
