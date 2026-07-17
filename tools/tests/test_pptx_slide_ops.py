@@ -8,7 +8,6 @@ Skips cleanly when python-pptx is unavailable (CI installs it via
 from __future__ import annotations
 
 import importlib.util
-import io
 import sys
 import zlib
 from pathlib import Path
