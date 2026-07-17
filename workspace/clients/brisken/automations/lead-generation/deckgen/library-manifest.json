@@ -29,7 +29,9 @@
     },
     "ecosystem": {
       "donor": 7,
-      "roles": []
+      "roles": [
+        "eco-headline"
+      ]
     },
     "custom-dev": {
       "donor": 8,

@@ -72,6 +72,7 @@ RENAMES: list[tuple[int, str, str]] = [
     # the first entry claim the headline, the second the body
     (6, "Title 1", "hub-headline"),
     (6, "Title 1", "hub-body"),
+    (7, "TextBox 121", "eco-headline"),
     (9, "Rounded Rectangle 1", "fdp-header"),
     (10, "TextBox 6", "transition-title"),
     (11, "TextBox 33", "vp-title"),
@@ -150,7 +151,7 @@ MANIFEST: dict[str, dict] = {
     "about":            {"donor": 3,  "roles": ["about-headline", "about-eyebrow"]},
     "clients":          {"donor": 4,  "roles": []},
     "suite-hub":        {"donor": 6,  "roles": ["hub-headline", "hub-body"]},
-    "ecosystem":        {"donor": 7,  "roles": []},
+    "ecosystem":        {"donor": 7,  "roles": ["eco-headline"]},
     "custom-dev":       {"donor": 8,  "roles": []},
     "func-diagram-platform": {"donor": 9, "roles": ["fdp-header"]},
     "transition":       {"donor": 10, "roles": ["transition-title"]},
@@ -258,7 +259,8 @@ def author_platform_context(prs, blank_layout):
     # three applications inside TreasuryCentral
     _box(s, "pc-app-mdh", "Market Data Hub", 1.90, 2.30, 2.95, 1.30, LIGHT, None, SLATE, 14)
     _box(s, "pc-app-st", "Smart Trading", 5.15, 2.30, 2.95, 1.30, LIGHT, None, SLATE, 14)
-    _box(s, "pc-app-dw", "Digital Worker (the AI)", 8.40, 2.30, 2.95, 1.30, LIGHT, None, SLATE, 14)
+    # brisken.com/onepilot names the AI application "AI Digital Workforce"
+    _box(s, "pc-app-dw", "AI Digital Workforce", 8.40, 2.30, 2.95, 1.30, LIGHT, None, SLATE, 14)
     # use cases hang off the Digital Worker
     _box(s, "pc-uc-strip",
          "Use cases: funding requests, remittance advices, bank statements, cash positioning",

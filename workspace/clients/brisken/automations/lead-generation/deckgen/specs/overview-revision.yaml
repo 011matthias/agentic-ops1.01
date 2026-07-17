@@ -6,11 +6,10 @@
 # Intercompany Funding Request one-pager on the usecase donor, and Digital
 # Worker re-attribution on the success stories. Dividers are donor-10
 # transition duplicates with the product-name run patched.
-# DROPPED vs the plan: suite-hub (donor 6, "SAP BTP" in body) and
-# func-diagram-platform (donor 9, "SAP Business Technology Platform") —
-# both donors carry banned terms in text, and both patterns expose no
-# roles in library-manifest.json, so no spec patch can reach the text.
-# Restore them once the manifest names those shapes.
+# suite-hub + func-diagram-platform are RESTORED (manifest roles hub-body /
+# fdp-header added 2026-07-17) with their BTP text patched to Dirk's own
+# "on SAP's own cloud" phrasing; ecosystem headline reframed from "Suite of
+# Cloud Applications" to platform language per the owner memo.
 deck: overview-revision
 output: "Brisken - OnePilot Solutions Overview 2026-08 PROPOSAL"
 slides:
@@ -49,13 +48,16 @@ slides:
     patch:
       hub-body: {sub: {"Running on the SAP BTP and": "Running on SAP's own cloud and"}}
 
-  # 7 — ecosystem donut (kept)
+  # 7 — ecosystem donut ("Suite of Cloud Applications" reframed to platform
+  # language per the 2026-07-17 owner memo)
   - pattern: ecosystem
+    patch:
+      eco-headline: {sub: {"Suite of Cloud Applications": "The OnePilot Platform"}}
 
   # 8 — the hierarchy slide (authored donor 34, no highlight)
   - pattern: platform-context
     patch:
-      pc-caption: {set: "TreasuryCentral is the screen your team works in. It sits on OnePilot, the platform. Inside it run the applications: Market Data Hub, Smart Trading, and the Digital Worker, the AI. The use cases below hang off the Digital Worker."}
+      pc-caption: {set: "TreasuryCentral is the screen your team works in: the shipped edition of OnePilot, the platform. Inside it run the applications: Market Data Hub, Brisken Smart Trading, and the AI Digital Workforce. OnePilot runs in production across financial-services, chemicals, food & drink, oil & gas, commodity and agricultural treasuries."}
 
   # 8b — platform functional overview (restored; BTP bar patched)
   - pattern: func-diagram-platform
@@ -94,17 +96,17 @@ slides:
           "SAP Business Technology Platform": "on SAP's own cloud"
       fd-product-label: {runs: {"Trade Automation": "Smart Trading"}}
 
-  # 15 — divider: Digital Worker
+  # 15 — divider: AI Digital Workforce (site-canonical name, brisken.com/onepilot)
   - pattern: transition
     patch:
-      transition-title: {runs: {"Market Data Hub": "Digital Worker"}}
+      transition-title: {runs: {"Market Data Hub": "AI Digital Workforce"}}
 
-  # 16 — Digital Worker features (kept; ChatGPT name-drop removed)
+  # 16 — Digital Co-Worker features (kept; ChatGPT name-drop removed)
   - pattern: features-dcw
     patch:
       feat-body: {sub: {", such as ChatGPT": ""}}
 
-  # 17 — Digital Worker functional diagram (generalized process sources + BTP run)
+  # 17 — Digital Co-Worker functional diagram (generalized process sources + BTP run)
   - pattern: func-diagram-dcw
     patch:
       fd-header:
@@ -116,10 +118,10 @@ slides:
       fd-src-4: {set: "Bank statements"}
       fd-src-5: {set: "Any document, any trigger"}
 
-  # 18 — divider: Digital Worker Use Cases
+  # 18 — divider: AI Digital Workforce Use Cases
   - pattern: transition
     patch:
-      transition-title: {runs: {"Market Data Hub": "Digital Worker Use Cases"}}
+      transition-title: {runs: {"Market Data Hub": "AI Digital Workforce Use Cases"}}
 
   # 19 — Intercompany Funding Request (repurposed usecase donor)
   - pattern: usecase
@@ -129,18 +131,20 @@ slides:
       uc-col1-body:
         outline:
           - [0, "Description"]
-          - [1, "A funding request arrives by email. The Digital Worker reads it, summarizes it, and suggests the next step."]
-          - [1, "It creates the memo record, checks the cash position, and sends the confirmation."]
+          - [1, "Subsidiaries email the in-house bank to ask for funding. Today a treasury analyst reads each request and keys it in."]
+          - [1, "The Digital Co-Worker reads the email, pulls out amount, currency, entity and value date, checks the group cash position and the intercompany limit, drafts the funding memo in SAP, and routes it for approval. On sign-off it posts and confirms back to the requester."]
           - [0, ""]
           - [0, "Challenges & Business Drivers"]
-          - [1, "The request arrives as an unstructured email."]
-          - [1, "Handling it touches several systems."]
+          - [1, "The request is free-text email; the work spans email, SAP in-house cash and the live cash position."]
+          - [1, "Volume spikes at month-end, and every step today waits on a person."]
       uc-col2-body:
         outline:
           - [0, "Reads, checks, executes, confirms"]
-          - [1, "The Digital Worker reads the request, checks the cash position, executes the steps, and confirms back."]
+          - [1, "Reads the request, pulls what it needs from your systems, and carries out each step; confirms the result in chat."]
+          - [0, "Chat-like interaction"]
+          - [1, "Ask it anything about the request in plain language; it answers in chat."]
           - [0, "Governed end to end"]
-          - [1, "Every step validated, logged, and auditable."]
+          - [1, "Every action checked and logged: audit trail, segregation of duty, anomaly alerts. A person in the loop for the moves that matter."]
 
   # 20 — Remittance Advice Gate (kept)
   - pattern: usecase-remit
@@ -156,20 +160,20 @@ slides:
   # 23 — FSI success story (kept, platform-level)
   - pattern: success-fsi
 
-  # 24 — agricultural success story (Digital Worker re-attribution)
+  # 24 — agricultural success story (Digital Co-Worker re-attribution)
   - pattern: success-agri
     patch:
       ss-sub:
         sub:
-          "AI + OnePilot Deployment": "Digital Worker deployment"
+          "AI + OnePilot Deployment": "AI Digital Workforce deployment"
           "powered by ChatGPT": "powered by AI"
 
-  # 25 — chemicals success story (Digital Worker re-attribution)
+  # 25 — chemicals success story (Digital Co-Worker re-attribution)
   - pattern: success-chem
     patch:
       ss-sub:
         sub:
-          "AI + OnePilot Deployment": "Digital Worker deployment"
+          "AI + OnePilot Deployment": "AI Digital Workforce deployment"
           "powered by ChatGPT": "powered by AI"
 
   # 26 — contact (kept)
