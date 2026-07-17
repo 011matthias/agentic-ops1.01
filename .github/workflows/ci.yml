@@ -47,6 +47,17 @@ jobs:
       - name: Run enforcement-layer test suite
         run: uv run --no-project --with pytest pytest tools/tests
 
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   spell:
     name: Spell check
     runs-on: ubuntu-latest

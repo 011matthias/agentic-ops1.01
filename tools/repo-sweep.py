@@ -5,22 +5,31 @@
 """Nightly unattended repo sweep: commit, push, and PR uncommitted work.
 
 Prevents the weeks-long uncommitted-backlog problem (2026-07-17: 301 dirty
-entries, 64-file conflict resolution) by sweeping quiesced working trees on
-a schedule. Non-LLM, deterministic, safety-gated.
+entries, 64-conflict merge) by sweeping quiesced working trees on a schedule.
+Non-LLM, deterministic, safety-gated, self-healing.
 
 Per-repo policy:
-  pr    - never commit on main: branch sys/sweep-YYYYMMDD, thematic commits,
-          push, open PR, wait for CI (bounded), squash-merge on green
-          (mirrors rule_no_auto_commit Bands 1-2).
+  pr    - never commit on main: branch sys/sweep-YYYYMMDD-HHMM, thematic
+          commits, adopt+supersede any older open sweep PRs, push, open PR,
+          poll structured CI state (gh pr view --json), self-heal a
+          CONFLICTING PR once via a local `git merge origin/main` (the
+          .gitattributes merge=union rules resolve append-only ledgers),
+          squash-merge on green (mirrors rule_no_auto_commit Bands 1-2).
   push  - commit on the current branch and push it (personal backup repos).
 
 Safety gates (any hit = skip, log, continue):
   - repo missing / not git / merge-rebase in progress / detached HEAD
   - quiesce: if ANY dirty file changed within --quiesce-minutes, the repo
-    is mid-work; skip entirely (partial sweeps make incoherent commits)
+    is mid-work; skip entirely (partial sweeps make incoherent commits).
+    Deleted paths age via their nearest existing ancestor directory (NTFS
+    bumps the parent dir mtime on unlink), never epoch-0.
   - credential-shaped filenames are never committed even if untracked
   - files > 50 MB are excluded and logged
   - > 5000 dirty entries means something is broken; skip and log
+
+Micro-mode: --normalize-sessions FILE... repairs the union-merge artifact in
+docs/sessions/*.md (duplicated frontmatter counters, colliding Session
+numbers) by recomputing everything from the body. Idempotent, fail-open.
 
 Default is dry-run. The scheduled task passes --execute.
 Log: %USERPROFILE%/.repo-sweep.log (one block per run).
@@ -31,7 +40,9 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import fnmatch
+import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -46,6 +57,7 @@ LOG_FILE = os.path.join(os.path.expanduser("~"), ".repo-sweep.log")
 MAX_FILE_BYTES = 50 * 1024 * 1024
 MAX_ENTRIES = 5000
 CI_WAIT_SECONDS = 15 * 60
+NO_CHECKS_GRACE = 180
 
 CREDENTIAL_PATTERNS = [
     ".env", ".env.*", "*.pem", "*.key", "*.p12", "*.pfx", "*.jks",
@@ -54,6 +66,9 @@ CREDENTIAL_PATTERNS = [
     ".npmrc", ".pypirc",
 ]
 CREDENTIAL_ALLOW = [".env.example", ".env.sample", ".env.template", ".env.dist"]
+
+RED_CONCLUSIONS = {"FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED",
+                   "STARTUP_FAILURE"}
 
 
 def is_credential_name(path: str) -> bool:
@@ -80,6 +95,144 @@ def group_for_path(path: str) -> str:
     return "misc"
 
 
+def classify_rollup(rollup: list[dict]) -> str:
+    """Overall check state from gh's statusCheckRollup: none|red|pending|green."""
+    if not rollup:
+        return "none"
+    red = pending = False
+    for c in rollup:
+        if c.get("__typename") == "StatusContext":
+            state = (c.get("state") or "").upper()
+            if state in ("FAILURE", "ERROR"):
+                red = True
+            elif state in ("PENDING", "EXPECTED"):
+                pending = True
+        else:  # CheckRun
+            conclusion = (c.get("conclusion") or "").upper()
+            status = (c.get("status") or "").upper()
+            if conclusion in RED_CONCLUSIONS:
+                red = True
+            elif status != "COMPLETED":
+                pending = True
+    if red:
+        return "red"
+    if pending:
+        return "pending"
+    return "green"
+
+
+def decide_pr_action(checks: str, mergeable: str, healed: bool,
+                     grace_expired: bool) -> str:
+    """The sweep-PR decision table. Red beats conflict beats everything."""
+    if checks == "red":
+        return "leave_red"
+    if mergeable == "CONFLICTING":
+        return "leave_conflict" if healed else "heal"
+    if checks == "green":
+        return "merge" if mergeable == "MERGEABLE" else "wait"
+    if checks == "none":
+        return "leave_nochecks" if grace_expired else "wait"
+    return "wait"  # pending
+
+
+def sweep_branch_name(now: dt.datetime) -> str:
+    return f"sys/sweep-{now.strftime('%Y%m%d-%H%M')}"
+
+
+def failed_check_names(rollup: list[dict]) -> list[str]:
+    names = []
+    for c in rollup:
+        if c.get("__typename") == "StatusContext":
+            if (c.get("state") or "").upper() in ("FAILURE", "ERROR"):
+                names.append(c.get("context") or "status-context")
+        elif (c.get("conclusion") or "").upper() in RED_CONCLUSIONS:
+            names.append(c.get("name") or "check")
+    return names
+
+
+def normalize_session_frontmatter(text: str) -> str:
+    """Repair union-merge artifacts in a docs/sessions/*.md file.
+
+    Renumbers '### Session N' headings sequentially, recomputes the
+    `sessions:` and `friction_events:` counters from the body, unions
+    duplicated inline-list keys, and drops duplicate frontmatter lines.
+    Idempotent; returns the input unchanged on any parse failure.
+    """
+    try:
+        lines = text.splitlines()
+        if not lines or lines[0].strip() != "---":
+            return text
+        try:
+            end = next(i for i in range(1, len(lines)) if lines[i].strip() == "---")
+        except StopIteration:
+            return text
+        front, body = lines[1:end], lines[end + 1:]
+
+        n = 0
+
+        def renumber(m: re.Match) -> str:
+            nonlocal n
+            n += 1
+            return f"### Session {n}"
+
+        body_text = re.sub(r"^### Session \d+", renumber,
+                           "\n".join(body), flags=re.MULTILINE)
+        friction = sum(int(m.group(1)) for m in
+                       re.finditer(r"^\*\*Friction:\*\*\s*(\d+)", body_text,
+                                   flags=re.MULTILINE))
+
+        def items(val: str) -> list[str]:
+            return [x.strip() for x in val.strip().strip("[]").split(",") if x.strip()]
+
+        list_keys = ("projects_touched", "work_types")
+        merged_lists: dict[str, list[str]] = {k: [] for k in list_keys}
+        out: list[str] = []
+        seen: set[str] = set()
+        for ln in front:
+            m = re.match(r"^(\w+):\s*(.*)$", ln)
+            if not m:
+                if ln not in seen:
+                    out.append(ln)
+                    seen.add(ln)
+                continue
+            key, val = m.group(1), m.group(2)
+            if key in list_keys:
+                for item in items(val):
+                    if item not in merged_lists[key]:
+                        merged_lists[key].append(item)
+                if key not in seen:
+                    out.append(ln)  # placeholder, rewritten below
+                    seen.add(key)
+            elif key in ("sessions", "friction_events"):
+                if key not in seen:
+                    out.append(ln)  # placeholder, rewritten below
+                    seen.add(key)
+            else:
+                if key not in seen:
+                    out.append(ln)
+                    seen.add(key)
+
+        rebuilt = []
+        for ln in out:
+            m = re.match(r"^(\w+):", ln)
+            key = m.group(1) if m else None
+            if key == "sessions":
+                rebuilt.append(f"sessions: {n}")
+            elif key == "friction_events":
+                rebuilt.append(f"friction_events: {friction}")
+            elif key in list_keys:
+                rebuilt.append(f"{key}: [{', '.join(merged_lists[key])}]")
+            else:
+                rebuilt.append(ln)
+
+        result = "\n".join(["---", *rebuilt, "---", body_text])
+        if text.endswith("\n"):
+            result += "\n"
+        return result
+    except Exception:
+        return text
+
+
 def run(args: list[str], cwd: str) -> subprocess.CompletedProcess:
     return subprocess.run(args, cwd=cwd, capture_output=True, text=True)
 
@@ -103,13 +256,21 @@ def dirty_entries(repo: str) -> list[tuple[str, str]]:
 
 
 def newest_mtime(repo: str, entries: list[tuple[str, str]]) -> float:
+    """Newest mtime across dirty paths. Deleted paths age via their nearest
+    existing ancestor directory (never epoch-0, which would bypass quiesce)."""
     newest = 0.0
+    repo_norm = os.path.normcase(os.path.normpath(repo))
     for _, rel in entries:
-        full = os.path.join(repo, rel.replace("/", os.sep))
+        probe = os.path.join(repo, rel.replace("/", os.sep))
+        while not os.path.exists(probe):
+            parent = os.path.dirname(probe)
+            if parent == probe or os.path.normcase(os.path.normpath(probe)) == repo_norm:
+                break
+            probe = parent
         try:
-            newest = max(newest, os.path.getmtime(full))
+            newest = max(newest, os.path.getmtime(probe))
         except OSError:
-            pass  # deleted files have no mtime; deletion age is unknowable
+            pass
     return newest
 
 
@@ -151,27 +312,139 @@ def log(lines: list[str]) -> None:
         f.write(block)
 
 
-def wait_for_ci_and_merge(repo: str, branch: str, lines: list[str]) -> None:
+def normalize_merged_sessions(repo: str, lines: list[str]) -> None:
+    """After a union merge, repair frontmatter in session files it touched."""
+    diff = git(repo, "diff", "--name-only", "HEAD^1", "HEAD", "--",
+               "docs/sessions").stdout.split()
+    changed = []
+    for rel in diff:
+        if not rel.endswith(".md"):
+            continue
+        full = os.path.join(repo, rel.replace("/", os.sep))
+        try:
+            text = open(full, encoding="utf-8").read()
+        except OSError:
+            continue
+        fixed = normalize_session_frontmatter(text)
+        if fixed != text:
+            open(full, "w", encoding="utf-8", newline="\n").write(fixed)
+            changed.append(rel)
+    if changed:
+        git(repo, "add", "--", *changed)
+        git(repo, "commit", "-q", "-m",
+            "sweep: normalize session frontmatter after union merge\n\n"
+            "Automated-by: tools/repo-sweep.py")
+        lines.append(f"  normalized session frontmatter: {', '.join(changed)}")
+
+
+def self_heal_conflict(repo: str, lines: list[str]) -> bool:
+    """Merge origin/main into the sweep branch locally (union drivers apply)."""
+    git(repo, "fetch", "--quiet", "origin", "main")
+    merge = git(repo, "merge", "--no-edit", "origin/main")
+    if merge.returncode != 0:
+        conflicted = git(repo, "diff", "--name-only",
+                         "--diff-filter=U").stdout.split()
+        git(repo, "merge", "--abort")
+        lines.append("  self-heal: real conflicts, aborted "
+                     f"({', '.join(conflicted[:8]) or 'unknown paths'})")
+        return False
+    normalize_merged_sessions(repo, lines)
+    push = git(repo, "push")
+    if push.returncode != 0:
+        lines.append(f"  self-heal: push failed: {push.stderr.strip()[:140]}")
+        return False
+    lines.append("  self-heal: merged origin/main cleanly (union) and pushed")
+    return True
+
+
+def supersede_old_sweeps(repo: str, current_branch: str, lines: list[str]) -> None:
+    """Adopt older open sweep PRs into this branch, then close them."""
+    listed = run(["gh", "pr", "list", "--state", "open",
+                  "--json", "number,headRefName"], cwd=repo)
+    if listed.returncode != 0:
+        return
+    try:
+        prs = json.loads(listed.stdout or "[]")
+    except json.JSONDecodeError:
+        return
+    for pr in prs:
+        branch = pr.get("headRefName", "")
+        if not branch.startswith("sys/sweep-") or branch == current_branch:
+            continue
+        git(repo, "fetch", "--quiet", "origin", branch)
+        merge = git(repo, "merge", "--no-edit", f"origin/{branch}")
+        if merge.returncode != 0:
+            git(repo, "merge", "--abort")
+            lines.append(f"  supersede: could not adopt PR #{pr['number']} "
+                         f"({branch}); leaving it open")
+            continue
+        run(["gh", "pr", "close", str(pr["number"]),
+             "--comment", f"Superseded by {current_branch}; its commits are "
+                          "now contained in the newer sweep PR.",
+             "--delete-branch"], cwd=repo)
+        git(repo, "branch", "-D", branch)
+        lines.append(f"  supersede: adopted + closed PR #{pr['number']} ({branch})")
+
+
+def wait_for_ci_and_merge(repo: str, branch: str, lines: list[str]) -> bool:
+    """Poll structured PR state and act per the decision table. True if merged."""
     pr = run(["gh", "pr", "list", "--head", branch, "--json", "number",
               "--jq", ".[0].number"], cwd=repo).stdout.strip()
     if not pr:
         lines.append(f"  no PR found for {branch}; leaving pushed branch")
-        return
-    deadline = time.time() + CI_WAIT_SECONDS
+        return False
+    start = time.time()
+    deadline = start + CI_WAIT_SECONDS
+    healed = False
     while time.time() < deadline:
-        checks = run(["gh", "pr", "checks", pr], cwd=repo)
-        combined = checks.stdout + checks.stderr
-        if "fail" in combined:
-            lines.append(f"  PR #{pr}: CI red; left open for review")
-            return
-        if checks.returncode == 0 and "pending" not in combined:
-            merge = run(["gh", "pr", "merge", pr, "--squash", "--delete-branch"], cwd=repo)
-            lines.append(f"  PR #{pr}: CI green -> squash-merged"
-                         if merge.returncode == 0 else
-                         f"  PR #{pr}: merge failed: {merge.stderr.strip()[:120]}")
-            return
+        view = run(["gh", "pr", "view", pr, "--json",
+                    "mergeable,mergeStateStatus,statusCheckRollup"], cwd=repo)
+        if view.returncode != 0:
+            time.sleep(60)
+            continue
+        try:
+            data = json.loads(view.stdout)
+        except json.JSONDecodeError:
+            time.sleep(60)
+            continue
+        checks = classify_rollup(data.get("statusCheckRollup") or [])
+        mergeable = (data.get("mergeable") or "UNKNOWN").upper()
+        action = decide_pr_action(checks, mergeable, healed,
+                                  time.time() - start > NO_CHECKS_GRACE)
+        if action == "merge":
+            merge = run(["gh", "pr", "merge", pr, "--squash", "--delete-branch"],
+                        cwd=repo)
+            if merge.returncode == 0:
+                lines.append(f"  PR #{pr}: CI green -> squash-merged")
+                return True
+            lines.append(f"  PR #{pr}: merge failed "
+                         f"(mergeStateStatus={data.get('mergeStateStatus')}): "
+                         f"{merge.stderr.strip()[:140]}")
+            return False
+        if action == "leave_red":
+            names = failed_check_names(data.get("statusCheckRollup") or [])
+            lines.append(f"  PR #{pr}: CI red ({', '.join(names) or 'unknown'}); "
+                         "left open for review")
+            return False
+        if action == "heal":
+            if self_heal_conflict(repo, lines):
+                healed = True
+                deadline = time.time() + CI_WAIT_SECONDS
+                continue
+            lines.append(f"  PR #{pr}: CONFLICTING and not auto-healable; left open")
+            return False
+        if action == "leave_conflict":
+            lines.append(f"  PR #{pr}: still CONFLICTING after one heal; left open")
+            return False
+        if action == "leave_nochecks":
+            lines.append(f"  PR #{pr}: NO CHECKS reported after "
+                         f"{NO_CHECKS_GRACE}s -- workflow trigger broken? "
+                         "NOT merging without CI; left open")
+            return False
         time.sleep(60)
-    lines.append(f"  PR #{pr}: CI still pending after {CI_WAIT_SECONDS // 60}m; left open")
+    lines.append(f"  PR #{pr}: CI still pending after "
+                 f"{CI_WAIT_SECONDS // 60}m; left open")
+    return False
 
 
 def sweep_repo(cfg: dict, execute: bool, quiesce_minutes: int) -> None:
@@ -207,51 +480,68 @@ def sweep_repo(cfg: dict, execute: bool, quiesce_minutes: int) -> None:
         lines.append("  nothing committable after exclusions")
         return log(lines)
 
-    today = dt.date.today().strftime("%Y-%m-%d")
-    branch = git(repo, "branch", "--show-current").stdout.strip()
+    now = dt.datetime.now()
+    today = now.date().isoformat()
+    original_branch = git(repo, "branch", "--show-current").stdout.strip()
     lines.append(f"  plan: {sum(len(v) for v in groups.values())} paths in "
-                 f"{len(groups)} commit(s) on branch {branch}")
+                 f"{len(groups)} commit(s) on branch {original_branch}")
     for g, paths in sorted(groups.items()):
         lines.append(f"    {g}: {len(paths)} paths")
     if not execute:
         lines.append("  DRY-RUN: no changes made")
         return log(lines)
 
-    sweep_branch = branch
-    if policy == "pr":
-        if branch in ("main", "master"):
-            sweep_branch = f"sys/sweep-{today.replace('-', '')}"
-            git(repo, "checkout", "-B", sweep_branch)
+    sweep_branch = original_branch
+    merged = False
+    try:
+        if policy == "pr" and original_branch in ("main", "master"):
+            sweep_branch = sweep_branch_name(now)
+            co = git(repo, "checkout", "-b", sweep_branch)
+            if co.returncode != 0:
+                lines.append(f"  abort: checkout -b failed: {co.stderr.strip()[:120]}")
+                return
             lines.append(f"  branched {sweep_branch} (never commit on main)")
 
-    for g, paths in sorted(groups.items()):
-        git(repo, "add", "-A", "--", *paths)
-        msg = f"sweep: {g} backlog {today}\n\nAutomated-by: tools/repo-sweep.py"
-        c = git(repo, "commit", "-q", "-m", msg)
-        lines.append(f"  commit {g}: {'ok' if c.returncode == 0 else c.stderr.strip()[:100]}")
+        for g, paths in sorted(groups.items()):
+            git(repo, "add", "-A", "--", *paths)
+            msg = f"sweep: {g} backlog {today}\n\nAutomated-by: tools/repo-sweep.py"
+            c = git(repo, "commit", "-q", "-m", msg)
+            lines.append(f"  commit {g}: {'ok' if c.returncode == 0 else c.stderr.strip()[:100]}")
 
-    push = git(repo, "push", "-u", "origin", sweep_branch)
-    lines.append(f"  push {sweep_branch}: {'ok' if push.returncode == 0 else push.stderr.strip()[:140]}")
-    if push.returncode != 0:
-        return log(lines)
+        if policy == "pr" and sweep_branch != original_branch:
+            supersede_old_sweeps(repo, sweep_branch, lines)
 
-    if policy == "pr":
-        existing = run(["gh", "pr", "list", "--head", sweep_branch, "--json", "number",
-                        "--jq", ".[0].number"], cwd=repo).stdout.strip()
-        if not existing:
-            pr = run(["gh", "pr", "create", "--fill-first",
-                      "--title", f"sweep: uncommitted backlog {today}",
-                      "--body", "Automated nightly sweep by tools/repo-sweep.py. "
-                                "Quiesce-gated; credential-shaped and >50MB files excluded.\n\n"
-                                "\U0001F916 Generated with [Claude Code](https://claude.com/claude-code)"],
-                     cwd=repo)
-            lines.append(f"  PR: {'created' if pr.returncode == 0 else pr.stderr.strip()[:140]}")
-        wait_for_ci_and_merge(repo, sweep_branch, lines)
-        if branch in ("main", "master"):
-            git(repo, "checkout", branch)
-            git(repo, "pull", "--ff-only")
-            lines.append(f"  returned to {branch}")
-    log(lines)
+        push = git(repo, "push", "-u", "origin", sweep_branch)
+        lines.append(f"  push {sweep_branch}: "
+                     f"{'ok' if push.returncode == 0 else push.stderr.strip()[:140]}")
+        if push.returncode != 0:
+            return
+
+        if policy == "pr":
+            existing = run(["gh", "pr", "list", "--head", sweep_branch,
+                            "--json", "number", "--jq", ".[0].number"],
+                           cwd=repo).stdout.strip()
+            if not existing:
+                pr = run(["gh", "pr", "create", "--fill-first",
+                          "--title", f"sweep: uncommitted backlog {today}",
+                          "--body", "Automated nightly sweep by tools/repo-sweep.py. "
+                                    "Quiesce-gated; credential-shaped and >50MB files "
+                                    "excluded; conflicts self-heal via merge=union.\n\n"
+                                    "\U0001F916 Generated with [Claude Code]"
+                                    "(https://claude.com/claude-code)"],
+                         cwd=repo)
+                lines.append(f"  PR: {'created' if pr.returncode == 0 else pr.stderr.strip()[:140]}")
+            merged = wait_for_ci_and_merge(repo, sweep_branch, lines)
+    finally:
+        current = git(repo, "branch", "--show-current").stdout.strip()
+        if current != original_branch:
+            git(repo, "checkout", original_branch)
+            pull = git(repo, "pull", "--ff-only")
+            lines.append(f"  returned to {original_branch}"
+                         f"{'' if pull.returncode == 0 else ' (pull --ff-only failed)'}")
+        if merged and sweep_branch != original_branch:
+            git(repo, "branch", "-D", sweep_branch)
+        log(lines)
 
 
 def main() -> int:
@@ -259,7 +549,21 @@ def main() -> int:
     ap.add_argument("--execute", action="store_true", help="act (default: dry-run)")
     ap.add_argument("--quiesce-minutes", type=int, default=120)
     ap.add_argument("--repo", help="sweep only the repo whose folder name matches")
+    ap.add_argument("--normalize-sessions", nargs="+", metavar="FILE",
+                    help="repair union-merge frontmatter artifacts in session "
+                         "files, then exit")
     args = ap.parse_args()
+
+    if args.normalize_sessions:
+        for f in args.normalize_sessions:
+            text = open(f, encoding="utf-8").read()
+            fixed = normalize_session_frontmatter(text)
+            if fixed != text:
+                open(f, "w", encoding="utf-8", newline="\n").write(fixed)
+                print(f"{f}: normalized")
+            else:
+                print(f"{f}: unchanged")
+        return 0
 
     for cfg in REPOS:
         if args.repo and os.path.basename(cfg["path"]) != args.repo:

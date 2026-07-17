@@ -6,9 +6,10 @@
 weekly-review loop's SIGNAL half.
 
 Composes the existing detectors (friction-watch signals + corrected backlog
-counts + synthesis-cadence staleness + an asset census) into one plain-text
-report and emails it via tools/send_email.py (Resend; non-default User-Agent
-contract lives there). WRITES NO FILE by design -- 52 dated digests/year
+counts + synthesis-cadence staleness + an ops-health sensor for the nightly
+repo-sweep: heartbeat, lingering sweep PRs, close-candidate worktrees, stale
+branches + an asset census) into one plain-text report and emails it via
+tools/send_email.py (Resend; non-default User-Agent contract lives there). WRITES NO FILE by design -- 52 dated digests/year
 restating an email is exactly the rule_no_file_bloat W1 clutter class; the
 record is the inbox + Task Scheduler history.
 
@@ -47,6 +48,8 @@ import argparse
 import datetime
 import importlib.util
 import json
+import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -54,6 +57,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 CADENCE_WORKTREE = r"C:\Users\neuma_p1qrsic\Repo\agentic-ops1-cadence"
 UV_EXE = r"C:\Users\neuma_p1qrsic\.local\bin\uv.exe"
+SWEEP_LOG = Path.home() / ".repo-sweep.log"
 
 REGISTRATION = f"""Register-ScheduledTask -TaskName "AgenticOpsWeeklySynthesis" `
   -Action (New-ScheduledTaskAction -Execute "{UV_EXE}" `
@@ -96,6 +100,127 @@ def sensor_lag() -> dict:
     return {"sensor_commit": head, "behind_origin_main": behind}
 
 
+def parse_sweep_log_last_stamp(text: str) -> datetime.datetime | None:
+    """Last [YYYY-MM-DD HH:MM] stamp in a repo-sweep log, or None."""
+    stamps = re.findall(r"^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2})\]", text,
+                        flags=re.MULTILINE)
+    if not stamps:
+        return None
+    try:
+        return datetime.datetime.strptime(stamps[-1], "%Y-%m-%d %H:%M")
+    except ValueError:
+        return None
+
+
+def sweep_heartbeat_alert(last: datetime.datetime | None,
+                          now: datetime.datetime,
+                          max_hours: int = 48) -> str | None:
+    if last is None:
+        return "sweep heartbeat missing: no ~/.repo-sweep.log stamps found"
+    age_h = (now - last).total_seconds() / 3600
+    if age_h > max_hours:
+        return (f"sweep heartbeat stale: last run {age_h:.0f}h ago "
+                f"(max {max_hours}h) -- is the RepoSweep task alive?")
+    return None
+
+
+def ops_health(scheduled: bool) -> dict:
+    """Unattended-git-ops sensor: sweep heartbeat, lingering sweep PRs,
+    close-candidate worktrees, stale unmerged branches. Fail-open per
+    surface -- this is an advisory sensor, never a gate."""
+    ops: dict = {"sweep_last_run": None, "open_sweep_prs": [],
+                 "close_candidate_worktrees": [], "stale_branches": [],
+                 "alerts": []}
+    try:
+        text = SWEEP_LOG.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        text = ""
+    last = parse_sweep_log_last_stamp(text)
+    ops["sweep_last_run"] = last.strftime("%Y-%m-%d %H:%M") if last else None
+    alert = sweep_heartbeat_alert(last, datetime.datetime.now())
+    if alert:
+        ops["alerts"].append(alert)
+
+    try:  # lingering sweep PRs
+        out = subprocess.run(
+            ["gh", "pr", "list", "--state", "open",
+             "--json", "number,headRefName,createdAt"],
+            capture_output=True, text=True, timeout=60, cwd=str(REPO))
+        for pr in json.loads(out.stdout or "[]"):
+            br = pr.get("headRefName", "")
+            if not br.startswith("sys/sweep-"):
+                continue
+            created = datetime.datetime.fromisoformat(
+                pr["createdAt"].replace("Z", "+00:00"))
+            age = (datetime.datetime.now(datetime.timezone.utc) - created).days
+            ops["open_sweep_prs"].append(
+                {"number": pr["number"], "branch": br, "age_days": age})
+            if age >= 1:
+                ops["alerts"].append(
+                    f"sweep PR #{pr['number']} open {age}d ({br}) -- "
+                    "self-heal could not merge it; needs a human look")
+    except Exception:
+        pass
+
+    try:  # worktrees whose HEAD is merged into origin/main AND clean
+        blocks = [b for b in _git(["worktree", "list", "--porcelain"])
+                  .strip().split("\n\n") if b]
+        for b in blocks:
+            path = head = None
+            for ln in b.splitlines():
+                if ln.startswith("worktree "):
+                    path = ln[len("worktree "):]
+                elif ln.startswith("HEAD "):
+                    head = ln[len("HEAD "):]
+            if not path or not head:
+                continue
+            if os.path.normcase(path) in (os.path.normcase(str(REPO)),
+                                          os.path.normcase(CADENCE_WORKTREE)):
+                continue  # primary clone / pinned-by-design
+            merged = subprocess.run(
+                ["git", "-C", str(REPO), "merge-base", "--is-ancestor",
+                 head, "origin/main"], capture_output=True).returncode == 0
+            dirty = subprocess.run(
+                ["git", "-C", path, "status", "--porcelain"],
+                capture_output=True, text=True).stdout.strip()
+            if merged and not dirty:
+                ops["close_candidate_worktrees"].append(path)
+        if ops["close_candidate_worktrees"]:
+            names = ", ".join(os.path.basename(p)
+                              for p in ops["close_candidate_worktrees"])
+            ops["alerts"].append(
+                f"{len(ops['close_candidate_worktrees'])} worktree(s) "
+                f"merged+clean -- close candidates: {names}")
+    except Exception:
+        pass
+
+    try:  # local branches unmerged and idle >14d
+        refs = _git(["for-each-ref", "refs/heads",
+                     "--format=%(refname:short)|%(committerdate:iso8601-strict)"])
+        for ln in refs.splitlines():
+            name, _, date_s = ln.partition("|")
+            if not date_s or name in ("main", "master"):
+                continue
+            cdate = datetime.datetime.fromisoformat(date_s)
+            age = (datetime.datetime.now(cdate.tzinfo) - cdate).days
+            if age < 14:
+                continue
+            merged = subprocess.run(
+                ["git", "-C", str(REPO), "merge-base", "--is-ancestor",
+                 name, "origin/main"], capture_output=True).returncode == 0
+            if not merged:
+                ops["stale_branches"].append({"branch": name, "age_days": age})
+        if ops["stale_branches"]:
+            listing = ", ".join(f"{b['branch']} ({b['age_days']}d)"
+                                for b in ops["stale_branches"][:5])
+            ops["alerts"].append(
+                f"{len(ops['stale_branches'])} unmerged local branch(es) "
+                f"idle >14d: {listing}")
+    except Exception:
+        pass
+    return ops
+
+
 def build_report(scheduled: bool) -> dict:
     fw = _load_friction_watch()
     rows = fw.parse_register(read_register(scheduled))
@@ -115,7 +240,7 @@ def build_report(scheduled: bool) -> dict:
     }
     return {"date": today.isoformat(), "mode": "scheduled" if scheduled else "local",
             "signals": signals, "backlog": backlog, "cadence": cadence,
-            "assets": sensor_lag()}
+            "ops": ops_health(scheduled), "assets": sensor_lag()}
 
 
 def render_text(r: dict) -> str:
@@ -145,12 +270,21 @@ def render_text(r: dict) -> str:
             L.append(f"  {breach}")
     else:
         L.append("  ledger + reviews fresh")
+    o = r["ops"]
+    L.append("OPS")
+    if o["alerts"]:
+        for alert in o["alerts"]:
+            L.append(f"  {alert}")
+    else:
+        L.append(f"  sweep heartbeat fresh ({o['sweep_last_run']}); "
+                 "no open sweep PRs; no stale surfaces")
     a = r["assets"]
     L.append("ASSETS")
     L.append(f"  sensor commit {a['sensor_commit']}, "
              f"{a['behind_origin_main']} commit(s) behind origin/main "
              f"(refresh: git -C {CADENCE_WORKTREE} pull --ff-only)")
-    if c or any([s["concentration"], s["memory_sprawl"], s["recurrence"]]):
+    if c or o["alerts"] or any([s["concentration"], s["memory_sprawl"],
+                                s["recurrence"]]):
         L.append("")
         L.append("RECOMMENDATION: run /comd_system-dev --audit-only to triage.")
     return "\n".join(L)
@@ -199,7 +333,8 @@ def main() -> int:
         c = report["cadence"]
         nsig = sum(bool(v) for v in report["signals"].values())
         subject = (f"[agentic-ops] weekly synthesis {report['date']} -- "
-                   f"{nsig} signal group(s), ledger "
+                   f"{nsig} signal group(s), "
+                   f"{len(report['ops']['alerts'])} ops alert(s), ledger "
                    f"{(str(c['ledger_age_days']) + 'd stale') if c and c.get('ledger_age_days') is not None else 'fresh'}")
         if not send(subject, render_text(report)):
             return 1  # fail loud -> LastTaskResult goes red
