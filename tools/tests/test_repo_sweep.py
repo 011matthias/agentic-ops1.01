@@ -150,6 +150,34 @@ def test_normalize_session_frontmatter_repairs_union_artifact():
     assert rs.normalize_session_frontmatter(fixed) == fixed
 
 
+def test_plan_expands_untracked_dirs_and_gates_each_file(tmp_path):
+    bundle = tmp_path / "docs" / "bundle"
+    bundle.mkdir(parents=True)
+    (bundle / "notes.md").write_text("small and fine")
+    big = bundle / "huge.bin"
+    big.write_bytes(b"\0" * (rs.MAX_FILE_BYTES + 1))
+    (bundle / "graph_token.txt").write_text("nope")
+    groups, skipped = rs.plan(str(tmp_path), [("??", "docs/bundle/")])
+    committed = [p for paths in groups.values() for p in paths]
+    assert committed == ["docs/bundle/notes.md"]
+    assert any("huge.bin" in s and ">50MB" in s for s in skipped)
+    assert any("graph_token.txt" in s and "credential" in s for s in skipped)
+
+
+def test_plan_denies_junk_dirs_at_any_depth(tmp_path):
+    rem = tmp_path / ".remotion" / "win64"
+    rem.mkdir(parents=True)
+    (rem / "shell.exe").write_bytes(b"x")
+    groups, skipped = rs.plan(str(tmp_path), [
+        ("??", ".remotion/"),
+        ("??", "app/node_modules/pkg/index.js"),
+        (" M", "docs/real-note.md"),
+    ])
+    committed = [p for paths in groups.values() for p in paths]
+    assert committed == ["docs/real-note.md"]
+    assert sum("cache/tooling" in s for s in skipped) == 2
+
+
 def test_normalize_session_frontmatter_fail_open():
     assert rs.normalize_session_frontmatter("no frontmatter at all") == \
         "no frontmatter at all"
