@@ -134,6 +134,11 @@ CANONICAL_HOOKS = {
                 },
                 {
                     "type": "command",
+                    "command": _cmd(".claude/hooks/ruff-push-gate.py"),
+                    "timeout": 10000,
+                },
+                {
+                    "type": "command",
                     "command": _cmd(".claude/hooks/cd-guard.py"),
                     "timeout": 10000,
                 },
@@ -246,6 +251,7 @@ EXPECTED_HOOK_SCRIPTS = {
     "file-placement-gate.py",
     "instantly-invasive-gate.py",
     "no-auto-commit-gate.py",
+    "ruff-push-gate.py",
     "cd-guard.py",
     "em-dash-strip-gate.py",
     "post-write-gate.py",
