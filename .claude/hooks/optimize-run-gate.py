@@ -116,24 +116,45 @@ def rel_to_repo(path: str) -> str | None:
     p = path.replace("\\", "/")
     if not (len(p) >= 2 and p[1] == ":") and not p.startswith("/"):
         p = f"{REPO_POSIX}/{p.lstrip('/')}"
+    # Collapse ../ and ./ BEFORE the repo-prefix check. Without this a
+    # traversal path (<repo>/assets/../../.claude/optimize/run.json) reads as
+    # in-scope to is_locked/matches_any but the OS resolves it to the real
+    # locked file at write time - a total ACL bypass. normpath uses \\ on
+    # Windows, so re-posix after.
+    p = os.path.normpath(p).replace("\\", "/")
     if not p.lower().startswith(REPO_POSIX_LOWER + "/"):
         return None
     rel = p[len(REPO_POSIX) + 1:]
-    return "/".join(seg for seg in rel.split("/") if seg not in ("", "."))
+    segs = [seg for seg in rel.split("/") if seg not in ("", ".")]
+    if ".." in segs:  # defence-in-depth: any residual traversal is untrusted
+        return None
+    return "/".join(segs)
 
 
 def load_state() -> dict | None | str:
-    """dict = active run; None = no run; 'corrupt' = unparseable state."""
+    """dict = active run; None = no run; 'corrupt' = unusable state.
+
+    A parseable object with a wrong-typed `assets`/`locked` is downgraded to
+    'corrupt' (-> ASK), not treated as an active run: otherwise it would reach
+    matches_any() and raise, and the outer `except: exit(0)` would convert
+    that crash into a silent ALLOW (fail-open, widening the writable surface).
+    """
     if not os.path.isfile(STATE_PATH):
         return None
     try:
         with open(STATE_PATH, encoding="utf-8") as f:
             state = json.load(f)
-        if not isinstance(state, dict) or "tag" not in state:
-            return "corrupt"
-        return state
     except Exception:
         return "corrupt"
+    if not isinstance(state, dict) or "tag" not in state:
+        return "corrupt"
+    assets = state.get("assets", [])
+    locked = state.get("locked", [])
+    if (not isinstance(assets, list) or not all(isinstance(a, str) for a in assets)
+            or not isinstance(locked, list)
+            or not all(isinstance(e, str) for e in locked)):
+        return "corrupt"
+    return state
 
 
 def is_locked(rel: str, state: dict) -> bool:
@@ -250,6 +271,32 @@ def handle_shell(cmd: str, state: dict | None | str) -> int:
         msg = (
             f"[optimize-run] shell command writes/restores locked path "
             f"{locked_hits[0]} during active optimize run '{tag}'. Outs: "
+            "`uv run tools/optimize_run.py stop` or user-ordered "
+            "OPTIMIZE_SCOPE_ALLOW=1."
+        )
+        if scope_allow():
+            advise("OVERRIDE ACTIVE (OPTIMIZE_SCOPE_ALLOW=1): " + msg)
+        else:
+            decision("deny", msg)
+        return 0
+
+    # Mirror the Write/Edit arm: a write-shaped shell command targeting any
+    # in-repo path outside the asset globs (and outside scratch) is denied,
+    # so a plain redirect/cp/Set-Content cannot reach a non-asset file the
+    # Write arm would refuse. (Interpreter escapes remain a documented
+    # residual; the per-round hash checks are the backstop.)
+    # The run's own logs dir is gitignored, per-run, write-only, and never
+    # read by the scorer - not part of the surface this ACL protects.
+    logs_prefix = f"docs/optimize/{tag}/logs/".lower()
+    out_of_scope = [
+        r for r in rels
+        if not r.lower().startswith((".scratch/", ".tmp/", logs_prefix))
+        and not matches_any(state.get("assets", []), r)
+    ]
+    if out_of_scope:
+        msg = (
+            f"[optimize-run] shell command writes {out_of_scope[0]}, outside "
+            f"the declared asset scope of active optimize run '{tag}'. Outs: "
             "`uv run tools/optimize_run.py stop` or user-ordered "
             "OPTIMIZE_SCOPE_ALLOW=1."
         )

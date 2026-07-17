@@ -416,6 +416,13 @@ def main() -> None:
     # logging and the prototype-scope git inspection.
     view = normalize_command(cmd)
 
+    # The optimize engine only performs local feature-branch commits (never a
+    # push/merge/deploy); its free-text `--desc "<hypothesis>"` argument can
+    # legitimately mention a ship verb (e.g. "revert the git push change"),
+    # which must not trip the ship gate mid-loop. Exempt the engine program.
+    if re.search(r"\btools/optimize_run\.py\b", view):
+        sys.exit(0)
+
     ship_tag = detect_ship_class(view)
     if not ship_tag:
         # Not a ship-class command -> let it run silently.

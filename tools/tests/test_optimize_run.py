@@ -473,3 +473,98 @@ def test_status_reports_run(tmp_path):
     engine(repo, "start", "t1")
     out = engine(repo, "status").stdout
     assert '"tag": "t1"' in out and '"best_score": 9' in out
+
+
+# --- FIX-2: resume must ADOPT a committed journal, never discard a kept win --
+
+def test_resume_adopts_committed_keep_after_crash_window(tmp_path):
+    repo = make_repo(tmp_path)                        # baseline 9
+    engine(repo, "start", "t1")
+    st0 = state(repo)                                 # base_sha=r0, round0, best9
+    edit_numbers(repo, ("2", "3"))                    # 5, a real win
+    engine(repo, "round", "--desc", "shrink")         # KEEP -> HEAD=J1, round1
+    # Simulate SIGKILL in the journal-commit -> save_state window: roll the
+    # run-state cache back to the pre-round values while HEAD stays at J1.
+    stp = repo / ".claude" / "optimize" / "run.json"
+    st = json.loads(stp.read_text(encoding="utf-8"))
+    st.update({"base_sha": st0["base_sha"], "round": 0, "best_score": 9.0,
+               "consecutive_non_keeps": 0,
+               "tsv_lines": st0["tsv_lines"], "tsv_sha256": st0["tsv_sha256"]})
+    stp.write_text(json.dumps(st), encoding="utf-8")
+    out = engine(repo, "resume").stdout
+    assert "adopting the durable journal" in out
+    s2 = state(repo)
+    assert s2["best_score"] == 5.0 and s2["round"] == 1      # win recovered
+    assert (repo / "numbers.txt").read_text().splitlines() == ["2", "3"]
+    assert [r[4] for r in tsv_rows(repo)] == ["baseline", "keep"]  # no crash row
+    assert "reproducibility check OK" in out
+
+
+# --- FIX-4: a parked guard_fail is never destroyed or mislabeled by resume --
+
+def test_resume_preserves_parked_guard_fail(tmp_path):
+    repo = make_repo(tmp_path, guard=True, numbers=("3", "3", "3"))  # 9, 3 lines
+    engine(repo, "start", "t1")
+    edit_numbers(repo, ("4",))                        # 4 (better) but 1 line: guard fail
+    engine(repo, "round", "--desc", "collapse to one line")
+    assert state(repo).get("pending_rework")
+    out = engine(repo, "resume").stdout
+    assert "parked guard_fail" in out
+    assert (repo / "numbers.txt").read_text().strip() == "4"   # not destroyed
+    assert [r[4] for r in tsv_rows(repo)] == ["baseline"]       # no crash row
+    edit_numbers(repo, ("1", "1", "2"))               # 4 AND 3 lines
+    out = engine(repo, "round", "--rework", "--desc", "restore lines").stdout
+    assert "r1: KEEP" in out and state(repo)["best_score"] == 4
+
+
+def test_plain_round_refused_on_parked_rework(tmp_path):
+    repo = make_repo(tmp_path, guard=True, numbers=("3", "3", "3"))
+    engine(repo, "start", "t1")
+    edit_numbers(repo, ("4",))
+    engine(repo, "round", "--desc", "guard-failing win")
+    edit_numbers(repo, ("2", "2", "2"))
+    proc = engine(repo, "round", "--desc", "plain round on parked", expect=1)
+    assert "parked guard_fail" in proc.stderr
+
+
+# --- FIX-3: guard scripts are auto-locked, hash-verified, refused in-scope ---
+
+def test_start_refuses_guard_script_inside_asset_scope(tmp_path):
+    repo = make_repo(tmp_path, guard=True, numbers=("1", "1", "1"),
+                     assets=("numbers.txt", "toy-guard.py"))
+    proc = engine(repo, "start", "t1", expect=1)
+    assert "sits inside the asset scope" in proc.stderr
+
+
+def test_round_aborts_on_guard_script_drift(tmp_path):
+    repo = make_repo(tmp_path, guard=True, numbers=("3", "3", "3"))
+    engine(repo, "start", "t1")
+    g = repo / "toy-guard.py"
+    g.write_text(g.read_text(encoding="utf-8") + "\n# tamper\n", encoding="utf-8")
+    edit_numbers(repo, ("1", "1", "1"))
+    proc = engine(repo, "round", "--desc", "win while guard is neutered",
+                  expect=1)
+    assert "guard script" in proc.stderr and "changed mid-run" in proc.stderr
+
+
+# --- FIX-5: stop clears a corrupt run.json instead of dying -----------------
+
+def test_stop_clears_corrupt_state(tmp_path):
+    repo = make_repo(tmp_path)
+    engine(repo, "start", "t1")
+    stp = repo / ".claude" / "optimize" / "run.json"
+    stp.write_text("{ this is not json", encoding="utf-8")
+    out = engine(repo, "stop").stdout
+    assert "unparseable" in out and "locks OFF" in out
+    assert not stp.exists()
+
+
+def test_round_still_dies_on_corrupt_state(tmp_path):
+    # only stop recovers corrupt state; round must not silently proceed
+    repo = make_repo(tmp_path)
+    engine(repo, "start", "t1")
+    edit_numbers(repo, ("1", "1"))
+    (repo / ".claude" / "optimize" / "run.json").write_text(
+        "{bad", encoding="utf-8")
+    proc = engine(repo, "round", "--desc", "x", expect=1)
+    assert "unparseable" in proc.stderr
