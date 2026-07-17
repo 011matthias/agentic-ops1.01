@@ -1049,6 +1049,13 @@ def main(argv: list[str] | None = None) -> int:
 
         return calibrate_main(argv[1:])
 
+    # `expense-recon label propose|accept|check` — ground-truth pairing
+    # labels for matcher calibration (optimize-loop prep).
+    if argv and argv[0] == "label":
+        from .labeling import main as label_main
+
+        return label_main(argv[1:])
+
     # `expense-recon memory list|forget|reset` — inspect / correct the
     # cross-run learning store (Phase 2 escape hatch, 2d).
     if argv and argv[0] == "memory":
