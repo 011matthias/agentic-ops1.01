@@ -10,6 +10,11 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-17 | Brisken Deck Use-Case Elaboration | client-dev | [Checkpoint](docs/2026-07-17%20-%20Brisken%20Deck%20Use-Case%20Elaboration/Checkpoint.md) |
+| 2026-07-17 | Brisken Planner Sync + Ashok Rethread | comms | [Checkpoint](docs/2026-07-17%20-%20Brisken%20Planner%20Sync%20%2B%20Ashok%20Rethread/Checkpoint.md) |
+| 2026-07-17 | Brisken Lead Desk GA Active Tier | client-dev | [Checkpoint](docs/2026-07-17%20-%20Brisken%20Lead%20Desk%20GA%20Active%20Tier/Checkpoint.md) |
+| 2026-07-17 | Brisken Match Fixtures + Ingest Hardening | client-dev | [Checkpoint](docs/2026-07-17%20-%20Brisken%20Match%20Fixtures%20%2B%20Ingest%20Hardening/Checkpoint.md) |
+| 2026-07-17 | Brisken Protokoll Final Fix + Send | comms | [Checkpoint](docs/2026-07-17%20-%20Brisken%20Protokoll%20Final%20Fix%20%2B%20Send/Checkpoint.md) |
 | 2026-07-17 | Brisken Protokoll Upload Lock | comms | [Checkpoint](docs/2026-07-17%20-%20Brisken%20Protokoll%20Upload%20Lock/Checkpoint.md) |
 | 2026-07-17 | Brisken 2026_PPTX Reorg Execution | client-dev | [Checkpoint](docs/2026-07-17%20-%20Brisken%202026_PPTX%20Reorg%20Execution/Checkpoint.md) |
 | 2026-07-17 | Brisken Expense Recon ER-PDF Ingest | client-dev | [Checkpoint](docs/2026-07-17%20-%20Brisken%20Expense%20Recon%20ER-PDF%20Ingest/Checkpoint.md) |
@@ -149,6 +154,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## jochen-projekt
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-17 | One Assessment UI Feedback-Log Full-Width Readability | client-dev | [Checkpoint](docs/2026-07-17%20-%20One%20Assessment%20UI%20Feedback-Log%20Full-Width%20Readability/Checkpoint.md) |
 | 2026-07-17 | One Assessment Followup + Brisken Branding | client-dev | [Checkpoint](docs/2026-07-17%20-%20One%20Assessment%20Followup%20+%20Brisken%20Branding/Checkpoint.md) |
 | 2026-07-16 | One Assessment RG Calibration + Adjudication | client-dev | [Checkpoint](docs/2026-07-16%20-%20One%20Assessment%20RG%20Calibration%20+%20Adjudication/Checkpoint.md) |
 | 2026-07-16 | One Assessment Document Channel + Gate + Manual-LLM | client-dev | [Checkpoint](docs/2026-07-16%20-%20One%20Assessment%20Document%20Channel%20+%20Gate%20+%20Manual-LLM/Checkpoint.md) |
@@ -174,6 +180,10 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-17 | Ruff Push Gate CI Prevention | system-infra | [→](docs/2026-07-17%20-%20Ruff%20Push%20Gate%20CI%20Prevention/Checkpoint.md) |
+| 2026-07-17 | Optimize Onboarding + Brisken Match Labeling | system-infra | [→](docs/2026-07-17%20-%20Optimize%20Onboarding%20+%20Brisken%20Match%20Labeling/Checkpoint.md) |
+| 2026-07-17 | Repo Clean + Backlog Ship + Sweep Automation | system-infra | [→](docs/2026-07-17%20-%20Repo%20Clean%20+%20Backlog%20Ship%20+%20Sweep%20Automation/Checkpoint.md) |
+| 2026-07-17 | Optimize-Loop Autoresearch Infrastructure | system-infra | [Checkpoint](docs/2026-07-17%20-%20Optimize-Loop%20Autoresearch%20Infrastructure/Checkpoint.md) |
 | 2026-07-13 | AOL Notation Experiment | system-infra | [Checkpoint](docs/2026-07-13%20-%20AOL%20Notation%20Experiment/Checkpoint.md) |
 | 2026-07-12 | System-Dev Sibling-Session Guard | system-infra | [Checkpoint](docs/2026-07-12%20-%20System-Dev%20Sibling-Session%20Guard/Checkpoint.md) |
 | 2026-07-10 | Harness Hardening Audit + Execution | system-infra | [Checkpoint](docs/2026-07-10%20-%20Harness%20Hardening%20Audit%20%2B%20Execution/Checkpoint.md) |
