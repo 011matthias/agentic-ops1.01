@@ -23,11 +23,11 @@ engine `tools/pptx_slide_ops.py`).
 | Element | State | Status | Next action | Blocker | Detail |
 |---|---|---|---|---|---|
 | Build system (deckgen v2) | done | Engine + library + composer + render + upload live; 10 pytest green; 5 decks built end-to-end | Reuse for future decks; refresh library when Dirk's reference changes (RENAMES tripwire fails loudly) | none | `automations/lead-generation/deckgen/README.md` |
-| MDH Commodities proposal (8 sl) | review | In Asset Testing, verified 2026-07-17 | Dirk review | Dirk | `Asset Testing/Brisken - Market Data Hub Commodities 2026-08 PROPOSAL.*` |
-| Market Data Hub proposal (10 sl) | review | In Asset Testing, verified | Dirk review | Dirk | same folder |
-| Smart Trading proposal (8 sl) | review | In Asset Testing, verified; Trade Automation renamed throughout text | Dirk review | Dirk | same folder |
-| Digital Co-Worker proposal (11 sl) | review | In Asset Testing, verified; 4 use-case one-pagers, internal demo labeled | Dirk review | Dirk | same folder |
-| Overview revision proposal (32 sl) | review | In Asset Testing, verified; platform reframe, hierarchy slide, appendix drawer | Dirk review | Dirk | same folder |
+| MDH Commodities proposal (9 sl) | review | In Asset Testing, re-verified 2026-07-17; 2 use cases (curve + Valuation & Exposure Prices) | Dirk review | Dirk | `Asset Testing/Brisken - Market Data Hub Commodities 2026-08 PROPOSAL.*` |
+| Market Data Hub proposal (11 sl) | review | In Asset Testing, re-verified; 4 use cases (adds Credit & Counterparty Data) | Dirk review | Dirk | same folder |
+| Smart Trading proposal (10 sl) | review | In Asset Testing, re-verified; 3 use cases (One FX Trade, Derivatives & Securities, OTC Commodity Swaps); BST naming | Dirk review | Dirk | same folder |
+| Digital Co-Worker proposal (12 sl) | review | In Asset Testing, re-verified; 5 use-case one-pagers (adds Bank Statement Intake), internal demo labeled | Dirk review | Dirk | same folder |
+| Overview revision proposal (32 sl) | review | In Asset Testing, re-verified; Funding one-pager elaborated, sourced customer-base credential caption | Dirk review | Dirk | same folder |
 | Swap into Product Assets | blocked | Runbook documented; NOT executed | Per-deck swap after explicit Dirk approval | Dirk approval per deck | deckgen README "Swap runbook" |
 | Old dark-cockpit generators | dormant | Superseded for product decks; TC prospect decks (Sanofi/Zalando) still on old pipeline | Rebuild TC prospect decks on the new foundation (next wave, per owner scope decision) | none | `.scratch/deckgen/build-treasurycentral.js` |
 
@@ -35,7 +35,9 @@ engine `tools/pptx_slide_ops.py`).
 
 1. BTP wording: proposals say "on SAP's own cloud"; his reference prints
    BTP text + the certification badge image. Opt-in restores it per deck.
-2. "Digital Worker / Digital Co-Worker" rename (his memo: term feels dated).
+2. Deck rename: hierarchy/captions now use brisken.com's "AI Digital
+   Workforce"; the DCW deck filename stays "Digital Co-Worker" for parity
+   with the file it replaces. Full deck rename = one parameter flip.
 3. Ring graphic on the platform slide bakes old names into the image
    (Trade Automation, ChatGPT mention, BTP badge): needs his source art.
 4. Success-story expansion (ADM, Nike, Nestle, Ford) waits on his
