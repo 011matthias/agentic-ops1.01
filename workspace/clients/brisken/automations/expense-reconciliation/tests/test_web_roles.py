@@ -75,7 +75,6 @@ def test_operator_login_sees_operator_home(gated_client):
         ("GET", "/compare"),
         ("GET", "/memory"),
         ("GET", "/jobs/deadbeef"),
-        ("GET", "/api/operator/state"),
         ("GET", "/intakes/xyz/prepare"),
     ],
 )
@@ -84,6 +83,54 @@ def test_user_gets_redirected_from_operator_get_routes(gated_client, method, pat
     resp = gated_client.request(method, path, follow_redirects=False)
     assert resp.status_code == 303
     assert resp.headers["location"] == "/"
+
+
+def test_user_gets_403_json_from_operator_api_routes(gated_client):
+    # API paths never redirect to the HTML home; a wrong-role caller gets a
+    # JSON 403 the SPA front end can act on (operator-only surface).
+    _login(gated_client, USER_CODE)
+    resp = gated_client.get("/api/operator/state", follow_redirects=False)
+    assert resp.status_code == 403
+    assert resp.json()["error"]
+
+
+# --- SPA front end: token login + bearer auth + scoped CORS ---------------
+
+
+def test_api_login_returns_bearer_token(gated_client):
+    ok = gated_client.post("/api/login", json={"code": OP_CODE})
+    assert ok.status_code == 200
+    assert ok.json()["role"] == auth.ROLE_OPERATOR
+    assert ok.json()["token"]
+    assert gated_client.post("/api/login", json={"code": "wrong"}).status_code == 401
+
+
+def test_bearer_token_authenticates_operator_api(gated_client):
+    token = gated_client.post("/api/login", json={"code": OP_CODE}).json()["token"]
+    # no credentials -> JSON 401, never an HTML redirect
+    assert gated_client.get(
+        "/api/operator/state", follow_redirects=False
+    ).status_code == 401
+    ok = gated_client.get(
+        "/api/operator/state", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert ok.status_code == 200
+    assert {"intakes", "published_runs", "feedback"} <= ok.json().keys()
+
+
+def test_cors_reflects_lovable_origin_only(gated_client):
+    lovable = gated_client.options(
+        "/api/login",
+        headers={"Origin": "https://demo.lovable.app",
+                 "Access-Control-Request-Method": "POST"},
+    )
+    assert lovable.headers.get("access-control-allow-origin") == "https://demo.lovable.app"
+    evil = gated_client.options(
+        "/api/login",
+        headers={"Origin": "https://evil.example.com",
+                 "Access-Control-Request-Method": "POST"},
+    )
+    assert evil.headers.get("access-control-allow-origin") is None
 
 
 @pytest.mark.parametrize(
