@@ -15,18 +15,18 @@ Books" replacement, web app deployment, customer onboarding flows.
 All of those are real but they belong to a different product. They
 re-enter scope only if Brisken later commercialises the tool.
 
-**Hard gates that determine ship calendar:**
+**Hard gates — all resolved (2026-07-20 update):**
 
-1. **Anthropic API access** to Brisken's Pro subscription (Dirk
-   task-list item, pending). Blocks slice 2.
-2. **Chris's first real-data sample** (one statement file, one receipt
-   folder, one Zoho chart-of-accounts export). Blocks calibration
-   work in slice 3.
-3. **Zoho Books API access** OR a confirmed file-export workflow.
-   Blocks slice 4.
+1. ~~Anthropic API access~~ → RESOLVED. Provider pivoted to **OpenAI**
+   (`gpt-4o-mini`); Dirk supplied the key. See the Provider Pivot below.
+2. ~~Chris's first real-data sample~~ → RESOLVED differently. No curated
+   ground-truth month is coming; accuracy is validated in production by
+   Criss's monthly runs (see "No further client data", Path A).
+3. ~~Zoho Books API access~~ → the tool posts via the **journal-entry CSV
+   import** (8.5), no live API dependency for the MVP.
 
-Slices 2 and 3 can be partially built against synthetic data while
-gates 1 and 2 land. Slice 4 cannot start without gate 3.
+The remaining work is no longer gate-blocked; it is the correctness +
+coverage program in the "Using-the-data revision (2026-07-20)" section.
 
 ---
 
@@ -99,6 +99,12 @@ Implications:
   the guess is visible as a guess.
 
 ### LD-3. Output structure — 5 + N sheets
+
+> **Reality note (2026-07-20).** The SHIPPED report is the 4-sheet form
+> (Summary / Matches / Needs Review / Unmatched, plus Errors + Explain);
+> the 5+N per-card layout below is aspirational (items 4.4/4.5 unbuilt),
+> not a live spec. Tier-2 adds a Category/Source column to the
+> unmatched-tx rows within the shipped shape rather than rebuilding to 5+N.
 
 `N` = number of credit cards being reconciled in the run.
 
@@ -230,6 +236,125 @@ appears.
 
 ---
 
+## Using-the-data revision (2026-07-20)
+
+First real end-to-end test by Criss (the tool's user; full name Cristiane
+Cavalcanti, the doc's older "Chris" is the same person) exposed that the
+post-ingest half of the pipeline does not yet do her real job. She uploaded a
+Chase card-2838 April activity CSV (94 charges, USD) + `ER-00215.pdf` (36
+receipts, 34 BRL + 2 EUR). The run reconciled **0 of 94**. Root-caused on her
+exact files, run locally with no LLM:
+
+1. **Sign.** The Chase *activity CSV* lists purchases as NEGATIVE (`Type=Sale`,
+   e.g. `-10.32`). The matcher rejects non-positive charges
+   (`deterministic.py:374` `charge_amount > 0`, `:535` `tx.amount <= 0`), so it
+   finds 0 candidates; `abs()` yields 34. But LD-5 A5 treats negatives as
+   refunds, so a blind `abs()` corrupts refund handling.
+2. **Cross-currency is LLM-gated.** ~95% of expense volume is BRL/EUR on a USD
+   card (Slice 3b). The only deterministic cross-currency path is the exact-FX
+   short-circuit (`deterministic.py:514-528`), which needs the charge's ORIGINAL
+   foreign amount. The Chase *activity CSV lacks* those columns; the Chase
+   *statement PDF carries* them (`statement_pdf.py` `_attach_fx` / `_build_tx`,
+   already wired). So the statement SOURCE alone decides whether most matching is
+   free or paid.
+3. **Receiptless charges are never categorized.** `categorize_receipts`
+   (`categorize.py:173`) runs on receipts; a charge with no receipt (every USD
+   SaaS subscription: Anthropic, Adobe, Microsoft, OpenAI) lands in
+   `unmatched_transactions`, gets no category, and is excluded from the Zoho
+   journal (`zoho_export.py:221`). This is the biggest gap vs Criss's real
+   month-end job, which is to categorize + status EVERY charge, not just the ones
+   with an expense-report receipt.
+
+### Removals (stale / contradicted, struck from the plan)
+
+- **Provider identity:** every Anthropic/Claude reference in Slice 2 is stale;
+  the provider is OpenAI/`gpt-4o-mini` (Provider Pivot). The Slice 2 config
+  example, Hard-gate #1, the slice-map "Claude vision", and R6 are corrected.
+- **EU/UK-card items 3.11 (per-bank profiles) + 3.12 (per-region tip
+  tolerance):** RETIRED, contradicted by LD-5 ("all cards USD, no per-region
+  profile, never") and the retracted EU-card note (Slice 3b).
+- **Slice 6 (Streamlit Review UI):** RETIRED, superseded by the shipped web
+  review-workbench (Slice 9). Only a pointer remains.
+- **Pre-Path-A planning artifacts** (Critical-path summary, the "For Chris (via
+  Dirk)" data-ask list, the Anthropic / ground-truth-month gates): superseded by
+  "No further client data is coming" + Path A; kept only as history.
+- **LD-3's unbuilt 5+N-sheet layout:** the shipped report is the 4-sheet form;
+  treat LD-3's sheet count as aspirational, not a live spec.
+
+### Corrections / build-ons (amendments to the locked decisions)
+
+- **LD-5 gains a Statement-source rule + a sign-convention rule.** Prefer the
+  Chase **statement PDF** over the activity CSV, because only the PDF carries the
+  per-charge original foreign amount the exact-FX short-circuit consumes.
+  Canonicalize the amount sign per source: **purchase = positive, credit =
+  negative**; detect via a `Type` column, else `auto` majority inference with a
+  warning. The activity-CSV inverted convention (`Type=Sale` is a debit though
+  the amount prints negative) is the case this fixes.
+- **3.7 becomes deterministic FX resolution** (not "a gate in front of the LLM"):
+  exact-FX short-circuit first, then a monthly reference-rate converter (≤3% =
+  match, 3-13% = review, >13% = LLM/review), LLM only for the residual. The
+  Slice-3b note already prescribes this.
+- **3.10 / A5 refunds** become a real `MatchOutcome.refunds` bucket + a per-tx
+  `is_credit` flag, partitioned before candidate generation.
+- **LD-2 gains a charge-level tier.** A receiptless charge is categorized from
+  its Description via LEARNED-first, then VENDOR fallback (never LINE), reusing
+  the existing tier engine.
+- **Slice 9 memory** is now consulted for CHARGES, not only receipt vendors; add
+  `expense-recon memory set "<vendor>" --category .. --account ..` to author a
+  standing rule directly (canonical: Anthropic → "Other Infra and IT Costs for
+  Cloud Business").
+- **4.11 COA gate** extends to charge-derived journal rows (same `CoaGate.run`
+  seam). **8.5 export policy** becomes "matched + postable receiptless-LEARNED
+  charges (gated), posted-skip + COA-gate honored".
+- **`entry_status`** (posted / subscription) gains source-agnostic derivation
+  (recurrence detector, Zoho-history cross-check) so CSV/PDF statements get the
+  yellow/gray/uncolored channel the xlsx fill-color path already has; precedence
+  fill/operator > derived.
+
+### New build slices (the roadmap; two isolated efforts)
+
+The work splits into two non-overlapping tiers built in separate branches
+(worktrees) so they never collide. Tier 1 owns `ingest/*` + `matching/*`; Tier 2
+owns `categorize*` + `output/*` + the post-match stage in `cli.py` (via a
+`ReconcileResult` side-map, so it does not touch Tier 1's frozen types).
+
+- **3.15 (Tier 1) — Sign-normalization + statement-source preference +
+  deterministic FX.** Canonicalize sign at ingest; partition credits into
+  `MatchOutcome.refunds`; prefer the PDF statement (add a doctor/web advisory
+  when a foreign-heavy receipt set meets a non-PDF statement); add a monthly
+  reference-rate FX converter. Effect: no-LLM matching on Criss's month goes
+  0/36 → ~30-34/36. Verify with `calibrate` (no API). Files: `ingest/_common.py`,
+  `ingest/statement_csv.py`, `ingest/statement_pdf.py`,
+  `matching/deterministic.py` (guards `:374`/`:535`, short-circuit `:514-528`,
+  FX branch `:548-608`), `matching/types.py` (`is_credit`, `refunds`),
+  `doctor.py`, `calibrate.py` + the summary ripple.
+- **Slice 10 (Tier 2) — Receiptless-charge categorization.** New
+  `categorize_charges.py` builds a charge-pseudo-receipt (empty `line_items`,
+  vendor = Description) and delegates to the existing `categorize_receipts`, so a
+  receiptless charge resolves LEARNED-first → VENDOR fallback as an ANNOTATION
+  that never changes bucket membership (invariant safe). Surface it in
+  report/writeback/reconciled-csv/web-workbench; make LEARNED charges
+  posting-eligible through the COA gate (withhold-until-confirmed default). Add
+  `expense-recon memory set`. Files: `categorize.py`, `cli.py` (post-match
+  stage), `output/{zoho_export,report_xlsx,sheet_writeback,reconciled_csv}.py`,
+  `coa_gate.py`, `learning_cli.py`, `web/service.py`.
+- **Slice 11 (Tier 2, P1) — source-agnostic subscription/recurrence detection**
+  over the built `StatementStore` → derived `entry_status="subscription"`
+  (annotation-only, precedence fill/operator > derived).
+- **Slice 12 (P2) — Zoho "already posted" cross-check** (reuse
+  `ZohoClient.list_expenses`) → a review flag only, never an automatic
+  export-skip; gated on live Zoho access.
+
+### No-cost test loop (owner directive 2026-07-20)
+
+While testing, retrieve the files the user uploads to the Fly app
+(`/data/runs/<id>/`, `flyctl ssh sftp get`, `MSYS_NO_PATHCONV=1`) and run the
+pipeline LOCALLY with NO `llm:` block. `expense-recon calibrate --config run.json`
+is the no-LLM regression harness (prints the bucket split + invariant, writes no
+report). Point `statement.path` at the PDF to exercise the deterministic FX path.
+
+---
+
 ## Current state (2026-05-31)
 
 **Slice 1 — Working tool skeleton.** Shipped (uncommitted, awaiting
@@ -256,13 +381,13 @@ gets a 4-sheet xlsx review report. No LLM, no Zoho, no run history.
 ## Slice map — what's left
 
 ```
-Slice 2 — LLM layer:    receipt OCR (Claude vision) + real judgment
+Slice 2 — LLM layer:    receipt OCR (OpenAI vision) + real judgment
 Slice 3 — Robustness:   matcher quality + error handling, real-data ready
 Slice 4 — Zoho output:  categorization + post-to-Zoho (API or file)
 Slice 5 — Production:   Brisken-specific config + run history + deploy
 
 Optional after MVP:
-Slice 6 — Review UI:    tiny Streamlit / FastAPI for in-tool editing
+Slice 6 — Review UI:    SHIPPED as the web review-workbench (FastAPI, Slice 9)
 Slice 7 — Mobile capture: replaces "Chris uploads receipts" step
 ```
 
@@ -407,21 +532,28 @@ end-to-end: a confirmed decision in one month upgrades categorization and
 sharpens matching the next, always with visible provenance and a correction
 path, and never at the cost of the reconciliation guarantee.
 
+**Extended 2026-07-20 (see "Using-the-data revision"):** `merchant_category`
+is now consulted for receiptless CHARGES (Slice 10), not only receipt vendors,
+and gains an `expense-recon memory set` command to author a standing rule
+directly (the Anthropic → "Other Infra and IT Costs for Cloud Business" case),
+so a vendor not yet in Zoho posting history can still carry a learned account.
+
 ---
 
 ## Slice 2 — LLM Layer (Receipt OCR + Real Judgment)
 
 **Goal.** Chris drops a folder of receipt images / PDFs instead of
 hand-extracting them into a CSV. The matcher's FX and ambiguous cases
-get real Claude judgment instead of `[STUB]`.
+get real LLM (OpenAI `gpt-4o-mini`) judgment instead of `[STUB]`.
 
-**Gates:** Anthropic API access (BLOCKS implementation, not design).
+**Gates:** RESOLVED. OpenAI API key provided by Dirk (Provider Pivot,
+2026-06-01); no longer blocked. This section is retro-documentation.
 
 **Deliverables:**
 
 | # | Item | Path |
 |---|---|---|
-| 2.1 | Anthropic client abstraction (`LLMClient` protocol) | `src/expense_recon/llm/client.py` |
+| 2.1 | LLM client abstraction (`LLMClient` protocol, OpenAI) | `src/expense_recon/llm/client.py` |
 | 2.2 | Receipt vision pipeline — **Done (2026-06-10, OpenAI):** `extract_receipt` on `LLMClient`; vision for images, text-layer path for digital PDFs (pypdf) with pypdfium2 render fallback for scans; extracts header fields AND line items per LD-2, never invents items | `src/expense_recon/ingest/receipts_folder.py` |
 | 2.3 | Real `judge_fx_match` body (LLM judgment call) — **Done (D1b, OpenAI):** `LLMClient.judge_fx_match` + impls, FX-convert + same-purchase verdict, 8 tests, always review | `src/expense_recon/matching/judgment.py` |
 | 2.4 | Real `judge_ambiguous` body — **Done (2026-06-07):** LLM tie-break, pick annotated + promoted, all candidates kept (guarantee), 5 tests | same |
@@ -441,9 +573,9 @@ get real Claude judgment instead of `[STUB]`.
   "default_currency": "USD"
 },
 "llm": {
-  "provider": "anthropic",
-  "model": "claude-sonnet-4-6",
-  "api_key_env": "ANTHROPIC_API_KEY",
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "api_key_env": "OPENAI_API_KEY",
   "max_concurrent": 4,
   "fail_on_no_key": true
 }
@@ -457,8 +589,8 @@ with no itemization, return `line_items: []`. If a line item is
 illegible, include it with `description: '(illegible)'` so the
 classifier can flag for review. Return JSON matching this schema."
 Structured output mode. Retry on parse failure (max 2). Costs
-~$0.007–$0.010 per receipt on Sonnet 4.6 (slightly higher than
-header-only OCR due to line-item extraction).
+~$0.007–$0.010 per receipt on gpt-4o-mini vision (slightly higher than
+header-only OCR due to line-item extraction; calibration measured ~$0.0016/receipt).
 
 **Judgment prompt shape (per FX/ambiguous case):** "Here is a credit-
 card transaction (USD $112.30, HOTEL PARIS FR, 2026-04-12) and a
@@ -482,10 +614,10 @@ case.
       service invoice in the calibration set returned 0 items while
       itemized receipts (ride-share fare breakdowns, a restaurant slip)
       returned their lines.
-- [ ] All FX cases in the test fixture get real Claude judgment, not
+- [ ] All FX cases in the test fixture get real LLM judgment, not
       `[STUB]`. Judgment includes plausibility reasoning in the report.
 - [ ] Summary sheet shows: `LLM calls: N, est. cost: $X.YY`.
-- [ ] `ANTHROPIC_API_KEY=invalid` produces a clean error, not a stack
+- [ ] `OPENAI_API_KEY=invalid` produces a clean error, not a stack
       trace.
 - [ ] Mocked-client tests run without an API key (CI-safe).
 - [x] (2026-06-11) Per-run cost stays under $1.00 for a typical
@@ -548,12 +680,12 @@ without it.
 
 | # | Item | ANNEALING ref | Why |
 |---|---|---|---|
-| 3.7 | FX cross-product noise: require date + amount-band before emitting FX_JUDGMENT **[shipped 2026-06-11]** | A1 | Most cited noise source |
+| 3.7 | FX resolution: exact-FX short-circuit first, then a deterministic reference-rate converter, LLM only for the residual (was "gate before the LLM"; see 3.15 + the 2026-07-20 revision) **[shipped 2026-06-11; upgraded by 3.15]** | A1 | Most cited noise source |
 | 3.8 | Bipartite receipt assignment (each receipt used at most once) **[shipped 2026-06-11]** | A2 | Real data will hit this |
 | 3.9 | Vendor fuzzy-match + reference number scoring **[shipped 2026-06-11]** | A3 | Tie-breaker for A2 |
-| 3.10 | Refund handling (explicit bucket; pair negative-to-negative) | A5 | Likely month-1 hit |
-| 3.11 | Per-bank tolerance profiles (`account_id` keyed `MatchingConfig`) | A7 | Once Chris has 2+ cards |
-| 3.12 | Tip-tolerance per region (US 20%, UK 12%, EU 0%) | A6 | When EU/UK card lands |
+| 3.10 | Refund handling: `is_credit` partition + explicit `MatchOutcome.refunds` bucket (see 3.15) | A5 | Real month-1 hit (Chase activity CSV sign convention) |
+| 3.11 | ~~Per-bank tolerance profiles~~ RETIRED 2026-07-20 — all cards settle USD, single global config (LD-5; contradicts A7) | A7 | n/a |
+| 3.12 | ~~Tip-tolerance per region~~ RETIRED 2026-07-20 — one US cardholder, single 20% global tolerance (LD-5; A6 closed) | A6 | n/a |
 | 3.13 | Tighten probable-match window after A3 lands | A4 | Last; needs A3 done first |
 | 3.14 | Optional `--explain` flag: 5th sheet with per-tx scoring breakdown | A8 | For "why didn't this match" debugging |
 
@@ -732,7 +864,7 @@ loop into the posting system.
    Category cell blank, `Source: REVIEW`, lands in the Needs Review
    sheet for Chris to assign.
 4. **Per-line cost cap.** Categorizer aggregates line items per
-   receipt into a single batched Claude call to control cost
+   receipt into a single batched LLM call to control cost
    (~$0.002 per receipt regardless of line-item count).
 
 **Zoho export shape (option 4a — file):**
@@ -885,19 +1017,16 @@ README.
 
 ---
 
-## Slice 6 (optional) — Review UI
+## Slice 6 (SHIPPED, not as planned) — Review UI
 
-**Goal.** Chris reviews and corrects in a local web page instead of
-editing an Excel file. Edits write back to the run-log (slice 5b).
-
-**Trigger to build:** Chris asks for it after month 2. Don't pre-build.
-
-**Shape:** Streamlit single-page app reading the latest run from
-run-log SQLite. Filter by sheet, click-to-edit category, mark
-"confirmed" on probable matches, write back. The xlsx export still
-exists as the canonical artifact; the UI is just a faster review path.
-
-**Effort:** ~3–5 days. Streamlit makes this cheap.
+**Superseded 2026-06-15.** The Streamlit sketch here was never built.
+The review surface shipped instead as the **web review-workbench** (the
+`web/` FastAPI module, `app.py` / `service.py` / `store.py` + templates,
+deployed to Fly at `brisken-expense-recon.fly.dev`), which is the
+sanctioned review surface Slice 9 builds on. It reads the run, offers
+click-to-confirm / reclassify / manual-match / commit-to-memory, and is
+role-gated. There is no Streamlit app; do not build one. This slice is
+kept only as a pointer to the workbench.
 
 ---
 
@@ -972,8 +1101,15 @@ promised export.
 
 ## Gate-resolution checklist
 
-These are the questions to push back to Dirk + Chris this week, since
-they all gate calendar:
+> **SUPERSEDED (2026-07-20).** This pre-Path-A checklist is historical.
+> The Anthropic gate resolved (OpenAI), the data-ask is retired ("No
+> further client data is coming"), and Zoho posting is via CSV import.
+> The live open questions are the two in the 2026-07-20 revision
+> (receiptless-LEARNED posting posture; deterministic-FX reference-rate
+> source). Kept below for provenance only.
+
+These were the questions to push back to Dirk + Chris, since they all
+gated calendar:
 
 **For Dirk:**
 
@@ -1003,7 +1139,7 @@ they all gate calendar:
 | R3 | Chris's real data has format we can't parse | Low | High | Defensive 3.1 error sheet + 3.4 inspect command; iterate |
 | R4 | Zoho import format mismatch | Medium | High | Get sample BEFORE building 4.4 |
 | R5 | Matcher noise on real data is worse than expected | Medium | Medium | Slice 3b is explicitly empirical; ship → measure → tune |
-| R6 | Anthropic API access never lands | Low | High | Fall back to GPT-4o or Claude via Bedrock; D1 abstraction makes this swap-able |
+| R6 | ~~Anthropic API access never lands~~ RESOLVED — running on OpenAI `gpt-4o-mini` (Dirk's key); provider-agnostic `LLMClient` keeps the swap open | n/a | n/a | Moot 2026-07-20 |
 | R7 | Chris's IT environment blocks Python install | Low | High | Distribute as standalone exe via PyInstaller; ~1 day extra work |
 | R8 | Brisken wants multi-tenant later, current MVP can't scale | Low | Low | MVP is intentionally narrow; rewrite from spec when/if that decision comes back |
 
