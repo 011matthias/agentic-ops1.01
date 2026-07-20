@@ -73,6 +73,7 @@ from .store import (
     JOB_DONE,
     JOB_ERROR,
     STATUS_CONFIRMED,
+    VALID_DISPOSITIONS,
     VALID_STATUSES,
     RunStore,
 )
@@ -1054,6 +1055,29 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             if run is None:
                 return JSONResponse({"error": "run not found"}, status_code=404)
             store.set_decision(run_id, tx_id, status, chosen, _now_iso())
+            decisions = store.get_decisions(run_id)
+            overrides = store.get_category_overrides(run_id)
+        view = build_view(run, decisions, overrides)
+        return JSONResponse({"ok": True, "summary": view["summary"]})
+
+    # §17 disposition. Registered on both the /api surface (the SPA's
+    # merged JSON API) and the bare /runs/{id}/... family the other JSON
+    # mutation handlers live on, so either client contract resolves. One
+    # shared handler; the disposition upsert is status-preserving in the
+    # store (never clobbers the row's triage verdict).
+    @app.post("/api/runs/{run_id}/disposition")
+    @app.post("/runs/{run_id}/disposition")
+    async def post_disposition(run_id: str, request: Request):
+        body = await request.json()
+        tx_id = body.get("transaction_id")
+        disposition = body.get("disposition")
+        if not tx_id or disposition not in VALID_DISPOSITIONS:
+            return JSONResponse({"error": "bad request"}, status_code=400)
+        with open_store() as store:
+            run = _visible_run(store, request, run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found"}, status_code=404)
+            store.set_disposition(run_id, tx_id, disposition, _now_iso())
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
         view = build_view(run, decisions, overrides)

@@ -237,3 +237,32 @@ def test_without_side_map_unmatched_rows_unchanged(tmp_path):
     )
     assert row[5] is None or row[5] == ""   # no category invented
     assert row[6] == "REVIEW"
+
+
+# ── §17 disposition column (CARD_TAB_COLUMNS index 9, appended last) ──
+
+
+def test_card_tab_disposition_defaults_to_business(tmp_path):
+    out = write_report(
+        _outcome(), [_matched_tx(), _unmatched_tx()], [_receipt()],
+        tmp_path / "r.xlsx",
+    )
+    ws = load_workbook(out)["amex-usd"]
+    row = next(
+        r for r in ws.iter_rows(min_row=2, values_only=True)
+        if r[2] == "Herman Miller chair"
+    )
+    assert row[9] == "business"  # Disposition column, defaulted
+
+
+def test_card_tab_disposition_reflects_map(tmp_path):
+    out = write_report(
+        _outcome(), [_matched_tx(), _unmatched_tx()], [_receipt()],
+        tmp_path / "r.xlsx",
+        dispositions={"t1": "reimbursable_personal"},
+    )
+    ws = load_workbook(out)["amex-usd"]
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        # Every line row of the matched tx t1 carries its disposition.
+        if row[2] in ("Herman Miller chair", "Coffee beans 2kg"):
+            assert row[9] == "reimbursable_personal"

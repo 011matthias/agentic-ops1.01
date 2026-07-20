@@ -208,6 +208,34 @@ def test_reimbursable_tri_state():
         assert row[_C["Reimbursable"]] == expected
 
 
+# ── §17 disposition column ───────────────────────────────────────────
+
+
+def test_disposition_defaults_to_business():
+    """Every line carries a Disposition; absent from the map => business,
+    never blank, never dropped."""
+    tx = _tx()
+    rec = _receipt([_line("widget", "180")])
+    row = build_reconciled_rows(_matched(), [tx], [rec])[0]
+    assert row[_C["Disposition"]] == "business"
+
+
+def test_disposition_reflects_map():
+    tx1, tx2 = _tx("t1"), _tx("t2")
+    rec = _receipt([_line("widget", "180")])
+    outcome = MatchOutcome(
+        matches=[Match("t1", "r1", MatchType.EXACT, 0.99, "x", False)],
+        unmatched_transactions=["t2"],
+    )
+    rows = build_reconciled_rows(
+        outcome, [tx1, tx2], [rec],
+        dispositions={"t1": "reimbursable_personal", "t2": "do_not_export"},
+    )
+    # An unmatched line still surfaces WITH its disposition (never dropped).
+    assert rows[0][_C["Disposition"]] == "reimbursable_personal"
+    assert rows[1][_C["Disposition"]] == "do_not_export"
+
+
 # ── CLI wiring: output.reconciled_csv ────────────────────────────────
 
 
