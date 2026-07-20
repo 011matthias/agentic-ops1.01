@@ -243,6 +243,7 @@ def _rows_from_match(
     if match.match_type in (
         MatchType.PROBABLE,
         MatchType.FX_JUDGMENT,
+        MatchType.FX_REFERENCE,
         MatchType.AMBIGUOUS,
     ) and match.reason:
         note_bits.append(match.reason)
@@ -355,9 +356,11 @@ def _write_summary(
         | {m.transaction_id for m in outcome.ambiguous}
     )
     unmatched_tx_ids = set(outcome.unmatched_transactions)
+    refund_tx_ids = set(outcome.refunds)
     n_matched = len(matched_tx_ids)
     n_review = len(review_tx_ids)
     n_unmatched_tx = len(unmatched_tx_ids)
+    n_refunds = len(refund_tx_ids)
     n_unmatched_rec = len(outcome.unmatched_receipts)
     # L1: fill-color annotations from the statement workbook.
     n_already_posted = sum(1 for t in transactions if t.entry_status == "posted")
@@ -368,8 +371,9 @@ def _write_summary(
     # count equality catches the same with a cheap arithmetic check.
     all_tx_ids = {tx.transaction_id for tx in transactions}
     invariant_ok = (
-        (matched_tx_ids | review_tx_ids | unmatched_tx_ids) == all_tx_ids
-        and n_matched + n_review + n_unmatched_tx == n_tx
+        (matched_tx_ids | review_tx_ids | unmatched_tx_ids | refund_tx_ids)
+        == all_tx_ids
+        and n_matched + n_review + n_unmatched_tx + n_refunds == n_tx
     )
 
     # Categorization tiers: count the postable journal rows only (rows
@@ -410,6 +414,10 @@ def _write_summary(
     for tx in transactions:
         if tx.transaction_id in needs_attention_tx_ids:
             cross_tab["(needs review)"][tx.account_id] += tx.amount
+        elif tx.transaction_id in refund_tx_ids:
+            # Refunds are their own bucket (3.10); keeping them in the
+            # cross-tab makes its total reconcile back to Spend.
+            cross_tab["(refunds / credits)"][tx.account_id] += tx.amount
 
     _append_section(ws, "RECONCILIATION SUMMARY")
     ws.append([])
@@ -418,6 +426,8 @@ def _write_summary(
     ws.append(["Matched", n_matched])
     ws.append(["Needs Review (FX / ambiguous)", n_review])
     ws.append(["Unmatched transactions", n_unmatched_tx])
+    if n_refunds:
+        ws.append(["Refunds / credits (own bucket, never receipt-matched)", n_refunds])
     ws.append(["Unmatched receipts", n_unmatched_rec])
     if n_already_posted:
         ws.append(["Already posted in Zoho (yellow rows)", n_already_posted])
@@ -554,6 +564,31 @@ def _write_unmatched(
         ])
         _fill_last_row(ws, FILL_UNMATCHED)
 
+    # Refunds / credits (3.10): their own section so a credit is never
+    # read as a purchase awaiting a receipt. Reviewed, not receipt-matched.
+    if outcome.refunds:
+        blank_row = ws.max_row + 2
+        ws.cell(
+            row=blank_row, column=1,
+            value="Refunds / credits (own bucket, never receipt-matched)",
+        ).font = HEADER_FONT
+        _write_header_row(
+            ws, ("Card", "Date", "Vendor", "Amount", "Currency"),
+            start_row=blank_row + 1,
+        )
+        for tx_id in outcome.refunds:
+            tx = tx_by_id.get(tx_id)
+            if tx is None:
+                continue
+            ws.append([
+                tx.account_id,
+                tx.transaction_date.isoformat() if tx.transaction_date else "",
+                tx.vendor_from_statement,
+                float(tx.amount),
+                tx.transaction_currency,
+            ])
+            _fill_last_row(ws, FILL_REVIEW)
+
     blank_row = ws.max_row + 2
     ws.cell(row=blank_row, column=1, value="Unmatched receipts").font = HEADER_FONT
     _write_header_row(
@@ -614,9 +649,17 @@ def _write_explain(
         disposition.setdefault(m.transaction_id, ("AMBIGUOUS", m))
     for tx_id in outcome.unmatched_transactions:
         disposition.setdefault(tx_id, ("UNMATCHED", None))
+    for tx_id in outcome.refunds:
+        disposition.setdefault(tx_id, ("REFUND", None))
 
     for tx in transactions:
         label, match = disposition.get(tx.transaction_id, ("UNKNOWN", None))
+        if match:
+            reason = match.reason
+        elif label == "REFUND":
+            reason = "Credit / refund; own bucket, never receipt-matched (LD-5 A5)."
+        else:
+            reason = "No candidate receipt."
         ws.append([
             tx.account_id,
             tx.transaction_date.isoformat() if tx.transaction_date else "",
@@ -625,11 +668,11 @@ def _write_explain(
             tx.transaction_currency,
             label,
             f"{match.confidence:.2f}" if match else "",
-            match.reason if match else "No candidate receipt.",
+            reason,
         ])
         if label == "MATCHED":
             fill = FILL_LINE
-        elif label in ("FX_JUDGMENT", "AMBIGUOUS"):
+        elif label in ("FX_JUDGMENT", "AMBIGUOUS", "REFUND"):
             fill = FILL_REVIEW
         else:
             fill = FILL_UNMATCHED

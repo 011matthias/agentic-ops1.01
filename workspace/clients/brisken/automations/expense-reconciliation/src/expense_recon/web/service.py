@@ -271,6 +271,41 @@ def prepare_run(
     )
 
 
+def _statement_source_advisory(
+    stmt_name: str, transactions: list, receipts: list
+) -> str | None:
+    """3.15: warn when a foreign-heavy receipt set met a non-PDF statement.
+
+    The Chase statement PDF prints each foreign charge's ORIGINAL amount +
+    currency (the two-line FX detail), which is what the deterministic
+    exact-FX match consumes; the activity CSV does not carry it, so on a
+    foreign-heavy month the statement source alone decides whether most
+    matching is deterministic or needs judgment. Thresholds mirror
+    doctor.py's `_check_statement_source`. Returns None when no advisory
+    applies."""
+    if Path(stmt_name).suffix.lower() == ".pdf":
+        return None
+    if not receipts:
+        return None
+    card_ccy = (
+        transactions[0].account_card_currency if transactions else "USD"
+    ).upper()
+    foreign = sum(
+        1
+        for r in receipts
+        if r.detected_currency and r.detected_currency.upper() != card_ccy
+    )
+    if foreign < 3 or foreign / len(receipts) < 0.3:
+        return None
+    return (
+        f"{foreign} of {len(receipts)} receipts are foreign-currency but the "
+        f"statement is {Path(stmt_name).suffix or 'tabular'} — the Chase "
+        f"statement PDF carries each charge's original foreign amount, which "
+        f"lets these match deterministically. Prefer uploading the statement "
+        f"PDF for this month."
+    )
+
+
 def execute_run(
     store: RunStore, prepared: PreparedRun, *, on_stage=None
 ) -> str:
@@ -301,6 +336,7 @@ def execute_run(
         "n_matched": len(outcome.matches),
         "n_review": n_review,
         "n_unmatched_tx": len(outcome.unmatched_transactions),
+        "n_refunds": len(outcome.refunds),
         "n_unmatched_rec": len(outcome.unmatched_receipts),
         "n_parse_errors": len(result.parse_errors),
         "match_rate": round(len(outcome.matches) / n_tx * 100, 1) if n_tx else 0.0,
@@ -309,6 +345,15 @@ def execute_run(
         ),
         "ai_unavailable": prepared.ai_unavailable,
     }
+    # 3.15 statement-source advisory: a foreign-heavy receipt set against a
+    # tabular (non-PDF) statement loses the per-charge original-currency
+    # detail only the Chase statement PDF carries — the input to the
+    # deterministic exact-FX match. Advisory only; the run still completes.
+    advisory = _statement_source_advisory(
+        prepared.stmt_name, result.transactions, result.receipts
+    )
+    if advisory:
+        summary["statement_advisory"] = advisory
     snapshot = snapshot_to_dict(
         result.transactions, result.receipts, outcome, result.parse_errors
     )
@@ -794,13 +839,16 @@ def apply_decisions(
                 ambiguous_by_tx[tx_id] = kept
                 consumed.update(m.document_id for m in kept)
 
-    # Assemble in transaction order for stable output. Any transaction not
-    # placed above (rejected, a pending claim that lost its receipt, or one
-    # with no candidate) is unmatched.
+    # Assemble in transaction order for stable output. Refunds (3.10) keep
+    # their own bucket unless the reviewer explicitly hand-matched one; any
+    # other transaction not placed above (rejected, a pending claim that
+    # lost its receipt, or one with no candidate) is unmatched.
+    refund_ids = set(outcome.refunds)
     new_matches: list[Match] = []
     new_judgment: list[Match] = []
     new_ambiguous: list[Match] = []
     new_unmatched_tx: list[str] = []
+    new_refunds: list[str] = []
     for tx in transactions:
         tx_id = tx.transaction_id
         if tx_id in match_by_tx:
@@ -809,6 +857,8 @@ def apply_decisions(
             new_judgment.extend(judgment_by_tx[tx_id])
         elif tx_id in ambiguous_by_tx:
             new_ambiguous.extend(ambiguous_by_tx[tx_id])
+        elif tx_id in refund_ids:
+            new_refunds.append(tx_id)
         else:
             new_unmatched_tx.append(tx_id)
 
@@ -819,6 +869,7 @@ def apply_decisions(
         unmatched_receipts=new_unmatched_rec,
         judgment_required=new_judgment,
         ambiguous=new_ambiguous,
+        refunds=new_refunds,
     )
 
 
@@ -979,10 +1030,12 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
     eff_review_tx = {m.transaction_id for m in effective.judgment_required} | {
         m.transaction_id for m in effective.ambiguous
     }
+    eff_refund_tx = set(effective.refunds)
 
     matched_ids = {m.transaction_id for m in outcome.matches}
     judgment_ids = {m.transaction_id for m in outcome.judgment_required}
     ambiguous_ids = {m.transaction_id for m in outcome.ambiguous}
+    refund_ids = set(outcome.refunds)
 
     def initial_bucket(tx_id: str) -> str:
         # The matcher's pre-decision view, shown as a hint next to the
@@ -991,10 +1044,12 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
             return "matched"
         if tx_id in judgment_ids or tx_id in ambiguous_ids:
             return "review"
+        if tx_id in refund_ids:
+            return "refund"
         return "unmatched"
 
     rows = []
-    n_reconciled = n_review = n_unmatched_tx = 0
+    n_reconciled = n_review = n_unmatched_tx = n_refunds = 0
     # PR A — "Ready to post?" inputs. `n_undecided` counts rows the tool is
     # holding a receipt for (effective reconciled/review) that the reviewer
     # has not yet ratified or rejected (still pending); it drives the post
@@ -1015,6 +1070,9 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
         elif tx_id in eff_review_tx:
             effective_bucket = "review"
             held_doc = decision.chosen_document_id if decision else None
+        elif tx_id in eff_refund_tx:
+            effective_bucket = "refund"
+            held_doc = None
         else:
             effective_bucket = "unmatched"
             held_doc = None
@@ -1023,6 +1081,8 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
             n_reconciled += 1
         elif effective_bucket == "review":
             n_review += 1
+        elif effective_bucket == "refund":
+            n_refunds += 1
         else:
             n_unmatched_tx += 1
 
@@ -1081,6 +1141,8 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
             section = "attention"
         elif effective_bucket == "reconciled":
             section = "matched"
+        elif effective_bucket == "refund":
+            section = "refund"
         elif status == STATUS_PENDING and cands:
             section = "attention"
         else:
@@ -1095,7 +1157,9 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
             and not is_posted
         ):
             n_undecided += 1
-        if effective_bucket != "reconciled" and not is_posted:
+        # Refunds (3.10) are money back, not unreconciled spend — they
+        # never count toward the unreconciled-by-currency total.
+        if effective_bucket not in ("reconciled", "refund") and not is_posted:
             unreconciled[tx.transaction_currency] = (
                 unreconciled.get(tx.transaction_currency, Decimal("0"))
                 + abs(tx.amount)
@@ -1217,7 +1281,7 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
     # Tier-1 #1: surface the weakest items first. Unmatched transactions
     # (need a receipt) rank above review items, which rank above
     # reconciled; within a rank, low triage score first.
-    _rank = {"unmatched": 0, "review": 1, "reconciled": 2}
+    _rank = {"unmatched": 0, "review": 1, "reconciled": 2, "refund": 3}
     rows.sort(
         key=lambda r: (
             _rank[r["effective_bucket"]],
@@ -1281,9 +1345,13 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
         "n_reconciled": n_reconciled,
         "n_review": n_review,
         "n_unmatched_tx": n_unmatched_tx,
+        # 3.10: credits, partitioned before matching, never receipt-matched.
+        "n_refunds": n_refunds,
         "n_unmatched_rec": len(unmatched_receipts),
         "match_rate": round(n_reconciled / n_tx * 100, 1) if n_tx else 0.0,
-        "invariant_ok": (n_reconciled + n_review + n_unmatched_tx) == n_tx,
+        "invariant_ok": (
+            n_reconciled + n_review + n_unmatched_tx + n_refunds
+        ) == n_tx,
         "n_parse_errors": len(parse_errors),
         "llm_cost_usd": run.summary.get("llm_cost_usd", "0"),
         "ai_unavailable": run.summary.get("ai_unavailable", False),
@@ -1483,18 +1551,26 @@ _COMPARE_DELTA_KEYS = (
 
 
 def _run_buckets(snapshot: dict) -> dict[str, str]:
-    """Each transaction's bucket (matched / review / unmatched) from a run's
-    stored matcher outcome, mirroring the CLI diff's `_bucket`."""
+    """Each transaction's bucket (matched / review / refund / unmatched)
+    from a run's stored matcher outcome, mirroring the CLI diff's
+    `_bucket`."""
     transactions, _, outcome, _ = snapshot_from_dict(snapshot)
     matched = {m.transaction_id for m in outcome.matches}
     review = {m.transaction_id for m in outcome.judgment_required} | {
         m.transaction_id for m in outcome.ambiguous
     }
+    refunds = set(outcome.refunds)
     out: dict[str, str] = {}
     for t in transactions:
         tid = t.transaction_id
         out[tid] = (
-            "matched" if tid in matched else "review" if tid in review else "unmatched"
+            "matched"
+            if tid in matched
+            else "review"
+            if tid in review
+            else "refund"
+            if tid in refunds
+            else "unmatched"
         )
     return out
 

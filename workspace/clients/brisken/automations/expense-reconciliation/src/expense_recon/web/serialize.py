@@ -108,6 +108,7 @@ def transaction_to_dict(t: Transaction) -> dict:
         "original_currency": t.original_currency,
         "fx_rate": _dec(t.fx_rate),
         "entry_status": t.entry_status,
+        "is_credit": t.is_credit,
     }
 
 
@@ -128,6 +129,8 @@ def transaction_from_dict(d: dict) -> Transaction:
         fx_rate=_as_dec(d.get("fx_rate")),
         # .get keeps pre-L1 snapshots loadable (no entry_status key).
         entry_status=d.get("entry_status"),
+        # .get keeps pre-3.15 snapshots loadable (no is_credit key).
+        is_credit=d.get("is_credit", False),
     )
 
 
@@ -217,6 +220,7 @@ def outcome_to_dict(o: MatchOutcome) -> dict:
         "unmatched_receipts": list(o.unmatched_receipts),
         "judgment_required": [match_to_dict(m) for m in o.judgment_required],
         "ambiguous": [match_to_dict(m) for m in o.ambiguous],
+        "refunds": list(o.refunds),
     }
 
 
@@ -227,6 +231,8 @@ def outcome_from_dict(d: dict) -> MatchOutcome:
         unmatched_receipts=list(d.get("unmatched_receipts", [])),
         judgment_required=[match_from_dict(x) for x in d.get("judgment_required", [])],
         ambiguous=[match_from_dict(x) for x in d.get("ambiguous", [])],
+        # .get keeps pre-3.15 snapshots loadable (no refunds key).
+        refunds=list(d.get("refunds", [])),
     )
 
 

@@ -35,13 +35,51 @@ REQUIRED_KEYS: tuple[str, ...] = ("transaction_date", "amount", "vendor")
 # tabular statement carry per-charge foreign-currency detail (BRL on the
 # USD card), the same fields the Chase PDF parser populates. The matcher
 # already consumes them (deterministic.py FX-detail path).
+# 3.15 (2026-07-20): "type" maps the export's debit/credit column (Chase
+# activity CSV "Type": Sale / Payment / Return / ...) so the row's sign
+# can be canonicalized per source instead of trusted blindly.
 OPTIONAL_KEYS: tuple[str, ...] = (
     "posting_date",
     "transaction_currency",
     "original_amount",
     "original_currency",
     "fx_rate",
+    "type",
 )
+
+# Type-column values that mark a CREDIT (money back to the card): the
+# canonical sign is negative and the transaction is partitioned into the
+# refunds bucket, never pair-matched to a purchase receipt (LD-5 A5).
+# Anything else (Sale, Fee, an unknown label) is treated as a purchase;
+# an ambiguous label like "Adjustment" deliberately stays a purchase so
+# it surfaces for review rather than silently landing in refunds.
+CREDIT_TYPE_VALUES: frozenset[str] = frozenset(
+    {"payment", "return", "refund", "credit", "reversal"}
+)
+
+
+def is_credit_type(type_value: str) -> bool:
+    """True when a statement Type-column value marks a credit/refund."""
+    return type_value.strip().lower() in CREDIT_TYPE_VALUES
+
+
+def infer_sign_flip(amounts: "list[Decimal]") -> bool:
+    """True when a statement's sign convention is inverted (purchases
+    printed negative), detected by strict majority of nonzero amounts
+    being negative. A normal month is dominated by purchases, so a
+    majority-negative export (the Chase activity CSV: Type=Sale prints
+    -10.32) is printing debits as negatives and every sign must flip to
+    reach the canonical convention (purchase = positive, credit =
+    negative). At least 3 negatives are required before inferring: a
+    tiny export that happens to hold only a refund or two is kept
+    verbatim rather than wrongly flipped. Used only when no Type column
+    is mapped; the caller emits a warning ParseIssue so the inference
+    is never silent."""
+    nonzero = [a for a in amounts if a != 0]
+    if not nonzero:
+        return False
+    negatives = sum(1 for a in nonzero if a < 0)
+    return negatives >= 3 and negatives * 2 > len(nonzero)
 
 
 class StatementParseError(ValueError):

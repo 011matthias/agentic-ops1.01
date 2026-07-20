@@ -270,4 +270,19 @@ def decisions_from_outcome(outcome) -> list[TxDecision]:
                 reason="no receipt matched",
             )
         )
+
+    for tx_id in getattr(outcome, "refunds", []):
+        if tx_id in seen:
+            continue
+        seen.add(tx_id)
+        decisions.append(
+            TxDecision(
+                transaction_id=tx_id,
+                document_id=None,
+                match_type="refund",
+                confidence=None,
+                requires_review=True,
+                reason="credit / refund; own bucket, never receipt-matched",
+            )
+        )
     return decisions

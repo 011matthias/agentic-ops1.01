@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import csv
 from collections.abc import Mapping
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -34,6 +35,8 @@ from ._common import (
     REQUIRED_KEYS,
     ParseIssue,
     StatementParseError,
+    infer_sign_flip,
+    is_credit_type,
     parse_amount,
     parse_date,
     validate_required_map,
@@ -143,6 +146,21 @@ def parse_statement_csv_tolerant(
                     raw_rate = (row.get(column_map["fx_rate"]) or "").strip()
                     if raw_rate:
                         fx_rate = parse_amount(raw_rate)
+
+                # 3.15 sign canonicalization, Type-column path: the export's
+                # own debit/credit label decides, not the printed sign. The
+                # Chase activity CSV prints purchases NEGATIVE (Type=Sale,
+                # -10.32) and payments positive; canonical is purchase =
+                # positive, credit = negative. A row with an empty Type cell
+                # keeps its printed sign and derives is_credit from it.
+                is_credit = False
+                if "type" in column_map:
+                    raw_type = (row.get(column_map["type"]) or "").strip()
+                    if raw_type:
+                        is_credit = is_credit_type(raw_type)
+                        amount = -abs(amount) if is_credit else abs(amount)
+                    else:
+                        is_credit = amount < 0
             except (KeyError, ValueError) as exc:
                 issues.append(
                     ParseIssue(
@@ -168,7 +186,40 @@ def parse_statement_csv_tolerant(
                     original_amount=original_amount,
                     original_currency=original_currency,
                     fx_rate=fx_rate,
+                    is_credit=is_credit,
                 )
             )
+
+    # 3.15 sign canonicalization, no-Type path: without a debit/credit
+    # column the file's convention is inferred from the sign majority. A
+    # majority-negative export prints purchases as negatives (the Chase
+    # activity CSV shape), so every sign flips to reach the canonical
+    # convention; the inference is surfaced as a warning, never silent.
+    # After canonicalization, credit = negative amount.
+    if "type" not in column_map and transactions:
+        flip = infer_sign_flip([t.amount for t in transactions])
+        if flip:
+            n_neg = sum(1 for t in transactions if t.amount < 0)
+            issues.append(
+                ParseIssue(
+                    file_name=file_name,
+                    line_number=1,
+                    message=(
+                        f"sign convention inferred: {n_neg} of "
+                        f"{len(transactions)} amounts are negative, so this "
+                        f"export prints purchases as negatives; all signs "
+                        f"flipped to canonical (purchase = positive, credit "
+                        f"= negative). Map a 'type' column to make this "
+                        f"explicit."
+                    ),
+                    severity="warning",
+                )
+            )
+            transactions = [replace(t, amount=-t.amount) for t in transactions]
+        transactions = [
+            replace(t, is_credit=t.amount < 0) if (t.amount < 0) != t.is_credit
+            else t
+            for t in transactions
+        ]
 
     return transactions, issues

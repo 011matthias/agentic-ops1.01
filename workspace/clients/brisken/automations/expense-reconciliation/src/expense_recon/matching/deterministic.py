@@ -13,8 +13,8 @@ resolve.
 
 The reconciliation guarantee (v2 spec §25.5) is preserved: every
 input transaction lands in exactly one of `matches`,
-`judgment_required`, `ambiguous`, or `unmatched_transactions`. No
-silent drops.
+`judgment_required`, `ambiguous`, `unmatched_transactions`, or (for
+credits, 3.10 / LD-5 A5) `refunds`. No silent drops.
 """
 from __future__ import annotations
 
@@ -166,6 +166,7 @@ _DEFAULT_FX_RATE_BANDS: dict[tuple[str, str], tuple[Decimal, Decimal]] = {
 # File-loadable tunables (MatchingConfig.from_dict), grouped by type.
 _TUNABLE_DECIMAL = frozenset({
     "amount_exact_tolerance", "amount_probable_tolerance_pct",
+    "fx_reference_match_pct", "fx_reference_review_pct",
 })
 _TUNABLE_INT = frozenset({
     "date_exact_window_days", "date_probable_window_days",
@@ -214,6 +215,27 @@ class MatchingConfig:
     fx_rate_bands: Mapping[tuple[str, str], tuple[Decimal, Decimal]] = field(
         default_factory=lambda: dict(_DEFAULT_FX_RATE_BANDS)
     )
+
+    # ── Deterministic reference-rate FX (3.15 / 3.7 upgrade) ───────────
+    # Monthly reference rates per (receipt_ccy, tx_ccy), e.g.
+    # ("BRL","USD") -> 0.185. When a rate is configured for the pair, a
+    # cross-currency candidate that survives the date gate is resolved
+    # DETERMINISTICALLY before the band/LLM path: expected charge =
+    # receipt total x rate; deviation <= fx_reference_match_pct is a
+    # match, <= fx_reference_review_pct a match flagged for review,
+    # beyond that it falls through to the implied-rate band / FX_JUDGMENT
+    # exactly as before. Deviations reflect DCC markup + tip, which only
+    # push the charge UP, but the check is symmetric for simplicity —
+    # the band's asymmetry still guards the fall-through path. Unconfigured
+    # pairs are byte-for-byte the old behaviour. Rates come from
+    # config/match-tuning.json ("fx_reference_rates": {"BRL:USD": 0.185});
+    # they are month-scoped operator input, never derived from Zoho's
+    # per-line rate (measured wrong by up to 12.8%, LD-5).
+    fx_reference_rates: Mapping[tuple[str, str], Decimal] = field(
+        default_factory=dict
+    )
+    fx_reference_match_pct: Decimal = Decimal("0.03")
+    fx_reference_review_pct: Decimal = Decimal("0.13")
 
     # ── Learned memory (PR 2c) ─────────────────────────────────────
     # Both default empty => the matcher is byte-for-byte its old self.
@@ -279,10 +301,20 @@ class MatchingConfig:
                         Decimal(str(lo)), Decimal(str(hi))
                     )
                 kwargs[key] = bands
+            elif key == "fx_reference_rates":
+                rates: dict[tuple[str, str], Decimal] = {}
+                for pair, rate in value.items():
+                    from_ccy, _, to_ccy = pair.partition(":")
+                    if not from_ccy or not to_ccy:
+                        raise ValueError(
+                            f"fx_reference_rates key {pair!r} must be 'FROM:TO'"
+                        )
+                    rates[(from_ccy, to_ccy)] = Decimal(str(rate))
+                kwargs[key] = rates
             else:
                 raise ValueError(
                     f"unknown matching-tuning key {key!r} "
-                    f"(tunables: {sorted(_TUNABLE_DECIMAL | _TUNABLE_INT | _TUNABLE_FLOAT | _TUNABLE_BOOL | {'fx_rate_bands'})})"
+                    f"(tunables: {sorted(_TUNABLE_DECIMAL | _TUNABLE_INT | _TUNABLE_FLOAT | _TUNABLE_BOOL | {'fx_rate_bands', 'fx_reference_rates'})})"
                 )
         return cls(**kwargs)
 
@@ -302,6 +334,12 @@ class MatchingConfig:
         """Plausible implied-rate band for receipt->transaction currency,
         or None if the pair is unprofiled."""
         return self.fx_rate_bands.get((from_ccy, to_ccy))
+
+    def fx_reference_rate(self, from_ccy: str, to_ccy: str) -> Decimal | None:
+        """Monthly reference rate for receipt->transaction currency, or
+        None when the pair has no configured rate (then the band/LLM path
+        applies unchanged)."""
+        return self.fx_reference_rates.get((from_ccy, to_ccy))
 
     def is_alias(
         self, legal_entity_id: str, stmt_vendor: str | None, receipt_vendor: str | None
@@ -544,6 +582,62 @@ def match_one(
         if date_diff > cfg.fx_date_window_days:
             return None
 
+        # Deterministic reference-rate FX (3.15, the 3.7 upgrade): when a
+        # monthly reference rate is configured for this pair, resolve the
+        # candidate WITHOUT the LLM. Deviation of the posted charge from
+        # (receipt total x rate): <= fx_reference_match_pct is a clean
+        # deterministic match; <= fx_reference_review_pct matches but is
+        # review-flagged (DCC-markup / tip territory); beyond that, fall
+        # through to the band / FX_JUDGMENT path exactly as before. This
+        # uses only the CONFIG rate — learned merchant_fx keeps its 2c
+        # role (re-centering the FX_JUDGMENT score within the band) and
+        # never decides bucket membership.
+        ref_rate = cfg.fx_reference_rate(
+            receipt.detected_currency, tx.transaction_currency
+        )
+        if ref_rate is not None and ref_rate > 0:
+            expected = receipt.detected_total * ref_rate
+            if expected > 0:
+                deviation = abs(tx.amount - expected) / expected
+                if deviation <= cfg.fx_reference_review_pct:
+                    clean = deviation <= cfg.fx_reference_match_pct
+                    date_score = max(
+                        0.0, 1.0 - date_diff / max(1, cfg.fx_date_window_days)
+                    )
+                    amount_score = max(
+                        0.0,
+                        1.0 - float(deviation) / float(cfg.fx_reference_review_pct),
+                    )
+                    return Match(
+                        transaction_id=tx.transaction_id,
+                        document_id=receipt.document_id,
+                        match_type=MatchType.FX_REFERENCE,
+                        confidence=(
+                            cfg.high_confidence if clean else cfg.probable_confidence
+                        ),
+                        reason=(
+                            f"Charge {tx.amount} {tx.transaction_currency} vs "
+                            f"receipt {receipt.detected_total} "
+                            f"{receipt.detected_currency} at monthly reference "
+                            f"rate {ref_rate}: deviation {float(deviation) * 100:.1f}%"
+                            + (
+                                "."
+                                if clean
+                                else (
+                                    f" (above {float(cfg.fx_reference_match_pct) * 100:.0f}%; "
+                                    f"DCC markup / tip territory — review)."
+                                )
+                            )
+                        ),
+                        requires_review=not clean,
+                        score=_blend_score(amount_score, date_score, vendor_score, cfg),
+                        amount_score=amount_score,
+                        date_score=date_score,
+                        vendor_score=vendor_score,
+                    )
+            # Deviation beyond the review threshold: not resolvable at the
+            # reference rate; the band / FX_JUDGMENT path below applies.
+
         implied_rate = tx.amount / receipt.detected_total
         band = cfg.fx_band(receipt.detected_currency, tx.transaction_currency)
         if band is not None:
@@ -672,10 +766,19 @@ def match_month(
     `judgment_required`. Tenant / legal-entity scope is enforced at the
     candidate-pair level. The reconciliation guarantee (v2 spec §25.5)
     holds: every transaction lands in exactly one of matches /
-    judgment_required / ambiguous / unmatched_transactions.
+    judgment_required / ambiguous / unmatched_transactions / refunds.
     """
     cfg = cfg or MatchingConfig()
     outcome = MatchOutcome()
+
+    # Refund partition (3.10 / LD-5 A5): credits are split out BEFORE
+    # candidate generation, so no purchase receipt can ever pair-match a
+    # credit and no credit competes in the bipartite assignment. They are
+    # their own review bucket; the receipts pool is untouched.
+    outcome.refunds.extend(
+        tx.transaction_id for tx in transactions if tx.is_credit
+    )
+    transactions = [tx for tx in transactions if not tx.is_credit]
 
     # Card-scoped candidate gating (2026-06-16): a receipt whose Zoho payment
     # mode names a specific card only reconciles against charges on that card.

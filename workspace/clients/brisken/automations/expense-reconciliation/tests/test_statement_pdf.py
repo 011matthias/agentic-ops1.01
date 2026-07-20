@@ -128,3 +128,12 @@ def test_charges_without_card_marker_flagged_unknown():
     assert len(txs) == 1
     assert txs[0].account_id == "UNKNOWN"
     assert any("no trailing card marker" in i.message for i in issues)
+
+
+def test_credit_flag_set_on_negative_amounts():
+    """3.15: the PDF prints the canonical convention already, so a
+    negative amount (the payment) is a credit and every purchase is not."""
+    txs, _ = _parse()
+    pay = next(t for t in txs if "Payment" in t.vendor_from_statement)
+    assert pay.is_credit
+    assert all(not t.is_credit for t in txs if t.amount > 0)

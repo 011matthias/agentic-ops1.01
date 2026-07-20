@@ -31,6 +31,7 @@ class MatchType(str, Enum):
     PROBABLE = "probable"          # deterministic with tolerance
     POSSIBLE = "possible"          # weaker signal; review required
     FX_JUDGMENT = "fx_judgment"    # currencies differ; LLM judgment needed
+    FX_REFERENCE = "fx_reference"  # cross-currency, deterministic via monthly reference rate (3.15)
     AMBIGUOUS = "ambiguous"        # multiple equally-strong candidates
 
 
@@ -153,6 +154,15 @@ class Transaction:
     # "posted" rows so a re-import can never double-post.
     entry_status: str | None = None            # "posted" | "subscription" | None
 
+    # Refund / credit flag (3.10 / LD-5 A5), set at INGEST from the source's
+    # own convention (a Type column, sign inference, or the PDF's negative
+    # print) — never inferred again downstream. Under the canonical sign
+    # convention (purchase = positive, credit = negative) a credit's `amount`
+    # is negative AND `is_credit` is True. The matcher partitions is_credit
+    # transactions into `MatchOutcome.refunds` before candidate generation:
+    # no purchase receipt ever pair-matches a credit.
+    is_credit: bool = False
+
 
 @dataclass(frozen=True)
 class Receipt:
@@ -269,8 +279,8 @@ class MatchOutcome:
     Fields are intentionally explicit and side-by-side so that the
     reconciliation guarantee (v2 spec §25.5) can be verified at a
     glance: every transaction either has a match, is in
-    `unmatched_transactions`, or is in `judgment_required`. Nothing
-    is silently dropped.
+    `unmatched_transactions`, is in `judgment_required`, or is a
+    credit in `refunds` (3.10 / LD-5 A5). Nothing is silently dropped.
 
     Frozen (E6): the dataclass is immutable so a consumer cannot
     accidentally rebind a bucket (`outcome.matches = [...]`) and break
@@ -285,3 +295,7 @@ class MatchOutcome:
     unmatched_receipts: list[str] = field(default_factory=list)
     judgment_required: list[Match] = field(default_factory=list)
     ambiguous: list[Match] = field(default_factory=list)
+    # Credit / refund transaction ids (3.10 / LD-5 A5): partitioned out
+    # BEFORE candidate generation, so a purchase receipt can never match
+    # a credit. They are reviewed as their own bucket, never pair-matched.
+    refunds: list[str] = field(default_factory=list)
