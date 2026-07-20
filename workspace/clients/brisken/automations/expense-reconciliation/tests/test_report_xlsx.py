@@ -176,3 +176,64 @@ def test_summary_counts_transactions_not_pair_rows(tmp_path):
     assert labels["Reconciliation invariant"] == "OK"    # not BROKEN
     # Spend = the single card charge, once — not the summed BRL receipts.
     assert _card_spend(wb) == 100.0
+
+
+# ── Slice 10: charge categorization on the unmatched rows ────────────
+
+
+def _charge_cat(source=ClassificationSource.LEARNED):
+    return Categorization(
+        category="Software & Subscriptions",
+        zoho_account="Other Infra and IT Costs for Cloud Business",
+        confidence=1.0, source=source,
+        reasoning="from your Zoho Books posting history",
+    )
+
+
+def test_unmatched_sheet_carries_charge_category_columns(tmp_path):
+    out = write_report(
+        _outcome(), [_matched_tx(), _unmatched_tx()], [_receipt()],
+        tmp_path / "r.xlsx",
+        charge_categorizations={"t2": _charge_cat()},
+    )
+    ws = load_workbook(out)["Unmatched"]
+    rows = list(ws.iter_rows(values_only=True))
+    header = rows[1]
+    assert header[5:8] == ("Category", "Zoho A/C", "Source")
+    tx_row = next(r for r in rows if r[2] == "MYSTERY LLC")
+    assert tx_row[5] == "Software & Subscriptions"
+    assert tx_row[6] == "Other Infra and IT Costs for Cloud Business"
+    assert tx_row[7] == "LEARNED"
+
+
+def test_unmatched_card_tab_row_carries_category_and_source(tmp_path):
+    out = write_report(
+        _outcome(), [_matched_tx(), _unmatched_tx()], [_receipt()],
+        tmp_path / "r.xlsx",
+        charge_categorizations={"t2": _charge_cat()},
+    )
+    ws = load_workbook(out)["amex-usd"]
+    row = next(
+        r for r in ws.iter_rows(min_row=2, values_only=True)
+        if r[1] == "MYSTERY LLC"
+    )
+    # CARD_TAB_COLUMNS: Date, Vendor, Line item, Qty, Amount, Category,
+    # Source, Zoho A/C, Note
+    assert row[5] == "Software & Subscriptions"
+    assert row[6] == "LEARNED"
+    assert row[7] == "Other Infra and IT Costs for Cloud Business"
+    assert "categorized from statement description" in row[8]
+
+
+def test_without_side_map_unmatched_rows_unchanged(tmp_path):
+    out = write_report(
+        _outcome(), [_matched_tx(), _unmatched_tx()], [_receipt()],
+        tmp_path / "r.xlsx",
+    )
+    ws = load_workbook(out)["amex-usd"]
+    row = next(
+        r for r in ws.iter_rows(min_row=2, values_only=True)
+        if r[1] == "MYSTERY LLC"
+    )
+    assert row[5] is None or row[5] == ""   # no category invented
+    assert row[6] == "REVIEW"

@@ -49,7 +49,12 @@ from ..learning import (
 from ..output.reconciled_csv import write_reconciled_csv
 from ..output.report_xlsx import write_report
 from ..output.zoho_export import write_zoho_export
-from .serialize import snapshot_from_dict, snapshot_to_dict
+from .serialize import (
+    categorization_from_dict,
+    categorization_to_dict,
+    snapshot_from_dict,
+    snapshot_to_dict,
+)
 from .store import (
     INTAKE_RECEIVED,
     STATUS_ALREADY_POSTED,
@@ -312,6 +317,15 @@ def execute_run(
     snapshot = snapshot_to_dict(
         result.transactions, result.receipts, outcome, result.parse_errors
     )
+    # Slice 10: the receiptless-charge categorization side-map rides in
+    # the snapshot under its own key (snapshot_from_dict ignores extras,
+    # so pre-Slice-10 readers stay compatible) — the workbench renders it
+    # on the no-receipt rows without re-running categorization.
+    if result.charge_categorizations:
+        snapshot["charge_categorizations"] = {
+            tx_id: categorization_to_dict(cat)
+            for tx_id, cat in result.charge_categorizations.items()
+        }
     label = (
         f"{prepared.form.account_id or prepared.stmt_name} "
         f"{prepared.now_iso[:10]}"
@@ -947,6 +961,21 @@ def _receipt_view(r: Receipt, overrides: dict[tuple[str, int], dict]) -> dict:
     }
 
 
+def _charge_category_view(cat) -> dict | None:
+    """The render model for a receiptless charge's Slice-10 suggested
+    category. None when nothing was categorized (REVIEW with no signal
+    stays a plain no-receipt row, not noise)."""
+    if cat is None or not cat.category:
+        return None
+    return {
+        "category": cat.category,
+        "zoho_account": cat.zoho_account or "",
+        "source": cat.source.value,
+        "provenance": cat.reasoning or "",
+        "is_learned": cat.source is ClassificationSource.LEARNED,
+    }
+
+
 def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> dict:
     """Compose the render model: per-transaction rows with candidates and
     the reviewer's effective verdict, plus the unmatched-receipt list and
@@ -954,6 +983,13 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
     transactions, receipts, outcome, parse_errors = snapshot_from_dict(run.snapshot)
     rec_by_id = {r.document_id: r for r in receipts}
     by_tx = _candidates_by_tx(outcome)
+
+    # Slice 10: receiptless-charge categorizations (extra snapshot key;
+    # absent on pre-Slice-10 runs => empty map, rows render as before).
+    charge_cats = {
+        tx_id: categorization_from_dict(d)
+        for tx_id, d in (run.snapshot.get("charge_categorizations") or {}).items()
+    }
 
     # PR C — line items the cross-run memory auto-filled (Tier-1 LEARNED),
     # excluding any the reviewer has since reclassified. Surfaced as a stat
@@ -1133,6 +1169,9 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
                 # L1: her workbook's fill-color annotation (yellow=posted,
                 # gray=subscription); drives the workbench chips.
                 "entry_status": tx.entry_status,
+                # Slice 10: the tool's suggested category for a receiptless
+                # charge (None on matched rows and pre-Slice-10 snapshots).
+                "charge_category": _charge_category_view(charge_cats.get(tx_id)),
                 "section": section,
                 "triage_score": max(
                     (c["score"] for c in cands if c["score"]), default=None

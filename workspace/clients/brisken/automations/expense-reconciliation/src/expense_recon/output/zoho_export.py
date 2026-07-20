@@ -34,9 +34,17 @@ card / bank account), linked by `Reference#` = transaction_id. A
 multi-line Amazon receipt becomes N debit rows + 1 credit row, all
 sharing the transaction_id.
 
-Posting policy: only MATCHED transactions are exported. FX / ambiguous
-/ review / unmatched items are withheld until confirmed
-(call-outcomes D2 — review everything for the first months). Journal
+Posting policy: MATCHED transactions are exported. FX / ambiguous /
+review items are withheld until confirmed (call-outcomes D2 — review
+everything for the first months). Receiptless charges (Slice 10,
+2026-07-20): an unmatched charge whose side-map categorization is
+Tier-1 LEARNED (a confirmed merchant->account recalled from memory or
+seeded from Zoho posting history) is posting-ELIGIBLE, but only behind
+the opt-in `include_receiptless_learned` flag (config
+`zoho.export_receiptless_learned`) — withheld-until-confirmed default.
+VENDOR / REVIEW charges never export. The COA gate runs on the charge
+pseudo-receipts the same way it runs on matched receipts, so a bad
+account diverts to review instead of reaching the file. Journal
 POSTING to Zoho (slice 4b) is irreversible and stays gated behind
 explicit confirmation; this module only writes the import file.
 
@@ -55,6 +63,7 @@ the existing seven-column shape and its column positions are unchanged.
 from __future__ import annotations
 
 import csv
+from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -62,6 +71,7 @@ from typing import TYPE_CHECKING
 from ..matching.types import (
     Categorization,
     ClassificationSource,
+    LineItem,
     MatchOutcome,
     Receipt,
     Transaction,
@@ -181,6 +191,8 @@ def build_journal_rows(
     receipt_urls: "Mapping[str, str | None] | None" = None,
     report_for: "Callable[[str], str | None] | None" = None,
     coa_gate: "CoaGate | None" = None,
+    charge_categorizations: "Mapping[str, Categorization] | None" = None,
+    include_receiptless_learned: bool = False,
 ) -> list[list[str]]:
     """Build the Zoho journal rows for the matched transactions.
 
@@ -207,6 +219,15 @@ def build_journal_rows(
     optional: without them each receipt's own `receipt_url` /
     `report_number` (8.1) is used, so the existing CLI path carries the
     references with no extra wiring. Unknown → blank, never fabricated.
+
+    `charge_categorizations` (Slice 10 side-map, transaction_id →
+    Categorization) + `include_receiptless_learned` add the receiptless-
+    charge rows: with the flag on, each unmatched charge whose (COA-
+    gated) categorization is still Tier-1 LEARNED gets one debit row to
+    its learned account + one balancing credit row. VENDOR / REVIEW
+    charges, gate-diverted charges, and `entry_status == "posted"`
+    charges are never written. Flag off (the default) => byte-for-byte
+    prior behaviour.
     """
     # Pre-write COA validation: divert any line with a non-postable
     # account to review before it can resolve into a debit row. Rebuilds
@@ -283,6 +304,104 @@ def build_journal_rows(
             _amount(line_total_sum),
         ] + provenance)
 
+    # Slice 10: postable receiptless-LEARNED charges (opt-in flag).
+    if include_receiptless_learned and charge_categorizations:
+        rows.extend(
+            _receiptless_charge_rows(
+                outcome,
+                tx_by_id,
+                charge_categorizations,
+                chart_of_accounts=chart_of_accounts,
+                card_accounts=card_accounts,
+                coa_gate=coa_gate,
+            )
+        )
+
+    return rows
+
+
+def _receiptless_charge_rows(
+    outcome: MatchOutcome,
+    tx_by_id: dict[str, Transaction],
+    charge_categorizations: "Mapping[str, Categorization]",
+    *,
+    chart_of_accounts: "ChartOfAccounts | None",
+    card_accounts: "Mapping[str, str] | None",
+    coa_gate: "CoaGate | None",
+) -> list[list[str]]:
+    """Journal rows for the unmatched charges whose categorization is
+    Tier-1 LEARNED. Each becomes one debit row (the learned account) +
+    one balancing credit row (the card account), Reference# = the
+    transaction id. The receipt-URL / report-reference columns stay
+    blank — there IS no receipt, and B4 says blank over fabricated.
+
+    The COA gate runs on charge pseudo-receipts exactly as it runs on
+    matched receipts; a diverted line (source flipped to REVIEW) drops
+    out of the file entirely — a receiptless charge is either cleanly
+    postable or review-only, never exported flagged.
+    """
+    from ..categorize_charges import CHARGE_DOC_PREFIX, build_charge_pseudo_receipt
+
+    pseudo: list[Receipt] = []
+    for tx_id in outcome.unmatched_transactions:
+        tx = tx_by_id.get(tx_id)
+        cat = charge_categorizations.get(tx_id)
+        if tx is None or cat is None:
+            continue
+        if cat.source is not ClassificationSource.LEARNED or not cat.category:
+            continue  # VENDOR / REVIEW charges stay review-only
+        # L1 posting policy, same as the matched loop: an already-in-Zoho
+        # row never reaches the journal again.
+        if tx.entry_status == "posted":
+            continue
+        line = LineItem(
+            description=tx.vendor_from_statement,
+            line_total=tx.amount,
+            categorization=cat,
+        )
+        pseudo.append(
+            replace(build_charge_pseudo_receipt(tx), line_items=(line,))
+        )
+
+    if not pseudo:
+        return []
+    if coa_gate is not None:
+        pseudo, _report = coa_gate.run(pseudo)
+
+    rows: list[list[str]] = []
+    for rec in pseudo:
+        item = rec.line_items[0]
+        cat = item.categorization
+        if (
+            cat is None
+            or cat.source is not ClassificationSource.LEARNED
+            or not cat.category
+        ):
+            continue  # gate-diverted -> review, not the journal
+        tx = tx_by_id[rec.document_id[len(CHARGE_DOC_PREFIX):]]
+        account, note = _debit_account_and_note(cat, chart_of_accounts)
+        note = f"{note} · receiptless charge"
+        if cat.reasoning:
+            note = f"{note} ({cat.reasoning})"
+        date_str = tx.transaction_date.isoformat() if tx.transaction_date else ""
+        ref = tx.transaction_id
+        provenance = ["", ""]
+        rows.append([
+            date_str, account, tx.vendor_from_statement, ref,
+            note, _amount(tx.amount), "",
+        ] + provenance)
+        credit_account, credit_note = _credit_account_and_note(
+            tx, card_accounts, chart_of_accounts
+        )
+        rows.append([
+            date_str,
+            credit_account,
+            f"Payment to {tx.vendor_from_statement}",
+            ref,
+            credit_note,
+            "",
+            _amount(tx.amount),
+        ] + provenance)
     return rows
 
 
@@ -297,6 +416,8 @@ def write_zoho_export(
     receipt_urls: "Mapping[str, str | None] | None" = None,
     report_for: "Callable[[str], str | None] | None" = None,
     coa_gate: "CoaGate | None" = None,
+    charge_categorizations: "Mapping[str, Categorization] | None" = None,
+    include_receiptless_learned: bool = False,
 ) -> Path:
     """Write the Zoho Books journal-entry CSV. Returns the path.
 
@@ -304,6 +425,10 @@ def write_zoho_export(
     against the target legal entity's chart and diverts any non-postable
     line to review before it can reach the file. See
     `build_journal_rows` / `coa_gate.CoaGate`.
+
+    `charge_categorizations` + `include_receiptless_learned` (Slice 10,
+    both opt-in) add the receiptless-LEARNED charge entries; see
+    `build_journal_rows`.
     """
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -317,6 +442,8 @@ def write_zoho_export(
         receipt_urls=receipt_urls,
         report_for=report_for,
         coa_gate=coa_gate,
+        charge_categorizations=charge_categorizations,
+        include_receiptless_learned=include_receiptless_learned,
     )
 
     with out_path.open("w", encoding="utf-8", newline="") as fh:

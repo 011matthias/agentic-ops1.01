@@ -451,3 +451,117 @@ def test_wired_lookup_miss_is_blank_not_error():
     debit = next(r for r in rows if r[5])
     assert debit[_RECEIPT_URL_COL] == ""   # wired mapping wins, miss → blank
     assert debit[_REPORT_REF_COL] == ""
+
+
+# ── Slice 10: receiptless-LEARNED charge rows (opt-in flag) ──────────
+#
+# An unmatched charge whose side-map categorization is Tier-1 LEARNED
+# becomes one debit + one balancing credit ONLY behind the
+# include_receiptless_learned flag. VENDOR / REVIEW / posted / gate-
+# diverted charges never reach the file.
+
+from expense_recon.coa_gate import CoaGate  # noqa: E402
+
+
+def _learned_cat(account="Travel: Flights", category="Travel & Transport",
+                 source=ClassificationSource.LEARNED):
+    return Categorization(
+        category=category, zoho_account=account, confidence=1.0,
+        source=source, reasoning="from your Zoho Books posting history",
+    )
+
+
+def test_flag_off_keeps_receiptless_charges_out():
+    tx = _tx("t2")
+    outcome = MatchOutcome(unmatched_transactions=["t2"])
+    rows = build_journal_rows(
+        outcome, {"t2": tx}, {},
+        charge_categorizations={"t2": _learned_cat()},
+    )
+    assert rows == []  # withheld-until-confirmed default
+
+
+def test_flag_on_exports_learned_charge_balanced():
+    tx = _tx("t2", amount="20", account="amex-usd")
+    outcome = MatchOutcome(unmatched_transactions=["t2"])
+    rows = build_journal_rows(
+        outcome, {"t2": tx}, {},
+        chart_of_accounts=_coa(),
+        card_accounts={"amex-usd": "A200"},
+        charge_categorizations={"t2": _learned_cat()},
+        include_receiptless_learned=True,
+    )
+    assert len(rows) == 2
+    debit = next(r for r in rows if r[5])
+    credit = next(r for r in rows if r[6])
+    assert debit[1] == "Travel: Flights"          # learned account resolved
+    assert credit[1] == "Amex Card USD"
+    assert Decimal(debit[5]) == Decimal(credit[6]) == Decimal("20.00")
+    assert {r[3] for r in rows} == {"t2"}         # Reference# = tx id
+    assert "receiptless charge" in debit[4]
+    # No receipt exists: reference columns blank, never fabricated (B4).
+    assert debit[7] == "" and debit[8] == ""
+
+
+def test_vendor_and_review_charges_stay_review_only():
+    tx = _tx("t2")
+    outcome = MatchOutcome(unmatched_transactions=["t2"])
+    for source in (ClassificationSource.VENDOR, ClassificationSource.REVIEW):
+        rows = build_journal_rows(
+            outcome, {"t2": tx}, {},
+            charge_categorizations={
+                "t2": _learned_cat(account=None, source=source)
+            },
+            include_receiptless_learned=True,
+        )
+        assert rows == []
+
+
+def test_already_posted_charge_never_reexported():
+    from dataclasses import replace as dc_replace
+    tx = dc_replace(_tx("t2"), entry_status="posted")
+    outcome = MatchOutcome(unmatched_transactions=["t2"])
+    rows = build_journal_rows(
+        outcome, {"t2": tx}, {},
+        charge_categorizations={"t2": _learned_cat()},
+        include_receiptless_learned=True,
+    )
+    assert rows == []
+
+
+def test_coa_gate_diverts_bad_learned_account_out_of_the_file():
+    """A learned account that is not postable in the entity's chart is
+    diverted by the gate — the charge drops out of the journal entirely
+    instead of exporting flagged."""
+    tx = _tx("t2")
+    outcome = MatchOutcome(unmatched_transactions=["t2"])
+    gate = CoaGate(chart=_coa(), entity="822741658")
+    rows = build_journal_rows(
+        outcome, {"t2": tx}, {},
+        chart_of_accounts=_coa(),
+        coa_gate=gate,
+        charge_categorizations={
+            "t2": _learned_cat(account="Z999 Hallucinated Account")
+        },
+        include_receiptless_learned=True,
+    )
+    assert rows == []
+
+
+def test_matched_and_learned_charge_rows_coexist():
+    tx1 = _tx("t1", amount="180", account="amex-usd")
+    tx2 = _tx("t2", amount="20", account="amex-usd")
+    rec = _receipt([_line("chair", "180", "Equipment & Hardware")])
+    outcome = MatchOutcome(
+        matches=[Match("t1", "r1", MatchType.EXACT, 0.99, "x", False)],
+        unmatched_transactions=["t2"],
+    )
+    rows = build_journal_rows(
+        outcome, {"t1": tx1, "t2": tx2}, {"r1": rec},
+        charge_categorizations={"t2": _learned_cat()},
+        include_receiptless_learned=True,
+    )
+    assert {r[3] for r in rows} == {"t1", "t2"}
+    debits = sum(Decimal(r[5]) for r in rows if r[5])
+    credits = sum(Decimal(r[6]) for r in rows if r[6])
+    assert debits == credits == Decimal("200.00")

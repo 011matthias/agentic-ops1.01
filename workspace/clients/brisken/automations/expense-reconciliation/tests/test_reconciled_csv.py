@@ -264,3 +264,49 @@ def test_cli_skips_reconciled_csv_when_absent(tmp_path):
     result = run(config_path)
     assert result is not None
     assert not (tmp_path / "reconciled.csv").exists()
+
+
+# ── Slice 10: charge-categorization columns on unmatched lines ───────
+
+
+def test_unmatched_line_carries_charge_categorization():
+    tx = _tx("t2", vendor_from_statement="ANTHROPIC")
+    outcome = MatchOutcome(unmatched_transactions=["t2"])
+    cat = Categorization(
+        category="Software & Subscriptions",
+        zoho_account="Other Infra and IT Costs for Cloud Business",
+        confidence=1.0, source=ClassificationSource.LEARNED,
+        reasoning="from your Zoho Books posting history",
+    )
+    rows = build_reconciled_rows(
+        outcome, [tx], [], charge_categorizations={"t2": cat}
+    )
+    row = rows[0]
+    assert row[_C["Match Status"]] == "UNMATCHED"
+    assert row[_C["Charge Category"]] == "Software & Subscriptions"
+    assert row[_C["Charge Zoho Account"]] == "Other Infra and IT Costs for Cloud Business"
+    assert row[_C["Charge Category Source"]] == "LEARNED"
+
+
+def test_matched_line_charge_columns_blank():
+    tx = _tx()
+    rec = _receipt([_line("widget", "180")])
+    rows = build_reconciled_rows(_matched(), [tx], [rec])
+    row = rows[0]
+    assert row[_C["Charge Category"]] == ""
+    assert row[_C["Charge Zoho Account"]] == ""
+    assert row[_C["Charge Category Source"]] == ""
+
+
+def test_review_no_signal_charge_stays_blank_not_noise():
+    tx = _tx("t2")
+    outcome = MatchOutcome(unmatched_transactions=["t2"])
+    cat = Categorization(
+        category=None, zoho_account=None, confidence=0.0,
+        source=ClassificationSource.REVIEW, reasoning="no signal",
+    )
+    rows = build_reconciled_rows(
+        outcome, [tx], [], charge_categorizations={"t2": cat}
+    )
+    assert rows[0][_C["Charge Category"]] == ""
+    assert rows[0][_C["Charge Category Source"]] == ""
