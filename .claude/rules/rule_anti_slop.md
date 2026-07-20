@@ -88,6 +88,43 @@ front end.
 - Brief contextual note before a code/config block ("the SPF push
   drops the Porkbun include") is necessary scaffolding, not slop.
 
+## The golden middle (the register the bans serve)
+
+The bans above kill one failure mode; over-correcting into the other is
+its own. Writing that is exact but cold, clinical, or affectless reads
+as machine-authored too, and loses the reader as fast as padding does.
+Two poles to stay off:
+
+- **Slop:** padded, evenly-paced, hedged, symmetric, corporate. An
+  agent performing thoroughness.
+- **Cold:** jargon-walled, affectless, or retreating into vague
+  non-committal hedging to avoid stating the exact thing
+  (imprecision-as-safety). An agent performing rigor.
+
+The middle is direct, precise, and warm at once: say the exact thing,
+in plain words, the way a sharp human peer would say it aloud, and
+commit to it.
+
+- One clear claim per sentence; no padding, no retreat into vagueness.
+  Precision is stating what is true, not hedging so nothing can be wrong.
+- Keep the terms that carry meaning; drop the ones that only perform.
+- Warmth is plain directness written to a person, not performed
+  friendliness or stacked adjectives.
+- Name uncertainty precisely (B4, [[rule_behaviors]]) rather than
+  smearing it into hedge-language.
+
+Test: read it aloud as if a sharp colleague said it to you. If it sounds
+like someone who knows the subject and respects you, it passes; if it
+reads like a brochure (slop pole) or a compliance memo (cold pole),
+rewrite.
+
+Source: 2026-07-20 owner directive (meji ROI page): clean and direct,
+language that does not defer to imprecision, no need to be cold or
+ruthlessly precise, find the golden middle. Cross-surface: this governs
+every agent-authored human-facing artifact (client pages, deliverables,
+outbound messages), inherited by the surface rules that already
+reference this file.
+
 ## Required protocol
 
 Before publishing a paragraph, bullet, sentence, or section into

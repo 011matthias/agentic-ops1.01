@@ -95,7 +95,9 @@ specific to outbound human comms:
 
 All enumerated voice bans in [[rule_anti_slop]] apply (corporate
 thesaurus, meta-phrases, "not just X but Y", sentence-opening adverbs,
-performed-humanness), plus the platform typography rule in
+performed-humanness), and so does its golden-middle register standard
+(direct, precise, and warm at once; never slop, never cold or
+vaguely-hedged), plus the platform typography rule in
 [[rule_platform_standards]] §2: zero em-dashes (` — `, `&mdash;`,
 ` -- `).
 
