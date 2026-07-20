@@ -383,3 +383,32 @@ def test_currency_default_applies_when_set(client):
     run = _snapshot(client, run_id)
     assert run.summary["n_matched"] == 1
     assert run.snapshot["receipts"][0]["detected_currency"] == "USD"
+
+
+def test_operator_state_surfaces_operator_runs(client):
+    """The dev-side notifier polls /api/operator/state; an operator
+    'run now' upload creates an (unpublished) run that must appear under
+    `operator_runs` with its summary, so a new upload can ping the dev.
+    Regression for the 2026-07-20 notifier blind spot."""
+    run_id = _create_run(client)
+
+    state = client.get("/api/operator/state").json()
+    runs = {r["run_id"]: r for r in state["operator_runs"]}
+    assert run_id in runs
+    row = runs[run_id]
+    assert row["published"] is False
+    assert row["n_transactions"] is not None
+    assert "n_matched" in row and "match_rate" in row
+    # An unpublished run is invisible to published_runs (the old blind spot).
+    assert run_id not in {r["run_id"] for r in state["published_runs"]}
+
+    # Publishing keeps it in operator_runs (announced once) and now also
+    # lists it under published_runs (the separate user-facing ping).
+    client.post(f"/runs/{run_id}/publish", follow_redirects=False)
+    state = client.get("/api/operator/state").json()
+    assert run_id in {r["run_id"] for r in state["operator_runs"]}
+    published = {r["run_id"]: r for r in state["published_runs"]}
+    assert run_id in published
+    assert next(
+        r for r in state["operator_runs"] if r["run_id"] == run_id
+    )["published"] is True

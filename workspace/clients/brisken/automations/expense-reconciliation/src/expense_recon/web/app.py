@@ -706,7 +706,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     def operator_state():
         with open_store() as store:
             intakes = store.list_intakes()
-            published = [r for r in store.list_runs() if r.published]
+            all_runs = store.list_runs()
+        published = [r for r in all_runs if r.published]
         return JSONResponse(
             {
                 "intakes": [
@@ -721,6 +722,25 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                         "run_id": i.run_id,
                     }
                     for i in intakes
+                ],
+                # Every run in the store, so the dev-side notifier can ping
+                # on a new operator "run now" upload. Since 2026-07-20 the
+                # user page is gone and Criss uploads via the operator form,
+                # which creates an (initially unpublished) run, not an intake;
+                # published_runs alone left those uploads invisible, so no
+                # mail ever fired. A run row exists only once its pipeline
+                # finished, so `summary` is always populated here.
+                "operator_runs": [
+                    {
+                        "run_id": r.run_id,
+                        "created_at": r.created_at,
+                        "label": r.label,
+                        "published": r.published,
+                        "n_transactions": r.summary.get("n_transactions"),
+                        "n_matched": r.summary.get("n_matched"),
+                        "match_rate": r.summary.get("match_rate"),
+                    }
+                    for r in all_runs
                 ],
                 "published_runs": [
                     {

@@ -53,18 +53,58 @@ def test_apply_to_state_marks_all_visible():
     mod = _load()
     remote = {
         "intakes": [{"intake_id": "i1"}, {"intake_id": "i2"}],
+        "operator_runs": [{"run_id": "r8"}, {"run_id": "r9"}],
         "published_runs": [{"run_id": "r9"}],
         "feedback": {"count": 3},
     }
     state = mod.apply_to_state({"seen_intakes": ["gone"]}, remote)
     assert state == {
         "seen_intakes": ["i1", "i2"],
+        "seen_runs": ["r8", "r9"],
         "seen_published": ["r9"],
         "seen_feedback_count": 3,
     }
     # idempotent second pass announces nothing
     assert mod.diff_state(state, remote) == ([], [])
+    assert mod.diff_runs(state, remote) == []
     assert mod.diff_feedback(state, remote) == 0
+
+
+def test_new_operator_run_announced_once_regardless_of_publish():
+    mod = _load()
+    # A "run now" upload: an unpublished run, no intake. Was invisible.
+    remote = {
+        "operator_runs": [
+            {"run_id": "r1", "label": "Corp 2838", "published": False,
+             "n_matched": 29, "n_transactions": 94, "match_rate": 30.9},
+        ],
+    }
+    new = mod.diff_runs({}, remote)
+    assert [r["run_id"] for r in new] == ["r1"]
+    # Once seen, publishing it later does not re-announce to the dev.
+    state = {"seen_runs": ["r1"]}
+    remote["operator_runs"][0]["published"] = True
+    assert mod.diff_runs(state, remote) == []
+
+
+def test_baseline_migration_suppresses_backlog_but_not_fresh_runs():
+    mod = _load()
+    remote = {
+        "operator_runs": [{"run_id": "old1"}, {"run_id": "old2"}],
+    }
+    # An existing state file from before operator-run tracking: has other
+    # seen_* keys but no seen_runs. The backlog must NOT be announced.
+    legacy = {"seen_intakes": ["i0"], "seen_published": ["p0"]}
+    migrated = mod.baseline_new_run_tracking(legacy, remote)
+    assert set(migrated["seen_runs"]) == {"old1", "old2"}
+    assert mod.diff_runs(migrated, remote) == []
+    # A run created AFTER the upgrade is still announced.
+    remote["operator_runs"].append({"run_id": "new1"})
+    assert [r["run_id"] for r in mod.diff_runs(migrated, remote)] == ["new1"]
+    # A truly fresh state ({}) is left untouched, so the first-ever pass
+    # still catches up on everything (matches intake / published behaviour).
+    assert mod.baseline_new_run_tracking({}, remote) == {}
+    assert len(mod.diff_runs({}, remote)) == 3
 
 
 def test_feedback_diff_counts_only_new_notes():
