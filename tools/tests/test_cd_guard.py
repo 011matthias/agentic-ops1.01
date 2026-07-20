@@ -99,6 +99,30 @@ def test_block_reason_shows_original_quoted_path():
     assert 'cd "$WT"' in reason
 
 
+# --- 2026-07-20: trailing-boundary lookahead (register 07-15/07-16 gaps) -----
+# The old consuming trailing group `(?:\s+&&|\s*\n|\s+;|\s*$)` required a
+# SPACE before `;` and had no case for a redirect after the path, so
+# `cd X; cmd` and `cd X 2>/dev/null` both bypassed. Now a non-consuming
+# `(?=[\s;&|]|$)` (PS-arm parity).
+
+def test_blocks_semicolon_chain_no_space():
+    # The 2026-07-16 live bypass verbatim shape: `cd X; gh pr create`.
+    assert _is_block(_run("cd platform; gh pr create"))
+
+
+def test_blocks_redirect_after_path():
+    # The 2026-07-15 shape: bare cd with a stderr redirect after the path.
+    assert _is_block(_run("cd workspace/clients/brisken 2>/dev/null"))
+
+
+def test_blocks_pipe_chain():
+    assert _is_block(_run("cd platform | cat"))
+
+
+def test_still_allows_home_subpath_with_chain():
+    assert _run("cd ~/Repo; ls").returncode == 0
+
+
 # --- 2026-07-10: PowerShell arm ---------------------------------------------
 # The PowerShell tool persists cwd exactly like Bash, but Set-Location ran
 # unguarded (recorded live bypass). These pin the PS block/allow boundary.

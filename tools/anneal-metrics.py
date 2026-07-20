@@ -180,6 +180,13 @@ def build_metrics(repo: Path, today: str) -> dict:
     rows = fw.parse_register(register_path.read_text(encoding="utf-8", errors="replace")) if register_path.is_file() else []
     total_rows = len(rows)
     unresolved = sum(1 for r in rows if r["unresolved"])
+    # Gate-held rows (friction-watch's hook_contained sub-bucket: Resolved
+    # reads "No (caught by hook)" etc.) are permanently backstopped by a
+    # live gate -- they can never flip to Yes, so counting them in the
+    # convergence Unres made the metric monotonically rising bookkeeping.
+    # Actionable = the backlog a cycle can actually shrink.
+    gate_held = sum(1 for r in rows if r.get("hook_contained"))
+    actionable = unresolved - gate_held
     recurrence = fw.find_recurrence(rows)
     recur_sigs = len(recurrence)
     distinct_sigs = len({(r["type"], " ".join(re.findall(r"\w+", r["desc"].lower())[:6])) for r in rows}) or 1
@@ -212,7 +219,8 @@ def build_metrics(repo: Path, today: str) -> dict:
         "date": today,
         "assets": assets,
         "asset_total": total,
-        "register": {"total_rows": total_rows, "unresolved": unresolved},
+        "register": {"total_rows": total_rows, "unresolved": unresolved,
+                     "gate_held": gate_held, "actionable": actionable},
         "recurrence_pct": recur_pct,
         "memory_fix_pct": mem_pct,
         "drift": drift,
@@ -233,7 +241,10 @@ def to_row(m: dict) -> str:
         str(a["tools"]),
         f"{a['rules']}/{a['rules_loc']}",
         str(m["register"]["total_rows"]),
-        str(m["register"]["unresolved"]),
+        # Leading int = ACTIONABLE unresolved (what a cycle can shrink);
+        # gate-held rows are reported but excluded from the convergence
+        # signal. _lead_int on prior rows keeps old plain-int cells readable.
+        f"{m['register']['actionable']} (+{m['register']['gate_held']} held)",
         f"{m['recurrence_pct']}",
         f"{m['memory_fix_pct']}",
         str(len(m["drift"])),
@@ -256,7 +267,10 @@ def render_text(m: dict) -> str:
         f"{a['tools']} tools, {a['rules']} rules ({a['rules_loc']} LOC) "
         f"-> total {m['asset_total']}",
         f"  friction register: {m['register']['total_rows']} rows, "
-        f"{m['register']['unresolved']} unresolved; recurrence {m['recurrence_pct']}%, "
+        f"{m['register']['unresolved']} unresolved "
+        f"({m['register']['actionable']} actionable, "
+        f"{m['register']['gate_held']} gate-held); "
+        f"recurrence {m['recurrence_pct']}%, "
         f"memory-fix {m['memory_fix_pct']}%",
     ]
     if m["net_asset_delta"] is not None:

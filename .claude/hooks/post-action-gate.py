@@ -157,6 +157,21 @@ def main() -> int:
             "no-undo actions. After deploy, run the deploy verification gate (WebFetch the URL, "
             "check 200 + key content)."
         )
+        # Platform-merge-is-not-live (rule_behaviors sub-clause; the thrice-
+        # deferred structural candidate, register 2026-07-14 jochen + 06-09
+        # volabyg): the Vercel git integration lags, so a merge is NOT a
+        # deploy. Fires on every PR merge (no network call in a hook); the
+        # condition is stated inline.
+        if re.search(r"\bgh\s+pr\s+merge\b", view) or "gh-merge" in view:
+            advisories.append(
+                "[MERGE-NOT-LIVE] If this merge touched platform/ paths: the page is "
+                "NOT live yet. Vercel's git integration lags (23h-stale prod, "
+                "2026-06-09). Run tools/vercel-force-deploy.sh from a clean "
+                "origin/main worktree, then re-fetch the no-slash URL and confirm "
+                "the new build before declaring anything live. A 404/stale page "
+                "right after a merge means 'not force-deployed yet', not 'CDN "
+                "cache'."
+            )
 
     if is_build:
         if is_exempt(view):

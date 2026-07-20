@@ -74,7 +74,10 @@ CD_RX = re.compile(
     (?!~\s*$)                        # NOT `cd ~` alone
     (?!\$HOME\s*$)                   # NOT `cd $HOME` alone
     (?P<path>[^\s;&|]+)              # the path argument
-    (?:\s+\&\&|\s*\n|\s+;|\s*$)      # followed by && or stmt boundary (chained)
+    (?=[\s;&|]|$)                    # stmt boundary, NON-CONSUMING (PS-arm parity;
+                                     # the old consuming group needed a space before
+                                     # `;` and missed `cd X; cmd` / `cd X 2>/dev/null`
+                                     # -- register 2026-07-15 + 2026-07-16 bypasses)
     """,
     re.VERBOSE,
 )

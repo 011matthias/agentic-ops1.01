@@ -108,6 +108,69 @@ def test_pass_empty_payload():
     assert proc.returncode == 0 and _classify(proc) == "pass"
 
 
+# --- 2026-07-20: worktree bypass (register 2026-07-17 skipped-gate) ---------
+# An Edit targeting tools/scorers/*.py in a git WORKTREE of this repo used to
+# resolve outside REPO_POSIX and pass, although the worktree commits into the
+# same repository. The gate now keys on the target's own git root (a worktree
+# carries a `.git` pointer FILE). A scorer-shaped path with NO git root around
+# it must still pass (test_pass_out_of_repo_path pins that).
+
+def _fake_worktree(tmp_path, with_scorer: bool):
+    wt = tmp_path / "wt"
+    (wt / "tools" / "scorers").mkdir(parents=True)
+    (wt / ".git").write_text("gitdir: C:/somewhere/.git/worktrees/wt\n",
+                             encoding="utf-8")
+    if with_scorer:
+        (wt / "tools" / "scorers" / "page-weight.py").write_text(
+            "# direction: minimize\n", encoding="utf-8")
+    return wt
+
+
+def test_deny_existing_scorer_in_worktree(tmp_path):
+    wt = _fake_worktree(tmp_path, with_scorer=True)
+    proc = run_hook(
+        "scorer-lock-gate.py",
+        {"tool_name": "Edit",
+         "tool_input": {"file_path": str(wt / "tools" / "scorers" / "page-weight.py")}},
+        cwd=REPO,
+    )
+    assert _classify(proc) == "deny"
+
+
+def test_advise_new_scorer_in_worktree(tmp_path):
+    wt = _fake_worktree(tmp_path, with_scorer=False)
+    proc = run_hook(
+        "scorer-lock-gate.py",
+        {"tool_name": "Write",
+         "tool_input": {"file_path": str(wt / "tools" / "scorers" / "brand-new.py")}},
+        cwd=REPO,
+    )
+    assert _classify(proc) == "advise"
+
+
+def test_deny_pins_in_worktree(tmp_path):
+    wt = _fake_worktree(tmp_path, with_scorer=False)
+    proc = run_hook(
+        "scorer-lock-gate.py",
+        {"tool_name": "Write",
+         "tool_input": {"file_path": str(wt / "tools" / "scorers" / "PINS.json")}},
+        cwd=REPO,
+    )
+    assert _classify(proc) == "deny"
+
+
+def test_pass_non_scorer_path_in_worktree(tmp_path):
+    wt = _fake_worktree(tmp_path, with_scorer=False)
+    (wt / "tools" / "x.py").write_text("pass\n", encoding="utf-8")
+    proc = run_hook(
+        "scorer-lock-gate.py",
+        {"tool_name": "Edit",
+         "tool_input": {"file_path": str(wt / "tools" / "x.py")}},
+        cwd=REPO,
+    )
+    assert _classify(proc) == "pass"
+
+
 # --- PINS.json: the pin registry is part of the locked surface --------------
 
 def test_deny_edit_pins_registry():

@@ -8,7 +8,13 @@
   ],
 
   "shared": {
-    "terms": [],
+    "terms": [
+      {
+        "term": "em-dash",
+        "pattern": "—|&mdash;",
+        "source": "rule_deliverables client directive 2026-05-08 (zero em-dashes in client-facing material). Added 2026-07-20: a 2026-07-16 checkpoint claimed validate-demo-material PASS covered em-dashes while the fixture had no such pattern (register 2026-07-16); rendered decks/PDFs bypass the Write-layer strip gate, so the content scanner must carry it too."
+      }
+    ],
     "exempt": []
   },
 
