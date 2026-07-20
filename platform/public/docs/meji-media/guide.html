@@ -7,6 +7,9 @@
     <style>
 :root {
     --header-height: 72px;
+  --sidebar-width: 200px;
+  --green: #16a34a;
+  --green-light: #dcfce7;
     --bg: #ffffff;
     --text: #1a1a1a;
     --text2: #6b7280;
@@ -46,8 +49,8 @@
 }
 
 @media print {
-    body { margin: 0; }
-    .header { display: none !important; }
+    body { margin: 0; padding-top: var(--header-height); }
+    
     .page-break { page-break-before: always; }
     h2 { page-break-before: always; }
     h2:first-of-type { page-break-before: avoid; }
@@ -58,9 +61,7 @@
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 0 30px;
+    margin: 0;
     padding-top: var(--header-height);
     color: var(--text);
     background: var(--bg);
@@ -242,29 +243,29 @@ em {
 @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.5; } }
 @media (max-width: 640px) {
     .header { padding: 12px 16px; }
-    .header-title { display: none; }
+    
     .header nav a { padding: 6px 8px; font-size: 12px; }
 }
 
 /* Guide sidebar */
-.guide-sidebar {
+.sidebar {
     position: fixed; top: var(--header-height); left: 0; width: 200px;
     height: calc(100vh - var(--header-height)); overflow-y: auto;
     background: var(--surface); border-right: 1px solid var(--border);
     padding: 16px 0; z-index: 50; transition: transform .25s, background .2s;
 }
-.guide-sidebar ul { list-style: none; padding: 0; }
-.guide-sidebar li { margin: 0; }
-.guide-sidebar a {
+.sidebar ul { list-style: none; padding: 0; }
+.sidebar li { margin: 0; }
+.sidebar a {
     display: block; padding: 7px 16px; font-size: 12px; font-weight: 500;
     color: var(--text2); text-decoration: none;
     border-left: 3px solid transparent; transition: background .15s, color .15s;
 }
-.guide-sidebar a:hover { background: var(--surface2); color: var(--text); text-decoration: none; }
-.guide-sidebar a.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
-.guide-sidebar .sidebar-group { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text3); padding: 12px 16px 4px; }
+.sidebar a:hover { background: var(--surface2); color: var(--text); text-decoration: none; }
+.sidebar a.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
+.sidebar .sidebar-group { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text3); padding: 12px 16px 4px; }
 
-.guide-content { max-width: 960px; margin: 0 auto; padding: 40px 24px 80px; }
+.guide-content { margin-left: var(--sidebar-width); max-width: 1200px; padding: 40px 24px 80px; }
 
 .hero {
   background: linear-gradient(135deg, #059669, var(--blue));
@@ -289,19 +290,24 @@ em {
 .guide-backdrop.active { display: block; }
 
 @media (max-width: 768px) {
-    .guide-sidebar { transform: translateX(-100%); z-index: 200; }
-    .guide-sidebar.open { transform: translateX(0); }
+    .sidebar { transform: translateX(-100%); z-index: 200; }
+    .sidebar.open { transform: translateX(0); }
     .guide-content { margin-left: 0; }
     .guide-hamburger { display: flex; align-items: center; justify-content: center; }
 }
 
+
+.hamburger { display: none; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; cursor: pointer; font-size: 18px; color: var(--text2); line-height: 1; }
+@media (max-width: 768px) { .hamburger { display: block; } .guide-content { margin-left: 0; } }
 </style>
 <script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
+<!-- deliverable-allow: copy-clipboard,keyboard-search | reason: Meji doc-site convention (see .deliverable-config.yaml); narrative pages, no shell/code blocks, native Ctrl+F suffices. -->
 </head>
 <body>
 
 <header class="header">
   <div class="header-left">
+    <button class="hamburger" id="hamburgerBtn" onclick="toggleSidebar()">&#9776;</button>
     <div class="header-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg><span class="logo-text">Unpause</span><span class="logo-accent">AI</span></div>
     <div class="header-title">
       <h1>Meji Media</h1>
@@ -346,7 +352,7 @@ if (saved) {
 
 <!-- Sidebar -->
 <div class="guide-backdrop" id="guideBackdrop" onclick="closeSidebar()"></div>
-<nav class="guide-sidebar" id="guideSidebar">
+<nav class="sidebar" id="sidebar">
   <ul>
     <li class="sidebar-group">Overview</li>
     <li><a href="#what-we-built">What We Built</a></li>
@@ -1274,11 +1280,11 @@ new -> following_up -> replied     (hot lead -- team notification + fastest cade
 
 <script>
 // Sidebar toggle
-function toggleSidebar(){document.getElementById('guideSidebar').classList.toggle('open');document.getElementById('guideBackdrop').classList.toggle('active')}
-function closeSidebar(){document.getElementById('guideSidebar').classList.remove('open');document.getElementById('guideBackdrop').classList.remove('active')}
+function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('guideBackdrop').classList.toggle('active')}
+function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('guideBackdrop').classList.remove('active')}
 // Active state on scroll
 (function(){
-  var links=document.querySelectorAll('.guide-sidebar a[href^="#"]');
+  var links=document.querySelectorAll('.sidebar a[href^="#"]');
   var sections=[];
   links.forEach(function(a){var t=document.querySelector(a.getAttribute('href'));if(t)sections.push({el:t,link:a})});
   window.addEventListener('scroll',function(){
