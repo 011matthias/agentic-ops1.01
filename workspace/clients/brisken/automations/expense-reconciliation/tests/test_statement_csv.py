@@ -204,7 +204,103 @@ def test_integration_parser_to_matcher_happy_path():
     outcome = match_month(txs, receipts)
     assert len(outcome.matches) == 2
     assert all(m.match_type == MatchType.EXACT for m in outcome.matches)
-    # The other 5 transactions in the fixture remain unmatched
-    # (no receipts seeded for them), preserving the reconciliation
-    # guarantee invariant (v2 spec §25.5).
-    assert len(outcome.unmatched_transactions) == 5
+    # 3.10 / LD-5 A5: the fixture's negative row (the Amazon return) is a
+    # credit — partitioned into its own refunds bucket, never left among
+    # the unmatched purchases.
+    assert outcome.refunds == ["brisken-amex-usd:6"]
+    # The other 4 purchases in the fixture remain unmatched (no receipts
+    # seeded for them), preserving the reconciliation guarantee invariant
+    # (v2 spec §25.5): 2 matched + 4 unmatched + 1 refund = 7.
+    assert len(outcome.unmatched_transactions) == 4
+
+
+# ── 3.15 sign canonicalization ───────────────────────────────────────
+
+
+TYPE_MAP = {**DEFAULT_MAP, "type": "Type"}
+
+
+def test_type_column_canonicalizes_chase_activity_convention(tmp_path):
+    """The Chase activity CSV prints purchases NEGATIVE (Type=Sale) and
+    payments/returns positive. With a mapped Type column the sign is
+    canonicalized per row: purchase = positive, credit = negative."""
+    csv_text = (
+        "Date,Description,Amount,Type\n"
+        "04/01/2026,UBER TRIP,-10.32,Sale\n"
+        "04/02/2026,PAYMENT THANK YOU,4000.00,Payment\n"
+        "04/03/2026,AMAZON RETURN,15.00,Return\n"
+    )
+    src = tmp_path / "chase_activity.csv"
+    src.write_text(csv_text, encoding="utf-8")
+    txs = parse_statement_csv(
+        src,
+        column_map=TYPE_MAP,
+        account_id="chase-2838",
+        legal_entity_id="brisken-us",
+        account_card_currency="USD",
+    )
+    sale, payment, ret = txs
+    assert sale.amount == Decimal("10.32") and not sale.is_credit
+    assert payment.amount == Decimal("-4000.00") and payment.is_credit
+    assert ret.amount == Decimal("-15.00") and ret.is_credit
+
+
+def test_no_type_column_majority_negative_flips_with_warning(tmp_path):
+    """Without a Type column, a majority-negative export is inferred to
+    print purchases as negatives; all signs flip and a warning issue is
+    emitted (never a silent flip)."""
+    from expense_recon.ingest.statement_csv import parse_statement_csv_tolerant
+
+    rows = "\n".join(
+        f"04/{i:02d}/2026,VENDOR {i},-{i}.00" for i in range(1, 6)
+    )
+    csv_text = f"Date,Description,Amount\n{rows}\n04/09/2026,PAYMENT,500.00\n"
+    src = tmp_path / "inverted.csv"
+    src.write_text(csv_text, encoding="utf-8")
+    txs, issues = parse_statement_csv_tolerant(
+        src,
+        column_map=DEFAULT_MAP,
+        account_id="x",
+        legal_entity_id="x",
+        account_card_currency="USD",
+    )
+    warnings = [i for i in issues if i.severity == "warning"]
+    assert len(warnings) == 1 and "sign convention inferred" in warnings[0].message
+    assert [t.amount for t in txs[:5]] == [Decimal(f"{i}.00") for i in range(1, 6)]
+    assert all(not t.is_credit for t in txs[:5])
+    payment = txs[5]
+    assert payment.amount == Decimal("-500.00") and payment.is_credit
+
+
+def test_no_type_column_canonical_file_untouched_but_credit_flagged():
+    """A majority-positive export keeps its signs verbatim; the lone
+    negative row (the Amazon return in the fixture) gets is_credit."""
+    txs = parse_statement_csv(
+        FIXTURE,
+        column_map=DEFAULT_MAP,
+        account_id="brisken-amex-usd",
+        legal_entity_id="brisken-us",
+        account_card_currency="USD",
+    )
+    credits = [t for t in txs if t.is_credit]
+    assert [t.amount for t in credits] == [
+        t.amount for t in txs if t.amount < 0
+    ]
+    assert all(not t.is_credit for t in txs if t.amount > 0)
+
+
+def test_tiny_export_with_lone_refund_not_flipped(tmp_path):
+    """A small export holding only a refund or two must not trip the
+    majority inference (>= 3 negatives required)."""
+    csv_text = "Date,Description,Amount\n04/01/2026,REFUND,(50.00)\n"
+    src = tmp_path / "lone_refund.csv"
+    src.write_text(csv_text, encoding="utf-8")
+    txs = parse_statement_csv(
+        src,
+        column_map=DEFAULT_MAP,
+        account_id="x",
+        legal_entity_id="x",
+        account_card_currency="USD",
+    )
+    assert txs[0].amount == Decimal("-50.00")
+    assert txs[0].is_credit

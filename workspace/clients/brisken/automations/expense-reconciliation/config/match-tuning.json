@@ -12,6 +12,9 @@
     "EUR:USD": ["1.00", "1.45"],
     "DKK:USD": ["0.13", "0.18"]
   },
+  "fx_reference_rates": {},
+  "fx_reference_match_pct": "0.03",
+  "fx_reference_review_pct": "0.13",
   "card_scoping": true,
   "blend_amount_weight": 0.55,
   "blend_date_weight": 0.30,

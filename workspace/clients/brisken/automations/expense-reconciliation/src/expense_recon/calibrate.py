@@ -46,11 +46,13 @@ def _metrics(
         m.transaction_id for m in outcome.ambiguous
     }
     unmatched_tx = set(outcome.unmatched_transactions)
+    refund_tx = set(outcome.refunds)
 
-    bucketed = matched_tx | review_tx | unmatched_tx
+    bucketed = matched_tx | review_tx | unmatched_tx | refund_tx
     invariant_ok = (
         bucketed == all_tx_ids
-        and len(matched_tx) + len(review_tx) + len(unmatched_tx) == len(all_tx_ids)
+        and len(matched_tx) + len(review_tx) + len(unmatched_tx) + len(refund_tx)
+        == len(all_tx_ids)
     )
 
     # Double-binding: a receipt assigned to more than one transaction
@@ -77,15 +79,19 @@ def _metrics(
     for tx in transactions:
         by_card_spend[tx.account_id] += tx.amount
 
+    # Match rate over purchases only: refunds are never matchable by
+    # design, so they must not depress the tuning signal.
+    n_purchases = len(all_tx_ids) - len(refund_tx)
     return {
         "transactions": len(all_tx_ids),
         "receipts": len(receipts),
         "matched": len(matched_tx),
         "needs_review": len(review_tx),
         "unmatched_tx": len(unmatched_tx),
+        "refunds": len(refund_tx),
         "unmatched_receipts": len(outcome.unmatched_receipts),
-        "match_rate_pct": round(len(matched_tx) / len(all_tx_ids) * 100, 1)
-        if all_tx_ids else 0.0,
+        "match_rate_pct": round(len(matched_tx) / n_purchases * 100, 1)
+        if n_purchases else 0.0,
         "invariant_ok": invariant_ok,
         "double_bound_receipts": double_bound,
         "foreign_receipts": n_foreign,
@@ -101,10 +107,11 @@ def _print_report(m: dict) -> None:
     print(f"  Transactions:        {m['transactions']}")
     print(f"  Receipts:            {m['receipts']}")
     print(
-        f"  Matched:             {m['matched']}  ({m['match_rate_pct']}%)"
+        f"  Matched:             {m['matched']}  ({m['match_rate_pct']}% of purchases)"
     )
     print(f"  Needs review (tx):   {m['needs_review']}")
     print(f"  Unmatched tx:        {m['unmatched_tx']}")
+    print(f"  Refunds / credits:   {m['refunds']}")
     print(f"  Unmatched receipts:  {m['unmatched_receipts']}")
     print()
     inv = "OK" if m["invariant_ok"] else "BROKEN"
@@ -162,8 +169,23 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
-    card_currency = cfg["statement"]["account_card_currency"]
-    outcome = match_month(transactions, receipts)
+    # statement.account_card_currency is optional for PDF statements
+    # (the Chase PDF is USD by definition); mirror the CLI's default.
+    card_currency = cfg["statement"].get("account_card_currency", "USD")
+
+    # Honor the run's matching.tuning_path (fx_reference_rates and the
+    # other file tunables), mirroring cli.reconcile — calibration must
+    # measure the same deterministic config the real run uses. Learned
+    # memory is deliberately NOT merged here: calibration is the
+    # memory-free baseline.
+    match_cfg = None
+    tuning_path = (cfg.get("matching") or {}).get("tuning_path")
+    if tuning_path:
+        from .matching.deterministic import MatchingConfig
+
+        match_cfg = MatchingConfig.from_file(config_dir / tuning_path)
+
+    outcome = match_month(transactions, receipts, match_cfg)
     m = _metrics(outcome, transactions, receipts, card_currency)
 
     # Categorization-accuracy gate (PR 2b): a labeled-fixture regression

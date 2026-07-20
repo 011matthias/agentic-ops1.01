@@ -306,4 +306,8 @@ def _build_tx(
         original_amount=p.get("original_amount"),
         original_currency=p.get("original_currency"),
         fx_rate=p.get("fx_rate"),
+        # The statement PDF already prints the canonical convention
+        # (purchases positive, payments/credits negative), so a negative
+        # amount IS a credit (3.15 / LD-5 A5).
+        is_credit=p["amount"] < 0,
     )

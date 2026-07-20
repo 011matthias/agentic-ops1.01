@@ -33,7 +33,14 @@ OK = "OK"
 WARN = "WARN"
 FAIL = "FAIL"
 
-_VALID_STATEMENT_SUFFIXES = (".csv", ".xlsx", ".xlsm")
+_VALID_STATEMENT_SUFFIXES = (".csv", ".xlsx", ".xlsm", ".pdf")
+
+# 3.15 statement-source advisory thresholds (mirrored in
+# web/service.py `_statement_source_advisory`): a receipt set is
+# "foreign-heavy" when at least this many receipts, and at least this
+# share of them, are in a currency other than the card's.
+_FOREIGN_HEAVY_MIN = 3
+_FOREIGN_HEAVY_SHARE = 0.3
 
 
 class _Report:
@@ -104,8 +111,11 @@ def _check_statement(report: _Report, cfg: dict, config_dir: Path) -> None:
         report.fail("statement", "missing or not an object")
         return
 
-    required = ("path", "account_id", "legal_entity_id", "account_card_currency", "column_map")
-    missing = [k for k in required if k not in s]
+    # The Chase statement PDF needs only path + legal_entity_id: account
+    # ids come from the per-card markers inside the statement and there
+    # is no column map (mirrors cli._load_statement).
+    base_required = ("path", "legal_entity_id")
+    missing = [k for k in base_required if k not in s]
     if missing:
         report.fail("statement", f"missing keys: {', '.join(missing)}")
         return
@@ -116,9 +126,26 @@ def _check_statement(report: _Report, cfg: dict, config_dir: Path) -> None:
         return
     suffix = path.suffix.lower()
     if suffix not in _VALID_STATEMENT_SUFFIXES:
-        report.fail("statement", f"unsupported file type {suffix!r} (use .csv/.xlsx/.xlsm)")
+        report.fail(
+            "statement",
+            f"unsupported file type {suffix!r} (use .csv/.xlsx/.xlsm/.pdf)",
+        )
+        return
+    if suffix == ".pdf":
+        report.ok(
+            "statement",
+            f"Chase statement PDF present: {path.name} (account ids come "
+            f"from the per-card markers; no column map needed; carries "
+            f"per-charge original-currency FX detail)",
+        )
         return
     report.ok("statement", f"file present: {path.name}")
+
+    required = ("account_id", "account_card_currency", "column_map")
+    missing = [k for k in required if k not in s]
+    if missing:
+        report.fail("statement", f"missing keys: {', '.join(missing)}")
+        return
 
     column_map = s["column_map"]
     if not isinstance(column_map, dict):
@@ -164,7 +191,13 @@ def _check_receipts(report: _Report, cfg: dict, config_dir: Path) -> None:
         report.fail("receipts", f"path not found: {path}")
         return
 
-    source = r.get("source") or ("folder" if path.is_dir() else "csv")
+    # Source inference mirrors cli._load_receipts: directory -> folder,
+    # .pdf -> the consolidated Zoho Expense report PDF, else csv.
+    source = r.get("source") or (
+        "folder" if path.is_dir()
+        else "expense_report_pdf" if path.suffix.lower() == ".pdf"
+        else "csv"
+    )
     has_llm = isinstance(cfg.get("llm"), dict)
 
     if source == "folder":
@@ -203,8 +236,129 @@ def _check_receipts(report: _Report, cfg: dict, config_dir: Path) -> None:
             report.fail("receipts", f"CSV missing required columns: {', '.join(missing_cols)}")
         else:
             report.ok("receipts", f"csv mode: required columns present")
+    elif source == "expense_csv":
+        if path.is_dir():
+            report.fail("receipts", f"source 'expense_csv' but {path} is a directory")
+            return
+        column_map = r.get("column_map")
+        if not isinstance(column_map, dict):
+            report.fail("receipts", "source 'expense_csv' requires receipts.column_map")
+            return
+        try:
+            header = _read_header(path, None)
+        except Exception as exc:  # noqa: BLE001
+            report.fail("receipts", f"could not read CSV header: {exc}")
+            return
+        header_set = set(header)
+        missing_cols = [
+            src for src in column_map.values() if src not in header_set
+        ]
+        if missing_cols:
+            report.fail(
+                "receipts",
+                f"expense CSV missing mapped columns: {', '.join(missing_cols)}",
+            )
+        else:
+            report.ok("receipts", "expense_csv mode: mapped columns present")
+    elif source == "expense_report_pdf":
+        if path.is_dir():
+            report.fail(
+                "receipts",
+                f"source 'expense_report_pdf' but {path} is a directory",
+            )
+            return
+        if path.suffix.lower() != ".pdf":
+            report.fail(
+                "receipts",
+                f"source 'expense_report_pdf' needs a .pdf file, got {path.suffix!r}",
+            )
+            return
+        report.ok(
+            "receipts",
+            f"expense report PDF present: {path.name} (text-layer parse, no LLM needed)",
+        )
     else:
-        report.fail("receipts", f"source {source!r} not supported (use 'csv' or 'folder')")
+        report.fail(
+            "receipts",
+            f"source {source!r} not supported "
+            f"(use 'csv', 'expense_csv', 'expense_report_pdf' or 'folder')",
+        )
+
+
+def _check_statement_source(report: _Report, cfg: dict, config_dir: Path) -> None:
+    """3.15 statement-source advisory: WARN when a foreign-heavy receipt
+    set is paired with a tabular (non-PDF) statement. Only the Chase
+    statement PDF carries each foreign charge's original amount +
+    currency — the input the deterministic exact-FX match consumes — so
+    on a foreign-heavy month the statement source decides whether most
+    matching is deterministic or lands in judgment. Advisory only:
+    read-only, never raises, never changes the exit code."""
+    s = cfg.get("statement")
+    r = cfg.get("receipts")
+    if not isinstance(s, dict) or not isinstance(r, dict):
+        return
+    stmt_path = s.get("path")
+    rcpt_path = r.get("path")
+    if not stmt_path or not rcpt_path:
+        return
+    if Path(stmt_path).suffix.lower() == ".pdf":
+        return  # already the preferred source
+
+    path = (config_dir / rcpt_path).resolve()
+    if not path.exists() or path.is_dir():
+        return  # folder OCR needs the LLM to know currencies; skip
+
+    card_ccy = str(s.get("account_card_currency") or "USD").upper()
+    currencies: list[str] = []
+    try:
+        suffix = path.suffix.lower()
+        if suffix == ".pdf":
+            from .ingest.expense_report_pdf import (
+                parse_expense_report_pdf_tolerant,
+            )
+
+            receipts, _ = parse_expense_report_pdf_tolerant(
+                path=path,
+                legal_entity_id="doctor-preflight",
+                default_currency=r.get("default_currency"),
+            )
+            currencies = [
+                x.detected_currency for x in receipts if x.detected_currency
+            ]
+        elif suffix == ".csv":
+            source = r.get("source") or "csv"
+            col = (
+                (r.get("column_map") or {}).get("currency")
+                if source == "expense_csv"
+                else "detected_currency"
+            )
+            if not col:
+                return
+            with path.open("r", encoding="utf-8-sig", newline="") as fh:
+                for row in csv.DictReader(fh):
+                    raw = (row.get(col) or "").strip()
+                    if raw:
+                        currencies.append(raw.upper())
+        else:
+            return
+    except Exception:  # noqa: BLE001 — advisory only, never crash doctor
+        return
+
+    if not currencies:
+        return
+    foreign = sum(1 for c in currencies if c.upper() != card_ccy)
+    if (
+        foreign >= _FOREIGN_HEAVY_MIN
+        and foreign / len(currencies) >= _FOREIGN_HEAVY_SHARE
+    ):
+        report.warn(
+            "statement",
+            f"{foreign} of {len(currencies)} receipts are foreign-currency "
+            f"but the statement is {Path(stmt_path).suffix} — only the Chase "
+            f"statement PDF carries each charge's original foreign amount, "
+            f"which lets these match deterministically (no LLM). Prefer the "
+            f"statement PDF for this month.",
+        )
 
 
 def _check_llm(report: _Report, cfg: dict) -> None:
@@ -300,6 +454,7 @@ def run_doctor(config_path: Path) -> int:
     print(f"doctor: checking {config_path.name}\n")
     _check_statement(report, cfg, config_dir)
     _check_receipts(report, cfg, config_dir)
+    _check_statement_source(report, cfg, config_dir)
     _check_llm(report, cfg)
     _check_zoho(report, cfg, config_dir)
     _check_output(report, cfg, config_dir)

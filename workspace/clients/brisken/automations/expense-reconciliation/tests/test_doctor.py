@@ -191,3 +191,64 @@ def test_doctor_routes_through_cli_main(tmp_path, capsys):
     rc = cli_main(["doctor", "--config", str(config_path)])
     assert rc == 0
     assert "all checks passed" in capsys.readouterr().out
+
+
+# ── 3.15 PDF statement support + statement-source advisory ───────────
+
+
+def test_pdf_statement_accepted_without_column_map(tmp_path, capsys):
+    """A Chase statement PDF needs only path + legal_entity_id (account
+    ids come from the per-card markers); doctor must not demand a
+    column map for it."""
+    cfg = _base_cfg(tmp_path)
+    (tmp_path / "stmt.pdf").write_bytes(b"%PDF-1.4 stub")
+    cfg["statement"] = {"path": "stmt.pdf", "legal_entity_id": "brisken-llc"}
+    rc = run_doctor(_write(tmp_path / "run.json", cfg))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "statement PDF present" in out
+
+
+def test_foreign_heavy_receipts_with_csv_statement_warns(tmp_path, capsys):
+    """3.15 advisory: a foreign-heavy receipt set against a tabular
+    statement WARNs to prefer the statement PDF (which carries the
+    per-charge original-currency FX detail). Never changes exit code."""
+    cfg = _base_cfg(tmp_path)
+    rows = "\n".join(
+        f"r{i},2026-05-0{i % 9 + 1},10.00,LOJA {i},BRL" for i in range(1, 7)
+    )
+    (tmp_path / "receipts.csv").write_text(
+        "document_id,detected_date,detected_total,detected_vendor,detected_currency\n"
+        f"{rows}\n",
+        encoding="utf-8",
+    )
+    rc = run_doctor(_write(tmp_path / "run.json", cfg))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "foreign-currency" in out and "statement PDF" in out
+
+
+def test_domestic_receipts_no_advisory(tmp_path, capsys):
+    cfg = _base_cfg(tmp_path)
+    (tmp_path / "receipts.csv").write_text(
+        "document_id,detected_date,detected_total,detected_vendor,detected_currency\n"
+        "r1,2026-05-01,10.00,STAPLES,USD\n"
+        "r2,2026-05-02,20.00,UBER,USD\n",
+        encoding="utf-8",
+    )
+    rc = run_doctor(_write(tmp_path / "run.json", cfg))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "foreign-currency" not in out
+
+
+def test_expense_report_pdf_receipts_source_accepted(tmp_path, capsys):
+    """The consolidated Zoho ER PDF is a first-class receipts source in
+    the CLI (2026-07-16); doctor must accept it (no LLM needed)."""
+    cfg = _base_cfg(tmp_path)
+    (tmp_path / "ER-00215.pdf").write_bytes(b"%PDF-1.4 stub")
+    cfg["receipts"] = {"path": "ER-00215.pdf", "source": "expense_report_pdf"}
+    rc = run_doctor(_write(tmp_path / "run.json", cfg))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "expense report PDF present" in out

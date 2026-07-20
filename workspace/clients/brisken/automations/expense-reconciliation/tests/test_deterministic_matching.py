@@ -370,3 +370,82 @@ def test_known_currency_same_as_card_still_matches():
     out = match_month([t], [r])
     assert len(out.matches) == 1
     assert out.matches[0].match_type == MatchType.EXACT
+
+
+# ── 3.10 refunds partition + 3.15 reference-rate FX ──────────────────
+
+
+def test_credit_partitioned_into_refunds_never_matched():
+    """A credit (is_credit=True) lands in the refunds bucket before
+    candidate generation: no purchase receipt can match it, and the
+    receipt stays free for the real purchase."""
+    from dataclasses import replace
+
+    credit = replace(
+        tx("t-ret", "-15.00", date(2026, 4, 20), vendor="AMAZON RETURN"),
+        is_credit=True,
+    )
+    purchase = tx("t-buy", "15.00", date(2026, 4, 20), vendor="AMAZON")
+    rs = [receipt("r1", "15.00", date(2026, 4, 20), vendor="AMAZON")]
+    out = match_month([credit, purchase], rs)
+    assert out.refunds == ["t-ret"]
+    assert [m.transaction_id for m in out.matches] == ["t-buy"]
+    assert "t-ret" not in out.unmatched_transactions
+    # Guarantee: every tx in exactly one bucket.
+    assert len(out.matches) + len(out.unmatched_transactions) + len(out.refunds) == 2
+
+
+def test_fx_reference_rate_clean_match_is_deterministic():
+    """A configured monthly reference rate resolves a cross-currency
+    pair deterministically: deviation <= 3% is a clean FX_REFERENCE
+    match, no review, no LLM."""
+    cfg = MatchingConfig(
+        fx_reference_rates={("EUR", "USD"): Decimal("1.10")}
+    )
+    txs = [tx("t1", "111.00", date(2026, 4, 12))]      # 100 EUR * 1.10 = 110; dev 0.9%
+    rs = [receipt("r1", "100.00", date(2026, 4, 12), currency="EUR")]
+    out = match_month(txs, rs, cfg)
+    assert len(out.matches) == 1
+    m = out.matches[0]
+    assert m.match_type == MatchType.FX_REFERENCE
+    assert not m.requires_review
+    assert not out.judgment_required
+
+
+def test_fx_reference_rate_dcc_band_flags_review():
+    """Deviation in 3-13% (DCC markup / tip territory) still matches
+    deterministically but is review-flagged."""
+    cfg = MatchingConfig(
+        fx_reference_rates={("EUR", "USD"): Decimal("1.10")}
+    )
+    txs = [tx("t1", "118.00", date(2026, 4, 12))]      # dev 7.3%
+    rs = [receipt("r1", "100.00", date(2026, 4, 12), currency="EUR")]
+    out = match_month(txs, rs, cfg)
+    assert len(out.matches) == 1
+    m = out.matches[0]
+    assert m.match_type == MatchType.FX_REFERENCE
+    assert m.requires_review
+
+
+def test_fx_reference_rate_large_deviation_falls_through_to_band():
+    """Beyond 13% the reference rate cannot resolve the pair; the
+    implied-rate band / FX_JUDGMENT path applies exactly as before."""
+    cfg = MatchingConfig(
+        fx_reference_rates={("EUR", "USD"): Decimal("1.10")}
+    )
+    txs = [tx("t1", "140.00", date(2026, 4, 12))]      # dev 27%; implied 1.40 in EUR band
+    rs = [receipt("r1", "100.00", date(2026, 4, 12), currency="EUR")]
+    out = match_month(txs, rs, cfg)
+    assert not out.matches
+    assert len(out.judgment_required) == 1
+    assert out.judgment_required[0].match_type == MatchType.FX_JUDGMENT
+
+
+def test_fx_unconfigured_pair_behaves_as_before():
+    """No reference rate for the pair => byte-for-byte the old band
+    behaviour (FX_JUDGMENT emission)."""
+    txs = [tx("t1", "110.00", date(2026, 4, 12))]
+    rs = [receipt("r1", "100.00", date(2026, 4, 12), currency="EUR")]
+    out = match_month(txs, rs)
+    assert not out.matches
+    assert len(out.judgment_required) == 1

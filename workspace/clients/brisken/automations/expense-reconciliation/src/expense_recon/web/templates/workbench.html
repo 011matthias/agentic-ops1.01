@@ -191,6 +191,7 @@
     <div class="stat"><div class="stat-value">{{ "yes" if s.invariant_ok else "NO" }}</div><div class="stat-label">All accounted for</div></div>
     <div class="stat"><div class="stat-value">{{ s.n_duplicate_groups }}</div><div class="stat-label">Dup groups</div></div>
     <div class="stat"><div class="stat-value">{{ s.n_learned_lines }}</div><div class="stat-label">Auto-filled (memory)</div></div>
+    {% if s.n_refunds %}<div class="stat"><div class="stat-value" style="color:var(--muted);">{{ s.n_refunds }}</div><div class="stat-label">Refunds / credits</div></div>{% endif %}
     {% if s.n_already_posted %}<div class="stat"><div class="stat-value" style="color:var(--posted);">{{ s.n_already_posted }}</div><div class="stat-label">Already in Zoho</div></div>{% endif %}
     {% if s.n_missing_receipt_image %}<div class="stat"><div class="stat-value" style="color:var(--muted);">{{ s.n_missing_receipt_image }}</div><div class="stat-label">No receipt image</div></div>{% endif %}
     {% if s.n_unknown_currency %}<div class="stat"><div class="stat-value" style="color:var(--orange);">{{ s.n_unknown_currency }}</div><div class="stat-label">Unknown currency</div></div>{% endif %}
@@ -204,6 +205,9 @@
   </div>
   {% if s.n_parse_errors %}
   <p class="muted" style="margin-top:10px;">{{ s.n_parse_errors }} row(s) could not be parsed (see "Other checks" at the foot of the page).</p>
+  {% endif %}
+  {% if s.statement_advisory %}
+  <p class="muted" style="margin-top:10px; color:var(--orange);">{{ s.statement_advisory }}</p>
   {% endif %}
 </div>
 
@@ -224,6 +228,7 @@
   {% set sec_matched = view.rows | selectattr('section', 'equalto', 'matched') | list %}
   {% set sec_posted = view.rows | selectattr('section', 'equalto', 'posted') | list %}
   {% set sec_noreceipt = view.rows | selectattr('section', 'equalto', 'noreceipt') | list %}
+  {% set sec_refund = view.rows | selectattr('section', 'equalto', 'refund') | list %}
 
   <details class="bucket" open>
     <summary><span data-i18n="wb_sec_attention">Needs your attention</span> <span class="badge review">{{ sec_attention | length }}</span></summary>
@@ -251,6 +256,14 @@
     {% for row in sec_noreceipt %}{{ txn_row(row) }}{% endfor %}
     {% if not sec_noreceipt %}<p class="muted" data-i18n="wb_sec_empty">Nothing here.</p>{% endif %}
   </details>
+
+  {% if sec_refund %}
+  <details class="bucket">
+    <summary><span data-i18n="wb_sec_refund">Refunds &amp; credits</span> <span class="badge pending">{{ sec_refund | length }}</span></summary>
+    <p class="muted" style="font-size:12px;" data-i18n="wb_sec_refund_note">Payments, returns and reversals from the statement. Never matched to purchase receipts; review them here.</p>
+    {% for row in sec_refund %}{{ txn_row(row) }}{% endfor %}
+  </details>
+  {% endif %}
 </div>
 
 <details class="bucket">
