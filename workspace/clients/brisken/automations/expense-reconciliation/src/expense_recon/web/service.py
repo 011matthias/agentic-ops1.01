@@ -18,6 +18,7 @@ which keeps the layer unit-testable without an HTTP client.
 """
 from __future__ import annotations
 
+import json
 import os
 import uuid
 from dataclasses import dataclass, replace
@@ -204,6 +205,14 @@ def prepare_run(
     fail-fast. Raises `RunInputError` for a user-fixable problem (an
     unmappable statement). No pipeline run and no DB row yet.
 
+    The uploaded statement + receipts are written into
+    `data_root/runs/<run_id>/`, and a self-contained no-API-key
+    `run.local.json` is written beside them so the run dir can be pulled off
+    the volume and reconciled locally with no OpenAI call (the local test
+    loop). Every run-creation path (`POST /runs`, the SPA `POST /api/runs`,
+    and the intake run-from-queue) funnels through here, so uploads from the
+    Lovable UI are persisted and locally reproducible the same way.
+
     `learning_db_path` (Phase 2): when given, confirmed merchant->category
     decisions from prior runs are consulted on the vendor-fallback path so
     a known merchant auto-promotes to Tier-1 LEARNED."""
@@ -261,6 +270,17 @@ def prepare_run(
     # entity not provisioned => cfg unchanged (fail-open). See coa_provision.
     cfg = apply_coa_provisioning(cfg, form.resolve_legal_entity())
 
+    # Local-repro config: write a self-contained `run.local.json` next to the
+    # uploaded files so pulling this run dir off the /data volume (flyctl
+    # sftp) is a one-command, no-API-key local reconciliation. The `llm:` and
+    # `coa_validation:` blocks are stripped: the first so a local run never
+    # calls (and never pays for) the OpenAI API even when a key is present in
+    # the dev env, the second because its chart paths point at /data files a
+    # local machine does not have. The remaining statement/receipts/output
+    # blocks carry relative paths that resolve against this dir on the volume
+    # AND after a local pull. See project_brisken_expense_recon_testing_loop.
+    _write_local_run_config(work_dir, cfg)
+
     learned = match_memory = None
     if learning_db_path is not None:
         learned = MerchantCategoryLookup.from_db_path(learning_db_path)
@@ -280,6 +300,29 @@ def prepare_run(
         operator=operator,
         intake_id=intake_id,
     )
+
+
+LOCAL_RUN_CONFIG_NAME = "run.local.json"
+# Config blocks stripped from the local-repro config: `llm` (never call the
+# paid API from a local test run) and `coa_validation` (its chart paths live
+# on /data, absent locally). Everything else the CLI needs to reconcile
+# deterministically is kept.
+_LOCAL_CONFIG_STRIP = ("llm", "coa_validation")
+
+
+def _write_local_run_config(work_dir: Path, cfg: dict) -> None:
+    """Write a self-contained, no-API-key copy of the run config into the run
+    dir as `run.local.json`, so `expense-recon --config run.local.json` (or
+    `python -m expense_recon.cli --config .../run.local.json`) reproduces the
+    reconciliation locally against the same uploaded files, with no OpenAI
+    call. Best-effort: a write failure never blocks the run."""
+    local = {k: v for k, v in cfg.items() if k not in _LOCAL_CONFIG_STRIP}
+    try:
+        (work_dir / LOCAL_RUN_CONFIG_NAME).write_text(
+            json.dumps(local, indent=2), encoding="utf-8"
+        )
+    except OSError:
+        pass  # provenance still lives in the DB; a missing file is not fatal
 
 
 def _statement_source_advisory(
