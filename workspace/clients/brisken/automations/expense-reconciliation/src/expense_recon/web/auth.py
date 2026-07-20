@@ -45,7 +45,7 @@ ROLES = (ROLE_USER, ROLE_OPERATOR)
 # probe, the favicon, and the packaged static assets (brand CSS/logos the
 # login page itself needs; no client data lives there). Everything else is
 # gated.
-OPEN_PATHS = frozenset({"/login", "/logout", "/healthz", "/favicon.ico"})
+OPEN_PATHS = frozenset({"/login", "/logout", "/api/login", "/healthz", "/favicon.ico"})
 OPEN_PREFIXES = ("/static/",)
 
 # Operator-only surface (testing mode): the pipeline trigger, job polling,
@@ -138,6 +138,20 @@ def code_matches(submitted: str) -> bool:
 
 def cookie_is_secure() -> bool:
     return os.environ.get("EXPENSE_RECON_INSECURE_COOKIE") != "1"
+
+
+def bearer_token(authorization: str | None) -> str | None:
+    """The token from an ``Authorization: Bearer <token>`` header, or None.
+    Lets the SPA front end authenticate cross-origin (no cookie) while the
+    server-rendered pages keep using the session cookie. The token carried
+    is the same one ``issue_token`` mints."""
+    if not authorization:
+        return None
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer":
+        return None
+    token = token.strip()
+    return token or None
 
 
 def path_is_open(path: str) -> bool:

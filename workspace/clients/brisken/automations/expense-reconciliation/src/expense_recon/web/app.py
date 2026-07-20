@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, Form, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -181,18 +182,43 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         role = auth.ROLE_OPERATOR
         if auth.gate_enabled():
             role = auth.token_role(request.cookies.get(auth.COOKIE_NAME))
+            # The SPA front end (Lovable) has no cookie; it authenticates
+            # with the same signed token in an Authorization: Bearer header.
+            if role is None:
+                role = auth.token_role(
+                    auth.bearer_token(request.headers.get("authorization"))
+                )
             if role is None and not auth.path_is_open(request.url.path):
-                if request.method == "GET":
+                # HTML pages redirect a signed-out browser to the login
+                # form; API paths return a JSON 401 the SPA can act on
+                # (clear the token, show its own login screen).
+                if request.method == "GET" and not request.url.path.startswith("/api/"):
                     return RedirectResponse(url="/login", status_code=303)
                 return JSONResponse({"error": "authentication required"}, status_code=401)
         request.state.role = role or auth.ROLE_USER
         if request.state.role != auth.ROLE_OPERATOR and auth.path_requires_operator(
             request.url.path, request.method
         ):
-            if request.method == "GET":
+            if request.method == "GET" and not request.url.path.startswith("/api/"):
                 return RedirectResponse(url="/", status_code=303)
             return JSONResponse({"error": "operator access required"}, status_code=403)
         return await call_next(request)
+
+    # Cross-origin access for the SPA front end (Lovable-built React app)
+    # and local dev. Auth is a Bearer token in the Authorization header,
+    # never a cookie, so no ambient credentials cross the origin and a
+    # scoped allow-list is safe. Added after the gate middleware so it
+    # wraps it and answers the CORS preflight before the gate runs.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=(
+            r"https://([a-z0-9-]+\.)*(lovable\.app|lovableproject\.com|lovable\.dev)"
+            r"|http://localhost(:\d+)?|http://127\.0\.0\.1(:\d+)?"
+        ),
+        allow_methods=["*"],
+        allow_headers=["*"],
+        allow_credentials=False,
+    )
 
     @app.get("/login", response_class=HTMLResponse)
     def login_form(request: Request) -> HTMLResponse:
@@ -222,6 +248,26 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         resp = RedirectResponse(url="/login", status_code=303)
         resp.delete_cookie(auth.COOKIE_NAME)
         return resp
+
+    @app.post("/api/login")
+    async def api_login(request: Request):
+        """Token login for the SPA front end. Returns the same signed
+        session token the cookie carries, for the client to send back as
+        `Authorization: Bearer`. When the gate is disabled (local dev) every
+        caller is the operator, mirroring the cookie login flow."""
+        if not auth.gate_enabled():
+            return JSONResponse(
+                {"token": auth.issue_token(auth.ROLE_OPERATOR), "role": auth.ROLE_OPERATOR}
+            )
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001 - a malformed body is a client error
+            body = {}
+        code = str((body or {}).get("code", ""))
+        role = auth.code_role(code)
+        if role is None:
+            return JSONResponse({"error": "invalid code"}, status_code=401)
+        return JSONResponse({"token": auth.issue_token(role), "role": role})
 
     @app.get("/healthz")
     def healthz():
