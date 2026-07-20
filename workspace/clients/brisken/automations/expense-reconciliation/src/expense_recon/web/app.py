@@ -607,6 +607,88 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             request, background, prepared, form.account_id or "this month"
         )
 
+    @app.post("/api/runs")
+    async def api_post_run(
+        request: Request,
+        background: BackgroundTasks,
+        statement: UploadFile,
+        receipts: UploadFile,
+        account_id: str = Form(""),
+        account_legal_entities: str = Form(""),
+        account_card_currency: str = Form("USD"),
+        sheet_name: str = Form(""),
+        receipts_source: str = Form("csv"),
+        receipts_default_currency: str = Form(""),
+        use_llm: str = Form(""),
+        expense_column_map: str = Form(""),
+        map_transaction_date: str = Form(""),
+        map_amount: str = Form(""),
+        map_vendor: str = Form(""),
+        map_posting_date: str = Form(""),
+        map_transaction_currency: str = Form(""),
+        card_key: str = Form(""),
+    ):
+        """JSON twin of POST /runs for the SPA front end: upload statement +
+        receipts, validate synchronously, kick the pipeline in the
+        background, return {job_id}. The SPA polls GET /jobs/{job_id} until
+        status flips to "done" (then navigates to /runs/{run_id}) or
+        "error". A user-fixable input problem is a JSON 400, not an HTML
+        form re-render. Always async (no sync seam): the SPA is built to
+        poll."""
+        try:
+            form = _parse_run_form(
+                account_id=account_id,
+                account_legal_entities=account_legal_entities,
+                account_card_currency=account_card_currency,
+                sheet_name=sheet_name,
+                receipts_source=receipts_source,
+                receipts_default_currency=receipts_default_currency,
+                use_llm=use_llm,
+                expense_column_map=expense_column_map,
+                map_transaction_date=map_transaction_date,
+                map_amount=map_amount,
+                map_vendor=map_vendor,
+                map_posting_date=map_posting_date,
+                map_transaction_currency=map_transaction_currency,
+                card_key=card_key,
+            )
+        except RunInputError as exc:
+            return JSONResponse({"error": exc.message}, status_code=400)
+
+        statement_bytes = await statement.read()
+        receipts_bytes = await receipts.read()
+        if not statement_bytes:
+            return JSONResponse(
+                {"error": "No statement file uploaded."}, status_code=400
+            )
+        if not receipts_bytes:
+            return JSONResponse(
+                {"error": "No receipts file uploaded."}, status_code=400
+            )
+
+        try:
+            prepared = prepare_run(
+                app.state.data_root,
+                statement_bytes=statement_bytes,
+                statement_filename=statement.filename or "statement.csv",
+                receipts_bytes=receipts_bytes,
+                receipts_filename=receipts.filename or "receipts.csv",
+                form=form,
+                now_iso=_now_iso(),
+                operator=_operator(),
+                learning_db_path=app.state.learning_db_path,
+            )
+        except RunInputError as exc:
+            return JSONResponse({"error": exc.message}, status_code=400)
+
+        job_id = uuid.uuid4().hex[:12]
+        with open_store() as store:
+            store.create_job(job_id, prepared.intake_id, _now_iso())
+        background.add_task(_run_job, app.state.db_path, job_id, prepared)
+        return JSONResponse(
+            {"job_id": job_id, "label": form.account_id or "this month"}
+        )
+
     # ── Operator: run the pipeline on a stored intake ──────────────────
     @app.get("/intakes/{intake_id}/prepare", response_class=HTMLResponse)
     def intake_prepare(request: Request, intake_id: str):
