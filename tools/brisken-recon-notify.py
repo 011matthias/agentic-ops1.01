@@ -11,9 +11,15 @@ publish, or via a scheduled task every ~15 min), polls the app's
 operator-state endpoint and sends the notification mails via
 Microsoft Graph:
 
-* new intake (user uploaded documents)  -> mail the dev
-* newly published run (result is ready) -> mail the user (Chris) + dev
+* new operator run ("run now" upload)    -> mail the dev
+* new intake (legacy user-upload flow)   -> mail the dev
+* newly published run (result is ready)  -> mail the user (Chris) + dev
 * new reviewer feedback (double-click widget) -> mail the dev
+
+Since 2026-07-20 the separate user page is gone and Criss uploads via the
+operator "run now" form, which creates a run (not an intake). The
+operator-run ping is what makes that upload visible; the older intake path
+is kept but is dormant while no user page exists.
 
 State (which intakes/publishes were already announced) lives in a local
 gitignored JSON file, so re-runs never double-send.
@@ -75,6 +81,22 @@ def diff_state(state: dict, remote: dict) -> tuple[list[dict], list[dict]]:
     return new_intakes, new_publishes
 
 
+def diff_runs(state: dict, remote: dict) -> list[dict]:
+    """Pure diff: operator runs not yet announced to the dev.
+
+    `state["seen_runs"]` holds run ids already announced. An operator
+    "run now" upload creates a run (initially unpublished) that is neither
+    an intake nor a published run, so it was invisible to `diff_state`;
+    this surfaces it. A run is announced ONCE, on first sight, whatever its
+    published flag, so publishing it later still fires the separate
+    user-facing "ready" ping without re-announcing to the dev.
+    """
+    seen = set(state.get("seen_runs", []))
+    return [
+        r for r in remote.get("operator_runs", []) if r.get("run_id") not in seen
+    ]
+
+
 def diff_feedback(state: dict, remote: dict) -> int:
     """Pure diff: how many reviewer-feedback notes are new since last pass.
 
@@ -93,6 +115,13 @@ def apply_to_state(state: dict, remote: dict) -> dict:
         "seen_intakes": sorted(
             {i.get("intake_id") for i in remote.get("intakes", []) if i.get("intake_id")}
         ),
+        "seen_runs": sorted(
+            {
+                r.get("run_id")
+                for r in remote.get("operator_runs", [])
+                if r.get("run_id")
+            }
+        ),
         "seen_published": sorted(
             {
                 r.get("run_id")
@@ -102,6 +131,26 @@ def apply_to_state(state: dict, remote: dict) -> dict:
         ),
         "seen_feedback_count": int((remote.get("feedback") or {}).get("count", 0)),
     }
+
+
+def baseline_new_run_tracking(state: dict, remote: dict) -> dict:
+    """One-time migration for a state file written before operator-run
+    tracking existed. Such a file has the other seen_* keys but no
+    `seen_runs`; without this, the first upgraded pass would announce the
+    ENTIRE run backlog to the dev. Baseline the currently-visible runs as
+    seen so only runs created AFTER the upgrade are announced. A truly
+    fresh state ({}) is left untouched, so the first-ever run still catches
+    up on everything, matching the intake / published behaviour."""
+    if state and "seen_runs" not in state:
+        state = dict(state)
+        state["seen_runs"] = sorted(
+            {
+                r.get("run_id")
+                for r in remote.get("operator_runs", [])
+                if r.get("run_id")
+            }
+        )
+    return state
 
 
 def load_env_file(path: Path) -> None:
@@ -218,15 +267,38 @@ def main() -> int:
     state = {}
     if args.state.exists():
         state = json.loads(args.state.read_text(encoding="utf-8"))
+    state = baseline_new_run_tracking(state, remote)
     new_intakes, new_publishes = diff_state(state, remote)
+    new_runs = diff_runs(state, remote)
     new_feedback = diff_feedback(state, remote)
 
-    if not new_intakes and not new_publishes and not new_feedback:
+    if not new_intakes and not new_runs and not new_publishes and not new_feedback:
         print("nothing new")
         return 0
 
     user_email = os.environ.get("EXPENSE_RECON_NOTIFY_USER", "").strip()
     plans: list[tuple[str, str, tuple[str, ...]]] = []
+    for r in new_runs:
+        matched = r.get("n_matched")
+        total = r.get("n_transactions")
+        rate = r.get("match_rate")
+        result = (
+            f"{matched}/{total} charges matched"
+            if matched is not None and total is not None
+            else "result ready"
+        )
+        if rate is not None:
+            result += f" ({rate}% match rate)"
+        subject = f"Expense recon: new run - {r.get('label', '?')}"
+        body = (
+            f"A new reconciliation was run in the expense tool.\n\n"
+            f"What: {r.get('label')}\n"
+            f"When: {r.get('created_at')}\n"
+            f"Result: {result}\n"
+            + ("Status: not yet published to the user\n" if not r.get("published") else "")
+            + f"\nReview it: {BASE_URL}/runs/{r.get('run_id')}\n"
+        )
+        plans.append((subject, body, DEV_RECIPIENTS))
     for i in new_intakes:
         subject = f"Expense recon: new upload - {i.get('label', '?')}"
         body = (
