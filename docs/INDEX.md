@@ -10,6 +10,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-20 | Brisken Expense-Recon FX + Notifier | client-dev | [Checkpoint](docs/2026-07-20%20-%20Brisken%20Expense-Recon%20FX%20%2B%20Notifier/Checkpoint.md) |
 | 2026-07-17 | Brisken Deck Use-Case Elaboration | client-dev | [Checkpoint](docs/2026-07-17%20-%20Brisken%20Deck%20Use-Case%20Elaboration/Checkpoint.md) |
 | 2026-07-17 | Brisken Planner Sync + Ashok Rethread | comms | [Checkpoint](docs/2026-07-17%20-%20Brisken%20Planner%20Sync%20%2B%20Ashok%20Rethread/Checkpoint.md) |
 | 2026-07-17 | Brisken Lead Desk GA Active Tier | client-dev | [Checkpoint](docs/2026-07-17%20-%20Brisken%20Lead%20Desk%20GA%20Active%20Tier/Checkpoint.md) |

@@ -4,7 +4,7 @@ workstream: p1-expense-reconciliation
 group: ""
 spec: p1
 state: active
-updated: 2026-07-17
+updated: 2026-07-20
 ---
 
 # Brisken / Expense Reconciliation (p1)
@@ -32,6 +32,8 @@ this table is the index, not a second record.
 | Receipt OCR (vision + PDF text) | done | BLUEPRINT slice 2 |
 | LLM categorizer (gpt-4o-mini, OpenAI Brisken key) | live | BLUEPRINT "Provider Pivot" |
 | Deterministic matcher | done | BLUEPRINT slice 3 |
+| Sign canonicalization + refunds bucket + deterministic FX (Tier-1) | done (PR #285) | BLUEPRINT 3.15; no-LLM 0/36->29/36 on Criss's April |
+| Dev notifier: operator "run now" uploads fire an email | code-done (PR #288), NOT scheduled | `tools/brisken-recon-notify.py`; user must register schtasks task |
 | Cross-run memory (Phase 2) | in-progress | BLUEPRINT Phase 2 |
 | Review workbench (web, Fly-hosted) | live | BLUEPRINT; brisken-expense-recon.fly.dev |
 | Zoho journal CSV export | in-progress | BLUEPRINT slice 4 |
