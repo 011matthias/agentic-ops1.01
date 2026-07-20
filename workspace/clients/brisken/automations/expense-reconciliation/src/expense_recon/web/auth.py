@@ -57,6 +57,7 @@ OPEN_PREFIXES = ("/static/",)
 # handlers, not here.
 _OPERATOR_RULES: tuple[tuple[re.Pattern, frozenset | None], ...] = (
     (re.compile(r"^/runs$"), frozenset({"POST"})),
+    (re.compile(r"^/api/runs$"), frozenset({"POST"})),  # SPA run kickoff
     (re.compile(r"^/jobs/"), None),
     (re.compile(r"^/compare$"), None),
     (re.compile(r"^/memory($|/)"), None),
