@@ -16,6 +16,7 @@ reconciliation guarantee. Pure functions; no LLM, no I/O.
 """
 from __future__ import annotations
 
+import hashlib
 import re
 from collections import defaultdict
 from datetime import date
@@ -24,6 +25,19 @@ from .matching.types import Receipt, Transaction
 
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
 _MIN_DATE = date.min
+
+
+def duplicate_group_id(kind: str, member_ids: list[str]) -> str:
+    """A stable, content-derived id for one duplicate group (§18).
+
+    The id is a hash of the group's KIND (`charge` / `receipt`) plus its
+    sorted member ids, so the same group yields the same id across
+    re-renders of a run (the reviewer's resolution keyed on it survives a
+    reload). Membership-order-independent; kind-scoped so a charge group and
+    a receipt group that happen to share ids never collide.
+    """
+    payload = f"{kind}:" + "|".join(sorted(member_ids))
+    return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
 
 
 def _norm_vendor(v: str | None) -> str:

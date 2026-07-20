@@ -69,6 +69,14 @@ INTAKE_PROCESSING = "processing"
 INTAKE_READY = "ready"
 VALID_INTAKE_STATUSES = (INTAKE_RECEIVED, INTAKE_PROCESSING, INTAKE_READY)
 
+# §18 duplicate-group resolutions. A reviewer's advisory verdict on a
+# flagged duplicate group: `ignore` (dismiss the flag; not really a
+# duplicate) or `confirmed` (yes, acknowledged). Advisory only — it never
+# touches buckets, never auto-deletes. Absent => still flagged / unresolved.
+DUP_IGNORE = "ignore"
+DUP_CONFIRMED = "confirmed"
+VALID_DUP_RESOLUTIONS = (DUP_IGNORE, DUP_CONFIRMED)
+
 # §16 export policy (the single-row `settings` table). The gate ships
 # advisory/OFF: `export_approved_only=False` keeps the current
 # review-everything behaviour (only the writer's own posting policy
@@ -205,6 +213,13 @@ class RunStore:
                 id         INTEGER PRIMARY KEY CHECK (id = 1),
                 data       TEXT NOT NULL,
                 updated_at TEXT
+            );
+            CREATE TABLE IF NOT EXISTS duplicate_resolutions (
+                run_id     TEXT NOT NULL,
+                group_id   TEXT NOT NULL,
+                resolution TEXT NOT NULL,
+                updated_at TEXT,
+                PRIMARY KEY (run_id, group_id)
             );
             """
         )
@@ -619,6 +634,33 @@ class RunStore:
         ).fetchone()
         data = json.loads(row["data"]) if row else {}
         return {**SETTINGS_DEFAULTS, **data}
+
+    # -- duplicate resolutions (§18; advisory, per run + group) -----------
+
+    def get_duplicate_resolutions(self, run_id: str) -> dict[str, str]:
+        """group_id -> resolution for a run. Absent groups are unresolved."""
+        rows = self.conn.execute(
+            "SELECT group_id, resolution FROM duplicate_resolutions "
+            "WHERE run_id = ?",
+            (run_id,),
+        ).fetchall()
+        return {r["group_id"]: r["resolution"] for r in rows}
+
+    def set_duplicate_resolution(
+        self, run_id: str, group_id: str, resolution: str, updated_at: str
+    ) -> None:
+        if resolution not in VALID_DUP_RESOLUTIONS:
+            raise ValueError(
+                f"invalid resolution {resolution!r}; expected {VALID_DUP_RESOLUTIONS}"
+            )
+        self.conn.execute(
+            "INSERT INTO duplicate_resolutions (run_id, group_id, resolution, "
+            "updated_at) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(run_id, group_id) DO UPDATE SET "
+            "resolution = excluded.resolution, updated_at = excluded.updated_at",
+            (run_id, group_id, resolution, updated_at),
+        )
+        self.conn.commit()
 
     def set_settings(self, patch: dict, updated_at: str) -> dict:
         """Merge `patch` into the stored settings (shallow) and return the
