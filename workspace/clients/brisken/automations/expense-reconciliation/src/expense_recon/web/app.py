@@ -74,6 +74,7 @@ from .store import (
     JOB_ERROR,
     STATUS_CONFIRMED,
     VALID_DISPOSITIONS,
+    VALID_DUP_RESOLUTIONS,
     VALID_STATUSES,
     RunStore,
 )
@@ -1018,7 +1019,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 return HTMLResponse("Run not found", status_code=404)
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
-        view = build_view(run, decisions, overrides)
+            resolutions = store.get_duplicate_resolutions(run_id)
+        view = build_view(run, decisions, overrides, resolutions)
         return templates.TemplateResponse(
             request, "workbench.html", {"view": view, "run": run}
         )
@@ -1037,9 +1039,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 return JSONResponse({"error": "run not found"}, status_code=404)
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
-        view = build_view(run, decisions, overrides)
+            resolutions = store.get_duplicate_resolutions(run_id)
+        view = build_view(run, decisions, overrides, resolutions)
         # build_view already carries run_id, label, summary, rows,
-        # unmatched_*, category_options: return it as the SPA render model.
+        # unmatched_*, duplicate_groups, category_options: return it as the
+        # SPA render model.
         return JSONResponse(jsonable_encoder(view))
 
     @app.post("/runs/{run_id}/decisions")
@@ -1081,6 +1085,30 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
         view = build_view(run, decisions, overrides)
+        return JSONResponse({"ok": True, "summary": view["summary"]})
+
+    # §18 duplicate resolve. Advisory: records the reviewer's verdict on a
+    # flagged duplicate group (ignore / confirmed); never touches buckets or
+    # the invariant, never deletes. Accepts either the backend-native
+    # {group_id, resolution} or the SPA contract's {group_id, action}.
+    # Registered on both the /api surface and the bare /runs family.
+    @app.post("/api/runs/{run_id}/duplicates/resolve")
+    @app.post("/runs/{run_id}/duplicates/resolve")
+    async def post_duplicate_resolve(run_id: str, request: Request):
+        body = await request.json()
+        group_id = body.get("group_id") or body.get("group_key")
+        resolution = body.get("resolution") or body.get("action")
+        if not group_id or resolution not in VALID_DUP_RESOLUTIONS:
+            return JSONResponse({"error": "bad request"}, status_code=400)
+        with open_store() as store:
+            run = _visible_run(store, request, run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found"}, status_code=404)
+            store.set_duplicate_resolution(run_id, group_id, resolution, _now_iso())
+            decisions = store.get_decisions(run_id)
+            overrides = store.get_category_overrides(run_id)
+            resolutions = store.get_duplicate_resolutions(run_id)
+        view = build_view(run, decisions, overrides, resolutions)
         return JSONResponse({"ok": True, "summary": view["summary"]})
 
     # §16 export policy. GET is readable by any logged-in role (reference);

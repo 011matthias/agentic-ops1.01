@@ -3,12 +3,36 @@ from datetime import date
 from decimal import Decimal
 
 from expense_recon.duplicates import (
+    duplicate_group_id,
     find_duplicate_charges,
     find_duplicate_receipts,
 )
 from expense_recon.matching.types import Receipt, Transaction
 
 LE = "le"
+
+
+# ── §18 stable group id ──────────────────────────────────────────────
+
+
+def test_group_id_is_member_order_independent():
+    assert duplicate_group_id("charge", ["t2", "t1"]) == duplicate_group_id(
+        "charge", ["t1", "t2"]
+    )
+
+
+def test_group_id_is_kind_scoped():
+    """A charge group and a receipt group with the same member ids get
+    distinct ids, so their resolutions never collide."""
+    assert duplicate_group_id("charge", ["a", "b"]) != duplicate_group_id(
+        "receipt", ["a", "b"]
+    )
+
+
+def test_group_id_distinguishes_membership():
+    assert duplicate_group_id("charge", ["a", "b"]) != duplicate_group_id(
+        "charge", ["a", "c"]
+    )
 
 
 def tx(tid, amount, d, vendor="ACME", currency="USD"):

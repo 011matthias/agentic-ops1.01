@@ -28,7 +28,11 @@ from pathlib import Path
 from .. import inspect as stmt_inspect
 from ..cli import ConfigError, reconcile
 from ..coa_provision import apply_to_config as apply_coa_provisioning
-from ..duplicates import find_duplicate_charges, find_duplicate_receipts
+from ..duplicates import (
+    duplicate_group_id,
+    find_duplicate_charges,
+    find_duplicate_receipts,
+)
 from ..matching.types import (
     Categorization,
     ClassificationSource,
@@ -1090,10 +1094,20 @@ def _dispositions(
     return out
 
 
-def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> dict:
+def build_view(
+    run: RunRow,
+    decisions: dict[str, Decision],
+    overrides: dict,
+    resolutions: dict[str, str] | None = None,
+) -> dict:
     """Compose the render model: per-transaction rows with candidates and
     the reviewer's effective verdict, plus the unmatched-receipt list and
-    a decision-aware summary."""
+    a decision-aware summary.
+
+    `resolutions` (§18, group_id -> `ignore`/`confirmed`) attaches the
+    reviewer's advisory verdict to each duplicate group in the SPA-facing
+    `duplicate_groups` list. None => every group unresolved; advisory only,
+    it never touches buckets or the invariant."""
     transactions, receipts, outcome, parse_errors = snapshot_from_dict(run.snapshot)
     rec_by_id = {r.document_id: r for r in receipts}
     by_tx = _candidates_by_tx(outcome)
@@ -1439,6 +1453,32 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
         for grp in find_duplicate_receipts(receipts)
     ]
 
+    # §18: a flat, SPA-facing view of the duplicate groups with a stable,
+    # content-derived group_id and the reviewer's advisory resolution. The
+    # legacy `duplicate_charges` / `duplicate_receipts` lists above stay
+    # exactly as-is for the Jinja workbench; this is additive. Advisory
+    # only — a resolution never changes a bucket or the invariant.
+    resolutions = resolutions or {}
+    duplicate_groups = []
+    for grp in find_duplicate_charges(transactions):
+        members = [tid for tid in grp if tid in tx_by_id]
+        gid = duplicate_group_id("charge", members)
+        duplicate_groups.append({
+            "group_id": gid,
+            "kind": "charge",
+            "members": members,
+            "resolution": resolutions.get(gid),
+        })
+    for grp in find_duplicate_receipts(receipts):
+        members = [d for d in grp if d in rec_by_id]
+        gid = duplicate_group_id("receipt", members)
+        duplicate_groups.append({
+            "group_id": gid,
+            "kind": "receipt",
+            "members": members,
+            "resolution": resolutions.get(gid),
+        })
+
     n_tx = len(transactions)
     n_unknown_currency = sum(1 for r in receipts if r.detected_currency is None)
     # L4 noise guard: the missing-image badge renders only when this run's
@@ -1501,6 +1541,7 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
         "assignable_receipts": assignable_receipts,
         "duplicate_charges": duplicate_charges,
         "duplicate_receipts": duplicate_receipts,
+        "duplicate_groups": duplicate_groups,
         "category_options": list(EXPENSE_CATEGORIES),
         "parse_errors": parse_errors,
         # L3: xlsx statements can be written back with the resolved accounts.
