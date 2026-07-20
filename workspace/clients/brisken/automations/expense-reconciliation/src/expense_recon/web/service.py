@@ -383,6 +383,16 @@ def execute_run(
             on_stage("saving")
         except Exception:  # noqa: BLE001
             pass
+    # §16: snapshot the live export policy into the run config so the run
+    # reproduces under the policy that was in effect when it ran, not
+    # whatever the setting later becomes. Absent/False => current behaviour.
+    settings = store.get_settings()
+    cfg = {
+        **prepared.cfg,
+        "policy": {
+            "export_approved_only": bool(settings.get("export_approved_only")),
+        },
+    }
     store.create_run(
         run_id=prepared.run_id,
         created_at=prepared.now_iso,
@@ -390,7 +400,7 @@ def execute_run(
         operator=prepared.operator,
         summary=summary,
         snapshot=snapshot,
-        config=prepared.cfg,
+        config=cfg,
         work_dir=str(prepared.work_dir),
         llm_enabled=prepared.use_llm_effective,
         has_coa=result.chart_of_accounts is not None,
@@ -1588,6 +1598,21 @@ def regenerate_zoho(
             effective,
             matches=[
                 m for m in effective.matches if m.transaction_id not in posted_ids
+            ],
+        )
+    # §16 export-approved gate: when the run's snapshotted policy requires
+    # it, only reviewer-CONFIRMED matches export; a still-pending auto-match
+    # is withheld from the journal (it stays visible in the report /
+    # reconciled CSV). Default (absent / False) => the current behaviour,
+    # where the writer's own posting policy is the only filter.
+    if (run.config or {}).get("policy", {}).get("export_approved_only"):
+        confirmed_ids = {
+            tid for tid, d in decisions.items() if d.status == STATUS_CONFIRMED
+        }
+        effective = replace(
+            effective,
+            matches=[
+                m for m in effective.matches if m.transaction_id in confirmed_ids
             ],
         )
     out_path = Path(run.work_dir) / "zoho_journal.csv"

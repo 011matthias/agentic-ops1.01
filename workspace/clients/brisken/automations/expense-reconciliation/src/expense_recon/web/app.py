@@ -1083,6 +1083,25 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         view = build_view(run, decisions, overrides)
         return JSONResponse({"ok": True, "summary": view["summary"]})
 
+    # §16 export policy. GET is readable by any logged-in role (reference);
+    # PUT is operator-only (enforced in auth._OPERATOR_RULES). The policy is
+    # snapshotted into each new run's config at creation, so changing it
+    # affects future runs, never re-writes a run already produced.
+    @app.get("/api/settings")
+    def api_get_settings(request: Request):
+        with open_store() as store:
+            return JSONResponse(store.get_settings())
+
+    @app.put("/api/settings")
+    async def api_put_settings(request: Request):
+        body = await request.json()
+        patch: dict = {}
+        if "export_approved_only" in body:
+            patch["export_approved_only"] = bool(body["export_approved_only"])
+        with open_store() as store:
+            settings = store.set_settings(patch, _now_iso())
+        return JSONResponse(settings)
+
     @app.post("/runs/{run_id}/decisions/confirm-matched")
     def post_confirm_matched(run_id: str, request: Request):
         # PR A — one click confirms every matched-bucket transaction with
