@@ -14,10 +14,12 @@ export const meta = {
 
 // args: { client: 'meji-media', date: 'YYYY-MM-DD', agents?: 12 }
 // date comes from the invoker because Date.now() is unavailable in workflow scripts.
-const client = args && args.client
-const runDate = args && args.date
-if (!client || !runDate) throw new Error('args {client, date} required')
-const maxLenses = (args && args.agents) || 12
+// Some invocation paths deliver args as a JSON string; normalize before reading.
+const A = typeof args === 'string' ? JSON.parse(args) : (args || {})
+const client = A.client
+const runDate = A.date
+if (!client || !runDate) throw new Error(`args {client, date} required (got: ${JSON.stringify(args).slice(0, 200)})`)
+const maxLenses = A.agents || 12
 
 const ROOT = `workspace/clients/${client}/context`
 const RO = 'HARD CONSTRAINT (B5): read-only against every live system. GET and read-style POST list endpoints only. Never POST/PUT/PATCH/DELETE mutations, never send or schedule email, never modify campaigns, leads, scenarios, data stores, or DNS. If a check would need a mutation, report it as a gated candidate instead of performing it.'
