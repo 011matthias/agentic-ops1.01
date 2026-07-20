@@ -242,3 +242,63 @@ def test_unparseable_transaction_id_skipped(tmp_path):
         ws.cell(row=r, column=4).value for r in range(2, ws.max_row + 1)
     ]
     assert written == [None, None, "(no receipt matched)"]
+
+
+# ── Slice 10: charge categorization on the unmatched rows ────────────
+
+
+def _charge_cat(source=ClassificationSource.LEARNED, account="Other Infra and IT Costs for Cloud Business"):
+    return Categorization(
+        category="Software & Subscriptions", zoho_account=account,
+        confidence=1.0, source=source, reasoning="t",
+    )
+
+
+def test_learned_charge_writes_its_account_verbatim(tmp_path):
+    src = tmp_path / "chris.xlsx"
+    _write_workbook(src)
+    outcome = MatchOutcome(unmatched_transactions=["card-1:2"])
+
+    out = write_sheet_writeback(
+        src, tmp_path / "out.xlsx", outcome, [_tx(2)], [],
+        charge_categorizations={"card-1:2": _charge_cat()},
+    )
+
+    ws = load_workbook(out).active
+    assert ws.cell(row=2, column=4).value == "Other Infra and IT Costs for Cloud Business"
+
+
+def test_vendor_guess_carries_confirm_marker(tmp_path):
+    src = tmp_path / "chris.xlsx"
+    _write_workbook(src)
+    outcome = MatchOutcome(unmatched_transactions=["card-1:2"])
+
+    out = write_sheet_writeback(
+        src, tmp_path / "out.xlsx", outcome, [_tx(2)], [],
+        charge_categorizations={
+            "card-1:2": _charge_cat(
+                source=ClassificationSource.VENDOR, account=None
+            )
+        },
+    )
+
+    ws = load_workbook(out).active
+    assert ws.cell(row=2, column=4).value == "Software & Subscriptions (confirm)"
+
+
+def test_review_charge_keeps_no_receipt_placeholder(tmp_path):
+    src = tmp_path / "chris.xlsx"
+    _write_workbook(src)
+    outcome = MatchOutcome(unmatched_transactions=["card-1:2"])
+    review = Categorization(
+        category=None, zoho_account=None, confidence=0.0,
+        source=ClassificationSource.REVIEW, reasoning="no signal",
+    )
+
+    out = write_sheet_writeback(
+        src, tmp_path / "out.xlsx", outcome, [_tx(2)], [],
+        charge_categorizations={"card-1:2": review},
+    )
+
+    ws = load_workbook(out).active
+    assert ws.cell(row=2, column=4).value == "(no receipt matched)"

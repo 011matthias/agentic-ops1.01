@@ -9,6 +9,9 @@ lands BEFORE any consult path (2b/2c) reads the store.
     expense-recon memory reset --yes                                      # apply
     expense-recon memory seed-zoho --entity "Corporate Services" --org 822741658 \
         [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--dry-run]             # L2 seed
+    expense-recon memory set "Anthropic" --entity "Corporate Services" \
+        --category "Software & Subscriptions" \
+        --account "Other Infra and IT Costs for Cloud Business"          # standing rule
 
 The store defaults to `<EXPENSE_RECON_WEB_DATA>/learning.sqlite` (same dir
 the web workbench writes), overridable with `--db PATH`. A vendor argument
@@ -22,6 +25,14 @@ account becomes a learned row with `zoho_account` = the real Books account
 name and `category` = a keyword-mapped one of the tool's 8 categories.
 Runs DEV-SIDE only (Zoho creds from the gitignored client context/.env,
 never on the server).
+
+`set` (Slice 10) authors ONE standing vendor -> category/account rule
+directly, for a vendor that has no Zoho posting history yet (the canonical
+case: Anthropic -> "Other Infra and IT Costs for Cloud Business", a
+standing instruction from Nicolas). The rule lands as a normal
+merchant_category row (source_run "manual-set"), so the charge categorizer
+recalls it as Tier-1 LEARNED and `forget` / `reset` correct it the same
+way as any learned row.
 """
 from __future__ import annotations
 
@@ -34,6 +45,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .learning import LearningStore, normalize_vendor
+from .matching.types import EXPENSE_CATEGORIES
 from .zoho.client import ZohoAPIError, ZohoAuthError, ZohoClient, ZohoConfig
 
 _DEFAULT_DATA = "recon-web-data"
@@ -136,6 +148,45 @@ def cmd_reset(args) -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
     print("reset done: " + ", ".join(f"{t} {n}" for t, n in counts.items()))
+    return 0
+
+
+def cmd_set(args) -> int:
+    """Author one standing vendor -> category/account rule (Slice 10)."""
+    if args.category not in EXPENSE_CATEGORIES:
+        print(
+            f"ERROR: category {args.category!r} is not one of the tool's "
+            f"{len(EXPENSE_CATEGORIES)} categories:",
+            file=sys.stderr,
+        )
+        for c in EXPENSE_CATEGORIES:
+            print(f"  {c}", file=sys.stderr)
+        return 2
+    vendor_norm = normalize_vendor(args.vendor)
+    if not vendor_norm:
+        print(
+            f"vendor {args.vendor!r} normalizes to empty; nothing to set",
+            file=sys.stderr,
+        )
+        return 2
+    db = _resolve_db(args)
+    db.parent.mkdir(parents=True, exist_ok=True)
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    with LearningStore(db) as s:
+        s.record_merchant_category(
+            args.entity, vendor_norm, args.category, args.account, now, "manual-set"
+        )
+    acct = f"  [{args.account}]" if args.account else ""
+    print(
+        f"set '{vendor_norm}' -> {args.category}{acct}  (entity: {args.entity})\n"
+        f"db: {db}"
+    )
+    if not args.account:
+        print(
+            "note: no --account given; the rule carries the category only. "
+            "Add --account with the real Zoho Books account name to make the "
+            "charge postable through the COA gate."
+        )
     return 0
 
 
@@ -372,6 +423,19 @@ def main(argv: list[str]) -> int:
     p_reset.add_argument("--yes", action="store_true", help="actually delete (default is preview)")
     _add_common(p_reset)
 
+    p_set = sub.add_parser(
+        "set",
+        help="author a standing vendor -> category/account rule directly",
+    )
+    p_set.add_argument("vendor", help="vendor name (as it appears; normalized internally)")
+    p_set.add_argument("--category", required=True,
+                       help="one of the tool's 8 expense categories (exact)")
+    p_set.add_argument("--account",
+                       help="Zoho Books account name to post to (recommended)")
+    p_set.add_argument("--entity", required=True,
+                       help="legal_entity_id the rule applies under")
+    p_set.add_argument("--db", type=Path, help="path to learning.sqlite directly")
+
     p_seed = sub.add_parser(
         "seed-zoho",
         help="seed merchant memory from Zoho Books posting history (dev-side)",
@@ -391,6 +455,8 @@ def main(argv: list[str]) -> int:
         return cmd_forget(args)
     if args.command == "reset":
         return cmd_reset(args)
+    if args.command == "set":
+        return cmd_set(args)
     if args.command == "seed-zoho":
         return cmd_seed_zoho(args)
     parser.print_help()

@@ -111,6 +111,7 @@ def write_report(
     parse_errors: list[tuple[str, int, str]] | None = None,
     llm_cost: Decimal | None = None,
     explain: bool = False,
+    charge_categorizations: dict[str, Categorization] | None = None,
 ) -> Path:
     """Write the LD-3 reconciliation report.
 
@@ -121,14 +122,18 @@ def write_report(
     `explain` (A8) appends an "Explain" sheet: one row per transaction
     with its outcome bucket, confidence, and the scoring / judgment
     reason — the "why did (not) this match" debugging trail.
+    `charge_categorizations` (Slice 10 side-map, transaction_id →
+    Categorization) puts a category + source + account on the unmatched
+    (receiptless) transaction rows; None => prior behaviour.
     """
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     tx_by_id = {tx.transaction_id: tx for tx in transactions}
     rec_by_id = {r.document_id: r for r in receipts}
+    charge_cats = charge_categorizations or {}
 
-    rows = _build_rows(outcome, tx_by_id, rec_by_id)
+    rows = _build_rows(outcome, tx_by_id, rec_by_id, charge_cats)
     rows_by_card = _group_by_card(rows)
 
     wb = Workbook()
@@ -138,7 +143,7 @@ def write_report(
     for card in sorted(rows_by_card):
         _write_card_tab(wb, card, rows_by_card[card])
     _write_needs_review(wb, rows)
-    _write_unmatched(wb, outcome, tx_by_id, rec_by_id)
+    _write_unmatched(wb, outcome, tx_by_id, rec_by_id, charge_cats)
     _write_errors(wb, parse_errors or [])
     if explain:
         _write_explain(wb, outcome, transactions)
@@ -154,6 +159,7 @@ def _build_rows(
     outcome: MatchOutcome,
     tx_by_id: dict[str, Transaction],
     rec_by_id: dict[str, Receipt],
+    charge_cats: dict[str, Categorization] | None = None,
 ) -> list[_Row]:
     """Expand the matching outcome into per-line-item Excel rows.
 
@@ -215,7 +221,7 @@ def _build_rows(
         tx = tx_by_id.get(tx_id)
         if tx is None:
             continue
-        rows.append(_unmatched_tx_row(tx))
+        rows.append(_unmatched_tx_row(tx, (charge_cats or {}).get(tx_id)))
 
     return rows
 
@@ -294,7 +300,30 @@ def _rows_from_match(
     return out
 
 
-def _unmatched_tx_row(tx: Transaction) -> _Row:
+def _unmatched_tx_row(
+    tx: Transaction, charge_cat: Categorization | None = None
+) -> _Row:
+    """One row per receiptless charge. With a Slice-10 charge
+    categorization, the row carries the category / account / source
+    (LEARNED colors blue, VENDOR yellow) instead of a bare REVIEW row;
+    the provenance rides in the note so Criss sees WHY."""
+    if charge_cat is not None and charge_cat.category:
+        note = "Unmatched transaction · categorized from statement description"
+        if charge_cat.reasoning:
+            note = f"{note} · {charge_cat.reasoning}"
+        return _Row(
+            card=tx.account_id,
+            date=tx.transaction_date,
+            vendor=tx.vendor_from_statement,
+            line_description="(no receipt)",
+            quantity=None,
+            amount=tx.amount,
+            category=charge_cat.category,
+            source=charge_cat.source,
+            zoho_account=charge_cat.zoho_account,
+            note=note,
+            transaction_id=tx.transaction_id,
+        )
     return _Row(
         card=tx.account_id,
         date=tx.transaction_date,
@@ -545,24 +574,38 @@ def _write_unmatched(
     outcome: MatchOutcome,
     tx_by_id: dict[str, Transaction],
     rec_by_id: dict[str, Receipt],
+    charge_cats: dict[str, Categorization] | None = None,
 ) -> None:
     ws = wb.create_sheet("Unmatched")
+    charge_cats = charge_cats or {}
 
     ws.append(["Unmatched transactions"])
     ws.cell(row=ws.max_row, column=1).font = HEADER_FONT
-    _write_header_row(ws, ("Card", "Date", "Vendor", "Amount", "Currency"), start_row=2)
+    _write_header_row(
+        ws,
+        ("Card", "Date", "Vendor", "Amount", "Currency", "Category", "Zoho A/C", "Source"),
+        start_row=2,
+    )
     for tx_id in outcome.unmatched_transactions:
         tx = tx_by_id.get(tx_id)
         if tx is None:
             continue
+        cat = charge_cats.get(tx_id)
+        has_cat = cat is not None and bool(cat.category)
         ws.append([
             tx.account_id,
             tx.transaction_date.isoformat() if tx.transaction_date else "",
             tx.vendor_from_statement,
             float(tx.amount),
             tx.transaction_currency,
+            cat.category if has_cat else "",
+            (cat.zoho_account or "") if has_cat else "",
+            cat.source.value if has_cat else "",
         ])
-        _fill_last_row(ws, FILL_UNMATCHED)
+        # A categorized charge colors by its tier (LEARNED blue, VENDOR
+        # yellow) so the postable ones read at a glance; bare unmatched
+        # rows keep the red-ish fill.
+        _fill_last_row(ws, _fill_for_source(cat.source) if has_cat else FILL_UNMATCHED)
 
     # Refunds / credits (3.10): their own section so a credit is never
     # read as a purchase awaiting a receipt. Reviewed, not receipt-matched.

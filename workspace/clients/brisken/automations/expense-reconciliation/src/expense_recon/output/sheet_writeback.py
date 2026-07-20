@@ -35,7 +35,14 @@ from typing import TYPE_CHECKING
 from openpyxl import load_workbook
 from openpyxl.styles import Font
 
-from ..matching.types import Match, MatchOutcome, Receipt, Transaction
+from ..matching.types import (
+    Categorization,
+    ClassificationSource,
+    Match,
+    MatchOutcome,
+    Receipt,
+    Transaction,
+)
 from .zoho_export import _resolve_account
 
 if TYPE_CHECKING:
@@ -116,10 +123,16 @@ def _cell_value(
     review_tx: set[str],
     unmatched_tx: set[str],
     coa: "ChartOfAccounts | None",
+    charge_cats: "dict[str, Categorization] | None" = None,
 ) -> str | None:
     """The writeback cell value for one transaction, or None to leave
     the row untouched. Priority: posted > matched > review > unmatched
-    (a yellow already-in-Zoho row wins even when it also matched)."""
+    (a yellow already-in-Zoho row wins even when it also matched).
+
+    Slice 10: an unmatched charge with a side-map categorization writes
+    its learned/guessed account instead of "(no receipt matched)" — a
+    LEARNED account verbatim, a VENDOR guess with a "(confirm)" marker
+    so the guess stays visible as a guess (LD-2)."""
     if tx.entry_status == "posted":
         return _ALREADY_POSTED
     match = match_by_tx.get(tx.transaction_id)
@@ -131,6 +144,13 @@ def _cell_value(
     if tx.transaction_id in review_tx:
         return _NEEDS_REVIEW
     if tx.transaction_id in unmatched_tx:
+        cat = (charge_cats or {}).get(tx.transaction_id)
+        if cat is not None and cat.category:
+            ref = cat.zoho_account or cat.category
+            value = (_resolve_account(ref, coa) or ref) if coa is not None else ref
+            if cat.source is ClassificationSource.LEARNED:
+                return value
+            return f"{value} (confirm)"
         return _NO_RECEIPT
     return None
 
@@ -144,6 +164,7 @@ def write_sheet_writeback(
     *,
     sheet_name: str | None = None,
     chart_of_accounts: "ChartOfAccounts | None" = None,
+    charge_categorizations: "dict[str, Categorization] | None" = None,
 ) -> Path:
     """Write Chris's workbook back with the appended writeback column.
 
@@ -176,7 +197,7 @@ def write_sheet_writeback(
         for tx in transactions:
             value = _cell_value(
                 tx, match_by_tx, rec_by_id, review_tx, unmatched_tx,
-                chart_of_accounts,
+                chart_of_accounts, charge_categorizations,
             )
             if value is None:
                 continue

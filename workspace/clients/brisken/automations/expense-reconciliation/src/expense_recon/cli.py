@@ -73,7 +73,7 @@ import json
 import logging
 import sys
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -81,6 +81,7 @@ import os
 from decimal import Decimal
 
 from .categorize import categorize_receipts
+from .categorize_charges import categorize_charges, derive_subscription_status
 from .ingest._common import ParseIssue
 from .ingest.chart_of_accounts import ChartOfAccounts
 from .ingest.expense_csv import parse_expense_csv_tolerant
@@ -94,7 +95,7 @@ from .llm.client import LLMClient, OpenAIClient
 from .llm.cost import CostTracker
 from .matching.deterministic import match_month
 from .matching.judgment import judge_ambiguous, judge_fx_match
-from .matching.types import Match, MatchOutcome, Receipt, Transaction
+from .matching.types import Categorization, Match, MatchOutcome, Receipt, Transaction
 from .output.reconciled_csv import write_reconciled_csv
 from .output.report_xlsx import write_report
 from .output.sheet_writeback import write_sheet_writeback
@@ -332,6 +333,11 @@ class ReconcileResult:
     cost_tracker: CostTracker | None
     chart_of_accounts: ChartOfAccounts | None
     zoho_cfg: dict
+    # Slice 10 side-map: transaction_id -> Categorization for the
+    # receiptless (unmatched) charges. A side-map, NOT a Transaction
+    # field, so Tier 1's frozen types stay untouched; annotation only —
+    # bucket membership never changes.
+    charge_categorizations: dict[str, Categorization] = field(default_factory=dict)
 
 
 def _load_learned(cfg: dict, config_dir: Path):
@@ -479,6 +485,27 @@ def reconcile(
     rec_by_id = {r.document_id: r for r in receipts}
     _apply_judgment(outcome, tx_by_id, rec_by_id, llm_client)
     _apply_ambiguous_judgment(outcome, tx_by_id, rec_by_id, llm_client)
+
+    # Slice 10: categorize the receiptless charges (unmatched after
+    # judgment). Reads the outcome only; the result is a side-map so no
+    # bucket, transaction, or receipt changes. LEARNED-first, then
+    # VENDOR fallback, never LINE (charge-level LD-2 tier).
+    charge_categorizations = categorize_charges(
+        outcome,
+        transactions,
+        client=llm_client,
+        chart_of_accounts=account_labels,
+        learned=learned,
+    )
+    if charge_categorizations:
+        n_categorized = sum(
+            1 for c in charge_categorizations.values() if c.category
+        )
+        logger.info(
+            "categorized %d of %d receiptless charge(s)",
+            n_categorized, len(charge_categorizations),
+        )
+
     if cost_tracker and cost_tracker.call_count:
         logger.info(
             "LLM: %d call(s), est. $%.4f",
@@ -494,6 +521,7 @@ def reconcile(
         cost_tracker=cost_tracker,
         chart_of_accounts=chart_of_accounts,
         zoho_cfg=zoho_cfg,
+        charge_categorizations=charge_categorizations,
     )
 
 
@@ -526,12 +554,19 @@ def run(
     cost_tracker = result.cost_tracker
     chart_of_accounts = result.chart_of_accounts
     zoho_cfg = result.zoho_cfg
+    charge_categorizations = result.charge_categorizations
 
     if dry_run:
         _print_dry_run_summary(
-            outcome, transactions, receipts, parse_errors, cost_tracker
+            outcome, transactions, receipts, parse_errors, cost_tracker,
+            charge_categorizations=charge_categorizations,
         )
         return None
+
+    # Slice 11 (P1): derive entry_status="subscription" for vendors that
+    # recur across prior months in the statements store. Annotation only;
+    # fill/operator precedence (an already-set entry_status wins).
+    transactions = _derive_subscriptions(cfg, config_dir, transactions)
 
     out_cfg = cfg.get("output") or {}
     out_path = out_override or (config_dir / (out_cfg.get("path") or "report.xlsx"))
@@ -544,6 +579,7 @@ def run(
         parse_errors=parse_errors,
         llm_cost=cost_tracker.total_cost_usd if cost_tracker else None,
         explain=explain,
+        charge_categorizations=charge_categorizations,
     )
 
     # BLUEPRINT 8.2/8.3: persist the tool's own tables (opt-in `store:`
@@ -567,6 +603,9 @@ def run(
         # target legal entity's chart is diverted to review before the
         # Books export is written. Absent block => unguarded (no change).
         coa_gate = _build_coa_gate(cfg, config_dir)
+        # Slice 10 posting policy: receiptless LEARNED charges become
+        # posting-eligible ONLY behind the opt-in flag (withheld-until-
+        # confirmed default); VENDOR/REVIEW charges stay review-only.
         write_zoho_export(
             outcome,
             transactions,
@@ -577,6 +616,10 @@ def run(
             receipt_urls=receipt_urls,
             report_for=report_lookup,
             coa_gate=coa_gate,
+            charge_categorizations=charge_categorizations,
+            include_receiptless_learned=bool(
+                zoho_cfg.get("export_receiptless_learned")
+            ),
         )
         logger.info("wrote Zoho journal export: %s", export_path)
         print(f"Wrote Zoho export: {export_path}")
@@ -597,6 +640,7 @@ def run(
             recon_csv_path,
             receipt_urls=receipt_urls,
             report_for=report_lookup,
+            charge_categorizations=charge_categorizations,
         )
         logger.info("wrote reconciled CSV: %s", recon_csv_path)
         print(f"Wrote reconciled CSV: {recon_csv_path}")
@@ -626,6 +670,7 @@ def run(
             receipts,
             sheet_name=stmt_cfg.get("sheet_name"),
             chart_of_accounts=chart_of_accounts,
+            charge_categorizations=charge_categorizations,
         )
         logger.info("wrote sheet writeback: %s", writeback_path)
         print(f"Wrote sheet writeback: {writeback_path}")
@@ -640,6 +685,36 @@ def run(
     )
 
     return report_path
+
+
+def _derive_subscriptions(
+    cfg: dict, config_dir: Path, transactions: list[Transaction]
+) -> list[Transaction]:
+    """Slice 11 (P1): annotate recurring vendors as subscriptions from
+    the statements store's prior months. Opt-in by construction — it
+    fires only when a `store.statements_path` is configured AND the DB
+    already exists on disk (a first run has no history; never create the
+    store file as a side effect of a read)."""
+    s = cfg.get("store")
+    if not isinstance(s, dict) or not s.get("statements_path"):
+        return transactions
+    db_path = (config_dir / s["statements_path"]).resolve()
+    if not db_path.exists():
+        return transactions
+    with StatementStore(db_path) as store:
+        annotated = derive_subscription_status(transactions, store)
+    n_derived = sum(
+        1
+        for before, after in zip(transactions, annotated)
+        if before.entry_status is None and after.entry_status == "subscription"
+    )
+    if n_derived:
+        logger.info(
+            "derived subscription status for %d charge(s) from statement history",
+            n_derived,
+        )
+        print(f"Subscriptions derived from history: {n_derived}")
+    return annotated
 
 
 def _persist_store(
@@ -1004,6 +1079,7 @@ def _print_dry_run_summary(
     receipts: list[Receipt],
     parse_errors: list[tuple[str, int, str]],
     cost_tracker: CostTracker | None,
+    charge_categorizations: dict[str, Categorization] | None = None,
 ) -> None:
     """B4 dry-run output: terse counts to stdout, no file write."""
     n_tx = len(transactions)
@@ -1024,6 +1100,11 @@ def _print_dry_run_summary(
     print(f"  Matched:      {n_matched}  ({match_rate:.1f}%)")
     print(f"  Needs review: {n_review}")
     print(f"  Unmatched tx: {n_unmatched}")
+    if charge_categorizations:
+        n_charge_cat = sum(
+            1 for c in charge_categorizations.values() if c.category
+        )
+        print(f"  ... categorized (receiptless): {n_charge_cat} of {n_unmatched}")
     print(f"  Parse errors: {len(parse_errors)}")
     if cost_tracker and cost_tracker.call_count > 0:
         print(

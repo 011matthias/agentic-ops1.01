@@ -267,3 +267,86 @@ def test_seed_zoho_config_env_adaptation():
         learning_cli._zoho_config_from_env("111", env={})
     assert "ZOHO_CLIENT_ID" in str(exc.value)
     assert "ZOHO_BOOKS_REFRESH_TOKEN" in str(exc.value)
+
+
+# -- set (Slice 10): author a standing vendor -> category/account rule ----
+
+def test_cli_set_authors_standing_rule(tmp_path, capsys):
+    db = tmp_path / "learning.sqlite"
+    rc = memory_main([
+        "set", "Anthropic",
+        "--entity", LE,
+        "--category", "Software & Subscriptions",
+        "--account", "Other Infra and IT Costs for Cloud Business",
+        "--db", str(db),
+    ])
+    assert rc == 0
+    with LearningStore(db) as s:
+        row = s.get_merchant_category(LE, normalize_vendor("Anthropic"))
+    assert row is not None
+    assert row.category == "Software & Subscriptions"
+    assert row.zoho_account == "Other Infra and IT Costs for Cloud Business"
+    assert row.source_run == "manual-set"
+    out = capsys.readouterr().out
+    assert "Software & Subscriptions" in out
+
+
+def test_cli_set_rejects_unknown_category(tmp_path, capsys):
+    db = tmp_path / "learning.sqlite"
+    rc = memory_main([
+        "set", "Anthropic", "--entity", LE,
+        "--category", "Not A Real Category", "--db", str(db),
+    ])
+    assert rc == 2
+    assert not db.exists()  # nothing written on a rejected rule
+    err = capsys.readouterr().err
+    assert "Software & Subscriptions" in err  # the valid list is shown
+
+
+def test_cli_set_without_account_warns_but_writes(tmp_path, capsys):
+    db = tmp_path / "learning.sqlite"
+    rc = memory_main([
+        "set", "Anthropic", "--entity", LE,
+        "--category", "Software & Subscriptions", "--db", str(db),
+    ])
+    assert rc == 0
+    with LearningStore(db) as s:
+        row = s.get_merchant_category(LE, normalize_vendor("Anthropic"))
+    assert row is not None and row.zoho_account is None
+    assert "no --account" in capsys.readouterr().out
+
+
+def test_cli_set_then_charge_categorizer_recalls_it(tmp_path):
+    """The end-to-end loop the command exists for: a manual rule set today
+    is recalled as Tier-1 LEARNED by the receiptless-charge path."""
+    from datetime import date
+
+    from expense_recon.categorize_charges import categorize_charges
+    from expense_recon.learning import MerchantCategoryLookup
+    from expense_recon.matching.types import (
+        ClassificationSource,
+        MatchOutcome,
+        Transaction,
+    )
+
+    db = tmp_path / "learning.sqlite"
+    assert memory_main([
+        "set", "Anthropic", "--entity", LE,
+        "--category", "Software & Subscriptions",
+        "--account", "Other Infra and IT Costs for Cloud Business",
+        "--db", str(db),
+    ]) == 0
+
+    tx = Transaction(
+        transaction_id="t1", legal_entity_id=LE, account_id="chase-2838",
+        transaction_date=date(2026, 4, 7), posting_date=None,
+        amount=Decimal("20.00"), transaction_currency="USD",
+        account_card_currency="USD", vendor_from_statement="ANTHROPIC",
+    )
+    cats = categorize_charges(
+        MatchOutcome(unmatched_transactions=["t1"]), [tx],
+        learned=MerchantCategoryLookup.from_db_path(db),
+    )
+    cat = cats["t1"]
+    assert cat.source is ClassificationSource.LEARNED
+    assert cat.zoho_account == "Other Infra and IT Costs for Cloud Business"

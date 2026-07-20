@@ -86,7 +86,16 @@
       {% endfor %}
     </div>
     {% else %}
-    <div class="muted" style="margin-top:8px;">No candidate receipt.</div>
+    <div class="muted" style="margin-top:8px;">No candidate receipt.
+      {% if row.charge_category %}
+      <span style="margin-left:6px;">Suggested account:
+        <strong>{{ row.charge_category.zoho_account or row.charge_category.category }}</strong>
+        <span class="badge {{ 'reconciled' if row.charge_category.is_learned else 'pending' }}"
+              title="{{ 'Recalled from a confirmed decision or your Zoho posting history.' if row.charge_category.is_learned else 'A guess from the vendor name; confirm before posting.' }}">{{ row.charge_category.source }}</span>
+        {% if row.charge_category.provenance %}<span style="font-size:11px;">&middot; {{ row.charge_category.provenance }}</span>{% endif %}
+      </span>
+      {% endif %}
+    </div>
     {% endif %}
 
     {% if row.near_miss %}
