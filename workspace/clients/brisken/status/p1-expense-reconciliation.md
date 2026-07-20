@@ -43,6 +43,9 @@ this table is the index, not a second record.
 | Match ground-truth labeling (`label propose/accept/check`) | done | `labeling.py`; optimize-loop prep — labels per month-bundle in gitignored context |
 | Label fixture: 6 production-shape bundles (CSV stmt + ER PDF) | done (2026-07-17) | `context/.../csv/by-month/`: labels.csv per month, `label check` OK on all 6; 141/218 labeled (95 confirmed / 46 no_charge), 77 excluded as ambiguous; decisions corroborated offline via 2026 stmt-PDF FX originals + payment-mode card refs |
 | ER-PDF ingest hardening (ISO-ccy amounts, inline rows, per-token format) | done (PR #263) | `expense_report_pdf.py`; all 6 real ERs parse to-the-cent vs printed totals |
+| Web-download exports carry Tier-2 receiptless categories | done (PR #294) | `service._charge_cats` threaded into all 4 `regenerate_*`; zoho honors `export_receiptless_learned` |
+| SPA JSON API for the Lovable front end | in-progress (concurrent session) | `/api` + bearer + CORS, Lovable-hosted (PRs #290/#291/#293); NOT `/api/v1` |
+| §17 personal/business/reimbursement, §16 export-approved gate, §18 dup resolve, §14 automation | planned | approved plan at `~/.claude/plans/async-beaming-perlis.md` |
 
 ## Open decisions / gates
 
