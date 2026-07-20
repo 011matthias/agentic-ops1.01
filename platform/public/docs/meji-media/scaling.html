@@ -123,7 +123,7 @@ body {
 .hamburger { display: none; background: none; border: none; color: var(--text); font-size: 22px; cursor: pointer; padding: 0 6px; }
 
 .page-layout { margin-left: var(--sidebar-width); }
-.main { max-width: 960px; margin: 0 auto; padding: 40px 24px 80px; }
+.main { max-width: 1200px; margin: 0; padding: 40px 24px 80px; }
 
 .hero {
   background: linear-gradient(135deg, var(--amber), var(--purple));
@@ -203,6 +203,7 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
 }
 </style>
 <script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
+<!-- deliverable-allow: copy-clipboard,keyboard-search | reason: Meji doc-site convention (see .deliverable-config.yaml); narrative pages, no shell commands or large code blocks, native Ctrl+F suffices. Site-wide, never per-page. -->
 </head>
 <body>
 
@@ -243,7 +244,7 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
     </nav>
   </div>
   <div class="header-right">
-    <span class="badge badge-amber"><span class="badge-dot"></span> Decision Document</span>
+    <span class="badge badge-green"><span class="badge-dot"></span> Decision Document</span>
     <button class="theme-btn" onclick="toggleTheme()">
       <span id="theme-icon">&#9790;</span> Theme
     </button>

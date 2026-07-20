@@ -82,7 +82,7 @@ body {
 /* Header */
 .header {
   background: var(--nav-bg); border-bottom: 1px solid var(--border);
-  padding: 16px 24px; padding-left: calc(var(--sidebar-width) + 24px);
+  padding: 16px 24px; 
   display: flex; align-items: center; justify-content: space-between;
   position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
   box-shadow: var(--shadow); transition: background .2s;
@@ -113,7 +113,7 @@ body {
 }
 
 /* Content */
-.main { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+.main { max-width: 1200px; margin: 0; padding: 40px 24px 80px; }
 @media (max-width: 768px) {
   .sidebar { transform: translateX(-100%); z-index: 200; }
   .sidebar.open { transform: translateX(0); }
@@ -219,6 +219,7 @@ tr:nth-child(even) td { background: var(--surface2); }
 }
 </style>
 <script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
+<!-- deliverable-allow: copy-clipboard,keyboard-search | reason: Meji doc-site convention (see .deliverable-config.yaml); narrative pages, no shell commands or large code blocks, native Ctrl+F suffices. Site-wide, never per-page. -->
 </head>
 <body>
 
