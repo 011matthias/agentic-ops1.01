@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, Form, Request, UploadFile
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (
     FileResponse,
@@ -938,6 +939,25 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return templates.TemplateResponse(
             request, "workbench.html", {"view": view, "run": run}
         )
+
+    @app.get("/api/runs/{run_id}")
+    def api_workbench(request: Request, run_id: str):
+        """JSON twin of the workbench: the same build_view render model the
+        Jinja page uses, for the SPA front end to render the review screen.
+        The mutation endpoints (/runs/{id}/decisions, /categories,
+        /manual-match, /confirm-matched, /forget, /commit-memory) already
+        speak JSON and are reused as-is. jsonable_encoder handles the view's
+        Decimal / date values for the display-only client."""
+        with open_store() as store:
+            run = _visible_run(store, request, run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found"}, status_code=404)
+            decisions = store.get_decisions(run_id)
+            overrides = store.get_category_overrides(run_id)
+        view = build_view(run, decisions, overrides)
+        # build_view already carries run_id, label, summary, rows,
+        # unmatched_*, category_options: return it as the SPA render model.
+        return JSONResponse(jsonable_encoder(view))
 
     @app.post("/runs/{run_id}/decisions")
     async def post_decision(run_id: str, request: Request):

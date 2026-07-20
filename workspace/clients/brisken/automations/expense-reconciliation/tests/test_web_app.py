@@ -79,6 +79,23 @@ def test_run_renders_workbench(client):
     assert "amex-9001" in resp.text
 
 
+def test_api_workbench_returns_json_render_model(client):
+    # JSON twin of the workbench for the SPA front end: the same build_view
+    # render model, serialized (Decimal/date handled by jsonable_encoder).
+    run_id = _create_run(client)
+    resp = client.get(f"/api/runs/{run_id}")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["run_id"] == run_id
+    for key in ("summary", "rows", "unmatched_receipts", "category_options"):
+        assert key in body
+    assert "match_rate" in body["summary"]
+    # unknown run -> JSON 404, never an HTML redirect
+    missing = client.get("/api/runs/does-not-exist", follow_redirects=False)
+    assert missing.status_code == 404
+    assert missing.json()["error"]
+
+
 def test_decision_roundtrip_updates_summary(client):
     run_id = _create_run(client)
     db = RunStore(client._data_root / "recon-web.sqlite")
