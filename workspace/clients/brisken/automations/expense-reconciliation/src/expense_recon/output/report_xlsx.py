@@ -60,6 +60,9 @@ CARD_TAB_COLUMNS = (
     "Source",
     "Zoho A/C",
     "Note",
+    # §17 disposition (business / personal / reimbursable / do-not-export;
+    # "business" default). Appended last so existing column indices hold.
+    "Disposition",
 )
 
 NEEDS_REVIEW_COLUMNS = ("Card",) + CARD_TAB_COLUMNS
@@ -86,6 +89,8 @@ class _Row:
     # one set per FX candidate receipt). The Summary must aggregate by
     # transaction, never by row, so it carries the id here.
     transaction_id: str = ""
+    # §17 disposition of the originating transaction (default business).
+    disposition: str = "business"
 
     @property
     def fill(self) -> PatternFill:
@@ -112,6 +117,7 @@ def write_report(
     llm_cost: Decimal | None = None,
     explain: bool = False,
     charge_categorizations: dict[str, Categorization] | None = None,
+    dispositions: dict[str, str] | None = None,
 ) -> Path:
     """Write the LD-3 reconciliation report.
 
@@ -125,6 +131,9 @@ def write_report(
     `charge_categorizations` (Slice 10 side-map, transaction_id →
     Categorization) puts a category + source + account on the unmatched
     (receiptless) transaction rows; None => prior behaviour.
+    `dispositions` (§17, transaction_id → disposition) fills the trailing
+    Disposition column on every per-line row; a transaction absent from
+    the map reads `business` (the default). None => every row `business`.
     """
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -133,7 +142,7 @@ def write_report(
     rec_by_id = {r.document_id: r for r in receipts}
     charge_cats = charge_categorizations or {}
 
-    rows = _build_rows(outcome, tx_by_id, rec_by_id, charge_cats)
+    rows = _build_rows(outcome, tx_by_id, rec_by_id, charge_cats, dispositions or {})
     rows_by_card = _group_by_card(rows)
 
     wb = Workbook()
@@ -160,6 +169,7 @@ def _build_rows(
     tx_by_id: dict[str, Transaction],
     rec_by_id: dict[str, Receipt],
     charge_cats: dict[str, Categorization] | None = None,
+    dispositions: dict[str, str] | None = None,
 ) -> list[_Row]:
     """Expand the matching outcome into per-line-item Excel rows.
 
@@ -168,6 +178,11 @@ def _build_rows(
     unmatched / FX / ambiguous txs become one or more REVIEW rows
     so the reconciliation guarantee (v2 spec §25.5) is visible.
     """
+    disp_map = dispositions or {}
+
+    def _disp(tx_id: str) -> str:
+        return disp_map.get(tx_id) or "business"
+
     rows: list[_Row] = []
 
     # L4: flag a matched expense with no receipt-image reference, but only
@@ -191,7 +206,12 @@ def _build_rows(
         rec = rec_by_id.get(match.document_id)
         if tx is None or rec is None:
             continue
-        rows.extend(_rows_from_match(tx, rec, match, extra_note=_note(tx, rec, "")))
+        rows.extend(
+            _rows_from_match(
+                tx, rec, match, extra_note=_note(tx, rec, ""),
+                disposition=_disp(tx.transaction_id),
+            )
+        )
 
     for match in outcome.judgment_required:
         tx = tx_by_id.get(match.transaction_id)
@@ -201,7 +221,10 @@ def _build_rows(
         # FX cases ride on the matched receipt's line items but stay
         # REVIEW until the LLM judgment layer (slice 2) confirms.
         rows.extend(
-            _rows_from_match(tx, rec, match, extra_note=_note(tx, rec, "FX — needs judgment"), force_review=True)
+            _rows_from_match(
+                tx, rec, match, extra_note=_note(tx, rec, "FX — needs judgment"),
+                force_review=True, disposition=_disp(tx.transaction_id),
+            )
         )
 
     seen_ambiguous_tx: set[str] = set()
@@ -214,14 +237,21 @@ def _build_rows(
         if tx is None or rec is None:
             continue
         rows.extend(
-            _rows_from_match(tx, rec, match, extra_note=_note(tx, rec, "Ambiguous — pick one"), force_review=True)
+            _rows_from_match(
+                tx, rec, match, extra_note=_note(tx, rec, "Ambiguous — pick one"),
+                force_review=True, disposition=_disp(tx.transaction_id),
+            )
         )
 
     for tx_id in outcome.unmatched_transactions:
         tx = tx_by_id.get(tx_id)
         if tx is None:
             continue
-        rows.append(_unmatched_tx_row(tx, (charge_cats or {}).get(tx_id)))
+        rows.append(
+            _unmatched_tx_row(
+                tx, (charge_cats or {}).get(tx_id), disposition=_disp(tx_id)
+            )
+        )
 
     return rows
 
@@ -233,6 +263,7 @@ def _rows_from_match(
     *,
     extra_note: str,
     force_review: bool = False,
+    disposition: str = "business",
 ) -> list[_Row]:
     """Build the per-line rows for a single (tx, receipt) match.
 
@@ -275,6 +306,7 @@ def _rows_from_match(
                 zoho_account=None,
                 note=note,
                 transaction_id=tx.transaction_id,
+                disposition=disposition,
             )
         ]
 
@@ -295,13 +327,17 @@ def _rows_from_match(
                 zoho_account=cat.zoho_account if source is not ClassificationSource.REVIEW else None,
                 note=note,
                 transaction_id=tx.transaction_id,
+                disposition=disposition,
             )
         )
     return out
 
 
 def _unmatched_tx_row(
-    tx: Transaction, charge_cat: Categorization | None = None
+    tx: Transaction,
+    charge_cat: Categorization | None = None,
+    *,
+    disposition: str = "business",
 ) -> _Row:
     """One row per receiptless charge. With a Slice-10 charge
     categorization, the row carries the category / account / source
@@ -323,6 +359,7 @@ def _unmatched_tx_row(
             zoho_account=charge_cat.zoho_account,
             note=note,
             transaction_id=tx.transaction_id,
+            disposition=disposition,
         )
     return _Row(
         card=tx.account_id,
@@ -336,6 +373,7 @@ def _unmatched_tx_row(
         zoho_account=None,
         note="Unmatched transaction",
         transaction_id=tx.transaction_id,
+        disposition=disposition,
     )
 
 
@@ -743,6 +781,7 @@ def _card_row_cells(r: _Row) -> list[object]:
         source_label,
         r.zoho_account or "",
         r.note,
+        r.disposition,
     ]
 
 

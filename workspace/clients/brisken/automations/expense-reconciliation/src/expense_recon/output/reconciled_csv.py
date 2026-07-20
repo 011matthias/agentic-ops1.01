@@ -81,6 +81,9 @@ RECONCILED_COLUMNS = (
     "Charge Category",
     "Charge Zoho Account",
     "Charge Category Source",
+    # ── §17 disposition (business / personal / reimbursable / do-not-export;
+    #    "business" is the default for every line) ──
+    "Disposition",
 )
 
 # Statement-line dispositions. Mirrors the report_xlsx Explain sheet's
@@ -144,6 +147,7 @@ def build_reconciled_rows(
     receipt_urls: "Mapping[str, str | None] | None" = None,
     report_for: "Callable[[str], str | None] | None" = None,
     charge_categorizations: "Mapping[str, Categorization] | None" = None,
+    dispositions: "Mapping[str, str] | None" = None,
 ) -> list[list[str]]:
     """Build the flat reconciled rows: one per statement line, in input
     (statement) order, in `RECONCILED_COLUMNS` order (no header row).
@@ -156,9 +160,14 @@ def build_reconciled_rows(
 
     `charge_categorizations` (Slice 10 side-map) fills the three trailing
     charge-categorization columns on unmatched lines; blank elsewhere.
+
+    `dispositions` (§17, transaction_id → disposition) fills the trailing
+    Disposition column; a line absent from the map reads `business` (the
+    default), so nothing is ever dropped and the column is never blank.
     """
     rec_by_id = {r.document_id: r for r in receipts}
     charge_cats = charge_categorizations or {}
+    disp_map = dispositions or {}
     disp = _disposition(outcome)
     # L4 noise guard: only flag missing receipt images when the run's
     # source carries image info at all (the slice-1 receipts CSV never
@@ -239,6 +248,8 @@ def build_reconciled_rows(
             _str(charge_cat.category) if charge_cat is not None else "",
             _str(charge_cat.zoho_account) if charge_cat is not None else "",
             charge_cat.source.value if charge_cat is not None else "",
+            # §17 disposition (default business)
+            disp_map.get(tx.transaction_id) or "business",
         ])
 
     return rows
@@ -253,6 +264,7 @@ def write_reconciled_csv(
     receipt_urls: "Mapping[str, str | None] | None" = None,
     report_for: "Callable[[str], str | None] | None" = None,
     charge_categorizations: "Mapping[str, Categorization] | None" = None,
+    dispositions: "Mapping[str, str] | None" = None,
 ) -> Path:
     """Write the flat reconciled CSV. Returns the path."""
     out_path = Path(out_path)
@@ -265,6 +277,7 @@ def write_reconciled_csv(
         receipt_urls=receipt_urls,
         report_for=report_for,
         charge_categorizations=charge_categorizations,
+        dispositions=dispositions,
     )
 
     with out_path.open("w", encoding="utf-8", newline="") as fh:

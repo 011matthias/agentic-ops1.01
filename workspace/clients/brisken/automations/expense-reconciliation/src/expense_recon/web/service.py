@@ -56,6 +56,8 @@ from .serialize import (
     snapshot_to_dict,
 )
 from .store import (
+    DISPOSITION_BUSINESS,
+    DISPOSITION_REIMBURSABLE,
     INTAKE_RECEIVED,
     STATUS_ALREADY_POSTED,
     STATUS_CONFIRMED,
@@ -1027,6 +1029,57 @@ def _charge_category_view(cat) -> dict | None:
     }
 
 
+def effective_disposition(
+    matched_receipt: Receipt | None, decision: Decision | None
+) -> tuple[str, str]:
+    """The (effective, default) §17 disposition for one transaction.
+
+    The default is seeded from the matched receipt: a receipt flagged
+    reimbursable in Zoho Expense seeds `reimbursable_personal` (it posts to
+    the reimbursement clearing account); everything else seeds `business`.
+    An explicit reviewer verdict (`decision.disposition`) overrides the
+    seed. Disposition is annotation only — it never enters bucketing or the
+    reconciliation invariant.
+    """
+    default = (
+        DISPOSITION_REIMBURSABLE
+        if matched_receipt is not None and matched_receipt.reimbursable is True
+        else DISPOSITION_BUSINESS
+    )
+    effective = (
+        decision.disposition
+        if decision is not None and decision.disposition
+        else default
+    )
+    return effective, default
+
+
+def _dispositions(
+    transactions: list[Transaction],
+    receipts: list[Receipt],
+    effective: "MatchOutcome",
+    decisions: dict[str, Decision],
+) -> dict[str, str]:
+    """The §17 disposition map (transaction_id -> disposition) the export
+    writers consume, emitting only NON-`business` entries. A run with no
+    disposition verdicts and no reimbursable-flagged matched receipts yields
+    an empty map, so the Zoho journal stays byte-for-byte unchanged; the
+    reconciled CSV / report render `business` for absent txs via their own
+    default."""
+    rec_by_id = {r.document_id: r for r in receipts}
+    match_by_tx = {m.transaction_id: m for m in effective.matches}
+    out: dict[str, str] = {}
+    for tx in transactions:
+        m = match_by_tx.get(tx.transaction_id)
+        matched_rec = rec_by_id.get(m.document_id) if m else None
+        eff, _default = effective_disposition(
+            matched_rec, decisions.get(tx.transaction_id)
+        )
+        if eff != DISPOSITION_BUSINESS:
+            out[tx.transaction_id] = eff
+    return out
+
+
 def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> dict:
     """Compose the render model: per-transaction rows with candidates and
     the reviewer's effective verdict, plus the unmatched-receipt list and
@@ -1215,6 +1268,11 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
             for li in c["receipt"]["line_items"]
         )
 
+        # §17 disposition: the matched receipt (the held candidate) seeds the
+        # default; an explicit reviewer verdict overrides it. Annotation only.
+        matched_rec = rec_by_id.get(held_doc) if held_doc else None
+        eff_disp, disp_default = effective_disposition(matched_rec, decision)
+
         rows.append(
             {
                 "transaction_id": tx_id,
@@ -1236,6 +1294,10 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
                 # Slice 10: the tool's suggested category for a receiptless
                 # charge (None on matched rows and pre-Slice-10 snapshots).
                 "charge_category": _charge_category_view(charge_cats.get(tx_id)),
+                # §17: the reviewer's effective disposition + the seeded
+                # default (so the SPA can show "auto: reimbursable" hints).
+                "disposition": eff_disp,
+                "disposition_default": disp_default,
                 "section": section,
                 "triage_score": max(
                     (c["score"] for c in cands if c["score"]), default=None
@@ -1465,6 +1527,7 @@ def regenerate_report(
         out_path,
         parse_errors=parse_errors,
         charge_categorizations=_charge_cats(run),
+        dispositions=_dispositions(transactions, receipts, effective, decisions),
     )
     return out_path
 
@@ -1539,6 +1602,10 @@ def regenerate_zoho(
         include_receiptless_learned=bool(
             (run.config or {}).get("zoho", {}).get("export_receiptless_learned")
         ),
+        dispositions=_dispositions(transactions, receipts, effective, decisions),
+        reimbursable_account=(run.config or {}).get("zoho", {}).get(
+            "reimbursable_account"
+        ),
     )
     return out_path
 
@@ -1567,6 +1634,7 @@ def regenerate_reconciled(
         receipts,
         out_path,
         charge_categorizations=_charge_cats(run),
+        dispositions=_dispositions(transactions, receipts, effective, decisions),
     )
     return out_path
 

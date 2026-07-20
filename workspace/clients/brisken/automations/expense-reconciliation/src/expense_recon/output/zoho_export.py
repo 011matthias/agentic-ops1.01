@@ -25,8 +25,17 @@ Without a `ChartOfAccounts` (legacy / no-Zoho runs), the export falls
 back to the pre-4.6 behaviour: category name on the debit side, the
 `Card: {account_id}` placeholder on the credit side.
 
-`Personal / business / reimbursement` mapping (v2 spec §31) is still
-unresolved; every line is treated as a straight business expense.
+`Personal / business / reimbursement` (§17, 2026-07-20): the reviewer's
+per-transaction ``dispositions`` map controls how each entry posts.
+``business`` (and any transaction absent from the map) posts normally;
+``personal_on_business_card`` and ``do_not_export`` are withheld from the
+journal (still fully present in the report / reconciled CSV — nothing
+silently dropped); ``reimbursable_personal`` posts with its balancing
+credit redirected to the reimbursement clearing account
+(``reimbursable_account``, from config ``zoho.reimbursable_account``) —
+only the credit ACCOUNT changes, never the amount, so double-entry
+holds. ``dispositions=None`` (the default) treats every line as a
+straight business expense, byte-for-byte the pre-§17 output.
 
 Double-entry shape: one Debit row per categorized line item (to its
 expense account) plus one balancing Credit row per transaction (to the
@@ -98,6 +107,13 @@ ZOHO_COLUMNS = (
 _CARD_ACCOUNT = "Card: {account_id}"
 _UNCATEGORIZED = "(uncategorized - assign)"
 _UNMAPPED = "(account unmapped - assign)"
+
+# §17 disposition values (string-typed copies of web.store's
+# VALID_DISPOSITIONS members; the output layer stays import-free of the
+# web layer). Absent / "business" posts normally.
+_DISPOSITION_WITHHELD = frozenset({"personal_on_business_card", "do_not_export"})
+_DISPOSITION_REIMBURSABLE = "reimbursable_personal"
+_REIMBURSABLE_PLACEHOLDER = "(reimbursable clearing - assign)"
 
 
 def _amount(value: Decimal | None) -> str:
@@ -181,6 +197,33 @@ def _credit_account_and_note(
     return resolved, "balancing entry"
 
 
+def _reimbursable_credit_and_note(
+    reimbursable_account: str | None, coa: "ChartOfAccounts | None"
+) -> tuple[str, str]:
+    """Account + Notes for a `reimbursable_personal` entry's credit row (§17).
+
+    The credit is redirected from the card account to the reimbursement
+    clearing account — only the ACCOUNT changes, never the amount, so the
+    entry still balances. Unconfigured => a visible placeholder, never a
+    guess (B4); an account that does not resolve against the chart passes
+    through flagged, mirroring `_credit_account_and_note`.
+    """
+    if not reimbursable_account:
+        return (
+            _REIMBURSABLE_PLACEHOLDER,
+            "balancing entry (reimbursable - assign clearing account)",
+        )
+    if coa is None:
+        return reimbursable_account, "balancing entry (reimbursable)"
+    resolved = _resolve_account(reimbursable_account, coa)
+    if resolved is None:
+        return (
+            reimbursable_account,
+            "balancing entry (reimbursable account not in chart) — verify",
+        )
+    return resolved, "balancing entry (reimbursable)"
+
+
 def build_journal_rows(
     outcome: MatchOutcome,
     tx_by_id: dict[str, Transaction],
@@ -193,6 +236,8 @@ def build_journal_rows(
     coa_gate: "CoaGate | None" = None,
     charge_categorizations: "Mapping[str, Categorization] | None" = None,
     include_receiptless_learned: bool = False,
+    dispositions: "Mapping[str, str] | None" = None,
+    reimbursable_account: str | None = None,
 ) -> list[list[str]]:
     """Build the Zoho journal rows for the matched transactions.
 
@@ -228,6 +273,13 @@ def build_journal_rows(
     charges, gate-diverted charges, and `entry_status == "posted"`
     charges are never written. Flag off (the default) => byte-for-byte
     prior behaviour.
+
+    `dispositions` (§17, transaction_id → disposition) withholds
+    `personal_on_business_card` / `do_not_export` entries and redirects
+    the balancing credit of `reimbursable_personal` entries to
+    `reimbursable_account` (placeholder when unset — visible, never
+    guessed). Applies to matched AND receiptless-charge entries. None
+    (the default) => byte-for-byte prior behaviour.
     """
     # Pre-write COA validation: divert any line with a non-postable
     # account to review before it can resolve into a debit row. Rebuilds
@@ -250,6 +302,13 @@ def build_journal_rows(
         # reconciled CSV (nothing silently dropped); only the Books
         # import skips it. The skip count is surfaced by the callers.
         if tx.entry_status == "posted":
+            continue
+        # §17 posting policy: personal spend on the business card, and an
+        # explicit do-not-export, never reach the journal. The row stays
+        # fully visible in the report / reconciled CSV (nothing silently
+        # dropped) — only the Books import withholds it.
+        disposition = (dispositions or {}).get(tx.transaction_id)
+        if disposition in _DISPOSITION_WITHHELD:
             continue
 
         date_str = tx.transaction_date.isoformat() if tx.transaction_date else ""
@@ -290,10 +349,17 @@ def build_journal_rows(
                 ] + provenance)
                 line_total_sum += item.line_total
 
-        # Balancing credit to the card / bank account.
-        credit_account, credit_note = _credit_account_and_note(
-            tx, card_accounts, chart_of_accounts
-        )
+        # Balancing credit to the card / bank account — or, for a
+        # reimbursable_personal entry (§17), to the reimbursement clearing
+        # account (same amount, different account; double-entry holds).
+        if disposition == _DISPOSITION_REIMBURSABLE:
+            credit_account, credit_note = _reimbursable_credit_and_note(
+                reimbursable_account, chart_of_accounts
+            )
+        else:
+            credit_account, credit_note = _credit_account_and_note(
+                tx, card_accounts, chart_of_accounts
+            )
         rows.append([
             date_str,
             credit_account,
@@ -314,6 +380,8 @@ def build_journal_rows(
                 chart_of_accounts=chart_of_accounts,
                 card_accounts=card_accounts,
                 coa_gate=coa_gate,
+                dispositions=dispositions,
+                reimbursable_account=reimbursable_account,
             )
         )
 
@@ -328,6 +396,8 @@ def _receiptless_charge_rows(
     chart_of_accounts: "ChartOfAccounts | None",
     card_accounts: "Mapping[str, str] | None",
     coa_gate: "CoaGate | None",
+    dispositions: "Mapping[str, str] | None" = None,
+    reimbursable_account: str | None = None,
 ) -> list[list[str]]:
     """Journal rows for the unmatched charges whose categorization is
     Tier-1 LEARNED. Each becomes one debit row (the learned account) +
@@ -353,6 +423,9 @@ def _receiptless_charge_rows(
         # L1 posting policy, same as the matched loop: an already-in-Zoho
         # row never reaches the journal again.
         if tx.entry_status == "posted":
+            continue
+        # §17: personal / do-not-export receiptless charges are withheld too.
+        if (dispositions or {}).get(tx_id) in _DISPOSITION_WITHHELD:
             continue
         line = LineItem(
             description=tx.vendor_from_statement,
@@ -390,9 +463,14 @@ def _receiptless_charge_rows(
             date_str, account, tx.vendor_from_statement, ref,
             note, _amount(tx.amount), "",
         ] + provenance)
-        credit_account, credit_note = _credit_account_and_note(
-            tx, card_accounts, chart_of_accounts
-        )
+        if (dispositions or {}).get(tx.transaction_id) == _DISPOSITION_REIMBURSABLE:
+            credit_account, credit_note = _reimbursable_credit_and_note(
+                reimbursable_account, chart_of_accounts
+            )
+        else:
+            credit_account, credit_note = _credit_account_and_note(
+                tx, card_accounts, chart_of_accounts
+            )
         rows.append([
             date_str,
             credit_account,
@@ -418,6 +496,8 @@ def write_zoho_export(
     coa_gate: "CoaGate | None" = None,
     charge_categorizations: "Mapping[str, Categorization] | None" = None,
     include_receiptless_learned: bool = False,
+    dispositions: "Mapping[str, str] | None" = None,
+    reimbursable_account: str | None = None,
 ) -> Path:
     """Write the Zoho Books journal-entry CSV. Returns the path.
 
@@ -428,6 +508,10 @@ def write_zoho_export(
 
     `charge_categorizations` + `include_receiptless_learned` (Slice 10,
     both opt-in) add the receiptless-LEARNED charge entries; see
+    `build_journal_rows`.
+
+    `dispositions` + `reimbursable_account` (§17, opt-in) withhold personal
+    / do-not-export entries and redirect reimbursable credits; see
     `build_journal_rows`.
     """
     out_path = Path(out_path)
@@ -444,6 +528,8 @@ def write_zoho_export(
         coa_gate=coa_gate,
         charge_categorizations=charge_categorizations,
         include_receiptless_learned=include_receiptless_learned,
+        dispositions=dispositions,
+        reimbursable_account=reimbursable_account,
     )
 
     with out_path.open("w", encoding="utf-8", newline="") as fh:

@@ -7,8 +7,10 @@ holds three tables:
               full snapshot blob (see `serialize.py`) so the workbench
               re-renders without re-running the pipeline.
 * `decisions` the reviewer's per-transaction verdict (pending / confirmed
-              / rejected) and, for a needs-review row, which candidate
-              receipt she picked. Applied when the exports regenerate.
+              / rejected), for a needs-review row which candidate receipt
+              she picked, and the §17 disposition (business / personal /
+              reimbursable / do-not-export). Applied when the exports
+              regenerate.
 * `category_overrides`  a reclassified category for one receipt line,
               keyed by (run, document, line index). Also applied on export.
 
@@ -38,6 +40,25 @@ VALID_STATUSES = (
     STATUS_CONFIRMED,
     STATUS_REJECTED,
     STATUS_ALREADY_POSTED,
+)
+
+# §17 dispositions: whose spend a charge is and how it exports. Stored on
+# the same (run_id, transaction_id) grain as the status verdict, but the
+# two layers are orthogonal: `set_disposition` and `set_decision` each
+# upsert ONLY their own columns, so triaging a row never clears its
+# disposition and vice versa. `business` (the default when no row / NULL)
+# posts normally; `personal_on_business_card` and `do_not_export` are
+# withheld from the Zoho journal; `reimbursable_personal` posts with the
+# credit redirected to the reimbursement clearing account.
+DISPOSITION_BUSINESS = "business"
+DISPOSITION_PERSONAL = "personal_on_business_card"
+DISPOSITION_REIMBURSABLE = "reimbursable_personal"
+DISPOSITION_DO_NOT_EXPORT = "do_not_export"
+VALID_DISPOSITIONS = (
+    DISPOSITION_BUSINESS,
+    DISPOSITION_PERSONAL,
+    DISPOSITION_REIMBURSABLE,
+    DISPOSITION_DO_NOT_EXPORT,
 )
 
 # Intake lifecycle (testing mode): the user's uploaded document set, waiting
@@ -93,6 +114,9 @@ class Decision:
     status: str
     chosen_document_id: str | None
     updated_at: str | None = None
+    # §17: None means "no explicit verdict" — the effective disposition is
+    # then seeded by the service layer (Receipt.reimbursable, else business).
+    disposition: str | None = None
 
 
 class RunStore:
@@ -133,6 +157,7 @@ class RunStore:
                 status             TEXT NOT NULL,
                 chosen_document_id TEXT,
                 updated_at         TEXT,
+                disposition        TEXT,
                 PRIMARY KEY (run_id, transaction_id)
             );
             CREATE TABLE IF NOT EXISTS category_overrides (
@@ -189,6 +214,15 @@ class RunStore:
         for column, ddl in adds:
             if column not in existing:
                 self.conn.execute(f"ALTER TABLE runs ADD COLUMN {column} {ddl}")
+        # decisions.disposition (§17, 2026-07-20): the live /data volume on
+        # Fly predates the column; NULL on old rows reads as "no explicit
+        # verdict", which the service seeds to business.
+        decision_cols = {
+            row["name"]
+            for row in self.conn.execute("PRAGMA table_info(decisions)").fetchall()
+        }
+        if "disposition" not in decision_cols:
+            self.conn.execute("ALTER TABLE decisions ADD COLUMN disposition TEXT")
 
     # -- runs -------------------------------------------------------------
 
@@ -458,13 +492,16 @@ class RunStore:
 
     def get_decisions(self, run_id: str) -> dict[str, Decision]:
         rows = self.conn.execute(
-            "SELECT transaction_id, status, chosen_document_id, updated_at "
-            "FROM decisions WHERE run_id = ?",
+            "SELECT transaction_id, status, chosen_document_id, updated_at, "
+            "disposition FROM decisions WHERE run_id = ?",
             (run_id,),
         ).fetchall()
         return {
             r["transaction_id"]: Decision(
-                r["status"], r["chosen_document_id"], r["updated_at"]
+                status=r["status"],
+                chosen_document_id=r["chosen_document_id"],
+                updated_at=r["updated_at"],
+                disposition=r["disposition"],
             )
             for r in rows
         }
@@ -479,6 +516,8 @@ class RunStore:
     ) -> None:
         if status not in VALID_STATUSES:
             raise ValueError(f"invalid status {status!r}; expected {VALID_STATUSES}")
+        # The ON CONFLICT SET deliberately excludes `disposition` (§17):
+        # re-triaging a row never clears its disposition verdict.
         self.conn.execute(
             "INSERT INTO decisions (run_id, transaction_id, status, "
             "chosen_document_id, updated_at) VALUES (?, ?, ?, ?, ?) "
@@ -487,6 +526,36 @@ class RunStore:
             "chosen_document_id = excluded.chosen_document_id, "
             "updated_at = excluded.updated_at",
             (run_id, transaction_id, status, chosen_document_id, updated_at),
+        )
+        self.conn.commit()
+
+    def set_disposition(
+        self,
+        run_id: str,
+        transaction_id: str,
+        disposition: str,
+        updated_at: str,
+    ) -> None:
+        """Upsert ONLY the §17 disposition for one transaction.
+
+        Status-preserving: a fresh row seeds `status=pending`; an existing
+        row keeps its `status` and `chosen_document_id` untouched (the
+        ON CONFLICT SET lists only `disposition` + `updated_at`). The
+        mirror-image guarantee lives in `set_decision`, whose upsert never
+        lists `disposition` — the two verdict layers stay orthogonal.
+        """
+        if disposition not in VALID_DISPOSITIONS:
+            raise ValueError(
+                f"invalid disposition {disposition!r}; expected {VALID_DISPOSITIONS}"
+            )
+        self.conn.execute(
+            "INSERT INTO decisions (run_id, transaction_id, status, "
+            "chosen_document_id, updated_at, disposition) "
+            "VALUES (?, ?, ?, NULL, ?, ?) "
+            "ON CONFLICT(run_id, transaction_id) DO UPDATE SET "
+            "disposition = excluded.disposition, "
+            "updated_at = excluded.updated_at",
+            (run_id, transaction_id, STATUS_PENDING, updated_at, disposition),
         )
         self.conn.commit()
 

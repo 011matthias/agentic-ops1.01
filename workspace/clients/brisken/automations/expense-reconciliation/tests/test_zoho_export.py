@@ -243,6 +243,116 @@ def test_resolution_keeps_books_balanced():
     assert debits == credits == Decimal("180.00")
 
 
+# ── §17: personal / business / reimbursement disposition ────────────
+#
+# The reviewer's per-transaction disposition controls how each matched
+# entry posts. business (or absent) posts normally; personal / do-not-
+# export are withheld from the journal; reimbursable redirects the
+# balancing credit to the clearing account (amount unchanged).
+
+
+def _two_tx_outcome():
+    return MatchOutcome(matches=[
+        Match("t1", "r1", MatchType.EXACT, 0.99, "x", False),
+        Match("t2", "r2", MatchType.EXACT, 0.99, "x", False),
+    ])
+
+
+def _refs(rows) -> set[str]:
+    return {r[3] for r in rows}
+
+
+def _balances_per_reference(rows) -> None:
+    """Assert debit total == credit total for every Reference# (entry)."""
+    from collections import defaultdict
+
+    debit, credit = defaultdict(Decimal), defaultdict(Decimal)
+    for r in rows:
+        if r[5]:
+            debit[r[3]] += Decimal(r[5])
+        if r[6]:
+            credit[r[3]] += Decimal(r[6])
+    assert set(debit) == set(credit)
+    for ref in debit:
+        assert debit[ref] == credit[ref], ref
+
+
+def test_personal_disposition_withheld_from_journal():
+    tx1, tx2 = _tx("t1"), _tx("t2")
+    rec1 = _receipt([_line("chair", "180", "Equipment & Hardware")])
+    rec2 = Receipt(
+        document_id="r2", legal_entity_id="le1",
+        detected_date=date(2026, 4, 7), detected_total=Decimal("180"),
+        detected_currency="USD", detected_vendor="Amazon",
+        line_items=(_line("gift", "180", "Meals & Entertainment"),),
+    )
+    rows = build_journal_rows(
+        _two_tx_outcome(), {"t1": tx1, "t2": tx2}, {"r1": rec1, "r2": rec2},
+        dispositions={"t2": "personal_on_business_card"},
+    )
+    # t2 (personal) is withheld; t1 still exports and balances.
+    assert _refs(rows) == {"t1"}
+    _balances_per_reference(rows)
+
+
+def test_do_not_export_withheld_from_journal():
+    tx1, tx2 = _tx("t1"), _tx("t2")
+    rec1 = _receipt([_line("chair", "180", "Equipment & Hardware")])
+    rec2 = Receipt(
+        document_id="r2", legal_entity_id="le1",
+        detected_date=date(2026, 4, 7), detected_total=Decimal("180"),
+        detected_currency="USD", detected_vendor="Amazon",
+        line_items=(_line("misc", "180", "Meals & Entertainment"),),
+    )
+    rows = build_journal_rows(
+        _two_tx_outcome(), {"t1": tx1, "t2": tx2}, {"r1": rec1, "r2": rec2},
+        dispositions={"t1": "do_not_export"},
+    )
+    assert _refs(rows) == {"t2"}
+
+
+def test_business_disposition_matches_no_disposition():
+    """A `business` disposition (explicit) is byte-for-byte identical to
+    passing no dispositions at all — the inert default."""
+    tx = _tx()
+    rec = _receipt([_line("chair", "180", "Equipment & Hardware")])
+    base = build_journal_rows(_matched_outcome(), {"t1": tx}, {"r1": rec})
+    with_biz = build_journal_rows(
+        _matched_outcome(), {"t1": tx}, {"r1": rec},
+        dispositions={"t1": "business"},
+    )
+    assert base == with_biz
+
+
+def test_reimbursable_redirects_credit_keeps_amount_and_balance():
+    tx = _tx()
+    rec = _receipt([_line("hotel", "180", "Travel & Transport")])
+    rows = build_journal_rows(
+        _matched_outcome(), {"t1": tx}, {"r1": rec},
+        card_accounts={"amex-usd": "Amex Card USD"},
+        dispositions={"t1": "reimbursable_personal"},
+        reimbursable_account="Employee Reimbursements Payable",
+    )
+    credit = next(r for r in rows if r[6])
+    # Credit redirected to the clearing account, amount unchanged.
+    assert credit[1] == "Employee Reimbursements Payable"
+    assert Decimal(credit[6]) == Decimal("180.00")
+    # Debit still hits the expense side; the entry balances.
+    _balances_per_reference(rows)
+
+
+def test_reimbursable_without_config_uses_visible_placeholder():
+    tx = _tx()
+    rec = _receipt([_line("hotel", "180", "Travel & Transport")])
+    rows = build_journal_rows(
+        _matched_outcome(), {"t1": tx}, {"r1": rec},
+        dispositions={"t1": "reimbursable_personal"},
+    )
+    credit = next(r for r in rows if r[6])
+    assert credit[1] == "(reimbursable clearing - assign)"
+    _balances_per_reference(rows)
+
+
 # ── slice 4.9: CLI wires the zoho: block end-to-end ─────────────────
 
 
