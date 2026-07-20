@@ -72,6 +72,47 @@ def test_not_applicable_is_resolved_word_boundary_pin():
     assert not rows[0]["unresolved"]
 
 
+# --- 2026-07-20: the 7-cell-row undercount ----------------------------------
+# 305/531 real register rows carry a trailing 7th note cell ("Yes (4th
+# occurrence)" etc.). The old right-anchored ROW_RE read the FIX text as
+# "resolved" for those rows, so most of the register was silently classified
+# resolved -- the same trend-flattering undercount class as the 2026-07-10
+# fix above. Resolved is now anchored by SHAPE (first verdict-shaped cell at
+# index >= 4 that leaves a Fix cell after it).
+
+def test_seven_cell_row_no_is_unresolved():
+    rows = _rows("| 2026-07-11 | brisken | infrastructure-deferred | desc text. "
+                 "| No | structural -- build the detector | Yes (4th occurrence) |\n")
+    assert rows[0]["unresolved"]
+    assert rows[0]["resolved"] == "No"
+    assert rows[0]["fix"].startswith("structural")
+
+
+def test_seven_cell_row_yes_is_resolved():
+    rows = _rows("| 2026-07-11 | brisken | slow-path | desc. "
+                 "| Yes (2026-07-12 structural) | documented | No regression |\n")
+    assert not rows[0]["unresolved"]
+
+
+def test_seven_cell_fix_starting_tbd_does_not_win_over_real_no():
+    rows = _rows("| 2026-05-08 | system | agent-deferred | desc. "
+                 "| No | TBD -- Layer 1 candidate | self-detected |\n")
+    assert rows[0]["unresolved"] and rows[0]["resolved"] == "No"
+
+
+def test_pipe_inside_description_still_finds_resolved():
+    rows = _rows("| 2026-06-01 | meji | slow-path | desc with a \\| pipe "
+                 "| second desc frag | Partially (kept) | memory |\n")
+    assert rows[0]["unresolved"]
+    assert rows[0]["resolved"].startswith("Partially")
+
+
+def test_seven_cell_hook_contained():
+    rows = _rows("| 2026-07-14 | brisken | agent-deferred | closing offer. "
+                 "| No (caught by hook) | structural -- stop-b1 backstop | recurring |\n")
+    assert rows[0]["unresolved"] and rows[0]["hook_contained"]
+
+
 # --- signal behavior ---------------------------------------------------------
 
 def test_stale_excludes_hook_contained():
