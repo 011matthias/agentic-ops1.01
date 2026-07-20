@@ -75,6 +75,46 @@ def test_own_scope_deploy_passes(tmp_path):
         "vercel deploy --prod --scope matthias-neumanns-projects", tmp_path))
 
 
+def test_own_scope_with_named_project_passes(tmp_path):
+    # a non-platform --project inside the user's OWN scope is theirs, not akkton
+    assert _allowed(_run(
+        "vercel deploy --project my-side-thing --scope matthias-neumanns-projects",
+        tmp_path))
+
+
+# --- layer B2: explicit non-platform akkton target asks (allowlist posture) ---
+
+def test_unknown_foreign_project_flag_asks(tmp_path):
+    # a project not in the lydar/webvorschau denylist must still ask
+    assert _asked(_run(
+        "vercel deploy --project newclient-app --scope akktons-projects", tmp_path))
+
+
+def test_unknown_foreign_project_flag_from_platform_linked_cwd_asks(tmp_path):
+    # the core gap: an explicit foreign --project overrides the platform link
+    link = tmp_path / ".vercel"
+    link.mkdir()
+    (link / "project.json").write_text(json.dumps(
+        {"projectId": "prj_xMUV3AVgiAq9uXC9YaX0tMxQdAvl", "orgId": "team_x"}),
+        encoding="utf-8")
+    assert _asked(_run(
+        "vercel deploy --prod --project newclient-app --scope akktons-projects",
+        tmp_path))
+
+
+def test_unknown_foreign_project_id_asks(tmp_path):
+    # any prj_ id that is not the platform id asks, even on a read
+    assert _asked(_run(
+        'vercel api "/v9/projects/prj_9aZZZunknownForeignId/env" --scope akktons-projects',
+        tmp_path))
+
+
+def test_platform_project_flag_from_foreign_named_cwd_still_passes(tmp_path):
+    # --project platform is the allowlisted target; B2 must not misfire on it
+    assert _allowed(_run(
+        "vercel deploy --prod --project platform --scope akktons-projects", tmp_path))
+
+
 # --- layer C: explicit platform target passes ---
 
 def test_platform_project_flag_passes(tmp_path):

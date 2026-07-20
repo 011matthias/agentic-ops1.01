@@ -14,6 +14,14 @@ Decision layers (target-based, not verb-based):
      webvorschau (name, project id, or domain) -> ask. Always.
   B. Own-scope pass: --scope matthias-neumanns-projects (the user's own
      account) -> allow.
+  B2. Explicit non-platform target (allowlist posture): after the own-scope
+     pass, any `--project <name>` that is not `platform`, or any `prj_<id>`
+     that is not the platform id -> ask. This is rigid against UNKNOWN /
+     future akkton projects, not just the named denylist, and it overrides a
+     platform-linked cwd (an explicit --project wins over the .vercel link, so
+     the cwd check in D must not be trusted when a foreign project is named
+     outright). Fires for reads too: touching another project's env/data by
+     explicit id is off limits. The user's own scope is already exempted at B.
   C. Platform pass: an explicit platform marker (--project platform, the
      platform project id, unpauseai.com, /projects/platform API path) -> allow.
   D. Unscoped mutation fail-toward-ask: deploy/promote/rollback/env/rm/alias/
@@ -143,6 +151,18 @@ def main() -> None:
     if OWN_SCOPE in view:
         log("allow:own-scope")
         sys.exit(0)
+
+    # B2. explicit NON-platform project target -> ask (allowlist posture).
+    # Rigid against unknown/future akkton projects, not just the A denylist.
+    # An explicit --project overrides the .vercel link, so this must fire even
+    # from a platform-linked cwd (before D's cwd allow). Own scope already
+    # exited at B, so a user's own non-platform project is unaffected.
+    pm = re.search(r"(?i)--project[ =]+([^\s\"';&|]+)", view)
+    if pm and pm.group(1).lower() not in ("platform", PLATFORM_PROJECT_ID.lower()):
+        _ask(cmd, "explicit non-platform project target (--project)")
+    for pid in re.findall(r"(?i)prj_[A-Za-z0-9]+", view):
+        if pid != PLATFORM_PROJECT_ID:
+            _ask(cmd, "explicit non-platform project id")
 
     # C. explicit platform target
     if PLATFORM_MARKER.search(view):
