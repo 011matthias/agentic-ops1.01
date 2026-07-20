@@ -69,6 +69,14 @@ INTAKE_PROCESSING = "processing"
 INTAKE_READY = "ready"
 VALID_INTAKE_STATUSES = (INTAKE_RECEIVED, INTAKE_PROCESSING, INTAKE_READY)
 
+# §16 export policy (the single-row `settings` table). The gate ships
+# advisory/OFF: `export_approved_only=False` keeps the current
+# review-everything behaviour (only the writer's own posting policy
+# applies). Snapshotted into each run's `config["policy"]` at creation so a
+# run reproduces under the policy that was live when it ran, not whatever
+# the setting later becomes.
+SETTINGS_DEFAULTS: dict = {"export_approved_only": False}
+
 # Background-job states (durable: a Fly machine can scale to zero mid-run;
 # a job row that is still `running` at boot was interrupted).
 JOB_RUNNING = "running"
@@ -191,6 +199,11 @@ class RunStore:
                 error      TEXT,
                 stage      TEXT,
                 created_at TEXT NOT NULL,
+                updated_at TEXT
+            );
+            CREATE TABLE IF NOT EXISTS settings (
+                id         INTEGER PRIMARY KEY CHECK (id = 1),
+                data       TEXT NOT NULL,
                 updated_at TEXT
             );
             """
@@ -594,3 +607,36 @@ class RunStore:
             (run_id, document_id, line_index, category, zoho_account, updated_at),
         )
         self.conn.commit()
+
+    # -- settings (§16 export policy; one row, id=1) -----------------------
+
+    def get_settings(self) -> dict:
+        """The current settings, with defaults applied. No row yet => the
+        defaults (`export_approved_only=False`), so a fresh install behaves
+        exactly as before the policy existed."""
+        row = self.conn.execute(
+            "SELECT data FROM settings WHERE id = 1"
+        ).fetchone()
+        data = json.loads(row["data"]) if row else {}
+        return {**SETTINGS_DEFAULTS, **data}
+
+    def set_settings(self, patch: dict, updated_at: str) -> dict:
+        """Merge `patch` into the stored settings (shallow) and return the
+        effective settings. Only the keys in `patch` change; unknown keys
+        are persisted as-is so a later phase can extend the policy without a
+        migration."""
+        current = {}
+        row = self.conn.execute(
+            "SELECT data FROM settings WHERE id = 1"
+        ).fetchone()
+        if row:
+            current = json.loads(row["data"])
+        merged = {**current, **patch}
+        self.conn.execute(
+            "INSERT INTO settings (id, data, updated_at) VALUES (1, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET "
+            "data = excluded.data, updated_at = excluded.updated_at",
+            (json.dumps(merged), updated_at),
+        )
+        self.conn.commit()
+        return {**SETTINGS_DEFAULTS, **merged}

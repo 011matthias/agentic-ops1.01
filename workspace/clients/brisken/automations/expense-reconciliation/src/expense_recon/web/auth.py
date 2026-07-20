@@ -64,6 +64,7 @@ _OPERATOR_RULES: tuple[tuple[re.Pattern, frozenset | None], ...] = (
     (re.compile(r"^/intakes/[^/]+($|/)"), None),  # POST /intakes itself is for users
     (re.compile(r"^/runs/[^/]+/(publish|unpublish|commit-memory|forget)$"), None),
     (re.compile(r"^/api/operator($|/)"), None),
+    (re.compile(r"^/api/settings$"), frozenset({"PUT"})),  # §16 policy write
     (re.compile(r"^/feedback-log$"), None),
     (re.compile(r"^/feedback\.jsonl$"), None),
 )

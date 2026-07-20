@@ -142,6 +142,7 @@ def test_cors_reflects_lovable_origin_only(gated_client):
         ("POST", "/runs/abc/publish"),
         ("POST", "/runs/abc/commit-memory"),
         ("POST", "/runs/abc/forget"),
+        ("PUT", "/api/settings"),  # §16 policy write is operator-only
     ],
 )
 def test_user_403_on_operator_post_routes(gated_client, method, path):

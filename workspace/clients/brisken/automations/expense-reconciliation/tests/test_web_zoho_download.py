@@ -93,3 +93,53 @@ def test_zoho_download_reflects_rejection(client):
     # The rejected charge is withheld; the others still export.
     assert rejected_tx not in body
     assert kept_tx in body
+
+
+# ── §16 export-approved gate (end-to-end) ────────────────────────────
+
+
+def test_settings_endpoint_get_default_and_put(client):
+    # GET returns the default (gate off).
+    assert client.get("/api/settings").json()["export_approved_only"] is False
+    # PUT (operator) flips it and GET reflects the change.
+    r = client.put("/api/settings", json={"export_approved_only": True})
+    assert r.status_code == 200
+    assert r.json()["export_approved_only"] is True
+    assert client.get("/api/settings").json()["export_approved_only"] is True
+
+
+def test_export_approved_gate_withholds_pending(client):
+    # Turn the policy ON before the run, so the run snapshots policy=on.
+    client.put("/api/settings", json={"export_approved_only": True})
+    run_id = _create_run(client)
+
+    # Nothing confirmed yet -> the journal has no data rows (header only).
+    lines = [ln for ln in client.get(f"/runs/{run_id}/zoho.csv").text.splitlines() if ln.strip()]
+    assert lines[0] == ",".join(ZOHO_COLUMNS)
+    assert len(lines) == 1
+
+    # Confirm exactly one matched charge -> only it exports; a still-pending
+    # sibling stays withheld under the gate.
+    matches = _matches(client, run_id)
+    confirmed = matches[0]["transaction_id"]
+    pending = matches[1]["transaction_id"]
+    client.post(
+        f"/runs/{run_id}/decisions",
+        json={
+            "transaction_id": confirmed,
+            "status": "confirmed",
+            "chosen_document_id": matches[0]["document_id"],
+        },
+    )
+    body = client.get(f"/runs/{run_id}/zoho.csv").text
+    assert confirmed in body
+    assert pending not in body
+
+
+def test_export_gate_default_off_exports_matched(client):
+    # With the policy left at its default (off), confirm-all still exports
+    # every matched charge -- the gate is inert unless switched on.
+    run_id = _create_run(client)
+    client.post(f"/runs/{run_id}/decisions/confirm-matched")
+    body = client.get(f"/runs/{run_id}/zoho.csv").text
+    assert _matches(client, run_id)[0]["transaction_id"] in body
