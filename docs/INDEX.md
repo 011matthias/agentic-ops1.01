@@ -180,6 +180,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-20 | System Development | system-infra | [→](docs/2026-07-20%20-%20System%20Development/Checkpoint.md) |
 | 2026-07-17 | Ruff Push Gate CI Prevention | system-infra | [→](docs/2026-07-17%20-%20Ruff%20Push%20Gate%20CI%20Prevention/Checkpoint.md) |
 | 2026-07-17 | Optimize Onboarding + Brisken Match Labeling | system-infra | [→](docs/2026-07-17%20-%20Optimize%20Onboarding%20+%20Brisken%20Match%20Labeling/Checkpoint.md) |
 | 2026-07-17 | Repo Clean + Backlog Ship + Sweep Automation | system-infra | [→](docs/2026-07-17%20-%20Repo%20Clean%20+%20Backlog%20Ship%20+%20Sweep%20Automation/Checkpoint.md) |
