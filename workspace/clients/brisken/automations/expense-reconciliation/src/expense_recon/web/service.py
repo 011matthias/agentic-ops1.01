@@ -1436,6 +1436,19 @@ def build_view(run: RunRow, decisions: dict[str, Decision], overrides: dict) -> 
     }
 
 
+def _charge_cats(run: RunRow) -> dict:
+    """The receiptless-charge categorization side-map (Slice 10), rebuilt
+    from the run snapshot keyed by transaction_id. Threaded into every
+    regenerated export so web downloads carry the same receiptless-charge
+    categories the workbench shows; `build_view` loads it the same way
+    (see the `charge_cats` block there). Empty dict when the snapshot has
+    none, so the writers behave exactly as before on receipt-only runs."""
+    return {
+        tx_id: categorization_from_dict(d)
+        for tx_id, d in (run.snapshot.get("charge_categorizations") or {}).items()
+    }
+
+
 def regenerate_report(
     run: RunRow, decisions: dict[str, Decision], overrides: dict
 ) -> Path:
@@ -1445,7 +1458,14 @@ def regenerate_report(
     receipts = apply_overrides(receipts, overrides)
     effective = apply_decisions(outcome, transactions, receipts, decisions)
     out_path = Path(run.work_dir) / "report.xlsx"
-    write_report(effective, transactions, receipts, out_path, parse_errors=parse_errors)
+    write_report(
+        effective,
+        transactions,
+        receipts,
+        out_path,
+        parse_errors=parse_errors,
+        charge_categorizations=_charge_cats(run),
+    )
     return out_path
 
 
@@ -1509,7 +1529,17 @@ def regenerate_zoho(
         )
     out_path = Path(run.work_dir) / "zoho_journal.csv"
     coa_gate = _coa_gate_from_config(run.config, run.work_dir)
-    write_zoho_export(effective, transactions, receipts, out_path, coa_gate=coa_gate)
+    write_zoho_export(
+        effective,
+        transactions,
+        receipts,
+        out_path,
+        coa_gate=coa_gate,
+        charge_categorizations=_charge_cats(run),
+        include_receiptless_learned=bool(
+            (run.config or {}).get("zoho", {}).get("export_receiptless_learned")
+        ),
+    )
     return out_path
 
 
@@ -1531,7 +1561,13 @@ def regenerate_reconciled(
     receipts = apply_overrides(receipts, overrides)
     effective = apply_decisions(outcome, transactions, receipts, decisions)
     out_path = Path(run.work_dir) / "reconciled.csv"
-    write_reconciled_csv(effective, transactions, receipts, out_path)
+    write_reconciled_csv(
+        effective,
+        transactions,
+        receipts,
+        out_path,
+        charge_categorizations=_charge_cats(run),
+    )
     return out_path
 
 
@@ -1572,6 +1608,7 @@ def regenerate_writeback(
         receipts,
         sheet_name=stmt_cfg.get("sheet_name"),
         chart_of_accounts=chart,
+        charge_categorizations=_charge_cats(run),
     )
     return out_path
 
