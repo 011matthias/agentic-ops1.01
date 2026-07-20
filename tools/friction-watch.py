@@ -56,33 +56,47 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 REGISTER = REPO / "docs" / "friction-register.md"
 
-ROW_RE = re.compile(
-    r"^\|\s*(?P<date>\d{4}-\d{2}-\d{2})\s*"
-    r"\|\s*(?P<client>[^|]+?)\s*"
-    r"\|\s*(?P<type>[^|]+?)\s*"
-    r"\|\s*(?P<desc>.+?)\s*"
-    r"\|\s*(?P<resolved>[^|]+?)\s*"
-    r"\|\s*(?P<fix>[^|]+?)\s*\|\s*$"
+ROW_START_RE = re.compile(r"^\|\s*(?P<date>\d{4}-\d{2}-\d{2})\s*\|")
+# A cell that reads like a resolution verdict. Anchors the Resolved column by
+# SHAPE instead of by position-from-the-right: 305/531 real register rows carry
+# a 7th trailing note cell, which made the old right-anchored ROW_RE read the
+# FIX text as "resolved" and silently classify most of the register as
+# resolved (2026-07-20 finding -- the same trend-flattering undercount class
+# as the 2026-07-10 fix this suite documents).
+RESOLVED_SHAPE_RE = re.compile(
+    r"^(yes|no|partial|held|n/?a|tbd|-+$|not applicable)",
+    re.IGNORECASE,
 )
 
 
 def parse_register(text: str) -> list[dict]:
     rows = []
     for line in text.splitlines():
-        m = ROW_RE.match(line)
-        if not m:
+        if not ROW_START_RE.match(line):
             continue
-        d = m.groupdict()
-        if d["date"] == "Date" or d["date"].startswith("---"):
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) < 6:
             continue
+        d = {"date": cells[0], "client": cells[1], "type": cells[2]}
         try:
             d["_parsed_date"] = datetime.strptime(d["date"], "%Y-%m-%d").date()
         except ValueError:
             continue
-        d["client"] = d["client"].strip()
-        d["type"] = d["type"].strip()
-        d["resolved"] = d["resolved"].strip()
-        d["fix"] = d["fix"].strip()
+        # Canonical layout: [date, client, type, desc, resolved, fix, note?].
+        # A pipe inside the description shifts everything right, so take the
+        # FIRST resolution-shaped cell at index >= 4 that still leaves a Fix
+        # cell after it (first, not last: a Fix cell starting "TBD ..." or a
+        # trailing "Yes (4th occurrence)" note must not win over a real "No").
+        ridx = None
+        for i in range(4, len(cells) - 1):
+            if RESOLVED_SHAPE_RE.match(cells[i]):
+                ridx = i
+                break
+        if ridx is None:
+            ridx = 4  # free-text or empty resolved cell: canonical position
+        d["desc"] = " | ".join(cells[3:ridx])
+        d["resolved"] = cells[ridx]
+        d["fix"] = cells[ridx + 1] if ridx + 1 < len(cells) else ""
         resolved_lower = d["resolved"].lower()
         # Prefix match, word-boundary safe: "No (caught by hook)" and
         # "Partially (...)" are unresolved; "not applicable" is not

@@ -82,6 +82,28 @@ def rel_to_repo(abspath: str) -> str | None:
     return "/".join(segs)
 
 
+def rel_to_git_root(abspath: str) -> str | None:
+    """Fallback for targets OUTSIDE the gate's own repo: if the target sits
+    inside ANY git-rooted tree (a `.git` dir, or the `.git` pointer FILE a
+    `git worktree` carries), return the path relative to that root.
+
+    Closes the 2026-07-17 tamper-test bypass (register `skipped-gate`): an
+    Edit to tools/scorers/*.py in a sibling worktree resolved outside
+    REPO_POSIX and passed, although the worktree commits into the same
+    repository. A path with no git root around it (e.g. C:/elsewhere/...)
+    still returns None and passes."""
+    p = os.path.normpath(abspath.replace("\\", "/")).replace("\\", "/")
+    d = os.path.dirname(p)
+    while True:
+        if os.path.exists(os.path.join(d, ".git")):
+            root = d.replace("\\", "/").rstrip("/")
+            return p[len(root) + 1:]
+        parent = os.path.dirname(d)
+        if parent == d:
+            return None
+        d = parent
+
+
 def main() -> int:
     try:
         raw = sys.stdin.read()
@@ -102,6 +124,11 @@ def main() -> int:
         abspath = f"{REPO_POSIX}/{abspath.lstrip('/')}"
 
     rel = rel_to_repo(abspath)
+    if rel is None:
+        # Outside the gate's own repo: a git worktree / second clone of this
+        # repo is still the locked surface (its commits land in the same
+        # repository). Key on the target's OWN git root.
+        rel = rel_to_git_root(abspath)
     if not rel or not SCORER_RE.match(rel):
         return 0
 
@@ -113,7 +140,9 @@ def main() -> int:
         )
         return 0
 
-    target = os.path.join(REPO, *rel.split("/"))
+    # Existing-vs-new check on the RESOLVED target itself (not a REPO join):
+    # for a worktree/second-clone target the file lives under that root.
+    target = os.path.normpath(abspath.replace("\\", "/"))
     if rel.lower().endswith("pins.json"):
         deny(
             f"[scorer-lock] {rel} is the scorer pin registry and is never "
