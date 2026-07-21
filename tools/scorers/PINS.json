@@ -1,4 +1,9 @@
 {
+  "gtm-roi-v2.py": {
+    "direction": "maximize",
+    "pinned": "2026-07-21",
+    "sha": "b6e0e17bf0c3ec5df658d70e8df71ae55bbe53f6"
+  },
   "gtm-roi.py": {
     "direction": "maximize",
     "pinned": "2026-07-21",
