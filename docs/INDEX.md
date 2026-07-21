@@ -182,6 +182,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-21 | Upwork-Independence GTM Optimize | misc | [→](docs/2026-07-21%20-%20Upwork-Independence%20GTM%20Optimize/Checkpoint.md) |
 | 2026-07-20 | System Development | system-infra | [→](docs/2026-07-20%20-%20System%20Development/Checkpoint.md) |
 | 2026-07-17 | Ruff Push Gate CI Prevention | system-infra | [→](docs/2026-07-17%20-%20Ruff%20Push%20Gate%20CI%20Prevention/Checkpoint.md) |
 | 2026-07-17 | Optimize Onboarding + Brisken Match Labeling | system-infra | [→](docs/2026-07-17%20-%20Optimize%20Onboarding%20+%20Brisken%20Match%20Labeling/Checkpoint.md) |
