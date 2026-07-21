@@ -1130,6 +1130,33 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             settings = store.set_settings(patch, _now_iso())
         return JSONResponse(settings)
 
+    @app.get("/api/compare")
+    def api_compare(request: Request, a: str = "", b: str = ""):
+        """JSON twin of the HTML /compare: the SPA picks two runs and shows
+        the bucket deltas. The diff is computed server-side by
+        `compare_runs` (the same function the Jinja page uses), so the front
+        end never derives it. Returns the run list for the two selectors plus
+        the comparison (null until both a and b resolve to real runs).
+        Operator-only, mirroring the HTML compare rule."""
+        with open_store() as store:
+            runs = store.list_runs()
+            run_a = store.get_run(a.strip()) if a.strip() else None
+            run_b = store.get_run(b.strip()) if b.strip() else None
+        comparison = (
+            compare_runs(run_a, run_b)
+            if run_a is not None and run_b is not None
+            else None
+        )
+        return JSONResponse({
+            "runs": [
+                {"run_id": r.run_id, "label": r.label, "created_at": r.created_at}
+                for r in runs
+            ],
+            "a": a.strip(),
+            "b": b.strip(),
+            "comparison": comparison,
+        })
+
     @app.post("/runs/{run_id}/decisions/confirm-matched")
     def post_confirm_matched(run_id: str, request: Request):
         # PR A — one click confirms every matched-bucket transaction with
