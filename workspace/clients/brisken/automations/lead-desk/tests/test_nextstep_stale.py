@@ -97,16 +97,34 @@ def test_upsert_stamps_next_step_at_on_adopt(tmp_path):
         assert s.get_contact("c1")["next_step_at"] == CREATED
 
 
-def test_v5_backfills_next_step_at_from_created_at(tmp_path):
-    db = tmp_path / "t.sqlite"
-    with ContactStore(db) as s:
+def _replay_v5(s):
+    """Simulate a legacy pre-v5 DB (no stamp) and re-run the migration."""
+    s.conn.execute("UPDATE contacts SET next_step_at = NULL")
+    s.conn.execute("PRAGMA user_version = 4")
+    s.conn.commit()
+    s._run_migrations()
+
+
+def test_v5_backfills_no_reply_plans_to_created_at(tmp_path):
+    with ContactStore(tmp_path / "t.sqlite") as s:
         s.upsert_contact({"contact_id": "c1", "natural_key": "a@x.com",
-                          "email": "a@x.com", "next_step": "nudge later"}, now=CREATED)
-        # Simulate a legacy pre-v5 row (no stamp) and replay the migration.
-        s.conn.execute("UPDATE contacts SET next_step_at = NULL")
-        s.conn.execute("PRAGMA user_version = 4")
-        s.conn.commit()
-        s._run_migrations()
+                          "email": "a@x.com",
+                          "next_step": "No reply yet; one optional nudge from ~2026-07-15."},
+                         now=CREATED)
+        _replay_v5(s)
         row = s.get_contact("c1")
         assert s.conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
-        assert row["next_step_at"] == row["created_at"]  # backfilled to created_at
+        assert row["next_step_at"] == row["created_at"]  # a reply now supersedes it
+
+
+def test_v5_leaves_a_genuine_note_unstamped(tmp_path):
+    # Regression: Lokesh Doggala / Zalando carried "HOT: he asked for a call".
+    # The backfill must NOT date it (that would suppress a live hot-lead note).
+    with ContactStore(tmp_path / "t.sqlite") as s:
+        s.upsert_contact({"contact_id": "c1", "natural_key": "a@x.com",
+                          "email": "a@x.com",
+                          "next_step": "HOT: he asked for a call incl. Adela."}, now=CREATED)
+        s.conn.execute("UPDATE contacts SET next_step_at = NULL")  # legacy row
+        s.conn.execute("PRAGMA user_version = 4"); s.conn.commit()
+        s._run_migrations()
+        assert s.get_contact("c1")["next_step_at"] is None  # honored verbatim

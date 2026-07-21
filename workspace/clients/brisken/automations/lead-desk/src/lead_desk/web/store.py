@@ -405,13 +405,17 @@ _MIGRATIONS: dict[int, list] = {
     # pre-reply plan (a "No reply yet / nudge on <date>" next_step written
     # before the contact replied) from a genuine post-reply plan, so it kept
     # surfacing "No reply yet" as the action next to a captured reply
-    # (Asako Teruki / NYK, 2026-07-21). Backfill existing plans to created_at:
-    # their real authored time predates any later reply, and updated_at is
-    # UNSAFE here (a sheet sync bumps it past the reply).
+    # (Asako Teruki / NYK, 2026-07-21). Going forward every next_step write is
+    # stamped accurately (update_fields / upsert_contact). The one-time backfill
+    # can only DATE legacy rows, so it stamps created_at (a safe lower bound;
+    # updated_at is UNSAFE - a sheet sync bumps it past the reply) ONLY for
+    # plans that literally assert "No reply yet", which a captured reply
+    # contradicts. Everything else stays NULL = honored verbatim, so a genuine
+    # post-reply note (e.g. "HOT: he asked for a call") is never suppressed.
     5: [
         _add_column("contacts", "next_step_at", "TEXT"),
         "UPDATE contacts SET next_step_at = created_at "
-        "WHERE COALESCE(next_step, '') != '' AND next_step_at IS NULL",
+        "WHERE next_step LIKE 'No reply yet%' AND next_step_at IS NULL",
     ],
 }
 
