@@ -1,2 +1,3 @@
 round	commit	score	delta	status	description
 0	05a828e	2649.94	0	baseline	baseline (asset as-is)
+1	f6387ae	3453.07	+803.13	keep	widen the entry tier: drop good to EUR650/scope0.20 so the numerous low-WTP micro segment actually buys a cheap thin plan (the flat baseline priced it out entirely)
