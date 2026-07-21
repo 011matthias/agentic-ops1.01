@@ -4,3 +4,4 @@ round	commit	score	delta	status	description
 2	d7c1953	121.79	+39.91	keep	cut capacity 40->15 h/wk: Route 1 is pool-capped, so extra hours only add opportunity cost without clients
 3	1db8c30	186.32	+64.53	keep	raise Route-1 care price 100->300 (ceiling): model has no care-price elasticity, so recurring care revenue scales freely
 4	d56477c	200.37	+14.05	keep	drop Route-1 build price 2000->1200 (floor): recurring care dominates, so loss-lead the build to maximize conversion and client count
+5	8f63cde	194.37	NA	discard	probe: shift allocation to 0.45 local / 0.55 b2b -- test whether the 50/50 balance is a true optimum
