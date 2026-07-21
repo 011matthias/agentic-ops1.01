@@ -21,7 +21,10 @@ Subcommands:
   round --desc "<hypothesis>"          one experiment: commit -> score ->
         [--simplification] [--rework]  guards -> keep/revert -> journal
         [--discard]
-  resume                               crash/interrupt recovery + repro check
+  resume                               crash/interrupt recovery + repro check;
+                                       banks the idle gap since the last engine
+                                       activity so a run picked up in a later
+                                       session is not wall-clock exhausted
   stop [--reason X]                    final journal row, unlock
   status                               print run state
 
@@ -138,6 +141,11 @@ def load_state(repo: str, corrupt_ok: bool = False) -> dict | None | str:
 
 
 def save_state(repo: str, state: dict) -> None:
+    # Every state write IS engine activity. `resume` banks the gap since this
+    # moment as idle time (bank_idle_gap), so the invariant "last_activity_at
+    # == the last time the engine actually ran" has to hold at every call
+    # site, not just the ones that remembered to stamp it.
+    state["last_activity_at"] = _now().isoformat(timespec="seconds")
     p = state_path(repo)
     os.makedirs(os.path.dirname(p), exist_ok=True)
     tmp = p + ".tmp"
@@ -416,12 +424,44 @@ def verify_harness_hashes(repo: str, state: dict) -> None:
                 "broken change).")
 
 
+def active_minutes(state: dict) -> float:
+    """Wall-clock the run has actually BURNED: calendar time since lock-on,
+    minus the idle gaps banked by `resume`.
+
+    The budget bounds burn, not calendar age. Measuring straight from a frozen
+    `started_at` made every run picked up in a later session permanently
+    WALL-CLOCK EXHAUSTED - and the engine's own advice ("raise the budget in a
+    NEW run") is impossible, because RUN.md is locked for the run's duration.
+    That killed the cross-session `continuous` mode outright. A run that
+    genuinely burns past its budget in one sitting still trips, because
+    `resume` is the only thing that banks idle time.
+    """
+    started = _dt.datetime.fromisoformat(state["started_at"])
+    elapsed_min = (_now() - started).total_seconds() / 60.0
+    return elapsed_min - float(state.get("idle_minutes", 0.0))
+
+
+def bank_idle_gap(state: dict) -> float:
+    """Move the gap since the last engine activity into `idle_minutes`.
+
+    Called by `resume` only: the time between one session ending and the next
+    picking the run up is not burn. Returns the banked gap (minutes).
+    """
+    last = state.get("last_activity_at") or state["started_at"]
+    now = _now()
+    gap = (now - _dt.datetime.fromisoformat(last)).total_seconds() / 60.0
+    if gap > 0:
+        state["idle_minutes"] = float(state.get("idle_minutes", 0.0)) + gap
+    else:
+        gap = 0.0
+    state["last_activity_at"] = now.isoformat(timespec="seconds")
+    return gap
+
+
 def check_budgets(state: dict) -> str | None:
     if state["round"] >= int(state["budgets"]["rounds"]):
         return "ROUNDS EXHAUSTED"
-    started = _dt.datetime.fromisoformat(state["started_at"])
-    elapsed_min = (_now() - started).total_seconds() / 60.0
-    if elapsed_min > float(state["budgets"]["wall_clock_minutes"]):
+    if active_minutes(state) > float(state["budgets"]["wall_clock_minutes"]):
         return "WALL-CLOCK EXHAUSTED"
     return None
 
@@ -488,6 +528,8 @@ def cmd_start(tag: str) -> int:
     # must leave no branch, no commit, no state behind.
     state.update({
         "started_at": _now().isoformat(timespec="seconds"),
+        "last_activity_at": _now().isoformat(timespec="seconds"),
+        "idle_minutes": 0.0,
         "round": 0, "best_score": None, "consecutive_non_keeps": 0,
         "rework_count": 0, "pending_rework": None,
     })
@@ -675,28 +717,60 @@ def cmd_resume() -> int:
     # A deliberately-parked guard_fail experiment (awaiting `round --rework`)
     # leaves HEAD at the experiment commit with a clean tree - byte-identical
     # to a crash, EXCEPT for this marker. Never destroy a parked experiment.
+    banked = bank_idle_gap(state)
+    if banked >= 1:
+        print(f"banked {banked:.0f} idle minute(s) since the last engine "
+              "activity (the budget bounds burn, not calendar age)")
+
     pend = state.get("pending_rework")
     if pend and head_sha(repo) == pend:
         cap = state["budgets"]["max_rework_attempts"]
         print(f"parked guard_fail at r{state['round'] + 1} awaiting "
               f"`round --rework --desc \"...\"` "
               f"({state['rework_count']}/{cap} used); nothing to recover.")
+        save_state(repo, state)
         return 0
 
-    if git(repo, "status", "--porcelain").stdout.strip():
-        print("dirty tree from interrupted round - restoring last kept state")
-        git(repo, "reset", "--hard", state["base_sha"])
-    elif head_sha(repo) != state["base_sha"]:
+    dirty = bool(git(repo, "status", "--porcelain").stdout.strip())
+    if head_sha(repo) != state["base_sha"]:
         n = state["round"] + 1
+        # last_tsv_row reads the WORKING TREE journal, so it also sees a row
+        # that append_tsv wrote but whose journal commit never landed.
         row = last_tsv_row(repo, state)
         if row is not None and row[0] == str(n):
-            # The round-n journal commit COMPLETED but save_state did not run
-            # (crash in the commit->save_state window). The committed journal
-            # is the durable record; reconcile the cache to it instead of
-            # `git reset` destroying a kept, guard-passed win.
             verdict = row[4]
-            print(f"crash after r{n} journal committed ({verdict}) - adopting "
-                  "the durable journal, no work lost")
+            if verdict == "stopped":
+                # cmd_stop journals its final row as round+1 - exactly the
+                # number this branch tests for - so a crash between the stop
+                # commit and the state-file removal must COMPLETE the unlock.
+                # Adopting it as an ordinary round would resurrect a stopped
+                # run and append future rounds after a `stopped` row.
+                os.remove(state_path(repo))
+                print(f"run '{state['tag']}' was already stopped (its journal "
+                      "row is committed); completing the interrupted unlock. "
+                      "Locks OFF.")
+                return 0
+            if dirty:
+                # Crash INSIDE the journal write: append_tsv() produced the
+                # row, the commit never landed. The verdict was already
+                # computed and guard-gated, so commit the pending row rather
+                # than let a blind reset destroy a scored win.
+                git(repo, "add", "--",
+                    f"docs/optimize/{state['tag']}/results.tsv")
+                git(repo, "commit", "-m",
+                    f"experiment({state['tag']}): r{n} journal ({verdict}) "
+                    "[recovered by resume]")
+                print(f"crash inside the r{n} journal write ({verdict}) - "
+                      "committed the pending journal row, no work lost")
+                if git(repo, "status", "--porcelain").stdout.strip():
+                    git(repo, "reset", "--hard", "HEAD")
+            else:
+                # The journal commit COMPLETED but save_state did not run.
+                # The committed journal is the durable record; reconcile the
+                # cache to it instead of `git reset` destroying a kept,
+                # guard-passed win.
+                print(f"crash after r{n} journal committed ({verdict}) - "
+                      "adopting the durable journal, no work lost")
             state["base_sha"] = head_sha(repo)
             state["round"] = n
             state["tsv_lines"], state["tsv_sha256"] = tsv_anchors(
@@ -724,6 +798,11 @@ def cmd_resume() -> int:
             state["round"] = n
             state["consecutive_non_keeps"] += 1
             state["pending_rework"] = None
+    elif dirty:
+        # HEAD is still the last kept state: a plain in-flight edit that never
+        # reached an experiment commit. Nothing journaled, nothing to recover.
+        print("dirty tree from interrupted round - restoring last kept state")
+        git(repo, "reset", "--hard", state["base_sha"])
 
     verify_harness_hashes(repo, state)
     verify_tsv(repo, state)

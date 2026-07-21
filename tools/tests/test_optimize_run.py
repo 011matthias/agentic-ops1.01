@@ -9,6 +9,7 @@ The engine executes everything a fumble could corrupt - so these tests
 assert BEHAVIOR: branch history shape, TSV rows, git tree state after
 keep/discard/crash, lock-state lifecycle.
 """
+import datetime as _dt
 import json
 import shutil
 import subprocess
@@ -568,3 +569,111 @@ def test_round_still_dies_on_corrupt_state(tmp_path):
         "{bad", encoding="utf-8")
     proc = engine(repo, "round", "--desc", "x", expect=1)
     assert "unparseable" in proc.stderr
+
+
+# --- E1: the wall-clock budget bounds ACTIVE burn, not calendar time --------
+
+def test_wallclock_budget_excludes_idle_session_gaps(tmp_path):
+    """A run resumed after a session gap must still be runnable.
+
+    started_at was frozen at lock-on and never adjusted, so any run picked up
+    the next day was permanently WALL-CLOCK EXHAUSTED - and the engine's own
+    advice ("raise the budget in a NEW run") is impossible because RUN.md is
+    locked. That structurally killed the cross-session `continuous` mode the
+    command doc promises.
+    """
+    repo = make_repo(tmp_path, budgets={"wall_clock_minutes": 60})
+    engine(repo, "start", "t1")
+    t0 = _dt.datetime.fromisoformat(state(repo)["started_at"])
+    next_session = (t0 + _dt.timedelta(days=2)).isoformat(timespec="seconds")
+    a_minute_later = (t0 + _dt.timedelta(days=2, minutes=1)).isoformat(
+        timespec="seconds")
+
+    # The run sat idle for two days; resuming banks that gap as idle, not burn.
+    engine(repo, "resume", env={"OPTIMIZE_NOW": next_session})
+    assert state(repo)["idle_minutes"] > 2800
+
+    edit_numbers(repo, ("2", "3"))
+    out = engine(repo, "round", "--desc", "round after an overnight gap",
+                 env={"OPTIMIZE_NOW": a_minute_later}).stdout
+    assert "r1: KEEP" in out
+
+
+def test_wallclock_budget_still_binds_on_continuous_burn(tmp_path):
+    """The idle carve-out must not defang the budget for a run that really
+    does burn past it without ever being resumed."""
+    repo = make_repo(tmp_path, budgets={"wall_clock_minutes": 60})
+    engine(repo, "start", "t1")
+    t0 = _dt.datetime.fromisoformat(state(repo)["started_at"])
+    way_later = (t0 + _dt.timedelta(minutes=90)).isoformat(timespec="seconds")
+    edit_numbers(repo, ("2", "3"))
+    proc = engine(repo, "round", "--desc", "burned past the budget",
+                  env={"OPTIMIZE_NOW": way_later}, expect=1)
+    assert "WALL-CLOCK EXHAUSTED" in proc.stderr
+
+
+# --- E2: a crash in the append -> journal-commit window must not eat a keep --
+
+def test_resume_recovers_keep_from_uncommitted_append_window(tmp_path):
+    """append_tsv() writes the row, then the journal commit lands.
+
+    A SIGKILL between them left HEAD at the experiment commit with a dirty
+    results.tsv - and cmd_resume's dirty-tree branch fired BEFORE the
+    adopt-journal branch, hard-resetting to the stale on-disk base_sha. The
+    scored, guard-passed win was destroyed with no crash row, and because the
+    on-disk best_score and TSV anchors were equally stale the reproducibility
+    check still passed. Silent loss.
+    """
+    repo = make_repo(tmp_path)                        # baseline 9
+    engine(repo, "start", "t1")
+    edit_numbers(repo, ("2", "3"))                    # 5 = a real win
+
+    # Simulate the crash: experiment commit landed, journal row written but
+    # NOT committed, run-state cache untouched (save_state never ran).
+    _git(repo, "add", "--", "numbers.txt")
+    _git(repo, "commit", "-q", "-m", "experiment(t1): r1: shrink both numbers")
+    exp_sha = _git(repo, "rev-parse", "HEAD").stdout.strip()
+    tsv = repo / "docs" / "optimize" / "t1" / "results.tsv"
+    tsv.write_text(
+        tsv.read_text(encoding="utf-8")
+        + f"1\t{exp_sha[:7]}\t5\t-4\tkeep\tshrink both numbers\n",
+        encoding="utf-8")
+
+    out = engine(repo, "resume").stdout
+    assert (repo / "numbers.txt").read_text().splitlines() == ["2", "3"], out
+    st = state(repo)
+    assert st["round"] == 1 and st["best_score"] == 5.0, out
+    assert [r[4] for r in tsv_rows(repo)] == ["baseline", "keep"], out
+    assert not _git(repo, "status", "--porcelain").stdout.strip()
+    # and the recovered round is a normal base for the next one
+    edit_numbers(repo, ("1", "1"))
+    assert "r2: KEEP" in engine(repo, "round", "--desc", "shrink again").stdout
+
+
+# --- E3: a crash inside stop must not resurrect the run ---------------------
+
+def test_resume_completes_an_interrupted_stop(tmp_path):
+    """cmd_stop journals its row as round+1, which is exactly the row number
+    cmd_resume's adopt-branch tests for. A crash between the stop commit and
+    os.remove(state) therefore made the next resume adopt the `stopped` row as
+    an ordinary non-keep round and bring the run back to life, with future
+    rounds appending after a `stopped` row in the durable journal."""
+    repo = make_repo(tmp_path)
+    engine(repo, "start", "t1")
+    edit_numbers(repo, ("2", "3"))
+    engine(repo, "round", "--desc", "shrink")
+    st_before_stop = state(repo)
+
+    engine(repo, "stop", "--reason", "converged")
+    assert state(repo) is None
+    # Simulate the crash: the stop row is committed, but the state file
+    # removal never happened.
+    stp = repo / ".claude" / "optimize" / "run.json"
+    stp.parent.mkdir(parents=True, exist_ok=True)
+    stp.write_text(json.dumps(st_before_stop), encoding="utf-8")
+
+    out = engine(repo, "resume").stdout
+    assert "already stopped" in out.lower(), out
+    assert state(repo) is None, "a stopped run must never resurrect"
+    assert [r[4] for r in tsv_rows(repo)].count("stopped") == 1
+    assert tsv_rows(repo)[-1][4] == "stopped"
