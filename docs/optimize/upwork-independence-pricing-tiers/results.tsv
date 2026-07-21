@@ -1,3 +1,4 @@
 round	commit	score	delta	status	description
 0	05a828e	2649.94	0	baseline	baseline (asset as-is)
 1	f6387ae	3453.07	+803.13	keep	widen the entry tier: drop good to EUR650/scope0.20 so the numerous low-WTP micro segment actually buys a cheap thin plan (the flat baseline priced it out entirely)
+2	6c48a8a	4775.09	+1322.02	keep	differentiate the mid tier and capture the premium segment in one coupled move: thin better to EUR1850/scope0.55 and raise best to EUR6300. The levers are incentive-coupled - raising best alone makes the scale segment defect DOWN to the cheaper better tier (more surplus there); thinning better removes that outside option so scale stays in best and pays for it
