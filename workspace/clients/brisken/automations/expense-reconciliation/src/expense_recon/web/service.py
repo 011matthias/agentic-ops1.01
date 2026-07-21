@@ -253,15 +253,27 @@ def prepare_run(
             "Upload the report PDF, or pick a CSV source."
         )
 
-    # A requested-but-unavailable AI key must NOT block the run. The
-    # keyword classifier always produces a complete reconciliation, so we
-    # drop the `llm:` block, run the deterministic path, and record an
-    # informational notice the workbench surfaces. Never a hard error.
-    ai_unavailable = form.use_llm and not os.environ.get("OPENAI_API_KEY")
-    use_llm_effective = form.use_llm and not ai_unavailable
+    # 2026-07-21: the LLM path is the default for a hosted run (the OpenAI key
+    # is set on the server, and the whole point of the tool is the AI read).
+    # `EXPENSE_RECON_DEFAULT_LLM=0` opts a deployment back out. An explicit
+    # form checkbox still forces it on. When no key is present the run silently
+    # falls back to the deterministic keyword path; the "AI unavailable" notice
+    # stays tied to an EXPLICIT request (checkbox on, no key), so a default run
+    # in a keyless env is deterministic without a misleading banner.
+    have_key = bool(os.environ.get("OPENAI_API_KEY"))
+    want_llm = form.use_llm or _default_llm_on()
+    ai_unavailable = form.use_llm and not have_key
+    use_llm_effective = want_llm and have_key
 
+    # 2026-07-21 owner decision: for a hosted run the tool's own category +
+    # account are authoritative over the Zoho report's (see
+    # categorization.override_er_category). Only meaningful when the LLM
+    # actually picks accounts; a no-op on the keyword path. Auditable /
+    # reversible via EXPENSE_RECON_OVERRIDE_ER_CATEGORY=0.
     cfg = _build_config(
-        stmt_name, rcpt_name, column_map, form, use_llm=use_llm_effective
+        stmt_name, rcpt_name, column_map, form,
+        use_llm=use_llm_effective,
+        override_er_category=use_llm_effective and _override_er_category_on(),
     )
     # Phase-5 COA gate on the hosted surface: inject a per-entity
     # `coa_validation` block from the /data provisioning file (env
@@ -703,6 +715,20 @@ def _resolve_statement_map(stmt_path: Path, form: RunForm) -> dict[str, str]:
     return column_map
 
 
+def _default_llm_on() -> bool:
+    """The hosted run uses the LLM by default (a key is set on the server).
+    `EXPENSE_RECON_DEFAULT_LLM=0` opts a deployment out."""
+    return os.environ.get("EXPENSE_RECON_DEFAULT_LLM", "1") != "0"
+
+
+def _override_er_category_on() -> bool:
+    """The tool's own category + account win over the Zoho report's by default
+    on the hosted surface (2026-07-21 owner decision).
+    `EXPENSE_RECON_OVERRIDE_ER_CATEGORY=0` restores the report-authoritative
+    behaviour."""
+    return os.environ.get("EXPENSE_RECON_OVERRIDE_ER_CATEGORY", "1") != "0"
+
+
 def _build_config(
     stmt_name: str,
     rcpt_name: str,
@@ -710,6 +736,7 @@ def _build_config(
     form: RunForm,
     *,
     use_llm: bool,
+    override_er_category: bool = False,
 ) -> dict:
     statement = {
         "path": stmt_name,
@@ -747,6 +774,8 @@ def _build_config(
     }
     if use_llm:
         cfg["llm"] = {"provider": "openai", "model": "gpt-4o-mini"}
+    if override_er_category:
+        cfg["categorization"] = {"override_er_category": True}
     return cfg
 
 

@@ -12,12 +12,14 @@ This is distinct from `categorization_gate.py`. That module is an LLM
 categorization-ACCURACY ratchet used in `calibrate`. This module is
 account-EXISTENCE / postability validation, run at export time.
 
-The account string validated is `Categorization.zoho_account` — per
-Dirk 2026-06-16 (`categorize._carry_zoho_account`), the posting account
-on each line comes from the Zoho Expense report's own category
-(`receipt.zoho_category`), authoritative for posting; the LLM's COA pick
-is secondary. So `zoho_account` is what posts, and what this gate
-checks.
+The account string validated is `Categorization.zoho_account` — whatever
+the categorization pass put there. Which pass owns it is decided by
+`categorize._carry_zoho_account`: by default (Dirk 2026-06-16) the Zoho
+Expense report's own account (`receipt.zoho_category`) is authoritative;
+under `categorization.override_er_category` (2026-07-21 owner decision)
+the tool's own LLM / learned account wins instead. Either way this gate
+validates the account that actually posts and diverts a bad one to
+REVIEW, so the source of the account does not change what this gate does.
 
 Three pieces:
 

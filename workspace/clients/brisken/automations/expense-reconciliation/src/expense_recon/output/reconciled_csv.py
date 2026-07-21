@@ -66,6 +66,14 @@ RECONCILED_COLUMNS = (
     "Expense ID",
     "Report Number",
     "Zoho Category",
+    # ── the tool's OWN categorization for a matched receipt (LLM / keyword /
+    #    learned), shown beside the report's "Zoho Category" so the reviewer
+    #    sees both. Under categorization.override_er_category the AI account is
+    #    what actually posts; otherwise the report's account posts and these
+    #    are the verify pass. Blank when unmatched. ──
+    "AI Category",
+    "AI Zoho Account",
+    "AI Category Source",
     "Payment Mode",
     "Receipt URL",
     "Receipt Image",
@@ -139,6 +147,32 @@ def _disposition(outcome: MatchOutcome) -> dict[str, tuple[str, Match | None]]:
     return disp
 
 
+def _ai_category_cells(rec: "Receipt | None") -> tuple[str, str, str]:
+    """The tool's OWN (category, posting account, tier) for a matched
+    receipt, aggregated across its line items — distinct non-blank values
+    joined with '; '. This is what the LLM / keyword / learned pass decided,
+    surfaced beside the report's own "Zoho Category" for comparison. Blank
+    when unmatched or when no line carries a category (a REVIEW-with-no-signal
+    receipt stays blank, not noise — mirrors the Slice-10 receiptless rule)."""
+    if rec is None:
+        return ("", "", "")
+    cats: list[str] = []
+    accts: list[str] = []
+    srcs: list[str] = []
+    for li in rec.line_items:
+        cat = li.categorization
+        if cat is None:
+            continue
+        has_signal = bool(cat.category or cat.zoho_account)
+        if cat.category and cat.category not in cats:
+            cats.append(cat.category)
+        if cat.zoho_account and cat.zoho_account not in accts:
+            accts.append(cat.zoho_account)
+        if has_signal and cat.source is not None and cat.source.value not in srcs:
+            srcs.append(cat.source.value)
+    return ("; ".join(cats), "; ".join(accts), "; ".join(srcs))
+
+
 def build_reconciled_rows(
     outcome: MatchOutcome,
     transactions: list[Transaction],
@@ -203,6 +237,9 @@ def build_reconciled_rows(
         if charge_cat is not None and not charge_cat.category:
             charge_cat = None  # REVIEW with no signal: stay blank, not noise
 
+        # The tool's own categorization for a matched receipt (blank otherwise).
+        ai_category, ai_zoho_account, ai_source = _ai_category_cells(rec)
+
         rows.append([
             # statement side
             tx.account_id,
@@ -230,6 +267,9 @@ def build_reconciled_rows(
             rec.document_id if rec is not None else "",
             _str(report_ref),
             _str(rec.zoho_category) if rec is not None else "",
+            ai_category,
+            ai_zoho_account,
+            ai_source,
             _str(rec.payment_mode) if rec is not None else "",
             _str(receipt_url),
             (

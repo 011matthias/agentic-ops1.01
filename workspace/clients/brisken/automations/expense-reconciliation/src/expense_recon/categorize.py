@@ -176,6 +176,7 @@ def categorize_receipts(
     client: LLMClient | None = None,
     chart_of_accounts: list[str] | None = None,
     learned: "MerchantCategoryLookup | None" = None,
+    override_er_category: bool = False,
 ) -> list[Receipt]:
     """Return a new list of receipts with line_items carrying
     Categorization results per LD-2.
@@ -195,9 +196,23 @@ def categorize_receipts(
     vendor-fallback path (a receipt with no usable line items); a
     confident line read always wins. None / empty => behaviour unchanged.
 
+    `override_er_category` (2026-07-21 owner decision) flips who owns the
+    posting account. Default False keeps the 2026-06-16 behaviour (the
+    Zoho Expense report's own GL account is authoritative). True makes the
+    tool's own category + account authoritative: the LLM's / memory's
+    `zoho_account` pick is kept, and the report's `zoho_category` is only
+    a fallback when the line has no account of its own. See
+    `_carry_zoho_account`.
+
     Pure function; does not mutate inputs.
     """
-    return [_categorize_one(r, client, chart_of_accounts, learned) for r in receipts]
+    return [
+        _categorize_one(
+            r, client, chart_of_accounts, learned,
+            override_er_category=override_er_category,
+        )
+        for r in receipts
+    ]
 
 
 def _categorize_one(
@@ -205,6 +220,8 @@ def _categorize_one(
     client: LLMClient | None,
     chart_of_accounts: list[str] | None,
     learned: "MerchantCategoryLookup | None" = None,
+    *,
+    override_er_category: bool = False,
 ) -> Receipt:
     """Apply the LD-2 tier rules to a single receipt."""
 
@@ -218,7 +235,10 @@ def _categorize_one(
             )
         else:
             categorized = tuple(_classify_line_keyword(li) for li in receipt.line_items)
-        return _carry_zoho_account(replace(receipt, line_items=categorized))
+        return _carry_zoho_account(
+            replace(receipt, line_items=categorized),
+            override_er_category=override_er_category,
+        )
 
     # No usable line items → the weak path that today re-pays for a vendor
     # guess and lands Tier-2. Memory FALLBACK first: a confirmed
@@ -231,7 +251,8 @@ def _categorize_one(
         return _carry_zoho_account(
             replace(
                 receipt, line_items=(replace(synthesized, categorization=learned_cat),)
-            )
+            ),
+            override_er_category=override_er_category,
         )
     if client is not None:
         classified = _classify_vendor_via_llm(
@@ -240,27 +261,51 @@ def _categorize_one(
         )
     else:
         classified = _classify_vendor_keyword(synthesized, receipt.detected_vendor)
-    return _carry_zoho_account(replace(receipt, line_items=(classified,)))
+    return _carry_zoho_account(
+        replace(receipt, line_items=(classified,)),
+        override_er_category=override_er_category,
+    )
 
 
-def _carry_zoho_account(receipt: Receipt) -> Receipt:
-    """Carry the Zoho Expense GL category onto each line's categorization as
-    the posting account (Dirk 2026-06-16: Zoho expenses arrive pre-classified,
-    so Zoho's account is authoritative for posting; the tool's own AI category
-    is the verify pass shown alongside it). Only `zoho_account` is set from the
-    report; the AI/keyword category (our 8) is left untouched so the reviewer
-    sees both. No-op when the receipt carries no Zoho category."""
+def _carry_zoho_account(
+    receipt: Receipt, *, override_er_category: bool = False
+) -> Receipt:
+    """Reconcile the report's own Zoho GL account with the tool's per-line
+    posting account.
+
+    Two policies, selected by `override_er_category`:
+
+    * **False (default, Dirk 2026-06-16):** the Zoho Expense report's account
+      is authoritative for posting — copy `receipt.zoho_category` onto every
+      line's `zoho_account`, overwriting whatever the LLM/keyword/memory pass
+      chose. The tool's own category (our 8) is left untouched so the reviewer
+      sees both.
+    * **True (2026-07-21 owner decision):** the tool's own judgment is
+      authoritative — KEEP the line's existing `zoho_account` (the LLM's or
+      memory's pick) and fall back to `receipt.zoho_category` only when the
+      line has no account of its own (e.g. no chart of accounts was wired, so
+      the LLM had nothing to choose). This never loses a posting account, and
+      the report's often-wrong account (ADOBE/ANTHROPIC -> "Travel Expense |
+      Food") no longer clobbers a correct pick. The export-time COA gate still
+      validates the surviving account and diverts a bad one to REVIEW.
+
+    No-op when the receipt carries no Zoho category (nothing to carry or fall
+    back to)."""
     if not receipt.zoho_category:
         return receipt
     new_items = []
     for li in receipt.line_items:
         cat = li.categorization
-        if cat is not None:
-            new_items.append(
-                replace(li, categorization=replace(cat, zoho_account=receipt.zoho_category))
-            )
-        else:
+        if cat is None:
             new_items.append(li)
+            continue
+        if override_er_category and cat.zoho_account:
+            # Keep the tool's own account; the report's label is display-only.
+            new_items.append(li)
+            continue
+        new_items.append(
+            replace(li, categorization=replace(cat, zoho_account=receipt.zoho_category))
+        )
     return replace(receipt, line_items=tuple(new_items))
 
 

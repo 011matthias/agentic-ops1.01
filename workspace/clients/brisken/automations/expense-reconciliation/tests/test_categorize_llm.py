@@ -268,6 +268,92 @@ def test_zoho_account_forwarded_on_vendor_fallback():
     assert out.line_items[0].categorization.zoho_account == "E100010-41 Travel Expense:Taxi/Uber"
 
 
+# ── override_er_category: who owns the posting account (2026-07-21) ──
+
+# The ER expenses (ADOBE/ANTHROPIC) arrive with EMPTY line_items → the
+# vendor-aware fallback path, and carry the report's own (wrong) account.
+_ER_ACCT = "E100010-31 - Travel Expense | Food"
+_LLM_ACCT = "E600020-01 - Software & Subscriptions"
+
+
+def _adobe_receipt():
+    return _receipt(items=[], detected_vendor="Adobe", zoho_category=_ER_ACCT)
+
+
+def _software_vendor_mock():
+    return MockLLMClient(responses=[
+        ClassificationResult(
+            category="Software & Subscriptions", zoho_account=_LLM_ACCT,
+            confidence=0.95, reasoning="Adobe is a software subscription.",
+        ),
+    ])
+
+
+def test_er_category_clobbers_account_by_default():
+    """Default (2026-06-16): the report's account is authoritative and
+    overwrites the LLM's correct pick. Pins the pre-override behaviour."""
+    [out] = categorize_receipts(
+        [_adobe_receipt()], client=_software_vendor_mock(),
+        chart_of_accounts=[_LLM_ACCT],
+    )
+    cat = out.line_items[0].categorization
+    assert cat.category == "Software & Subscriptions"  # LLM category always survived
+    assert cat.zoho_account == _ER_ACCT  # but the report's account clobbered the pick
+
+
+def test_override_lets_llm_account_win():
+    """override_er_category=True: the LLM's own account is authoritative;
+    ADOBE no longer posts to 'Travel Expense | Food'."""
+    [out] = categorize_receipts(
+        [_adobe_receipt()], client=_software_vendor_mock(),
+        chart_of_accounts=[_LLM_ACCT], override_er_category=True,
+    )
+    cat = out.line_items[0].categorization
+    assert cat.category == "Software & Subscriptions"
+    assert cat.zoho_account == _LLM_ACCT
+
+
+def test_override_keeps_learned_account_over_report():
+    """override_er_category=True keeps a LEARNED (memory) account; the default
+    still clobbers it with the report's."""
+    from expense_recon.learning import (
+        MerchantCategory,
+        MerchantCategoryLookup,
+        normalize_vendor,
+    )
+
+    learned = MerchantCategoryLookup([
+        MerchantCategory(
+            "le1", normalize_vendor("Adobe"), "Software & Subscriptions",
+            _LLM_ACCT, 1, "2026-05-01T00:00:00", "r1",
+        )
+    ])
+    # No client → the vendor-fallback path takes the LEARNED categorization.
+    [dflt] = categorize_receipts([_adobe_receipt()], learned=learned)
+    assert dflt.line_items[0].categorization.zoho_account == _ER_ACCT  # clobbered
+
+    [ovr] = categorize_receipts(
+        [_adobe_receipt()], learned=learned, override_er_category=True
+    )
+    assert ovr.line_items[0].categorization.zoho_account == _LLM_ACCT  # memory wins
+
+
+def test_override_falls_back_to_report_when_llm_has_no_account():
+    """override on, but the LLM returned no account (no chart of accounts
+    wired) → fall back to the report's account, never post nothing."""
+    [out] = categorize_receipts(
+        [_adobe_receipt()],
+        client=MockLLMClient(responses=[
+            ClassificationResult(
+                category="Software & Subscriptions", zoho_account=None,
+                confidence=0.95, reasoning="no COA to pick from",
+            ),
+        ]),
+        override_er_category=True,  # no chart_of_accounts → LLM returns None
+    )
+    assert out.line_items[0].categorization.zoho_account == _ER_ACCT
+
+
 # ── Keyword fallback preserved when no LLM ──────────────────────────
 
 
