@@ -92,6 +92,40 @@ def test_header_and_one_row_per_statement_line(tmp_path):
     assert rows[2][_C["Match Status"]] == "UNMATCHED"
 
 
+def test_matched_row_carries_ai_category_and_account(tmp_path):
+    """The tool's OWN category + posting account surface in the AI columns
+    for a matched row, beside the report's own Zoho Category, and stay blank
+    on an unmatched line."""
+    matched_line = LineItem(
+        description="Adobe subscription", line_total=Decimal("180"),
+        categorization=Categorization(
+            category="Software & Subscriptions",
+            zoho_account="E600020-01 - Software & Subscriptions",
+            confidence=0.95, source=ClassificationSource.VENDOR, reasoning="t",
+        ),
+    )
+    rec = _receipt([matched_line], zoho_category="E100010-31 - Travel Expense | Food")
+    outcome = MatchOutcome(
+        matches=[Match("t1", "r1", MatchType.EXACT, 0.99, "x", False)],
+        unmatched_transactions=["t2"],
+    )
+    out = write_reconciled_csv(
+        outcome, [_tx("t1"), _tx("t2")], [rec], tmp_path / "reconciled.csv"
+    )
+    with out.open(encoding="utf-8") as fh:
+        rows = list(csv.reader(fh))
+    matched, unmatched = rows[1], rows[2]
+    # The report's label and the tool's own label sit side by side.
+    assert matched[_C["Zoho Category"]] == "E100010-31 - Travel Expense | Food"
+    assert matched[_C["AI Category"]] == "Software & Subscriptions"
+    assert matched[_C["AI Zoho Account"]] == "E600020-01 - Software & Subscriptions"
+    assert matched[_C["AI Category Source"]] == ClassificationSource.VENDOR.value
+    # Blank on the unmatched line (no receipt).
+    assert unmatched[_C["AI Category"]] == ""
+    assert unmatched[_C["AI Zoho Account"]] == ""
+    assert unmatched[_C["AI Category Source"]] == ""
+
+
 def test_matched_row_carries_expense_enrichment():
     tx = _tx()
     rec = _receipt(

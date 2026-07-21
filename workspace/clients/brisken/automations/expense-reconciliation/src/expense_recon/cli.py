@@ -49,8 +49,12 @@ The config is a JSON file (stdlib only — no YAML dep) of the shape:
       },
       "matching": {                            # optional (2026-07-17) — load
         "tuning_path": "match-tuning.json"     #   MatchingConfig tunables from
-      }                                        #   a file (the optimize asset)
-    }
+      },                                       #   a file (the optimize asset)
+      "categorization": {                      # optional (2026-07-21) — when
+        "override_er_category": true           #   true, the tool's OWN category
+      }                                        #   + Zoho account win over the
+    }                                          #   report's (reverses 2026-06-16;
+                                               #   default false = report wins)
 
 What this slice does NOT do (deferred):
 - Receipt OCR / Claude-vision extraction — receipts come in already-
@@ -442,9 +446,17 @@ def reconcile(
     # vendor-fallback path to Tier-1 LEARNED; a good line read still wins.
     if learned is None:
         learned = _load_learned(cfg, config_dir)
+    # 2026-07-21 owner decision: when categorization.override_er_category is
+    # set, the tool's own category + account are authoritative and the Zoho
+    # report's often-wrong GL account no longer clobbers a correct pick.
+    # Default False preserves the 2026-06-16 "report is authoritative" rule.
+    override_er_category = bool(
+        (cfg.get("categorization") or {}).get("override_er_category", False)
+    )
     _stage("categorizing")
     receipts = categorize_receipts(
-        receipts, client=llm_client, chart_of_accounts=account_labels, learned=learned
+        receipts, client=llm_client, chart_of_accounts=account_labels, learned=learned,
+        override_er_category=override_er_category,
     )
 
     # PR 2c: learned vendor aliases + per-merchant FX feed match scoring /
@@ -496,6 +508,7 @@ def reconcile(
         client=llm_client,
         chart_of_accounts=account_labels,
         learned=learned,
+        override_er_category=override_er_category,
     )
     if charge_categorizations:
         n_categorized = sum(

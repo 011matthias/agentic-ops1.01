@@ -84,6 +84,7 @@ def categorize_charges(
     client: "LLMClient | None" = None,
     chart_of_accounts: list[str] | None = None,
     learned: "MerchantCategoryLookup | None" = None,
+    override_er_category: bool = False,
 ) -> dict[str, Categorization]:
     """Categorize every unmatched (receiptless) charge.
 
@@ -107,7 +108,8 @@ def categorize_charges(
         return {}
 
     categorized = categorize_receipts(
-        pseudo, client=client, chart_of_accounts=chart_of_accounts, learned=learned
+        pseudo, client=client, chart_of_accounts=chart_of_accounts, learned=learned,
+        override_er_category=override_er_category,
     )
 
     out: dict[str, Categorization] = {}
