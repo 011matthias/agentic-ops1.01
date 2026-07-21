@@ -1,2 +1,3 @@
 round	commit	score	delta	status	description
 0	641b497	2159.04	0	baseline	baseline (asset as-is)
+1	3c9c61d	3013.27	+854.23	keep	Shift the whole hedge to the value-weighted mix: saturate the 3 high-value B2B channels (cold-email, LinkedIn, referral) + fund AEO/content past its fixed-cost threshold, drop demo-first-local (lowest value per acquisition hour); fills delivery capacity with the most valuable clients
