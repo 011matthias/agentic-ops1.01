@@ -108,8 +108,9 @@ body {
 .header-logo svg { display: block; }
 .logo-text { font-weight: 700; color: var(--text); }
 .logo-accent { font-weight: 700; color: var(--blue); }
-.header-title h1 { font-size: 17px; font-weight: 700; color: var(--text); line-height: 1.2; }
-.header-title p { font-size: 12px; color: var(--text2); margin-top: 1px; }
+.header-title { width: 240px; flex-shrink: 0; overflow: hidden; }
+.header-title h1 { font-size: 17px; font-weight: 700; color: var(--text); line-height: 1.2;  white-space: nowrap; }
+.header-title p { font-size: 12px; color: var(--text2); margin-top: 1px;  white-space: nowrap; text-overflow: ellipsis; }
 .header-right { display: flex; align-items: center; gap: 12px; }
 .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 999px; }
 .badge-amber { background: var(--amber-light); color: var(--amber); }
@@ -123,7 +124,7 @@ body {
 .hamburger { display: none; background: none; border: none; color: var(--text); font-size: 22px; cursor: pointer; padding: 0 6px; }
 
 .page-layout { margin-left: var(--sidebar-width); }
-.main { max-width: 960px; margin: 0 auto; padding: 40px 24px 80px; }
+.main { max-width: 1200px; margin: 0; padding: 40px 24px 80px; }
 
 .hero {
   background: linear-gradient(135deg, var(--amber), var(--purple));
@@ -201,8 +202,28 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
   .main { padding: 24px 16px 60px; }
   .header-left nav { display: none; }
 }
+/* ===== unified canonical header (meji doc-site) ===== */
+.header{background:var(--nav-bg);border-bottom:1px solid var(--border);padding:16px 24px;height:auto;display:flex;align-items:center;justify-content:space-between;position:fixed;top:0;left:0;right:0;z-index:1000;box-shadow:var(--shadow);transition:background .2s;}
+.header-left{display:flex;align-items:center;gap:16px;min-width:0;}
+.header-logo{display:flex;align-items:center;gap:6px;font-size:18px;letter-spacing:-0.025em;flex-shrink:0;}
+.header-logo svg{flex-shrink:0;}
+.header-logo .logo-text{font-weight:700;color:var(--text);}
+.header-logo .logo-accent{font-weight:700;color:var(--blue);}
+.header-title{width:240px;flex-shrink:0;overflow:hidden;display:block;}
+.header-title h1{font-size:18px;font-weight:700;color:var(--text);white-space:nowrap;line-height:1.2;}
+.header-title p{font-size:13px;color:var(--text2);margin:1px 0 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.header-right{display:flex;align-items:center;gap:12px;flex-shrink:0;}
+.theme-btn{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;transition:background .15s;}
+.theme-btn:hover{background:var(--border);}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600;}
+.badge-green{background:var(--green-light);color:var(--green);}
+.badge-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;}
+.hamburger{display:none;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:18px;color:var(--text2);line-height:1;flex-shrink:0;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+@media (max-width:768px){.header{padding:12px 16px;}.hamburger{display:block;}.header-title{display:none;}}
 </style>
 <script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
+<!-- deliverable-allow: copy-clipboard,keyboard-search | reason: Meji doc-site convention (see .deliverable-config.yaml); narrative pages, no shell commands or large code blocks, native Ctrl+F suffices. Site-wide, never per-page. -->
 </head>
 <body>
 
@@ -239,11 +260,11 @@ code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-s
       <a href="/docs/meji-media/lead-scoring" style="font-size:13px;font-weight:500;padding:6px 10px;border-radius:6px;color:var(--text2);text-decoration:none;white-space:nowrap;margin-left:14px;"><span style="opacity:.5;font-weight:600;margin-right:3px;">6</span>Scoring</a>
       <a href="/docs/meji-media/ab-testing" style="font-size:13px;font-weight:500;padding:6px 10px;border-radius:6px;color:var(--text2);text-decoration:none;white-space:nowrap;"><span style="opacity:.5;font-weight:600;margin-right:3px;">7</span>A/B Tests</a>
       <a href="/docs/meji-media/volume-forecast" style="font-size:13px;font-weight:500;padding:6px 10px;border-radius:6px;color:var(--text2);text-decoration:none;white-space:nowrap;margin-left:14px;"><span style="opacity:.5;font-weight:600;margin-right:3px;">8</span>Volume</a>
-      <a href="/docs/meji-media/scaling" style="font-size:13px;font-weight:700;padding:6px 10px;border-radius:6px;background:var(--blue-light);color:var(--blue);text-decoration:none;white-space:nowrap;"><span style="opacity:.5;font-weight:600;margin-right:3px;">9</span>Scaling</a>
+      <a href="/docs/meji-media/scaling" style="font-size:13px;font-weight:500;padding:6px 10px;border-radius:6px;background:var(--blue-light);color:var(--blue);text-decoration:none;white-space:nowrap;"><span style="opacity:.5;font-weight:600;margin-right:3px;">9</span>Scaling</a>
     </nav>
   </div>
   <div class="header-right">
-    <span class="badge badge-amber"><span class="badge-dot"></span> Decision Document</span>
+    <span class="badge badge-green"><span class="badge-dot"></span> Live</span>
     <button class="theme-btn" onclick="toggleTheme()">
       <span id="theme-icon">&#9790;</span> Theme
     </button>
