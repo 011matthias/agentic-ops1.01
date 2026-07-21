@@ -20,5 +20,10 @@
     "pinned": "2026-07-17",
     "pr": 247,
     "sha": "f8ab2bfcbd07326fbecc34011ed0e498657688f3"
+  },
+  "pricing-tiers.py": {
+    "direction": "maximize",
+    "pinned": "2026-07-21",
+    "sha": "e5327b0204087663a5b85e92276e08901bc2ecd0"
   }
 }
