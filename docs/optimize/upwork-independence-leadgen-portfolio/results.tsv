@@ -1,0 +1,7 @@
+round	commit	score	delta	status	description
+0	641b497	2159.04	0	baseline	baseline (asset as-is)
+1	3c9c61d	3013.27	+854.23	keep	Shift the whole hedge to the value-weighted mix: saturate the 3 high-value B2B channels (cold-email, LinkedIn, referral) + fund AEO/content past its fixed-cost threshold, drop demo-first-local (lowest value per acquisition hour); fills delivery capacity with the most valuable clients
+2	6694580	2735.75	NA	discard	PROBE add demo-first-local 0.15 (from LinkedIn hours): tests whether the DE local wedge earns acquisition budget; expect DISCARD because a local client costs ~27h for ~EUR4k while the same hours win B2B clients worth ~EUR30k
+3	1e01c35	1432.69	NA	discard	PROBE concentrate all effort on cold-email: tests single-channel focus; expect DISCARD because cold-email's reachable pool caps at 50 clients, so extra hours past saturation are wasted and the market-reach ceiling (the whole reason to diversify) bites
+4	96d161a	2737.76	NA	discard	PROBE drop AEO/content, pour hours into B2B outbound: tests whether the slow-ramp inbound channel earns its keep; expect DISCARD because the B2B pools are already near-saturated so the extra hours are wasted while ~20 content clients (~EUR400k) are lost
+5	-	NA	NA	stopped	converged: 2159 -> 3013.27 kEUR net won-client value; winner = diversified value-weighted portfolio (cold-email 0.38 + LinkedIn 0.29 + referral 0.15 + AEO/content 0.18, demo-first dropped); 3 boundary probes discarded (add-demo, all-in-cold, drop-content)
