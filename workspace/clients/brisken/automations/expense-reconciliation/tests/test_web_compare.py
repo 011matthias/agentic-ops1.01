@@ -102,3 +102,33 @@ def test_compare_page_renders_picker_and_comparison(tmp_path):
         assert "changed bucket" in page.text
         # identical re-runs of the same data -> no bucket changes
         assert "No charge changed bucket" in page.text
+
+
+def test_api_compare_returns_server_computed_diff(tmp_path):
+    """The SPA compare endpoint returns the diff computed by compare_runs, so
+    the front end never derives it. Mirrors the HTML page's data."""
+    app = create_app(tmp_path)
+    with TestClient(app) as c:
+        files = {
+            "statement": ("statement.example.csv", (EXAMPLES / "statement.example.csv").read_bytes(), "text/csv"),
+            "receipts": ("receipts.example.csv", (EXAMPLES / "receipts.example.csv").read_bytes(), "text/csv"),
+        }
+        data = {"account_id": "amex-9001", "legal_entity_id": "brisken-llc", "receipts_source": "csv"}
+        r1 = c.post("/runs", files=files, data=data, follow_redirects=False).headers["location"].rsplit("/", 1)[-1]
+        r2 = c.post("/runs", files=files, data=data, follow_redirects=False).headers["location"].rsplit("/", 1)[-1]
+
+        # No selection yet: the run list is present, comparison is null.
+        empty = c.get("/api/compare").json()
+        assert {"runs", "a", "b", "comparison"} <= empty.keys()
+        assert empty["comparison"] is None
+        assert len(empty["runs"]) == 2
+        assert {"run_id", "label", "created_at"} <= empty["runs"][0].keys()
+
+        # Both selected: the server-computed diff comes back whole.
+        body = c.get(f"/api/compare?a={r1}&b={r2}").json()
+        cmp = body["comparison"]
+        assert cmp is not None
+        assert {"deltas", "rate", "n_changed", "changes"} <= cmp.keys()
+        # identical re-runs of the same data -> nothing changed bucket
+        assert cmp["n_changed"] == 0
+        assert any(d["label"] == "Matched" for d in cmp["deltas"])

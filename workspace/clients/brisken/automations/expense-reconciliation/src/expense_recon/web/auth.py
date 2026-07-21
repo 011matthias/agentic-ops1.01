@@ -60,6 +60,7 @@ _OPERATOR_RULES: tuple[tuple[re.Pattern, frozenset | None], ...] = (
     (re.compile(r"^/api/runs$"), frozenset({"POST"})),  # SPA run kickoff
     (re.compile(r"^/jobs/"), None),
     (re.compile(r"^/compare$"), None),
+    (re.compile(r"^/api/compare$"), None),  # SPA compare (operator-only)
     (re.compile(r"^/memory($|/)"), None),
     (re.compile(r"^/intakes/[^/]+($|/)"), None),  # POST /intakes itself is for users
     (re.compile(r"^/runs/[^/]+/(publish|unpublish|commit-memory|forget)$"), None),
