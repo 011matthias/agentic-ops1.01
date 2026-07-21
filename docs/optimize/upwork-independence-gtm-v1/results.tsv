@@ -1,2 +1,3 @@
 round	commit	score	delta	status	description
 0	0c66068	36.88	0	baseline	baseline (asset as-is)
+1	bab7239	81.88	+45	keep	raise B2B retainer 1200->2400: clients are service-capacity-capped, so higher price scales revenue despite elasticity
