@@ -14,6 +14,7 @@ from expense_recon.llm.client import (
 from expense_recon.llm.cost import CostTracker, TokenUsage
 from expense_recon.matching.types import (
     EXPENSE_CATEGORIES,
+    Categorization,
     ClassificationSource,
     LineItem,
     Receipt,
@@ -508,3 +509,149 @@ def test_cli_no_llm_block_uses_keyword_fallback(tmp_path):
     result = run(config_path)
     assert result is not None  # ran without an LLM
     assert result.exists()
+
+
+# ── WS2 top-level adjudication gate (2026-07-21) ────────────────────
+#
+# Synthetic two-root chart: Travel Expense (E100 + leaves Food/Flights) and
+# IT: Computer and Internet Expenses (E500 + leaf Cloud Subscriptions). The
+# static EXPENSE_CATEGORY_ROOT_GROUP map targets these real root names.
+
+from expense_recon.categorize import (  # noqa: E402
+    DECISION_AI_OVERRIDE_HEAVY,
+    DECISION_KEPT_ER,
+    DECISION_REVIEW_UNRESOLVED,
+    adjudicate_receipts,
+)
+from expense_recon.ingest.chart_of_accounts import ChartOfAccounts  # noqa: E402
+
+_ADJ_RECORDS = [
+    {"account_id": "1", "account_name": "Travel Expense", "account_code": "E100",
+     "account_type": "expense", "parent_account_name": None, "is_active": True},
+    {"account_id": "2", "account_name": "Travel: Food", "account_code": "E100-31",
+     "account_type": "expense", "parent_account_name": "Travel Expense", "is_active": True},
+    {"account_id": "3", "account_name": "Travel: Flights", "account_code": "E100-21",
+     "account_type": "expense", "parent_account_name": "Travel Expense", "is_active": True},
+    {"account_id": "4", "account_name": "IT: Computer and Internet Expenses",
+     "account_code": "E500", "account_type": "expense", "parent_account_name": None,
+     "is_active": True},
+    {"account_id": "5", "account_name": "Cloud Subscriptions", "account_code": "E500-10",
+     "account_type": "expense", "parent_account_name": "IT: Computer and Internet Expenses",
+     "is_active": True},
+]
+
+
+def _adj_chart() -> ChartOfAccounts:
+    return ChartOfAccounts.from_api(_ADJ_RECORDS)
+
+
+def _adj_receipt(zoho_category, *, cat_account, cat_category="Travel & Transport") -> Receipt:
+    li = LineItem(
+        description="x", line_total=Decimal("10"),
+        categorization=Categorization(
+            category=cat_category, zoho_account=cat_account, confidence=0.9,
+            source=ClassificationSource.LINE, reasoning="t",
+        ),
+    )
+    return _receipt([li], zoho_category=zoho_category, detected_vendor="V")
+
+
+def _verdict(receipt):
+    cat = adjudicate_receipts([receipt], _adj_chart())[0].line_items[0].categorization
+    return cat.decision, cat.zoho_account
+
+
+def test_adjudicate_same_root_group_keeps_report():
+    # LLM picked a distinct Travel leaf; report is another Travel leaf -> same
+    # root group -> report category kept.
+    decision, account = _verdict(
+        _adj_receipt("E100-31 - Travel: Food", cat_account="E100-21 Travel: Flights")
+    )
+    assert decision == DECISION_KEPT_ER
+    assert account == "E100-31 - Travel: Food"
+
+
+def test_adjudicate_heavy_mismatch_inserts_llm_account():
+    # LLM picked an IT account; report is Travel -> different root -> heavy
+    # override; the LLM's own account posts.
+    decision, account = _verdict(
+        _adj_receipt(
+            "E100-31 - Travel: Food",
+            cat_account="E500-10 Cloud Subscriptions",
+            cat_category="Software & Subscriptions",
+        )
+    )
+    assert decision == DECISION_AI_OVERRIDE_HEAVY
+    assert account == "E500-10 Cloud Subscriptions"
+
+
+def test_adjudicate_static_fallback_heavy_when_no_llm_account():
+    # LLM has the Software category but NO GL leaf. The static map routes it to
+    # the IT root; report is Travel -> heavy override, no leaf (reviewer assigns).
+    decision, account = _verdict(
+        _adj_receipt(
+            "E100-31 - Travel: Food", cat_account=None,
+            cat_category="Software & Subscriptions",
+        )
+    )
+    assert decision == DECISION_AI_OVERRIDE_HEAVY
+    assert account is None
+
+
+def test_adjudicate_static_fallback_same_root_keeps_report():
+    decision, account = _verdict(
+        _adj_receipt(
+            "E100-31 - Travel: Food", cat_account=None,
+            cat_category="Travel & Transport",
+        )
+    )
+    assert decision == DECISION_KEPT_ER
+    assert account == "E100-31 - Travel: Food"
+
+
+def test_adjudicate_report_fallback_pollution_still_detects_heavy():
+    # PR1's _carry_zoho_account fell the no-leaf line back to the report's own
+    # account. Adjudication must ignore that fallback (== report) and still use
+    # the category's static root to catch a heavy Software-vs-Travel mismatch.
+    decision, account = _verdict(
+        _adj_receipt(
+            "E100-31 - Travel: Food",
+            cat_account="E100-31 - Travel: Food",   # report fallback, not a real pick
+            cat_category="Software & Subscriptions",
+        )
+    )
+    assert decision == DECISION_AI_OVERRIDE_HEAVY
+    assert account is None
+
+
+def test_adjudicate_unresolvable_report_keeps_conservatively():
+    decision, account = _verdict(
+        _adj_receipt(
+            "Z999 - Not In Chart",
+            cat_account="E500-10 Cloud Subscriptions",
+            cat_category="Software & Subscriptions",
+        )
+    )
+    assert decision == DECISION_REVIEW_UNRESOLVED
+    assert account == "Z999 - Not In Chart"
+
+
+def test_adjudicate_noop_without_report_category():
+    r = _adj_receipt(None, cat_account="E500-10 Cloud Subscriptions")
+    cat = adjudicate_receipts([r], _adj_chart())[0].line_items[0].categorization
+    assert cat.decision is None
+    assert cat.zoho_account == "E500-10 Cloud Subscriptions"  # untouched
+
+
+def test_adjudicate_scope_filters_static_fallback():
+    # The static map target (IT root) is out of the run's scope_groups -> the
+    # fallback comparison is treated as unresolvable -> report kept.
+    r = _adj_receipt(
+        "E100-31 - Travel: Food", cat_account=None,
+        cat_category="Software & Subscriptions",
+    )
+    cat = adjudicate_receipts(
+        [r], _adj_chart(), scope_groups=["Travel Expense"]
+    )[0].line_items[0].categorization
+    assert cat.decision == DECISION_REVIEW_UNRESOLVED
+    assert cat.zoho_account == "E100-31 - Travel: Food"

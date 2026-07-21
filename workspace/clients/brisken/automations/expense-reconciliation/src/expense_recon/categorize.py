@@ -45,6 +45,7 @@ from .matching.types import (
 )
 
 if TYPE_CHECKING:
+    from .ingest.chart_of_accounts import Account, ChartOfAccounts
     from .learning import MerchantCategoryLookup
 
 
@@ -547,3 +548,208 @@ def _synthesize_total_line(receipt: Receipt) -> LineItem:
         description="(receipt total, no itemization)",
         line_total=receipt.detected_total or Decimal("0"),
     )
+
+
+# ── Top-level adjudication (WS2, 2026-07-21) ─────────────────────────
+#
+# The owner's decision: under `override_er_category` the tool's own category /
+# account should not win UNCONDITIONALLY (PR1), only when it HEAVILY
+# contradicts the Zoho report -- a different Zoho ROOT-GROUP (top-level).
+# When both the tool's pick and the report's category roll up into the same
+# root-group, trust the report and keep its category. This gate is
+# deterministic (no LLM call): both sides resolve through the chart of
+# accounts to their root-group and the roots are compared.
+
+# Adjudication verdicts recorded on `Categorization.decision`, surfaced in the
+# reconciled CSV "Category Decision" column.
+DECISION_KEPT_ER = "kept_er"
+DECISION_AI_OVERRIDE_HEAVY = "ai_override_heavy"
+DECISION_REVIEW_UNRESOLVED = "review_unresolved"
+
+# Fallback map used ONLY when the LLM produced one of our 8 categories but no
+# specific GL leaf (no chart wired for the pick, or none clearly fit): the
+# category maps to the Zoho root-GROUP it belongs to, so a heavy top-level
+# mismatch can still be detected without an LLM account. The target names are
+# the Brisken operating root-groups (confirmed against zoho-books-coa.json:
+# every entity's postable operating subtree uses these root names, e.g. Cloud
+# Services / Holding / Consulting). A mapped root that is not an actual root of
+# the run's chart (or not in the run's scope_groups) counts as UNRESOLVED, so
+# the gate stays conservative on a chart whose roots are named differently.
+EXPENSE_CATEGORY_ROOT_GROUP: dict[str, str] = {
+    "Travel & Transport": "Travel Expense",
+    # Brisken's in-scope operating charts roll travel meals into Travel Expense
+    # (no standalone Meals root in the card-expense scope groups).
+    "Meals & Entertainment": "Travel Expense",
+    "Software & Subscriptions": "IT: Computer and Internet Expenses",
+    "Office Supplies & Consumables": "Office Infra and Admin",
+    "Equipment & Hardware": "Office Infra and Admin",
+    "Marketing & Advertising": "Marketing & Selling Expenses",
+    "Professional Services": "Professional Fees",
+    "Utilities & Premises": "Office Infra and Admin",
+}
+
+
+def _resolve_account(chart: "ChartOfAccounts", ref: str | None) -> "Account | None":
+    """Resolve a posting-account reference to a chart Account, mirroring the
+    Zoho export's / COA gate's resolution: exact code-or-name first, then the
+    leading token as a code and the remainder as a name. Handles BOTH the
+    report's "CODE - Name" print form and the categorizer's "CODE Name" label
+    form."""
+    ref = (ref or "").strip()
+    if not ref:
+        return None
+    acct = chart.resolve(ref)
+    if acct is not None:
+        return acct
+    head, _, tail = ref.partition(" ")
+    acct = chart.by_code(head.strip())
+    if acct is None and tail.strip():
+        acct = chart.by_name(tail.strip().lstrip("-").strip())
+    return acct
+
+
+def _root_of(chart: "ChartOfAccounts", ref: str | None) -> str | None:
+    """The Zoho root-group of the account `ref` resolves to, or None when it
+    does not resolve in the chart."""
+    acct = _resolve_account(chart, ref)
+    return chart.root_group(acct) if acct is not None else None
+
+
+def _norm_label(ref: str | None) -> str:
+    """Normalize a posting-account label for equality (lowercase, collapse
+    non-alphanumerics), so the report's "E100010-31 - Travel..." and a
+    fallback copy compare equal regardless of separator noise."""
+    return re.sub(r"[^a-z0-9]", "", (ref or "").lower())
+
+
+def adjudicate_receipts(
+    receipts: list[Receipt],
+    chart: "ChartOfAccounts",
+    *,
+    scope_groups: "list[str] | None" = None,
+) -> list[Receipt]:
+    """Apply the top-level adjudication gate to every receipt.
+
+    For each categorized line, compare the tool's category/account to the
+    report's `zoho_category` at the Zoho root-group level. Different root-group
+    => HEAVY mismatch => the tool's account is inserted (it posts) and the line
+    is flagged for review. Same root-group (or an unresolvable comparison) =>
+    the report's category is kept. The verdict is recorded on each line's
+    `Categorization.decision`. Pure; does not mutate inputs.
+
+    Runs only under `override_er_category` with a chart wired (the caller
+    gates); without a chart there is no root-group to compare and PR1's
+    `_carry_zoho_account` behaviour stands unchanged.
+    """
+    chart_roots = {chart.root_group(a) for a in chart.accounts}
+    scope_set = {g.strip() for g in scope_groups} if scope_groups else None
+    return [
+        adjudicate_categorization(
+            r, chart, scope_groups=scope_groups,
+            _chart_roots=chart_roots, _scope_set=scope_set,
+        )
+        for r in receipts
+    ]
+
+
+def adjudicate_categorization(
+    receipt: Receipt,
+    chart: "ChartOfAccounts",
+    *,
+    scope_groups: "list[str] | None" = None,
+    _chart_roots: "set[str] | None" = None,
+    _scope_set: "set[str] | None" = None,
+) -> Receipt:
+    """Adjudicate one receipt's line categorizations against the report's
+    `zoho_category` at the Zoho root-group level (see `adjudicate_receipts`).
+
+    No-op (returns the receipt unchanged) when the report carries no
+    `zoho_category` -- there is nothing to adjudicate against, so the tool's
+    own pick (already kept by `_carry_zoho_account`) stands.
+    """
+    if not receipt.zoho_category:
+        return receipt
+
+    chart_roots = (
+        _chart_roots if _chart_roots is not None
+        else {chart.root_group(a) for a in chart.accounts}
+    )
+    scope_set = (
+        _scope_set if _scope_set is not None
+        else ({g.strip() for g in scope_groups} if scope_groups else None)
+    )
+
+    report_root = _root_of(chart, receipt.zoho_category)
+    norm_report = _norm_label(receipt.zoho_category)
+
+    new_items: list[LineItem] = []
+    for li in receipt.line_items:
+        cat = li.categorization
+        if cat is None:
+            new_items.append(li)
+            continue
+
+        # The LLM's OWN account is its zoho_account UNLESS `_carry_zoho_account`
+        # already fell that back to the report's category (no leaf picked).
+        own_account = cat.zoho_account
+        if own_account and _norm_label(own_account) == norm_report:
+            own_account = None
+
+        tool_root = _root_of(chart, own_account) if own_account else None
+        if tool_root is None and cat.category:
+            mapped = EXPENSE_CATEGORY_ROOT_GROUP.get(cat.category)
+            if mapped and _is_real_root(mapped, chart_roots, scope_set):
+                tool_root = mapped
+
+        decision, final_account = _adjudicate_line(
+            report_root=report_root,
+            tool_root=tool_root,
+            own_account=own_account,
+            report_category=receipt.zoho_category,
+            has_tool_signal=bool(cat.category or own_account),
+        )
+        new_items.append(
+            replace(li, categorization=replace(
+                cat, zoho_account=final_account, decision=decision,
+            ))
+        )
+
+    return replace(receipt, line_items=tuple(new_items))
+
+
+def _is_real_root(
+    root_name: str, chart_roots: set[str], scope_set: set[str] | None
+) -> bool:
+    """A fallback-mapped root name counts only when it is an actual root-group
+    of this run's chart AND (when a scope is set) within scope -- so the
+    semantic default map does not force a spurious mismatch on a chart whose
+    roots are named differently (e.g. entity-bucket roots)."""
+    if root_name not in chart_roots:
+        return False
+    if scope_set is not None:
+        return root_name in scope_set
+    return True
+
+
+def _adjudicate_line(
+    *,
+    report_root: str | None,
+    tool_root: str | None,
+    own_account: str | None,
+    report_category: str,
+    has_tool_signal: bool,
+) -> tuple[str, str | None]:
+    """The gate decision for one line. Returns (decision, posting account).
+
+    * no tool signal at all (pure REVIEW), or either side unresolvable
+      => keep the report's category (conservative).
+    * different root-group => insert the tool's account (heavy override; it
+      becomes a review row -- `own_account` may be None when the tool had a
+      category but no GL leaf, in which case the reviewer assigns the leaf).
+    * same root-group => keep the report's category.
+    """
+    if not has_tool_signal or report_root is None or tool_root is None:
+        return DECISION_REVIEW_UNRESOLVED, report_category
+    if tool_root != report_root:
+        return DECISION_AI_OVERRIDE_HEAVY, own_account
+    return DECISION_KEPT_ER, report_category
