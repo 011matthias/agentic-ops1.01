@@ -147,6 +147,11 @@ def parse_statement_csv_tolerant(
                     if raw_rate:
                         fx_rate = parse_amount(raw_rate)
 
+                # WS3: the per-row card, when the export prints one.
+                card_last4: str | None = None
+                if "card" in column_map:
+                    card_last4 = (row.get(column_map["card"]) or "").strip() or None
+
                 # 3.15 sign canonicalization, Type-column path: the export's
                 # own debit/credit label decides, not the printed sign. The
                 # Chase activity CSV prints purchases NEGATIVE (Type=Sale,
@@ -187,6 +192,7 @@ def parse_statement_csv_tolerant(
                     original_currency=original_currency,
                     fx_rate=fx_rate,
                     is_credit=is_credit,
+                    card_last4=card_last4,
                 )
             )
 

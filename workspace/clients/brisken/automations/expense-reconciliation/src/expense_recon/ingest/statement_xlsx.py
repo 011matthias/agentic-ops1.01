@@ -352,6 +352,11 @@ def parse_statement_xlsx_tolerant(
                     mapped.get("fx_rate")
                 ):
                     fx_rate = _coerce_amount(mapped["fx_rate"])
+
+                # WS3: the per-row card, when the workbook prints one.
+                card_last4: str | None = None
+                if "card" in column_map:
+                    card_last4 = _coerce_str(mapped.get("card")) or None
             except (KeyError, ValueError) as exc:
                 issues.append(
                     ParseIssue(
@@ -384,6 +389,7 @@ def parse_statement_xlsx_tolerant(
                     original_currency=original_currency,
                     fx_rate=fx_rate,
                     entry_status=_row_entry_status(row_cells, mapped_indices),
+                    card_last4=card_last4,
                 )
             )
     finally:

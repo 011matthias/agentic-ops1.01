@@ -180,11 +180,19 @@ class LLMClient(Protocol):
         receipt_date: str | None,
         receipt_vendor: str | None,
         receipt_reference: str | None,
+        tx_card: str | None = None,
+        receipt_payment_mode: str | None = None,
     ) -> FxJudgmentResult:
         """FX judgment (v2 spec §15.2). One call per FX-mismatch
         candidate pair. Unlike LD-2 categorization, vendor name IS a
         legitimate input here — this is a matching task, not a
-        line-item classification."""
+        line-item classification.
+
+        `tx_card` / `receipt_payment_mode` (WS3) are the two systems'
+        records of which card paid — the statement's card column or
+        account id, and the Zoho expense's payment-mode label. Optional
+        so an older client implementation still satisfies the protocol;
+        omitted means "unknown card", never "different card"."""
         ...
 
     def judge_ambiguous(
@@ -296,16 +304,20 @@ Transaction (from the card statement):
   amount: {tx_amount} {tx_currency}
   date: {tx_date}
   vendor as printed on the statement: {tx_vendor}
+  card it was charged to: {tx_card}
 
 Receipt:
   amount: {receipt_amount} {receipt_currency}
   date: {receipt_date}
   vendor: {receipt_vendor}
   reference: {receipt_reference}
+  card the expense report says paid it: {receipt_payment_mode}
 
 How to judge:
 - Convert the receipt amount from {receipt_currency} to {tx_currency} using your best estimate of the exchange rate around {tx_date}. Card networks usually add a small FX fee (roughly 1 to 3 percent), so the statement amount is often slightly higher than the raw converted amount.
 - Compare the converted amount to the transaction amount, then weigh vendor-name similarity, reference overlap, and how close the dates are.
+- Check the two card labels. They come from different systems and are written differently, so compare the card numbers inside them rather than the whole string. Matching numbers corroborate the pair. Numbers that clearly disagree are strong evidence these are two different purchases, even when the converted amounts land close, because a small amount in one currency often coincides with a small amount in another. Say so in your reasoning when the cards decide it. When either label names no card, treat the card as unknown and judge on the other signals; unknown is not disagreement.
+- Weigh the vendors as evidence too. A recurring software subscription, a cloud bill, or another charge that clearly is not a travel purchase does not belong to a restaurant, taxi, or toll receipt however well the amounts convert.
 - Be honest about uncertainty. Your exchange-rate estimate is approximate and this judgment always goes to a human for review, so do not overstate confidence.
 
 Return a JSON object with:
@@ -583,6 +595,8 @@ class OpenAIClient:
         receipt_date: str | None,
         receipt_vendor: str | None,
         receipt_reference: str | None,
+        tx_card: str | None = None,
+        receipt_payment_mode: str | None = None,
     ) -> FxJudgmentResult:
         prompt = _FX_JUDGMENT_PROMPT_TEMPLATE.format(
             tx_amount=tx_amount,
@@ -594,6 +608,8 @@ class OpenAIClient:
             receipt_date=receipt_date or "(unknown)",
             receipt_vendor=receipt_vendor or "(unknown)",
             receipt_reference=receipt_reference or "(none)",
+            tx_card=tx_card or "(unknown)",
+            receipt_payment_mode=receipt_payment_mode or "(unknown)",
         )
         response = self._client.chat.completions.create(
             model=self.model,
@@ -815,6 +831,9 @@ class MockLLMClient:
         # Last chart-of-accounts labels seen by a classify_* call, so tests
         # can assert the categorizer forwarded the in-scope account list.
         self.last_chart_of_accounts: list[str] | None = None
+        # Last (tx_card, receipt_payment_mode) pair seen by judge_fx_match
+        # (WS3), so tests can assert the card evidence reached the model.
+        self.last_fx_cards: tuple[str | None, str | None] | None = None
         self.cost_tracker = cost_tracker or CostTracker()
         # Record a fixed nominal cost per call so tests can verify
         # cost-tracking behavior without coupling to provider pricing.
@@ -869,8 +888,14 @@ class MockLLMClient:
         receipt_date: str | None,
         receipt_vendor: str | None,
         receipt_reference: str | None,
+        tx_card: str | None = None,
+        receipt_payment_mode: str | None = None,
     ) -> FxJudgmentResult:
         self.calls.append(("judge_fx_match", (tx_vendor, receipt_vendor)))
+        # WS3: the card pair is recorded on the side rather than in `calls`,
+        # so the existing (vendor, vendor) call assertions stay valid while
+        # a test can still assert the cards reached the model.
+        self.last_fx_cards = (tx_card, receipt_payment_mode)
         self.cost_tracker.record(self._per_call_cost)
 
         if self._fx_queue:

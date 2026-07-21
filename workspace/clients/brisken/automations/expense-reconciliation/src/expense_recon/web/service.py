@@ -1320,6 +1320,10 @@ def build_view(
                     "amount_pct": round(m.amount_score * 100),
                     "date_pct": round(m.date_score * 100),
                     "vendor_pct": round(m.vendor_score * 100),
+                    # WS3 — card agreement between the charge's card and the
+                    # receipt's Zoho payment mode. 50 means neither side named
+                    # a card, so it neither corroborates nor contradicts.
+                    "card_pct": round(m.card_score * 100),
                     "receipt": _receipt_view(r, overrides) if r else None,
                 }
             )
