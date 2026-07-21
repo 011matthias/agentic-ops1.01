@@ -5,3 +5,4 @@ round	commit	score	delta	status	description
 3	6a45698	3103.65	NA	discard	probe: push best to EUR8500 to over-extract from the premium segment - expect the scale segment to defect down to better (incentive-compatibility ceiling on the best price)
 4	dc00ff7	769.48	NA	discard	probe: fatten the entry tier to scope 0.45 (near better's 0.55) - expect the mid core segment to trade DOWN to the cheap good tier (cannibalization); the entry tier must stay deliberately thin
 5	c397f66	3971.96	NA	discard	probe: drop the entry tier (fold good up to equal better) - expect to lose the numerous micro segment entirely, testing whether the cheap thin plan earns its place in the menu
+6	fb8427e	3103.65	NA	discard	probe: collapse the premium tier (best = better) - expect the scale segment to pay only EUR1850 instead of EUR6300, testing whether a distinct high tier earns its place by capturing premium willingness-to-pay
