@@ -1,0 +1,10 @@
+{
+  "currency": "EUR",
+  "period": "monthly",
+  "note": "good/better/best retainer menu for the B2B lead-gen service. scope in [0,1] = normalized service intensity (lead volume / channels / reporting depth; 1.0 = fullest package). Optimize-loop asset for run upwork-independence-pricing-tiers.",
+  "tiers": {
+    "good":   {"price": 650, "scope": 0.20},
+    "better": {"price": 1850, "scope": 0.55},
+    "best":   {"price": 6300, "scope": 1.00}
+  }
+}
