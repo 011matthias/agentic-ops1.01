@@ -10,6 +10,11 @@
     "pr": 0,
     "sha": "d70ae527db3dbcc28db75ca43840342dd5cbb59d"
   },
+  "leadgen-portfolio.py": {
+    "direction": "maximize",
+    "pinned": "2026-07-21",
+    "sha": "adad0c2350a0690e6e631cdd6601f6f63565445a"
+  },
   "page-weight.py": {
     "direction": "minimize",
     "pinned": "2026-07-17",
