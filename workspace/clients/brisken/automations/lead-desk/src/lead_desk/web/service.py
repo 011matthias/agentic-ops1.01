@@ -147,12 +147,27 @@ def is_awaiting_reply(row: dict) -> bool:
     return not _unanswered(row)
 
 
+def next_step_is_stale(row: dict) -> bool:
+    """True when the stored next_step plan was authored BEFORE the contact's
+    latest inbound reply. Such a plan (a "No reply yet" / scheduled-nudge note)
+    is overtaken by the reply and must not drive the board's action or a
+    past-due-follow-up flag. Unknown authored-time (next_step_at absent, e.g. a
+    legacy row the v5 backfill didn't reach) is treated as NOT stale, so a plan
+    we cannot date is still honored verbatim."""
+    ns_at = _dt(row.get("next_step_at"))
+    last_in = _dt(row.get("last_in"))
+    return ns_at is not None and last_in is not None and ns_at < last_in
+
+
 def is_dangling(row: dict, today: date) -> bool:
     """A follow-up the operator scheduled is now past due AND we have not sent
     anything since. Stage-agnostic: a booked/held/accepted contact with a
     past-due next step owes an action too. Clears once we send after the due
-    date (last_out >= due)."""
-    if row.get("suppressed"):
+    date (last_out >= due).
+
+    A plan overtaken by a later reply is NOT dangling: the owed action is a
+    reply (the replied/aging path), not the stale scheduled nudge."""
+    if row.get("suppressed") or next_step_is_stale(row):
         return False
     due = _d(row.get("next_step_due"))
     if due is None or due >= today:
@@ -195,6 +210,11 @@ def recommended_action(row: dict, today: date) -> dict:
         return {"needed": False}
     last_in = (row.get("last_in") or "")[:10]
     next_step = (row.get("next_step") or "").strip()
+    # A next_step authored before the latest reply is stale (e.g. "No reply
+    # yet; nudge on 07-15" once they have replied) - do not show it as the
+    # action; fall back to the reply-aware default.
+    if next_step and next_step_is_stale(row):
+        next_step = ""
     if replied:
         reason = (f"They replied on {last_in} and we have not responded yet."
                   if last_in else "They replied and we have not responded yet.")
