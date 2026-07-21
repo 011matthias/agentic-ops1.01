@@ -77,7 +77,7 @@ import json
 import logging
 import sys
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -97,8 +97,8 @@ from .ingest.statement_pdf import parse_statement_pdf_tolerant
 from .ingest.statement_xlsx import parse_statement_xlsx_tolerant
 from .llm.client import LLMClient, OpenAIClient
 from .llm.cost import CostTracker
-from .matching.deterministic import match_month
-from .matching.judgment import judge_ambiguous, judge_fx_match
+from .matching.deterministic import MatchingConfig, match_month
+from .matching.judgment import judge_ambiguous, judge_fx_match, judge_unmatched
 from .matching.types import Categorization, Match, MatchOutcome, Receipt, Transaction
 from .output.reconciled_csv import write_reconciled_csv
 from .output.report_xlsx import write_report
@@ -327,7 +327,24 @@ def _apply_judgment(
         if tx is None or rec is None:
             judged.append(m)
             continue
-        judged.append(judge_fx_match(tx, rec, client=client))
+        verdict = judge_fx_match(tx, rec, client=client)
+        # The judgment layer builds a fresh Match around the model's
+        # verdict, which dropped the deterministic sub-scores the matcher
+        # had already computed. Carry them over: every FX row otherwise
+        # reaches the workbench scoring 0/100 on amount, date, vendor, and
+        # card, so the review queue could not sort them and the reviewer
+        # could not see WHY a pair was proposed. The verdict itself
+        # (match_type, confidence, reason) still comes from the judgment.
+        judged.append(
+            replace(
+                verdict,
+                score=m.score,
+                amount_score=m.amount_score,
+                date_score=m.date_score,
+                vendor_score=m.vendor_score,
+                card_score=m.card_score,
+            )
+        )
     # In-place: MatchOutcome is frozen (E6); rebinding the attribute
     # would raise. Slice-assignment revises the same list object.
     outcome.judgment_required[:] = judged
@@ -361,6 +378,104 @@ def _apply_ambiguous_judgment(
         rebuilt.append(pick)
         rebuilt.extend(others)
     outcome.ambiguous[:] = rebuilt
+
+
+# WS3 (2026-07-21) second-chance pass defaults. Read from the run config's
+# `matching` block; every one of them only ever narrows the pass.
+_SECOND_PASS_TOP_K = 3
+_SECOND_PASS_MAX_CALLS = 40
+_SECOND_PASS_MIN_CONFIDENCE = 0.6
+
+
+def _apply_unmatched_judgment(
+    outcome: MatchOutcome,
+    transactions: list[Transaction],
+    receipts: list[Receipt],
+    client: LLMClient | None,
+    match_cfg: MatchingConfig,
+    cfg: dict,
+) -> None:
+    """Optional second-chance LLM pass over the leftovers (WS3).
+
+    Off unless the run config sets `matching.llm_second_pass_unmatched`.
+    For each unmatched transaction it asks the model about a bounded
+    shortlist of still-free receipts (see `judge_unmatched`) and, on a
+    confident verdict, moves the pair from `unmatched` into
+    `judgment_required`.
+
+    The reconciliation guarantee holds by construction: ids only ever
+    move between those two buckets, a receipt is claimed at most once, and
+    nothing lands in `matches` — every rescue is review-flagged. Off, or
+    without a client, this is a no-op.
+    """
+    block = cfg.get("matching") or {}
+    if not block.get("llm_second_pass_unmatched"):
+        return
+    if client is None or not outcome.unmatched_transactions:
+        return
+
+    top_k = int(block.get("llm_second_pass_top_k", _SECOND_PASS_TOP_K))
+    max_calls = int(block.get("llm_second_pass_max_calls", _SECOND_PASS_MAX_CALLS))
+    min_confidence = float(
+        block.get("llm_second_pass_min_confidence", _SECOND_PASS_MIN_CONFIDENCE)
+    )
+    date_window = int(
+        block.get("llm_second_pass_date_window_days", match_cfg.fx_date_window_days)
+    )
+
+    tx_by_id = {tx.transaction_id: tx for tx in transactions}
+    rec_by_id = {r.document_id: r for r in receipts}
+    free_docs = list(outcome.unmatched_receipts)
+
+    calls_used = 0
+    rescued_tx: set[str] = set()
+    claimed_docs: set[str] = set()
+    for tx_id in outcome.unmatched_transactions:
+        if calls_used >= max_calls:
+            break
+        tx = tx_by_id.get(tx_id)
+        if tx is None:
+            continue
+        available = [
+            rec_by_id[doc]
+            for doc in free_docs
+            if doc not in claimed_docs and doc in rec_by_id
+        ]
+        if not available:
+            break
+        judged, calls = judge_unmatched(
+            tx,
+            available,
+            client=client,
+            cfg=match_cfg,
+            top_k=top_k,
+            date_window_days=date_window,
+            min_confidence=min_confidence,
+        )
+        calls_used += calls
+        if judged is None:
+            continue
+        outcome.judgment_required.append(judged)
+        rescued_tx.add(tx_id)
+        claimed_docs.add(judged.document_id)
+
+    if not rescued_tx:
+        logger.info(
+            "second-chance pass: no rescue from %d LLM call(s)", calls_used
+        )
+        return
+
+    # In-place: MatchOutcome is frozen (E6), so revise the same list objects.
+    outcome.unmatched_transactions[:] = [
+        tx_id for tx_id in outcome.unmatched_transactions if tx_id not in rescued_tx
+    ]
+    outcome.unmatched_receipts[:] = [
+        doc for doc in outcome.unmatched_receipts if doc not in claimed_docs
+    ]
+    logger.info(
+        "second-chance pass: %d transaction(s) moved to judgment from "
+        "%d LLM call(s)", len(rescued_tx), calls_used,
+    )
 
 
 @dataclass
@@ -542,14 +657,8 @@ def reconcile(
     match_cfg = None
     tuning_path = (cfg.get("matching") or {}).get("tuning_path")
     if tuning_path:
-        from .matching.deterministic import MatchingConfig
-
         match_cfg = MatchingConfig.from_file(config_dir / tuning_path)
     if match_memory:
-        from dataclasses import replace
-
-        from .matching.deterministic import MatchingConfig
-
         match_cfg = replace(
             match_cfg or MatchingConfig(),
             vendor_aliases=match_memory.vendor_aliases,
@@ -571,6 +680,12 @@ def reconcile(
     rec_by_id = {r.document_id: r for r in receipts}
     _apply_judgment(outcome, tx_by_id, rec_by_id, llm_client)
     _apply_ambiguous_judgment(outcome, tx_by_id, rec_by_id, llm_client)
+    # WS3: opt-in second chance for the leftovers, after the deterministic
+    # buckets are settled so it only ever sees genuinely free receipts.
+    _apply_unmatched_judgment(
+        outcome, transactions, receipts, llm_client,
+        match_cfg or MatchingConfig(), cfg,
+    )
 
     # Slice 10: categorize the receiptless charges (unmatched after
     # judgment). Reads the outcome only; the result is a side-map so no

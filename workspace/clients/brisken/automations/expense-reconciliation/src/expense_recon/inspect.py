@@ -88,6 +88,15 @@ _HEURISTICS: dict[str, list[re.Pattern[str]]] = {
         re.compile(r"^exchange\s*rate$", re.I),
         re.compile(r"^fx\s*rate$", re.I),
     ],
+    # WS3: the per-row card column. Patterns stay tight on purpose — a
+    # false positive would scope every receipt to a card that is really
+    # something else and hide real matches, which is worse than the miss.
+    "card": [
+        re.compile(r"^card$", re.I),
+        re.compile(r"^card\s*(number|no\.?|#)$", re.I),
+        re.compile(r"^card\s*last\s*4$", re.I),
+        re.compile(r"^last\s*4$", re.I),
+    ],
 }
 
 
@@ -116,6 +125,7 @@ def guess_column_map(headers: list[str]) -> tuple[dict[str, str], list[str]]:
         "original_amount",
         "original_currency",
         "fx_rate",
+        "card",
     ):
         for header in headers_clean:
             if header in claimed:
@@ -190,6 +200,7 @@ def format_output(
         "vendor",
         "posting_date",
         "transaction_currency",
+        "card",
     )
     ordered: dict[str, str] = {}
     for key in ordered_keys:

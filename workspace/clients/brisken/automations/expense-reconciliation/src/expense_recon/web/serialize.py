@@ -201,6 +201,7 @@ def match_to_dict(m: Match) -> dict:
         "amount_score": m.amount_score,
         "date_score": m.date_score,
         "vendor_score": m.vendor_score,
+        "card_score": m.card_score,
     }
 
 
@@ -216,6 +217,9 @@ def match_from_dict(d: dict) -> Match:
         amount_score=d.get("amount_score", 0.0),
         date_score=d.get("date_score", 0.0),
         vendor_score=d.get("vendor_score", 0.0),
+        # Absent from snapshots written before WS3; 0.0 reads as "not
+        # scored" exactly like the three above, so an old run still loads.
+        card_score=d.get("card_score", 0.0),
     )
 
 

@@ -304,3 +304,52 @@ def test_tiny_export_with_lone_refund_not_flipped(tmp_path):
     )
     assert txs[0].amount == Decimal("-50.00")
     assert txs[0].is_credit
+
+
+def test_card_column_maps_to_per_row_card(tmp_path):
+    """WS3: a tabular export prints the card beside every charge while the
+    account id names the whole account. Mapping the column is what gives
+    the matcher a real per-charge card identity."""
+    csv_text = (
+        "Transaction Date,Post Date,Description,Amount,Card,Type\n"
+        "04/29/2026,04/30/2026,ADOBE  *800-833-6687,16.23,3645,Sale\n"
+        "05/04/2026,05/05/2026,RISTORANTE,17.50,2838,Sale\n"
+        "05/04/2026,05/05/2026,NO CARD PRINTED,9.00,,Sale\n"
+    )
+    src = tmp_path / "activity.csv"
+    src.write_text(csv_text, encoding="utf-8")
+
+    txs = parse_statement_csv(
+        src,
+        column_map={
+            "transaction_date": "Transaction Date",
+            "posting_date": "Post Date",
+            "amount": "Amount",
+            "vendor": "Description",
+            "card": "Card",
+            "type": "Type",
+        },
+        account_id="chase-2838-family",
+        legal_entity_id="brisken-corpserv",
+        account_card_currency="USD",
+    )
+
+    assert [t.card_last4 for t in txs] == ["3645", "2838", None]
+    # The account id (and therefore the transaction id, which the store and
+    # the reviewer's dispositions key on) is untouched by the card column.
+    assert {t.account_id for t in txs} == {"chase-2838-family"}
+
+
+def test_card_column_absent_leaves_card_unset(tmp_path):
+    """An export with no card column parses exactly as before."""
+    csv_text = "Date,Description,Amount\n04/01/2026,COFFEE,4.50\n"
+    src = tmp_path / "no_card.csv"
+    src.write_text(csv_text, encoding="utf-8")
+    txs = parse_statement_csv(
+        src,
+        column_map=DEFAULT_MAP,
+        account_id="x",
+        legal_entity_id="x",
+        account_card_currency="USD",
+    )
+    assert txs[0].card_last4 is None

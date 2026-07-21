@@ -59,10 +59,26 @@ def test_from_dict_rejects_malformed_band_key():
 
 def test_blend_weights_steer_triage_score():
     base = MatchingConfig()
-    assert _blend_score(1.0, 0.0, 0.0, base) == 55
+    assert _blend_score(1.0, 0.0, 0.0, 0.0, base) == 55
     all_amount = replace(
         base, blend_amount_weight=1.0, blend_date_weight=0.0,
         blend_vendor_weight=0.0,
     )
-    assert _blend_score(1.0, 0.0, 0.0, all_amount) == 100
-    assert _blend_score(0.0, 1.0, 1.0, all_amount) == 0
+    assert _blend_score(1.0, 0.0, 0.0, 0.0, all_amount) == 100
+    assert _blend_score(0.0, 1.0, 1.0, 0.0, all_amount) == 0
+
+
+def test_card_weight_ships_at_zero_and_is_tunable():
+    """WS3: card agreement rides on every Match but must not move the
+    triage score until an operator prices it, so the pre-WS3 sort is
+    unchanged. A perfect card agreement scores the same as a flat
+    contradiction under the shipped weights."""
+    base = MatchingConfig()
+    assert base.blend_card_weight == 0.0
+    assert _blend_score(1.0, 0.0, 0.0, 1.0, base) == _blend_score(
+        1.0, 0.0, 0.0, 0.0, base
+    )
+
+    priced = MatchingConfig.from_dict({"blend_card_weight": 0.5})
+    assert priced.blend_card_weight == 0.5
+    assert _blend_score(0.0, 0.0, 0.0, 1.0, priced) == 50

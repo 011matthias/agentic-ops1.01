@@ -13,12 +13,14 @@ candidate set:
 """
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 
 from expense_recon.matching.deterministic import (
     MatchingConfig,
     _card_keys,
+    _card_score,
     match_month,
 )
 from expense_recon.matching.types import MatchType, Receipt, Transaction
@@ -172,3 +174,138 @@ def test_exact_fx_only_when_currencies_agree():
     # BRL has a band; the implied rate 31.73/150 = 0.21 is in [0.15, 0.26].
     assert len(out.judgment_required) == 1
     assert out.judgment_required[0].match_type == MatchType.FX_JUDGMENT
+
+
+# ── WS3 (2026-07-21): the card as a first-class signal ───────────────
+#
+# The 01-05-2026 corpserv month is the case these cover. Its CSV export
+# prints a "Card" column spanning 2838 / 3645 / 3876 / 0340 while the run
+# config named one account id for the whole file, so every charge looked
+# like it was on the same card. Software subscriptions on 3645 were then
+# free to FX-false-pair with EUR meal receipts paid on 2838, purely
+# because $16.23 and EUR 16.20 sit inside the EUR->USD plausibility band.
+
+
+def _tx_carded(tid, amount, card, *, account="chase-2838-family", **kw):
+    """A charge whose card comes from the export's per-row Card column,
+    not from the account id (the tabular-statement shape)."""
+    tx = _tx(tid, amount, account, **kw)
+    return replace(tx, card_last4=card)
+
+
+def test_card_score_reads_agreement_disagreement_and_silence():
+    tx_3645 = _tx_carded("t1", "16.23", "3645")
+    same = _receipt("r1", "16.20", currency="EUR",
+                    payment_mode="1 - CorpServ 3645/1672 (Chase)")
+    other = _receipt("r2", "16.20", currency="EUR",
+                     payment_mode="1 - CorpServ 2838/1672 (Chase)")
+    silent = _receipt("r3", "16.20", currency="EUR", payment_mode=None)
+
+    assert _card_score(tx_3645, same) == 1.0
+    assert _card_score(tx_3645, other) == 0.0
+    # Unknown is not disagreement: it must sort above a contradiction so a
+    # receipt with no payment mode is never pushed below a wrong-card pair.
+    assert _card_score(tx_3645, silent) == 0.5
+    assert _card_score(tx_3645, silent) > _card_score(tx_3645, other)
+
+
+def test_per_row_card_stops_the_software_vs_food_fx_false_pair():
+    """The ADOBE case. A USD software charge on card 3645 and a EUR meal
+    receipt paid on card 2838 convert into each other's range, so amount
+    and date alone pair them into judgment_required. The per-row card is
+    what rejects it.
+
+    The statement carries a 2838 charge as well, which is what the real
+    export looks like and what lets scoping act: the receipt's card is
+    present in this statement, so the receipt is scoped to it and the 3645
+    charge is not a candidate at all."""
+    adobe = _tx_carded("chase-2838-family:44", "16.23", "3645",
+                       vendor="ADOBE  *800-833-6687")
+    other_card_charge = _tx_carded("chase-2838-family:9", "500.00", "2838",
+                                   vendor="HOTEL")
+    lunch = _receipt("ER-00216#004", "16.20", currency="EUR",
+                     payment_mode="1 - CorpServ 2838/1672 (Chase)",
+                     vendor=None)
+
+    out = match_month([adobe, other_card_charge], [lunch])
+    assert not out.matches
+    assert not out.judgment_required
+    assert sorted(out.unmatched_transactions) == [
+        "chase-2838-family:44", "chase-2838-family:9",
+    ]
+    assert out.unmatched_receipts == ["ER-00216#004"]
+
+
+def test_receipt_card_absent_from_statement_stays_unscoped_but_scores_zero():
+    """The conservative half of the design. When the receipt's card is not
+    in this statement at all (a single-card export, a partial download), the
+    receipt is deliberately left UNSCOPED so a real match is never excluded
+    on evidence we do not have. The pair still forms, but it carries
+    `card_score=0.0`, which is what demotes it in the tie-break and what the
+    FX judgment layer then hands the model as evidence to reject it."""
+    adobe = _tx_carded("chase-2838-family:44", "16.23", "3645",
+                       vendor="ADOBE  *800-833-6687")
+    lunch = _receipt("ER-00216#004", "16.20", currency="EUR",
+                     payment_mode="1 - CorpServ 2838/1672 (Chase)")
+
+    out = match_month([adobe], [lunch])
+    assert len(out.judgment_required) == 1
+    assert out.judgment_required[0].card_score == 0.0
+
+
+def test_without_the_card_column_the_false_pair_still_forms():
+    """The same two rows, ingested from a config that never mapped the Card
+    column: `card_last4` is None, both sides fall back to the single account
+    id, and the pair reaches judgment. This is the pre-WS3 behaviour and the
+    reason the run config's column map matters."""
+    adobe = _tx("chase-2838-family:44", "16.23", "chase-2838-family",
+                vendor="ADOBE  *800-833-6687")
+    lunch = _receipt("ER-00216#004", "16.20", currency="EUR",
+                     payment_mode="1 - CorpServ 2838/1672 (Chase)")
+
+    out = match_month([adobe], [lunch])
+    assert len(out.judgment_required) == 1
+    assert out.judgment_required[0].match_type == MatchType.FX_JUDGMENT
+
+
+def test_matching_card_still_pairs():
+    """The guard must not cost a real match: same charge, same receipt, but
+    the expense report names the card the charge is actually on."""
+    charge = _tx_carded("chase-2838-family:12", "17.50", "2838", vendor="RISTORANTE")
+    receipt = _receipt("ER-00216#004", "16.20", currency="EUR",
+                       payment_mode="1 - CorpServ 2838/1672 (Chase)",
+                       vendor="Ristorante")
+
+    out = match_month([charge], [receipt])
+    assert len(out.judgment_required) == 1
+    assert out.judgment_required[0].card_score == 1.0
+
+
+def test_card_score_rides_on_every_match_for_the_reviewer():
+    """A plain same-currency match carries the card verdict too, so the
+    workbench can explain the pairing without re-deriving it."""
+    charge = _tx_carded("chase-2838-family:12", "42.50", "2838")
+    receipt = _receipt("r1", "42.50",
+                       payment_mode="1 - CorpServ 2838/1672 (Chase)")
+    out = match_month([charge], [receipt])
+    assert out.matches[0].match_type == MatchType.EXACT
+    assert out.matches[0].card_score == 1.0
+
+
+def test_card_breaks_the_tie_when_scoping_is_off():
+    """With `card_scoping` off (the pre-2026-06-16 parity switch) nothing
+    filters cross-card pairs, so two receipts that agree on amount, date,
+    and vendor would tie and land in `ambiguous` for a human. The card
+    separates them instead: the one on the charge's own card wins and the
+    transaction resolves without review of a false ambiguity."""
+    cfg = MatchingConfig(card_scoping=False)
+    charge = _tx_carded("chase-2838-family:12", "42.50", "3645")
+    right = _receipt("r-right", "42.50",
+                     payment_mode="1 - CorpServ 3645/1672 (Chase)")
+    wrong = _receipt("r-wrong", "42.50",
+                     payment_mode="1 - CorpServ 2838/1672 (Chase)")
+
+    out = match_month([charge], [right, wrong], cfg)
+    assert not out.ambiguous
+    assert [m.document_id for m in out.matches] == ["r-right"]
+    assert out.unmatched_receipts == ["r-wrong"]

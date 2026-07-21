@@ -173,6 +173,24 @@ class Transaction:
     # no purchase receipt ever pair-matches a credit.
     is_credit: bool = False
 
+    # The card this charge was made on, when the source names it PER ROW
+    # (WS3, 2026-07-21). The Chase statement PDF groups charges under a
+    # per-card cycle marker and the PDF parser already puts that number in
+    # `account_id`; the tabular exports (CSV / xlsx) instead print a "Card"
+    # column beside every row while `account_id` names the whole account.
+    # Mapping that column here gives the matcher a real per-charge card
+    # identity without churning `account_id` (and therefore `transaction_id`,
+    # which the store and the reviewer's dispositions key on).
+    #
+    # `matching.deterministic._tx_card_keys` prefers this field and falls
+    # back to `account_id`, so a source that carries no card column behaves
+    # byte-for-byte as before. Without it a multi-card statement is invisible
+    # to card scoping: on the real 01-05-2026 corpserv export all 134 rows
+    # carried account_id "chase-2838-family" while the rows themselves span
+    # cards 2838 / 3645 / 3876 / 0340, so software charges on 3645 were free
+    # to FX-false-pair with EUR meal receipts paid on 2838.
+    card_last4: str | None = None
+
 
 @dataclass(frozen=True)
 class Receipt:
@@ -288,6 +306,15 @@ class Match:
     amount_score: float = 0.0
     date_score: float = 0.0
     vendor_score: float = 0.0
+    # Card agreement between the charge's card and the receipt's Zoho
+    # payment mode (WS3, 2026-07-21): 1.0 when they name the same card,
+    # 0.0 when both name a card and they differ, 0.5 when either side does
+    # not name one (unknown corroborates nothing). It is a TIE-BREAK in the
+    # bipartite assignment and a review-transparency field; it enters the
+    # blended triage score only if the operator sets a non-zero
+    # `blend_card_weight`. 0.0 also means "not scored" on a
+    # reviewer-built match, same convention as the three sub-scores above.
+    card_score: float = 0.0
 
 
 @dataclass(frozen=True)

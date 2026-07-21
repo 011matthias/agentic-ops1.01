@@ -298,3 +298,89 @@ def test_apply_ambiguous_judgment_no_client_is_noop():
     outcome = MatchOutcome(ambiguous=list(cand))
     _apply_ambiguous_judgment(outcome, {tx.transaction_id: tx}, rec_by_id, None)
     assert [m.document_id for m in outcome.ambiguous] == ["r1", "r2"]  # unchanged
+
+
+# ── WS3 (2026-07-21): the card reaches the model ─────────────────────
+
+
+def test_fx_judgment_hands_the_model_both_cards():
+    """The card is the evidence that separates a real FX pair from an FX
+    coincidence, so both systems' records of it have to reach the model:
+    the statement's card column and the Zoho payment mode."""
+    mock = MockLLMClient()
+    tx = _tx(card_last4="3645", vendor_from_statement="ADOBE  *800-833-6687")
+    receipt = _receipt(payment_mode="1 - CorpServ 2838/1672 (Chase)")
+
+    judge_fx_match(tx, receipt, client=mock)
+
+    assert mock.last_fx_cards == ("3645", "1 - CorpServ 2838/1672 (Chase)")
+
+
+def test_fx_judgment_falls_back_to_the_account_id_for_the_card():
+    """A statement that names the card in its account id rather than a
+    per-row column (the Chase PDF path, whose cycle markers ARE the
+    account id) still tells the model which card paid."""
+    mock = MockLLMClient()
+    judge_fx_match(_tx(account_id="3645"), _receipt(), client=mock)
+
+    tx_card, payment_mode = mock.last_fx_cards
+    assert tx_card == "3645"
+    assert payment_mode is None
+
+
+def test_fx_judgment_prompt_carries_the_cards():
+    """The prompt template must actually render both cards; a kwarg that
+    never reaches the text would be silent."""
+    from expense_recon.llm.client import _FX_JUDGMENT_PROMPT_TEMPLATE
+
+    prompt = _FX_JUDGMENT_PROMPT_TEMPLATE.format(
+        tx_amount="16.23", tx_currency="USD", tx_date="2026-04-29",
+        tx_vendor="ADOBE  *800-833-6687",
+        receipt_amount="16.20", receipt_currency="EUR",
+        receipt_date="2026-05-04", receipt_vendor="(unknown)",
+        receipt_reference="(none)",
+        tx_card="3645",
+        receipt_payment_mode="1 - CorpServ 2838/1672 (Chase)",
+    )
+    assert "3645" in prompt
+    assert "1 - CorpServ 2838/1672 (Chase)" in prompt
+
+
+def test_apply_judgment_keeps_the_deterministic_sub_scores():
+    """The judgment layer builds a fresh Match around the model's verdict.
+    The matcher's sub-scores have to survive that, or every FX row reaches
+    the workbench scoring 0/100 on amount, date, vendor, and card: the
+    review queue cannot sort them and the reviewer cannot see why the pair
+    was proposed. The verdict fields still come from the judgment."""
+    tx, rec = _tx(), _receipt()
+    scored = Match(
+        transaction_id=tx.transaction_id,
+        document_id=rec.document_id,
+        match_type=MatchType.FX_JUDGMENT,
+        confidence=0.5,
+        reason="placeholder from deterministic layer",
+        requires_review=True,
+        score=64,
+        amount_score=0.71,
+        date_score=1.0,
+        vendor_score=0.83,
+        card_score=1.0,
+    )
+    outcome = MatchOutcome(judgment_required=[scored])
+    mock = MockLLMClient(fx_responses=[
+        FxJudgmentResult(
+            is_match=True, same_purchase_confidence=0.91,
+            implied_rate=1.14, converted_amount=Decimal("112.23"),
+            reasoning="match",
+        )
+    ])
+
+    _apply_judgment(outcome, {tx.transaction_id: tx}, {rec.document_id: rec}, mock)
+
+    judged = outcome.judgment_required[0]
+    assert judged.confidence == 0.91          # the verdict
+    assert judged.score == 64                 # the matcher's work, preserved
+    assert judged.amount_score == 0.71
+    assert judged.date_score == 1.0
+    assert judged.vendor_score == 0.83
+    assert judged.card_score == 1.0
