@@ -1,3 +1,4 @@
 round	commit	score	delta	status	description
 0	c4ce64d	687.58	0	baseline	baseline (asset as-is)
 1	2f6ecd3	716.39	+28.81	keep	Route-1 care price 300->200: care-price elasticity now resists, so the ceiling is no longer optimal; expect the interior optimum ~EUR200/mo
+2	1d15f42	1386.8	+670.41	keep	Capacity 15->32 h/wk: subcontracting makes added hours productive (more served clients) and freed-hour reinvestment makes idle capacity neutral, so the v1 low-capacity artifact should lift toward the market-saturating knee
