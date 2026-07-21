@@ -5,3 +5,4 @@ round	commit	score	delta	status	description
 3	1db8c30	186.32	+64.53	keep	raise Route-1 care price 100->300 (ceiling): model has no care-price elasticity, so recurring care revenue scales freely
 4	d56477c	200.37	+14.05	keep	drop Route-1 build price 2000->1200 (floor): recurring care dominates, so loss-lead the build to maximize conversion and client count
 5	8f63cde	194.37	NA	discard	probe: shift allocation to 0.45 local / 0.55 b2b -- test whether the 50/50 balance is a true optimum
+6	-	NA	NA	stopped	converged: 200.37 EUR/hr (+443% vs 36.88 baseline); all levers at model optimum (grid-swept + r5 allocation probe reverted)
