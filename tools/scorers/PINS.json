@@ -1,4 +1,10 @@
 {
+  "gtm-roi.py": {
+    "direction": "maximize",
+    "pinned": "2026-07-21",
+    "pr": 0,
+    "sha": "d70ae527db3dbcc28db75ca43840342dd5cbb59d"
+  },
   "page-weight.py": {
     "direction": "minimize",
     "pinned": "2026-07-17",
