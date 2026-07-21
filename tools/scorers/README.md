@@ -70,3 +70,4 @@ wrong tool):
 | Scorer | Metric | Direction |
 |---|---|---|
 | `page-weight.py FILE.html [...]` | Total local page weight in bytes (HTML + referenced local assets) | minimize |
+| `gtm-roi.py PLAN.json` | Upwork-independence GTM blended contribution-margin per working hour (EUR/hr above the hourly-work opportunity cost), 30-mo horizon, over a locked economic model | maximize |
