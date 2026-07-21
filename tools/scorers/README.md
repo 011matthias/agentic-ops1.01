@@ -70,4 +70,5 @@ wrong tool):
 | Scorer | Metric | Direction |
 |---|---|---|
 | `page-weight.py FILE.html [...]` | Total local page weight in bytes (HTML + referenced local assets) | minimize |
-| `gtm-roi.py PLAN.json` | Upwork-independence GTM blended contribution-margin per working hour (EUR/hr above the hourly-work opportunity cost), 30-mo horizon, over a locked economic model | maximize |
+| `gtm-roi.py PLAN.json` | Upwork-independence GTM v1 blended contribution-margin per working hour (EUR/hr above the hourly-work opportunity cost), 30-mo horizon, over a locked economic model | maximize |
+| `gtm-roi-v2.py PLAN.json` | Upwork-independence GTM v2 TOTAL contribution surplus (kEUR above the opportunity cost) over the 30-mo horizon; adds care-price elasticity + subcontracting/freed-hour reinvestment so care and capacity land on interior optima instead of bounds. NOT score-comparable to v1 (different metric) | maximize |
