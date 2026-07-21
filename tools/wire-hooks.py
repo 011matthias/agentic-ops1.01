@@ -243,6 +243,18 @@ CANONICAL_HOOKS = {
                     "command": _cmd("tools/project_status.py", "--sweep-stale --once-per-day"),
                     "timeout": 10000,
                 },
+                {
+                    # Surface optimize runs that need a decision (ACTIVE,
+                    # INTERRUPTED, closed without SUMMARY) instead of relying
+                    # on someone remembering to run the fleet view. Silent
+                    # when the fleet is clean; fail-open, exit 0 always;
+                    # advises at most once per day. tools/ script (not a
+                    # .claude/hooks gate), like project_status above -- not
+                    # part of EXPECTED_HOOK_SCRIPTS. See rule_optimize_loop.md.
+                    "type": "command",
+                    "command": _cmd("tools/optimize_overview.py", "--sweep --once-per-day"),
+                    "timeout": 10000,
+                },
             ],
         }
     ],
