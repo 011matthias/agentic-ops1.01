@@ -71,6 +71,15 @@ class Categorization:
     mapped Brisken Zoho chart-of-accounts entry (e.g.,
     "6420 - Office Equipment"); None until chart-of-accounts ingest
     is wired in slice 4.
+
+    `decision` (WS2, 2026-07-21) records the top-level adjudication verdict
+    from `categorize.adjudicate_categorization`: whether the tool's own
+    category/account was inserted over the Zoho report's on a heavy
+    root-group mismatch (`"ai_override_heavy"`), the report's category was
+    kept because both resolve to the same Zoho root-group
+    (`"kept_er"`), or the comparison could not be made and the report's
+    category was kept conservatively (`"review_unresolved"`). None when no
+    adjudication ran (no chart wired, or override_er_category off).
     """
 
     category: str | None
@@ -78,6 +87,7 @@ class Categorization:
     confidence: float
     source: ClassificationSource
     reasoning: str = ""
+    decision: str | None = None
 
 
 @dataclass(frozen=True)
@@ -233,6 +243,14 @@ class Receipt:
     base_amount: Decimal | None = None
     reimbursable: bool | None = None
     expense_location: str | None = None
+
+    # Vision receipt-image extraction (WS2, 2026-07-21). When the LLM reads
+    # the receipt IMAGE and its amount/currency/card disagrees with the
+    # deterministic EXPENSE SUMMARY row, the summary value is KEPT for
+    # matching (the deterministic backbone) and the disagreement is recorded
+    # here as a short human-readable note, surfaced in the workbench. None
+    # when vision agreed with the summary, or vision did not run.
+    data_quality_note: str | None = None
 
     @property
     def has_receipt_image(self) -> bool:

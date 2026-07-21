@@ -84,7 +84,7 @@ from pathlib import Path
 import os
 from decimal import Decimal
 
-from .categorize import categorize_receipts
+from .categorize import adjudicate_receipts, categorize_receipts
 from .categorize_charges import categorize_charges, derive_subscription_status
 from .ingest._common import ParseIssue
 from .ingest.chart_of_accounts import ChartOfAccounts
@@ -262,6 +262,51 @@ def _load_receipts(
     )
 
 
+def _apply_vision_receipts(
+    cfg: dict,
+    config_dir: Path,
+    receipts: list[Receipt],
+    llm_client: LLMClient | None,
+) -> tuple[list[Receipt], list[ParseIssue]]:
+    """WS2 vision stage: read the report PDF's receipt IMAGES and attach each
+    receipt's real merchant + line items to its EXPENSE SUMMARY row.
+
+    Gated by `categorization.vision_receipts: true` AND an LLM client AND a
+    `receipts.source` of `expense_report_pdf` (the receipt-image pages live in
+    the consolidated report PDF). A no-op returning the receipts unchanged in
+    every other case — the summary stays the deterministic matching backbone.
+    """
+    if not (cfg.get("categorization") or {}).get("vision_receipts", False):
+        return receipts, []
+    if llm_client is None or not receipts:
+        return receipts, []
+
+    r = cfg.get("receipts") or {}
+    if "path" not in r:
+        return receipts, []
+    path = (config_dir / r["path"]).resolve()
+    source = r.get("source") or (
+        "folder" if path.is_dir()
+        else "expense_report_pdf" if path.suffix.lower() == ".pdf"
+        else "csv"
+    )
+    if source != "expense_report_pdf" or not path.exists():
+        return receipts, []
+
+    from .ingest.expense_report_images import extract_receipt_images
+
+    try:
+        return extract_receipt_images(
+            path, client=llm_client, summary_receipts=receipts
+        )
+    except Exception as exc:  # noqa: BLE001 - vision must never break a run
+        logger.warning("vision receipt-image pass failed: %s", exc, exc_info=True)
+        return receipts, [
+            ParseIssue(path.name, 0, f"vision receipt-image pass failed: {exc}",
+                       severity="warning")
+        ]
+
+
 def _apply_judgment(
     outcome: MatchOutcome, tx_by_id, rec_by_id, client: LLMClient | None
 ) -> None:
@@ -416,9 +461,20 @@ def reconcile(
         "ingested %d transactions, %d receipts", len(transactions), len(receipts)
     )
 
+    # WS2 (2026-07-21): read the report PDF's receipt IMAGES with vision and
+    # attach each receipt's real merchant + line items to its EXPENSE SUMMARY
+    # row BEFORE categorization, so the ~half of summary rows with no printed
+    # vendor take the vendor-aware / LINE categorization path instead of REVIEW.
+    # Gated by `categorization.vision_receipts` + an LLM client; a no-op
+    # otherwise (the summary stays the deterministic backbone for matching).
+    _stage("receipt-images")
+    receipts, vision_issues = _apply_vision_receipts(
+        cfg, config_dir, receipts, llm_client
+    )
+
     parse_errors: list[tuple[str, int, str]] = [
         (issue.file_name, issue.line_number, issue.message)
-        for issue in (*stmt_issues, *receipt_issues)
+        for issue in (*stmt_issues, *receipt_issues, *vision_issues)
     ]
     if parse_errors:
         logger.warning("%d parse error(s) — see Errors sheet", len(parse_errors))
@@ -429,15 +485,23 @@ def reconcile(
     # cached CSV) and narrow it to the owner-approved operating-expense
     # groups, so the categorizer picks a real Zoho leaf account per LD-2.
     chart_of_accounts, zoho_cfg = _build_chart_of_accounts(cfg, config_dir)
-    account_labels: list[str] | None = None
-    if chart_of_accounts is not None:
-        postable = chart_of_accounts.postable_expense_accounts(
-            scope_groups=zoho_cfg.get("scope_groups")
-        )
-        account_labels = chart_of_accounts.llm_account_labels(postable)
+    # WS2 (2026-07-21): when there is no `zoho:` block (the hosted web run,
+    # built from an upload form) fall back to the per-entity `coa_validation`
+    # chart the COA-gate provisioning injects, so the categorizer gets the
+    # in-scope account labels AND the root-group adjudication has a chart to
+    # resolve against on hosted runs. Without this the account override and
+    # the adjudication were no-ops on every hosted upload (only the CLI's
+    # explicit `zoho:` block wired a chart).
+    cat_chart, account_labels, scope_groups = _resolve_categorizer_chart(
+        cfg, config_dir, chart_of_accounts, zoho_cfg
+    )
+    # The categorizer chart (COA-validation fallback included) is the one the
+    # export + workbench should see as "the run's chart".
+    chart_of_accounts = cat_chart
+    if cat_chart is not None and account_labels is not None:
         logger.info(
             "chart of accounts: %d accounts, %d in-scope postable",
-            len(chart_of_accounts), len(postable),
+            len(cat_chart), len(account_labels),
         )
 
     # BLUEPRINT LD-2: categorize per line item BEFORE matching so the
@@ -458,6 +522,16 @@ def reconcile(
         receipts, client=llm_client, chart_of_accounts=account_labels, learned=learned,
         override_er_category=override_er_category,
     )
+
+    # WS2 (2026-07-21): top-level adjudication. Under override_er_category the
+    # tool's account no longer wins unconditionally -- only on a HEAVY mismatch
+    # (a different Zoho root-group between the tool's pick and the report's
+    # category). Same root-group => the report's category is kept. Deterministic
+    # (no LLM call); runs only with a chart to resolve root-groups against.
+    if override_er_category and cat_chart is not None:
+        receipts = adjudicate_receipts(
+            receipts, cat_chart, scope_groups=scope_groups
+        )
 
     # PR 2c: learned vendor aliases + per-merchant FX feed match scoring /
     # tie-break (never bucket membership). Empty memory => default config.
@@ -1023,6 +1097,55 @@ def _build_chart_of_accounts(
             f"config.zoho.coa_source {source!r} not supported (use 'api' or 'csv')"
         )
     return coa, z
+
+
+def _resolve_categorizer_chart(
+    cfg: dict,
+    config_dir: Path,
+    chart_of_accounts: ChartOfAccounts | None,
+    zoho_cfg: dict,
+) -> tuple[ChartOfAccounts | None, list[str] | None, list[str] | None]:
+    """Resolve the chart + in-scope account labels + scope_groups the
+    categorizer and the WS2 adjudication use.
+
+    Prefers the `zoho:` block's chart (the CLI path). When there is none — the
+    hosted web run built from an upload form carries only the per-entity
+    `coa_validation` block the COA-gate provisioning injects — it builds the
+    chart from THAT block instead, so the account override and the root-group
+    adjudication fire on hosted runs (previously no-ops there). Returns
+    `(None, None, None)` when no chart can be built. Fail-open on the fallback:
+    a bad `coa_validation` chart leaves the categorizer label-less rather than
+    breaking the run (the export-time gate reports the real error separately).
+    """
+    if chart_of_accounts is not None:
+        scope = zoho_cfg.get("scope_groups")
+        postable = chart_of_accounts.postable_expense_accounts(scope_groups=scope)
+        return chart_of_accounts, chart_of_accounts.llm_account_labels(postable), scope
+
+    block = cfg.get("coa_validation")
+    if not (
+        isinstance(block, dict)
+        and block.get("enabled", True)
+        and block.get("chart_path")
+        and block.get("org_id")
+    ):
+        return None, None, None
+
+    from .coa_gate import load_entity_chart
+
+    try:
+        chart_path = (config_dir / block["chart_path"]).resolve()
+        chart = load_entity_chart(chart_path, block["org_id"])
+    except (KeyError, FileNotFoundError, ValueError, OSError) as exc:
+        logger.warning(
+            "categorizer chart from coa_validation failed (%s); "
+            "categorizing without account labels", exc,
+        )
+        return None, None, None
+
+    scope = block.get("scope_groups")
+    postable = chart.postable_expense_accounts(scope_groups=scope)
+    return chart, chart.llm_account_labels(postable), scope
 
 
 def _build_coa_gate(cfg: dict, config_dir: Path):

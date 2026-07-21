@@ -78,12 +78,29 @@ def test_override_er_category_on_unless_opted_out(monkeypatch):
 # ── _build_config block injection ────────────────────────────────────
 
 
-def test_build_config_injects_categorization_when_overriding():
+def test_build_config_injects_categorization_when_overriding(monkeypatch):
+    # WS2: vision_receipts is on by default alongside override_er_category
+    # whenever the LLM is effective.
+    monkeypatch.delenv("EXPENSE_RECON_VISION_RECEIPTS", raising=False)
     cfg = _build_config(
         "s.csv", "r.csv", _CMAP, _run_form(),
         use_llm=True, override_er_category=True,
     )
     assert cfg["llm"] == {"provider": "openai", "model": "gpt-4o-mini"}
+    assert cfg["categorization"] == {
+        "override_er_category": True,
+        "vision_receipts": True,
+    }
+
+
+def test_build_config_vision_receipts_opt_out(monkeypatch):
+    """EXPENSE_RECON_VISION_RECEIPTS=0 drops vision from the categorization
+    block while the override stays."""
+    monkeypatch.setenv("EXPENSE_RECON_VISION_RECEIPTS", "0")
+    cfg = _build_config(
+        "s.csv", "r.csv", _CMAP, _run_form(),
+        use_llm=True, override_er_category=True,
+    )
     assert cfg["categorization"] == {"override_er_category": True}
 
 
@@ -102,11 +119,16 @@ def test_hosted_run_defaults_to_llm_with_key(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test-fake")
     monkeypatch.delenv("EXPENSE_RECON_DEFAULT_LLM", raising=False)
     monkeypatch.delenv("EXPENSE_RECON_OVERRIDE_ER_CATEGORY", raising=False)
+    monkeypatch.delenv("EXPENSE_RECON_VISION_RECEIPTS", raising=False)
     prepared = _prepare(tmp_path)  # use_llm=False
     assert prepared.use_llm_effective is True
     assert prepared.ai_unavailable is False  # not explicitly requested; key present
     assert prepared.cfg["llm"]["provider"] == "openai"
-    assert prepared.cfg["categorization"] == {"override_er_category": True}
+    # WS2: override + vision both default-on when the LLM is effective.
+    assert prepared.cfg["categorization"] == {
+        "override_er_category": True,
+        "vision_receipts": True,
+    }
 
 
 def test_hosted_run_deterministic_without_key_no_notice(tmp_path, monkeypatch):

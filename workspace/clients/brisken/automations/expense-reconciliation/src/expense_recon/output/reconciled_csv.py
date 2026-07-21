@@ -37,10 +37,42 @@ from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from ..categorize import (
+    DECISION_AI_OVERRIDE_HEAVY,
+    DECISION_KEPT_ER,
+    DECISION_REVIEW_UNRESOLVED,
+)
 from ..matching.types import Categorization, Match, MatchOutcome, Receipt, Transaction
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
+
+# The adjudication verdict -> the human-readable "Category Decision" cell.
+# Precedence (highest first): a heavy override anywhere on the receipt is the
+# review-queue signal and dominates; an unresolved comparison beats a plain
+# kept-ER; otherwise the report category was kept.
+_DECISION_LABELS: tuple[tuple[str, str], ...] = (
+    (DECISION_AI_OVERRIDE_HEAVY, "AI override (heavy)"),
+    (DECISION_REVIEW_UNRESOLVED, "review"),
+    (DECISION_KEPT_ER, "kept ER"),
+)
+
+
+def _category_decision_cell(rec: "Receipt | None") -> str:
+    """The adjudication verdict for a matched receipt, aggregated across its
+    line items by precedence. Blank when unmatched or no line was adjudicated
+    (override off / no chart wired)."""
+    if rec is None:
+        return ""
+    seen = {
+        li.categorization.decision
+        for li in rec.line_items
+        if li.categorization is not None and li.categorization.decision
+    }
+    for value, label in _DECISION_LABELS:
+        if value in seen:
+            return label
+    return ""
 
 
 RECONCILED_COLUMNS = (
@@ -74,6 +106,13 @@ RECONCILED_COLUMNS = (
     "AI Category",
     "AI Zoho Account",
     "AI Category Source",
+    # ── WS2 top-level adjudication verdict for a matched receipt (2026-07-21):
+    #    "kept ER" (report + tool share a Zoho root-group, report kept),
+    #    "AI override (heavy)" (different root-group, the tool's category was
+    #    inserted -- the review queue), or "review" (comparison unresolvable,
+    #    report kept conservatively). Blank when unmatched or no adjudication
+    #    ran (override off / no chart wired). ──
+    "Category Decision",
     "Payment Mode",
     "Receipt URL",
     "Receipt Image",
@@ -270,6 +309,7 @@ def build_reconciled_rows(
             ai_category,
             ai_zoho_account,
             ai_source,
+            _category_decision_cell(rec),
             _str(rec.payment_mode) if rec is not None else "",
             _str(receipt_url),
             (

@@ -57,6 +57,7 @@ def categorization_to_dict(c: Categorization | None) -> dict | None:
         "confidence": c.confidence,
         "source": c.source.value,
         "reasoning": c.reasoning,
+        "decision": c.decision,
     }
 
 
@@ -69,6 +70,8 @@ def categorization_from_dict(d: dict | None) -> Categorization | None:
         confidence=d["confidence"],
         source=ClassificationSource(d["source"]),
         reasoning=d.get("reasoning", ""),
+        # .get keeps pre-WS2 snapshots loadable (no decision key).
+        decision=d.get("decision"),
     )
 
 
@@ -156,6 +159,7 @@ def receipt_to_dict(r: Receipt) -> dict:
         "base_amount": _dec(r.base_amount),
         "reimbursable": r.reimbursable,
         "expense_location": r.expense_location,
+        "data_quality_note": r.data_quality_note,
     }
 
 
@@ -180,6 +184,8 @@ def receipt_from_dict(d: dict) -> Receipt:
         base_amount=_as_dec(d.get("base_amount")),
         reimbursable=d.get("reimbursable"),
         expense_location=d.get("expense_location"),
+        # .get keeps pre-WS2 snapshots loadable (no data_quality_note key).
+        data_quality_note=d.get("data_quality_note"),
     )
 
 

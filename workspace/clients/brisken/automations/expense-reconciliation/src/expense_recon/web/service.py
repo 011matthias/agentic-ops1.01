@@ -729,6 +729,16 @@ def _override_er_category_on() -> bool:
     return os.environ.get("EXPENSE_RECON_OVERRIDE_ER_CATEGORY", "1") != "0"
 
 
+def _vision_receipts_on() -> bool:
+    """WS2: read the report PDF's receipt IMAGES with vision by default on the
+    hosted surface (the fix for the ~half of ER summary rows that carry no
+    printed merchant). Only fires for the `expense_report_pdf` receipts source
+    and with the LLM effective; a no-op elsewhere.
+    `EXPENSE_RECON_VISION_RECEIPTS=0` opts a deployment out (e.g. to cap
+    per-run vision cost)."""
+    return os.environ.get("EXPENSE_RECON_VISION_RECEIPTS", "1") != "0"
+
+
 def _build_config(
     stmt_name: str,
     rcpt_name: str,
@@ -774,8 +784,17 @@ def _build_config(
     }
     if use_llm:
         cfg["llm"] = {"provider": "openai", "model": "gpt-4o-mini"}
+    # WS2: the tool's own category can override the report's (heavy mismatch),
+    # and vision reads the report PDF's receipt images. Both need the LLM;
+    # vision additionally only fires for the report-PDF receipts source (gated
+    # in cli._apply_vision_receipts), so setting it for a CSV upload is a no-op.
+    categorization: dict = {}
     if override_er_category:
-        cfg["categorization"] = {"override_er_category": True}
+        categorization["override_er_category"] = True
+    if use_llm and _vision_receipts_on():
+        categorization["vision_receipts"] = True
+    if categorization:
+        cfg["categorization"] = categorization
     return cfg
 
 
@@ -1096,6 +1115,9 @@ def _receipt_view(r: Receipt, overrides: dict[tuple[str, int], dict]) -> dict:
         "base_amount": _fmt_amount(r.base_amount),
         "reimbursable": r.reimbursable,
         "expense_location": r.expense_location or "",
+        # WS2: a note when the vision receipt-image read disagreed with the
+        # report's amount/currency (the report value was kept for matching).
+        "data_quality_note": r.data_quality_note or "",
         "line_items": items,
     }
 
