@@ -10,6 +10,11 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-20 | Brisken Dirk Comments Review | client-dev | [Checkpoint](docs/2026-07-20%20-%20Brisken%20Dirk%20Comments%20Review/Checkpoint.md) |
+| 2026-07-20 | Brisken Expense-Recon Lovable API | client-dev | [Checkpoint](docs/2026-07-20%20-%20Brisken%20Expense-Recon%20Lovable%20API/Checkpoint.md) |
+| 2026-07-20 | Brisken Expense-Recon Tier-2 Charge Categorization | client-dev | [Checkpoint](docs/2026-07-20%20-%20Brisken%20Expense-Recon%20Tier-2%20Charge%20Categorization/Checkpoint.md) |
+| 2026-07-20 | Brisken Expense-Recon Blueprint Revision | client-dev | [Checkpoint](docs/2026-07-20%20-%20Brisken%20Expense-Recon%20Blueprint%20Revision/Checkpoint.md) |
+| 2026-07-20 | Brisken Tool Logins | client-dev | [Checkpoint](docs/2026-07-20%20-%20Brisken%20Tool%20Logins/Checkpoint.md) |
 | 2026-07-17 | Brisken Deck Use-Case Elaboration | client-dev | [Checkpoint](docs/2026-07-17%20-%20Brisken%20Deck%20Use-Case%20Elaboration/Checkpoint.md) |
 | 2026-07-17 | Brisken Planner Sync + Ashok Rethread | comms | [Checkpoint](docs/2026-07-17%20-%20Brisken%20Planner%20Sync%20%2B%20Ashok%20Rethread/Checkpoint.md) |
 | 2026-07-17 | Brisken Lead Desk GA Active Tier | client-dev | [Checkpoint](docs/2026-07-17%20-%20Brisken%20Lead%20Desk%20GA%20Active%20Tier/Checkpoint.md) |
@@ -267,6 +272,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## meji-media
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-20 | Meji P2 September Rework | comms | [Checkpoint](docs/2026-07-20%20-%20Meji%20P2%20September%20Rework/Checkpoint.md) |
+| 2026-07-20 | Meji Media Instantly Scan | client-dev | [Checkpoint](docs/2026-07-20%20-%20Meji%20Media%20Instantly%20Scan/Checkpoint.md) |
 | 2026-07-16 | Meji Media Intel Sweep + Multi-Inbox Build | - | [Checkpoint](docs/2026-07-16%20-%20Meji%20Media%20Intel%20Sweep%20+%20Multi-Inbox%20Build/Checkpoint.md) |
 | 2026-07-16 | Meji Media Leak Sweep | - | [Checkpoint](docs/2026-07-16%20-%20Meji%20Media%20Leak%20Sweep/Checkpoint.md) |
 | 2026-07-14 | Meji Version C Dream Accounts | - | [Checkpoint](docs/2026-07-14%20-%20Meji%20Version%20C%20Dream%20Accounts/Checkpoint.md) |
