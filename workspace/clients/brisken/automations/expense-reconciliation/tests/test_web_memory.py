@@ -99,3 +99,46 @@ def test_reset_clears_everything(client):
         assert s.count_rows() == {
             "merchant_category": 0, "vendor_alias": 0, "merchant_fx": 0,
         }
+
+
+# -- SPA JSON API (the memory screen the Lovable front end renders) --------
+
+def test_api_memory_empty(client):
+    r = client.get("/api/memory")
+    assert r.status_code == 200
+    v = r.json()
+    assert v["total"] == 0
+    assert v["categories"] == [] and v["aliases"] == [] and v["fx"] == []
+
+
+def test_api_memory_lists_learned(client):
+    _seed(client._data_root)
+    r = client.get("/api/memory")
+    assert r.status_code == 200
+    v = r.json()
+    assert v["total"] == 3
+    assert v["categories"][0]["category"] == "Meals & Entertainment"
+    assert v["aliases"][0]["stmt"] == "mega cente constr"
+    assert v["fx"][0]["mean"] == "1.1000"
+
+
+def test_api_memory_forget_removes_the_merchant(client):
+    _seed(client._data_root)
+    r = client.post(
+        "/api/memory/forget",
+        json={"legal_entity_id": LE, "vendor": "delancey tavern"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    assert body["forgotten"]["merchant_category"] == 1
+    with LearningStore(client._data_root / "learning.sqlite") as s:
+        assert s.get_merchant_category(LE, normalize_vendor("Delancey Tavern")) is None
+        # other merchants untouched
+        assert s.get_merchant_fx(LE, normalize_vendor("Hostaria"))
+
+
+def test_api_memory_forget_bad_request(client):
+    r = client.post("/api/memory/forget", json={"legal_entity_id": LE})
+    assert r.status_code == 400
+    assert r.json()["error"]

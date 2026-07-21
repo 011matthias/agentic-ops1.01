@@ -143,6 +143,8 @@ def test_cors_reflects_lovable_origin_only(gated_client):
         ("POST", "/runs/abc/commit-memory"),
         ("POST", "/runs/abc/forget"),
         ("PUT", "/api/settings"),  # §16 policy write is operator-only
+        ("GET", "/api/memory"),  # SPA memory read is operator-only (JSON 403, no redirect)
+        ("POST", "/api/memory/forget"),
     ],
 )
 def test_user_403_on_operator_post_routes(gated_client, method, path):
@@ -156,6 +158,7 @@ def test_operator_passes_operator_routes(gated_client):
     _login(gated_client, OP_CODE)
     assert gated_client.get("/compare").status_code == 200
     assert gated_client.get("/memory").status_code == 200
+    assert gated_client.get("/api/memory").status_code == 200
     assert gated_client.get("/api/operator/state").status_code == 200
 
 

@@ -1157,6 +1157,35 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             "comparison": comparison,
         })
 
+    @app.get("/api/memory")
+    def api_memory(request: Request):
+        """JSON twin of the HTML /memory page: everything the tool has
+        learned (merchant categories, vendor aliases, FX means) grouped by
+        table, for the SPA memory screen. build_memory_view is already a
+        JSON-safe dict; jsonable_encoder is kept for symmetry with the
+        other /api render-model routes. Operator-only, mirroring the HTML
+        /memory rule."""
+        return JSONResponse(
+            jsonable_encoder(build_memory_view(app.state.learning_db_path))
+        )
+
+    @app.post("/api/memory/forget")
+    async def api_memory_forget(request: Request):
+        """JSON twin of the /memory/forget form post: drop everything
+        learned for one merchant in one entity so next month stops
+        auto-filling it. Same {legal_entity_id, vendor} body and
+        {ok, forgotten: <per-table delete counts>} reply as the workbench's
+        /runs/{id}/forget. Operator-only."""
+        body = await request.json()
+        legal_entity_id = (body.get("legal_entity_id") or "").strip()
+        vendor = (body.get("vendor") or "").strip()
+        if not legal_entity_id or not vendor:
+            return JSONResponse({"error": "bad request"}, status_code=400)
+        forgotten = forget_memory_vendor(
+            app.state.learning_db_path, legal_entity_id, vendor
+        )
+        return JSONResponse({"ok": True, "forgotten": forgotten})
+
     @app.post("/runs/{run_id}/decisions/confirm-matched")
     def post_confirm_matched(run_id: str, request: Request):
         # PR A — one click confirms every matched-bucket transaction with
