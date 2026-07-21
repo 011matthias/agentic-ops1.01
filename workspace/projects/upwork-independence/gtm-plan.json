@@ -1,20 +1,20 @@
 {
   "_comment": "Upwork-independence GTM execution plan = the ONLY agent-writable surface during an optimize run. Every field is a DECISION; the reality that turns a decision into money is locked in tools/scorers/gtm-roi.py (30-month horizon). Edit values, not structure. Bounds + enums enforced by tools/gtm-plan-validate.py. Baseline is a deliberately naive plan (even 50/50 hedge, work-hard capacity, reference pricing); the loop climbs from here.",
-  "capacity_hours_per_week": 15,
+  "capacity_hours_per_week": 32,
   "route_allocation": {
-    "local_smb": 0.5,
-    "b2b_lead_gen": 0.5
+    "local_smb": 0.24,
+    "b2b_lead_gen": 0.76
   },
   "local_smb": {
     "geo": "DE",
     "acquisition": "demo_first",
     "segment": "handwerk",
     "price_build_eur": 1200,
-    "price_care_eur_mo": 300
+    "price_care_eur_mo": 200
   },
   "b2b_lead_gen": {
     "geo": "UK",
     "acquisition": "cold_email",
-    "retainer_eur_mo": 2400
+    "retainer_eur_mo": 2500
   }
 }
