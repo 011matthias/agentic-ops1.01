@@ -176,6 +176,6 @@ Recommendation: {STAY_ON_PLAN | UPGRADE_TO_{tier} | PURCHASE_OPS_PACK}
 
 ## Integration
 
-- **Pre-build:** Referenced from `make-pack/SKILL.md` Build Procedure step 2.5
+- **Pre-build:** Referenced from `.claude/skills/skil_make-pack/SKILL.md` Build Procedure step 2.5
 - **Post-hoc:** Load when client reports ops issues or at periodic `/status-check`
 - **AUTONOMOUS-DIAGNOSTICS:** Cross-reference from Level 1 when symptom is "account paused" or "ops limit reached"
