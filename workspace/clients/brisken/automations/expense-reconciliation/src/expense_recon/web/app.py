@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -86,7 +87,7 @@ from .store import (
     VALID_STATUSES,
     RunStore,
 )
-from . import auth
+from . import auth, ratelimit
 
 
 def _now_iso() -> str:
@@ -221,12 +222,31 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             return JSONResponse(
                 {"token": auth.issue_token(auth.ROLE_OPERATOR), "role": auth.ROLE_OPERATOR}
             )
+        # One shared code is this app's entire security boundary, so an
+        # attempt is throttled BEFORE the code is checked: per-IP with a
+        # doubling lockout, plus a global budget that a caller forging
+        # Fly-Client-IP cannot rotate around. See web/ratelimit.py.
+        caller = ratelimit.client_ip(request)
+        now = time.time()
+        with open_store() as store:
+            verdict = ratelimit.evaluate(store, caller, now)
+        if not verdict.allowed:
+            return JSONResponse(
+                ratelimit.denial_body(verdict),
+                status_code=429,
+                headers={"Retry-After": str(verdict.retry_after)},
+            )
         try:
             body = await request.json()
         except Exception:  # noqa: BLE001 - a malformed body is a client error
             body = {}
         code = str((body or {}).get("code", ""))
         role = auth.code_role(code)
+        with open_store() as store:
+            if role is None:
+                ratelimit.register_failure(store, caller, now)
+            else:
+                ratelimit.register_success(store, caller)
         if role is None:
             return JSONResponse({"error": "invalid code"}, status_code=401)
         return JSONResponse({"token": auth.issue_token(role), "role": role})

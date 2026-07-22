@@ -221,6 +221,15 @@ class RunStore:
                 updated_at TEXT,
                 PRIMARY KEY (run_id, group_id)
             );
+            CREATE TABLE IF NOT EXISTS login_failures (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ip TEXT NOT NULL,
+                ts REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_login_failures_ts
+                ON login_failures (ts);
+            CREATE INDEX IF NOT EXISTS idx_login_failures_ip_ts
+                ON login_failures (ip, ts);
             """
         )
         self._migrate()
@@ -682,3 +691,42 @@ class RunStore:
         )
         self.conn.commit()
         return {**SETTINGS_DEFAULTS, **merged}
+
+    # -- login throttle (see web/ratelimit.py for the policy) --------------
+    # Failed /api/login attempts only. Timestamps are epoch seconds, so the
+    # policy never has to parse a date. Successful logins clear the caller's
+    # rows; `prune_login_failures` keeps the table bounded to one window.
+
+    def record_login_failure(self, ip: str, ts: float) -> None:
+        self.conn.execute(
+            "INSERT INTO login_failures (ip, ts) VALUES (?, ?)", (ip, float(ts))
+        )
+        self.conn.commit()
+
+    def login_failure_stats(
+        self, since: float, ip: str | None = None
+    ) -> tuple[int, float]:
+        """`(count, latest_ts)` for failures at or after `since` — for one
+        caller when `ip` is given, else across every caller. `latest_ts` is
+        0.0 when there are none."""
+        if ip is None:
+            row = self.conn.execute(
+                "SELECT COUNT(*) AS n, COALESCE(MAX(ts), 0.0) AS last "
+                "FROM login_failures WHERE ts >= ?",
+                (float(since),),
+            ).fetchone()
+        else:
+            row = self.conn.execute(
+                "SELECT COUNT(*) AS n, COALESCE(MAX(ts), 0.0) AS last "
+                "FROM login_failures WHERE ip = ? AND ts >= ?",
+                (ip, float(since)),
+            ).fetchone()
+        return int(row["n"]), float(row["last"])
+
+    def clear_login_failures(self, ip: str) -> None:
+        self.conn.execute("DELETE FROM login_failures WHERE ip = ?", (ip,))
+        self.conn.commit()
+
+    def prune_login_failures(self, before: float) -> None:
+        self.conn.execute("DELETE FROM login_failures WHERE ts < ?", (float(before),))
+        self.conn.commit()
