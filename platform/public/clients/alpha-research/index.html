@@ -138,7 +138,7 @@ tr:hover td{background:var(--blue-bg)}
 .stat-value{font-size:20px}
 }
 </style>
-<script>(function(){var t=localStorage.getItem('alpha-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();</script>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
 </head>
 <body>
 <nav class="site-nav">
@@ -382,7 +382,7 @@ tr:hover td{background:var(--blue-bg)}
 var el = document.documentElement;
 var t = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
 el.setAttribute('data-theme', t);
-localStorage.setItem('alpha-theme', t);
+localStorage.setItem('theme', t);
 }
 var links = document.querySelectorAll('.step-link');
 var sections = [];
@@ -411,7 +411,8 @@ if (el) el.scrollIntoView({ behavior: 'smooth' });
 document.querySelector('.sidebar').classList.remove('open');
 });
 });</script>
-
+
+
 <div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
 <div style="text-align:center;max-width:360px;padding:24px;">
 <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;">

@@ -509,8 +509,8 @@ tr:nth-child(even) td { background: var(--surface2); }
 </div><!-- /page-layout -->
 
 <script>
-function toggleTheme(){var h=document.documentElement;var n=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('meji-docs-theme',n);document.getElementById('theme-icon').innerHTML=n==='dark'?'&#9788;':'&#9790;'}
-(function(){var s=localStorage.getItem('meji-docs-theme');if(s){document.documentElement.setAttribute('data-theme',s);if(s==='dark')document.getElementById('theme-icon').innerHTML='&#9788;'}})();
+function toggleTheme(){var h=document.documentElement;var n=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('theme',n);document.getElementById('theme-icon').innerHTML=n==='dark'?'&#9788;':'&#9790;'}
+(function(){var s=localStorage.getItem('theme');if(s){document.documentElement.setAttribute('data-theme',s);if(s==='dark')document.getElementById('theme-icon').innerHTML='&#9788;'}})();
 
 // Sidebar
 function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('sidebarBackdrop').classList.toggle('active')}

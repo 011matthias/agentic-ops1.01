@@ -123,7 +123,7 @@ li{margin-bottom:6px}
 @media (max-width:1100px){.nav-links a{font-size:12px;padding:5px 8px}.nav-status{display:none}}
 @media (max-width:768px){.sidebar{transform:translateX(-100%);width:260px}.sidebar.open{transform:translateX(0);box-shadow:4px 0 12px rgba(0,0,0,.1)}.main-content{margin-left:0 !important}.mobile-nav-toggle{display:block}.nav-links{display:none}.wf-diagram{flex-direction:column}.wf-arrow{transform:rotate(90deg);justify-content:center}.hero h1{font-size:24px}}
 </style>
-<script>(function(){var t=localStorage.getItem('ai-automation-agency-partner-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})()</script>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
 </head>
 <body>
 
@@ -310,7 +310,7 @@ li{margin-bottom:6px}
 <script>
 function checkAccess(){var c=document.getElementById('accessCode').value.trim().toLowerCase();if(c==='ai-partner-2026'){document.getElementById('accessGate').classList.add('hidden');localStorage.setItem('ai-automation-agency-partner-access','granted')}else{document.getElementById('accessError').textContent='Incorrect code. Check your message for the access code.'}}
 if(localStorage.getItem('ai-automation-agency-partner-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}
-function toggleTheme(){var h=document.documentElement;var t=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',t);localStorage.setItem('ai-automation-agency-partner-theme',t)}
+function toggleTheme(){var h=document.documentElement;var t=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',t);localStorage.setItem('theme',t)}
 
 var links=document.querySelectorAll('.step-link');var sections=[];
 links.forEach(function(a){var id=a.getAttribute('href').replace('#','');var el=document.getElementById(id);if(el)sections.push({el:el,link:a})});

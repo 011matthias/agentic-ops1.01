@@ -51,7 +51,7 @@ p{margin-bottom:16px;color:var(--text)}a{color:var(--blue);text-decoration:none}
 .mobile-nav-toggle{display:none;background:none;border:none;cursor:pointer;padding:8px;color:var(--text)}
 @media(max-width:768px){.sidebar{transform:translateX(-100%);width:260px}.sidebar.open{transform:translateX(0);box-shadow:4px 0 12px rgba(0,0,0,.1)}.main-content{margin-left:0!important}.mobile-nav-toggle{display:block}.nav-links{display:none}.hero h1{font-size:24px}}
 </style>
-<script>(function(){var t=localStorage.getItem('mailerlite-zoom-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})()</script>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
 </head>
 <body>
 
@@ -240,7 +240,7 @@ p{margin-bottom:16px;color:var(--text)}a{color:var(--blue);text-decoration:none}
 <script>
 function checkAccess(){var c=document.getElementById('accessCode').value.trim().toLowerCase();if(c==='mailerlite-2026'){localStorage.setItem('mailerlite-zoom-access','granted');document.getElementById('accessGate').classList.add('hidden')}else{document.getElementById('accessError').textContent='Incorrect access code. Check your Upwork message.'}}
 (function(){if(localStorage.getItem('mailerlite-zoom-access')==='granted'){document.getElementById('accessGate').classList.add('hidden')}})();
-function toggleTheme(){var h=document.documentElement;var t=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',t);localStorage.setItem('mailerlite-zoom-theme',t)}
+function toggleTheme(){var h=document.documentElement;var t=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',t);localStorage.setItem('theme',t)}
 (function(){var links=document.querySelectorAll('.step-link');var sections=[];links.forEach(function(l){var id=l.getAttribute('href');if(id&&id.startsWith('#')){var el=document.querySelector(id);if(el)sections.push({el:el,link:l})}});if(!sections.length)return;var observer=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){links.forEach(function(l){l.classList.remove('active')});sections.forEach(function(s){if(s.el===e.target)s.link.classList.add('active')})}})},{rootMargin:'-80px 0px -60% 0px'});sections.forEach(function(s){observer.observe(s.el)})})();
 </script>
 </body>

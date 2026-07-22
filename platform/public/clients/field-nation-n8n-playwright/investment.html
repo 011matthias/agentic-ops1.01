@@ -4,9 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Investment | Field Nation Automation | UnpauseAI</title>
-<script>
-(function(){var t=localStorage.getItem('field-nation-n8n-playwright-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
-</script>
 <style>
 :root {
     --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
@@ -221,6 +218,7 @@ tr:hover td { background: var(--surface); }
     .ongoing-grid { grid-template-columns: 1fr; }
 }
 </style>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
 </head>
 <body>
 
@@ -462,7 +460,7 @@ function toggleTheme(){
     var h=document.documentElement;
     var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
     h.setAttribute('data-theme',t);
-    localStorage.setItem('field-nation-n8n-playwright-theme',t);
+    localStorage.setItem('theme',t);
 }
 (function(){
     var links=document.querySelectorAll('.step-link');

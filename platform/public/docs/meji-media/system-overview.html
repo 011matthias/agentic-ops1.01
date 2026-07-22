@@ -1455,11 +1455,11 @@ const root = document.documentElement;
 function toggleTheme() {
   const t = root.dataset.theme === 'dark' ? 'light' : 'dark';
   root.dataset.theme = t;
-  localStorage.setItem('meji-docs-theme', t);
+  localStorage.setItem('theme', t);
   document.getElementById('theme-icon').innerHTML = t === 'dark' ? '&#9788;' : '&#9790;';
 }
 (function() {
-  const saved = localStorage.getItem('meji-docs-theme');
+  const saved = localStorage.getItem('theme');
   if (saved) {
     root.dataset.theme = saved;
     if (saved === 'dark') document.getElementById('theme-icon').innerHTML = '&#9788;';

@@ -4,9 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Investment | Shakil's Automation | UnpauseAI</title>
-<script>
-(function(){var t=localStorage.getItem('shakil-n8n-clickup-automation-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
-</script>
 <style>
 :root {
     --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
@@ -269,6 +266,7 @@ table.comparison tr:hover td.highlight { background: color-mix(in srgb, var(--bl
     .includes-list { grid-template-columns: 1fr; }
 }
 </style>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
 </head>
 <body>
 
@@ -527,7 +525,7 @@ function toggleTheme(){
     var h=document.documentElement;
     var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
     h.setAttribute('data-theme',t);
-    localStorage.setItem('shakil-n8n-clickup-automation-theme',t);
+    localStorage.setItem('theme',t);
 }
 
 var links = document.querySelectorAll('.step-link');
