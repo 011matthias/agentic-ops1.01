@@ -25,7 +25,7 @@ If seeds land in spam, stop the campaign. More volume on a burned setup deepens 
 
 ## Then the list
 
-A list can pass verification and still be wrong two ways. First, corporate mail gateways: many companies route mail through filtering services, and a gateway can accept your message at the server level and still discard it before a human sees it. Checking a domain's MX records tells you who actually receives its mail, and heavily gatewayed segments are often better removed than emailed. Second, wrong-person targeting: if replies come back saying "not my area," the filters that built the list are off, and no sequence fixes that.
+A list can pass verification and still be wrong two ways. First, corporate mail gateways: many companies route mail through filtering services, and a gateway can accept your message at the server level and still discard it before a human sees it. Checking a domain's MX records tells you who actually receives its mail, and heavily gateway-filtered segments are often better removed than emailed. Second, wrong-person targeting: if replies come back saying "not my area," the filters that built the list are off, and no sequence fixes that.
 
 ## Then the message
 

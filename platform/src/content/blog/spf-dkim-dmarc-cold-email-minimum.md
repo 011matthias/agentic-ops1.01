@@ -48,4 +48,4 @@ Two structural rules sit on top of the records themselves.
 
 **Never cold-send from your primary domain.** Outreach happens from separate look-alike sending domains, each carrying its own SPF, DKIM, and DMARC, each redirecting to the main site. Reputation damage on a sending domain is a replaceable loss; on your primary domain it follows every invoice and support email you send.
 
-**Authentication does not replace warm-up.** A fully authenticated fresh domain is still a fresh domain. Providers score sending history, and new domains earn inbox placement over weeks of gradually increasing, humanlike volume. The records are the entry ticket; warm-up is the queue.
+**Authentication does not replace warm-up.** A fully authenticated fresh domain is still a fresh domain. Providers score sending history, and new domains earn inbox placement over weeks of gradually increasing, human-paced volume. The records are the entry ticket; warm-up is the queue.
