@@ -320,9 +320,12 @@ def check_dead_links(public_jsx_files: list[Path]) -> list[Finding]:
     findings: list[Finding] = []
     if not PUBLIC_APP.exists():
         return findings
-    # Enumerate available routes.
+    # Enumerate available routes. NOTE: "/" is deliberately NOT in this set.
+    # It used to be, and the walk-up loop below reduced every target to "/",
+    # so hit=True for every href and the check could never flag anything
+    # (2026-07-22 blind-spot fix). href="/" is handled as an explicit
+    # exact-match special case instead.
     available: set[str] = set()
-    available.add("/")
     for p in PUBLIC_APP.rglob("page.tsx"):
         rel = p.parent.relative_to(PUBLIC_APP)
         if str(rel) == ".":
@@ -352,17 +355,26 @@ def check_dead_links(public_jsx_files: list[Path]) -> list[Finding]:
                     target = "/"
                 # Normalize: collapse dynamic-segment placeholders.
                 norm = target
-                # Quick lookup: exact match or prefix in available routes.
+                # href="/" is always valid (exact match only, never via walk-up).
+                if norm == "/":
+                    continue
+                # Quick lookup: exact match in available routes.
                 if norm in available or norm + "/" in available:
                     continue
-                # Try walking up: a target like /proposals/foo should match /proposals/*.
+                # Walk up: a target like /proposals/foo matches ONLY a dynamic
+                # parent route (/proposals/*). A bare static parent does NOT
+                # make an arbitrary child valid, and the root is never an
+                # implicit accept (that combination made this check a no-op).
                 hit = False
                 head = norm
-                while "/" in head:
-                    head = head.rsplit("/", 1)[0] or "/"
-                    if head + "/*" in available or head in available:
+                while True:
+                    parent = head.rsplit("/", 1)[0]
+                    if not parent:
+                        break
+                    if parent + "/*" in available:
                         hit = True
                         break
+                    head = parent
                 if hit:
                     continue
                 findings.append(Finding(
@@ -406,6 +418,34 @@ def main() -> int:
         all_findings.extend(check_proposal_headings(p, lines))
         all_findings.extend(check_email_consistency(p, lines))
     all_findings.extend(check_dead_links(public_jsx_files))
+
+    if args.format == "json" and explicit is not None and len(explicit) == 1:
+        # Hook contract (post-write-gate dispatcher): one file in, one
+        # {total, hits, by_category, by_severity} payload out — the same
+        # shape every other dispatched validator emits. Out-of-scope files
+        # yield an empty payload.
+        hits = [
+            {
+                "line": f.line,
+                "category": f.rule,
+                "severity": f.severity,
+                "message": f.text,
+                "snippet": f.text,
+            }
+            for f in all_findings
+        ]
+        by_cat: dict[str, int] = {}
+        by_sev: dict[str, int] = {}
+        for h in hits:
+            by_cat[h["category"]] = by_cat.get(h["category"], 0) + 1
+            by_sev[h["severity"]] = by_sev.get(h["severity"], 0) + 1
+        print(json.dumps({
+            "total": len(hits),
+            "hits": hits,
+            "by_category": by_cat,
+            "by_severity": by_sev,
+        }))
+        return 1 if any(f.severity == "HIGH" for f in all_findings) else 0
 
     severity_rank = {"HIGH": 3, "MEDIUM": 2, "LOW": 1}
     threshold = severity_rank.get(args.severity or "LOW", 1)

@@ -50,7 +50,9 @@ REPO = Path(__file__).resolve().parent.parent
 CONFIG = REPO / "tools" / "fixtures" / "demo-banned-terms.json"
 
 TEXT_SUFFIXES = {".html", ".htm", ".md", ".txt", ".srt", ".vtt", ".js", ".py", ".json"}
-SLIDE_XML = re.compile(r"ppt/slides/slide\d+\.xml$")
+# Slides AND speaker notes (2026-07-22 blind-spot fix: notesSlides/ was never
+# scanned, though a banned term there is presenter-visible in every demo).
+SLIDE_XML = re.compile(r"ppt/(?:slides|notesSlides)/[^/]*\.xml$")
 SCAN_SUFFIXES = TEXT_SUFFIXES | {".pdf", ".pptx"}
 
 
@@ -96,16 +98,19 @@ def pdf_segments(path: Path):
 
 def pptx_segments(path: Path):
     with zipfile.ZipFile(path) as z:
-        names = sorted(
-            (n for n in z.namelist() if SLIDE_XML.match(n)),
-            key=lambda n: int(re.search(r"slide(\d+)\.xml$", n).group(1)),
-        )
+        def order(name: str) -> tuple[bool, int]:
+            m = re.search(r"(\d+)\.xml$", name)
+            return ("notesslides/" in name.lower(), int(m.group(1)) if m else 0)
+
+        names = sorted((n for n in z.namelist() if SLIDE_XML.match(n)), key=order)
         for n in names:
             xml = z.read(n).decode("utf8", "ignore")
             # join <a:t> runs so a term split across runs is still found
             text = " ".join(re.findall(r"<a:t>(.*?)</a:t>", xml, re.S))
-            num = re.search(r"slide(\d+)\.xml$", n).group(1)
-            yield f"slide {num}", text
+            m = re.search(r"(\d+)\.xml$", n)
+            num = m.group(1) if m else "?"
+            label = "notes slide" if "notesslides/" in n.lower() else "slide"
+            yield f"{label} {num}", text
 
 
 def text_segments(path: Path):
@@ -142,7 +147,12 @@ def scan(path: Path, terms: list[dict], exemptions: list[dict]) -> tuple[list[Hi
                 continue
             for entry in terms:
                 term = entry["term"]
-                pattern = entry.get("pattern") or rf"\b{re.escape(term)}\b"
+                # Multi-word terms must match across line breaks: PDF
+                # extract_text inserts newlines constantly (2026-07-22
+                # blind-spot fix — 'Business Technology Platform' split
+                # across lines was invisible).
+                esc = re.escape(term).replace("\\ ", r"\s+")
+                pattern = entry.get("pattern") or rf"\b{esc}\b"
                 for m in re.finditer(pattern, text, re.IGNORECASE):
                     reason = is_exempt(path, term, exemptions)
                     if reason:

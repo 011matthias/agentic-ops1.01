@@ -130,3 +130,49 @@ def test_proposal_heading_drift_still_flagged():
     lines = body.splitlines(keepends=True)
     findings = VPC.check_proposal_headings(VPC.PROPOSALS / "x.md", lines)
     assert [f.rule for f in findings] == ["heading-drift"]
+
+
+# --- check_dead_links (2026-07-22 blind spot: the walk-up loop reduced every
+# target to "/", which was unconditionally in the available set, so hit=True
+# for every href and the check was a no-op) ---------------------------------
+
+def _mk_public_app(tmp_path: Path) -> Path:
+    app = tmp_path / "app" / "(public)"
+    (app / "contact").mkdir(parents=True)
+    (app / "contact" / "page.tsx").write_text("x", encoding="utf-8")
+    (app / "proposals" / "[slug]").mkdir(parents=True)
+    (app / "proposals" / "[slug]" / "page.tsx").write_text("x", encoding="utf-8")
+    return app
+
+
+def _dead_links(tmp_path, monkeypatch, href: str) -> list[str]:
+    monkeypatch.setattr(VPC, "PUBLIC_APP", _mk_public_app(tmp_path))
+    page = tmp_path / "page.tsx"
+    page.write_text(f'<Link href="{href}">x</Link>\n', encoding="utf-8")
+    return [f.rule for f in VPC.check_dead_links([page])]
+
+
+def test_dead_href_is_flagged(tmp_path, monkeypatch):
+    assert _dead_links(tmp_path, monkeypatch, "/really-dead") == ["dead-link"]
+
+
+def test_deep_dead_href_is_flagged(tmp_path, monkeypatch):
+    assert _dead_links(tmp_path, monkeypatch, "/really/dead/deep") == ["dead-link"]
+
+
+def test_real_route_not_flagged(tmp_path, monkeypatch):
+    assert _dead_links(tmp_path, monkeypatch, "/contact") == []
+
+
+def test_dynamic_child_not_flagged(tmp_path, monkeypatch):
+    # /proposals/foo should match the [slug] dynamic route (/proposals/*).
+    assert _dead_links(tmp_path, monkeypatch, "/proposals/some-prospect") == []
+
+
+def test_child_of_static_route_is_flagged(tmp_path, monkeypatch):
+    # /contact exists but has no dynamic child route, so /contact/foo is dead.
+    assert _dead_links(tmp_path, monkeypatch, "/contact/foo") == ["dead-link"]
+
+
+def test_trailing_slash_route_not_flagged(tmp_path, monkeypatch):
+    assert _dead_links(tmp_path, monkeypatch, "/contact/") == []

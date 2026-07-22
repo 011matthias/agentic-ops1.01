@@ -84,6 +84,7 @@ CHECKS: list[dict] = [
 
 
 SUPPRESS_RE = re.compile(r"<!--\s*deliverable-allow:\s*([\w,\s-]+?)\s*(?:\|\s*reason:\s*(.*?))?\s*-->")
+HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 RELATIVE_LINK_RE = re.compile(r'<a\s+[^>]*href=["\'](?!https?://|mailto:|#|/|tel:|javascript:)([^"\']+)["\']', re.IGNORECASE)
 SCRIPT_SRC_RE = re.compile(r'<script\s+[^>]*src=["\']([^"\']+)["\']', re.IGNORECASE)
 LINK_HREF_RE = re.compile(r'<link\s+[^>]*href=["\']([^"\']+)["\']', re.IGNORECASE)
@@ -134,11 +135,16 @@ def check_relative_paths(text: str) -> list[dict]:
 
 
 def check_qol_features(text: str, suppressed: set[str]) -> list[dict]:
+    # Strip HTML comments first: a feature string inside a comment is not a
+    # working feature (2026-07-22 blind-spot fix — commented-out boilerplate
+    # satisfied all three HIGH ship-blocker checks). Suppression markers are
+    # parsed from the raw text by the caller before this runs.
+    live = HTML_COMMENT_RE.sub("", text)
     hits = []
     for check in CHECKS:
         if check["id"] in suppressed:
             continue
-        all_present = all(re.search(p, text, re.IGNORECASE) for p in check["patterns"])
+        all_present = all(re.search(p, live, re.IGNORECASE) for p in check["patterns"])
         if not all_present:
             hits.append({
                 "line": 1,

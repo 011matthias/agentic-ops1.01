@@ -114,10 +114,19 @@ RULES: list[tuple[str, str, str, str]] = [
 ]
 
 EM_DASH_RULES: list[tuple[str, str, str, str]] = [
+    # Four grammatical forms, one rule class (2026-07-22 blind-spot fix: the
+    # spaced-only patterns missed tight `word—word`, `&mdash;`, and tight
+    # `word--word`).
     (r" — ", "em-dash", "MEDIUM",
      "Em-dash banned in comms. Use comma, semicolon, colon, or period."),
+    (r"(?<! )—|—(?! )", "em-dash", "MEDIUM",
+     "Tight em-dash (no surrounding spaces). Same rule."),
+    (r"&mdash;", "em-dash", "MEDIUM",
+     "&mdash; entity form of the em-dash. Same rule."),
     (r" -- ", "em-dash-substitute", "MEDIUM",
      "Double-hyphen as em-dash substitute. Same rule."),
+    (r"(?<=\w)--(?=\w)", "em-dash-substitute", "MEDIUM",
+     "Tight double-hyphen between words. Same rule."),
 ]
 
 
@@ -127,16 +136,12 @@ def check_text(text: str, include_em_dash: bool) -> list[dict]:
         rules.extend(EM_DASH_RULES)
 
     hits: list[dict] = []
-    in_fence = False
-    for i, line in enumerate(text.splitlines(), 1):
+    lines = text.splitlines()
+
+    def scan_line(i: int, line: str) -> None:
         stripped = line.lstrip()
-        if stripped.startswith("```") or stripped.startswith("~~~"):
-            in_fence = not in_fence
-            continue
-        if in_fence:
-            continue
         if stripped.startswith("> "):
-            continue
+            return
         for regex, category, severity, message in rules:
             if re.search(regex, line, flags=re.IGNORECASE):
                 hits.append({
@@ -146,6 +151,38 @@ def check_text(text: str, include_em_dash: bool) -> list[dict]:
                     "message": message,
                     "snippet": line.strip()[:160],
                 })
+
+    in_fence = False
+    last_fence_line = 0
+    for i, line in enumerate(lines, 1):
+        stripped = line.lstrip()
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            in_fence = not in_fence
+            last_fence_line = i
+            continue
+        if in_fence:
+            continue
+        scan_line(i, line)
+
+    if in_fence and last_fence_line:
+        # Unbalanced fence (2026-07-22 blind-spot fix): an opener with no
+        # closer used to exempt the rest of the draft from every rule.
+        # Rescan the swallowed tail with fencing disabled and surface the
+        # imbalance itself.
+        hits.append({
+            "line": last_fence_line,
+            "category": "fence-unbalanced",
+            "severity": "LOW",
+            "message": (
+                "Unclosed ``` fence: everything after this line would have "
+                "been exempt from all rules. Tail rescanned with fencing "
+                "disabled; close the fence if it is a real code block."
+            ),
+            "snippet": lines[last_fence_line - 1].strip()[:160],
+        })
+        for i in range(last_fence_line + 1, len(lines) + 1):
+            scan_line(i, lines[i - 1])
+        hits.sort(key=lambda h: h["line"])
     return hits
 
 
