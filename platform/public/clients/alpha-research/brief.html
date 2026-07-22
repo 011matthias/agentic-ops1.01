@@ -132,10 +132,6 @@ li { margin-bottom: 6px; }
 .callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
 .callout.green { border-color: var(--green); background: var(--green-bg); }
 .callout.green .callout-title, .callout.green p { color: var(--green-dark); }
-.callout.orange { border-color: var(--orange); background: var(--orange-bg); }
-.callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
-.callout.purple { border-color: var(--purple); background: var(--purple-bg); }
-.callout.purple .callout-title, .callout.purple p { color: var(--purple-dark); }
 .req-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 24px 0; }
 .req-card {
     padding: 20px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface);
@@ -145,33 +141,6 @@ li { margin-bottom: 6px; }
 .req-card h3 { margin-top: 0; color: var(--text-strong); font-size: 15px; }
 .req-card ul { padding-left: 20px; margin-bottom: 0; }
 .req-card li { font-size: 13px; margin-bottom: 4px; }
-.overlap-diagram {
-    display: flex; align-items: center; justify-content: center; gap: 0; margin: 32px 0;
-    position: relative; min-height: 260px;
-}
-.overlap-circle {
-    width: 220px; height: 220px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    padding: 24px; text-align: center; font-size: 12px; line-height: 1.5; font-weight: 500;
-}
-.overlap-circle.left {
-    background: color-mix(in srgb, var(--blue) 15%, transparent);
-    border: 2px solid var(--blue);
-    margin-right: -60px; z-index: 1;
-    color: var(--blue-dark);
-}
-.overlap-circle.right {
-    background: color-mix(in srgb, var(--purple) 15%, transparent);
-    border: 2px solid var(--purple);
-    margin-left: -60px; z-index: 1;
-    color: var(--purple-dark);
-}
-.overlap-center {
-    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-    z-index: 2; background: var(--green-bg); border: 2px solid var(--green);
-    border-radius: 12px; padding: 12px 16px; text-align: center;
-    font-size: 11px; font-weight: 600; color: var(--green-dark); line-height: 1.5;
-    box-shadow: var(--card-shadow);
-}
 .cross-ref {
     display: flex; gap: 12px; padding: 14px 16px; border-radius: 10px;
     border: 1px solid var(--border); background: var(--surface); margin: 8px 0;
