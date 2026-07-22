@@ -110,6 +110,16 @@ is banned for isolation outright.
 - **Backstop (existing).** [[rule_no_auto_commit]]'s
   `no-auto-commit-gate.py` already blocks direct commit/push to
   `main`, forcing ledger updates through a PR.
+- **Structural guard for §3 (built 2026-07-22, round 3).**
+  `.claude/hooks/git-stash-gate.py` (PreToolUse Bash|PowerShell, wired in
+  `wire-hooks.py`) permission-stops stash CREATE forms (`git stash`,
+  `push`, `save`, bare-with-flags, plumbing) and DESTROY forms (`drop`,
+  `clear` — archive-first per the round-1 heal pattern), while `list` /
+  `show` / `pop` / `apply` / `branch` pass silently (reads + draining move
+  WIP OUT of the shared store; `stash branch` IS the remediation). A
+  user-ordered stash stays possible via the prompt. Trigger recurrence: the
+  2026-06-12 tangle plus a build subagent stashing on 2026-07-22 despite
+  this rule. Tests: `tools/tests/test_git_stash_gate.py`.
 - **Structural guard (built 2026-07-22).**
   `.claude/hooks/branch-isolation-gate.py` (PreToolUse Write|Edit,
   wired in `wire-hooks.py`) advises when the target path is a TRACKED
