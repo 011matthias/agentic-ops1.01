@@ -23,6 +23,14 @@ DIR="${VFD_DIR:-platform}"
 DOMAIN="${VFD_DOMAIN:-unpauseai.com}"
 SETTLE="${VFD_SETTLE_SECONDS:-45}"
 VERIFY=1
+# Identity routing (2026-07-22). unpauseai.com lives in the akkton account
+# while this machine's default CLI session is usually matthias; `--scope`
+# cannot bridge two ACCOUNTS, so a plain `vercel` here either fails with
+# "scope does not exist" or, worse, deploys into the wrong team and creates a
+# phantom project. VFD_IDENTITY routes every CLI call through
+# tools/vercel-as.sh, which keeps a per-identity auth store. Empty = legacy
+# behavior (bare `vercel`, whatever session is active).
+IDENTITY="${VFD_IDENTITY:-}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -30,11 +38,22 @@ while [ $# -gt 0 ]; do
     --domain) DOMAIN="$2"; shift 2 ;;
     --settle) SETTLE="$2"; shift 2 ;;
     --no-verify) VERIFY=0; shift ;;
+    --identity) IDENTITY="$2"; shift 2 ;;
     *) echo "unknown arg: $1" >&2; exit 1 ;;
   esac
 done
 
 log() { printf '%s\n' "[vfd] $*"; }
+
+# Resolve the CLI invocation once, before the cd (the wrapper path is
+# repo-relative). With no identity this is exactly the historical `vercel`.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -n "$IDENTITY" ]; then
+  VC=(bash "$REPO_ROOT/tools/vercel-as.sh" "$IDENTITY")
+  log "identity: $IDENTITY (via tools/vercel-as.sh)"
+else
+  VC=(vercel)
+fi
 
 cd "$DIR"
 
@@ -42,7 +61,7 @@ log "Forcing production deploy from $(pwd) ..."
 # Deploy once. The CLI's output format varies by version (bare URL on older
 # CLIs, JSON on 53.x where `tail -1` returns `}`), so don't assume the URL
 # is the last line — extract the first *.vercel.app URL from combined output.
-DEPLOY_OUT="$(vercel --prod --force --yes 2>&1 || true)"
+DEPLOY_OUT="$("${VC[@]}" --prod --force --yes 2>&1 || true)"
 DEPLOY_URL="$(printf '%s' "$DEPLOY_OUT" | grep -oE 'https://[a-z0-9-]+-[a-z0-9-]+\.vercel\.app' | head -1 || true)"
 DEPLOY_URL="$(printf '%s' "$DEPLOY_URL" | tr -d '[:space:]')"
 
@@ -74,7 +93,7 @@ WANT="$(printf '%s' "$DEPLOY_URL" | sed -E 's#https?://##; s#/.*##')"
 # `vercel ls` prints the deployment table to STDERR, so capture 2>&1 (not
 # 2>/dev/null, which discards the very output we parse). The status column
 # contains a UTF-8 bullet (●) before "Ready"; match on "Production" alone.
-TOP_LINE="$(vercel ls --prod 2>&1 | grep -E 'Ready[[:space:]]+Production' | head -1 || true)"
+TOP_LINE="$("${VC[@]}" ls --prod 2>&1 | grep -E 'Ready[[:space:]]+Production' | head -1 || true)"
 TOP_URL="$(printf '%s' "$TOP_LINE" | grep -oE 'https://[a-z0-9.-]+\.vercel\.app' | head -1 || true)"
 
 if [ -z "$TOP_URL" ]; then
@@ -90,7 +109,7 @@ fi
 
 log "SUPERSEDED: production now points at $TOP_URL, not $DEPLOY_URL"
 log "Promoting intended deployment back to production ..."
-if vercel promote "$DEPLOY_URL" --yes 2>/dev/null; then
+if "${VC[@]}" promote "$DEPLOY_URL" --yes 2>/dev/null; then
   sleep 10
   CODE="$(curl -s -o /dev/null -w '%{http_code}' "https://$DOMAIN" || echo 000)"
   log "Promoted. https://$DOMAIN -> $CODE"
