@@ -1,2 +1,3 @@
 round	commit	score	delta	status	description
 0	0db7003	219045.0	0	baseline	baseline (asset as-is)
+1	df629f7	217504.0	-1541	keep	Strip HTML comments outside script/style blocks, conditional comments preserved.
