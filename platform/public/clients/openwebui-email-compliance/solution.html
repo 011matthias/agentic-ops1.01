@@ -178,224 +178,189 @@ background: var(--surface); margin: 16px 0;
 <script>(function(){var t=localStorage.getItem('oec-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();</script>
 </head>
 <body>
-
 <nav class="site-nav">
-    <div class="nav-left">
-        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
-        </button>
-        <a href="/clients/openwebui-email-compliance/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
-        <span class="nav-sep">|</span>
-        <span class="nav-client">Email Compliance Monitor</span>
-    </div>
-    <div class="nav-links">
-        <a href="/clients/openwebui-email-compliance/">Overview</a>
-        <a href="/clients/openwebui-email-compliance/solution" class="active">Solution</a>
-        <a href="/clients/openwebui-email-compliance/workflow">Workflow</a>
-        <a href="/clients/openwebui-email-compliance/timeline">Timeline</a>
-        <a href="/clients/openwebui-email-compliance/investment">Investment</a>
-        <a href="/clients/openwebui-email-compliance/faq">FAQ</a>
-        <a href="/clients/openwebui-email-compliance/gdpr">GDPR</a>
-        <a href="/clients/openwebui-email-compliance/onboarding">Onboarding</a>
-    </div>
-    <div class="nav-right">
-        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
-        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
-    </div>
+<div class="nav-left">
+<button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+</button>
+<a href="/clients/openwebui-email-compliance/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+<span class="nav-sep">|</span>
+<span class="nav-client">Email Compliance Monitor</span>
+</div>
+<div class="nav-links">
+<a href="/clients/openwebui-email-compliance/">Overview</a>
+<a href="/clients/openwebui-email-compliance/solution" class="active">Solution</a>
+<a href="/clients/openwebui-email-compliance/workflow">Workflow</a>
+<a href="/clients/openwebui-email-compliance/timeline">Timeline</a>
+<a href="/clients/openwebui-email-compliance/investment">Investment</a>
+<a href="/clients/openwebui-email-compliance/faq">FAQ</a>
+<a href="/clients/openwebui-email-compliance/gdpr">GDPR</a>
+<a href="/clients/openwebui-email-compliance/onboarding">Onboarding</a>
+</div>
+<div class="nav-right">
+<span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+<button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+</div>
 </nav>
-
 <aside class="sidebar">
-    <div class="sidebar-label">Solution details</div>
-    <ul class="step-list">
-        <li class="step-item">
-            <a href="#email-monitor" class="step-link active"><span class="step-num">1</span> Email Monitor</a>
-            <div class="step-line"></div>
-        </li>
-        <li class="step-item">
-            <a href="#ai-processing" class="step-link"><span class="step-num">2</span> AI Processing</a>
-            <div class="step-line"></div>
-        </li>
-        <li class="step-item">
-            <a href="#alerts" class="step-link"><span class="step-num">3</span> Alert System</a>
-            <div class="step-line"></div>
-        </li>
-        <li class="step-item">
-            <a href="#chat" class="step-link"><span class="step-num">4</span> AI Chat System</a>
-            <div class="step-line"></div>
-        </li>
-        <li class="step-item">
-            <a href="#gdpr-layer" class="step-link"><span class="step-num">5</span> GDPR Layer</a>
-            <div class="step-line"></div>
-        </li>
-        <li class="step-item">
-            <a href="#infrastructure" class="step-link"><span class="step-num">6</span> Infrastructure</a>
-        </li>
-    </ul>
+<div class="sidebar-label">Solution details</div>
+<ul class="step-list">
+<li class="step-item">
+<a href="#email-monitor" class="step-link active"><span class="step-num">1</span> Email Monitor</a>
+<div class="step-line"></div>
+</li>
+<li class="step-item">
+<a href="#ai-processing" class="step-link"><span class="step-num">2</span> AI Processing</a>
+<div class="step-line"></div>
+</li>
+<li class="step-item">
+<a href="#alerts" class="step-link"><span class="step-num">3</span> Alert System</a>
+<div class="step-line"></div>
+</li>
+<li class="step-item">
+<a href="#chat" class="step-link"><span class="step-num">4</span> AI Chat System</a>
+<div class="step-line"></div>
+</li>
+<li class="step-item">
+<a href="#gdpr-layer" class="step-link"><span class="step-num">5</span> GDPR Layer</a>
+<div class="step-line"></div>
+</li>
+<li class="step-item">
+<a href="#infrastructure" class="step-link"><span class="step-num">6</span> Infrastructure</a>
+</li>
+</ul>
 </aside>
-
 <div class="main-content">
 <div class="content-inner">
-
 <h2 id="email-monitor" style="margin-top:24px">Email Monitor Pipeline</h2>
 <p>The email monitoring system is the core deliverable. It captures incoming emails, runs them through AI analysis, and routes the results to the right place -- all without manual intervention.</p>
-
 <div class="flow-diagram">
-    <span class="flow-node start">Email Source (M365/Gmail)</span>
-    <span class="flow-arrow">&rarr;</span>
-    <span class="flow-node">Pre-Processing</span>
-    <span class="flow-arrow">&rarr;</span>
-    <span class="flow-node ai">Claude Analysis</span>
-    <span class="flow-arrow">&rarr;</span>
-    <span class="flow-node">Severity Router</span>
-    <span class="flow-arrow">&rarr;</span>
-    <span class="flow-node end">Storage + Alerts</span>
+<span class="flow-node start">Email Source (M365/Gmail)</span>
+<span class="flow-arrow">&rarr;</span>
+<span class="flow-node">Pre-Processing</span>
+<span class="flow-arrow">&rarr;</span>
+<span class="flow-node ai">Claude Analysis</span>
+<span class="flow-arrow">&rarr;</span>
+<span class="flow-node">Severity Router</span>
+<span class="flow-arrow">&rarr;</span>
+<span class="flow-node end">Storage + Alerts</span>
 </div>
-
 <div class="detail-card">
-    <h4>Email Source (M365/Gmail)</h4>
-    <p>Event-driven ingestion via Microsoft Graph API or Gmail API. New emails trigger processing automatically -- no polling intervals, no missed messages. The system subscribes to mailbox changes and receives push notifications when new emails arrive.</p>
+<h4>Email Source (M365/Gmail)</h4>
+<p>Event-driven ingestion via Microsoft Graph API or Gmail API. New emails trigger processing automatically -- no polling intervals, no missed messages. The system subscribes to mailbox changes and receives push notifications when new emails arrive.</p>
 </div>
-
 <div class="detail-card">
-    <h4>Pre-Processing</h4>
-    <p>Before any email reaches the AI, it goes through a data minimization step. PII is stripped or masked, email headers are parsed for metadata, and the content is normalized into a standard format. This reduces GDPR exposure and keeps API costs down by sending only what's needed.</p>
+<h4>Pre-Processing</h4>
+<p>Before any email reaches the AI, it goes through a data minimization step. PII is stripped or masked, email headers are parsed for metadata, and the content is normalized into a standard format. This reduces GDPR exposure and keeps API costs down by sending only what's needed.</p>
 </div>
-
 <div class="detail-card">
-    <h4>Claude Analysis</h4>
-    <p>The core intelligence layer. Anthropic's Claude API analyzes each email for sentiment, complaint indicators, legal risk markers, and urgency signals. The API is configured for zero data retention -- nothing is stored on Anthropic's servers after processing.</p>
+<h4>Claude Analysis</h4>
+<p>The core intelligence layer. Anthropic's Claude API analyzes each email for sentiment, complaint indicators, legal risk markers, and urgency signals. The API is configured for zero data retention -- nothing is stored on Anthropic's servers after processing.</p>
 </div>
-
 <div class="detail-card">
-    <h4>Severity Router</h4>
-    <p>Based on the AI analysis, each email gets a severity score (1-5) and is routed accordingly. High-severity items trigger immediate alerts. Low-severity items are logged for daily digests. The routing logic is configurable -- you can adjust thresholds without touching code.</p>
+<h4>Severity Router</h4>
+<p>Based on the AI analysis, each email gets a severity score (1-5) and is routed accordingly. High-severity items trigger immediate alerts. Low-severity items are logged for daily digests. The routing logic is configurable -- you can adjust thresholds without touching code.</p>
 </div>
-
 <div class="detail-card">
-    <h4>Storage + Alerts</h4>
-    <p>Results land in your chosen data store with full audit trail. Alert channels (Slack, email, or both) are configured per severity level. Retention automation handles archival and purging on your defined schedule.</p>
+<h4>Storage + Alerts</h4>
+<p>Results land in your chosen data store with full audit trail. Alert channels (Slack, email, or both) are configured per severity level. Retention automation handles archival and purging on your defined schedule.</p>
 </div>
-
 <h2 id="ai-processing">AI Processing</h2>
 <p>Here's what Claude extracts from each email that passes through the system.</p>
-
 <h3>Analysis Output Fields</h3>
 <ul>
-    <li><strong>Sentiment:</strong> positive, neutral, or negative</li>
-    <li><strong>Complaint detection:</strong> yes/no with confidence score (0-100%)</li>
-    <li><strong>Key tags:</strong> complaint, urgent, legal risk, escalation, cancellation</li>
-    <li><strong>Severity score:</strong> 1 (informational) to 5 (critical)</li>
-    <li><strong>Suggested priority action:</strong> what to do next, based on the analysis</li>
+<li><strong>Sentiment:</strong> positive, neutral, or negative</li>
+<li><strong>Complaint detection:</strong> yes/no with confidence score (0-100%)</li>
+<li><strong>Key tags:</strong> complaint, urgent, legal risk, escalation, cancellation</li>
+<li><strong>Severity score:</strong> 1 (informational) to 5 (critical)</li>
+<li><strong>Suggested priority action:</strong> what to do next, based on the analysis</li>
 </ul>
-
 <h3>Classification Examples</h3>
 <table>
-    <tr><th>Email Content</th><th>Sentiment</th><th>Complaint</th><th>Tags</th><th>Severity</th></tr>
-    <tr><td>"I've been waiting 3 weeks for a response. This is unacceptable."</td><td>Negative</td><td>Yes (92%)</td><td>complaint, escalation</td><td>4</td></tr>
-    <tr><td>"Thanks for the quick turnaround on our order."</td><td>Positive</td><td>No (2%)</td><td>--</td><td>1</td></tr>
-    <tr><td>"We're considering legal action if this isn't resolved."</td><td>Negative</td><td>Yes (98%)</td><td>complaint, legal risk, urgent</td><td>5</td></tr>
-    <tr><td>"Can you send me the updated pricing sheet?"</td><td>Neutral</td><td>No (5%)</td><td>--</td><td>1</td></tr>
-    <tr><td>"I want to cancel my subscription immediately."</td><td>Negative</td><td>Yes (78%)</td><td>cancellation</td><td>3</td></tr>
+<tr><th>Email Content</th><th>Sentiment</th><th>Complaint</th><th>Tags</th><th>Severity</th></tr>
+<tr><td>"I've been waiting 3 weeks for a response. This is unacceptable."</td><td>Negative</td><td>Yes (92%)</td><td>complaint, escalation</td><td>4</td></tr>
+<tr><td>"Thanks for the quick turnaround on our order."</td><td>Positive</td><td>No (2%)</td><td>--</td><td>1</td></tr>
+<tr><td>"We're considering legal action if this isn't resolved."</td><td>Negative</td><td>Yes (98%)</td><td>complaint, legal risk, urgent</td><td>5</td></tr>
+<tr><td>"Can you send me the updated pricing sheet?"</td><td>Neutral</td><td>No (5%)</td><td>--</td><td>1</td></tr>
+<tr><td>"I want to cancel my subscription immediately."</td><td>Negative</td><td>Yes (78%)</td><td>cancellation</td><td>3</td></tr>
 </table>
-
 <h2 id="alerts">Alert System</h2>
 <p>Not every email needs someone's immediate attention. The alert system routes based on severity so your team only gets interrupted when it matters.</p>
-
 <div class="detail-card">
-    <h4>Severity 4-5: Immediate Alert</h4>
-    <p>Legal threats, high-confidence complaints, and urgent escalations trigger instant notifications. These go to your designated response team via Slack and email simultaneously. Average time from email receipt to alert: under 30 seconds.</p>
+<h4>Severity 4-5: Immediate Alert</h4>
+<p>Legal threats, high-confidence complaints, and urgent escalations trigger instant notifications. These go to your designated response team via Slack and email simultaneously. Average time from email receipt to alert: under 30 seconds.</p>
 </div>
-
 <div class="detail-card">
-    <h4>Severity 3: Daily Digest</h4>
-    <p>Moderate-concern items -- confirmed complaints without urgency markers, cancellation requests, negative sentiment patterns. These are batched into a daily summary sent at your chosen time. Enough visibility without notification fatigue.</p>
+<h4>Severity 3: Daily Digest</h4>
+<p>Moderate-concern items -- confirmed complaints without urgency markers, cancellation requests, negative sentiment patterns. These are batched into a daily summary sent at your chosen time. Enough visibility without notification fatigue.</p>
 </div>
-
 <div class="detail-card">
-    <h4>Severity 1-2: Logged, No Alert</h4>
-    <p>Routine emails, positive feedback, and standard inquiries. Fully analyzed and stored for reporting, but they won't generate any notifications. Available in the dashboard for trend analysis and audit purposes.</p>
+<h4>Severity 1-2: Logged, No Alert</h4>
+<p>Routine emails, positive feedback, and standard inquiries. Fully analyzed and stored for reporting, but they won't generate any notifications. Available in the dashboard for trend analysis and audit purposes.</p>
 </div>
-
 <div class="callout green">
-    <div class="callout-title">Configurable thresholds</div>
-    <p>All severity thresholds, alert channels, and digest timing are adjustable through configuration. No code changes required to tune the system to your team's needs.</p>
+<div class="callout-title">Configurable thresholds</div>
+<p>All severity thresholds, alert channels, and digest timing are adjustable through configuration. No code changes required to tune the system to your team's needs.</p>
 </div>
-
 <h2 id="chat">AI Chat System</h2>
 <p>The second system: a self-hosted AI chat interface for your team, running on your own infrastructure.</p>
-
 <div class="detail-card">
-    <h4>Open WebUI on AWS</h4>
-    <p>Open WebUI is a mature, open-source chat interface. We'll deploy it on AWS (EC2 or ECS depending on your scale preference) with Docker. Your data stays on your servers -- no third-party SaaS dependency for the chat layer.</p>
+<h4>Open WebUI on AWS</h4>
+<p>Open WebUI is a mature, open-source chat interface. We'll deploy it on AWS (EC2 or ECS depending on your scale preference) with Docker. Your data stays on your servers -- no third-party SaaS dependency for the chat layer.</p>
 </div>
-
 <div class="detail-card">
-    <h4>Staff Authentication</h4>
-    <p>Managed user accounts with role-based access. Options include local authentication (built into Open WebUI) or SSO integration with your existing identity provider. Each user gets their own conversation history, isolated from other users.</p>
+<h4>Staff Authentication</h4>
+<p>Managed user accounts with role-based access. Options include local authentication (built into Open WebUI) or SSO integration with your existing identity provider. Each user gets their own conversation history, isolated from other users.</p>
 </div>
-
 <div class="detail-card">
-    <h4>Anthropic API with Zero Retention</h4>
-    <p>The chat connects to Anthropic's Claude API configured with zero data retention. Conversations are processed and returned but never stored on Anthropic's infrastructure. Combined with your self-hosted deployment, this gives you full control over where data lives.</p>
+<h4>Anthropic API with Zero Retention</h4>
+<p>The chat connects to Anthropic's Claude API configured with zero data retention. Conversations are processed and returned but never stored on Anthropic's infrastructure. Combined with your self-hosted deployment, this gives you full control over where data lives.</p>
 </div>
-
 <div class="callout">
-    <div class="callout-title">Cost control built in</div>
-    <p>CloudWatch billing alerts notify you before API costs exceed your set threshold. Usage dashboards show per-user and per-department consumption so you can allocate costs accurately.</p>
+<div class="callout-title">Cost control built in</div>
+<p>CloudWatch billing alerts notify you before API costs exceed your set threshold. Usage dashboards show per-user and per-department consumption so you can allocate costs accurately.</p>
 </div>
-
 <h2 id="gdpr-layer">GDPR Compliance Layer</h2>
 <p>This isn't a separate feature -- it's woven into both systems. Here's what the compliance layer covers.</p>
-
 <div class="detail-card">
-    <h4>Pre-Processing Data Minimization</h4>
-    <p>Before any email content reaches the AI, PII is identified and stripped. Only the fields necessary for analysis are sent to the API. Original emails are stored separately with access controls, so the AI never processes more data than it needs.</p>
+<h4>Pre-Processing Data Minimization</h4>
+<p>Before any email content reaches the AI, PII is identified and stripped. Only the fields necessary for analysis are sent to the API. Original emails are stored separately with access controls, so the AI never processes more data than it needs.</p>
 </div>
-
 <div class="detail-card">
-    <h4>Anthropic API Zero Retention</h4>
-    <p>Anthropic offers a zero-retention API configuration. We'll set this up so that email content sent for analysis is processed and discarded -- never used for model training, never stored beyond the request lifecycle. This is documented in Anthropic's data processing terms.</p>
+<h4>Anthropic API Zero Retention</h4>
+<p>Anthropic offers a zero-retention API configuration. We'll set this up so that email content sent for analysis is processed and discarded -- never used for model training, never stored beyond the request lifecycle. This is documented in Anthropic's data processing terms.</p>
 </div>
-
 <div class="detail-card">
-    <h4>Retention Automation Engine</h4>
-    <p>Configurable retention policies with two stages: archive (move to cold storage after X days) and purge (permanent deletion after Y days). Both stages are automated -- no manual cleanup required. Every action is logged to the audit trail.</p>
+<h4>Retention Automation Engine</h4>
+<p>Configurable retention policies with two stages: archive (move to cold storage after X days) and purge (permanent deletion after Y days). Both stages are automated -- no manual cleanup required. Every action is logged to the audit trail.</p>
 </div>
-
 <div class="detail-card">
-    <h4>Audit Trail</h4>
-    <p>Every data access, processing event, and retention action is logged. When your compliance team needs to demonstrate what happened to a specific email's data, the trail shows exactly when it was processed, what was extracted, when it was archived, and when it was purged.</p>
+<h4>Audit Trail</h4>
+<p>Every data access, processing event, and retention action is logged. When your compliance team needs to demonstrate what happened to a specific email's data, the trail shows exactly when it was processed, what was extracted, when it was archived, and when it was purged.</p>
 </div>
-
 <h2 id="infrastructure">Shared Infrastructure</h2>
 <p>Both systems share a common infrastructure layer designed for reliability and observability.</p>
-
 <div class="detail-card">
-    <h4>Event-Based Architecture</h4>
-    <p>No polling scripts. The email monitor uses push-based event subscriptions (Microsoft Graph webhooks or Gmail push notifications). The chat system responds to user requests in real time. Events are queued and processed asynchronously, so spikes in volume don't cause failures.</p>
+<h4>Event-Based Architecture</h4>
+<p>No polling scripts. The email monitor uses push-based event subscriptions (Microsoft Graph webhooks or Gmail push notifications). The chat system responds to user requests in real time. Events are queued and processed asynchronously, so spikes in volume don't cause failures.</p>
 </div>
-
 <div class="detail-card">
-    <h4>Retry Logic with Exponential Backoff</h4>
-    <p>When an API call fails (Anthropic rate limit, transient network error, temporary service outage), the system retries automatically. Each retry waits longer than the last. After max retries, the item moves to the dead letter queue for manual review -- it's never silently dropped.</p>
+<h4>Retry Logic with Exponential Backoff</h4>
+<p>When an API call fails (Anthropic rate limit, transient network error, temporary service outage), the system retries automatically. Each retry waits longer than the last. After max retries, the item moves to the dead letter queue for manual review -- it's never silently dropped.</p>
 </div>
-
 <div class="detail-card">
-    <h4>CloudWatch Monitoring + Billing Alerts</h4>
-    <p>Dashboards for processing volume, error rates, API latency, and costs. Billing alerts trigger before you hit your budget ceiling. Anomaly detection flags unusual patterns -- a sudden spike in high-severity emails, an unexpected drop in processing volume, or API costs trending above normal.</p>
+<h4>CloudWatch Monitoring + Billing Alerts</h4>
+<p>Dashboards for processing volume, error rates, API latency, and costs. Billing alerts trigger before you hit your budget ceiling. Anomaly detection flags unusual patterns -- a sudden spike in high-severity emails, an unexpected drop in processing volume, or API costs trending above normal.</p>
 </div>
-
 <div class="detail-card">
-    <h4>Dead Letter Queue</h4>
-    <p>Failed processing attempts land in a dead letter queue instead of being lost. Each item includes the original payload, the error details, and the number of retry attempts. You can reprocess items manually or set up automated replay once the underlying issue is resolved.</p>
+<h4>Dead Letter Queue</h4>
+<p>Failed processing attempts land in a dead letter queue instead of being lost. Each item includes the original payload, the error details, and the number of retry attempts. You can reprocess items manually or set up automated replay once the underlying issue is resolved.</p>
 </div>
-
 <footer class="footer" style="border-top: 1px solid var(--border); padding: 24px 0 40px;">
-    <p>Built and maintained by <a href="https://unpauseai.com" target="_blank" rel="noopener">UnpauseAI</a></p>
-    <p style="margin-top:4px;"><a href="https://unpauseai.com/privacy">Privacy Policy</a> &middot; <a href="https://unpauseai.com/terms">Terms of Service</a></p>
-    <p style="margin-top:4px; font-size: 12px;">Last updated: March 2026</p>
+<p>Built and maintained by <a href="https://unpauseai.com" target="_blank" rel="noopener">UnpauseAI</a></p>
+<p style="margin-top:4px;"><a href="https://unpauseai.com/privacy">Privacy Policy</a> &middot; <a href="https://unpauseai.com/terms">Terms of Service</a></p>
+<p style="margin-top:4px; font-size: 12px;">Last updated: March 2026</p>
 </footer>
-
 </div>
 </div>
 
@@ -434,19 +399,19 @@ document.querySelector('.sidebar').classList.remove('open');
 });</script>
 
 <div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
-  <div style="text-align:center;max-width:360px;padding:24px;">
-    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg>
-      <span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span>
-    </div>
-    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Email Compliance Monitor</h2>
-    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Enter your access code to continue.</p>
-    <div style="display:flex;gap:8px;">
-      <input id="auth-input" type="password" placeholder="Access code" autocomplete="off" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;" onkeydown="if(event.key==='Enter')checkAuth()" />
-      <button onclick="checkAuth()" style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">Enter</button>
-    </div>
-    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Incorrect code. Please try again.</p>
-  </div>
+<div style="text-align:center;max-width:360px;padding:24px;">
+<div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg>
+<span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span>
+</div>
+<h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Email Compliance Monitor</h2>
+<p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Enter your access code to continue.</p>
+<div style="display:flex;gap:8px;">
+<input id="auth-input" type="password" placeholder="Access code" autocomplete="off" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;" onkeydown="if(event.key==='Enter')checkAuth()" />
+<button onclick="checkAuth()" style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">Enter</button>
+</div>
+<p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Incorrect code. Please try again.</p>
+</div>
 </div>
 <script>var OEC_CODE='openwebui-ec';
 function checkAuth(){var v=document.getElementById('auth-input').value;if(v===OEC_CODE){localStorage.setItem('oec-access','granted');var g=document.getElementById('auth-gate');g.style.opacity='0';setTimeout(function(){g.style.display='none'},300)}else{document.getElementById('auth-error').style.display='block';document.getElementById('auth-input').value='';document.getElementById('auth-input').focus()}}

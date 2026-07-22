@@ -202,266 +202,227 @@ box-shadow: 0 2px 8px rgba(37,99,235,.3);
 <script>(function(){var t=localStorage.getItem('oec-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();</script>
 </head>
 <body>
-
 <nav class="site-nav">
-    <div class="nav-left">
-        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
-        </button>
-        <a href="/clients/openwebui-email-compliance/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
-        <span class="nav-sep">|</span>
-        <span class="nav-client">Email Compliance Monitor</span>
-    </div>
-    <div class="nav-links">
-        <a href="/clients/openwebui-email-compliance/">Overview</a>
-        <a href="/clients/openwebui-email-compliance/solution">Solution</a>
-        <a href="/clients/openwebui-email-compliance/workflow">Workflow</a>
-        <a href="/clients/openwebui-email-compliance/timeline">Timeline</a>
-        <a href="/clients/openwebui-email-compliance/investment">Investment</a>
-        <a href="/clients/openwebui-email-compliance/faq">FAQ</a>
-        <a href="/clients/openwebui-email-compliance/gdpr">GDPR</a>
-        <a href="/clients/openwebui-email-compliance/onboarding" class="active">Onboarding</a>
-    </div>
-    <div class="nav-right">
-        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
-        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
-    </div>
+<div class="nav-left">
+<button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+</button>
+<a href="/clients/openwebui-email-compliance/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+<span class="nav-sep">|</span>
+<span class="nav-client">Email Compliance Monitor</span>
+</div>
+<div class="nav-links">
+<a href="/clients/openwebui-email-compliance/">Overview</a>
+<a href="/clients/openwebui-email-compliance/solution">Solution</a>
+<a href="/clients/openwebui-email-compliance/workflow">Workflow</a>
+<a href="/clients/openwebui-email-compliance/timeline">Timeline</a>
+<a href="/clients/openwebui-email-compliance/investment">Investment</a>
+<a href="/clients/openwebui-email-compliance/faq">FAQ</a>
+<a href="/clients/openwebui-email-compliance/gdpr">GDPR</a>
+<a href="/clients/openwebui-email-compliance/onboarding" class="active">Onboarding</a>
+</div>
+<div class="nav-right">
+<span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+<button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+</div>
 </nav>
-
 <aside class="sidebar">
-    <div class="sidebar-label">Onboarding form</div>
-    <ul class="step-list">
-        <li class="step-item">
-            <a href="#getting-started" class="step-link active"><span class="step-num">1</span> Getting Started</a>
-            <div class="step-line"></div>
-        </li>
-        <li class="step-item">
-            <a href="#what-we-need" class="step-link"><span class="step-num">2</span> What We Need</a>
-            <div class="step-line"></div>
-        </li>
-        <li class="step-item">
-            <a href="#contact" class="step-link"><span class="step-num">3</span> Contact Info</a>
-            <div class="step-line"></div>
-        </li>
-        <li class="step-item">
-            <a href="#systems" class="step-link"><span class="step-num">4</span> Systems Access</a>
-            <div class="step-line"></div>
-        </li>
-        <li class="step-item">
-            <a href="#project-details" class="step-link"><span class="step-num">5</span> Project Details</a>
-            <div class="step-line"></div>
-        </li>
-        <li class="step-item">
-            <a href="#timeline-prefs" class="step-link"><span class="step-num">6</span> Timeline</a>
-        </li>
-    </ul>
+<div class="sidebar-label">Onboarding form</div>
+<ul class="step-list">
+<li class="step-item">
+<a href="#getting-started" class="step-link active"><span class="step-num">1</span> Getting Started</a>
+<div class="step-line"></div>
+</li>
+<li class="step-item">
+<a href="#what-we-need" class="step-link"><span class="step-num">2</span> What We Need</a>
+<div class="step-line"></div>
+</li>
+<li class="step-item">
+<a href="#contact" class="step-link"><span class="step-num">3</span> Contact Info</a>
+<div class="step-line"></div>
+</li>
+<li class="step-item">
+<a href="#systems" class="step-link"><span class="step-num">4</span> Systems Access</a>
+<div class="step-line"></div>
+</li>
+<li class="step-item">
+<a href="#project-details" class="step-link"><span class="step-num">5</span> Project Details</a>
+<div class="step-line"></div>
+</li>
+<li class="step-item">
+<a href="#timeline-prefs" class="step-link"><span class="step-num">6</span> Timeline</a>
+</li>
+</ul>
 </aside>
-
 <div class="main-content">
 <div class="content-inner">
-
 <section class="hero" id="top">
-    <div class="hero-badge">Day 1 Kickoff</div>
-    <h1>Onboarding Checklist</h1>
-    <p class="hero-sub">Fill this in to help us prepare for a fast start. We'll review your responses and come back with a detailed implementation plan.</p>
-    <div class="stats-row">
-        <div class="stat-card"><div class="stat-value">5</div><div class="stat-label">Minutes to complete</div></div>
-        <div class="stat-card"><div class="stat-value">Day 1</div><div class="stat-label">Start target</div></div>
-        <div class="stat-card"><div class="stat-value">24h</div><div class="stat-label">Response time</div></div>
-    </div>
-</section>
-
-<h2 id="getting-started">Getting Started</h2>
-
-<p>Once we agree on scope, here's what a typical kickoff looks like:</p>
-
-<ol>
-    <li>You fill in this form with your current setup details</li>
-    <li>We review and prepare a technical implementation plan</li>
-    <li>30-minute kickoff call to confirm approach</li>
-    <li>Week 1 begins -- email pipeline in dev environment</li>
-</ol>
-
-<div class="callout green">
-    <div class="callout-title">No preparation needed</div>
-    <p>You don't need to set up anything before we start. We'll handle all AWS infrastructure, API configuration, and system setup. This form just helps us understand your current environment.</p>
+<div class="hero-badge">Day 1 Kickoff</div>
+<h1>Onboarding Checklist</h1>
+<p class="hero-sub">Fill this in to help us prepare for a fast start. We'll review your responses and come back with a detailed implementation plan.</p>
+<div class="stats-row">
+<div class="stat-card"><div class="stat-value">5</div><div class="stat-label">Minutes to complete</div></div>
+<div class="stat-card"><div class="stat-value">Day 1</div><div class="stat-label">Start target</div></div>
+<div class="stat-card"><div class="stat-value">24h</div><div class="stat-label">Response time</div></div>
 </div>
-
+</section>
+<h2 id="getting-started">Getting Started</h2>
+<p>Once we agree on scope, here's what a typical kickoff looks like:</p>
+<ol>
+<li>You fill in this form with your current setup details</li>
+<li>We review and prepare a technical implementation plan</li>
+<li>30-minute kickoff call to confirm approach</li>
+<li>Week 1 begins -- email pipeline in dev environment</li>
+</ol>
+<div class="callout green">
+<div class="callout-title">No preparation needed</div>
+<p>You don't need to set up anything before we start. We'll handle all AWS infrastructure, API configuration, and system setup. This form just helps us understand your current environment.</p>
+</div>
 <h2 id="what-we-need">What We Need</h2>
-
 <div id="form-wrap">
 <form class="onboard-form" id="onboard-form" onsubmit="submitOnboarding(event)">
-
 <h3 id="contact">Contact Information</h3>
-
 <div class="form-group">
-    <label class="form-label" for="contact-name">Your Name</label>
-    <input class="form-input" type="text" id="contact-name" name="contact_name" placeholder="Your full name" required>
+<label class="form-label" for="contact-name">Your Name</label>
+<input class="form-input" type="text" id="contact-name" name="contact_name" placeholder="Your full name" required>
 </div>
-
 <div class="form-group">
-    <label class="form-label" for="contact-role">Your Role</label>
-    <input class="form-input" type="text" id="contact-role" name="contact_role" placeholder="e.g. Head of Operations">
+<label class="form-label" for="contact-role">Your Role</label>
+<input class="form-input" type="text" id="contact-role" name="contact_role" placeholder="e.g. Head of Operations">
 </div>
-
 <div class="form-group">
-    <label class="form-label" for="contact-email">Preferred Email</label>
-    <input class="form-input" type="email" id="contact-email" name="contact_email" placeholder="you@company.com" required>
+<label class="form-label" for="contact-email">Preferred Email</label>
+<input class="form-input" type="email" id="contact-email" name="contact_email" placeholder="you@company.com" required>
 </div>
-
 <div class="form-group">
-    <label class="form-label" for="company-name">Company Name</label>
-    <input class="form-input" type="text" id="company-name" name="company_name" placeholder="Your company name">
+<label class="form-label" for="company-name">Company Name</label>
+<input class="form-input" type="text" id="company-name" name="company_name" placeholder="Your company name">
 </div>
-
 <div class="form-group">
-    <label class="form-label" for="company-size">Company Size</label>
-    <select class="form-select" id="company-size" name="company_size">
-        <option value="">Select...</option>
-        <option value="1-50">1-50</option>
-        <option value="51-100">51-100</option>
-        <option value="101-500">101-500</option>
-        <option value="501-1000">501-1000</option>
-        <option value="1000+">1000+</option>
-    </select>
+<label class="form-label" for="company-size">Company Size</label>
+<select class="form-select" id="company-size" name="company_size">
+<option value="">Select...</option>
+<option value="1-50">1-50</option>
+<option value="51-100">51-100</option>
+<option value="101-500">101-500</option>
+<option value="501-1000">501-1000</option>
+<option value="1000+">1000+</option>
+</select>
 </div>
-
 <h3 id="systems">Current Systems</h3>
-
 <div class="form-group">
-    <label class="form-label" for="email-provider">Email Provider</label>
-    <select class="form-select" id="email-provider" name="email_provider">
-        <option value="">Select...</option>
-        <option value="Microsoft 365">Microsoft 365</option>
-        <option value="Gmail/Google Workspace">Gmail/Google Workspace</option>
-        <option value="Other">Other</option>
-    </select>
+<label class="form-label" for="email-provider">Email Provider</label>
+<select class="form-select" id="email-provider" name="email_provider">
+<option value="">Select...</option>
+<option value="Microsoft 365">Microsoft 365</option>
+<option value="Gmail/Google Workspace">Gmail/Google Workspace</option>
+<option value="Other">Other</option>
+</select>
 </div>
-
 <div class="form-group">
-    <label class="form-label" for="email-provider-other">If Other, specify</label>
-    <input class="form-input" type="text" id="email-provider-other" name="email_provider_other" placeholder="e.g. Zoho Mail, self-hosted Exchange">
+<label class="form-label" for="email-provider-other">If Other, specify</label>
+<input class="form-input" type="text" id="email-provider-other" name="email_provider_other" placeholder="e.g. Zoho Mail, self-hosted Exchange">
 </div>
-
 <div class="form-group">
-    <label class="form-label" for="email-volume">Current Email Volume</label>
-    <select class="form-select" id="email-volume" name="email_volume">
-        <option value="">Select...</option>
-        <option value="Under 100/day">Under 100/day</option>
-        <option value="100-500/day">100-500/day</option>
-        <option value="500-1000/day">500-1000/day</option>
-        <option value="1000+/day">1000+/day</option>
-        <option value="Not sure">Not sure</option>
-    </select>
+<label class="form-label" for="email-volume">Current Email Volume</label>
+<select class="form-select" id="email-volume" name="email_volume">
+<option value="">Select...</option>
+<option value="Under 100/day">Under 100/day</option>
+<option value="100-500/day">100-500/day</option>
+<option value="500-1000/day">500-1000/day</option>
+<option value="1000+/day">1000+/day</option>
+<option value="Not sure">Not sure</option>
+</select>
 </div>
-
 <div class="form-group">
-    <label class="form-label" for="cloud-provider">Cloud Provider</label>
-    <select class="form-select" id="cloud-provider" name="cloud_provider">
-        <option value="">Select...</option>
-        <option value="AWS (existing account)">AWS (existing account)</option>
-        <option value="AWS (need new account)">AWS (need new account)</option>
-        <option value="Other">Other</option>
-        <option value="Not sure">Not sure</option>
-    </select>
+<label class="form-label" for="cloud-provider">Cloud Provider</label>
+<select class="form-select" id="cloud-provider" name="cloud_provider">
+<option value="">Select...</option>
+<option value="AWS (existing account)">AWS (existing account)</option>
+<option value="AWS (need new account)">AWS (need new account)</option>
+<option value="Other">Other</option>
+<option value="Not sure">Not sure</option>
+</select>
 </div>
-
 <div class="form-group">
-    <label class="form-label" for="monitoring-tools">Current Monitoring/Alerting Tools</label>
-    <div class="form-hint">Do you use Slack, Teams, email alerts, or something else?</div>
+<label class="form-label" for="monitoring-tools">Current Monitoring/Alerting Tools</label>
+<div class="form-hint">Do you use Slack, Teams, email alerts, or something else?</div>
     <textarea class="form-textarea" id="monitoring-tools" name="monitoring_tools" rows="3" placeholder="e.g. Slack for team comms, email alerts from our helpdesk"></textarea>
 </div>
-
 <div class="form-group">
-    <label class="form-label" for="compliance-docs">Existing Compliance Documentation</label>
-    <select class="form-select" id="compliance-docs" name="compliance_docs">
-        <option value="">Select...</option>
-        <option value="Yes - DPIA exists">Yes - DPIA exists</option>
-        <option value="Yes - privacy policy only">Yes - privacy policy only</option>
-        <option value="No">No</option>
-        <option value="Not sure">Not sure</option>
-    </select>
+<label class="form-label" for="compliance-docs">Existing Compliance Documentation</label>
+<select class="form-select" id="compliance-docs" name="compliance_docs">
+<option value="">Select...</option>
+<option value="Yes - DPIA exists">Yes - DPIA exists</option>
+<option value="Yes - privacy policy only">Yes - privacy policy only</option>
+<option value="No">No</option>
+<option value="Not sure">Not sure</option>
+</select>
 </div>
-
 <h3 id="project-details">Project Details</h3>
-
 <div class="form-group">
-    <label class="form-label" for="email-source">Primary Email Source to Monitor</label>
-    <div class="form-hint">Which inbox(es) should the system monitor?</div>
+<label class="form-label" for="email-source">Primary Email Source to Monitor</label>
+<div class="form-hint">Which inbox(es) should the system monitor?</div>
     <textarea class="form-textarea" id="email-source" name="email_source" rows="3" placeholder="e.g. support@company.com, complaints@company.com"></textarea>
 </div>
-
 <div class="form-group">
-    <label class="form-label" for="flag-categories">Key Categories to Flag</label>
+<label class="form-label" for="flag-categories">Key Categories to Flag</label>
     <textarea class="form-textarea" id="flag-categories" name="flag_categories" rows="3">Complaints, negative sentiment, urgent messages, legal risk -- are there others?</textarea>
 </div>
-
 <div class="form-group">
-    <label class="form-label" for="alert-recipients">Who Should Receive Alerts?</label>
-    <div class="form-hint">Names/roles of people who should get high-severity notifications</div>
+<label class="form-label" for="alert-recipients">Who Should Receive Alerts?</label>
+<div class="form-hint">Names/roles of people who should get high-severity notifications</div>
     <textarea class="form-textarea" id="alert-recipients" name="alert_recipients" rows="3" placeholder="e.g. Jane Smith (Head of CS), Mike Jones (Legal)"></textarea>
 </div>
-
 <div class="form-group">
-    <label class="form-label" for="priority-system">Priority: Which System First?</label>
-    <select class="form-select" id="priority-system" name="priority_system">
-        <option value="">Select...</option>
-        <option value="Email Monitor (recommended)" selected>Email Monitor (recommended)</option>
-        <option value="AI Chat">AI Chat</option>
-        <option value="Both simultaneously">Both simultaneously</option>
-    </select>
+<label class="form-label" for="priority-system">Priority: Which System First?</label>
+<select class="form-select" id="priority-system" name="priority_system">
+<option value="">Select...</option>
+<option value="Email Monitor (recommended)" selected>Email Monitor (recommended)</option>
+<option value="AI Chat">AI Chat</option>
+<option value="Both simultaneously">Both simultaneously</option>
+</select>
 </div>
-
 <h3 id="timeline-prefs">Timeline &amp; Preferences</h3>
-
 <div class="form-group">
-    <label class="form-label" for="start-date">Preferred Start Date</label>
-    <input class="form-input" type="date" id="start-date" name="start_date">
+<label class="form-label" for="start-date">Preferred Start Date</label>
+<input class="form-input" type="date" id="start-date" name="start_date">
 </div>
-
 <div class="form-group">
-    <label class="form-label" for="compliance-deadlines">Any Compliance Deadlines?</label>
+<label class="form-label" for="compliance-deadlines">Any Compliance Deadlines?</label>
     <textarea class="form-textarea" id="compliance-deadlines" name="compliance_deadlines" rows="3" placeholder="e.g. Board review in Q2, audit scheduled for June"></textarea>
 </div>
-
 <div class="form-group">
-    <label class="form-label" for="comm-channel">Preferred Communication Channel</label>
-    <select class="form-select" id="comm-channel" name="comm_channel">
-        <option value="">Select...</option>
-        <option value="Upwork messages">Upwork messages</option>
-        <option value="Email">Email</option>
-        <option value="Slack">Slack</option>
-        <option value="Video calls">Video calls</option>
-    </select>
+<label class="form-label" for="comm-channel">Preferred Communication Channel</label>
+<select class="form-select" id="comm-channel" name="comm_channel">
+<option value="">Select...</option>
+<option value="Upwork messages">Upwork messages</option>
+<option value="Email">Email</option>
+<option value="Slack">Slack</option>
+<option value="Video calls">Video calls</option>
+</select>
 </div>
-
 <div class="form-group">
-    <label class="form-label" for="notes">Anything Else We Should Know?</label>
+<label class="form-label" for="notes">Anything Else We Should Know?</label>
     <textarea class="form-textarea" id="notes" name="notes" rows="4" placeholder="Any additional context about your email setup, compliance requirements, or technical constraints."></textarea>
 </div>
-
 <button type="submit" class="form-submit" id="form-submit-btn">Submit Onboarding Form</button>
-
 </form>
 </div>
-
 <div id="form-success" class="form-success" style="display:none;">
-    <h3>&#10003; Form received</h3>
-    <p>Thank you! We'll review your responses and get back to you within 24 hours with a detailed implementation plan.</p>
+<h3>&#10003; Form received</h3>
+<p>Thank you! We'll review your responses and get back to you within 24 hours with a detailed implementation plan.</p>
 </div>
-
 <section class="cta-section">
-    <h2>All set? Let's start.</h2>
-    <p>Reply on Upwork with "ready to go" and we'll kick off the contract and Day 1 session.</p>
-    <a href="/clients/openwebui-email-compliance/" class="cta-btn">Back to Overview &rarr;</a>
+<h2>All set? Let's start.</h2>
+<p>Reply on Upwork with "ready to go" and we'll kick off the contract and Day 1 session.</p>
+<a href="/clients/openwebui-email-compliance/" class="cta-btn">Back to Overview &rarr;</a>
 </section>
-
 <footer class="footer" style="border-top: 1px solid var(--border); padding: 24px 0 40px;">
-    <p>Built and maintained by <a href="https://unpauseai.com" target="_blank" rel="noopener">UnpauseAI</a></p>
-    <p style="margin-top:4px;"><a href="https://unpauseai.com/privacy">Privacy Policy</a> &middot; <a href="https://unpauseai.com/terms">Terms of Service</a></p>
-    <p style="margin-top:4px; font-size: 12px;">Last updated: March 2026</p>
+<p>Built and maintained by <a href="https://unpauseai.com" target="_blank" rel="noopener">UnpauseAI</a></p>
+<p style="margin-top:4px;"><a href="https://unpauseai.com/privacy">Privacy Policy</a> &middot; <a href="https://unpauseai.com/terms">Terms of Service</a></p>
+<p style="margin-top:4px; font-size: 12px;">Last updated: March 2026</p>
 </footer>
-
 </div>
 </div>
 
@@ -541,19 +502,19 @@ document.querySelector('.sidebar').classList.remove('open');
 });</script>
 
 <div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
-  <div style="text-align:center;max-width:360px;padding:24px;">
-    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg>
-      <span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span>
-    </div>
-    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Email Compliance Monitor</h2>
-    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Enter your access code to continue.</p>
-    <div style="display:flex;gap:8px;">
-      <input id="auth-input" type="password" placeholder="Access code" autocomplete="off" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;" onkeydown="if(event.key==='Enter')checkAuth()" />
-      <button onclick="checkAuth()" style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">Enter</button>
-    </div>
-    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Incorrect code. Please try again.</p>
-  </div>
+<div style="text-align:center;max-width:360px;padding:24px;">
+<div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg>
+<span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span>
+</div>
+<h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Email Compliance Monitor</h2>
+<p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Enter your access code to continue.</p>
+<div style="display:flex;gap:8px;">
+<input id="auth-input" type="password" placeholder="Access code" autocomplete="off" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;" onkeydown="if(event.key==='Enter')checkAuth()" />
+<button onclick="checkAuth()" style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">Enter</button>
+</div>
+<p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Incorrect code. Please try again.</p>
+</div>
 </div>
 <script>var OEC_CODE='openwebui-ec';
 function checkAuth(){var v=document.getElementById('auth-input').value;if(v===OEC_CODE){localStorage.setItem('oec-access','granted');var g=document.getElementById('auth-gate');g.style.opacity='0';setTimeout(function(){g.style.display='none'},300)}else{document.getElementById('auth-error').style.display='block';document.getElementById('auth-input').value='';document.getElementById('auth-input').focus()}}
