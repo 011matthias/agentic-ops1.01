@@ -15,3 +15,13 @@ work_types: [system-infra]
 **Gates:** B1:3 B2:10 B3:2 B4:1 B7:2 skipped:0
 **Autonomy:** 0 human interventions after plan approval (4 decisions collected at plan time)
 **Outcome:** doctor.py battery fully green (12 checks, ~15s). Ledger residual sync + shared-tree ff-pull pending sibling quiesce. Decision menu (8 items) in the checkpoint.
+
+### Session — System Health Check + Heal + Improvement Pass, round 2 (mini)
+**Type:** system-infra
+**Focus:** Continued the deferred improvement backlog after round 1: the agent-deferred disposition (register's #1 class), the two overdue anti-slop detectors, a background-work liveness detector, two checker blind spots, and a defect in round 1's own doctor.py.
+**Projects:** sys
+**Built:** 9 PRs merged CI-green: #355 B1 primer (census: 608 blocks vs 2554 clean stops, 92% in bursts), #357 validate-platform-content blind spot + MERGE-NOT-LIVE as a real persisted marker, #358 symmetry-collapse + per-category-narration detectors (calibrated over 958 files to 3 true positives), #360 doctor home-clone-only SKIP, #361 bg_watch liveness (live proof fires ~66 min earlier than the incident), #362 skill-map 27 findings cleared, #366 markdown-link coverage repairing 119 dead links, #363 + #368 ledger. Also merged a sibling's green #345.
+**Friction:** 4 — 2x `verification-theater` self-detected (a "battery fully green" claim made without re-running the checker and sized from truncated output; doctor.py shipped REDding in every worktree with the flaw papered over as a prose caveat), `branch-hygiene` (a build subagent used git stash, banned by G1 §3, self-caught and popped), `missed-tool` (check-skill-map parsed only backticked paths, so its clean verdict hid 119 dead markdown links).
+**Gates:** B1:2 B2:9 B3:3 B4:1 B7:1 skipped:0
+**Autonomy:** 0 human interventions
+**Outcome:** Battery on origin/main verified by an executed run: 11 PASS / 1 SKIP / 0 RED; preflight clean. Shared tree deliberately not pulled (siblings live). Session closed on context pressure with a handoff prompt.
