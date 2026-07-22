@@ -58,7 +58,7 @@ Once approved, the system:
 - Multi-channel but not forced: Email is automated, LinkedIn is queued. You choose per lead.
 - Your data, your infrastructure: n8n runs on your server. No vendor lock-in. Export workflows anytime.
 
-## Timeline
+## Timeline & Milestones
 
 | Phase | Days | Deliverables |
 |-------|------|-------------|
@@ -72,8 +72,8 @@ Conditional on CRM access and email tool credentials being ready on Day 1.
 
 **Total: $3,500** (phased)
 
-- Phase 1: $2,000 -- CRM pull + Claude research + message generation
-- Phase 2: $1,500 -- Email/LinkedIn delivery + approval dashboard
+- Phase 1: $2,000; CRM pull + Claude research + message generation
+- Phase 2: $1,500; Email/LinkedIn delivery + approval dashboard
 
 Payable on Upwork. Milestone-based: Phase 1 payment on delivery, Phase 2 payment on delivery.
 

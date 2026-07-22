@@ -42,13 +42,13 @@ research:
     - "what breaks and how to fix it"
   location_advantage: "6-hour overlap with Ontario business hours (CET to EST)"
   relevant_proof_points:
-    - "n8n workflow design -- production self-hosted workflows with custom code nodes"
-    - "Marketing analytics pipeline -- understands lead gen and cold email context"
-  budget_gap: "$10 placeholder budget, avg bid $427 -- proposed $650"
+    - "n8n workflow design; production self-hosted workflows with custom code nodes"
+    - "Marketing analytics pipeline; understands lead gen and cold email context"
+  budget_gap: "$10 placeholder budget, avg bid $427; proposed $650"
   profile_cherry_picks:
-    - "n8n primary -- exact match for self-hosted n8n requirement"
-    - "Google Sheets data layer -- direct experience"
-    - "Marketing ops background -- understands cold email deliverability"
+    - "n8n primary; exact match for self-hosted n8n requirement"
+    - "Google Sheets data layer; direct experience"
+    - "Marketing ops background; understands cold email deliverability"
 ---
 
 ## What We Understood
@@ -61,10 +61,10 @@ The workflow needs to handle 500 URLs in a single batch run without manual inter
 
 A 4-phase n8n workflow with error handling at every step:
 
-1. **Google Sheets Reader** -- Pulls company name, URL, and contact email from a structured spreadsheet template
-2. **axe-core Audit Engine** -- Launches headless Puppeteer, injects axe-core, captures WCAG 2.1 AA violations per URL with fallback logging for blocked or timed-out sites
-3. **Results Writer** -- Updates the source sheet with pass/fail status, total error count, and top 3 error types per URL
-4. **Instantly.ai Trigger** -- Sends audit summary and contact data to Instantly via API for sites that fail, logs each triggered email to a second sheet with timestamps
+1. **Google Sheets Reader**: Pulls company name, URL, and contact email from a structured spreadsheet template
+2. **axe-core Audit Engine**: Launches headless Puppeteer, injects axe-core, captures WCAG 2.1 AA violations per URL with fallback logging for blocked or timed-out sites
+3. **Results Writer**: Updates the source sheet with pass/fail status, total error count, and top 3 error types per URL
+4. **Instantly.ai Trigger**: Sends audit summary and contact data to Instantly via API for sites that fail, logs each triggered email to a second sheet with timestamps
 
 ## Timeline & Milestones
 

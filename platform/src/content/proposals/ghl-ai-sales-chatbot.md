@@ -23,9 +23,9 @@ deliverables:
 
 You need a scalable AI sales chatbot system inside GoHighLevel that acts as a real human sales rep for credit repair businesses. The system must handle natural text and voice conversations, follow up automatically based on prospect behavior, close prospects into a paid community, and be cloneable across multiple clients via GHL's snapshot system.
 
-This is not a basic FAQ bot -- it requires genuine sales conversation intelligence with objection handling, brand voice matching, and context-aware responses.
+This is not a basic FAQ bot; it requires genuine sales conversation intelligence with objection handling, brand voice matching, and context-aware responses.
 
-## Proposed Solution
+## Our Proposed Solution
 
 A hybrid architecture: GoHighLevel as the CRM, messaging, and pipeline frontend; an external AI conversation engine as the brain; and n8n as the orchestration layer connecting everything.
 
@@ -33,12 +33,12 @@ The key insight: GHL's built-in Conversations AI is designed for FAQ-style respo
 
 ### Architecture
 
-1. **AI Conversation Engine** -- External service with Claude/OpenAI, sales playbook, objection library, and conversation state tracking
-2. **Voice Pipeline** -- ElevenLabs for voice generation, Twilio for delivery (voice notes + calls)
-3. **GHL Integration** -- Webhook + API v2 for contacts, conversations, pipelines, tags, custom values
-4. **Follow-Up Engine** -- n8n orchestration for behavior-based sequences (no response, clicked but did not buy, asked questions but did not convert)
-5. **Conversion Tracking** -- Pipeline stage detection, auto-tagging, onboarding trigger on purchase/booking/community join
-6. **Snapshot System** -- GHL snapshot for CRM config + external provisioning script for AI/voice stack
+1. **AI Conversation Engine**: External service with Claude/OpenAI, sales playbook, objection library, and conversation state tracking
+2. **Voice Pipeline**: ElevenLabs for voice generation, Twilio for delivery (voice notes + calls)
+3. **GHL Integration**: Webhook + API v2 for contacts, conversations, pipelines, tags, custom values
+4. **Follow-Up Engine**: n8n orchestration for behavior-based sequences (no response, clicked but did not buy, asked questions but did not convert)
+5. **Conversion Tracking**: Pipeline stage detection, auto-tagging, onboarding trigger on purchase/booking/community join
+6. **Snapshot System**: GHL snapshot for CRM config + external provisioning script for AI/voice stack
 
 ### Timeline
 

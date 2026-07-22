@@ -5,7 +5,7 @@ prospect: Roberto (via agency)
 contact: Roberto
 source: upwork
 source_url: "https://www.upwork.com/jobs/~022037316152600648655"
-project_title: "AI Automation Specialist -- Build Agentic AI Workflows for a Growing SaaS Company"
+project_title: "AI Automation Specialist; Build Agentic AI Workflows for a Growing SaaS Company"
 status: draft
 track: 2
 created: "2026-03-27"
@@ -37,7 +37,7 @@ A 3-tier AI support system built on n8n:
 
 Each tier connects to existing tools via REST APIs and webhooks. MCP integrations for real-time tool access where supported.
 
-## Timeline and Milestones
+## Timeline & Milestones
 
 **Week 1:** Discovery + first AI support agent. Deliverable: working webhook-to-classification-to-response pipeline in n8n.
 
@@ -69,7 +69,7 @@ We build AI automation infrastructure for businesses moving from manual processe
 - Client also posted "Data and Knowledge Engineer" role (complementary hire)
 
 **Profile fit:**
-- EU-based (Germany) -- matches their EU preference
+- EU-based (Germany); matches their EU preference
 - Active n8n and Make.com projects (Meji Media, Kunde Inc)
 - MCP integration experience (daily use with Make.com and n8n MCP servers)
 - Python + JavaScript + REST API experience

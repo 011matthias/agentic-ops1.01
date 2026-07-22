@@ -5,7 +5,7 @@ prospect: "TBD"
 contact: "TBD"
 source: upwork
 source_url: "https://www.upwork.com/jobs/~022037607416172112406"
-project_title: "n8n Real Estate AI Demo -- Speed-to-Lead RAG Workflow"
+project_title: "n8n Real Estate AI Demo; Speed-to-Lead RAG Workflow"
 status: draft
 track: 2
 created: "2026-03-27"
@@ -44,7 +44,7 @@ research:
     - "n8n workflow design (primary platform, self-hosted and cloud)"
     - "AI agent and RAG integration builds"
     - "Non-technical user handoff with Loom walkthroughs"
-  budget_gap: "Budget TBD, hourly posting but fixed deliverable -- proposing $650 fixed for defined scope"
+  budget_gap: "Budget TBD, hourly posting but fixed deliverable; proposing $650 fixed for defined scope"
   profile_cherry_picks:
     platforms: ["n8n"]
     proof_points: ["n8n self-hosted workflows", "AI classification and RAG systems", "Loom walkthrough handoffs"]
@@ -61,9 +61,9 @@ Beyond the wow factor, this demo needs to be meeting-ready every time. You need 
 
 Two n8n workflows that together create the full demo loop:
 
-1. **Lead Response Workflow** -- Google Sheet trigger detects a new row (lead name, phone, question). An AI Agent node with a Simple Vector Store reads the property PDF, finds the relevant answer, drafts a concise SMS in a professional "white-glove" tone, and sends it via Twilio. The Sheet row updates with the response status. If the SMS fails, the row turns red with an error note.
+1. **Lead Response Workflow**: Google Sheet trigger detects a new row (lead name, phone, question). An AI Agent node with a Simple Vector Store reads the property PDF, finds the relevant answer, drafts a concise SMS in a professional "white-glove" tone, and sends it via Twilio. The Sheet row updates with the response status. If the SMS fails, the row turns red with an error note.
 
-2. **Property Ingestion Workflow** -- Drop a new PDF listing flyer into a designated folder (Google Drive or local). The workflow extracts the text, chunks it, and rebuilds the vector store. After ingestion, the demo is ready for the new property with zero manual steps.
+2. **Property Ingestion Workflow**: Drop a new PDF listing flyer into a designated folder (Google Drive or local). The workflow extracts the text, chunks it, and rebuilds the vector store. After ingestion, the demo is ready for the new property with zero manual steps.
 
 Both workflows are designed for a non-technical operator. No code editing, no node configuration between demos. Swap the PDF, add a row, watch the SMS arrive.
 

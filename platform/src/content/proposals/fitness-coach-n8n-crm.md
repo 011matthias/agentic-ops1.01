@@ -46,11 +46,11 @@ research:
   location_advantage: "4-hour overlap with Dubai (CET to GST). Requests sent at their midday land during my morning. Solid async coverage."
   relevant_proof_points:
     - "n8n primary platform with production workflows and structured error handling"
-    - "Marketing analytics pipeline contributing to 600K+ weekly impressions -- understands what lead gen workflows are supposed to achieve"
+    - "Marketing analytics pipeline contributing to 600K+ weekly impressions; understands what lead gen workflows are supposed to achieve"
     - "CRM sync patterns with deduplication and conflict resolution"
-  budget_gap: "$100 posted vs $900 proposed -- addressed by free Phase 0 (lead capture + CRM pipeline delivered at no cost) plus phased approach"
+  budget_gap: "$100 posted vs $900 proposed; addressed by free Phase 0 (lead capture + CRM pipeline delivered at no cost) plus phased approach"
   profile_cherry_picks:
-    - "n8n is primary platform -- exact match for their preferred tool"
+    - "n8n is primary platform; exact match for their preferred tool"
     - "Marketing ops background means understanding lead gen strategy, not just plumbing"
     - "CRM integration patterns relevant to their pipeline stage tracking"
   scope_estimate:

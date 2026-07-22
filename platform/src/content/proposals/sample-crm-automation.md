@@ -46,6 +46,6 @@ The investment includes:
 - 2 weeks of post-launch support
 - All Make.com scenario configurations
 
-## About UnpausAI
+## About UnpauseAI
 
 We specialize in building automation workflows that replace repetitive manual work. Our systems run 24/7, process data in seconds, and scale without additional headcount. We have delivered automation solutions across CRM, email marketing, data processing, and operational workflows.
