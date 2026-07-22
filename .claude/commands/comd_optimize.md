@@ -71,7 +71,8 @@ structurally refuses unpinned scorers.
    your ONLY writable surface once locked), `guards` + `guard_files`
    (correctness commands; a guard fail discards even a score win),
    `budgets` (`rounds`, `wall_clock_minutes`, `score_timeout_seconds`,
-   `max_rework_attempts`), `mode` (`converge` | `continuous` |
+   `guard_timeout_seconds`, `max_rework_attempts`; omitted keys take the
+   RECIPES skeleton's defaults), `mode` (`converge` | `continuous` |
    `supervised`), `stop` (`goal_score`, `consecutive_reverts`). Copy the
    nearest skeleton from RECIPES.md. CLI args seed this: `{scorer}
    {asset...} [--rounds N] [--goal SCORE]`.
@@ -107,6 +108,10 @@ your memory; do not re-run a journaled dead end.
      and re-run the round. Fundamentally broken idea: move on.
    - `guard failed` - you may fix WITHIN the round: edit assets, then
      `round --rework --desc "..."` (capped by `max_rework_attempts`).
+   - `GUARD_TIMEOUT` - the guard never judged the experiment, so this says
+     nothing about the hypothesis. The round is reverted and journaled under
+     its own status, with no rework offered. Fix the guard or raise
+     `guard_timeout_seconds` in a NEW run, then re-run the same hypothesis.
 5. The engine announces `GOAL REACHED` / `ROUNDS EXHAUSTED` /
    `WALL-CLOCK EXHAUSTED` / `PLATEAU`. Obey them per mode (Step 6).
 

@@ -28,6 +28,16 @@ broken". Point guards at shared validators (`tools/validate-*.py`) where
 possible: they are high-visibility files, so a stop -> weaken-guard ->
 restart move shows up loudly in the PR diff.
 
+Guards run on their own budget, `guard_timeout_seconds` (a correctness
+check's runtime has nothing to do with the scorer's), and a guard that
+exceeds it journals as `guard_timeout`, never `guard_fail`. The distinction
+is load-bearing in the other direction too: a failing guard says the
+experiment is wrong and the round may be reworked, while a guard that never
+returned judged nothing, so the engine reverts the round and offers no
+rework rather than burning rework attempts on an environment problem. A
+`guard_timeout` in a journal means fix the guard or raise the budget in a
+NEW run, then re-run the same hypothesis.
+
 Guards are hash-pinned too, in `tools/guard-pins.json`. A run refuses to
 lock on if a declared guard's live hash diverges from its reviewed pin,
 and warns when a guard carries no pin at all. Re-pinning goes through the
@@ -83,6 +93,7 @@ budgets:
   rounds: 10
   wall_clock_minutes: 120
   score_timeout_seconds: 300
+  guard_timeout_seconds: 300
   max_rework_attempts: 2
 mode: converge             # converge | continuous | supervised
 stop:

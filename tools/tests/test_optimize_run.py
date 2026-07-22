@@ -11,6 +11,7 @@ keep/discard/crash, lock-state lifecycle.
 """
 import datetime as _dt
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -42,7 +43,8 @@ def make_repo(tmp_path: Path, numbers=("5", "4"), guard=False,
               scorer="toy-scorer.py", direction="minimize",
               budgets: dict | None = None, stop: dict | None = None,
               assets=("numbers.txt",), mode="converge",
-              pin_sha: str | None = None) -> Path:
+              pin_sha: str | None = None, guard_runner: str | None = None,
+              omit_budgets: bool = False) -> Path:
     repo = tmp_path / "repo"
     (repo / "tools" / "scorers").mkdir(parents=True)
     (repo / ".claude" / "hooks").mkdir(parents=True)
@@ -73,9 +75,14 @@ def make_repo(tmp_path: Path, numbers=("5", "4"), guard=False,
     s.update(stop or {})
     guard_lines = ""
     if guard:
-        shutil.copy(FIXTURES / "toy-guard.py", repo / "toy-guard.py")
-        guard_lines = (f"guards:\n  - {PYEXE} toy-guard.py numbers.txt\n"
-                       f"guard_files:\n  - toy-guard.py\n")
+        # guard=True -> the default toy guard; guard="<file>" -> that fixture.
+        gscript = "toy-guard.py" if guard is True else guard
+        shutil.copy(FIXTURES / gscript, repo / gscript)
+        # PYEXE by default (instant); `uv run` where a test needs a real
+        # parent->grandchild process tree to kill.
+        runner = guard_runner or PYEXE
+        guard_lines = (f"guards:\n  - {runner} {gscript} numbers.txt\n"
+                       f"guard_files:\n  - {gscript}\n")
     manifest = (
         "---\n"
         "tag: t1\n"
@@ -85,7 +92,8 @@ def make_repo(tmp_path: Path, numbers=("5", "4"), guard=False,
         f"direction: {direction}\n"
         "assets:\n" + "".join(f"  - {a}\n" for a in assets)
         + guard_lines
-        + "budgets:\n" + "".join(f"  {k}: {v}\n" for k, v in b.items())
+        + ("" if omit_budgets else
+           "budgets:\n" + "".join(f"  {k}: {v}\n" for k, v in b.items()))
         + f"mode: {mode}\n"
         + "stop:\n" + "".join(f"  {k}: {v}\n" for k, v in s.items())
         + "---\n\nToy run for engine tests.\n"
@@ -888,3 +896,124 @@ def test_start_with_guard_has_no_zero_guard_warning(tmp_path):
     out = engine(repo, "start", "t1").stdout
     assert "ZERO guards" not in out
     engine(repo, "stop", "--reason", "test done")
+
+
+# --- 2026-07-22 verify: guard timeouts (#6) + budget-default drift (#28) ----
+
+def _recipes_skeleton_budgets() -> dict[str, int]:
+    text = (REPO / "docs" / "optimize" / "RECIPES.md").read_text(
+        encoding="utf-8")
+    m = re.search(r"^budgets:\n((?:  \w+: \d+\n)+)", text, re.MULTILINE)
+    assert m, "RECIPES.md manifest skeleton has no budgets block"
+    return {k: int(v) for k, v in re.findall(r"  (\w+): (\d+)", m.group(1))}
+
+
+def test_engine_budget_defaults_match_the_recipes_skeleton(tmp_path):
+    """The skeleton an author copies IS the default the engine applies.
+
+    They had diverged (engine wall_clock_minutes=240 vs skeleton 120), so the
+    documented default was never the real one - and no real run has ever
+    declared more than 120. Reconciled onto the skeleton's numbers; this test
+    is the anti-drift lock on the pair.
+
+    It doubles as the backward-compat proof for new budget keys: a manifest
+    with NO budgets block at all still locks on.
+    """
+    repo = make_repo(tmp_path, omit_budgets=True)
+    engine(repo, "start", "t1")
+    assert state(repo)["budgets"] == _recipes_skeleton_budgets()
+
+
+def test_round_guard_timeout_is_journaled_not_as_a_guard_fail(tmp_path):
+    """A guard that never finished judged nothing - it is not a guard FAIL.
+
+    Guards used to share the scorer's timeout budget and to catch
+    TimeoutExpired into the same `(False, cmd)` a real failure returns, so an
+    environmental hang journaled as `guard_fail` and offered a rework cycle
+    against a hypothesis no guard had evaluated. Guards also ran under plain
+    subprocess.run, whose timeout kills only the direct child, while the
+    scorer path already killed the tree.
+    """
+    repo = make_repo(tmp_path, guard="toy-slow-guard.py", guard_runner="uv run",
+                     numbers=("3", "3", "3"),
+                     budgets={"guard_timeout_seconds": 8})
+    engine(repo, "start", "t1")                  # guard fast-passes: no -999
+    edit_numbers(repo, ("-999", "3", "3"))       # improves AND hangs the guard
+
+    t0 = time.monotonic()
+    out = engine(repo, "round", "--desc", "trip the guard timeout").stdout
+    elapsed = time.monotonic() - t0
+    assert elapsed < 90, f"guard timeout took {elapsed:.0f}s - tree not killed?"
+
+    assert "r1: GUARD_TIMEOUT" in out, out
+    assert "no rework is offered" in out, out
+    row = tsv_rows(repo)[-1]
+    assert row[4] == "guard_timeout", row
+    assert float(row[2]) == -993, row      # the score that was NOT kept
+    st = state(repo)
+    assert st["pending_rework"] is None, "a timeout must not park a rework"
+    assert st["best_score"] == 9          # the unjudged win is not adopted
+    assert (repo / "numbers.txt").read_text().splitlines() == ["3", "3", "3"]
+    # ...and the round is over: the next PLAIN round is accepted, not refused
+    # as a parked guard_fail awaiting a fix.
+    edit_numbers(repo, ("1", "1", "1"))
+    assert "r2: KEEP" in engine(repo, "round", "--desc", "next one").stdout
+
+
+def test_start_refuses_a_baseline_guard_that_times_out(tmp_path):
+    """A hanging baseline guard is a broken harness, not a failing baseline -
+    and lock-on must leave nothing behind either way."""
+    repo = make_repo(tmp_path, guard="toy-slow-guard.py", guard_runner="uv run",
+                     numbers=("-999", "3", "3"),
+                     budgets={"guard_timeout_seconds": 8})
+    t0 = time.monotonic()
+    proc = engine(repo, "start", "t1", expect=1)
+    elapsed = time.monotonic() - t0
+    assert "baseline guard timed out" in proc.stderr, proc.stderr
+    assert "guard_timeout_seconds" in proc.stderr, "must name the budget key"
+    assert elapsed < 90, f"timeout kill took {elapsed:.0f}s - tree not killed?"
+    assert state(repo) is None
+    assert _git(repo, "branch", "--list", "optimize/t1").stdout.strip() == ""
+    assert not (repo / "docs" / "optimize" / "t1" / "results.tsv").exists()
+
+
+# --- 2026-07-22 verify (#7): the untested crash windows --------------------
+
+def test_resume_adopts_a_committed_rework_keep_after_crash_window(tmp_path):
+    """The rework variant of the adopt-journal window.
+
+    test_resume_adopts_committed_keep_after_crash_window covers a PLAIN round
+    whose journal commit landed before save_state ran. A reworked round enters
+    that same window from a different starting state: the on-disk run state is
+    the PARKED snapshot (pending_rework set, round not yet advanced), so
+    resume must both adopt the durable journal AND clear the stale park
+    marker. A surviving marker wedges the run - every later plain round is
+    refused as "a parked guard_fail awaiting a fix".
+    """
+    repo = make_repo(tmp_path, guard=True, numbers=("3", "3", "3"))   # 9, 3 lines
+    engine(repo, "start", "t1")
+    edit_numbers(repo, ("4",))                    # better score, 1 line: guard fail
+    engine(repo, "round", "--desc", "collapse to one line")
+    parked = state(repo)
+    assert parked["pending_rework"], "precondition: the round is parked"
+
+    edit_numbers(repo, ("1", "1", "2"))           # sum 4 AND 3 lines: a KEEP
+    engine(repo, "round", "--rework", "--desc", "same sum, restore 3 lines")
+    # Simulate SIGKILL in the journal-commit -> save_state window: HEAD holds
+    # the committed journal, the state file is still the parked snapshot.
+    (repo / ".claude" / "optimize" / "run.json").write_text(
+        json.dumps(parked), encoding="utf-8")
+
+    out = engine(repo, "resume").stdout
+    assert "adopting the durable journal" in out, out
+    st = state(repo)
+    assert st["round"] == 1 and st["best_score"] == 4.0, out
+    assert st["pending_rework"] is None, "stale park marker would wedge the run"
+    assert st["rework_count"] == 0, out
+    assert (repo / "numbers.txt").read_text().splitlines() == ["1", "1", "2"]
+    assert [r[4] for r in tsv_rows(repo)] == ["baseline", "keep"], out
+    assert "reproducibility check OK" in out
+    assert not _git(repo, "status", "--porcelain").stdout.strip()
+    # the recovered round is a normal base for the next PLAIN round
+    edit_numbers(repo, ("1", "1", "1"))
+    assert "r2: KEEP" in engine(repo, "round", "--desc", "shrink again").stdout
