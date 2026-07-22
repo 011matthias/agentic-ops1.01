@@ -6,7 +6,14 @@ filesystem with no Windows `vercel` install. Same contract as
 test_vercel_as.py -- argument routing verified by running the real script
 against a stub `vercel` that records its argv.
 
-Skipped where pwsh is unavailable.
+WINDOWS-ONLY BY CONSTRUCTION. The stub shim is a `vercel.bat` relying on
+PATHEXT resolution (a PowerShell *function* named `vercel` loses to the real
+CLI's own .ps1 on PATH), and the script under test targets a Windows CLI
+install. GitHub's ubuntu runners DO ship pwsh, so gating on `which pwsh` alone
+is not enough: the suite then runs on Linux, the .bat never executes, argv
+comes back empty and 5 tests fail. That exact miss turned the CI hooks job red
+on 2026-07-22 (PR #401). The POSIX contract is covered by the .sh twin's suite
+(`test_vercel_as.py`), so skipping off-Windows loses no coverage.
 """
 from __future__ import annotations
 
@@ -21,7 +28,11 @@ from hooklib import REPO
 
 SCRIPT = REPO / "tools" / "vercel-as.ps1"
 PWSH = shutil.which("pwsh") or shutil.which("powershell")
-pytestmark = pytest.mark.skipif(PWSH is None, reason="pwsh unavailable")
+pytestmark = pytest.mark.skipif(
+    os.name != "nt" or PWSH is None,
+    reason="vercel-as.ps1 is a Windows tool; its .bat stub needs PATHEXT "
+           "(ubuntu CI ships pwsh, so the pwsh check alone is insufficient)",
+)
 
 
 def run(identity_and_args: list[str], tmp_path, env_extra: dict | None = None):
