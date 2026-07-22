@@ -2,7 +2,7 @@
 date: 2026-07-22
 session: recon-login-hardening
 projects_touched: [brisken]
-friction_events: 1
+friction_events: 2
 work_types: [client-dev]
 ---
 
@@ -31,3 +31,19 @@ work_types: [client-dev]
 **Gates:** B1:1 (used the existing Graph tool rather than asking) B2:4 B3:2 B4:3 B6:2 B7:1 skipped:0
 **Autonomy:** 0 human interventions.
 **Outcome:** Rate-limit hardening closed and live. Second-pass default decided with evidence and no spend. One new blocker surfaced for the optimize track. Owner decisions pending: send Criss the SPA link, and whether to re-validate the label fixture.
+
+---
+
+### Continuation — notifier revival + scheduling
+
+**Built:** **#373** — the recon notifier had been dead since PR #350's UI deletion, not merely unscheduled. It logged in via the deleted `POST /login` (303 + cookie), so every run died on a 401 before reading state; and all four human-facing links in its mails pointed into the deleted HTML UI, including the publish ping that goes to the USER (it would have auto-sent Criss a dead link). Now `/api/login` + bearer, explicit 429 handling for the new throttle, and links to a new `APP_URL` (the SPA).
+
+**Scheduled:** Windows task `BriskenReconNotify`, 15-min repeat, `LastTaskResult 0` across two scheduler fires, 0 missed runs. State baselined via the script's own `apply_to_state` so the first fire did not mail the 2-run + 7-note backlog.
+
+**Friction (2nd):** `agent-deferred` / `missed-tool`, user-corrected. I told the owner "LIMITATION: I have no schtasks capability" and handed the registration back as a USER ACTION. It was false: `Register-ScheduledTask` needs no elevation for a user-level task. The claim was inherited from two memories and never tested, and it had deferred an automatable action for two days. The owner pushed back ("register the notifier first") and it took one call. Fix: structural-ish — new memory `feedback_agent_can_register_scheduled_tasks` plus corrections to `project_brisken_expense_recon_testing_loop` and the `project_repo_sweep_automation` index line, which carried the same false claim and had blocked the 03:30 sweep task the same way. Regression: yes, same class as `feedback_verify_limitations_before_asserting` — an inherited "can't" repeated without a test.
+
+**Second lesson:** scheduling a broken job is worse than not scheduling it, because it looks live. Running it once before scheduling is what surfaced the cutover breakage.
+
+**Blast-radius note:** the cutover checkpoint enumerated 9 test files as the deletion's blast radius but missed an out-of-app CONSUMER that also used the HTML surface.
+
+**Outcome:** notifier live. Next task chosen and scoped (spec-vs-build reconciliation) but deliberately not started — high context pressure, and a half-finished gap register is worse than none.
