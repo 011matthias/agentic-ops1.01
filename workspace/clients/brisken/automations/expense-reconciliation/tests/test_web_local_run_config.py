@@ -1,10 +1,10 @@
-"""Every web/SPA run persists a self-contained `run.local.json` beside the
+"""Every SPA run persists a self-contained `run.local.json` beside the
 uploaded files, so pulling the run dir off the /data volume reconciles
 locally with NO OpenAI call (the cost-free local test loop).
 
-Covers: the file is written for both POST /runs and the SPA POST /api/runs;
-its config drops the `llm` / `coa_validation` blocks; and a copy of the run
-dir reconciles end-to-end through the CLI with OPENAI_API_KEY unset.
+Covers: the file is written by POST /api/runs; its config drops the
+`llm` / `coa_validation` blocks; and a copy of the run dir reconciles
+end-to-end through the CLI with OPENAI_API_KEY unset.
 """
 from __future__ import annotations
 
@@ -27,11 +27,9 @@ EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 
 
 @pytest.fixture
-def sync_client(tmp_path, monkeypatch):
-    # Sync seam: POST /runs reconciles inline and 303s to the workbench, so
-    # the run dir (with run.local.json) exists by the time the call returns.
+def client(tmp_path, monkeypatch):
     # No API key in the env: the run must complete deterministically.
-    monkeypatch.setenv("EXPENSE_RECON_WEB_SYNC", "1")
+    # TestClient finishes the background job before the POST returns.
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     app = create_app(tmp_path)
     with TestClient(app) as c:
@@ -62,16 +60,17 @@ _DATA = {
 }
 
 
-def _run_id_from_redirect(resp) -> str:
-    assert resp.status_code == 303, resp.text
-    return resp.headers["location"].rstrip("/").rsplit("/", 1)[-1]
+def _api_run(client) -> str:
+    resp = client.post("/api/runs", files=_files(), data=_DATA)
+    assert resp.status_code == 200, resp.text
+    job = client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
+    return job["run_id"]
 
 
-def test_run_dir_gets_self_contained_local_config(sync_client):
-    run_id = _run_id_from_redirect(
-        sync_client.post("/runs", files=_files(), data=_DATA, follow_redirects=False)
-    )
-    run_dir = sync_client._data_root / "runs" / run_id
+def test_run_dir_gets_self_contained_local_config(client):
+    run_id = _api_run(client)
+    run_dir = client._data_root / "runs" / run_id
     cfg_path = run_dir / LOCAL_RUN_CONFIG_NAME
     assert cfg_path.exists(), "run.local.json not written into the run dir"
 
@@ -88,11 +87,9 @@ def test_run_dir_gets_self_contained_local_config(sync_client):
     assert (run_dir / cfg["receipts"]["path"]).exists()
 
 
-def test_pulled_run_dir_reconciles_locally_without_api_key(sync_client, tmp_path, monkeypatch):
-    run_id = _run_id_from_redirect(
-        sync_client.post("/runs", files=_files(), data=_DATA, follow_redirects=False)
-    )
-    src = sync_client._data_root / "runs" / run_id
+def test_pulled_run_dir_reconciles_locally_without_api_key(client, tmp_path, monkeypatch):
+    run_id = _api_run(client)
+    src = client._data_root / "runs" / run_id
     cfg = json.loads((src / LOCAL_RUN_CONFIG_NAME).read_text(encoding="utf-8"))
 
     # Simulate `flyctl sftp` pulling the run dir: copy ONLY the inputs + the
@@ -109,16 +106,3 @@ def test_pulled_run_dir_reconciles_locally_without_api_key(sync_client, tmp_path
     assert report is not None and report.exists()
     # It landed inside the pulled dir (relative output path), self-contained.
     assert report.parent == local
-
-
-def test_spa_api_run_also_writes_local_config(sync_client):
-    # The SPA path funnels through the same prepare_run, so it persists the
-    # local config too. POST /api/runs kicks a background job and returns
-    # {job_id}; with the sync seam the pipeline still runs inline first via
-    # prepare_run, so the run dir + config exist.
-    resp = sync_client.post("/api/runs", files=_files(), data=_DATA)
-    assert resp.status_code == 200, resp.text
-    # Exactly one run dir exists; it carries the local config.
-    runs = list((sync_client._data_root / "runs").iterdir())
-    assert len(runs) == 1
-    assert (runs[0] / LOCAL_RUN_CONFIG_NAME).exists()

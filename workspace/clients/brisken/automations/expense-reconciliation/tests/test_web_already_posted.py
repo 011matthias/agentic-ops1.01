@@ -33,7 +33,7 @@ def client(tmp_path):
 
 def _create_run(client) -> str:
     resp = client.post(
-        "/runs",
+        "/api/runs",
         files={
             "statement": (
                 "statement.example.csv",
@@ -47,10 +47,11 @@ def _create_run(client) -> str:
             ),
         },
         data={"account_id": "amex-9001", "account_card_currency": "USD"},
-        follow_redirects=False,
     )
-    assert resp.status_code == 303, resp.text
-    return resp.headers["location"].rstrip("/").rsplit("/", 1)[-1]
+    assert resp.status_code == 200, resp.text
+    job = client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
+    return job["run_id"]
 
 
 def _first_matched_tx(client, run_id) -> str:
@@ -59,34 +60,21 @@ def _first_matched_tx(client, run_id) -> str:
     return run.snapshot["outcome"]["matches"][0]["transaction_id"]
 
 
-def test_sections_render(client):
-    run_id = _create_run(client)
-    resp = client.get(f"/runs/{run_id}")
-    assert resp.status_code == 200
-    for title in (
-        "Needs your attention",
-        "Matched automatically",
-        "Already in Zoho",
-        "No receipt yet",
-        "Other checks",
-    ):
-        assert title in resp.text, f"section {title!r} missing"
-    # legend present
-    assert "Subscription" in resp.text
-
-
 def test_already_posted_accepted_and_counts_decided(client):
     run_id = _create_run(client)
     tx_id = _first_matched_tx(client, run_id)
     resp = client.post(
-        f"/runs/{run_id}/decisions",
+        f"/api/runs/{run_id}/decisions",
         json={"transaction_id": tx_id, "status": "already_posted"},
     )
     assert resp.status_code == 200, resp.text
-    summary = resp.json()["summary"]
-    # the row is decided (not undecided) and the run can still become ready
-    page = client.get(f"/runs/{run_id}")
-    assert page.status_code == 200
+    # the row is decided and the run's render model still serves
+    view = client.get(f"/api/runs/{run_id}")
+    assert view.status_code == 200
+    row = next(
+        r for r in view.json()["rows"] if r["transaction_id"] == tx_id
+    )
+    assert row["status"] == "already_posted"
 
 
 def test_already_posted_excluded_from_zoho_export(client):
@@ -95,11 +83,11 @@ def test_already_posted_excluded_from_zoho_export(client):
 
     # confirm everything, then flip one matched row to already_posted
     assert (
-        client.post(f"/runs/{run_id}/decisions/confirm-matched").status_code == 200
+        client.post(f"/api/runs/{run_id}/decisions/confirm-matched").status_code == 200
     )
     assert (
         client.post(
-            f"/runs/{run_id}/decisions",
+            f"/api/runs/{run_id}/decisions",
             json={"transaction_id": tx_id, "status": "already_posted"},
         ).status_code
         == 200

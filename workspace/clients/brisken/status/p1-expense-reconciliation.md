@@ -36,7 +36,7 @@ this table is the index, not a second record.
 | Sign canonicalization + refunds bucket + deterministic FX (Tier-1) | done (PR #285) | BLUEPRINT 3.15; no-LLM 0/36->29/36 on Criss's April |
 | Dev notifier: operator "run now" uploads fire an email | code-done (PR #288), NOT scheduled | `tools/brisken-recon-notify.py`; user must register schtasks task |
 | Cross-run memory (Phase 2) | in-progress | BLUEPRINT Phase 2 |
-| Review workbench (web, Fly-hosted) | live, deletion ATTEMPTED + reverted 2026-07-22 | BLUEPRINT; brisken-expense-recon.fly.dev. SPA reached parity + a production URL 2026-07-22, so the retirement gate is now only "Criss has actually switched". A first deletion pass was reverted (line-arithmetic surgery broke `app.py`; redo with `ast`, manifest in the 2026-07-22 SPA-cutover checkpoint). Deletion = 8 GET pages, ~2,455 lines of templates, 4 static files, the `_wants_json` branches, and the now-dead role plumbing (owner 2026-07-22: operator role ONLY, so `ROLE_USER`/`_OPERATOR_RULES` are inert) |
+| Jinja HTML UI retirement (API-only backend) | deletion MERGED 2026-07-22, NOT deployed | Redone ast-first per the SPA-cutover checkpoint manifest: 17 HTML routes + 14 bare decorator twins removed, `_wants_json` collapsed, `templates/` (12 files) + `static/` (4 files) deleted, role plumbing stripped (operator is the only role; gate keyed on `EXPENSE_RECON_OPERATOR_CODE`, which is the only code set on Fly). app.py 1518 -> 1071 lines; suite 772 -> 712 green (60 HTML-surface tests deleted/rewritten to `/api`). The deployed machine (v30) still serves the old HTML until the next `flyctl deploy` — deploy is gated ONLY on Criss confirmed on the SPA |
 | Zoho journal CSV export | in-progress | BLUEPRINT slice 4 |
 | Run history + doctor pre-flight | done | BLUEPRINT slice 5/5b |
 | COA pre-write validation gate | live (Fly, per-entity) | BLUEPRINT 4.11 (PR #202/#203/#205) |
@@ -66,8 +66,8 @@ this table is the index, not a second record.
 - **Lovable merge != live:** merging the SPA repo's main syncs the Lovable EDITOR only; the
   published site keeps serving the last explicitly-published build. Verify with a structural
   DOM probe, not a label. Publishing is a dashboard action the agent cannot perform.
-- Fly HTML-UI deletion is gated ONLY on Criss actually switching over. Do not deploy it
-  before that; `flyctl releases` + rollback is the escape hatch.
+- Fly HTML-UI deletion MERGED but its deploy is gated ONLY on Criss actually switching
+  over. Do not deploy before that; `flyctl releases` + rollback is the escape hatch.
 - Concurrency: two sessions share this module (active `agentic-ops1-recon` worktree); before
   any backend build here, `git fetch origin main` + `git log` first (4th collision-class event).
 - COA gate DEPLOYED 2026-07-01: `coa-provision.json` + `zoho-books-coa.json` on the Fly `/data`

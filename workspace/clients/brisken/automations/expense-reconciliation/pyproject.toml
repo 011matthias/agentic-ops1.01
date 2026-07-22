@@ -14,10 +14,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "httpx>=0.27"]   # httpx backs fastapi's TestClient
 web = [
-    "fastapi>=0.110",        # local review-workbench app (browser UI over the CLI pipeline)
-    "uvicorn>=0.30",         # ASGI server Chris runs on her machine
+    "fastapi>=0.110",        # JSON API behind the Lovable SPA front end
+    "uvicorn>=0.30",         # ASGI server
     "python-multipart>=0.0.9",  # multipart/form-data file uploads
-    "jinja2>=3.1",           # server-rendered workbench templates
 ]
 
 [project.scripts]

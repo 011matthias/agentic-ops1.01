@@ -46,7 +46,7 @@ def _create_run(client) -> str:
         ),
     }
     resp = client.post(
-        "/runs",
+        "/api/runs",
         files=files,
         data={
             "account_id": "amex-9001",
@@ -54,10 +54,11 @@ def _create_run(client) -> str:
             "account_card_currency": "USD",
             "receipts_source": "csv",
         },
-        follow_redirects=False,
     )
-    assert resp.status_code == 303, resp.text
-    return resp.headers["location"].rstrip("/").rsplit("/", 1)[-1]
+    assert resp.status_code == 200, resp.text
+    job = client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
+    return job["run_id"]
 
 
 def _snapshot(client, run_id) -> dict:
@@ -69,7 +70,7 @@ def _snapshot(client, run_id) -> dict:
 
 def test_reconciled_download_headers_and_one_row_per_charge(client):
     run_id = _create_run(client)
-    client.post(f"/runs/{run_id}/decisions/confirm-matched")
+    client.post(f"/api/runs/{run_id}/decisions/confirm-matched")
 
     resp = client.get(f"/runs/{run_id}/reconciled.csv")
     assert resp.status_code == 200
@@ -94,7 +95,7 @@ def _status_counts(body: str) -> tuple[int, int]:
 
 def test_reconciled_download_reflects_rejection(client):
     run_id = _create_run(client)
-    client.post(f"/runs/{run_id}/decisions/confirm-matched")
+    client.post(f"/api/runs/{run_id}/decisions/confirm-matched")
     matches = _snapshot(client, run_id)["outcome"]["matches"]
     rejected_tx = matches[0]["transaction_id"]
 
@@ -102,7 +103,7 @@ def test_reconciled_download_reflects_rejection(client):
         client.get(f"/runs/{run_id}/reconciled.csv").text
     )
     client.post(
-        f"/runs/{run_id}/decisions",
+        f"/api/runs/{run_id}/decisions",
         json={"transaction_id": rejected_tx, "status": "rejected"},
     )
     after_rows, after_unmatched = _status_counts(

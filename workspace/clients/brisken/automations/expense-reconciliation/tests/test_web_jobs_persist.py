@@ -43,16 +43,13 @@ def test_async_job_row_is_durable(tmp_path, monkeypatch):
     app = create_app(tmp_path)
     with TestClient(app) as c:
         resp = c.post(
-            "/runs",
+            "/api/runs",
             files=_files(),
             data={"account_id": "amex-9001", "account_card_currency": "USD"},
         )
         assert resp.status_code == 200
-        import re
-
-        m = re.search(r'data-job-id="([0-9a-f]+)"', resp.text)
-        assert m, "running page should carry the job id"
-        job_id = m.group(1)
+        job_id = resp.json()["job_id"]
+        assert job_id
         # poll until done (TestClient runs background tasks on response close,
         # so by now the job has finished)
         status = c.get(f"/jobs/{job_id}").json()

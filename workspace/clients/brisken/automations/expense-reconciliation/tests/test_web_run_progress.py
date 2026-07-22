@@ -1,13 +1,12 @@
 """PR F — background run + status poll.
 
-By default POST /runs validates synchronously, then runs the pipeline in a
-background task and returns a polling page; the workbench opens once the
+POST /api/runs validates synchronously, then runs the pipeline in a
+background task and returns {job_id}; the SPA polls /jobs/{id} until the
 job reports done. These tests delete the sync seam (set globally in
 conftest) so they exercise the real async path.
 """
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import pytest
@@ -37,44 +36,6 @@ def _files():
     }
 
 
-def test_async_run_backgrounds_then_completes(tmp_path, monkeypatch):
-    monkeypatch.delenv("EXPENSE_RECON_WEB_SYNC", raising=False)
-    app = create_app(tmp_path)
-    with TestClient(app) as c:
-        resp = c.post(
-            "/runs",
-            files=_files(),
-            data={
-                "account_id": "amex-9001",
-                "legal_entity_id": "brisken-llc",
-                "account_card_currency": "USD",
-                "receipts_source": "csv",
-            },
-            follow_redirects=False,
-        )
-        # Not the workbench redirect; a polling page carrying the job id.
-        assert resp.status_code == 200
-        assert "Reconciling" in resp.text
-        m = re.search(r'data-job-id="([^"]+)"', resp.text)
-        assert m, resp.text
-        job_id = m.group(1)
-
-        # The background task runs within the TestClient request lifecycle,
-        # so the job is already done; re-check defensively.
-        status = None
-        for _ in range(50):
-            status = c.get(f"/jobs/{job_id}").json()
-            if status["status"] != "running":
-                break
-        assert status["status"] == "done", status
-        run_id = status["run_id"]
-
-        wb = c.get(f"/runs/{run_id}")
-        assert wb.status_code == 200
-        assert "Transactions" in wb.text
-        assert "amex-9001" in wb.text
-
-
 def test_job_status_unknown_is_404(tmp_path):
     app = create_app(tmp_path)
     with TestClient(app) as c:
@@ -82,9 +43,8 @@ def test_job_status_unknown_is_404(tmp_path):
 
 
 def test_api_run_backgrounds_then_completes(tmp_path, monkeypatch):
-    # JSON twin of the run kickoff for the SPA front end: POST /api/runs
-    # returns a job_id; poll /jobs/{id} to done, then read the JSON
-    # workbench. Same async path as the HTML flow above.
+    # The run kickoff: POST /api/runs returns a job_id; poll /jobs/{id} to
+    # done, then read the JSON workbench.
     monkeypatch.delenv("EXPENSE_RECON_WEB_SYNC", raising=False)
     app = create_app(tmp_path)
     with TestClient(app) as c:
@@ -151,8 +111,6 @@ def test_async_unmappable_statement_still_400(tmp_path, monkeypatch):
                 "text/csv",
             ),
         }
-        resp = c.post(
-            "/runs", files=bad, data={"receipts_source": "csv"}, follow_redirects=False
-        )
+        resp = c.post("/api/runs", files=bad, data={"receipts_source": "csv"})
         assert resp.status_code == 400
-        assert "auto-detect" in resp.text.lower()
+        assert "auto-detect" in resp.json()["error"].lower()
