@@ -79,6 +79,19 @@ def test_env_seam_allows_edit_with_advisory():
     assert _classify(proc) == "advise"
 
 
+def test_deny_edit_guard_pin_registry():
+    # tools/guard-pins.json is a pin registry: same always-on lock as
+    # PINS.json (a guard defines the floor; weaken-and-repin = move the
+    # metric). 2026-07-22 verify finding #24 residual.
+    assert _classify(_run("tools/guard-pins.json", tool="Edit")) == "deny"
+
+
+def test_guard_pin_registry_seam_advises():
+    proc = _run("tools/guard-pins.json", tool="Edit",
+                env={"SCORER_LOCK_ALLOW": "1"})
+    assert _classify(proc) == "advise"
+
+
 # --- PASS: everything outside the locked surface ----------------------------
 
 def test_pass_scorers_readme():

@@ -42,7 +42,15 @@ if _ENV_REPO:
 REPO_POSIX = REPO.replace("\\", "/").rstrip("/")
 REPO_POSIX_LOWER = REPO_POSIX.lower()
 
-SCORER_RE = re.compile(r"^tools/scorers/(.+\.py|PINS\.json)$", re.IGNORECASE)
+# tools/guard-pins.json is in the always-locked set for the same reason as
+# PINS.json: a guard defines the floor an experiment must clear, so weakening
+# a guard and re-pinning it in one move is the same act as moving the metric.
+# Verified gap 2026-07-22 (optimize-audit adversarial verify, finding #24
+# residual): the guard-pin registry previously had NO always-on write lock.
+SCORER_RE = re.compile(
+    r"^(?:tools/scorers/(?:.+\.py|PINS\.json)|tools/guard-pins\.json)$",
+    re.IGNORECASE,
+)
 
 
 def deny(reason: str) -> None:
@@ -145,10 +153,11 @@ def main() -> int:
     target = os.path.normpath(abspath.replace("\\", "/"))
     if rel.lower().endswith("pins.json"):
         deny(
-            f"[scorer-lock] {rel} is the scorer pin registry and is never "
-            "edited directly. Re-pin via `uv run tools/pin_scorer.py pin "
-            "<name>` under SCORER_LOCK_ALLOW=1 after a user-approved scorer "
-            "change; the PINS diff ships in the PR for review."
+            f"[scorer-lock] {rel} is a pin registry and is never edited "
+            "directly. Re-pin via `uv run tools/pin_scorer.py pin <name>` "
+            "(scorers) or `pin-guard <path>` (guards) under "
+            "SCORER_LOCK_ALLOW=1 after a user-approved change; the pin diff "
+            "ships in the PR for review."
         )
         return 0
     if os.path.isfile(target):

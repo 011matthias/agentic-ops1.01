@@ -27,7 +27,10 @@ the locks here are code, not prose.
   command file - hardcoded in-hook so a tampered state file cannot unlock
   them); DENY edits outside the asset globs; shell arm denies write-shaped
   commands on locked paths and `git checkout/restore/apply` on locked
-  pathspecs. Scorer/PINS shell writes are denied even with NO active run.
+  pathspecs. Scorer/PINS/guard-pins shell writes are denied even with NO
+  active run (`tools/guard-pins.json` joined both gates' always-on deny
+  sets 2026-07-22, closing the verify finding that a guard could be
+  weakened and re-pinned between runs with only PR review as the gate).
   Corrupt run state -> ask (never fail-open, never brick).
 - **`tools/optimize_run.py`** (the engine) executes branch/commit/score/
   guard/keep-revert/journal deterministically and re-verifies the scorer,
