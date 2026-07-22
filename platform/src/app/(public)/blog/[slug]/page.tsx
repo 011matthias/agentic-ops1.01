@@ -58,6 +58,32 @@ function renderMarkdown(content: string): string {
       i++; continue;
     }
 
+    // GFM table blocks: a header row, a |---|---| separator, then data rows.
+    // AEO content patterns lean on comparison tables; without this branch a
+    // table renders as a paragraph of pipes. Wide tables scroll in their own
+    // container so the page body never scrolls horizontally.
+    if (block.startsWith("|")) {
+      const rows = block.split(/\n/).map((l) => l.trim()).filter((l) => l.startsWith("|"));
+      const isSeparator = rows.length >= 2 && /^\|[\s:|-]+\|$/.test(rows[1]);
+      if (isSeparator) {
+        const parseCells = (row: string) =>
+          row.replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => applyInline(c.trim()));
+        const header = parseCells(rows[0])
+          .map((c) => `<th class="border-b-2 border-border px-4 py-2.5 text-left font-semibold text-foreground">${c}</th>`)
+          .join("");
+        const body = rows.slice(2)
+          .map((row) =>
+            `<tr class="border-b border-border/60">${parseCells(row)
+              .map((c) => `<td class="px-4 py-2.5 align-top">${c}</td>`)
+              .join("")}</tr>`)
+          .join("\n");
+        rendered.push(
+          `<div class="my-6 overflow-x-auto rounded-lg border border-border"><table class="w-full text-sm leading-relaxed"><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table></div>`,
+        );
+        i++; continue;
+      }
+    }
+
     // List blocks (unordered)
     if (block.match(/^- /m)) {
       const items = block.split(/\n/).filter(l => l.startsWith("- ")).map(l => {

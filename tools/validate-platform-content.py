@@ -34,6 +34,10 @@ PLATFORM = REPO / "platform" / "src"
 
 PUBLIC_APP = PLATFORM / "app" / "(public)"
 PROPOSALS = PLATFORM / "content" / "proposals"
+# Blog markdown renders public at /blog/[slug]; before 2026-07-22 it was the
+# one public content surface the validator never scanned (the corpus build
+# would have shipped un-gated against the house voice standard).
+BLOG = PLATFORM / "content" / "blog"
 COMPONENTS = PLATFORM / "components"
 EMAIL_LIB = PLATFORM / "lib" / "email.ts"
 LAYOUT = PLATFORM / "app" / "layout.tsx"
@@ -117,8 +121,8 @@ def is_in_scope(path: Path) -> bool:
     # app/(public)/**
     if parts[0] == "app" and len(parts) > 1 and parts[1] == "(public)":
         return True
-    # content/proposals/**
-    if parts[0] == "content" and len(parts) > 1 and parts[1] == "proposals":
+    # content/proposals/** and content/blog/**
+    if parts[0] == "content" and len(parts) > 1 and parts[1] in {"proposals", "blog"}:
         return True
     # components/Header.tsx, Footer.tsx, proposal/**
     if parts[0] == "components":
@@ -152,7 +156,7 @@ def iter_target_files(explicit: list[Path] | None) -> Iterable[Path]:
                 yield p
         return
     # Default scan: all in-scope files.
-    for sub in (PUBLIC_APP, PROPOSALS):
+    for sub in (PUBLIC_APP, PROPOSALS, BLOG):
         if sub.exists():
             for ext in ("*.tsx", "*.ts", "*.md", "*.mdx", "*.txt"):
                 for p in sub.rglob(ext):
@@ -265,6 +269,12 @@ def check_banned_vocab(path: Path, lines: list[str]) -> list[Finding]:
 def check_proposal_headings(path: Path, lines: list[str]) -> list[Finding]:
     findings: list[Finding] = []
     if path.suffix.lower() not in {".md", ".mdx"}:
+        return findings
+    # The canonical-heading contract is proposal-specific (rule_platform_standards
+    # §3). A blog post may legitimately carry "## Timeline"; only proposals drift.
+    try:
+        path.resolve().relative_to(PROPOSALS)
+    except ValueError:
         return findings
     # Skip Track-family proposals (heading vocabulary differs).
     text = "".join(lines)
