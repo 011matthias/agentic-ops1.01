@@ -148,8 +148,10 @@ For deliverables that pass through the PostToolUse dispatcher
 `workspace/clients/*/context/drafts/`), the validators
 `validate-output.py` and `lint-comms-draft.py` already catch some
 banned constructions (em-dashes via strip gate, cost-anchor drift,
-unsourced claims). Symmetry-collapse and information-per-token are
-agent discipline; the slop check is the manual gate.
+unsourced claims), and since 2026-07-22 flag suspected
+symmetry-collapse and per-category narration as LOW advisories (see
+Enforcement). Information-per-token stays agent discipline; the slop
+check is still the gate that decides.
 
 ## Why
 
@@ -181,14 +183,34 @@ in this space:
   `validate-output.py` + `lint-comms-draft.py`
 - `validate-pilot-routing.py` (piece cross-wire check)
 
-Future enforcement candidates (not yet built):
+Built 2026-07-22 in `validate-output.py`, markdown only, both **LOW /
+advisory** (the tool's LOW band is "nudge"; a heuristic over prose that
+fired at HIGH would bury the brand / placeholder / unsourced-claim rules
+in the same advisory):
 
-- `validate-output.py` "symmetry-collapse" detector: scan for N
-  bullets or N paragraphs with similar shape + length within a
-  section, flag as suspected slop.
-- `validate-output.py` "per-category-narration" detector: detect
-  N-row tables / lists where each entry's prose follows the same
-  grammar template, flag for collapse.
+- `symmetry-collapse`: >=3 sibling bullets or >=3 consecutive
+  paragraphs in one section whose lengths cluster (stddev/mean <= 12%)
+  AND whose openings share one template. Both signals are required;
+  either alone matches ordinary prose.
+- `per-category-narration`: a table column whose every body cell, or a
+  `**Name** sentence` run whose every sentence, follows one grammar
+  template.
+
+The template test approximates opening grammar with no NLP dependency:
+function words survive literally, content words collapse to `X`, a bold
+lead to `**`. An all-placeholder skeleton (`X X X X`) is the shape of any
+English sentence and never counts on its own, which is what keeps the
+"What is NOT slop" cases above silent. Exempt by construction, because
+their symmetry is the point rather than the smell: numbered lists and
+sequence-labelled runs (`**Week 3:**`), question checklists,
+comma-separated inventories, and columns of noun phrases. Suppress a
+judged-good run with `<!-- output-allow:symmetry-collapse -->` or
+`<!-- output-allow:per-category-narration -->` plus a reason.
+
+Calibrated against 958 repo markdown files (friction register, proposals,
+rules, client deliverables): 3 files flagged, 3 hits. Tests:
+`tools/tests/test_validate_output_slop.py`, where the negative cases are
+the contract.
 
 Related rules and memories: [[rule_deliverables]] (PDF voice pass,
 banned constructions), [[feedback_no_per_category_narration]] (the
