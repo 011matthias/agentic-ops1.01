@@ -478,16 +478,22 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         map_posting_date: str,
         map_transaction_currency: str,
         card_key: str = "",
+        map_card: str = "",
     ) -> RunForm:
         """Shared form parsing for POST /runs and POST /intakes/{id}/run.
         Raises RunInputError for a user-fixable problem. A provisioned card
-        preset fills account/entity/currency; explicit fields still win."""
+        preset fills account/entity/currency; explicit fields still win.
+
+        `map_card` (WS3) is not `card_key`: the former names the statement
+        COLUMN holding each row's card, the latter picks a provisioned card
+        preset for the whole run."""
         overrides = {
             "transaction_date": map_transaction_date.strip(),
             "amount": map_amount.strip(),
             "vendor": map_vendor.strip(),
             "posting_date": map_posting_date.strip(),
             "transaction_currency": map_transaction_currency.strip(),
+            "card": map_card.strip(),
         }
         try:
             expense_map = (
@@ -567,6 +573,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         map_vendor: str = Form(""),
         map_posting_date: str = Form(""),
         map_transaction_currency: str = Form(""),
+        map_card: str = Form(""),
         card_key: str = Form(""),
     ):
         try:
@@ -584,6 +591,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 map_vendor=map_vendor,
                 map_posting_date=map_posting_date,
                 map_transaction_currency=map_transaction_currency,
+                map_card=map_card,
                 card_key=card_key,
             )
         except RunInputError as exc:
@@ -668,6 +676,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         map_vendor: str = Form(""),
         map_posting_date: str = Form(""),
         map_transaction_currency: str = Form(""),
+        map_card: str = Form(""),
         card_key: str = Form(""),
     ):
         """JSON twin of POST /runs for the SPA front end: upload statement +
@@ -692,6 +701,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 map_vendor=map_vendor,
                 map_posting_date=map_posting_date,
                 map_transaction_currency=map_transaction_currency,
+                map_card=map_card,
                 card_key=card_key,
             )
         except RunInputError as exc:
@@ -772,6 +782,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         map_vendor: str = Form(""),
         map_posting_date: str = Form(""),
         map_transaction_currency: str = Form(""),
+        map_card: str = Form(""),
         card_key: str = Form(""),
     ):
         with open_store() as store:
@@ -816,6 +827,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 map_vendor=map_vendor,
                 map_posting_date=map_posting_date,
                 map_transaction_currency=map_transaction_currency,
+                map_card=map_card,
                 card_key=card_key or intake.card_key or "",
             )
             prepared = prepare_intake_run(
