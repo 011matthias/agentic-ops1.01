@@ -252,3 +252,70 @@ def test_once_per_day_skips_second_run(tmp_path, monkeypatch, capsys):
     ps.main(["--sweep-stale", "--once-per-day"])           # same day -> skipped
     second = capsys.readouterr().out
     assert "stale" in first and second == ""
+
+
+# --- sweep vs a checkout behind origin/main --------------------------------
+
+def _stale_tree(tmp_path, monkeypatch):
+    clients = _client_tree(tmp_path, monkeypatch)
+    d = clients / "brisken" / "status"
+    d.mkdir(parents=True)
+    (d / "p2-rome.md").write_text(
+        "---\nproject: brisken\nworkstream: rome\nstate: active\n"
+        "updated: 2026-04-01\n---\n", encoding="utf-8")
+    return d / "p2-rome.md"
+
+
+def test_sweep_flags_a_genuinely_stale_file(tmp_path, monkeypatch):
+    _stale_tree(tmp_path, monkeypatch)
+    monkeypatch.setattr(ps, "_fresher_on_origin", lambda p, u: False)
+    assert [f["file"] for f in ps.sweep_stale(TODAY)] == ["p2-rome.md"]
+
+
+def test_sweep_suppresses_a_file_already_refreshed_on_origin(tmp_path, monkeypatch):
+    """The sweep reads the WORKING TREE, so a checkout behind origin/main
+    nags about files somebody already updated.
+
+    Same defect class as the optimize overview's STALE CHECKOUT blind spot,
+    but here it produces false positives, which is worse for an advisory: it
+    trains the reader to ignore the line.
+    """
+    _stale_tree(tmp_path, monkeypatch)
+    monkeypatch.setattr(ps, "_fresher_on_origin", lambda p, u: True)
+    assert ps.sweep_stale(TODAY) == []
+
+
+def test_sweep_still_reports_malformed_files_even_if_origin_is_newer(tmp_path, monkeypatch):
+    """Suppression is scoped to STALENESS only.
+
+    A malformed file is malformed in this checkout regardless of what
+    origin/main holds, and hiding it would be a real miss rather than a
+    spared false alarm.
+    """
+    clients = _client_tree(tmp_path, monkeypatch)
+    d = clients / "brisken" / "status"
+    d.mkdir(parents=True)
+    (d / "broken.md").write_text(
+        "---\nproject: brisken\nstate: nonsense\nupdated: 2026-04-01\n---\n",
+        encoding="utf-8")
+    monkeypatch.setattr(ps, "_fresher_on_origin", lambda p, u: True)
+    findings = ps.sweep_stale(TODAY)
+    assert [f["file"] for f in findings] == ["broken.md"]
+    assert findings[0]["problems"]
+
+
+def test_fresher_on_origin_fails_open_outside_a_repo(tmp_path):
+    """Any git problem must mean 'cannot tell' and report as normal.
+
+    Suppressing on a guess would hide real rot; this path is reached on every
+    SessionStart, so it has to be the safe direction.
+    """
+    p = tmp_path / "p2-rome.md"
+    p.write_text("---\nupdated: 2026-04-01\n---\n", encoding="utf-8")
+    assert ps._fresher_on_origin(p, "2026-04-01") is False
+
+
+def test_fresher_on_origin_needs_a_local_date(tmp_path):
+    p = tmp_path / "x.md"
+    p.write_text("---\n---\n", encoding="utf-8")
+    assert ps._fresher_on_origin(p, None) is False

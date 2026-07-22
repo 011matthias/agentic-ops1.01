@@ -43,6 +43,7 @@ import argparse
 import datetime as _dt
 import json
 import re
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -267,10 +268,53 @@ def sweep_stale(today: _dt.date, max_age_days: int = DEFAULT_MAX_AGE_DAYS) -> li
     for client_dir in sorted(p for p in CLIENTS_DIR.iterdir() if p.is_dir()):
         if not (client_dir / "status").is_dir():
             continue
-        for row in (evaluate_file(p, today, max_age_days) for p in list_status_files(client_dir.name)):
-            if row["stale"] or row["problems"]:
-                findings.append({"client": client_dir.name, **row})
+        for p in list_status_files(client_dir.name):
+            row = evaluate_file(p, today, max_age_days)
+            if not (row["stale"] or row["problems"]):
+                continue
+            # This sweep derives staleness from the WORKING TREE, so a checkout
+            # behind origin/main nags about files somebody already refreshed.
+            # Same defect class as the optimize overview's STALE CHECKOUT
+            # blind spot; here it produces false positives rather than silent
+            # under-reporting, which trains the reader to ignore the advisory.
+            # Suppression is scoped to STALENESS only. A malformed file is
+            # malformed in this checkout whatever origin/main holds, so it is
+            # still reported even when the remote copy is newer.
+            if row["stale"] and not row["problems"] \
+                    and _fresher_on_origin(p, row["updated"]):
+                continue
+            findings.append({"client": client_dir.name, **row})
     return findings
+
+
+def _fresher_on_origin(path: Path, local_updated: str | None) -> bool:
+    """True when origin/main's copy carries a NEWER `updated:` than this one.
+
+    Fail-open: any git problem, missing ref, or unparseable date means "cannot
+    tell", and the finding is reported as normal. Never suppress on a guess.
+    """
+    if not local_updated:
+        return False
+    try:
+        rel = path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return False
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "show", f"origin/main:{rel}"],
+            capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    if proc.returncode != 0:
+        return False
+    remote_updated = parse_frontmatter(proc.stdout).get("updated")
+    if remote_updated is None:
+        return False
+    try:
+        return _dt.date.fromisoformat(str(remote_updated)) > \
+            _dt.date.fromisoformat(str(local_updated))
+    except ValueError:
+        return False
 
 
 # Once-per-day stamp so the SessionStart sweep advises at most once per calendar
