@@ -97,7 +97,7 @@ export default function BlogPage() {
             href="/assessment"
             className="mt-2 rounded-full bg-accent px-7 py-3 text-sm font-medium text-white shadow-[0_2px_8px_rgba(37,99,235,.3)] transition-all hover:bg-accent-light hover:-translate-y-0.5"
           >
-            Request Assessment &mdash; $1
+            Request Assessment: $1
           </Link>
         </div>
       </section>

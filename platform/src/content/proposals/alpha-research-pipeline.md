@@ -58,11 +58,11 @@ Key design decisions:
 - Deduplication via hash comparison against existing files before download.
 - Batch processing with configurable delays between groups to prevent IP bans.
 
-## Timeline
+## Timeline & Milestones
 
-**Phase 1: Foundation (Days 1-5)** -- Dispatcher, scrapers, browser API integration, dedup, cloud storage
-**Phase 2: Intelligence (Days 6-9)** -- Thesis synthesis, news filter, LLM relevance scoring, HITL approval
-**Phase 3: Testing & Delivery (Days 10-12)** -- E2E testing with 5-10 real companies, prompt tuning, JSON export, documentation
+**Phase 1: Foundation (Days 1-5)**; Dispatcher, scrapers, browser API integration, dedup, cloud storage
+**Phase 2: Intelligence (Days 6-9)**; Thesis synthesis, news filter, LLM relevance scoring, HITL approval
+**Phase 3: Testing & Delivery (Days 10-12)**; E2E testing with 5-10 real companies, prompt tuning, JSON export, documentation
 
 ## Investment
 

@@ -43,7 +43,7 @@ research:
     - "Built GDPR compliance scanner automation for meditation app prospect"
     - "Email automation workflows for multiple clients (MailerLite, Make.com, n8n)"
     - "Stripe payment integration experience across client projects"
-  budget_gap: "Client budget $150, bidding $200 -- justified by Stripe + GDPR + reusable template combination"
+  budget_gap: "Client budget $150, bidding $200; justified by Stripe + GDPR + reusable template combination"
   profile_cherry_picks:
     - "GDPR compliance expertise (meditation app GDPR scanner proposal)"
     - "Email marketing automation (Meji Media email workflows)"
@@ -58,11 +58,11 @@ You need a complete signup flow for recurring group Zoom sessions: a clean Maile
 
 Everything stays inside MailerLite's native toolset, which keeps it simple and maintainable:
 
-1. **Domain Authentication** -- DKIM, SPF, and DMARC records configured at your domain registrar, verified in MailerLite
-2. **Reusable Landing Page Template** -- Drag-and-drop page with your branding, saved as a reusable template. Duplicating it for a new Zoom session takes 5 minutes: swap the title, date, and Zoom link
-3. **Signup Form with GDPR Consent** -- Required terms checkbox with link to your terms page and popup display. GDPR consent fields capture IP, timestamp, and subscription source automatically
-4. **Stripe Payment Block** -- Native MailerLite-Stripe integration. Product created in Stripe, payment block added to the landing page. No third-party connectors needed
-5. **Automated Email with Zoom Link** -- MailerLite automation triggered on form submission: sends a branded confirmation email containing the Zoom link immediately after signup
+1. **Domain Authentication**: DKIM, SPF, and DMARC records configured at your domain registrar, verified in MailerLite
+2. **Reusable Landing Page Template**: Drag-and-drop page with your branding, saved as a reusable template. Duplicating it for a new Zoom session takes 5 minutes: swap the title, date, and Zoom link
+3. **Signup Form with GDPR Consent**: Required terms checkbox with link to your terms page and popup display. GDPR consent fields capture IP, timestamp, and subscription source automatically
+4. **Stripe Payment Block**: Native MailerLite-Stripe integration. Product created in Stripe, payment block added to the landing page. No third-party connectors needed
+5. **Automated Email with Zoom Link**: MailerLite automation triggered on form submission: sends a branded confirmation email containing the Zoom link immediately after signup
 
 ## Timeline & Milestones
 

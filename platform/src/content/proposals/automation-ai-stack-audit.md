@@ -58,7 +58,7 @@ research:
   budget_gap: "Posted $90 for n8n/Make audit; our Tier 1 is $175. Premium justified by cross-system scope that covers AI and chatbot layers other auditors miss."
   profile_cherry_picks:
     - "Lead with Make.com + n8n dual expertise (rare combination)"
-    - "Reference AI integration experience (Claude API, OpenAI) -- connects to their LLM/RAG and chatbot needs"
+    - "Reference AI integration experience (Claude API, OpenAI); connects to their LLM/RAG and chatbot needs"
     - "Skip German language advantage (US client)"
     - "Skip Trigger.dev (not in their stack)"
 ---
@@ -71,7 +71,7 @@ The pattern is clear: you're preparing for a significant scaling push and want a
 
 Here's what most auditors will miss: your automation layer (n8n, Make.com, chatbots, AI pipelines) is the connective tissue between all your other systems. An n8n audit that doesn't understand your AI pipeline, or a chatbot review that doesn't trace data flow back to your automation triggers, gives you a partial picture at best.
 
-## Proposed Solution
+## Our Proposed Solution
 
 A tiered audit that starts with your automation workflows and extends into your AI and integration layers, depending on how deep you want to go.
 
@@ -101,7 +101,7 @@ Each tier delivers a clear, actionable report covering:
 3. Optimization opportunities (quick wins vs. strategic improvements)
 4. Recommended next steps (prioritized implementation roadmap)
 
-## Timeline
+## Timeline & Milestones
 
 5-7 business days from access to systems:
 - Day 1-2: System access, workflow inventory, initial assessment

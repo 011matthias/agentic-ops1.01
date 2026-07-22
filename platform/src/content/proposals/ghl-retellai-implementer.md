@@ -42,13 +42,13 @@ research:
     - "standardized stack"
   location_advantage: "Germany = preferred European location, CET timezone overlap"
   relevant_proof_points:
-    - "n8n workflow design -- production workflows with Supabase, Airtable, webhook handling"
-    - "Multi-scenario architecture -- managing 50+ Make.com scenarios across client accounts"
-    - "AI dev tools -- builds with Claude Code and Cursor daily"
+    - "n8n workflow design; production workflows with Supabase, Airtable, webhook handling"
+    - "Multi-scenario architecture; managing 50+ Make.com scenarios across client accounts"
+    - "AI dev tools; builds with Claude Code and Cursor daily"
   budget_gap: ""
   profile_cherry_picks:
-    - "n8n primary -- core to their stack, the orchestration backbone"
-    - "Supabase + Airtable -- direct experience with their data layer"
+    - "n8n primary; core to their stack, the orchestration backbone"
+    - "Supabase + Airtable; direct experience with their data layer"
     - "Location: European preference, lead with Germany/CET"
     - "AI dev tools: Cursor/Claude Code alignment with their workflow"
 ---

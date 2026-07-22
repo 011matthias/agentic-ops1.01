@@ -27,9 +27,9 @@ research:
     - "Google Sheets or Airtable"
     - "Email/messaging platforms"
   prospect_pain_points:
-    - "No automated lead sourcing -- manual process eating time"
-    - "No follow-up system -- leads going cold without response"
-    - "Wants minimal manual input once set up -- needs to focus on running the business"
+    - "No automated lead sourcing; manual process eating time"
+    - "No follow-up system; leads going cold without response"
+    - "Wants minimal manual input once set up; needs to focus on running the business"
   job_language_echoes:
     - "simple, reliable system"
     - "think in terms of results, not just workflows"
@@ -39,9 +39,9 @@ research:
   relevant_proof_points:
     - "n8n workflow design"
     - "Marketing analytics pipeline"
-  budget_gap: "$10 posted vs $750 proposed -- major gap, must address with scope breakdown"
+  budget_gap: "$10 posted vs $750 proposed; major gap, must address with scope breakdown"
   profile_cherry_picks:
-    - "n8n primary -- exact platform match"
-    - "Marketing ops background -- understands lead gen strategy, not just plumbing"
-    - "Skip location -- no timezone advantage"
+    - "n8n primary; exact platform match"
+    - "Marketing ops background; understands lead gen strategy, not just plumbing"
+    - "Skip location; no timezone advantage"
 ---
