@@ -132,3 +132,6 @@ After code is written, use the testing-agent (`/test {client} {id}`) to verify t
 | [FASTAPI-BUILD.md](modules/FASTAPI-BUILD.md) | Full FastAPI implementation workflow |
 | [PLATFORM-DEV.md](modules/PLATFORM-DEV.md) | Platform development (Next.js 16, auth, DB, Playwright) |
 | [SHELL-GOTCHAS.md](modules/SHELL-GOTCHAS.md) | Shell pitfalls (echo newlines, Windows line endings, heredoc quoting) |
+| [DETECTION.md](modules/DETECTION.md) | Standalone orchestrator-detection table; loaded by implementation-agent, deployer, and build-orchestrator |
+| [DOC-GENERATION.md](modules/DOC-GENERATION.md) | Technical + client-facing docs; loaded by build-orchestrator Phase 4 |
+| [BUILD-TEMPLATES.md](modules/BUILD-TEMPLATES.md) | Session summary, phase report, progress update, and build log templates |

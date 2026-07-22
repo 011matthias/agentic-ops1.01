@@ -52,7 +52,7 @@ Read the following to build a live inventory:
 
 **Client status:**
 - For each client in `workspace/clients/*/`:
-  - Read `specs/automation-status.yaml` if exists
+  - Read `workspace/clients/{client}/specs/automation-status.yaml` if exists
   - Read `infrastructure.yaml` if exists (for orchestrator type)
   - Count specs in `specs/` subdirectories
 

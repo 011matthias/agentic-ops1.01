@@ -355,4 +355,4 @@ After discovering a novel fix during the iteration loop:
 ```
 
 3. Add to the appropriate category section above
-4. If the fix is Make.com-specific and relates to IML, also cross-reference in `make-mcp-tools-expert/modules/IML-GOTCHAS.md`
+4. If the fix is Make.com-specific and relates to IML, also cross-reference in `.claude/skills/skil_make-mcp-tools-expert/modules/IML-GOTCHAS.md`
