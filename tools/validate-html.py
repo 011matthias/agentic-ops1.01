@@ -11,6 +11,9 @@ but break in production:
   * Duplicate IDs (breaks anchor links and JS lookups)
   * Missing <title>, charset, viewport
   * External resources without integrity (security risk for client deliverables)
+  * Artefact weight vs origin/main (WARNING when a file grew >20% AND >10 KB
+    vs its committed version; catches silently duplicated embedded assets,
+    e.g. the 2026-07-22 PDF regen that doubled a 92KB logo blob per page)
   * Cross-page consistency (in --dir mode):
       - All pages reference the same set of sibling pages
       - All pages share the same theme-toggle and search wiring
@@ -27,12 +30,14 @@ Usage:
     uv run tools/validate-html.py FILE.html --format json
 
 Exit 0 = pass. Exit 1 = structural failure. Exit 2 = usage error.
+WARNING-severity findings (artefact-weight) are reported but never fail.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import re
+import subprocess
 import sys
 from html.parser import HTMLParser
 from pathlib import Path
@@ -41,6 +46,12 @@ VOID_TAGS = {
     "area", "base", "br", "col", "embed", "hr", "img", "input",
     "link", "meta", "param", "source", "track", "wbr",
 }
+
+# [artefact-weight] growth thresholds vs the committed origin/main version.
+# Both must trip: relative growth >20% AND absolute growth >10 KB (the
+# absolute floor keeps tiny files from warning on trivial edits).
+WEIGHT_RATIO = 1.20
+WEIGHT_ABS_FLOOR = 10 * 1024
 
 
 class StructuralChecker(HTMLParser):
@@ -185,6 +196,61 @@ def check_one(path: Path) -> list[dict]:
     return hits
 
 
+def _git_baseline_size(path: Path) -> int | None:
+    """Byte size of this file's committed origin/main version, or None.
+
+    None means "no baseline": git unavailable, file outside any repo, no
+    origin/main ref, or the path does not exist on origin/main (new file).
+    Callers skip silently on None.
+    """
+    try:
+        resolved = path.resolve()
+        top = subprocess.run(
+            ["git", "-C", str(resolved.parent), "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, timeout=15,
+        )
+        if top.returncode != 0 or not top.stdout.strip():
+            return None
+        root = Path(top.stdout.strip()).resolve()
+        rel = resolved.relative_to(root).as_posix()
+        size = subprocess.run(
+            ["git", "-C", str(root), "cat-file", "-s", f"origin/main:{rel}"],
+            capture_output=True, text=True, timeout=15,
+        )
+        if size.returncode != 0:
+            return None
+        return int(size.stdout.strip())
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+
+
+def check_weight(path: Path) -> list[dict]:
+    """Warn when the file grew sharply vs its committed origin/main version.
+
+    Catches silently duplicated embedded assets (friction register
+    2026-07-22: a PDF regeneration doubled a 92KB logo blob into every
+    page). WARNING severity only: reported in text and JSON output but
+    never a failure, never changes the exit code.
+    """
+    baseline = _git_baseline_size(path)
+    if baseline is None or baseline <= 0:
+        return []
+    try:
+        current = path.stat().st_size
+    except OSError:
+        return []
+    growth = current - baseline
+    if current > baseline * WEIGHT_RATIO and growth > WEIGHT_ABS_FLOOR:
+        pct = round(growth / baseline * 100)
+        return [{
+            "line": 0, "category": "artefact-weight", "severity": "WARNING",
+            "message": (f"grew {pct}% vs origin/main ({baseline} -> {current} bytes) "
+                        "— check for duplicated embedded assets"),
+            "snippet": "",
+        }]
+    return []
+
+
 def check_directory(d: Path) -> list[dict]:
     """Cross-page consistency for a directory of HTML files."""
     files = sorted(d.glob("*.html")) + sorted(d.glob("*.htm"))
@@ -273,13 +339,13 @@ def main() -> int:
         return 2
 
     if args.format == "json" and len(targets) == 1 and not extra_hits:
-        hits = check_one(targets[0])
+        hits = check_one(targets[0]) + check_weight(targets[0])
         print(json.dumps(aggregate(hits)))
         return 0
 
     grand_hits: list[dict] = list(extra_hits)
     for path in sorted(set(targets)):
-        per_file = check_one(path)
+        per_file = check_one(path) + check_weight(path)
         if per_file:
             print(f"\n## {path}")
             for h in per_file:
@@ -298,7 +364,9 @@ def main() -> int:
             print(f"  [{h['severity']}] [{h['category']}] {h['message']}")
 
     print(f"\n---\nGrand total: {payload['total']} hits across {len(targets)} files.")
-    return 1 if payload["total"] else 0
+    # WARNING-severity findings (artefact-weight) report but never fail.
+    failures = sum(1 for h in grand_hits if h["severity"] != "WARNING")
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":
