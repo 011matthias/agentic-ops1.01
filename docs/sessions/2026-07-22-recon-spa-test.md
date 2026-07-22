@@ -44,7 +44,7 @@ Run outcome (source: `GET /api/runs/8074aa2bf7d9` summary): 94 transactions,
   candidates" (ANTHROPIC, GOOGLE). Expanded FX panel shows "Card 100%" while its
   own text says "the card numbers do not match" (neutral-when-absent rendered as
   100%?).
-- **B6 — "Confirm all matched" is a silent no-op** when nothing is auto-matched
+- **B6 — RETRACTED, see Corrections. Not a silent no-op** when nothing is auto-matched
   (fires POST, no dialog, no "0 rows confirmed" feedback) — and conversely has no
   confirmation prompt for when it WOULD bulk-confirm.
 - **B7 — "6 parse errors" mislabels severity**: 1 is an informational
@@ -155,6 +155,71 @@ Backend, all verified against the same real April files:
 
 Suite 758 green (was 727); `calibrate` exit 0, invariant OK.
 
-Still open: the SPA half (overlay swallowing clicks, inert Blocked chip, no bulk
-UI, no settings screen for the new master data, EN-only), G1 memory seed, G2
-xlsx/writeback discoverability, and the spec-vs-build reconciliation.
+## Deployed + verified on the LIVE app (Fly v34)
+
+Deployed from a clean `origin/main` worktree, then April's real master data set
+via `PUT /api/settings` (`BRL:USD 0.192448`, `EUR:USD 1.162275`, card 2838 ->
+`Corporate Services` — the entity key read from `/data/coa-provision.json`, not
+guessed). `card_accounts` deliberately left UNSET: no verified Zoho bank-account
+name for 2838, and B4 says a visible gap beats a fabricated value. Re-ran
+Criss's exact April files through the live hosted app:
+
+| | before | after |
+|---|---|---|
+| reconciled | 0 (0.0%) | **31 (33.0%)** |
+| `has_coa` | false | **true** |
+| parse "errors" | 6 | **0** (7 correctly reclassified as notes) |
+| rows wearing NEAR MISS | many | **0** |
+| setup advisories | none | 1, naming the one real remaining gap |
+
+Then, on the live run:
+
+- **Bulk decide:** one call cleared all 33 pending rows -> `ready_to_post: true`.
+- **Journal export re-checked against the bank:** 152 rows / 33 entries, **0
+  unbalanced**, **0 zero-value debit rows**, total debits == total credits ==
+  1,856.97 USD, and **every one of the 33 entries equals its actual statement
+  charge to the cent** (checked programmatically against each row's `amount`).
+  117 converted lines carry their original BRL figure in Notes for audit.
+
+## Corrections to the original findings
+
+Two findings did not survive verification. Recording both, because a wrong
+finding is more expensive than no finding:
+
+- **F1 overstated** (already corrected above): publish needs the rows HOLDING a
+  receipt, 34, not all 94.
+- **B6 was FALSE.** "Confirm all matched" is not a silent no-op: `confirmAll`
+  already toasts `Confirmed N rows` and the `<Toaster>` is mounted in
+  `__root.tsx`. I took the snapshot ~2s after the click and grepped only for
+  headings/dialogs, so I missed the toast. The backend also already returned a
+  `confirmed` count. Nothing was changed for this; the lesson is that "no
+  feedback" needs a positive check for the feedback element, not its absence
+  from one snapshot.
+
+## SPA half (repo `011matthias/brisken-expense-review`, PR #3 MERGED)
+
+Settings master-data editor (the backend fix is unreachable without it), setup +
+statement advisories rendered, bulk confirm/reject over the filtered set,
+"Blocked" naming its cause, and the feedback hint no longer swallowing clicks
+(pointer-events pass through its body; retires on first click/scroll).
+`tsc --noEmit` clean, `vite build` passes.
+
+**NOT LIVE.** Verified by structural DOM probe after the merge: the live
+Settings page still shows only the export toggle + clear-memory, with no FX
+rates card. Merging syncs the Lovable EDITOR only; publishing is a dashboard
+action the agent cannot perform ([[reference_lovable_merge_is_not_live]]).
+**USER ACTION: press Publish in the Lovable dashboard.**
+
+## Still open
+
+- **G1 memory seed BLOCKED on a Zoho scope** (verified, not assumed). The Books
+  refresh token reads `chartofaccounts` (code 0) but is denied `expenses` and
+  `bills` (code 57, "not authorized"), so `memory seed-zoho` cannot pull posting
+  history. USER ACTION: re-consent the Books refresh token with expense/bill read
+  scope. Until then production memory stays empty and ANTHROPIC keeps
+  categorizing to a generic LLM guess instead of the standing account.
+- `card_accounts` for card 2838 (needs the real Zoho bank-account name).
+- G2 xlsx/writeback discoverability; F3 in-flight run visibility; F9 run
+  rename/delete; F7 PT locale; the spec-vs-build reconciliation.
+- Two test runs (`8074aa2bf7d9`, `8751a4045f42`) left on the dashboard: there is
+  no delete-run path, and deleting live data is a gated action.
