@@ -141,6 +141,35 @@ def test_client_ip_prefers_fly_header_then_forwarded_then_peer():
     assert len(long) == 64
 
 
+def test_ipv6_is_bucketed_by_prefix_not_by_address():
+    """A caller holding a /64 must not get 2**64 fresh buckets. The real
+    live key seen on Fly was a /128 Telekom address; these two differ only
+    below the /64 and so must share a bucket."""
+    a = ratelimit.bucket_key("2003:c6:3f3c:3200:5c56:c79:7bc4:fffa")
+    b = ratelimit.bucket_key("2003:c6:3f3c:3200:dead:beef:1:2")
+    assert a == b == "2003:c6:3f3c:3200::/64"
+    # A different /64 is genuinely a different caller.
+    assert ratelimit.bucket_key("2003:c6:3f3c:3201::1") != a
+
+
+def test_ipv4_keeps_the_full_address_and_junk_passes_through():
+    assert ratelimit.bucket_key("198.51.100.4") == "198.51.100.4"
+    assert ratelimit.bucket_key("testclient") == "testclient"
+    assert ratelimit.bucket_key("") == "unknown"
+
+
+def test_ipv6_rotation_within_one_prefix_still_locks_out(gated):
+    """The per-IP tier holds against the rotation it would otherwise miss —
+    without needing the global budget to catch it."""
+    for i in range(5):
+        assert _login(gated, ip=f"2003:c6:3f3c:3200::{i + 1}").status_code == 401, i
+    blocked = _login(gated, ip="2003:c6:3f3c:3200::ffff")
+    assert blocked.status_code == 429
+    assert blocked.json()["scope"] == "ip"
+    # A different /64 is unaffected.
+    assert _login(gated, ip="2003:c6:3f3c:3299::1").status_code == 401
+
+
 def test_lockout_doubles_per_extra_failure_and_caps():
     pol = ratelimit.Policy(max_attempts=5, lockout=60, lockout_cap=3600)
     assert ratelimit._lock_seconds(5, pol) == 60
