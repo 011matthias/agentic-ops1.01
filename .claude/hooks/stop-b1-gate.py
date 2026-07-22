@@ -25,6 +25,31 @@ import sys
 
 HOOK_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hook-log.txt")
 
+# tools/ on the path so a BLOCK can be recorded for the next turn's primer.
+sys.path.insert(
+    0,
+    os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "tools",
+    ),
+)
+try:
+    import session_state  # noqa: E402
+except Exception:  # state is a nice-to-have; blocking is this hook's real job
+    session_state = None
+
+
+def record_block() -> None:
+    """Count this block so input-classifier can prime the NEXT turn before the
+    deferral is written, instead of only catching it after. Fail-open: state
+    problems must never interfere with the block itself."""
+    if session_state is None:
+        return
+    try:
+        session_state.bump_b1_block()
+    except Exception:
+        pass
+
 # Deferral / closing-offer / ask-permission-to-ship phrasings. Narrow on
 # purpose: a bare question or a genuine fork ("which approach do you prefer?")
 # must NOT match -- only the shapes where the agent offers to do, or asks
@@ -178,6 +203,7 @@ def main() -> int:
             start = max(0, m.start() - 30)
             snippet = scan[start:m.end() + 40].strip().replace("\n", " ")
             log_fire(f"BLOCK matched={rx.pattern!r} snippet={snippet[:80]!r}")
+            record_block()
             print(json.dumps({
                 "decision": "block",
                 "reason": REASON.format(snippet=snippet[:120]),

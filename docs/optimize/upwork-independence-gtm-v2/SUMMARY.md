@@ -130,3 +130,58 @@ validated: make `acq_fraction` and a subcontract-intensity decision part of the
 plan (currently locked), and add a management span-of-control cost so Route-2
 scale has a diminishing return beyond a solo's oversight bandwidth rather than
 stopping only at the market cap.
+
+---
+
+*The two sections below were retrofitted 2026-07-22 so `optimize_overview.py
+--prior-art upwork-independence` can read this run. They transcribe the r5-r8
+probes and the "Model limitations the winner leans on" section above; no new
+analysis.*
+
+## Dead ends
+
+Four boundary probes, all discarded as predicted. A later run should not spend
+rounds re-deriving these against the same v2 model:
+
+- **Capacity above 32 h/wk is score-neutral (r5: 32 to 40, identical 2123.84).**
+  At 32 both channels already saturate, so extra hours reinvest at the
+  opportunity rate and contribute exactly zero surplus. Read the winner as "work
+  ~32 h to saturate, reinvest the rest", not "work exactly 32".
+- **The all-B2B corner is worse than a mixed allocation (r6: b2b 1.0, 1987.25,
+  -137).** Route-1's care annuity earns above the opportunity rate up to its
+  pool, so dropping local destroys surplus. The optimum is mixed.
+- **Raising the build price off the floor loses (r7: 1200 to 1500, 2123.11).**
+  Build conversion is elastic and recurring care dominates, so a higher build
+  price sheds clients faster than it adds per-deal revenue.
+- **Raising care off 200 loses (r8: 200 to 250, 2116.48).** Care-price elasticity
+  makes uptake and retention fall faster than price rises past ~EUR200/mo.
+
+Also settled by construction, and worth knowing before spending a round: the v2
+SCORE is total surplus in kEUR and is NOT comparable to v1's EUR-per-hour figure.
+Compare the two runs by their DECISIONS.
+
+## Sensitivities
+
+The absolute surplus scales with the ASSUMPTION-tagged locked params; the RANKING
+of decisions is more stable than the EUR figure. The winner leans hardest on:
+
+- **The subcontracting economics (v2-new, highest new sensitivity).** The entire
+  B2B scale-up rests on subcontracting delivery at ~EUR20/hr against only
+  ~1.5 h/client/mo of your oversight (~4x leverage). Heavier real oversight or
+  costlier subcontractors drops Route-2's ceiling. Validate against an actual
+  subcontracted arrangement before assuming 62.5 serviceable clients.
+- **The Route-2 market cap (25 clients/yr) is now the BINDING constraint.** The
+  winner is market-capped at 62.5 clients over the horizon, so this single locked
+  input sets all of Route-2's revenue. v1's answer did not depend on it (it was
+  service-capped far below); v2's does. Highest-sensitivity input for the winner.
+- **Retainer 2500/mo sits exactly on its declared ceiling (500-2500).** This is
+  the pegged-at-bound tell: mild elasticity means the model always wants more, so
+  2500 is an artifact of where the bound was set, not a discovered optimum. It is
+  value-priced against ~6 delivered h/mo. A harder real-world ceiling moves it.
+- **Care 200/mo tracks the assumed elasticity reference** (ref 150, k 0.6). The
+  existence of an interior optimum is robust to the shape; the LEVEL is not.
+- **The probes only tested one side of each interior claim.** r7 and r8 both
+  pushed UP from the winner (build 1200 to 1500, care 200 to 250). Neither the
+  downward side nor the Route-2 acquisition channel was ever probed in v1 or v2,
+  so "all levers confirmed at optimum" in the journal's stop row is scoped to the
+  levers that were actually tested.

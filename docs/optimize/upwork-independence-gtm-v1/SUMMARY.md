@@ -69,3 +69,46 @@ EUR300/mo and whether the real lead-gen retainer ceiling is 2400 or higher.
 Next iteration (`-v2`) worth building: add care-price elasticity and a reinvestment
 term for freed hours, which would move the winner off the care-ceiling and off the
 15h/wk floor toward a more realistic interior optimum.
+
+---
+
+*The two sections below were retrofitted 2026-07-22 so `optimize_overview.py
+--prior-art upwork-independence` can read this run. They transcribe findings
+already recorded above and in `results.tsv`; the only additions are two
+cross-references to what `-v2` later did to these findings, so a reader of the
+machine-readable path is not handed a superseded conclusion as if it still held.*
+
+## Dead ends
+
+- **Allocation away from 50/50 (r5, discard).** 0.45 local / 0.55 b2b scored
+  194.37 vs the 200.37 winner and reverted. Do NOT inherit this as "50/50 is
+  correct". v1's own reading is that Route 2 was capped by solo delivery hours,
+  and `upwork-independence-gtm-v2` overturned the result outright (winner
+  0.24 / 0.76) once subcontracting lifted that cap. Superseded, not a boundary
+  that held.
+- **The other four levers were grid-swept, not sampled** (journal stop row:
+  "grid-swept + r5 allocation probe reverted"). The keeps are the v1 model's
+  optimum for those fields: retainer 1200 to 2400, capacity 40 to 15, care 100
+  to 300, build 2000 to 1200. A later run re-deriving them against the v1 model
+  will land in the same place; the reason to move any of them is a model change,
+  which is what v2 was.
+
+## Sensitivities
+
+- **Three levers pegged to their declared bounds; the run's own tell.** Care
+  price at the EUR300 ceiling (the model has NO care-price elasticity, so care
+  revenue scaled freely: highest-sensitivity input), build price at the EUR1200
+  floor, retainer at what v1 called the ceiling. The answer is only as good as
+  where those bounds were set. v2 confirmed the tell was right: adding care
+  elasticity moved care to an interior EUR200.
+- **v1's retainer "ceiling" label is wrong and should not be inherited.** The
+  winner table reads "EUR 2400 (ceiling)", but the v1 scorer's declared bound is
+  500-2500 (`tools/scorers/gtm-roi.py` BOUNDS), so 2400 was interior, not pegged.
+  v2 subsequently moved retainer to 2500, which IS that ceiling.
+- **"Work 15 h/wk" is a single-period artifact, not a recommendation.** The model
+  charges full opportunity cost on every hour and cannot reinvest freed ones.
+  Read insight 2 as "do not over-invest hours in a saturated channel". v2 added
+  reinvestment and the same lever settled at 32 h/wk.
+- **Conversion funnels are ASSUMPTION-tagged** (R1 demo to client 0.22; R2 cold
+  3% x 35% x 22%). The absolute EUR/hr scales with them; the RANKING of decisions
+  is more stable than the level.
