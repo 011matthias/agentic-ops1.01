@@ -132,6 +132,103 @@ def test_proposal_heading_drift_still_flagged():
     assert [f.rule for f in findings] == ["heading-drift"]
 
 
+# --- C5: Track-family detection by exact heading lines (2026-07-22 residual:
+# the substring test exempted any file merely CONTAINING "## Track", so a
+# "## Tracking metrics" heading switched off ALL heading checks) ------------
+
+def _headings(body: str):
+    lines = body.splitlines(keepends=True)
+    return [f.rule for f in VPC.check_proposal_headings(VPC.PROPOSALS / "x.md", lines)]
+
+
+def test_tracking_metrics_heading_does_not_exempt():
+    assert _headings("## Tracking metrics\n\n## Timeline\n") == ["heading-drift"]
+
+
+def test_exact_track_heading_still_exempts():
+    assert _headings("## Track\n\n## Timeline\n") == []
+
+
+def test_exact_centerpiece_heading_still_exempts():
+    assert _headings("## Centerpiece\n\n## Timeline\n") == []
+
+
+def test_prose_mention_of_track_heading_does_not_exempt():
+    body = "We describe the ## Track shape here.\n\n## Timeline\n"
+    assert _headings(body) == ["heading-drift"]
+
+
+# --- C3: "not just X but Y" must cross commas/apostrophes/hyphens ------------
+
+def _vocab_rules(path: Path, body: str):
+    lines = body.splitlines(keepends=True)
+    return [f.rule for f in VPC.check_banned_vocab(path, lines)]
+
+
+def test_not_just_but_crosses_comma():
+    rules = _vocab_rules(VPC.PROPOSALS / "x.md", "This is not just fast, but reliable.\n")
+    assert "banned-phrase" in rules
+
+
+def test_not_just_but_crosses_apostrophe_and_hyphen():
+    body = "It's not just a client's one-off build but a re-usable system.\n"
+    assert "banned-phrase" in _vocab_rules(VPC.PROPOSALS / "x.md", body)
+
+
+def test_not_just_but_plain_form_still_flagged():
+    body = "This is not just a sample but a framework.\n"
+    assert "banned-phrase" in _vocab_rules(VPC.PROPOSALS / "x.md", body)
+
+
+def test_not_just_but_never_spans_sentences():
+    body = "This is not just it. But we also ship the docs.\n"
+    assert "banned-phrase" not in _vocab_rules(VPC.PROPOSALS / "x.md", body)
+
+
+def test_not_just_but_bounded_at_60_chars():
+    filler = "a" * 70
+    body = f"This is not just {filler} but more.\n"
+    assert "banned-phrase" not in _vocab_rules(VPC.PROPOSALS / "x.md", body)
+
+
+# --- C4: quoted-demotion is markdown-only; TSX string literals ARE the
+# rendered copy (full severity), with a narrow nested-quotation carve --------
+
+def _vocab(path: Path, body: str):
+    lines = body.splitlines(keepends=True)
+    return VPC.check_banned_vocab(path, lines)
+
+
+def test_md_double_quoted_banned_word_stays_low():
+    fs = _vocab(VPC.PROPOSALS / "x.md", '- "robust JSON parser" from the posting\n')
+    assert [(f.rule, f.severity) for f in fs] == [("banned-word:robust", "LOW")]
+
+
+def test_md_blockquote_banned_word_still_exempt():
+    assert _vocab(VPC.PROPOSALS / "x.md", "> We need a robust system\n") == []
+
+
+def test_tsx_string_literal_banned_word_full_severity():
+    body = '  title: "A robust automation stack",\n'
+    fs = _vocab(Path("page.tsx"), body)
+    assert [(f.rule, f.severity) for f in fs] == [("banned-word:robust", "MEDIUM")]
+
+
+def test_tsx_nested_quotation_specimen_demoted_low():
+    # The oneproposal FAQ shape: rendered copy QUOTING a slop specimen.
+    body = "    a: \"ChatGPT opens with 'I am excited to leverage my experience.' This won't.\",\n"
+    fs = _vocab(Path("page.tsx"), body)
+    assert [(f.rule, f.severity) for f in fs] == [("banned-word:leverage", "LOW")]
+    assert "(quoted specimen — review)" in fs[0].text
+
+
+def test_tsx_contraction_apostrophes_do_not_form_a_carve_span():
+    # won't ... doesn't must not delimit a fake quotation around the word.
+    body = '  a: "It won\'t streamline anything and it doesn\'t try to.",\n'
+    fs = _vocab(Path("page.tsx"), body)
+    assert [(f.rule, f.severity) for f in fs] == [("banned-word:streamline", "MEDIUM")]
+
+
 # --- check_dead_links (2026-07-22 blind spot: the walk-up loop reduced every
 # target to "/", which was unconditionally in the available set, so hit=True
 # for every href and the check was a no-op) ---------------------------------

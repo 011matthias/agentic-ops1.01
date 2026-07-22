@@ -340,7 +340,7 @@ tr:hover td { background: var(--blue-bg); }
 
 <!-- n8n Self-Hosting -->
 <h2 id="hosting-detail" style="scroll-margin-top:80px">n8n Self-Hosting on NameHero</h2>
-<p>n8n runs on your NameHero server, which means the workflow data stays in your environment. There's no third-party cloud cost for n8n itself -- you own the instance.</p>
+<p>n8n runs on your NameHero server, which means the workflow data stays in your environment. There's no third-party cloud cost for n8n itself; you own the instance.</p>
 
 <div class="flow-diagram">
     <div class="flow-step">
@@ -383,7 +383,7 @@ tr:hover td { background: var(--blue-bg); }
 
 <!-- axe-core Audit Engine -->
 <h2 id="audit-engine">axe-core Audit Engine</h2>
-<p>axe-core is the industry-standard open-source accessibility testing library. It's what most accessibility auditing tools are built on top of -- I'm using it directly so you get the full ruleset without a markup layer in between.</p>
+<p>axe-core is the industry-standard open-source accessibility testing library. It's what most accessibility auditing tools are built on top of; I'm using it directly so you get the full ruleset without a markup layer in between.</p>
 
 <div class="flow-diagram">
     <div class="flow-step">
@@ -471,9 +471,9 @@ tr:hover td { background: var(--blue-bg); }
 
 <!-- Results Processing -->
 <h2 id="results">Results Processing</h2>
-<p>For each URL, the workflow writes results back to the same row in your Google Sheet. Pass means zero WCAG 2.1 AA violations were detected. Fail includes the total error count and the top 3 error types by frequency -- so you can see at a glance what the most common issues are across your prospect list.</p>
+<p>For each URL, the workflow writes results back to the same row in your Google Sheet. Pass means zero WCAG 2.1 AA violations were detected. Fail includes the total error count and the top 3 error types by frequency; so you can see at a glance what the most common issues are across your prospect list.</p>
 
-<p>The sheet updates in place. No duplicate rows, no separate output sheet -- the status column and audit columns update on the same row as the input data.</p>
+<p>The sheet updates in place. No duplicate rows, no separate output sheet; the status column and audit columns update on the same row as the input data.</p>
 
 <table>
     <thead>
@@ -520,7 +520,7 @@ tr:hover td { background: var(--blue-bg); }
 
 <!-- Instantly.ai Email Integration -->
 <h2 id="email-integration">Instantly.ai Email Integration</h2>
-<p>Failed audits are the only URLs that trigger outreach. The IF node in n8n checks the audit status and routes FAIL rows to the Instantly.ai API. Pass, blocked, and timeout rows are skipped entirely -- your outreach list stays clean.</p>
+<p>Failed audits are the only URLs that trigger outreach. The IF node in n8n checks the audit status and routes FAIL rows to the Instantly.ai API. Pass, blocked, and timeout rows are skipped entirely; your outreach list stays clean.</p>
 
 <div class="flow-diagram">
     <div class="flow-step">
@@ -626,10 +626,10 @@ tr:hover td { background: var(--blue-bg); }
 <p>Starter workflow skeleton with all nodes, error handling, and sticky note documentation. Import into n8n to see the structure before we start building.</p>
 
 <p style="margin-bottom: 20px;">
-    <a href="accessibility-audit-cold-email-workflow.json" class="download-btn">&#8595; Download n8n Workflow JSON</a>
+    <a href="/clients/accessibility-audit-cold-email/accessibility-audit-cold-email-workflow.json" class="download-btn">&#8595; Download n8n Workflow JSON</a>
 </p>
 
-<p style="font-size: 13px; color: var(--text2);">This is a skeleton -- it won't run without your credentials (Google Sheets OAuth, Instantly API key, and NameHero connection). It's meant to show the node structure and logic before you commit.</p>
+<p style="font-size: 13px; color: var(--text2);">This is a skeleton; it won't run without your credentials (Google Sheets OAuth, Instantly API key, and NameHero connection). It's meant to show the node structure and logic before you commit.</p>
 
 <footer class="footer">
     <p>Prepared for <strong>Clickworthy Digital Marketing</strong> by UnpauseAI &middot; <a href="mailto:nico@unpauseai.com">nico@unpauseai.com</a> &middot; 2026</p>
