@@ -28,6 +28,16 @@ broken". Point guards at shared validators (`tools/validate-*.py`) where
 possible: they are high-visibility files, so a stop -> weaken-guard ->
 restart move shows up loudly in the PR diff.
 
+Guards are hash-pinned too, in `tools/guard-pins.json`. A run refuses to
+lock on if a declared guard's live hash diverges from its reviewed pin,
+and warns when a guard carries no pin at all. Re-pinning goes through the
+same user-order-only seam as a scorer (`SCORER_LOCK_ALLOW=1 uv run
+tools/pin_scorer.py pin-guard <path>`), and the registry diff is the
+review surface. This closes the BETWEEN-runs window: during a run the file
+ACL and the per-round hash re-verify already bind guards, but before the
+registry a guard weakened between runs was simply adopted at the next
+`start`.
+
 ## Constructed metrics (fields without a natural scalar)
 
 When no honest number exists yet (goal-md protocol):

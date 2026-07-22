@@ -1,0 +1,34 @@
+{
+  "tools/gtm-plan-validate.py": {
+    "pinned": "2026-07-22",
+    "sha": "97cb1c4b90c30f86b0076cbed355c4a831b3353e"
+  },
+  "tools/gtm-stress-guard-v2.py": {
+    "pinned": "2026-07-22",
+    "sha": "681bd883c5dc6b848c806f3e54a4802fde0064d4"
+  },
+  "tools/gtm-stress-guard.py": {
+    "pinned": "2026-07-22",
+    "sha": "98354819bf5a92bde53c090608132f2be42fbadd"
+  },
+  "tools/guard-text-preserved.py": {
+    "pinned": "2026-07-22",
+    "sha": "8d65ae3ad58c6c07e61565f3661c06203add395c"
+  },
+  "tools/leadgen-portfolio-stress-guard.py": {
+    "pinned": "2026-07-22",
+    "sha": "5ad037434b2dbecea44096abdb3671eb3e3e145d"
+  },
+  "tools/leadgen-portfolio-validate.py": {
+    "pinned": "2026-07-22",
+    "sha": "b507b44d665839ed65357f116a1ddfa1911f8094"
+  },
+  "tools/pricing-tiers-stress-guard.py": {
+    "pinned": "2026-07-22",
+    "sha": "42307965ea8965a1618d81c10bf7494c31f8864d"
+  },
+  "tools/pricing-tiers-validate.py": {
+    "pinned": "2026-07-22",
+    "sha": "5244b2dd0618dfef3d3de257e71d9f7eefd73fdc"
+  }
+}

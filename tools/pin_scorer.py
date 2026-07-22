@@ -43,6 +43,18 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCORERS_DIR = os.path.join(REPO, "tools", "scorers")
 PINS_PATH = os.path.join(SCORERS_DIR, "PINS.json")
 
+# Guards carry the whole anti-overfit floor (RECIPES rule 3) but live in
+# top-level tools/, outside the always-on scorer lock and outside PINS.json,
+# and cmd_start hashed them straight from the live tree. A guard weakened
+# BETWEEN runs was therefore locked in at the next `start` with nothing to
+# compare against. (During a run the file ACL plus per-round hash re-verify
+# already cover it; this closes the between-runs window.)
+#
+# Separate registry file, on purpose: PINS.json is keyed by bare filename
+# inside one directory and every consumer assumes that shape. Guards live
+# anywhere under tools/, so they are keyed by repo-relative path.
+GUARD_PINS_PATH = os.path.join(REPO, "tools", "guard-pins.json")
+
 DIRECTION_RE = re.compile(r"^#\s*direction:\s*(minimize|maximize)\s*$", re.MULTILINE)
 
 
@@ -75,6 +87,72 @@ def scorer_files() -> list[str]:
         n for n in os.listdir(SCORERS_DIR)
         if n.endswith(".py") and os.path.isfile(os.path.join(SCORERS_DIR, n))
     )
+
+
+def load_guard_pins() -> dict:
+    if not os.path.isfile(GUARD_PINS_PATH):
+        return {}
+    with open(GUARD_PINS_PATH, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def cmd_pin_guard(path: str, pr: int | None) -> int:
+    """Pin a guard script to a reviewed content hash.
+
+    Same SCORER_LOCK_ALLOW seam as scorer pinning: a guard defines the FLOOR
+    an experiment must clear, so moving it is the same class of act as moving
+    the metric. No `# direction:` requirement - guards are pass/fail, not
+    scalar.
+    """
+    if not os.environ.get("SCORER_LOCK_ALLOW"):
+        print(
+            "REFUSED: pinning re-defines a locked guard (the anti-overfit "
+            "floor). Set SCORER_LOCK_ALLOW=1 (user-approved maintenance seam) "
+            "and re-run.",
+            file=sys.stderr,
+        )
+        return 1
+    rel = path.replace("\\", "/").lstrip("./")
+    full = os.path.join(REPO, *rel.split("/"))
+    if not os.path.isfile(full):
+        print(f"REFUSED: {rel} not found.", file=sys.stderr)
+        return 1
+    if rel.startswith("tools/scorers/"):
+        print(f"REFUSED: {rel} is a SCORER; pin it with `pin`, not "
+              "`pin-guard`.", file=sys.stderr)
+        return 1
+    pins = load_guard_pins()
+    entry = {"sha": blob_sha(full), "pinned": _dt.date.today().isoformat()}
+    if pr is not None:
+        entry["pr"] = pr
+    elif isinstance(pins.get(rel), dict) and "pr" in pins[rel]:
+        entry["pr"] = pins[rel]["pr"]
+    pins[rel] = entry
+    with open(GUARD_PINS_PATH, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(pins, f, indent=2, sort_keys=True)
+        f.write("\n")
+    print(f"pinned guard {rel}: sha={entry['sha']}")
+    return 0
+
+
+def guard_failures() -> list[str]:
+    """DRIFT / ORPHAN for pinned guards.
+
+    Deliberately NOT "unpinned guard" as a failure: tools/ holds many
+    validate-*.py that are guards only when a manifest names them, so
+    demanding a pin for every candidate would be noise. Absence is surfaced
+    by the run engine at lock-on (which knows the manifest) instead.
+    """
+    failures = []
+    for rel, entry in sorted(load_guard_pins().items()):
+        full = os.path.join(REPO, *rel.split("/"))
+        if not os.path.isfile(full):
+            failures.append(f"ORPHAN GUARD PIN: {rel} pinned but no such file")
+            continue
+        want, got = entry.get("sha"), blob_sha(full)
+        if want != got:
+            failures.append(f"GUARD DRIFT: {rel} pin={want} live={got}")
+    return failures
 
 
 def cmd_pin(name: str, pr: int | None) -> int:
@@ -136,10 +214,13 @@ def cmd_check() -> int:
     for name in pins:
         if name not in files:
             failures.append(f"ORPHAN PIN: {name} pinned but no such scorer file")
+    guards = guard_failures()
+    failures.extend(guards)
     for line in failures:
         print(line)
     if not failures:
-        print(f"OK: {len(files)} scorer(s), all pinned and matching.")
+        print(f"OK: {len(files)} scorer(s) and {len(load_guard_pins())} "
+              "guard(s), all pinned and matching.")
     return 1 if failures else 0
 
 
@@ -159,11 +240,16 @@ def main() -> int:
     p_pin = sub.add_parser("pin")
     p_pin.add_argument("name")
     p_pin.add_argument("--pr", type=int, default=None)
+    p_guard = sub.add_parser("pin-guard")
+    p_guard.add_argument("path", help="repo-relative path, e.g. tools/x-guard.py")
+    p_guard.add_argument("--pr", type=int, default=None)
     sub.add_parser("check")
     sub.add_parser("list")
     args = ap.parse_args()
     if args.cmd == "pin":
         return cmd_pin(args.name, args.pr)
+    if args.cmd == "pin-guard":
+        return cmd_pin_guard(args.path, args.pr)
     if args.cmd == "check":
         return cmd_check()
     return cmd_list()
