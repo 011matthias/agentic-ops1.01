@@ -109,6 +109,11 @@ CANONICAL_HOOKS = {
                 },
                 {
                     "type": "command",
+                    "command": _cmd(".claude/hooks/branch-isolation-gate.py"),
+                    "timeout": 10000,
+                },
+                {
+                    "type": "command",
                     "command": _cmd(".claude/hooks/scorer-lock-gate.py"),
                     "timeout": 10000,
                 },
@@ -266,6 +271,7 @@ EXPECTED_HOOK_SCRIPTS = {
     "auto-approve-protected.py",
     "reference-anchor-gate.py",
     "file-placement-gate.py",
+    "branch-isolation-gate.py",
     "instantly-invasive-gate.py",
     "no-auto-commit-gate.py",
     "ruff-push-gate.py",
