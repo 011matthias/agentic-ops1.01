@@ -82,6 +82,11 @@ EM_DASH = "—"
 EM_DASH_ENT = "&mdash;"
 DD_SUBSTITUTE = re.compile(r" -- ")  # space, two hyphens, space
 
+# A leading `*` is a block-comment continuation (` * foo`) only in JS/TS source.
+# In markdown it opens a bullet (`* item`) or a bold run (`**Lead** ...`), both
+# of which render, so the comment skip must not apply there.
+JS_FAMILY_SUFFIXES = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"}
+
 # Permitted em-dash patterns (placeholders in tables; metadata titles for admin).
 EM_DASH_PLACEHOLDER = re.compile(r'\?\?\s*"' + EM_DASH + r'"|<span[^>]*>' + EM_DASH + r"</span>")
 
@@ -172,10 +177,15 @@ def iter_target_files(explicit: list[Path] | None) -> Iterable[Path]:
 def check_em_dashes(path: Path, lines: list[str]) -> list[Finding]:
     findings: list[Finding] = []
     admin_or_portal = is_admin_or_portal(path)
+    js_family = path.suffix.lower() in JS_FAMILY_SUFFIXES
     for i, line in enumerate(lines, 1):
-        # Skip JS/TS comments and JSX comments — they don't render.
+        # Skip JS/TS comments and JSX comments; they don't render.
         stripped = line.lstrip()
-        if stripped.startswith("//") or stripped.startswith("*") or stripped.startswith("/*"):
+        if stripped.startswith("//") or stripped.startswith("/*"):
+            continue
+        # Block-comment continuation lines, JS/TS source only. Applying this
+        # to markdown silently exempted every bullet and every bold-lead line.
+        if js_family and stripped.startswith("*"):
             continue
         # Markdown YAML frontmatter does render (slugs, project_title used in metadata).
         # Check raw line for em-dash variants.
