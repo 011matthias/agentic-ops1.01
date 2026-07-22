@@ -199,9 +199,7 @@ box-shadow: 0 2px 8px rgba(37,99,235,.3);
 .stat-value { font-size: 20px; }
 }
 </style>
-<script>
-(function(){var t=localStorage.getItem('oec-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
-</script>
+<script>(function(){var t=localStorage.getItem('oec-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();</script>
 </head>
 <body>
 
@@ -467,88 +465,80 @@ box-shadow: 0 2px 8px rgba(37,99,235,.3);
 </div>
 </div>
 
-<script>
-function toggleTheme() {
-    var el = document.documentElement;
-    var t = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-    el.setAttribute('data-theme', t);
-    localStorage.setItem('oec-theme', t);
+<script>function toggleTheme() {
+var el = document.documentElement;
+var t = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+el.setAttribute('data-theme', t);
+localStorage.setItem('oec-theme', t);
 }
-
 async function submitOnboarding(e) {
-    e.preventDefault();
-    var btn = document.getElementById('form-submit-btn');
-    btn.disabled = true;
-    btn.textContent = 'Submitting...';
-
-    var form = document.getElementById('onboard-form');
-    var data = {
-        contact_name: form.contact_name.value,
-        contact_role: form.contact_role.value,
-        contact_email: form.contact_email.value,
-        company_name: form.company_name.value,
-        company_size: form.company_size.value,
-        email_provider: form.email_provider.value,
-        email_provider_other: form.email_provider_other.value,
-        email_volume: form.email_volume.value,
-        cloud_provider: form.cloud_provider.value,
-        monitoring_tools: form.monitoring_tools.value,
-        compliance_docs: form.compliance_docs.value,
-        email_source: form.email_source.value,
-        flag_categories: form.flag_categories.value,
-        alert_recipients: form.alert_recipients.value,
-        priority_system: form.priority_system.value,
-        start_date: form.start_date.value,
-        compliance_deadlines: form.compliance_deadlines.value,
-        comm_channel: form.comm_channel.value,
-        notes: form.notes.value
-    };
-
-    try {
-        await fetch('https://unpauseai.app.n8n.cloud/webhook/oec-onboarding', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(data)
-        });
-        document.getElementById('form-wrap').style.display = 'none';
-        document.getElementById('form-success').style.display = 'block';
-    } catch(err) {
-        btn.disabled = false;
-        btn.textContent = 'Submit Onboarding Form';
-        alert('Submission failed: ' + err.message + '. Please try again or contact us directly.');
-    }
+e.preventDefault();
+var btn = document.getElementById('form-submit-btn');
+btn.disabled = true;
+btn.textContent = 'Submitting...';
+var form = document.getElementById('onboard-form');
+var data = {
+contact_name: form.contact_name.value,
+contact_role: form.contact_role.value,
+contact_email: form.contact_email.value,
+company_name: form.company_name.value,
+company_size: form.company_size.value,
+email_provider: form.email_provider.value,
+email_provider_other: form.email_provider_other.value,
+email_volume: form.email_volume.value,
+cloud_provider: form.cloud_provider.value,
+monitoring_tools: form.monitoring_tools.value,
+compliance_docs: form.compliance_docs.value,
+email_source: form.email_source.value,
+flag_categories: form.flag_categories.value,
+alert_recipients: form.alert_recipients.value,
+priority_system: form.priority_system.value,
+start_date: form.start_date.value,
+compliance_deadlines: form.compliance_deadlines.value,
+comm_channel: form.comm_channel.value,
+notes: form.notes.value
+};
+try {
+await fetch('https://unpauseai.app.n8n.cloud/webhook/oec-onboarding', {
+method: 'POST',
+headers: {'Content-Type': 'application/json'},
+body: JSON.stringify(data)
+});
+document.getElementById('form-wrap').style.display = 'none';
+document.getElementById('form-success').style.display = 'block';
+} catch(err) {
+btn.disabled = false;
+btn.textContent = 'Submit Onboarding Form';
+alert('Submission failed: ' + err.message + '. Please try again or contact us directly.');
 }
-
+}
 var links = document.querySelectorAll('.step-link');
 var sections = [];
 links.forEach(function(a) {
-    var id = a.getAttribute('href').replace('#','');
-    var el = document.getElementById(id);
-    if (el) sections.push({ el: el, link: a });
+var id = a.getAttribute('href').replace('#','');
+var el = document.getElementById(id);
+if (el) sections.push({ el: el, link: a });
 });
-
 function updateActive() {
-    var scrollY = window.scrollY + 120;
-    var active = sections[0];
-    for (var i = 0; i < sections.length; i++) {
-        if (sections[i].el.offsetTop <= scrollY) active = sections[i];
-    }
-    links.forEach(function(l) { l.classList.remove('active'); });
-    if (active) active.link.classList.add('active');
+var scrollY = window.scrollY + 120;
+var active = sections[0];
+for (var i = 0; i < sections.length; i++) {
+if (sections[i].el.offsetTop <= scrollY) active = sections[i];
+}
+links.forEach(function(l) { l.classList.remove('active'); });
+if (active) active.link.classList.add('active');
 }
 window.addEventListener('scroll', updateActive);
 updateActive();
-
 links.forEach(function(a) {
-    a.addEventListener('click', function(e) {
-        e.preventDefault();
-        var id = this.getAttribute('href').replace('#','');
-        var el = document.getElementById(id);
-        if (el) el.scrollIntoView({ behavior: 'smooth' });
-        document.querySelector('.sidebar').classList.remove('open');
-    });
+a.addEventListener('click', function(e) {
+e.preventDefault();
+var id = this.getAttribute('href').replace('#','');
+var el = document.getElementById(id);
+if (el) el.scrollIntoView({ behavior: 'smooth' });
+document.querySelector('.sidebar').classList.remove('open');
 });
-</script>
+});</script>
 
 <div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
   <div style="text-align:center;max-width:360px;padding:24px;">
@@ -565,10 +555,8 @@ links.forEach(function(a) {
     <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Incorrect code. Please try again.</p>
   </div>
 </div>
-<script>
-var OEC_CODE='openwebui-ec';
+<script>var OEC_CODE='openwebui-ec';
 function checkAuth(){var v=document.getElementById('auth-input').value;if(v===OEC_CODE){localStorage.setItem('oec-access','granted');var g=document.getElementById('auth-gate');g.style.opacity='0';setTimeout(function(){g.style.display='none'},300)}else{document.getElementById('auth-error').style.display='block';document.getElementById('auth-input').value='';document.getElementById('auth-input').focus()}}
-(function(){if(localStorage.getItem('oec-access')==='granted'){document.getElementById('auth-gate').style.display='none'}else{var i=document.getElementById('auth-input');if(i)i.focus()}})();
-</script>
+(function(){if(localStorage.getItem('oec-access')==='granted'){document.getElementById('auth-gate').style.display='none'}else{var i=document.getElementById('auth-input');if(i)i.focus()}})();</script>
 </body>
 </html>
