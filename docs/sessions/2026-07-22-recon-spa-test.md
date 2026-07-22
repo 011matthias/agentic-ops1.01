@@ -53,9 +53,14 @@ Run outcome (source: `GET /api/runs/8074aa2bf7d9` summary): 94 transactions,
 
 ## (b) Friction
 
-- **F1 — Publish = decide all 94 rows one by one.** Guide: "when every charge is
-  decided." 60 receiptless unmatched rows have no bulk action ("these are
-  subscriptions, accept all"), so a month = ~90 clicks; her backlog multiplies it.
+- **F1 — Publish = decide the 34 review rows one by one, with no bulk action.**
+  CORRECTED during the fix pass (this entry first claimed all 94 rows).
+  `n_undecided` counts only rows the tool is HOLDING A RECEIPT for (effective
+  bucket reconciled or review) that are still pending: 34 on this run, matching
+  `n_review` 34. The 60 receiptless unmatched rows do NOT block publish, so the
+  real cost is ~34 decisions per month, not ~90. Still no bulk path, and the
+  Guide's "when every charge is decided" wording is what made the wider reading
+  plausible. Backend half fixed by PR #395 (bulk confirm/reject over a named set).
 - **F2 — "Blocked" chip is inert.** No click-through to what blocks; only hint is
   the disabled Publish button's hover title ("Resolve the blockers above").
 - **F3 — In-flight runs are invisible.** The processing page invites leaving the
@@ -125,6 +130,31 @@ zero false positives across 3 successful logins; feedback widget everywhere.
   agent-browser session when siblings are live (feedback_worktree analog for
   browser state).
 - Screenshots in session scratchpad (`recon-test/01..06*.png`), ephemeral.
-- Next steps (not started, per collect-first discipline): triage B1-B3 (hosted
-  tuning config, COA/card mapping, export currency) as the fix pass; fold G1
-  (seed memory) + G2 (xlsx guidance) into the spec-vs-build reconciliation.
+
+## Fix pass (same day, PR #395 merged)
+
+Backend, all verified against the same real April files:
+
+- **B1 fixed + PROVEN.** Master data (`fx_reference_rates`, `card_entities`,
+  `card_accounts`) now lives in stored settings, is applied at run creation and
+  snapshotted into the run config; the CLI accepts inline `matching` tunables so
+  the rates reach the matcher AND land in `run.local.json`. Proof: the real April
+  pair now reconciles **29/36 (30.9%)**, up from 0, with rates passed inline the
+  way the hosted surface passes them.
+- **B2 fixed.** Entity resolves from `card_entities` (matching on trailing
+  digits, so a typed `2838` works), and an unresolved chart now says so.
+- **B3 fixed.** The journal posts in the STATEMENT currency: the charged amount
+  is allocated across the receipt's lines, so debits equal the bank's number to
+  the cent. Zero-value debit rows dropped; the receipt's own figure kept in Notes.
+- **B5 / B7 fixed.** Near-miss requires actual nearness; parse issues carry their
+  severity, so an advisory note is no longer counted or coloured as an error.
+- **F1 backend half fixed.** `POST /api/runs/{id}/decisions/bulk`.
+- **Latent bug found while fixing:** `statement_advisory` was written at run
+  creation but never rebuilt in `build_view`, so it had never once reached the
+  review screen. Now carried.
+
+Suite 758 green (was 727); `calibrate` exit 0, invariant OK.
+
+Still open: the SPA half (overlay swallowing clicks, inert Blocked chip, no bulk
+UI, no settings screen for the new master data, EN-only), G1 memory seed, G2
+xlsx/writeback discoverability, and the spec-vs-build reconciliation.
