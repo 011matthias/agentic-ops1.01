@@ -107,6 +107,11 @@ STATEMENT_MAP_FIELDS = (
     "vendor",
     "posting_date",
     "transaction_currency",
+    # WS3: the per-row card column. `guess_column_map` claims it from tight
+    # header patterns; this is the escape hatch for a statement that spells
+    # the column some other way, where the alternative is silently losing
+    # card scoping with no way to fix it from either front end.
+    "card",
 )
 REQUIRED_STATEMENT_FIELDS = ("transaction_date", "amount", "vendor")
 
