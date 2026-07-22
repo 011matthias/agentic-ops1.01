@@ -4,7 +4,7 @@ workstream: p1-expense-reconciliation
 group: ""
 spec: p1
 state: active
-updated: 2026-07-20
+updated: 2026-07-22
 ---
 
 # Brisken / Expense Reconciliation (p1)
@@ -32,10 +32,11 @@ this table is the index, not a second record.
 | Receipt OCR (vision + PDF text) | done | BLUEPRINT slice 2 |
 | LLM categorizer (gpt-4o-mini, OpenAI Brisken key) | live | BLUEPRINT "Provider Pivot" |
 | Deterministic matcher | done | BLUEPRINT slice 3 |
+| Card as a matching signal (WS3) | live (PR #317, deployed 2026-07-22) | `Transaction.card_last4` + optional `card` column map (CSV/xlsx + hosted guess); card-scoped candidates now key on the CHARGE's card, not the account id. On the real 01-05 month software-vs-Food FX-false-pairs 4 -> 0. Also: `Match.card_score` (tie-break + workbench), card into the FX-judgment prompt, optional `matching.llm_second_pass_unmatched` (OFF) |
 | Sign canonicalization + refunds bucket + deterministic FX (Tier-1) | done (PR #285) | BLUEPRINT 3.15; no-LLM 0/36->29/36 on Criss's April |
 | Dev notifier: operator "run now" uploads fire an email | code-done (PR #288), NOT scheduled | `tools/brisken-recon-notify.py`; user must register schtasks task |
 | Cross-run memory (Phase 2) | in-progress | BLUEPRINT Phase 2 |
-| Review workbench (web, Fly-hosted) | live | BLUEPRINT; brisken-expense-recon.fly.dev |
+| Review workbench (web, Fly-hosted) | live, slated for deletion | BLUEPRINT; brisken-expense-recon.fly.dev. Retire once the SPA wires the `/api` twins + has a production URL; deletion = 8 GET pages, ~2,455 lines of templates, 4 static files, the `_wants_json` branches, and the now-dead role plumbing (owner 2026-07-22: operator role ONLY, so `ROLE_USER`/`_OPERATOR_RULES` are inert) |
 | Zoho journal CSV export | in-progress | BLUEPRINT slice 4 |
 | Run history + doctor pre-flight | done | BLUEPRINT slice 5/5b |
 | COA pre-write validation gate | live (Fly, per-entity) | BLUEPRINT 4.11 (PR #202/#203/#205) |
@@ -44,11 +45,26 @@ this table is the index, not a second record.
 | Label fixture: 6 production-shape bundles (CSV stmt + ER PDF) | done (2026-07-17) | `context/.../csv/by-month/`: labels.csv per month, `label check` OK on all 6; 141/218 labeled (95 confirmed / 46 no_charge), 77 excluded as ambiguous; decisions corroborated offline via 2026 stmt-PDF FX originals + payment-mode card refs |
 | ER-PDF ingest hardening (ISO-ccy amounts, inline rows, per-token format) | done (PR #263) | `expense_report_pdf.py`; all 6 real ERs parse to-the-cent vs printed totals |
 | Web-download exports carry Tier-2 receiptless categories | done (PR #294) | `service._charge_cats` threaded into all 4 `regenerate_*`; zoho honors `export_receiptless_learned` |
-| SPA JSON API for the Lovable front end | in-progress (concurrent session) | `/api` + bearer + CORS, Lovable-hosted (PRs #290/#291/#293); NOT `/api/v1` |
-| §17 personal/business/reimbursement, §16 export-approved gate, §18 dup resolve, §14 automation | planned | approved plan at `~/.claude/plans/async-beaming-perlis.md` |
+| SPA JSON API for the Lovable front end | live | `/api` + bearer + CORS, Lovable-hosted (PRs #290/#291/#293); NOT `/api/v1`; SPA repo `011matthias/brisken-expense-review` (TanStack Start). Path 1 chosen 2026-07-21: extend this SPA, do NOT rebuild from the plan's prompt |
+| §17 disposition, §16 export-approved gate, §18 duplicate resolve | backend live (deployed 2026-07-21, verified) | PRs #296/#297/#298; `/api/runs/{id}/disposition`, `/duplicates/resolve`, `GET/PUT /api/settings` all live + inert-by-default; run detail carries `duplicate_groups` + `disposition` |
+| Local no-API-key test loop: `run.local.json` per run | live (PR #299, deployed 2026-07-21) | `prepare_run` writes a self-contained config (minus `llm`/`coa_validation`) beside the uploads in `/data/runs/<id>/`, so `flyctl sftp` + `expense-recon --config run.local.json` reconciles locally with NO OpenAI call. Existing live run `b67133b8df98` backfilled |
+| SPA mutation parity (`/api` twins) | live (PR #318, deployed 2026-07-22) | 11 mutations mounted on `/api` (decisions, confirm-matched, categories, manual-match, forget, commit-memory, feedback, publish, unpublish, memory/reset, intakes+files+run). `_wants_json` branches one handler across both surfaces. `auth.path_requires_operator` now canonicalizes the `/api` prefix — future twins inherit their operator rule, do NOT add duplicate regexes. SPA can now finish a full review |
+| SPA compare (server-computed diff) | live (PR #301, deployed 2026-07-21) | `GET /api/compare?a=&b=` wraps `compare_runs`; closes the last frontend-computation hole so Lovable computes no diff |
+| §14 configurable automation | planned | plan Phase 6 (`~/.claude/plans/async-beaming-perlis.md`), optional; behavior-changing (auto-confirm), default-OFF |
+| SPA memory screen (`/api/memory`) | live (deployed v25, verified 2026-07-21) | PR #304: `GET /api/memory` + `POST /api/memory/forget`, operator-gated (mirrors HTML `/memory`); serializes `build_memory_view` / reuses `forget_memory_vendor` |
+| LLM owns category+account + AI Category CSV columns + hosted LLM default-on (WS1) | live (PR #313, deployed 2026-07-21) | `categorization.override_er_category` keeps the LLM/learned account; reconciled CSV gains `AI Category`/`AI Zoho Account`/`AI Category Source`; hosted runs use LLM by default (`EXPENSE_RECON_DEFAULT_LLM`/`_OVERRIDE_ER_CATEGORY`) |
+| Vision receipt-image read + deterministic root-group adjudication (WS2) | live (PR #315, deployed 2026-07-21) | `ingest/expense_report_images.py` reads the ER PDF's receipt IMAGES (fills the ~9/20 summary rows with no vendor); `adjudicate_receipts` overrides the report's category only on a heavy Zoho root-group mismatch (`Category Decision` column: kept ER / AI override (heavy) / review); categorizer chart now built from `coa_validation` so override+adjudication fire on hosted runs; vision default-on (`EXPENSE_RECON_VISION_RECEIPTS`, ~$0.14/run). NOTE: ADOBE/ANTHROPIC are receiptless statement charges (FX-false-paired to Food receipts) -> a MATCHING problem = WS3, NOT fixed here. Plan: `~/.claude/plans/plan-out-how-we-playful-boole.md` |
+| Matching: card signal + FX-judgment card enrichment + second-chance pass (WS3) | not-started | the real ADOBE/ANTHROPIC fix (they FX-false-pair to unrelated Food receipts); card as a first-class matching signal + FX-judgment enriched with card + optional second-chance pass over unmatched. Plan WS3 |
 
 ## Open decisions / gates
 
+- Spec-incorporation backend (§16/§17/§18 + `/api/settings`) DEPLOYED to Fly 2026-07-21
+  from `origin/main` #299 (full suite 670-green first; idempotent DB migration verified safe
+  on Criss's live 94-row run). Live app now at #299.
+- SPA production URL undecided: Lovable URL now vs `recon.brisken.com` (CORS-add + GoDaddy DNS
+  are agent-doable; the domain attach happens in Lovable = user).
+- Concurrency: two sessions share this module (active `agentic-ops1-recon` worktree); before
+  any backend build here, `git fetch origin main` + `git log` first (4th collision-class event).
 - COA gate DEPLOYED 2026-07-01: `coa-provision.json` + `zoho-books-coa.json` on the Fly `/data`
   volume, `EXPENSE_RECON_COA_PROVISION` set, deployed (v10). Verified in-container on the real
   files: Corporate Services (822741658, 177 accts) + Cloud Services (697686691, 199 accts) resolve;
