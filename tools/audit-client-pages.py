@@ -60,10 +60,23 @@ MAIN_CONTENT = re.compile(r"class=[\"'][^\"']*\bmain-content\b", re.IGNORECASE)
 FOOTER = re.compile(r"<footer\b|class=[\"'][^\"']*\bfooter\b", re.IGNORECASE)
 
 # §3 theme — the recurrence-kill
+# 2026-07-22 blind-spot fix: the key regexes matched single-quoted lowercase
+# keys only, so a double-quoted "site-theme" or camelCase 'siteTheme' toggle
+# was invisible and the collision probe (the 2026-06-03 incident class) never
+# fired. Quote class + A-Z in the key class + IGNORECASE on the 'theme'
+# literal close all three shapes. Captured keys stay verbatim: localStorage
+# keys are case-sensitive, so 'Theme' vs 'theme' IS a collision.
 CANONICAL_BOOT = "matchMedia('(prefers-color-scheme:dark)')"
-THEME_KEY = re.compile(r"localStorage\.(?:get|set)Item\('([a-z0-9_-]*theme[a-z0-9_-]*)'")
-THEME_SET = re.compile(r"localStorage\.setItem\('([a-z0-9_-]*theme[a-z0-9_-]*)'")
+THEME_KEY = re.compile(
+    r"localStorage\.(?:get|set)Item\(['\"]([A-Za-z0-9_-]*theme[A-Za-z0-9_-]*)['\"]",
+    re.IGNORECASE,
+)
+THEME_SET = re.compile(
+    r"localStorage\.setItem\(['\"]([A-Za-z0-9_-]*theme[A-Za-z0-9_-]*)['\"]",
+    re.IGNORECASE,
+)
 TOGGLE_HINT = re.compile(r"toggleTheme|class=[\"'][^\"']*(?:nav-theme|theme-toggle)\b", re.IGNORECASE)
+HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 
 # §4 dates
 LAST_UPDATED = re.compile(r"last\s+updated", re.IGNORECASE)
@@ -99,8 +112,12 @@ def audit_text(text: str) -> list[dict]:
 
     # --- §3 theme: the collision probe runs ALWAYS (a collision is a bug even
     #     on a chromeless page); the boot/toggle probes are chrome-only. -------
-    theme_keys = {m.group(1) for m in THEME_KEY.finditer(text)}
-    boot_count = text.count(CANONICAL_BOOT)
+    # Theme probes run on comment-stripped text: a boot script or theme key
+    # inside an HTML comment is not live code (2026-07-22 blind-spot fix — a
+    # commented-out boot script satisfied boot_count).
+    live = HTML_COMMENT.sub("", text)
+    theme_keys = {m.group(1) for m in THEME_KEY.finditer(live)}
+    boot_count = live.count(CANONICAL_BOOT)
     non_canonical = theme_keys - {"theme"}
 
     if len(theme_keys) > 1:
@@ -123,7 +140,7 @@ def audit_text(text: str) -> list[dict]:
             add(1, "theme-boot-duplicate", "MEDIUM",
                 f"{boot_count} canonical boot scripts present; expected exactly one")
 
-        has_toggle = bool(THEME_SET.search(text)) or bool(TOGGLE_HINT.search(text))
+        has_toggle = bool(THEME_SET.search(live)) or bool(TOGGLE_HINT.search(live))
         if SITE_NAV.search(text) and not has_toggle:
             add(1, "theme-toggle-missing", "LOW",
                 "site-nav present but no working theme toggle (button/onclick writing 'theme')")

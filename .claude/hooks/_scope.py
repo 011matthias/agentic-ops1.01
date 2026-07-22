@@ -61,6 +61,13 @@ REFERENCE_ANCHOR_SEGMENTS = DELIVERABLE_SEGMENTS + PROPOSAL_SEGMENTS + ("/comms-
 HTML_EXTS = (".html", ".htm")
 DOC_EXTS = (".md", ".markdown", ".mdx")
 DELIVERABLE_EXTS = HTML_EXTS + DOC_EXTS
+# Human-to-human text is frequently plain .txt (Upwork cover letters at
+# platform/src/content/proposals/*.txt, plain-text drafts under
+# context/drafts/). 2026-07-22 blind-spot fix: .txt bypassed the whole comms
+# pipeline because the comms / human-to-human predicates were gated on
+# DOC_EXTS / DELIVERABLE_EXTS only.
+COMMS_EXTS = DOC_EXTS + (".txt",)
+HUMAN_TO_HUMAN_EXTS = DELIVERABLE_EXTS + (".txt",)
 
 
 def norm(path: str) -> str:
@@ -83,7 +90,7 @@ def in_deliverable_scope(path: str) -> bool:
 
 def in_comms_scope(path: str) -> bool:
     p = norm(path)
-    if not p.endswith(DOC_EXTS):
+    if not p.endswith(COMMS_EXTS):
         return False
     if "/context/drafts/" in p or "/proposals/" in p:
         return True
@@ -93,7 +100,7 @@ def in_comms_scope(path: str) -> bool:
 # --- em-dash-strip-gate (mutating; excludes comms-log.md on purpose) -------
 def in_human_to_human_scope(path: str) -> bool:
     p = norm(path)
-    if not p.endswith(DELIVERABLE_EXTS):
+    if not p.endswith(HUMAN_TO_HUMAN_EXTS):
         return False
     return _any(p, DELIVERABLE_SEGMENTS) or _any(p, COMMS_DRAFT_SEGMENTS)
 

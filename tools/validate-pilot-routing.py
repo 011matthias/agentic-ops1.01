@@ -75,8 +75,12 @@ def parse_routing_table(routing_md: Path) -> dict[str, dict]:
 
     # The canonical table has rows like:
     # | **Piece 1** | 983 past ... | `1f40cb36-...` | ... | `gurmej@mejimedia.co`, ... | ... |
+    # 2026-07-22 blind-spot fix: bold markers are optional (a plain
+    # `| Piece 2 |` row used to be dropped) and the row terminator accepts
+    # end-of-string (the last row of a file without a trailing newline used
+    # to be dropped).
     row_re = re.compile(
-        r"\|\s*\*\*Piece\s*(?P<num>\d)\*\*\s*\|(?P<rest>.+?)\|\s*\n",
+        r"\|\s*(?:\*\*)?\s*Piece\s*(?P<num>\d)\b[^|\n]*\|(?P<rest>.+?)\|\s*(?:\n|$)",
         re.IGNORECASE,
     )
     for m in row_re.finditer(text):
@@ -100,22 +104,47 @@ def parse_routing_table(routing_md: Path) -> dict[str, dict]:
 def find_piece_attributed_sections(content: str) -> list[tuple[str, str]]:
     """Split content into (piece_num, section_text) pairs.
 
-    Looks for paragraphs that lead with "**Piece N**" or "Piece N (".
-    Returns each piece-attributed chunk up to the next piece marker.
+    Anchors, in match priority order:
+      - "**Piece N ...**" bold markers and line-leading "Piece N" claim the
+        text up to the next anchor (the original behavior).
+      - Inline / lowercase "piece N" mid-sentence (the actual 2026-05-30
+        incident shape: "piece 1: mailboxes are reconnected") claims only its
+        containing sentence plus the rest of its paragraph, never past the
+        next anchor. 2026-07-22 blind-spot fix: these were invisible before,
+        and with them, attributed text before the first strong marker is now
+        scanned too.
     """
-    # Match either **Piece 1 (foo)** OR **Piece 1.** OR plain "Piece 1" leading a line
     marker_re = re.compile(
-        r"(?:\*\*Piece\s*(\d)[^*\n]*\*\*|^Piece\s*(\d)\b)",
+        r"(?:\*\*Piece\s*(\d)[^*\n]*\*\*|^Piece\s*(\d)\b|\bPiece\s*(\d)\b)",
         re.MULTILINE | re.IGNORECASE,
     )
     matches = list(marker_re.finditer(content))
+    # Strong anchors (bold / line-leading) delimit each other exactly as
+    # before; inline anchors add supplementary sentence-scoped sections and
+    # must NOT truncate a strong section (that would un-attribute the text
+    # between an inline mention and the next strong marker).
+    strong_starts = [m.start() for m in matches if m.group(3) is None]
     sections: list[tuple[str, str]] = []
-    for i, m in enumerate(matches):
-        piece_num = m.group(1) or m.group(2)
-        start = m.end()
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(content)
-        section = content[start:end]
-        sections.append((piece_num, section))
+    for m in matches:
+        piece_num = m.group(1) or m.group(2) or m.group(3)
+        inline = m.group(3) is not None
+        next_strong = next(
+            (s for s in strong_starts if s > m.start()), len(content)
+        )
+        if inline:
+            # Sentence start: just after the closest sentence delimiter or
+            # newline before the mention (start of content otherwise).
+            sent_start = 0
+            for delim in (". ", "! ", "? ", "\n"):
+                idx = content.rfind(delim, 0, m.start())
+                if idx != -1:
+                    sent_start = max(sent_start, idx + len(delim))
+            para_end = content.find("\n\n", m.end())
+            if para_end == -1:
+                para_end = len(content)
+            sections.append((piece_num, content[sent_start:min(next_strong, para_end)]))
+        else:
+            sections.append((piece_num, content[m.end():next_strong]))
     return sections
 
 

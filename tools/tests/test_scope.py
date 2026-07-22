@@ -56,6 +56,28 @@ def test_comms_rejects_html():
     assert not S.in_comms_scope("workspace/clients/meji/context/drafts/note.html")
 
 
+# --- .txt joins the comms / human-to-human sets (2026-07-22 blind-spot fix:
+# Upwork cover letters and plain-text drafts bypassed the whole pipeline) ----
+def test_comms_txt_draft_included():
+    assert S.in_comms_scope("workspace/clients/meji/context/drafts/note.txt")
+
+
+def test_comms_txt_cover_letter_included():
+    assert S.in_comms_scope(
+        "platform/src/content/proposals/menovia-upwork-cover-letter.txt"
+    )
+
+
+def test_h2h_txt_cover_letter_included():
+    assert S.in_human_to_human_scope("/x/platform/src/content/proposals/cover.txt")
+
+
+def test_deliverable_still_rejects_txt():
+    # .txt is comms-shaped, not a deliverable; the deliverable validator's
+    # HTML/markdown checks make no sense on plain text.
+    assert not S.in_deliverable_scope("workspace/clients/b/deliverables/x.txt")
+
+
 # --- in_human_to_human_scope: deliverables + drafts/proposals, NO comms-log -
 def test_h2h_deliverable():
     # Absolute path: the "/platform/public/" segment needs its leading slash

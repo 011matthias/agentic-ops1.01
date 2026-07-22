@@ -98,3 +98,46 @@ def test_json_contract_clean(tmp_path):
     code, payload = _run_json(f)
     assert code == 0
     assert payload == {"total": 0, "hits": [], "by_category": {}, "by_severity": {}}
+
+
+# --- 2026-07-22 blind-spot fixes: speaker notes + multi-word line breaks ----
+
+def _make_pptx(path, parts: dict[str, str]) -> None:
+    """Minimal pptx-shaped zip: the validator reads slide/notesSlide XML parts
+    with a regex, so no python-pptx and no committed binary fixture needed."""
+    import zipfile
+    with zipfile.ZipFile(path, "w") as z:
+        for name, txt in parts.items():
+            z.writestr(name, f"<p:sld><a:t>{txt}</a:t></p:sld>")
+
+
+def test_notes_slides_are_scanned(tmp_path):
+    # Banned term ONLY in the speaker notes; ppt/slides/ is clean.
+    f = tmp_path / "deck.pptx"
+    _make_pptx(f, {
+        "ppt/slides/slide1.xml": "clean visible slide",
+        "ppt/notesSlides/notesSlide1.xml": "presenter cue: mention SAP BTP here",
+    })
+    code, payload = _run_json(f)
+    assert code == 1
+    assert payload["total"] == 1
+    assert "notes slide 1" in payload["hits"][0]["message"]
+
+
+def test_visible_slides_still_scanned(tmp_path):
+    f = tmp_path / "deck.pptx"
+    _make_pptx(f, {"ppt/slides/slide2.xml": "runs on SAP BTP"})
+    code, payload = _run_json(f)
+    assert code == 1
+    assert "slide 2" in payload["hits"][0]["message"]
+
+
+def test_multiword_term_across_line_break(tmp_path):
+    # PDF extract_text inserts newlines constantly; the multi-word directive
+    # term must match across them ('Business\nTechnology Platform').
+    f = tmp_path / "extract.txt"
+    f.write_text("built on the Business\nTechnology Platform stack\n", encoding="utf-8")
+    code, payload = _run_json(f)
+    assert code == 1
+    assert payload["total"] == 1
+    assert "Business Technology Platform" in payload["hits"][0]["message"]
