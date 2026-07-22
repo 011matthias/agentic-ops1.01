@@ -57,7 +57,10 @@ list means the branch or window is wrong, NOT "no activity"; never write "no
 commits" unless `COMMIT_COUNT` is literally `0`. Also run `git diff --stat` for
 any uncommitted working-tree changes. Then continue the scan:
 
-- `docs/sessions/{TODAY}.md` — today's session log (may be empty).
+- `docs/sessions/{TODAY}.md` plus any `docs/sessions/{TODAY}-*.md` shards —
+  today's session log (may be empty). Concurrent sessions write per-session
+  shard files; the nightly sweep folds them into the canonical daily file via
+  `tools/merge-session-logs.py`.
 - Each active client `workspace/clients/*/context/comms-log.md` — tail for
   items going stale (>3 days since last contact).
 - Open specs in `1-spec` / `2-build` / `3-test` with `needs_fixes: true` or a
@@ -79,8 +82,11 @@ any uncommitted working-tree changes. Then continue the scan:
 
 ## 4. Write state (then STOP at commit boundary)
 
-- Append today's capture to `docs/sessions/{TODAY}.md` (create with the
-  frontmatter from `/comd_checkpoint` if missing). Surgical append only.
+- Append today's capture to this run's OWN shard `docs/sessions/{TODAY}-eod.md`
+  (create with the frontmatter from `/comd_checkpoint` if missing). Never
+  write the plain `docs/sessions/{TODAY}.md` — live sessions may hold it; the
+  nightly sweep folds shards into it via `tools/merge-session-logs.py --apply`.
+  Surgical append only.
 - Append any promoted friction rows to `docs/friction-register.md`.
 - Do NOT create new files. Do NOT commit. Leave changes staged-but-uncommitted.
 
