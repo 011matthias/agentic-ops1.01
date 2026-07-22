@@ -249,6 +249,7 @@ pre.mermaid:hover .mermaid-controls{opacity:1}
 }
 </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.2/dist/svg-pan-zoom.min.css" onerror="this.remove()">
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
 </head>
 <body data-tab="automationen">
 <div id="cdn-banner" class="cdn-banner">Mermaid-CDN nicht erreichbar; Diagramme werden ggf. nicht gerendert. Quelltext bleibt sichtbar.</div>
@@ -896,8 +897,8 @@ GEPLANTE AENDERUNGEN IN N8N-MIGRATION:
 })();
 </script>
 <script>
-function toggleTheme(){var h=document.documentElement;var c=h.getAttribute('data-theme');var n=c==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('wimmer-docs-theme',n);var i=document.getElementById('theme-icon');if(i)i.innerHTML=n==='dark'?'&#9788;':'&#9790;';if(window.renderMermaidForTheme){window.renderMermaidForTheme(n)}}
-var saved=localStorage.getItem('wimmer-docs-theme');
+function toggleTheme(){var h=document.documentElement;var c=h.getAttribute('data-theme');var n=c==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('theme',n);var i=document.getElementById('theme-icon');if(i)i.innerHTML=n==='dark'?'&#9788;':'&#9790;';if(window.renderMermaidForTheme){window.renderMermaidForTheme(n)}}
+var saved=localStorage.getItem('theme');
 if(saved){document.documentElement.setAttribute('data-theme',saved);var i=document.getElementById('theme-icon');if(i&&saved==='dark')i.innerHTML='&#9788;'}
 function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');document.getElementById('sidebarBackdrop').classList.toggle('active')}
 function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('sidebarBackdrop').classList.remove('active')}

@@ -275,9 +275,7 @@ li { margin-bottom: 6px; }
     .milestone-meta { align-items: flex-start; }
 }
 </style>
-<script>
-(function(){var t=localStorage.getItem('dae-course-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
-</script>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
 </head>
 <body>
 
@@ -544,7 +542,7 @@ function toggleTheme(){
     var h=document.documentElement;
     var t=h.getAttribute('data-theme')==='dark'?'light':'dark';
     h.setAttribute('data-theme',t);
-    localStorage.setItem('dae-course-theme',t);
+    localStorage.setItem('theme',t);
 }
 
 // Sidebar active state

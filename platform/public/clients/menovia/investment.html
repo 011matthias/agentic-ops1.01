@@ -236,9 +236,7 @@ tr:hover td { background: var(--blue-bg); }
 .page-hero h1 { font-size: 30px; font-weight: 800; color: var(--text-strong); margin-bottom: 10px; }
 .page-hero p { font-size: 15px; color: var(--text2); max-width: 560px; margin: 0; }
 </style>
-<script>
-(function(){var t=localStorage.getItem('menovia-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
-</script>
+<script>(function(){var t=localStorage.getItem('theme');var d=document.documentElement;d.setAttribute('data-theme',t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light');})();</script>
 </head>
 <body>
 
@@ -569,7 +567,7 @@ function toggleTheme() {
     var el = document.documentElement;
     var t = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     el.setAttribute('data-theme', t);
-    localStorage.setItem('menovia-theme', t);
+    localStorage.setItem('theme', t);
 }
 
 // Active sidebar tracking on scroll
