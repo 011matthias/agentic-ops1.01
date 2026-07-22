@@ -47,6 +47,13 @@ from pathlib import Path
 BASE_URL = os.environ.get(
     "EXPENSE_RECON_BASE_URL", "https://brisken-expense-recon.fly.dev"
 )
+# Where a HUMAN clicks. Since the v31 cutover the Fly origin is API-only —
+# every HTML page was deleted — so a link to BASE_URL now lands on a raw
+# JSON 401. The reviewable surface is the Lovable SPA, which happens to use
+# the same path shapes (`/`, `/runs/{id}`), so only the origin changes.
+APP_URL = os.environ.get(
+    "EXPENSE_RECON_APP_URL", "https://brisken-reconcile-dash.lovable.app"
+)
 # HARD allowlist (rule_brisken_graph_first): the credential can act as any
 # tenant mailbox until the Exchange Application Access Policy exists, so
 # the sender is pinned in code and recipients are restricted to the known
@@ -224,12 +231,27 @@ def fetch_state_from_app():
     code = os.environ.get("EXPENSE_RECON_OPERATOR_CODE", "").strip()
     session = requests.Session()
     if code:
+        # Bearer, not the old cookie flow: PR #350 deleted the HTML
+        # `POST /login` (which answered 303 + Set-Cookie) when the backend
+        # went API-only. The signed token is the same one the cookie used
+        # to carry; setting it on the session authenticates every later
+        # call (state, feedback.jsonl) the same way.
         login = session.post(
-            f"{BASE_URL}/login", data={"code": code}, timeout=60,
-            allow_redirects=False,
+            f"{BASE_URL}/api/login", json={"code": code}, timeout=60,
         )
-        if login.status_code != 303:
+        if login.status_code == 429:
+            # The 2026-07-22 login throttle. Back off quietly rather than
+            # burning the caller's remaining budget on a 15-min schedule.
+            retry = login.headers.get("Retry-After", "?")
+            raise RuntimeError(
+                f"operator login throttled (429); retry after {retry}s"
+            )
+        if login.status_code != 200:
             raise RuntimeError(f"operator login failed: {login.status_code}")
+        token = (login.json() or {}).get("token", "")
+        if not token:
+            raise RuntimeError("operator login returned no token")
+        session.headers["Authorization"] = f"Bearer {token}"
     resp = session.get(f"{BASE_URL}/api/operator/state", timeout=60)
     resp.raise_for_status()
     return resp.json(), session
@@ -296,7 +318,7 @@ def main() -> int:
             f"When: {r.get('created_at')}\n"
             f"Result: {result}\n"
             + ("Status: not yet published to the user\n" if not r.get("published") else "")
-            + f"\nReview it: {BASE_URL}/runs/{r.get('run_id')}\n"
+            + f"\nReview it: {APP_URL}/runs/{r.get('run_id')}\n"
         )
         plans.append((subject, body, DEV_RECIPIENTS))
     for i in new_intakes:
@@ -308,14 +330,14 @@ def main() -> int:
             f"Files: {i.get('statement_name')}"
             + (f" + {i.get('receipts_name')}" if i.get("receipts_name") else " (no receipts yet)")
             + f"\nAuto-detect: {i.get('detect_note') or 'n/a'}\n\n"
-            f"Queue: {BASE_URL}/\n"
+            f"Queue: {APP_URL}/\n"
         )
         plans.append((subject, body, DEV_RECIPIENTS))
     for r in new_publishes:
         subject = f"Your reconciliation is ready - {r.get('label', '?')}"
         body = (
             f"The reconciliation for {r.get('label')} is ready for your review.\n\n"
-            f"Open it here: {BASE_URL}/runs/{r.get('run_id')}\n"
+            f"Open it here: {APP_URL}/runs/{r.get('run_id')}\n"
         )
         recipients = tuple([user_email] if user_email else []) + DEV_RECIPIENTS
         if not user_email:
@@ -342,7 +364,7 @@ def main() -> int:
         body = (
             "New reviewer feedback in the expense tool.\n\n"
             + "\n".join(lines)
-            + f"\n\nFull log: {BASE_URL}/feedback-log\n"
+            + f"\n\nFull log: {BASE_URL}/feedback.jsonl\n"
         )
         plans.append((subject, body, DEV_RECIPIENTS))
 
