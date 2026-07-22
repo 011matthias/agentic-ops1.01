@@ -4,3 +4,4 @@ round	commit	score	delta	status	description
 2	010baba	215901.0	-1603	keep	Remove CSS rules whose selector names a class/id appearing nowhere else in the file (markup, attributes and script text all count as present).
 3	36f9f45	211235.0	-4666	keep	Drop indentation and blank lines inside <style>, readable one-declaration-per-line form retained. Deliberately NOT the full-minification variant: run 1's SUMMARY flagged that as an owner decision not to be inherited across client sites.
 4	6a2d362	209211.0	-2024	keep	Strip indentation, blank lines and whole-line // comments inside inline <script>. Line-oriented only, no intra-line changes.
+5	0346321	198371.0	-10840	keep	Collapse markup indentation only where the whitespace run sits entirely between '>' and '<'. pre/textarea/style/script excluded; text-node inter-word spacing untouched. Run 1 predicted this would be the biggest lever.
