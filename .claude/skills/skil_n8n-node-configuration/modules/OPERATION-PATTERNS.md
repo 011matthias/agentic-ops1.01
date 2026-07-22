@@ -230,5 +230,5 @@ Minimal valid configurations for top n8n nodes. Adapt and extend as needed.
 
 ## Related
 
-- [SKILL.md](SKILL.md) — Configuration workflow
+- [SKILL.md](../SKILL.md) — Configuration workflow
 - [DEPENDENCIES.md](DEPENDENCIES.md) — Property dependency rules

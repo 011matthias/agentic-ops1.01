@@ -779,6 +779,6 @@ Use `search_templates({query: "ai agent"})` to find more!
 **Pattern**: Trigger → AI Agent (Model + Tools + Memory) → Output
 
 **Related**:
-- [webhook_processing.md](webhook_processing.md) - Receiving chat messages
-- [http_api_integration.md](http_api_integration.md) - Tools that call APIs
-- [database_operations.md](database_operations.md) - Database tools for agents
+- [WEBHOOK-PROCESSING.md](WEBHOOK-PROCESSING.md) - Receiving chat messages
+- [HTTP-API-INTEGRATION.md](HTTP-API-INTEGRATION.md) - Tools that call APIs
+- [DATABASE-OPERATIONS.md](DATABASE-OPERATIONS.md) - Database tools for agents

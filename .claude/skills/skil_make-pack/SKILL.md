@@ -13,11 +13,11 @@ Unified reference for building Make.com scenarios. Consolidates: make-mcp-tools-
 
 1. **Detect** — Confirm Make.com orchestrator (`infrastructure.yaml` has `type: make`)
 2. **Read spec** — Extract flow, systems, edge cases, acceptance criteria
-2.5. **Estimate ops** — For each scenario, estimate monthly operations before building. Scheduled: `(2,592,000 / interval_seconds) × modules_in_flow`. Webhook: `events_per_month × modules_in_flow`. Compare total against client's Make.com plan — if projected > 80% of limit, flag before building. Load [OPERATIONS-ANALYZER](../make-mcp-tools-expert/modules/OPERATIONS-ANALYZER.md) Section A for full estimation procedure.
+2.5. **Estimate ops** — For each scenario, estimate monthly operations before building. Scheduled: `(2,592,000 / interval_seconds) × modules_in_flow`. Webhook: `events_per_month × modules_in_flow`. Compare total against client's Make.com plan — if projected > 80% of limit, flag before building. Load [OPERATIONS-ANALYZER](../skil_make-mcp-tools-expert/modules/OPERATIONS-ANALYZER.md) Section A for full estimation procedure.
 3. **List connections** — Verify auth connections exist for required services
 4. **Generate blueprint** → Load BLUEPRINT module for JSON format
 5. **Deploy** — Try MCP `scenarios_update` first; fall back to `uv run tools/make-api.py update|deploy` or UI import if MCP fails.
-6. **Post-deploy binding check** — Load [POST-DEPLOYMENT-VERIFICATION](../make-mcp-tools-expert/modules/POST-DEPLOYMENT-VERIFICATION.md) after API deployment. Alert user to rebind data store/connection modules in UI.
+6. **Post-deploy binding check** — Load [POST-DEPLOYMENT-VERIFICATION](../skil_make-mcp-tools-expert/modules/POST-DEPLOYMENT-VERIFICATION.md) after API deployment. Alert user to rebind data store/connection modules in UI.
 7. **Verify** — Test with Run Once, check execution inspector
 8. **Activate** — Enable scheduling or webhook listening
 
@@ -25,7 +25,7 @@ Unified reference for building Make.com scenarios. Consolidates: make-mcp-tools-
 
 ## Critical Rules (Always Apply)
 
-- **Check API impossibilities FIRST** — Before attempting any API approach, load [API-IMPOSSIBILITIES](../make-mcp-tools-expert/modules/API-IMPOSSIBILITIES.md). Gmail/OAuth scenarios cannot be made functional via API alone. State UI requirements in your FIRST response — do not iterate.
+- **Check API impossibilities FIRST** — Before attempting any API approach, load [API-IMPOSSIBILITIES](../skil_make-mcp-tools-expert/modules/API-IMPOSSIBILITIES.md). Gmail/OAuth scenarios cannot be made functional via API alone. State UI requirements in your FIRST response — do not iterate.
 - **MCP blueprint deployment may work** — `scenarios_update` with blueprint param succeeded for A3 on 2026-03-14 after previously failing with 500. Test each deployment; fall back to REST API (`tools/make-api.py`) or UI import if it fails.
 - **Module name casing matters** — `datastore:AddRecord` (capital A), not `datastore:addRecord`
 - **Connection IDs are instance-specific** — cannot copy between orgs
@@ -42,33 +42,33 @@ Load ONE module at a time based on your current task.
 
 | When | Module | Source |
 |------|--------|--------|
-| Generating blueprint JSON | [BLUEPRINT-FORMAT](../make-mcp-tools-expert/modules/BLUEPRINT-FORMAT.md) | make-mcp-tools-expert |
-| Setting up a new project | [PROJECT-SETUP](../make-mcp-tools-expert/modules/PROJECT-SETUP.md) | make-mcp-tools-expert |
-| Testing webhooks | [WEBHOOK-TESTING](../make-mcp-tools-expert/modules/WEBHOOK-TESTING.md) | make-mcp-tools-expert |
-| Diagnosing scenario failures | [AUTONOMOUS-DIAGNOSTICS](../make-mcp-tools-expert/modules/AUTONOMOUS-DIAGNOSTICS.md) | make-mcp-tools-expert |
-| Verifying execution outcomes | [POST-EXECUTION-VERIFICATION](../make-mcp-tools-expert/modules/POST-EXECUTION-VERIFICATION.md) | make-mcp-tools-expert |
-| After API blueprint deployment | [POST-DEPLOYMENT-VERIFICATION](../make-mcp-tools-expert/modules/POST-DEPLOYMENT-VERIFICATION.md) | make-mcp-tools-expert |
-| Iterating on fixes | [ITERATION-CYCLE](../make-mcp-tools-expert/modules/ITERATION-CYCLE.md) | make-mcp-tools-expert |
-| Adding/modifying data store fields | [SCHEMA-EVOLUTION](../make-mcp-tools-expert/modules/SCHEMA-EVOLUTION.md) | make-mcp-tools-expert |
-| Discovering webhook payloads | [WEBHOOK-PAYLOAD-INSPECTOR](../make-mcp-tools-expert/modules/WEBHOOK-PAYLOAD-INSPECTOR.md) | make-mcp-tools-expert |
-| Pre-handover checklist | [PRE-CLIENT-REVIEW](../make-mcp-tools-expert/modules/PRE-CLIENT-REVIEW.md) | make-mcp-tools-expert |
-| Cross-validating blueprint vs data stores | [DATA-STORE-RECONCILER](../blueprint-reconciler/modules/DATA-STORE-RECONCILER.md) | blueprint-reconciler |
-| Validating Sheets column refs | [SHEETS-COLUMN-RECONCILER](../blueprint-reconciler/modules/SHEETS-COLUMN-RECONCILER.md) | blueprint-reconciler |
-| Checking IML `{{N.field}}` refs | [IML-REFERENCE-CHECKER](../blueprint-reconciler/modules/IML-REFERENCE-CHECKER.md) | blueprint-reconciler |
-| Validating email template placeholders | [TEMPLATE-PLACEHOLDER-CHECKER](../blueprint-reconciler/modules/TEMPLATE-PLACEHOLDER-CHECKER.md) | blueprint-reconciler |
-| Pre-handover blueprint format check | [HANDOVER-FORMAT-CHECKER](../blueprint-reconciler/modules/HANDOVER-FORMAT-CHECKER.md) | blueprint-reconciler |
-| Capturing webhook payloads | [CAPTURE-PATTERN](../webhook-inspector/modules/CAPTURE-PATTERN.md) | webhook-inspector |
-| Analyzing captured payloads | [ANALYZE-PAYLOAD](../webhook-inspector/modules/ANALYZE-PAYLOAD.md) | webhook-inspector |
-| Estimating or analyzing operations costs | [OPERATIONS-ANALYZER](../make-mcp-tools-expert/modules/OPERATIONS-ANALYZER.md) | make-mcp-tools-expert |
-| Onboarding platform feasibility check | [PLATFORM-FEASIBILITY](../make-mcp-tools-expert/modules/PLATFORM-FEASIBILITY.md) | make-mcp-tools-expert |
-| Before attempting any API approach | [API-IMPOSSIBILITIES](../make-mcp-tools-expert/modules/API-IMPOSSIBILITIES.md) | make-mcp-tools-expert |
+| Generating blueprint JSON | [BLUEPRINT-FORMAT](../skil_make-mcp-tools-expert/modules/BLUEPRINT-FORMAT.md) | make-mcp-tools-expert |
+| Setting up a new project | [PROJECT-SETUP](../skil_make-mcp-tools-expert/modules/PROJECT-SETUP.md) | make-mcp-tools-expert |
+| Testing webhooks | [WEBHOOK-TESTING](../skil_make-mcp-tools-expert/modules/WEBHOOK-TESTING.md) | make-mcp-tools-expert |
+| Diagnosing scenario failures | [AUTONOMOUS-DIAGNOSTICS](../skil_make-mcp-tools-expert/modules/AUTONOMOUS-DIAGNOSTICS.md) | make-mcp-tools-expert |
+| Verifying execution outcomes | [POST-EXECUTION-VERIFICATION](../skil_make-mcp-tools-expert/modules/POST-EXECUTION-VERIFICATION.md) | make-mcp-tools-expert |
+| After API blueprint deployment | [POST-DEPLOYMENT-VERIFICATION](../skil_make-mcp-tools-expert/modules/POST-DEPLOYMENT-VERIFICATION.md) | make-mcp-tools-expert |
+| Iterating on fixes | [ITERATION-CYCLE](../skil_make-mcp-tools-expert/modules/ITERATION-CYCLE.md) | make-mcp-tools-expert |
+| Adding/modifying data store fields | [SCHEMA-EVOLUTION](../skil_make-mcp-tools-expert/modules/SCHEMA-EVOLUTION.md) | make-mcp-tools-expert |
+| Discovering webhook payloads | [WEBHOOK-PAYLOAD-INSPECTOR](../skil_make-mcp-tools-expert/modules/WEBHOOK-PAYLOAD-INSPECTOR.md) | make-mcp-tools-expert |
+| Pre-handover checklist | [PRE-CLIENT-REVIEW](../skil_make-mcp-tools-expert/modules/PRE-CLIENT-REVIEW.md) | make-mcp-tools-expert |
+| Cross-validating blueprint vs data stores | [DATA-STORE-RECONCILER](../skil_blueprint-reconciler/modules/DATA-STORE-RECONCILER.md) | blueprint-reconciler |
+| Validating Sheets column refs | [SHEETS-COLUMN-RECONCILER](../skil_blueprint-reconciler/modules/SHEETS-COLUMN-RECONCILER.md) | blueprint-reconciler |
+| Checking IML `{{N.field}}` refs | [IML-REFERENCE-CHECKER](../skil_blueprint-reconciler/modules/IML-REFERENCE-CHECKER.md) | blueprint-reconciler |
+| Validating email template placeholders | [TEMPLATE-PLACEHOLDER-CHECKER](../skil_blueprint-reconciler/modules/TEMPLATE-PLACEHOLDER-CHECKER.md) | blueprint-reconciler |
+| Pre-handover blueprint format check | [HANDOVER-FORMAT-CHECKER](../skil_blueprint-reconciler/modules/HANDOVER-FORMAT-CHECKER.md) | blueprint-reconciler |
+| Capturing webhook payloads | [CAPTURE-PATTERN](../skil_webhook-inspector/modules/CAPTURE-PATTERN.md) | webhook-inspector |
+| Analyzing captured payloads | [ANALYZE-PAYLOAD](../skil_webhook-inspector/modules/ANALYZE-PAYLOAD.md) | webhook-inspector |
+| Estimating or analyzing operations costs | [OPERATIONS-ANALYZER](../skil_make-mcp-tools-expert/modules/OPERATIONS-ANALYZER.md) | make-mcp-tools-expert |
+| Onboarding platform feasibility check | [PLATFORM-FEASIBILITY](../skil_make-mcp-tools-expert/modules/PLATFORM-FEASIBILITY.md) | make-mcp-tools-expert |
+| Before attempting any API approach | [API-IMPOSSIBILITIES](../skil_make-mcp-tools-expert/modules/API-IMPOSSIBILITIES.md) | make-mcp-tools-expert |
 
 ### Reference Modules (load ONLY for specific lookups)
 
 | When | Module | Source |
 |------|--------|--------|
-| IML expression error | [IML-GOTCHAS](../make-mcp-tools-expert/modules/IML-GOTCHAS.md) | make-mcp-tools-expert |
-| Known webhook provider formats | [KNOWN-PROVIDERS](../webhook-inspector/modules/KNOWN-PROVIDERS.md) | webhook-inspector |
+| IML expression error | [IML-GOTCHAS](../skil_make-mcp-tools-expert/modules/IML-GOTCHAS.md) | make-mcp-tools-expert |
+| Known webhook provider formats | [KNOWN-PROVIDERS](../skil_webhook-inspector/modules/KNOWN-PROVIDERS.md) | webhook-inspector |
 
 ---
 

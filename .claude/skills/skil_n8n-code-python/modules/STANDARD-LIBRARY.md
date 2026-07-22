@@ -968,7 +968,7 @@ return [{
 - Use n8n nodes for operations requiring external libraries
 
 **See Also**:
-- [SKILL.md](SKILL.md) - Python Code overview
-- [DATA_ACCESS.md](DATA_ACCESS.md) - Data access patterns
-- [COMMON_PATTERNS.md](COMMON_PATTERNS.md) - Production patterns
-- [ERROR_PATTERNS.md](ERROR_PATTERNS.md) - Avoid common mistakes
+- [SKILL.md](../SKILL.md) - Python Code overview
+- [DATA-ACCESS.md](DATA-ACCESS.md) - Data access patterns
+- [COMMON-PATTERNS.md](COMMON-PATTERNS.md) - Production patterns
+- [ERROR-PATTERNS.md](ERROR-PATTERNS.md) - Avoid common mistakes

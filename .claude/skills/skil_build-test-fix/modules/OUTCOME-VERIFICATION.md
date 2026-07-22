@@ -137,7 +137,7 @@ Each unverifiable item is a candidate for a persistent test fixture. If the same
 
 ### Make.com
 
-Uses `executions_list` → `executions_get_detail` for execution metadata. Integrates with the [POST-EXECUTION-VERIFICATION](../../make-mcp-tools-expert/modules/POST-EXECUTION-VERIFICATION.md) module for Make.com-specific patterns.
+Uses `executions_list` → `executions_get_detail` for execution metadata. Integrates with the [POST-EXECUTION-VERIFICATION](../../skil_make-mcp-tools-expert/modules/POST-EXECUTION-VERIFICATION.md) module for Make.com-specific patterns.
 
 Key proxies:
 - **Operations count:** Compare expected module count vs actual. Fewer ops = something was skipped (filter blocked, error handler caught).

@@ -777,6 +777,6 @@ return allData.map(item => ({json: item}));
 - Use appropriate method for your mode (All Items vs Each Item)
 
 **See Also**:
-- [SKILL.md](SKILL.md) - Overview and quick start
-- [COMMON_PATTERNS.md](COMMON_PATTERNS.md) - Production patterns
-- [ERROR_PATTERNS.md](ERROR_PATTERNS.md) - Avoid common mistakes
+- [SKILL.md](../SKILL.md) - Overview and quick start
+- [COMMON-PATTERNS.md](COMMON-PATTERNS.md) - Production patterns
+- [ERROR-PATTERNS.md](ERROR-PATTERNS.md) - Avoid common mistakes
