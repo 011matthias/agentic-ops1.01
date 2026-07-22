@@ -8,6 +8,7 @@ export interface BlogPost {
   date: string;
   category: string;
   excerpt: string;
+  author?: string;
   content: string;
 }
 
@@ -28,6 +29,7 @@ export function getAllPosts(): BlogPost[] {
       date: data.date || "",
       category: data.category || "",
       excerpt: data.excerpt || "",
+      author: data.author || undefined,
       content,
     };
   });
