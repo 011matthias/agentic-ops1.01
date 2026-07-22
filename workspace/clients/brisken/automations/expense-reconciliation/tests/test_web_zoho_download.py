@@ -44,7 +44,7 @@ def _create_run(client) -> str:
         ),
     }
     resp = client.post(
-        "/runs",
+        "/api/runs",
         files=files,
         data={
             "account_id": "amex-9001",
@@ -52,10 +52,11 @@ def _create_run(client) -> str:
             "account_card_currency": "USD",
             "receipts_source": "csv",
         },
-        follow_redirects=False,
     )
-    assert resp.status_code == 303, resp.text
-    return resp.headers["location"].rstrip("/").rsplit("/", 1)[-1]
+    assert resp.status_code == 200, resp.text
+    job = client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
+    return job["run_id"]
 
 
 def _matches(client, run_id) -> list[dict]:
@@ -67,7 +68,7 @@ def _matches(client, run_id) -> list[dict]:
 
 def test_zoho_download_headers_and_matched_rows(client):
     run_id = _create_run(client)
-    client.post(f"/runs/{run_id}/decisions/confirm-matched")
+    client.post(f"/api/runs/{run_id}/decisions/confirm-matched")
 
     resp = client.get(f"/runs/{run_id}/zoho.csv")
     assert resp.status_code == 200
@@ -80,13 +81,13 @@ def test_zoho_download_headers_and_matched_rows(client):
 
 def test_zoho_download_reflects_rejection(client):
     run_id = _create_run(client)
-    client.post(f"/runs/{run_id}/decisions/confirm-matched")
+    client.post(f"/api/runs/{run_id}/decisions/confirm-matched")
     matches = _matches(client, run_id)
     rejected_tx = matches[0]["transaction_id"]
     kept_tx = matches[1]["transaction_id"]
 
     client.post(
-        f"/runs/{run_id}/decisions",
+        f"/api/runs/{run_id}/decisions",
         json={"transaction_id": rejected_tx, "status": "rejected"},
     )
     body = client.get(f"/runs/{run_id}/zoho.csv").text
@@ -124,7 +125,7 @@ def test_export_approved_gate_withholds_pending(client):
     confirmed = matches[0]["transaction_id"]
     pending = matches[1]["transaction_id"]
     client.post(
-        f"/runs/{run_id}/decisions",
+        f"/api/runs/{run_id}/decisions",
         json={
             "transaction_id": confirmed,
             "status": "confirmed",
@@ -140,6 +141,6 @@ def test_export_gate_default_off_exports_matched(client):
     # With the policy left at its default (off), confirm-all still exports
     # every matched charge -- the gate is inert unless switched on.
     run_id = _create_run(client)
-    client.post(f"/runs/{run_id}/decisions/confirm-matched")
+    client.post(f"/api/runs/{run_id}/decisions/confirm-matched")
     body = client.get(f"/runs/{run_id}/zoho.csv").text
     assert _matches(client, run_id)[0]["transaction_id"] in body

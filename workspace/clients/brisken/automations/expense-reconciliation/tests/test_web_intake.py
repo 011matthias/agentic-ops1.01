@@ -1,5 +1,6 @@
-"""Testing-mode intake: POST /intakes saves the documents WITHOUT running
-the pipeline; the operator queue lists them with the auto-detect advisory."""
+"""Intake on the JSON API: POST /api/intakes saves the documents WITHOUT
+running the pipeline; /api/operator/state lists them with the auto-detect
+advisory; /api/intakes/{id}/files replaces or late-adds files."""
 from __future__ import annotations
 
 import json
@@ -45,19 +46,23 @@ def _files(receipts: bool = True):
 
 def test_intake_saves_files_and_row_without_running(client):
     resp = client.post(
-        "/intakes",
+        "/api/intakes",
         files=_files(),
         data={"card_name": "Corporate card 2838", "month": "2026-06"},
-        follow_redirects=False,
     )
-    assert resp.status_code == 303, resp.text
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["intake_id"]
+    assert body["label"] == "Corporate card 2838 2026-06"
+    assert body["status"] == INTAKE_RECEIVED
     with RunStore(client._data_root / "recon-web.sqlite") as store:
         intakes = store.list_intakes()
         runs = store.list_runs()
     assert len(intakes) == 1
     intake = intakes[0]
+    assert intake.intake_id == body["intake_id"]
     assert intake.status == INTAKE_RECEIVED
-    assert intake.label == "Corporate card 2838 2026-06"
     assert "column map auto-detected" in (intake.detect_note or "")
     # files persisted in the intake work dir
     work = Path(intake.work_dir)
@@ -69,38 +74,37 @@ def test_intake_saves_files_and_row_without_running(client):
 
 def test_intake_without_receipts_is_accepted_and_flagged(client):
     resp = client.post(
-        "/intakes",
+        "/api/intakes",
         files=_files(receipts=False),
         data={"card_name": "Corporate card 2838"},
-        follow_redirects=False,
     )
-    assert resp.status_code == 303, resp.text
+    assert resp.status_code == 200, resp.text
     with RunStore(client._data_root / "recon-web.sqlite") as store:
         intake = store.list_intakes()[0]
     assert intake.receipts_name is None
 
 
 def test_intake_requires_card_label(client):
-    resp = client.post("/intakes", files=_files(), data={"month": "2026-06"})
+    resp = client.post("/api/intakes", files=_files(), data={"month": "2026-06"})
     assert resp.status_code == 400
-    assert "which card" in resp.text.lower()
+    assert "which card" in resp.json()["error"].lower()
 
 
 def test_intake_rejects_wrong_statement_extension(client):
     resp = client.post(
-        "/intakes",
+        "/api/intakes",
         files={"statement": ("notes.txt", b"hello", "text/plain")},
         data={"card_name": "Corporate card 2838"},
     )
     assert resp.status_code == 400
-    assert ".csv, .xlsx or .pdf" in resp.text
+    assert ".csv, .xlsx or .pdf" in resp.json()["error"]
 
 
 def test_intake_accepts_pdf_receipts(client):
     """Chris's real artifact (2026-07-16): the Zoho Expense report PDF,
     not only the extracted-fields CSV."""
     resp = client.post(
-        "/intakes",
+        "/api/intakes",
         files={
             "statement": (
                 "statement.example.csv",
@@ -110,9 +114,8 @@ def test_intake_accepts_pdf_receipts(client):
             "receipts": ("expense-report.pdf", b"%PDF-1.4 synthetic", "application/pdf"),
         },
         data={"card_name": "Corporate card 2838", "month": "2026-06"},
-        follow_redirects=False,
     )
-    assert resp.status_code == 303, resp.text
+    assert resp.status_code == 200, resp.text
     with RunStore(client._data_root / "recon-web.sqlite") as store:
         intake = store.list_intakes()[0]
     assert intake.receipts_name == "expense-report.pdf"
@@ -120,7 +123,7 @@ def test_intake_accepts_pdf_receipts(client):
 
 def test_intake_rejects_wrong_receipts_extension(client):
     resp = client.post(
-        "/intakes",
+        "/api/intakes",
         files={
             "statement": (
                 "statement.example.csv",
@@ -132,12 +135,12 @@ def test_intake_rejects_wrong_receipts_extension(client):
         data={"card_name": "Corporate card 2838"},
     )
     assert resp.status_code == 400
-    assert ".csv export or a Zoho Expense report .pdf" in resp.text
+    assert ".csv export or a Zoho Expense report .pdf" in resp.json()["error"]
 
 
 def test_undetectable_statement_still_accepted_with_note(client):
     resp = client.post(
-        "/intakes",
+        "/api/intakes",
         files={
             "statement": ("weird.csv", b"colA,colB\n1,2\n", "text/csv"),
             "receipts": (
@@ -147,10 +150,9 @@ def test_undetectable_statement_still_accepted_with_note(client):
             ),
         },
         data={"card_name": "Corporate card 2838"},
-        follow_redirects=False,
     )
     # Detection failure is advisory, never a wall in front of the uploader.
-    assert resp.status_code == 303, resp.text
+    assert resp.status_code == 200, resp.text
     with RunStore(client._data_root / "recon-web.sqlite") as store:
         intake = store.list_intakes()[0]
     assert "missing" in (intake.detect_note or "") or "failed" in (
@@ -174,30 +176,30 @@ def test_card_preset_fills_label_and_key(client, tmp_path, monkeypatch):
     cards_path.write_text(json.dumps(cards), encoding="utf-8")
     monkeypatch.setenv("EXPENSE_RECON_CARDS", str(cards_path))
     resp = client.post(
-        "/intakes",
+        "/api/intakes",
         files=_files(),
         data={"card_key": "corp-2838", "month": "2026-06"},
-        follow_redirects=False,
     )
-    assert resp.status_code == 303, resp.text
+    assert resp.status_code == 200, resp.text
     with RunStore(client._data_root / "recon-web.sqlite") as store:
         intake = store.list_intakes()[0]
     assert intake.card_key == "corp-2838"
     assert intake.label == "Corporate card ending 2838 2026-06"
 
 
-def test_operator_queue_lists_intake(client):
+def test_operator_state_lists_intake(client):
     client.post(
-        "/intakes",
+        "/api/intakes",
         files=_files(),
         data={"card_name": "Corporate card 2838", "month": "2026-06"},
-        follow_redirects=False,
     )
-    resp = client.get("/")  # gate disabled => operator home
-    assert resp.status_code == 200
-    assert "Intake queue" in resp.text
-    assert "Corporate card 2838 2026-06" in resp.text
-    assert "Prepare run" in resp.text
+    state = client.get("/api/operator/state").json()
+    assert len(state["intakes"]) == 1
+    row = state["intakes"][0]
+    assert row["label"] == "Corporate card 2838 2026-06"
+    assert row["status"] == INTAKE_RECEIVED
+    assert row["statement_name"] == "statement.example.csv"
+    assert "column map auto-detected" in (row["detect_note"] or "")
 
 
 # ── Replace / late-add files on a queued intake (2026-07-16 feedback:
@@ -206,12 +208,11 @@ def test_operator_queue_lists_intake(client):
 
 def _one_intake(client, **kw):
     resp = client.post(
-        "/intakes",
+        "/api/intakes",
         files=_files(**kw),
         data={"card_name": "Corporate card 2838", "month": "2026-06"},
-        follow_redirects=False,
     )
-    assert resp.status_code == 303, resp.text
+    assert resp.status_code == 200, resp.text
     with RunStore(client._data_root / "recon-web.sqlite") as store:
         return store.list_intakes()[0]
 
@@ -220,11 +221,11 @@ def test_replace_receipts_on_received_intake(client):
     intake = _one_intake(client)
     old_name = intake.receipts_name
     resp = client.post(
-        f"/intakes/{intake.intake_id}/files",
+        f"/api/intakes/{intake.intake_id}/files",
         files={"receipts": ("expense-report.pdf", b"%PDF-1.4 replacement", "application/pdf")},
-        follow_redirects=False,
     )
-    assert resp.status_code == 303, resp.text
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {"ok": True, "intake_id": intake.intake_id}
     with RunStore(client._data_root / "recon-web.sqlite") as store:
         updated = store.get_intake(intake.intake_id)
     assert updated.receipts_name == "expense-report.pdf"
@@ -238,15 +239,14 @@ def test_late_add_receipts_to_waiting_intake(client):
     intake = _one_intake(client, receipts=False)
     assert intake.receipts_name is None
     resp = client.post(
-        f"/intakes/{intake.intake_id}/files",
+        f"/api/intakes/{intake.intake_id}/files",
         files={"receipts": (
             "receipts.example.csv",
             (EXAMPLES / "receipts.example.csv").read_bytes(),
             "text/csv",
         )},
-        follow_redirects=False,
     )
-    assert resp.status_code == 303, resp.text
+    assert resp.status_code == 200, resp.text
     with RunStore(client._data_root / "recon-web.sqlite") as store:
         updated = store.get_intake(intake.intake_id)
     assert updated.receipts_name == "receipts.example.csv"
@@ -255,11 +255,10 @@ def test_late_add_receipts_to_waiting_intake(client):
 def test_replace_statement_refreshes_detect_note(client):
     intake = _one_intake(client)
     resp = client.post(
-        f"/intakes/{intake.intake_id}/files",
+        f"/api/intakes/{intake.intake_id}/files",
         files={"statement": ("chase.pdf", b"%PDF-1.4 stmt", "application/pdf")},
-        follow_redirects=False,
     )
-    assert resp.status_code == 303, resp.text
+    assert resp.status_code == 200, resp.text
     with RunStore(client._data_root / "recon-web.sqlite") as store:
         updated = store.get_intake(intake.intake_id)
     assert updated.statement_name == "chase.pdf"
@@ -271,11 +270,11 @@ def test_replace_statement_refreshes_detect_note(client):
 def test_replace_rejects_wrong_receipts_extension(client):
     intake = _one_intake(client)
     resp = client.post(
-        f"/intakes/{intake.intake_id}/files",
+        f"/api/intakes/{intake.intake_id}/files",
         files={"receipts": ("notes.txt", b"hello", "text/plain")},
     )
     assert resp.status_code == 400
-    assert ".csv export or a Zoho Expense report .pdf" in resp.text
+    assert ".csv export or a Zoho Expense report .pdf" in resp.json()["error"]
     with RunStore(client._data_root / "recon-web.sqlite") as store:
         unchanged = store.get_intake(intake.intake_id)
     assert unchanged.receipts_name == intake.receipts_name
@@ -283,9 +282,9 @@ def test_replace_rejects_wrong_receipts_extension(client):
 
 def test_replace_with_no_files_is_form_error(client):
     intake = _one_intake(client)
-    resp = client.post(f"/intakes/{intake.intake_id}/files")
+    resp = client.post(f"/api/intakes/{intake.intake_id}/files")
     assert resp.status_code == 400
-    assert "at least one file" in resp.text.lower()
+    assert "at least one file" in resp.json()["error"].lower()
 
 
 def test_replace_blocked_once_processing(client):
@@ -297,47 +296,17 @@ def test_replace_blocked_once_processing(client):
             intake.intake_id, INTAKE_PROCESSING, updated_at="2026-07-17T00:00:00"
         )
     resp = client.post(
-        f"/intakes/{intake.intake_id}/files",
+        f"/api/intakes/{intake.intake_id}/files",
         files={"receipts": ("r.pdf", b"%PDF-1.4", "application/pdf")},
     )
     assert resp.status_code == 400
-    assert "already being processed" in resp.text
+    assert "already being processed" in resp.json()["error"]
 
 
 def test_replace_unknown_intake_404(client):
     resp = client.post(
-        "/intakes/deadbeef/files",
+        "/api/intakes/deadbeef/files",
         files={"receipts": ("r.pdf", b"%PDF-1.4", "application/pdf")},
     )
     assert resp.status_code == 404
-
-
-def test_user_home_shows_swap_control_on_received_intake(tmp_path, monkeypatch):
-    """The replace form renders on the USER home for a queued intake, and
-    disappears once the intake leaves `received`."""
-    from expense_recon.web.store import INTAKE_READY
-
-    monkeypatch.setenv("EXPENSE_RECON_ACCESS_CODE", "user-code-1")
-    monkeypatch.setenv("EXPENSE_RECON_OPERATOR_CODE", "operator-code-1")
-    monkeypatch.setenv("EXPENSE_RECON_INSECURE_COOKIE", "1")
-    app = create_app(tmp_path)
-    with TestClient(app) as c:
-        resp = c.post("/login", data={"code": "user-code-1"}, follow_redirects=False)
-        assert resp.status_code == 303
-        c.post(
-            "/intakes",
-            files=_files(),
-            data={"card_name": "Corporate card 2838"},
-            follow_redirects=False,
-        )
-        html = c.get("/").text
-        assert "Sent the wrong file? Replace it here." in html
-        assert "/files" in html
-
-        with RunStore(tmp_path / "recon-web.sqlite") as store:
-            intake = store.list_intakes()[0]
-            store.set_intake_status(
-                intake.intake_id, INTAKE_READY, updated_at="2026-07-17T00:00:00"
-            )
-        html = c.get("/").text
-        assert "Sent the wrong file? Replace it here." not in html
+    assert resp.json()["error"] == "upload not found"

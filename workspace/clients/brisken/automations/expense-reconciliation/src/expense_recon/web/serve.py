@@ -1,11 +1,12 @@
 """`expense-recon-web` console entry point.
 
-Launches the local review-workbench server with uvicorn. Defaults to
-127.0.0.1 (loopback only) so the tool is reachable from the browser on
-the machine running it and nowhere else, all of Brisken's financial data
+Launches the JSON API server with uvicorn (the browser UI is the
+Lovable-hosted SPA; this server answers JSON + file downloads only).
+Defaults to 127.0.0.1 (loopback only) so the API is reachable from the
+machine running it and nowhere else, all of Brisken's financial data
 stays on that machine.
 
-    expense-recon-web                       # http://127.0.0.1:8000
+    expense-recon-web                       # http://127.0.0.1:8000 (docs at /docs)
     expense-recon-web --port 9000
     expense-recon-web --data ./my-runs      # where runs + the db live
 """
@@ -21,7 +22,7 @@ from pathlib import Path
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="expense-recon-web",
-        description="Local browser UI for the Brisken expense reconciliation tool.",
+        description="JSON API server for the Brisken expense reconciliation tool.",
     )
     parser.add_argument("--host", default="127.0.0.1", help="Bind host (default loopback).")
     parser.add_argument("--port", type=int, default=8000, help="Bind port (default 8000).")
@@ -50,11 +51,11 @@ def main(argv: list[str] | None = None) -> int:
     os.environ["EXPENSE_RECON_WEB_DATA"] = str(Path(args.data).resolve())
 
     url = f"http://{args.host}:{args.port}"
-    print(f"Brisken expense reconciliation UI: {url}")
+    print(f"Brisken expense reconciliation API: {url} (docs at {url}/docs)")
     print(f"Run data: {os.environ['EXPENSE_RECON_WEB_DATA']}")
     if not args.no_open:
         try:
-            webbrowser.open(url)
+            webbrowser.open(f"{url}/docs")
         except Exception:
             pass
 

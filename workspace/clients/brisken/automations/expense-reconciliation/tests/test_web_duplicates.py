@@ -117,10 +117,10 @@ def test_resolve_endpoint_records_resolution(client):
     assert grp2["resolution"] == "ignore"
 
 
-def test_resolve_accepts_action_alias_and_bare_path(client):
+def test_resolve_accepts_action_alias(client):
     run_id = _seed(client)
     r = client.post(
-        f"/runs/{run_id}/duplicates/resolve",
+        f"/api/runs/{run_id}/duplicates/resolve",
         json={"group_id": _GROUP_ID, "action": "confirmed"},
     )
     assert r.status_code == 200, r.text

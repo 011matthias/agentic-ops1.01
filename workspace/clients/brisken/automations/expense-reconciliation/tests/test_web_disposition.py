@@ -1,8 +1,8 @@
 """§17 disposition: the web endpoint + the reimbursable seeding in build_view.
 
 Two layers:
-* the JSON endpoint (POST /api/runs/{id}/disposition and its /runs/{id}
-  sibling) records a disposition and returns the fresh summary; and
+* the JSON endpoint (POST /api/runs/{id}/disposition) records a
+  disposition and returns the fresh summary; and
 * `build_view` / `effective_disposition` seed the default from a matched
   receipt's Zoho `reimbursable` flag, with an explicit reviewer verdict
   overriding the seed.
@@ -63,7 +63,7 @@ def _create_run(client) -> str:
         ),
     }
     resp = client.post(
-        "/runs",
+        "/api/runs",
         files=files,
         data={
             "account_id": "amex-9001",
@@ -71,10 +71,11 @@ def _create_run(client) -> str:
             "account_card_currency": "USD",
             "receipts_source": "csv",
         },
-        follow_redirects=False,
     )
-    assert resp.status_code == 303, resp.text
-    return resp.headers["location"].rstrip("/").rsplit("/", 1)[-1]
+    assert resp.status_code == 200, resp.text
+    job = client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
+    return job["run_id"]
 
 
 def _a_transaction_id(client, run_id) -> str:
@@ -103,17 +104,6 @@ def test_disposition_endpoint_records_and_returns_summary(client):
     assert row["disposition"] == "personal_on_business_card"
 
 
-def test_disposition_endpoint_also_on_bare_runs_path(client):
-    run_id = _create_run(client)
-    tx_id = _a_transaction_id(client, run_id)
-    resp = client.post(
-        f"/runs/{run_id}/disposition",
-        json={"transaction_id": tx_id, "disposition": "do_not_export"},
-    )
-    assert resp.status_code == 200, resp.text
-    assert resp.json()["ok"] is True
-
-
 def test_disposition_endpoint_rejects_invalid_value(client):
     run_id = _create_run(client)
     tx_id = _a_transaction_id(client, run_id)
@@ -128,7 +118,7 @@ def test_disposition_does_not_clobber_triage_status(client):
     """A disposition write leaves a prior confirm intact (store orthogonality
     exercised through the HTTP surface)."""
     run_id = _create_run(client)
-    client.post(f"/runs/{run_id}/decisions/confirm-matched")
+    client.post(f"/api/runs/{run_id}/decisions/confirm-matched")
     tx_id = _a_transaction_id(client, run_id)
 
     client.post(
