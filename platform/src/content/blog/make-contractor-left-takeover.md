@@ -3,6 +3,7 @@ title: "Your Make.com Contractor Left: Taking Over an Automation You Didn't Buil
 slug: make-contractor-left-takeover
 date: "2026-07-22"
 category: Process
+author: "Matthias Neumann"
 excerpt: "The takeover order that keeps inherited automations alive: secure access, freeze changes, map what exists, watch it run, then stabilize before you touch a single module."
 ---
 

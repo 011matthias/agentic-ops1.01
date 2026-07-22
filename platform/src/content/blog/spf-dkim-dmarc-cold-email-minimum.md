@@ -3,6 +3,7 @@ title: "SPF, DKIM, DMARC for Cold Email: The Minimum That Actually Passes"
 slug: spf-dkim-dmarc-cold-email-minimum
 date: "2026-07-22"
 category: Technical
+author: "Matthias Neumann"
 excerpt: "The three DNS records every sending domain needs, the minimal working values, the setup order that avoids rework, and when to tighten DMARC from monitoring to enforcement."
 ---
 

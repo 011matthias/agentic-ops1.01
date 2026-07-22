@@ -3,6 +3,7 @@ title: "Cold Email Getting No Replies: Find the Real Problem Before Sending More
 slug: cold-email-no-replies-diagnostic
 date: "2026-07-22"
 category: Strategy
+author: "Matthias Neumann"
 excerpt: "Reply problems live in four layers: deliverability, list, message, offer. They fail in that order, so diagnose bottom-up instead of rewriting subject lines on top of a broken foundation."
 ---
 

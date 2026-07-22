@@ -141,7 +141,7 @@ export default async function BlogPostPage({ params }: PageProps) {
     headline: post.title,
     description: post.excerpt,
     datePublished: post.date,
-    author: { "@type": "Person", name: "Nicolas Neumann" },
+    author: { "@type": "Person", name: post.author || "Nicolas Neumann" },
     publisher: { "@type": "Organization", name: "UnpauseAI", url: "https://unpauseai.com" },
     url: `https://unpauseai.com/blog/${slug}`,
   };
