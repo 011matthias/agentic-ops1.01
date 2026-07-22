@@ -11,6 +11,10 @@ UnpauseAI is an automation consultancy. It is a separate entity from PauseAI, th
 - [Services](https://unpauseai.com/services): the automation work we deliver
 - [Work](https://unpauseai.com/work): shipped automations and case studies
 - [Automations](https://unpauseai.com/automations): automation modules
+- [Pricing](https://unpauseai.com/pricing): tiers and fixed-scope pricing ([plain-text version](https://unpauseai.com/pricing.md))
+- [Compare](https://unpauseai.com/compare): how we compare to alternatives
+- [Blog](https://unpauseai.com/blog): articles on automation practice
+- [FAQ](https://unpauseai.com/faq): common questions
 - [About](https://unpauseai.com/about): who we are
 - [Contact](https://unpauseai.com/contact): start a project
 - [Assessment](https://unpauseai.com/assessment): request an automation assessment

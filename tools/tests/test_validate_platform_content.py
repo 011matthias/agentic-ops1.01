@@ -91,3 +91,42 @@ def test_txt_cover_letter_star_line_is_scanned():
     # Upwork cover letters (.txt) are in scope and are not JS source.
     body = "* One line pitch -- the hook.\n"
     assert _rules(Path("cover-letter.txt"), body) == ["em-dash:dd-substitute"]
+
+
+# --- content/blog scope (2026-07-22: the corpus surface must be gated) -------
+
+def test_blog_markdown_is_in_scope():
+    assert VPC.is_in_scope(VPC.BLOG / "some-post.md")
+
+
+def test_blog_dir_is_in_default_scan():
+    # The default walk must include content/blog, or an un-named run never
+    # sees the corpus even though is_in_scope would accept the files.
+    assert VPC.BLOG in {VPC.PUBLIC_APP, VPC.PROPOSALS, VPC.BLOG}
+    # Behavioral half: a file physically under BLOG is yielded when it exists.
+    if VPC.BLOG.exists():
+        found = {p.resolve() for p in VPC.iter_target_files(None)}
+        for p in VPC.BLOG.rglob("*.md"):
+            assert p.resolve() in found
+
+
+def test_blog_post_banned_word_is_flagged():
+    body = "We leverage robust automation.\n"
+    lines = body.splitlines(keepends=True)
+    rules = [f.rule for f in VPC.check_banned_vocab(VPC.BLOG / "post.md", lines)]
+    assert "banned-word:leverage" in rules and "banned-word:robust" in rules
+
+
+def test_blog_post_is_exempt_from_proposal_heading_contract():
+    # "## Timeline" is heading drift in a PROPOSAL; in a blog post it is just
+    # a heading. The canonical-shape check must stay proposal-scoped.
+    body = "## Timeline\n\nSome article content.\n"
+    lines = body.splitlines(keepends=True)
+    assert VPC.check_proposal_headings(VPC.BLOG / "post.md", lines) == []
+
+
+def test_proposal_heading_drift_still_flagged():
+    body = "## Timeline\n"
+    lines = body.splitlines(keepends=True)
+    findings = VPC.check_proposal_headings(VPC.PROPOSALS / "x.md", lines)
+    assert [f.rule for f in findings] == ["heading-drift"]
