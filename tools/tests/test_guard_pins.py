@@ -38,6 +38,36 @@ def test_every_pinned_guard_matches_its_hash():
     assert not failures, "\n".join(failures)
 
 
+def declared_guard_scripts(manifest_text: str) -> set:
+    """The guard scripts a manifest DECLARES, read from its frontmatter only.
+
+    `guards:` / `guard_files:` in the YAML frontmatter are the authoritative
+    declaration; `optimize_run.validate_manifest` derives the locked guard set
+    from exactly those two keys. The prose body is not a declaration: it
+    routinely cites tool paths, and comd_optimize Step 2.0 MANDATES naming
+    `tools/optimize_overview.py --prior-art` before the manifest is written, so
+    a manifest that documents following the required step necessarily mentions
+    a tool it does not guard with. Scanning the whole file turned every such
+    citation into a false "unpinned guard".
+
+    A manifest with no frontmatter declares nothing; the engine refuses it at
+    `start`, so returning an empty set loses no coverage.
+    """
+    import re
+    fm = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n", manifest_text, re.DOTALL)
+    if not fm:
+        return set()
+    found = set()
+    for m in re.finditer(r"(tools/[A-Za-z0-9._-]+\.py)", fm.group(1)):
+        rel = m.group(1)
+        # Scorers have their own registry; shared validators are guards
+        # only incidentally and are covered by the advisory at lock-on.
+        if rel.startswith("tools/scorers/") or "validate-html" in rel:
+            continue
+        found.add(rel)
+    return found
+
+
 def test_every_guard_named_by_a_shipped_manifest_is_pinned():
     """Coverage, derived from the journals rather than a hand-kept list.
 
@@ -45,21 +75,49 @@ def test_every_guard_named_by_a_shipped_manifest_is_pinned():
     change exists to close, so it is asserted against the manifests on disk -
     a new run that introduces an unpinned guard fails here.
     """
-    import re
     pins = _pin.load_guard_pins()
     missing = set()
     for run_md in (REPO / "docs" / "optimize").glob("*/RUN.md"):
         text = run_md.read_text(encoding="utf-8", errors="replace")
-        for m in re.finditer(r"(tools/[A-Za-z0-9._-]+\.py)", text):
-            rel = m.group(1)
-            # Scorers have their own registry; shared validators are guards
-            # only incidentally and are covered by the advisory at lock-on.
-            if rel.startswith("tools/scorers/") or "validate-html" in rel:
-                continue
+        for rel in declared_guard_scripts(text):
             if rel not in pins and (REPO / rel).is_file():
                 missing.add(f"{run_md.parent.name} -> {rel}")
     assert not missing, "guard(s) used by a shipped run but unpinned:\n" + \
         "\n".join(sorted(missing))
+
+
+_MANIFEST = """---
+tag: t
+guards:
+  - uv run tools/gtm-plan-validate.py some/asset.json
+guard_files:
+  - tools/gtm-plan-validate.py
+scorer: tools/scorers/gtm-roi-v2.py
+---
+
+Read the prior art first: `uv run tools/optimize_overview.py --prior-art x`.
+"""
+
+
+def test_declared_guards_come_from_the_frontmatter():
+    assert declared_guard_scripts(_MANIFEST) == {"tools/gtm-plan-validate.py"}
+
+
+def test_prose_citation_of_a_tool_is_not_a_declared_guard():
+    """The regression: `tools/optimize_overview.py` is cited in the body of
+    every manifest that follows comd_optimize Step 2.0, and is not a guard."""
+    assert "tools/optimize_overview.py" not in declared_guard_scripts(_MANIFEST)
+
+
+def test_a_real_unpinned_guard_still_fails():
+    """The fix must not become a hole: a guard in the frontmatter is caught."""
+    text = _MANIFEST.replace("tools/gtm-plan-validate.py",
+                             "tools/not-pinned-guard.py")
+    assert declared_guard_scripts(text) == {"tools/not-pinned-guard.py"}
+
+
+def test_manifest_without_frontmatter_declares_nothing():
+    assert declared_guard_scripts("no frontmatter tools/x.py here\n") == set()
 
 
 def test_pin_guard_refuses_without_the_seam(tmp_path):
