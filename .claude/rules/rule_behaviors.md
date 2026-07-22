@@ -52,6 +52,19 @@ Surface in checkpoint. This layer fires on direction changes, not just debug fai
 6. If genuinely blocked: state "LIMITATION: {what}. USER ACTION NEEDED: {what + why}." Never frame as a choice.
 Asking for information findable in project files = friction event (`agent-deferred`).
 
+**B1 enforcement is two-stage, and the first stage is the one that matters.**
+`stop-b1-gate.py` (Stop) catches a deferral only after the response exists, so
+the whole turn has to be redone; a 2026-07-22 hook-log census measured 608
+blocks against 2554 clean stops (~19% of turns) holding flat across all of
+July, with 92% of blocks landing in bursts of 2+ within an hour. Containment
+without cure. So a block now also increments `b1_blocks` in the session state,
+and `input-classifier.py` (UserPromptSubmit) spends it as a `[B1 PRIMER]` on
+the NEXT turn, before any closing text is written: bounded, reversible,
+yours-to-take steps get done, not offered. One primer per block, so a burst is
+primed each time instead of nagging every prompt. Read the primer as
+pre-generation instruction, not as a report on the past. Tests:
+`tools/tests/test_b1_primer.py`.
+
 **B2 — "I'm about to mark something done."** Before declaring any task, subtask, or batch operation complete:
 1. Did I enumerate ALL targets before starting? (grep/search for the full set — e.g., all `google-email:sendAnEmail` modules, all env vars, all specs)
 2. Did I verify EACH target, not just the ones I touched?

@@ -89,6 +89,12 @@ def _default_state(session_id: str = "") -> dict:
         "distinct_files": [],
         "pressure_band_emitted": None,
         "candidates": [],
+        # B1 deferral priming: how many times stop-b1-gate blocked this
+        # session, and how many of those have already been surfaced as a
+        # pre-generation primer on a later turn. b1_blocks > b1_primed means
+        # a block is waiting to prime the NEXT turn. See rule_behaviors.md B1.
+        "b1_blocks": 0,
+        "b1_primed": 0,
     }
 
 
@@ -237,6 +243,36 @@ def bump_tool(tool_name: str, file_path: str | None = None) -> dict:
     return _modify(_fn)
 
 
+def bump_b1_block() -> dict:
+    """Record that stop-b1-gate blocked a stop this session.
+
+    The Stop hook is a POST-hoc catch: it fires after the deferring response
+    already exists, costing a full turn redo, and 608 blocks against 2554
+    clean stops (2026-07-22 hook-log census, ~19% of turns, flat across July)
+    show it contains the behavior without changing the disposition. 92% of
+    those blocks land in bursts (2+ within an hour of each other), so the
+    leverage is priming the NEXT turn rather than catching it again."""
+    def _fn(state: dict) -> dict:
+        state["b1_blocks"] = int(state.get("b1_blocks", 0)) + 1
+        return state
+    return _modify(_fn)
+
+
+def b1_priming_due(state: dict | None = None) -> int:
+    """Blocks recorded but not yet surfaced as a primer (0 = nothing due)."""
+    st = state if state is not None else load()
+    return max(0, int(st.get("b1_blocks", 0)) - int(st.get("b1_primed", 0)))
+
+
+def mark_b1_primed() -> dict:
+    """Mark every recorded block as primed, so one block primes exactly one
+    later turn instead of nagging on every subsequent prompt."""
+    def _fn(state: dict) -> dict:
+        state["b1_primed"] = int(state.get("b1_blocks", 0))
+        return state
+    return _modify(_fn)
+
+
 def add_candidate(signal: str, source: str, context: str = "") -> bool:
     """Append a friction CANDIDATE (not a register row). Dedupes on
     (signal, context) within the session. Returns True if newly added."""
@@ -318,12 +354,15 @@ def _cmd_status(as_json: bool) -> int:
             "pressure_band": band,
             "pressure_band_emitted": st.get("pressure_band_emitted"),
             "candidates": len(st.get("candidates", []) or []),
+            "b1_blocks": st.get("b1_blocks", 0),
+            "b1_priming_due": b1_priming_due(st),
         }))
     else:
         print(f"[session-state] band={band or 'none'} "
               f"calls={st.get('tool_calls', 0)} "
               f"files={len(st.get('distinct_files', []) or [])} "
-              f"candidates={len(st.get('candidates', []) or [])}")
+              f"candidates={len(st.get('candidates', []) or [])} "
+              f"b1_blocks={st.get('b1_blocks', 0)}")
     return 0
 
 
