@@ -37,12 +37,12 @@ Load ONE module at a time based on your current task.
 
 | When | Module | Source |
 |------|--------|--------|
-| Writing basic tasks | [TRIGGER-DEV-BASIC-TASKS](../build/modules/TRIGGER-DEV-BASIC-TASKS.md) | build |
-| Full build workflow | [TRIGGER-DEV-BUILD](../build/modules/TRIGGER-DEV-BUILD.md) | build |
-| Modifying trigger.config.ts | [TRIGGER-DEV-CONFIG](../build/modules/TRIGGER-DEV-CONFIG.md) | build |
-| Advanced patterns (concurrency, retries) | [TRIGGER-DEV-ADVANCED-TASKS](../build/modules/TRIGGER-DEV-ADVANCED-TASKS.md) | build |
-| Scheduled/cron tasks | [TRIGGER-DEV-SCHEDULED](../build/modules/TRIGGER-DEV-SCHEDULED.md) | build |
-| Frontend monitoring | [TRIGGER-DEV-REALTIME](../build/modules/TRIGGER-DEV-REALTIME.md) | build |
+| Writing basic tasks | [TRIGGER-DEV-BASIC-TASKS](../skil_build/modules/TRIGGER-DEV-BASIC-TASKS.md) | build |
+| Full build workflow | [TRIGGER-DEV-BUILD](../skil_build/modules/TRIGGER-DEV-BUILD.md) | build |
+| Modifying trigger.config.ts | [TRIGGER-DEV-CONFIG](../skil_build/modules/TRIGGER-DEV-CONFIG.md) | build |
+| Advanced patterns (concurrency, retries) | [TRIGGER-DEV-ADVANCED-TASKS](../skil_build/modules/TRIGGER-DEV-ADVANCED-TASKS.md) | build |
+| Scheduled/cron tasks | [TRIGGER-DEV-SCHEDULED](../skil_build/modules/TRIGGER-DEV-SCHEDULED.md) | build |
+| Frontend monitoring | [TRIGGER-DEV-REALTIME](../skil_build/modules/TRIGGER-DEV-REALTIME.md) | build |
 | AI agent tasks | [AGENTS](modules/AGENTS.md) | trigger-pack |
 | Configuration reference | [CONFIG](modules/CONFIG.md) | trigger-pack |
 | Realtime reference | [REALTIME](modules/REALTIME.md) | trigger-pack |

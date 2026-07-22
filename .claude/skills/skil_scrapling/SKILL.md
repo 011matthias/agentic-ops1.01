@@ -165,7 +165,7 @@ def scrape(category_url: str) -> list[Product]:
     return items
 ```
 
-**Test fixtures:** save real responses to `workspace/clients/{client}/context/test-fixtures/` as `.html` files; tests load the HTML directly via `scrapling.parser.Adaptor(html_string)` instead of hitting the live site. Persistent, namespaced fixtures per [rule_behaviors.md](../../../rules/rule_behaviors.md).
+**Test fixtures:** save real responses to `workspace/clients/{client}/context/test-fixtures/` as `.html` files; tests load the HTML directly via `scrapling.parser.Adaptor(html_string)` instead of hitting the live site. Persistent, namespaced fixtures per [rule_behaviors.md](../../rules/rule_behaviors.md).
 
 **Anti-bot escalation log:** record which fetcher worked for which target in `context/scrape-targets.md`. Don't re-derive the right fetcher on every revisit.
 

@@ -730,5 +730,5 @@ Use `search_templates({query: "http api"})` to find more!
 **Pattern**: Trigger → HTTP Request → Transform → Action → Error Handler
 
 **Related**:
-- [webhook_processing.md](webhook_processing.md) - Receiving HTTP requests
-- [database_operations.md](database_operations.md) - Storing API data
+- [WEBHOOK-PROCESSING.md](WEBHOOK-PROCESSING.md) - Receiving HTTP requests
+- [DATABASE-OPERATIONS.md](DATABASE-OPERATIONS.md) - Storing API data

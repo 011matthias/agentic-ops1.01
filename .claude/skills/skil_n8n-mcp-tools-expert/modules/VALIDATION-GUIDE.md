@@ -438,5 +438,5 @@ n8n_autofix_workflow({
 - **n8n_autofix_workflow({id})**: Auto-fix common issues
 
 **Related**:
-- [SEARCH_GUIDE.md](SEARCH_GUIDE.md) - Find nodes
-- [WORKFLOW_GUIDE.md](WORKFLOW_GUIDE.md) - Build workflows
+- [SEARCH-GUIDE.md](SEARCH-GUIDE.md) - Find nodes
+- [WORKFLOW-GUIDE.md](WORKFLOW-GUIDE.md) - Build workflows

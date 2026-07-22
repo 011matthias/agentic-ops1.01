@@ -126,6 +126,126 @@ def test_illustrative_paths_skipped_real_drift_still_flagged(tmp_path):
     assert len(dead) == 1 and "real-ghost.md" in dead[0], dead
 
 
+def _dead(tmp_path) -> list[str]:
+    return [h["message"] for h in _run_fixture(tmp_path)["hits"]
+            if h["category"] == "dead-pointer"]
+
+
+def test_markdown_link_to_missing_file_fires(tmp_path):
+    # L1: the blind spot this coverage closes. A markdown link is a routing
+    # pointer exactly like a backticked path; a missing target fires, an
+    # existing one does not.
+    sk = tmp_path / ".claude" / "skills" / "skil_link"
+    (sk / "modules").mkdir(parents=True)
+    (sk / "modules" / "REAL.md").write_text("real\n", encoding="utf-8")
+    (sk / "SKILL.md").write_text(
+        "# Link\n\n"
+        "Load [REAL](modules/REAL.md) for the detail.\n"    # exists -> quiet
+        "Load [GHOST](modules/GHOST.md) for more.\n",       # missing -> fires
+        encoding="utf-8")
+    dead = _dead(tmp_path)
+    assert len(dead) == 1 and "modules/GHOST.md" in dead[0], dead
+
+
+def test_pack_prefix_loss_in_link_fires(tmp_path):
+    # L2: the exact 2026-07-22 regression class. A pack spine routes into a
+    # consolidation stub via a cross-skill link that dropped the `skil_`
+    # prefix; the corrected link resolves and stays quiet.
+    skills = tmp_path / ".claude" / "skills"
+    (skills / "skil_stub" / "modules").mkdir(parents=True)
+    (skills / "skil_stub" / "SKILL.md").write_text("# Stub\n", encoding="utf-8")
+    (skills / "skil_stub" / "modules" / "THING.md").write_text("x\n", encoding="utf-8")
+    pack = skills / "skil_pack"
+    pack.mkdir(parents=True)
+    (pack / "SKILL.md").write_text(
+        "# Pack\n\n"
+        "| Bad | [THING](../stub/modules/THING.md) |\n"        # prefix lost -> fires
+        "| Good | [THING](../skil_stub/modules/THING.md) |\n",  # correct -> quiet
+        encoding="utf-8")
+    dead = _dead(tmp_path)
+    assert len(dead) == 1 and "../stub/modules/THING.md" in dead[0], dead
+
+
+def test_link_anchor_and_query_stripped_before_resolving(tmp_path):
+    # L3: `FILE.md#section` is a pointer to FILE.md. The fragment (and any
+    # query) is stripped before resolution, so a real file with an anchor is
+    # quiet and a missing one still fires — reported by its bare path.
+    sk = tmp_path / ".claude" / "skills" / "skil_anchor"
+    (sk / "modules").mkdir(parents=True)
+    (sk / "modules" / "REAL.md").write_text("real\n", encoding="utf-8")
+    (sk / "SKILL.md").write_text(
+        "# Anchor\n\n"
+        "See [a](modules/REAL.md#step-3) and [b](modules/REAL.md?v=2).\n"  # quiet
+        "See [c](modules/GHOST.md#step-3).\n",                             # fires
+        encoding="utf-8")
+    dead = _dead(tmp_path)
+    assert len(dead) == 1, dead
+    assert "modules/GHOST.md" in dead[0] and "#step-3" not in dead[0], dead
+
+
+def test_external_and_pure_anchor_links_never_fire(tmp_path):
+    # L4: schemes and in-page anchors are not file pointers. Detection is by
+    # URL scheme (`name:`), never a bare prefix — `http_api_integration.md`
+    # starts with "http" but is a real sibling file, so it MUST be checked.
+    sk = tmp_path / ".claude" / "skills" / "skil_ext"
+    sk.mkdir(parents=True)
+    (sk / "SKILL.md").write_text(
+        "# Ext\n\n"
+        "[a](https://example.com/x.md) [b](http://example.com/y.md)\n"
+        "[c](mailto:admin@unpauseai.com) [d](tel:+4900) [e](#section)\n"
+        "[f](/docs/site-absolute.md)\n"          # site-root, not a repo pointer
+        "[g](http_api_integration.md)\n",        # NOT a scheme -> must fire
+        encoding="utf-8")
+    dead = _dead(tmp_path)
+    assert len(dead) == 1 and "http_api_integration.md" in dead[0], dead
+
+
+def test_image_links_are_checked_like_file_links(tmp_path):
+    # L5: images are pointers too. A shipped diagram that resolves nowhere is
+    # the same drift class as a missing module, and costs nothing to catch, so
+    # `![alt](path)` is checked and image suffixes are in scope.
+    sk = tmp_path / ".claude" / "skills" / "skil_img"
+    (sk / "references").mkdir(parents=True)
+    (sk / "references" / "flow.png").write_bytes(b"\x89PNG\r\n")
+    (sk / "SKILL.md").write_text(
+        "# Img\n\n"
+        "![flow](references/flow.png)\n"      # exists -> quiet
+        "![gone](references/gone.svg)\n",     # missing -> fires
+        encoding="utf-8")
+    dead = _dead(tmp_path)
+    assert len(dead) == 1 and "references/gone.svg" in dead[0], dead
+
+
+def test_same_path_backticked_and_linked_reported_once(tmp_path):
+    # L6: ``[`x/Y.md`](x/Y.md)`` is one pointer written twice. Both extractors
+    # see it; the line-level dedupe means it is reported once, not twice.
+    sk = tmp_path / ".claude" / "skills" / "skil_dup"
+    sk.mkdir(parents=True)
+    (sk / "SKILL.md").write_text(
+        "# Dup\n\nLoad [`modules/GHOST.md`](modules/GHOST.md) now.\n",
+        encoding="utf-8")
+    dead = _dead(tmp_path)
+    assert len(dead) == 1 and "modules/GHOST.md" in dead[0], dead
+
+
+def test_link_resolves_against_containing_dir_only(tmp_path):
+    # L7: a link has ONE correct base — the dir of the file holding it — because
+    # that is what a reader following it gets. `[SKILL.md](SKILL.md)` inside
+    # modules/ is broken even though the spine exists one level up; backticked
+    # prose keeps the permissive skill-dir/repo-root resolution.
+    sk = tmp_path / ".claude" / "skills" / "skil_base"
+    (sk / "modules").mkdir(parents=True)
+    (sk / "SKILL.md").write_text("# Base\n\nmodules/A.md modules/B.md\n", encoding="utf-8")
+    (sk / "modules" / "A.md").write_text(
+        "- [spine](SKILL.md)\n", encoding="utf-8")        # wrong base -> fires
+    (sk / "modules" / "B.md").write_text(
+        "- [spine](../SKILL.md)\n"                        # correct -> quiet
+        "- prose pointer `modules/A.md` resolves via the skill dir\n",
+        encoding="utf-8")
+    dead = _dead(tmp_path)
+    assert len(dead) == 1 and "A.md: link target `SKILL.md`" in dead[0], dead
+
+
 def test_runtime_created_paths_not_flagged(tmp_path):
     # C3: skil_prompt-queue documents `.claude/queue/pending.md` / `done.md` as
     # real pointers it creates on first use, so absence at rest is not drift. A

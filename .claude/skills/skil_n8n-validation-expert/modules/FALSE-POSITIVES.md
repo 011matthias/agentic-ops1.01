@@ -716,5 +716,5 @@ When accepting a warning, document why:
 **Golden Rule**: If you accept a warning, document WHY.
 
 **Related Files**:
-- **[SKILL.md](SKILL.md)** - Main validation guide
-- **[ERROR_CATALOG.md](ERROR_CATALOG.md)** - Error types and fixes
+- **[SKILL.md](../SKILL.md)** - Main validation guide
+- **[ERROR-CATALOG.md](ERROR-CATALOG.md)** - Error types and fixes

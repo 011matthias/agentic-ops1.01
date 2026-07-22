@@ -184,6 +184,6 @@ IF/Switch operator structure issues are **auto-fixed on save**. Don't manually f
 
 ## Related
 
-- [SKILL.md](SKILL.md) — Main validation guide
-- [FALSE_POSITIVES.md](FALSE_POSITIVES.md) — When to ignore warnings
+- [SKILL.md](../SKILL.md) — Main validation guide
+- [FALSE-POSITIVES.md](FALSE-POSITIVES.md) — When to ignore warnings
 - **n8n Expression Syntax** skill — Fix expression errors

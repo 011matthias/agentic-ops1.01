@@ -595,7 +595,7 @@ return all_items if all_items else [{"json": {"message": "No data"}}]
 - Use n8n nodes for complex operations
 
 **See Also**:
-- [SKILL.md](SKILL.md) - Python Code overview
-- [DATA_ACCESS.md](DATA_ACCESS.md) - Data access patterns
-- [STANDARD_LIBRARY.md](STANDARD_LIBRARY.md) - Available modules
-- [COMMON_PATTERNS.md](COMMON_PATTERNS.md) - Production patterns
+- [SKILL.md](../SKILL.md) - Python Code overview
+- [DATA-ACCESS.md](DATA-ACCESS.md) - Data access patterns
+- [STANDARD-LIBRARY.md](STANDARD-LIBRARY.md) - Available modules
+- [COMMON-PATTERNS.md](COMMON-PATTERNS.md) - Production patterns
