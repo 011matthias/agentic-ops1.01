@@ -288,8 +288,7 @@ li { margin-bottom: 6px; }
 </script>
 </head>
 <body>
-
-<!-- Navigation -->
+
 <nav class="site-nav">
     <div class="nav-left">
         <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
@@ -314,8 +313,7 @@ li { margin-bottom: 6px; }
         <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
     </div>
 </nav>
-
-<!-- Sidebar -->
+
 <aside class="sidebar">
     <div class="sidebar-label">Workflow sections</div>
     <ul class="step-list">
@@ -340,19 +338,16 @@ li { margin-bottom: 6px; }
         </li>
     </ul>
 </aside>
-
-<!-- Main Content -->
+
 <div class="main-content">
 <div class="content-inner">
-
-<!-- Hero -->
+
 <section class="hero">
     <div class="hero-badge">Interactive Demo</div>
     <h1>See the AI in Action</h1>
     <p class="hero-sub">Three deliverables on this page: a live AI demo, and two complete n8n workflow templates you can download and import. Each one explained below.</p>
 </section>
-
-<!-- Live Demo -->
+
 <h2 id="demo">Live Demo: Document Link Extraction</h2>
 
 <div class="callout orange">
@@ -411,8 +406,7 @@ The AI will:
     <div class="callout-title">What this proves</div>
     <p>This is the hardest technical requirement in the project: given arbitrary HTML from 300+ different investor relations pages, reliably extract and classify financial document links. The AI handles structural variation that would break rule-based scrapers. Each company's page is different, but the AI adapts.</p>
 </div>
-
-<!-- Architecture Overview -->
+
 <h2 id="architecture">System Architecture</h2>
 <p>You receive <strong>two complete n8n workflow files</strong>. Together they cover all 5 pipelines. Here's how they connect:</p>
 
@@ -443,8 +437,7 @@ The AI will:
         <div style="font-size:12px;color:var(--purple-dark);opacity:.85;">Pipelines 3 + 4 + 5. Handles intelligence: synthesizes thesis updates from new documents, filters daily news by relevance, and routes all changes through email approval before modifying any files.</div>
     </div>
 </div>
-
-<!-- Workflow 1: Dispatcher -->
+
 <h2 id="wf1">Workflow 1: Web Scraping Dispatcher</h2>
 <p>The dispatcher-worker pattern handles 300+ companies without a single failure blocking everything. Companies are batched, scraped independently, and failures are isolated and retried.</p>
 
@@ -510,8 +503,7 @@ The AI will:
     <div class="sd-text"><strong>Download Workflow 1</strong> - Complete n8n template with color-coded zones, error handling, and descriptive node names.</div>
     <a href="/clients/alpha-research/alpha-research-web-scraping-dispatcher.json" download class="dl-btn blue">&#128190; Download JSON</a>
 </div>
-
-<!-- Workflow 2: Thesis + News + HITL -->
+
 <h2 id="wf2">Workflow 2: Thesis + News + HITL</h2>
 <p>Three pipelines that work together: thesis synthesis watches for new documents, news intelligence monitors 3 API sources daily, and the HITL approval chain ensures nothing modifies your files without your explicit sign-off.</p>
 
@@ -562,8 +554,7 @@ The AI will:
 <h3>HITL Approval Flow (Detail)</h3>
 <p>The human-in-the-loop pattern ensures no AI-generated content modifies your core research files without explicit approval.</p>
 
-<div style="margin:32px 0;">
-    <!-- Step 1 -->
+<div style="margin:32px 0;">
     <div style="display:flex;align-items:center;gap:16px;margin-bottom:4px;">
         <div style="width:48px;height:48px;border-radius:50%;background:var(--purple-bg);border:2px solid var(--purple);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><path d="M12 2a4 4 0 0 1 4 4v2H8V6a4 4 0 0 1 4-4z"/><rect x="3" y="8" width="18" height="14" rx="2"/><circle cx="12" cy="16" r="2"/></svg>
@@ -574,8 +565,7 @@ The AI will:
             <div style="font-size:12px;color:var(--purple-dark);opacity:.8;margin-top:2px;">Thesis synthesis or news filter produces a change to review</div>
         </div>
     </div>
-    <div style="width:2px;height:20px;background:var(--border);margin-left:23px;"></div>
-    <!-- Step 2 -->
+    <div style="width:2px;height:20px;background:var(--border);margin-left:23px;"></div>
     <div style="display:flex;align-items:center;gap:16px;margin-bottom:4px;">
         <div style="width:48px;height:48px;border-radius:50%;background:var(--blue-bg);border:2px solid var(--blue);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><polyline points="22,6 12,13 2,6"/></svg>
@@ -586,8 +576,7 @@ The AI will:
             <div style="font-size:12px;color:var(--blue-dark);opacity:.8;margin-top:2px;">Shows exactly what will change, with source references</div>
         </div>
     </div>
-    <div style="width:2px;height:20px;background:var(--border);margin-left:23px;"></div>
-    <!-- Step 3 -->
+    <div style="width:2px;height:20px;background:var(--border);margin-left:23px;"></div>
     <div style="display:flex;align-items:center;gap:16px;margin-bottom:4px;">
         <div style="width:48px;height:48px;border-radius:50%;background:var(--orange-bg);border:2px solid var(--orange);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
@@ -598,8 +587,7 @@ The AI will:
             <div style="font-size:12px;color:var(--orange-dark);opacity:.8;margin-top:2px;">Pipeline holds state until you respond (7-day timeout, day-3 reminder)</div>
         </div>
     </div>
-    <div style="width:2px;height:20px;background:var(--border);margin-left:23px;"></div>
-    <!-- Step 4 -->
+    <div style="width:2px;height:20px;background:var(--border);margin-left:23px;"></div>
     <div style="display:flex;align-items:center;gap:16px;margin-bottom:4px;">
         <div style="width:48px;height:48px;border-radius:50%;background:var(--blue-bg);border:2px solid var(--blue);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2"><path d="M14 9l-2 2-2-2"/><path d="M10 15l2-2 2 2"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
@@ -610,8 +598,7 @@ The AI will:
             <div style="font-size:12px;color:var(--blue-dark);opacity:.8;margin-top:2px;">Works on any device. Signed URLs prevent unauthorized approvals.</div>
         </div>
     </div>
-    <div style="width:2px;height:20px;background:var(--border);margin-left:23px;"></div>
-    <!-- Step 5 -->
+    <div style="width:2px;height:20px;background:var(--border);margin-left:23px;"></div>
     <div style="display:flex;align-items:center;gap:16px;">
         <div style="width:48px;height:48px;border-radius:50%;background:var(--green-bg);border:2px solid var(--green);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><polyline points="20,6 9,17 4,12"/></svg>
@@ -628,8 +615,7 @@ The AI will:
     <div class="sd-text"><strong>Download Workflow 2</strong> - Three pipelines with color-coded zones (purple = thesis, blue = news, green = HITL approval). Error handling included.</div>
     <a href="/clients/alpha-research/alpha-research-thesis-news-hitl.json" download class="dl-btn purple">&#128190; Download JSON</a>
 </div>
-
-<!-- Downloads Summary -->
+
 <h2 id="downloads">Download Both Templates</h2>
 <p>Two complete n8n workflow templates. Import into your n8n instance, add your API credentials, and they run. Free to keep regardless of whether we work together.</p>
 
@@ -650,8 +636,7 @@ The AI will:
     <div class="callout-title">What you get</div>
     <p>Both templates include color-coded sticky notes (blue = input, purple = processing, green = output, orange = error handling) explaining each section. Every node has a descriptive name. Error handling is built in. These are working starting points, not sketches.</p>
 </div>
-
-<!-- CTA -->
+
 <section class="cta-section">
     <h2>See the timeline</h2>
     <p>Three weeks from kickoff to tested delivery. Three phases with clear milestones.</p>
@@ -742,8 +727,7 @@ async function runDemo() {
     btn.textContent = 'Extract Document Links';
 }
 </script>
-
-<!-- Access Gate -->
+
 <div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
   <div style="text-align:center;max-width:360px;padding:24px;">
     <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;">

@@ -206,8 +206,7 @@ tr:hover td { background: var(--blue-bg); }
 </script>
 </head>
 <body>
-
-<!-- Navigation -->
+
 <nav class="site-nav">
     <div class="nav-left">
         <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
@@ -232,8 +231,7 @@ tr:hover td { background: var(--blue-bg); }
         <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
     </div>
 </nav>
-
-<!-- Sidebar -->
+
 <aside class="sidebar">
     <div class="sidebar-label">Pipelines</div>
     <ul class="step-list">
@@ -262,19 +260,16 @@ tr:hover td { background: var(--blue-bg); }
         </li>
     </ul>
 </aside>
-
-<!-- Main Content -->
+
 <div class="main-content">
 <div class="content-inner">
-
-<!-- Hero -->
+
 <section class="hero" id="solution-top">
     <div class="hero-badge">Solution Architecture</div>
     <h1>Five Pipelines, One Engine</h1>
     <p class="hero-sub">Each pipeline is a self-contained n8n workflow that shares a common company registry, storage layer, and error handling infrastructure.</p>
 </section>
-
-<!-- Pipeline 1 -->
+
 <h2 id="pipeline-1">Pipeline 1: Web Scraping Dispatcher</h2>
 <div class="pipeline-block">
     <div class="pipeline-header">
@@ -300,8 +295,7 @@ tr:hover td { background: var(--blue-bg); }
     <p>The dispatcher runs on a schedule (configurable: daily, weekly, or on-demand). It reads your Google Sheets company registry, filters for companies due for a scrape, splits them into batches of 10-20 to respect rate limits, and dispatches each batch to the scraper sub-workflow.</p>
     <p><strong>Why a dispatcher?</strong> If one company's scrape fails, it does not block the other 299. Each batch runs independently with its own error handling. Failed companies get logged and retried on the next run.</p>
 </div>
-
-<!-- Pipeline 2 -->
+
 <h2 id="pipeline-2">Pipeline 2: Modular Document Scrapers</h2>
 <div class="pipeline-block">
     <div class="pipeline-header">
@@ -340,8 +334,7 @@ tr:hover td { background: var(--blue-bg); }
     <div class="callout-title">Honest note: Browser API requirement</div>
     <p>n8n does not have a native headless browser. For JavaScript-rendered investor relations pages (React, Angular, or heavy SPA sites), we use an external browser API service like ScrapingBee, Bright Data, or Apify. This is actually the production-grade approach: these services handle CAPTCHA solving, proxy rotation, and browser fingerprinting better than a self-hosted Puppeteer instance. The trade-off is a per-request cost (typically $0.001-0.01 per page). For 300+ companies scraped weekly, expect $5-30/month in browser API costs depending on how many sites require JS rendering.</p>
 </div>
-
-<!-- Pipeline 3 -->
+
 <h2 id="pipeline-3">Pipeline 3: Thesis Synthesis</h2>
 <div class="pipeline-block">
     <div class="pipeline-header">
@@ -365,8 +358,7 @@ tr:hover td { background: var(--blue-bg); }
     <p>When a new analysis file appears in your cloud storage (e.g., a freshly scraped annual report), the file watcher triggers this pipeline. It fetches the existing thesis documents for that company (Core Thesis, Financial Model, Risk Assessment, Catalyst Tracker), passes everything to Claude with a synthesis prompt, and generates a proposed update.</p>
     <p>The proposed update is sent to HITL approval (Pipeline 5) before any file is modified. On approval, a Code node reads the target markdown file, identifies the correct section using regex, and appends the new content without overwriting existing analysis.</p>
 </div>
-
-<!-- Pipeline 4 -->
+
 <h2 id="pipeline-4">Pipeline 4: News Intelligence Filter</h2>
 <div class="pipeline-block">
     <div class="pipeline-header">
@@ -401,8 +393,7 @@ tr:hover td { background: var(--blue-bg); }
         <tr><td>RSS Feeds</td><td>Direct subscription</td><td>Industry-specific, configurable per sector</td></tr>
     </table>
 </div>
-
-<!-- Pipeline 5 -->
+
 <h2 id="pipeline-5">Pipeline 5: HITL Email Approval</h2>
 <div class="pipeline-block">
     <div class="pipeline-header">
@@ -441,8 +432,7 @@ tr:hover td { background: var(--blue-bg); }
     <div class="callout-title">Honest note: Wait node mechanics</div>
     <p>n8n's Wait node pauses an execution and resumes it when a webhook fires. This is not a native approval queue with a UI dashboard. You approve or reject via email buttons. The upside: it works everywhere (phone, desktop, any email client). The downside: if the n8n instance restarts, paused executions resume from their saved state but the wait timeout resets. We configure a 7-day timeout with a fallback reminder email at day 3.</p>
 </div>
-
-<!-- Shared Infrastructure -->
+
 <h2 id="shared">Shared Infrastructure</h2>
 <p>All five pipelines share these components. Building them once means consistent behavior across the entire system.</p>
 
@@ -467,8 +457,7 @@ tr:hover td { background: var(--blue-bg); }
     <h3>Execution Logging</h3>
     <p>Every pipeline execution logs: start time, end time, items processed, items succeeded, items failed, duration. This feeds a simple operations dashboard (a Google Sheet with pivot tables) so you can monitor pipeline health at a glance.</p>
 </div>
-
-<!-- CTA -->
+
 <section class="cta-section">
     <h2>See it running</h2>
     <p>The Workflow page has a live demo of the AI link extraction, plus architecture diagrams and downloadable n8n templates.</p>
@@ -522,8 +511,7 @@ links.forEach(function(a) {
     });
 });
 </script>
-
-<!-- Access Gate -->
+
 <div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
   <div style="text-align:center;max-width:360px;padding:24px;">
     <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;">

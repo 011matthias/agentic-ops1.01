@@ -224,8 +224,7 @@ li { margin-bottom: 6px; }
 </script>
 </head>
 <body>
-
-<!-- Navigation -->
+
 <nav class="site-nav">
     <div class="nav-left">
         <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
@@ -250,8 +249,7 @@ li { margin-bottom: 6px; }
         <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
     </div>
 </nav>
-
-<!-- Sidebar -->
+
 <aside class="sidebar">
     <div class="sidebar-label">Brief sections</div>
     <ul class="step-list">
@@ -276,19 +274,16 @@ li { margin-bottom: 6px; }
         </li>
     </ul>
 </aside>
-
-<!-- Main Content -->
+
 <div class="main-content">
 <div class="content-inner">
-
-<!-- Hero -->
+
 <section class="hero" id="requirements">
     <div class="hero-badge">Project Brief</div>
     <h1>Your Requirements, Mapped</h1>
     <p class="hero-sub">We read both job postings carefully. Here is what you asked for, organized by scope, with links to where each requirement is addressed in this proposal.</p>
 </section>
-
-<!-- Job 1 -->
+
 <h2 id="job1">Job 1: Dynamic Web Scraping Pipeline</h2>
 <p>Build a dynamic web scraping pipeline using n8n for investment research across 300+ companies. The system must handle diverse website structures, extract financial documents, and deliver structured data.</p>
 
@@ -322,8 +317,7 @@ li { margin-bottom: 6px; }
     <li><strong>Time estimate</strong> for building the initial scraping pipeline for 5-10 site types?</li>
     <li><strong>Cost estimate</strong> for the project?</li>
 </ol>
-
-<!-- Job 2 -->
+
 <h2 id="job2">Job 2: AI Document Processing + News + HITL</h2>
 <p>Build an AI-powered document processing, news filtering, and human-in-the-loop pipeline. The system synthesizes investment thesis files, monitors relevant news, and routes updates through email-based approval before modifying core research documents.</p>
 
@@ -356,8 +350,7 @@ li { margin-bottom: 6px; }
     <li><strong>Time estimate</strong> for the complete pipeline?</li>
     <li><strong>Cost estimate</strong> for the project?</li>
 </ol>
-
-<!-- Why One System -->
+
 <h2 id="overlap">Why One System</h2>
 <p>These two jobs share one hard problem: getting structured data out of unstructured sources. The web scraper extracts document links from messy HTML. The thesis synthesizer extracts insights from messy markdown. The news filter extracts relevance from messy articles. Same pattern, same infrastructure.</p>
 
@@ -396,8 +389,7 @@ li { margin-bottom: 6px; }
     <div class="callout-title">One build, two deliverables</div>
     <p>Building these as one system means: one Google Sheets company registry (not two), one cloud storage layer (not two), one error handling pattern (not two), and one place to debug when something breaks. You get two exportable n8n workflow templates that share infrastructure.</p>
 </div>
-
-<!-- Cross-References -->
+
 <h2 id="cross-ref">Where Each Requirement Is Answered</h2>
 <p>Every "To Apply" question from both job postings is addressed in detail on a specific page of this proposal.</p>
 
@@ -449,8 +441,7 @@ li { margin-bottom: 6px; }
     <div class="cross-ref-text"><strong>Cost estimate</strong> &mdash; Combined pricing covers both scopes. Building together is more efficient than building separately.</div>
     <a href="/clients/alpha-research/investment" class="cross-ref-link">Investment &rarr;</a>
 </div>
-
-<!-- CTA -->
+
 <section class="cta-section">
     <h2>See the technical solution</h2>
     <p>The Solution page breaks down all five pipelines with architecture details and honest technical notes.</p>
@@ -504,8 +495,7 @@ links.forEach(function(a) {
     });
 });
 </script>
-
-<!-- Access Gate -->
+
 <div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
   <div style="text-align:center;max-width:360px;padding:24px;">
     <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;">

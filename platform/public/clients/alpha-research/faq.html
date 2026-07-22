@@ -228,8 +228,7 @@ li { margin-bottom: 6px; }
 </script>
 </head>
 <body>
-
-<!-- Navigation -->
+
 <nav class="site-nav">
     <div class="nav-left">
         <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
@@ -254,8 +253,7 @@ li { margin-bottom: 6px; }
         <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
     </div>
 </nav>
-
-<!-- Sidebar -->
+
 <aside class="sidebar">
     <div class="sidebar-label">FAQ sections</div>
     <ul class="step-list">
@@ -276,19 +274,16 @@ li { margin-bottom: 6px; }
         </li>
     </ul>
 </aside>
-
-<!-- Main Content -->
+
 <div class="main-content">
 <div class="content-inner">
-
-<!-- Hero -->
+
 <section class="hero" id="top">
     <div class="hero-badge">FAQ</div>
     <h1>Frequently Asked Questions</h1>
     <p class="hero-sub">Honest answers to the questions we would ask if we were hiring for this project. Click any question to expand.</p>
 </section>
-
-<!-- Scope -->
+
 <h2 id="scope">Scope</h2>
 
 <details class="faq-item">
@@ -313,8 +308,7 @@ li { margin-bottom: 6px; }
         <p>The workflows are separate n8n templates. You can run Workflow 1 (scraping) independently. The shared infrastructure (registry, storage) works for both but doesn't require both.</p>
     </div>
 </details>
-
-<!-- Technical -->
+
 <h2 id="technical">Technical</h2>
 
 <details class="faq-item">
@@ -347,8 +341,7 @@ li { margin-bottom: 6px; }
         <p>n8n persists execution state to its database. On restart, paused executions resume from saved state. The wait timeout resets, so the approval window effectively extends.</p>
     </div>
 </details>
-
-<!-- Delivery -->
+
 <h2 id="delivery">Delivery</h2>
 
 <details class="faq-item">
@@ -372,8 +365,7 @@ li { margin-bottom: 6px; }
         <p>Yes, they are standard n8n workflows. No proprietary code, no lock-in. Every node is documented with sticky notes explaining what it does and why.</p>
     </div>
 </details>
-
-<!-- Risk -->
+
 <h2 id="risk">Risk</h2>
 
 <details class="faq-item">
@@ -399,8 +391,7 @@ li { margin-bottom: 6px; }
         <p>The live demo on the <a href="/clients/alpha-research/workflow">Workflow page</a> proves the technical capability directly. We prefer demonstrating competence over describing it.</p>
     </div>
 </details>
-
-<!-- CTA -->
+
 <section class="cta-section">
     <h2>Ready to get started?</h2>
     <p>The Onboarding page has everything needed to kick off: access requirements, timeline, and a quick-start form.</p>
@@ -454,8 +445,7 @@ links.forEach(function(a) {
     });
 });
 </script>
-
-<!-- Access Gate -->
+
 <div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
   <div style="text-align:center;max-width:360px;padding:24px;">
     <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;">

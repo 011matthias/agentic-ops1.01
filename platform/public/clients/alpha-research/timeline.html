@@ -225,8 +225,7 @@ tr:hover td { background: var(--blue-bg); }
 </script>
 </head>
 <body>
-
-<!-- Navigation -->
+
 <nav class="site-nav">
     <div class="nav-left">
         <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
@@ -251,8 +250,7 @@ tr:hover td { background: var(--blue-bg); }
         <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
     </div>
 </nav>
-
-<!-- Sidebar -->
+
 <aside class="sidebar">
     <div class="sidebar-label">Timeline sections</div>
     <ul class="step-list">
@@ -277,19 +275,16 @@ tr:hover td { background: var(--blue-bg); }
         </li>
     </ul>
 </aside>
-
-<!-- Main Content -->
+
 <div class="main-content">
 <div class="content-inner">
-
-<!-- Hero -->
+
 <section class="hero">
     <div class="hero-badge">Project Timeline</div>
     <h1>Three Weeks to Production</h1>
     <p class="hero-sub">Fifteen working days across three phases with clear milestones. Each phase delivers testable, working functionality. You review results after each phase and adjust priorities before the next one starts.</p>
 </section>
-
-<!-- Overview -->
+
 <h2 id="overview">Timeline Overview</h2>
 <p>The project is structured as three sequential phases over fifteen working days (three weeks). Each phase builds on the previous one and delivers a concrete, testable result before moving forward.</p>
 
@@ -339,8 +334,7 @@ tr:hover td { background: var(--blue-bg); }
     <div class="callout-title">Why 3 weeks</div>
     <p>The estimate accounts for pipeline complexity: 5 interconnected workflows, 4 external API integrations, AI-powered extraction with prompt tuning, and a HITL approval flow that requires email + webhook coordination. Each phase builds on the previous one and includes testing plus buffer for API integration issues and edge cases in 300+ website structures. Typical agency timelines for comparable AI automation projects are 4&ndash;8 weeks. The shorter timeline is possible because we use proven n8n pipeline patterns and pre-built Claude AI integration templates.</p>
 </div>
-
-<!-- Phase 1 -->
+
 <h2 id="phase-1">Phase 1: Foundation (Days 1-6)</h2>
 <p>Data ingestion pipelines. This phase builds the core scraping infrastructure: how companies get queued, how pages get fetched, how documents get extracted and stored.</p>
 
@@ -374,8 +368,7 @@ tr:hover td { background: var(--blue-bg); }
 <div class="deliverable-box blue">
     <strong>Phase 1 Deliverable:</strong>&nbsp;Working dispatcher that scrapes 5-10 test companies end-to-end. Registry reads, pages fetch, links extract, documents download to cloud storage.
 </div>
-
-<!-- Phase 2 -->
+
 <h2 id="phase-2">Phase 2: Intelligence (Days 7-11)</h2>
 <p>Processing pipelines. This phase builds the analytical layer: thesis synthesis, news filtering, and the human-in-the-loop approval flow that prevents any automated overwrites.</p>
 
@@ -411,8 +404,7 @@ tr:hover td { background: var(--blue-bg); }
 <div class="deliverable-box purple">
     <strong>Phase 2 Deliverable:</strong>&nbsp;All 5 pipelines functional in sandbox with test data. Thesis synthesis triggers on file upload, news filter scores articles against thesis, HITL emails send and process responses.
 </div>
-
-<!-- Phase 3 -->
+
 <h2 id="phase-3">Phase 3: Test + Deliver (Days 12-15)</h2>
 <p>Production readiness. This phase hardens everything: real data, edge cases, prompt quality, error handling, and documentation for handoff.</p>
 
@@ -447,8 +439,7 @@ tr:hover td { background: var(--blue-bg); }
 <div class="deliverable-box green">
     <strong>Phase 3 Deliverable:</strong>&nbsp;Two tested n8n workflow JSON exports, operations documentation, and handoff. Production-ready system processing real companies with tuned prompts and full error handling.
 </div>
-
-<!-- Day-by-Day Table -->
+
 <h2 id="deliverables">Day-by-Day Breakdown</h2>
 <p>Detailed view of what gets built each day across all three phases.</p>
 
@@ -559,8 +550,7 @@ tr:hover td { background: var(--blue-bg); }
     <div class="callout-title">Flexible phasing</div>
     <p>Each phase delivers testable functionality. You can review results after each phase and adjust priorities before the next one starts. If the scraping patterns take longer to stabilize on day 5, we shift intelligence work rather than cutting quality.</p>
 </div>
-
-<!-- CTA -->
+
 <section class="cta-section" id="next-steps">
     <h2>See the Investment Breakdown</h2>
     <p>Three weeks, two pricing options. Fixed initial phase with hourly ongoing, or full project fixed.</p>
@@ -614,8 +604,7 @@ links.forEach(function(a) {
     });
 });
 </script>
-
-<!-- Access Gate -->
+
 <div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
   <div style="text-align:center;max-width:360px;padding:24px;">
     <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;">
