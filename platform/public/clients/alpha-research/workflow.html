@@ -155,9 +155,7 @@ li{margin-bottom:6px}
 .lane-flow{flex-wrap:wrap;gap:4px}
 }
 </style>
-<script>
-(function(){var t=localStorage.getItem('alpha-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
-</script>
+<script>(function(){var t=localStorage.getItem('alpha-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();</script>
 </head>
 <body>
 
@@ -524,81 +522,75 @@ The AI will:
 </div>
 </div>
 
-<script>
-function toggleTheme() {
-    var el = document.documentElement;
-    var t = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-    el.setAttribute('data-theme', t);
-    localStorage.setItem('alpha-theme', t);
+<script>function toggleTheme() {
+var el = document.documentElement;
+var t = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+el.setAttribute('data-theme', t);
+localStorage.setItem('alpha-theme', t);
 }
-
 var links = document.querySelectorAll('.step-link');
 var sections = [];
 links.forEach(function(a) {
-    var id = a.getAttribute('href').replace('#','');
-    var el = document.getElementById(id);
-    if (el) sections.push({ el: el, link: a });
+var id = a.getAttribute('href').replace('#','');
+var el = document.getElementById(id);
+if (el) sections.push({ el: el, link: a });
 });
-
 function updateActive() {
-    var scrollY = window.scrollY + 120;
-    var active = sections[0];
-    for (var i = 0; i < sections.length; i++) {
-        if (sections[i].el.offsetTop <= scrollY) active = sections[i];
-    }
-    links.forEach(function(l) { l.classList.remove('active'); });
-    if (active) active.link.classList.add('active');
+var scrollY = window.scrollY + 120;
+var active = sections[0];
+for (var i = 0; i < sections.length; i++) {
+if (sections[i].el.offsetTop <= scrollY) active = sections[i];
+}
+links.forEach(function(l) { l.classList.remove('active'); });
+if (active) active.link.classList.add('active');
 }
 window.addEventListener('scroll', updateActive);
 updateActive();
-
 links.forEach(function(a) {
-    a.addEventListener('click', function(e) {
-        e.preventDefault();
-        var id = this.getAttribute('href').replace('#','');
-        var el = document.getElementById(id);
-        if (el) el.scrollIntoView({ behavior: 'smooth' });
-        document.querySelector('.sidebar').classList.remove('open');
-    });
+a.addEventListener('click', function(e) {
+e.preventDefault();
+var id = this.getAttribute('href').replace('#','');
+var el = document.getElementById(id);
+if (el) el.scrollIntoView({ behavior: 'smooth' });
+document.querySelector('.sidebar').classList.remove('open');
 });
-
+});
 async function runDemo() {
-    var btn = document.getElementById('demo-btn');
-    var output = document.getElementById('demo-output');
-    var html = document.getElementById('demo-text').value;
-    if (!html.trim()) { output.textContent = 'Please paste HTML content to extract document links.'; return; }
-    btn.disabled = true;
-    btn.textContent = 'Extracting...';
-    output.textContent = 'Sending HTML to Claude AI for analysis...';
-    try {
-        var controller = new AbortController();
-        var timeout = setTimeout(function() { controller.abort(); }, 30000);
-        var res = await fetch('/api/demos/document-link-extractor', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({html: html}),
-            signal: controller.signal
-        });
-        clearTimeout(timeout);
-        if (!res.ok) {
-            var errText = await res.text();
-            output.textContent = 'Error ' + res.status + ': ' + (errText || res.statusText);
-        } else {
-            var raw = await res.text();
-            try {
-                var data = JSON.parse(raw);
-                output.textContent = JSON.stringify(data, null, 2);
-            } catch(pe) {
-                output.textContent = raw || 'Empty response from server';
-            }
-        }
-    } catch(e) {
-        output.textContent = e.name === 'AbortError' ? 'Request timed out (30s). Please try again.' : 'Error: ' + e.message;
-    }
-    btn.disabled = false;
-    btn.textContent = 'Extract Document Links';
+var btn = document.getElementById('demo-btn');
+var output = document.getElementById('demo-output');
+var html = document.getElementById('demo-text').value;
+if (!html.trim()) { output.textContent = 'Please paste HTML content to extract document links.'; return; }
+btn.disabled = true;
+btn.textContent = 'Extracting...';
+output.textContent = 'Sending HTML to Claude AI for analysis...';
+try {
+var controller = new AbortController();
+var timeout = setTimeout(function() { controller.abort(); }, 30000);
+var res = await fetch('/api/demos/document-link-extractor', {
+method: 'POST',
+headers: {'Content-Type': 'application/json'},
+body: JSON.stringify({html: html}),
+signal: controller.signal
+});
+clearTimeout(timeout);
+if (!res.ok) {
+var errText = await res.text();
+output.textContent = 'Error ' + res.status + ': ' + (errText || res.statusText);
+} else {
+var raw = await res.text();
+try {
+var data = JSON.parse(raw);
+output.textContent = JSON.stringify(data, null, 2);
+} catch(pe) {
+output.textContent = raw || 'Empty response from server';
 }
-</script>
+}
+} catch(e) {
+output.textContent = e.name === 'AbortError' ? 'Request timed out (30s). Please try again.' : 'Error: ' + e.message;
+}
+btn.disabled = false;
+btn.textContent = 'Extract Document Links';
+}</script>
 
 <div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
   <div style="text-align:center;max-width:360px;padding:24px;">
@@ -615,10 +607,8 @@ async function runDemo() {
     <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Incorrect code. Please try again.</p>
   </div>
 </div>
-<script>
-var AR_CODE='alpha-2026';
+<script>var AR_CODE='alpha-2026';
 function checkAuth(){var v=document.getElementById('auth-input').value;if(v===AR_CODE){localStorage.setItem('alpha-access','granted');var g=document.getElementById('auth-gate');g.style.opacity='0';setTimeout(function(){g.style.display='none'},300)}else{document.getElementById('auth-error').style.display='block';document.getElementById('auth-input').value='';document.getElementById('auth-input').focus()}}
-(function(){if(localStorage.getItem('alpha-access')==='granted'){document.getElementById('auth-gate').style.display='none'}else{var i=document.getElementById('auth-input');if(i)i.focus()}})();
-</script>
+(function(){if(localStorage.getItem('alpha-access')==='granted'){document.getElementById('auth-gate').style.display='none'}else{var i=document.getElementById('auth-input');if(i)i.focus()}})();</script>
 </body>
 </html>
