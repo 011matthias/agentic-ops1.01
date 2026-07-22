@@ -56,7 +56,10 @@ META_PHRASES = [
     r"in summary",
     r"in conclusion",
     r"to summarize",
-    r"not just [\w ]+ but",
+    # "not just X but Y": X may carry commas, apostrophes, hyphens ("not just
+    # fast, but reliable" escaped the old `[\w ]+`). Bound at 60 chars and stop
+    # at sentence ends so the phrase never spans two sentences.
+    r"not just [^.!?\n]{1,60}?\bbut\b",
 ]
 DRIVE_PATTERN = re.compile(r"\bdrive (results|value|growth)\b", re.IGNORECASE)
 
@@ -226,8 +229,23 @@ def check_brand_spelling(path: Path, lines: list[str]) -> list[Finding]:
     return findings
 
 
+# Prose surfaces where a double-quoted span or a `>` blockquote is a genuine
+# citation of someone else's words (research-block posting quotes, cover
+# letters anchoring on the client's phrasing). In JS/TS/TSX the same marks
+# delimit string literals, which ARE the rendered copy, so no demotion there.
+QUOTE_DEMOTION_SUFFIXES = {".md", ".mdx", ".markdown", ".txt"}
+# Narrow carve for JS/TS string literals: a banned word inside a NESTED
+# quotation ('...' or curly-quoted span whose marks function as quote marks,
+# not contraction apostrophes) is the copy quoting a specimen, e.g. the
+# oneproposal FAQ mocking "'I am excited to leverage my experience.'".
+# Both quote marks must not touch a word character, so won't / doesn't
+# apostrophes can never open or close a span.
+_NESTED_QUOTE_TMPL = r"(?<!\w)['‘][^'‘’]*\b{word}\b[^'‘’]*['’](?!\w)"
+
+
 def check_banned_vocab(path: Path, lines: list[str]) -> list[Finding]:
     findings: list[Finding] = []
+    quote_demotes = path.suffix.lower() in QUOTE_DEMOTION_SUFFIXES
     for i, line in enumerate(lines, 1):
         # Skip code-fence-like lines (rough heuristic for .md).
         if line.lstrip().startswith("```"):
@@ -236,16 +254,24 @@ def check_banned_vocab(path: Path, lines: list[str]) -> list[Finding]:
         for word in CORPORATE_THESAURUS:
             # Word boundary search.
             if re.search(rf"\b{word}\b", low):
-                # Allow inside a markdown blockquote (lifted from source posting).
-                if line.lstrip().startswith(">"):
-                    continue
-                # Allow inside a quoted string within a "research:" block
-                # (frontmatter quotes from job postings).
-                if re.search(rf'"[^"]*\b{word}\b[^"]*"', line):
-                    # likely a citation of the posting in research notes
+                if quote_demotes:
+                    # Allow inside a markdown blockquote (lifted from source posting).
+                    if line.lstrip().startswith(">"):
+                        continue
+                    # Demote inside a quoted string within a "research:" block
+                    # (frontmatter quotes from job postings).
+                    if re.search(rf'"[^"]*\b{word}\b[^"]*"', line):
+                        # likely a citation of the posting in research notes
+                        findings.append(Finding(
+                            file=str(path), line=i, severity="LOW",
+                            rule=f"banned-word:{word}", text=line.rstrip("\n")[:200] + "  (quoted — review)",
+                        ))
+                        continue
+                elif re.search(_NESTED_QUOTE_TMPL.format(word=word), low):
+                    # JS/TS string literal quoting a specimen inside the copy.
                     findings.append(Finding(
                         file=str(path), line=i, severity="LOW",
-                        rule=f"banned-word:{word}", text=line.rstrip("\n")[:200] + "  (quoted — review)",
+                        rule=f"banned-word:{word}", text=line.rstrip("\n")[:200] + "  (quoted specimen — review)",
                     ))
                     continue
                 findings.append(Finding(
@@ -276,10 +302,12 @@ def check_proposal_headings(path: Path, lines: list[str]) -> list[Finding]:
         path.resolve().relative_to(PROPOSALS)
     except ValueError:
         return findings
-    # Skip Track-family proposals (heading vocabulary differs).
-    text = "".join(lines)
-    is_track_family = any(h in text for h in TRACK_FAMILY_HEADINGS)
-    if is_track_family:
+    # Skip Track-family proposals (heading vocabulary differs). Detect by
+    # EXACT heading lines, not substring: "## Tracking metrics" contains the
+    # substring "## Track" but is not a Track-family proposal, and the old
+    # substring test exempted such a file from ALL heading checks.
+    heading_lines = {line.strip() for line in lines}
+    if heading_lines & TRACK_FAMILY_HEADINGS:
         return findings
     for i, line in enumerate(lines, 1):
         for bad, good in HEADING_FIXES.items():

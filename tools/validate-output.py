@@ -163,12 +163,29 @@ CLAIM_PATTERNS = [
     r"\b(?:we'?re|we are) (?:losing|bleeding|burning) (?:leads|opportunities|revenue|money|deliverability)\b",
 ]
 CLAIM_RE = [re.compile(p, re.IGNORECASE) for p in CLAIM_PATTERNS]
-# Hypothesis / hedge cues -> not the regressed shape (a flat assertion). If
-# the claim line is hedged, do not flag.
+# Hypothesis / hedge cues -> not the regressed shape (a flat assertion). The
+# hedge must sit in the SAME clause/sentence as the claim: "Deliverability
+# has dropped sharply; we should probably revisit X" hedges the follow-up,
+# not the claim, so it still flags (2026-07-22 residual fix — a hedge
+# anywhere on the line used to drop the flag).
 HEDGE_RE = re.compile(
     r"\b(?:could|would|might|may|possibly|potentially|if\s|risk(?:s|ed)?\b|"
     r"i\s+(?:suspect|think|believe|worry)|seems?\s+to|appears?\s+to|likely|"
     r"probably|hypothes|my\s+(?:guess|hunch))\b", re.IGNORECASE)
+# Clause boundaries for hedge scoping: sentence enders + semicolon/colon.
+# Commas deliberately do NOT split ("has dropped, which could hurt us"
+# keeps its hedge).
+_CLAUSE_SPLIT_RE = re.compile(r"[.;:!?]")
+
+
+def _claim_clause_hedged(line: str, claim_start: int) -> bool:
+    """True when the clause containing the claim match carries a hedge cue."""
+    start = 0
+    for m in _CLAUSE_SPLIT_RE.finditer(line):
+        if start <= claim_start < m.start():
+            return bool(HEDGE_RE.search(line[start:m.start()]))
+        start = m.end()
+    return bool(HEDGE_RE.search(line[start:]))
 # Source-attribution cues. Presence within +/-2 lines == the claim is tied
 # to queried evidence -> not flagged.
 SOURCE_RE = re.compile(
@@ -191,9 +208,12 @@ def check_unsourced_claims(
             continue
         if "unsourced-claim" in suppress.get(i, set()):
             continue
-        if not any(rx.search(line) for rx in CLAIM_RE):
+        claim_matches = [m for rx in CLAIM_RE for m in rx.finditer(line)]
+        if not claim_matches:
             continue
-        if HEDGE_RE.search(line):  # a hypothesis is not the regressed shape
+        # A hypothesis is not the regressed shape — but only when the hedge
+        # sits in the same clause as the claim (see HEDGE_RE note).
+        if all(_claim_clause_hedged(line, m.start()) for m in claim_matches):
             continue
         window = "\n".join(
             lines[j - 1] for j in range(max(1, i - 2), min(len(lines), i + 2) + 1)
@@ -911,6 +931,14 @@ def check_structural_slop(text: str) -> list[dict]:
     return kept
 
 
+# Rule categories that still run on blockquoted (`> `) lines. Quoted inbound
+# text legitimately carries em-dashes and LLM-ish voice, so those rules stay
+# exempt — but an agent-authored blockquote with a brand misspell or a leaked
+# placeholder is our error regardless of the quoting (2026-07-22 residual
+# fix: `> ` used to exempt a line from ALL rules).
+BLOCKQUOTE_CHECKED_CATEGORIES = {"brand-misspell", "placeholder-leak"}
+
+
 def check_text(text: str, path: Path | None = None) -> list[dict]:
     """Return list of hit dicts."""
     lines = text.splitlines()
@@ -921,13 +949,18 @@ def check_text(text: str, path: Path | None = None) -> list[dict]:
 
     def scan_line(i: int, line: str) -> None:
         stripped = line.lstrip()
-        # Skip blockquoted citations
-        if stripped.startswith("> "):
-            return
-        eligible.add(i)
+        # Blockquoted citations: voice/em-dash rules skip (quoted inbound
+        # text), brand + placeholder rules still apply. Blockquotes stay
+        # out of the unsourced-claim eligible set (a quoted claim is the
+        # sender's assertion, not ours).
+        blockquoted = stripped.startswith("> ")
+        if not blockquoted:
+            eligible.add(i)
         suppressed_here = suppress.get(i, set())
         for regex, category, severity, message in RULES:
             if category in suppressed_here:
+                continue
+            if blockquoted and category not in BLOCKQUOTE_CHECKED_CATEGORIES:
                 continue
             if re.search(regex, line, flags=re.IGNORECASE):
                 hits.append({
