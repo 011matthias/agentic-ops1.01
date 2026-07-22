@@ -117,7 +117,16 @@ def test_evaluate_unparseable_date_is_problem(tmp_path):
 def _client_tree(tmp_path, monkeypatch):
     clients = tmp_path / "workspace" / "clients"
     monkeypatch.setattr(ps, "CLIENTS_DIR", clients)
+    # Keep tests hermetic: repoint the projects root too, or the sweep would
+    # scan the REAL workspace/projects tree from inside a tmp-dir test.
+    monkeypatch.setattr(ps, "PROJECTS_DIR", tmp_path / "workspace" / "projects")
     return clients
+
+
+def _project_tree(tmp_path):
+    projects = tmp_path / "workspace" / "projects"
+    projects.mkdir(parents=True, exist_ok=True)
+    return projects
 
 
 def test_check_no_folder_exit3(tmp_path, monkeypatch):
@@ -224,7 +233,65 @@ def test_sweep_catches_malformed(tmp_path, monkeypatch):
 
 def test_sweep_no_clients_dir_is_empty(tmp_path, monkeypatch):
     monkeypatch.setattr(ps, "CLIENTS_DIR", tmp_path / "nope")
+    monkeypatch.setattr(ps, "PROJECTS_DIR", tmp_path / "also-nope")
     assert ps.sweep_stale(TODAY, ps.DEFAULT_MAX_AGE_DAYS) == []
+
+
+# --- projects root (workspace/projects, added 2026-07-22 for uwi) -----------
+
+def test_check_resolves_a_project_slug(tmp_path, monkeypatch):
+    _client_tree(tmp_path, monkeypatch)
+    projects = _project_tree(tmp_path)
+    d = projects / "upwork-independence" / "status"
+    d.mkdir(parents=True)
+    (d / "u1-cold-email-infra.md").write_text(
+        "---\nproject: upwork-independence\nworkstream: u1\nstate: active\nupdated: 2026-06-19\n---\n",
+        encoding="utf-8")
+    rows, code = ps.check("upwork-independence", TODAY, ps.DEFAULT_MAX_AGE_DAYS)
+    assert code == 0
+    assert [r["file"] for r in rows] == ["u1-cold-email-infra.md"]
+
+
+def test_sweep_covers_the_projects_root(tmp_path, monkeypatch):
+    clients = _client_tree(tmp_path, monkeypatch)
+    projects = _project_tree(tmp_path)
+    _seed(clients, "brisken", "p2-rome.md", "2026-06-19")          # fresh client
+    d = projects / "upwork-independence" / "status"
+    d.mkdir(parents=True)
+    (d / "u2-aeo-content.md").write_text(
+        "---\nproject: upwork-independence\nworkstream: u2\nstate: active\nupdated: 2026-04-01\n---\n",
+        encoding="utf-8")                                          # stale project
+    monkeypatch.setattr(ps, "_fresher_on_origin", lambda p, u: False)
+    findings = ps.sweep_stale(TODAY, ps.DEFAULT_MAX_AGE_DAYS)
+    assert [(f["client"], f["file"]) for f in findings] == \
+        [("upwork-independence", "u2-aeo-content.md")]
+
+
+def test_client_shadows_project_on_slug_collision(tmp_path, monkeypatch):
+    clients = _client_tree(tmp_path, monkeypatch)
+    projects = _project_tree(tmp_path)
+    (clients / "twin" / "status").mkdir(parents=True)
+    (projects / "twin" / "status").mkdir(parents=True)
+    assert ps.slug_dir("twin") == clients / "twin"
+
+
+def test_scaffold_into_a_project(tmp_path, monkeypatch):
+    _client_tree(tmp_path, monkeypatch)
+    projects = _project_tree(tmp_path)
+    (projects / "upwork-independence").mkdir(parents=True, exist_ok=True)
+    dest = ps.scaffold("upwork-independence", "u3-linkedin-outbound", today=TODAY)
+    assert dest == projects / "upwork-independence" / "status" / "u3-linkedin-outbound.md"
+    assert dest.exists()
+
+
+def test_scaffold_unknown_slug_names_both_roots(tmp_path, monkeypatch):
+    _client_tree(tmp_path, monkeypatch)
+    try:
+        ps.scaffold("ghost", "w", today=TODAY)
+    except SystemExit as e:
+        assert "no client or project folder" in str(e)
+    else:
+        raise AssertionError("expected SystemExit for unknown slug")
 
 
 def test_main_sweep_always_exit0(tmp_path, monkeypatch, capsys):

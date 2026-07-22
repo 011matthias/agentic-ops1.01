@@ -36,6 +36,7 @@ Use these when building the session header slug and title:
 | `hie` | hideit-equorperated |
 | `bris` | brisken |
 | `peak` | peakora |
+| `uwi` | upwork-independence |
 | `{3-4 char initials}` | any new client/project |
 
 ## Step 0: Try YAML Fast-Path
