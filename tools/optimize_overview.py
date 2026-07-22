@@ -92,10 +92,19 @@ def tsv_summary(text: str) -> dict:
     """
     rows = [ln.split("\t") for ln in text.splitlines() if ln.strip()]
     out = {"baseline": None, "best": None, "rounds": 0, "keeps": 0,
-           "last_status": None}
+           "last_status": None, "minutes": None}
+    stamps: list[_dt.datetime] = []
     for row in rows[1:]:  # skip header
         if len(row) < 5:
             continue
+        # Column 7 (timestamp) was added 2026-07-22. Runs closed before that
+        # have six-column rows, so its absence is normal, not a defect: the
+        # timing block is simply omitted for them.
+        if len(row) >= 7:
+            try:
+                stamps.append(_dt.datetime.fromisoformat(row[6]))
+            except ValueError:
+                pass
         status = row[4]
         out["last_status"] = status
         if status == "baseline":
@@ -106,6 +115,8 @@ def tsv_summary(text: str) -> dict:
             out["keeps"] += 1
         if status not in ("baseline", "stopped"):
             out["rounds"] += 1
+    if len(stamps) >= 2:
+        out["minutes"] = (max(stamps) - min(stamps)).total_seconds() / 60.0
     return out
 
 
@@ -256,6 +267,16 @@ def print_scoreboard(runs: dict[str, dict], active: dict[str, dict],
              if rounds else "n/a (no rounds)"))
     print("  rounds per run        "
           + (f"{rounds / total:.1f} avg" if total else "n/a"))
+    timed = [(t, i["summary"]) for t, i in runs.items()
+             if i["summary"] and i["summary"].get("minutes") is not None
+             and i["summary"]["rounds"]]
+    if timed:
+        per = sorted(s["minutes"] / s["rounds"] for _, s in timed)
+        med = per[len(per) // 2]
+        print(f"  minutes per round     {med:.1f} median over {len(timed)}"
+              f"/{total} timed run(s)")
+    else:
+        print(f"  minutes per round     n/a (0/{total} runs carry timestamps)")
     print("  closed with SUMMARY   "
           + (f"{sum(1 for t in closed if runs[t]['has_summary'])}/{len(closed)}"
              if closed else "n/a (none closed)"))

@@ -219,3 +219,52 @@ def test_manifest_without_project_groups_unassigned(tmp_path):
     assert "CLOSED" in out
     assert "summary=NO" in out            # closed without SUMMARY.md warns
     assert "closed without SUMMARY.md" in out
+
+
+
+def test_legacy_six_column_journal_reports_no_timing(tmp_path):
+    """Runs closed before the timestamp column must keep parsing.
+
+    results.tsv is append-only and every run closed before 2026-07-22 carries
+    six-column rows. A parser that assumed seven would silently drop them from
+    the scoreboard - the same under-reporting the STALE CHECKOUT guard exists
+    to prevent, arriving from the other direction. The whole fixture repo here
+    is six-column, so the timing line must say so rather than guess.
+    """
+    repo = make_fixture_repo(tmp_path)
+    out = _run(repo, "--scoreboard")
+    assert "minutes per round     n/a (0/3 runs carry timestamps)" in out, out
+    # ...and the historical six-column runs are still counted, not dropped.
+    assert "experiment rounds     4" in out, out
+
+
+def test_timestamped_journal_yields_minutes_per_round(tmp_path):
+    repo = make_fixture_repo(tmp_path)
+    _write(repo, "docs/optimize/timed-run/RUN.md",
+           "---\ntag: timed-run\nproject: sys\ndirection: minimize\n---\nx\n")
+    _write(repo, "docs/optimize/timed-run/results.tsv",
+           "round\tcommit\tscore\tdelta\tstatus\tdescription\ttimestamp\n"
+           "0\taaaaaaa\t100.0\t0\tbaseline\tbase\t2026-07-22T10:00:00\n"
+           "1\tbbbbbbb\t90.0\t-10\tkeep\tone\t2026-07-22T10:02:00\n"
+           "2\tccccccc\t85.0\t-5\tkeep\ttwo\t2026-07-22T10:06:00\n")
+    _write(repo, "docs/optimize/timed-run/SUMMARY.md", "s\n")
+    out = _run(repo, "--scoreboard")
+    # 6 minutes spanned / 2 experiment rounds = 3.0
+    assert "minutes per round     3.0 median over 1/4 timed run(s)" in out, out
+
+
+def test_unparseable_timestamp_does_not_crash_the_overview(tmp_path):
+    """A hand-mangled stamp must degrade to 'no timing', never raise.
+
+    optimize_overview is a read-only reporting surface wired into the
+    SessionStart sweep; it is required to fail open.
+    """
+    repo = make_fixture_repo(tmp_path)
+    _write(repo, "docs/optimize/bad-stamp/RUN.md",
+           "---\ntag: bad-stamp\nproject: sys\ndirection: minimize\n---\nx\n")
+    _write(repo, "docs/optimize/bad-stamp/results.tsv",
+           "round\tcommit\tscore\tdelta\tstatus\tdescription\ttimestamp\n"
+           "0\taaaaaaa\t100.0\t0\tbaseline\tbase\tnot-a-date\n"
+           "1\tbbbbbbb\t90.0\t-10\tkeep\tone\talso-bad\n")
+    out = _run(repo, "--scoreboard")   # _run asserts exit 0
+    assert "minutes per round     n/a" in out, out
