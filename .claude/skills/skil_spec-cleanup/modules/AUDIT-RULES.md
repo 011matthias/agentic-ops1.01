@@ -72,5 +72,5 @@ When a file is misplaced, choose based on actual work state:
 
 After moving files, update `workspace/clients/{client}/specs/README.md`:
 - Change the **Stage** column value to match the new stage
-- Update file **links** if they include the folder path (e.g. `1-spec/a1.md` → `3-test/a1.md`)
+- Update file **links** if they include the folder path (e.g. `1-spec/{id}.md` → `3-test/{id}.md`)
 - Do not restructure the table — only update affected rows

@@ -5,6 +5,12 @@ Pattern-matches the executed command:
   git push|commit / gh pr ...        -> [SHIP GATE] reminder
   npm run build / pytest / uv run    -> [B2] verification reminder
   3 consecutive build/test commands  -> [HARD LIMIT] (3-iteration cap)
+  PR merge that touched platform/    -> [MERGE-NOT-LIVE] + a not-live marker
+
+The not-live marker persists in a temp file: it re-surfaces as
+[PLATFORM NOT LIVE] on every later ship-class command and is cleared by a
+vercel-force-deploy run. Merges that touched no platform/ path say nothing,
+which is what turns the old fire-on-every-merge advisory into a marker.
 
 The 3-in-a-row counter persists in a temp file. The counter increments only
 on REAL fix-then-test loops -- the same command (or near-identical, fuzzy by
@@ -23,8 +29,10 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 import tempfile
+import time
 
 # Shared PowerShell/.cmd normalizer (matching view only; fail-open identity).
 try:
@@ -35,11 +43,21 @@ except Exception:
 
 HOOK_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hook-log.txt")
 COUNTER_FILE = os.path.join(tempfile.gettempdir(), "agentic-ops-build-counter.txt")
+# Platform-merge-is-not-live marker: set when a merged PR actually touched
+# platform/ paths, cleared when vercel-force-deploy.sh runs. See the
+# rule_behaviors 'Platform-merge-is-not-live' sub-clause.
+PLATFORM_FLAG_FILE = os.path.join(tempfile.gettempdir(), "agentic-ops-platform-not-live.txt")
+# A marker older than this is assumed dead (machine left on, session over) and
+# stops nagging, so a forgotten flag can never nag indefinitely.
+PLATFORM_FLAG_TTL_SEC = 12 * 3600
+PLATFORM_PREFIXES = ("platform/",)
+GH_TIMEOUT_SEC = 6  # hook budget is 10s; leave headroom.
 
 SHIP_PATTERNS = [
     r"\bgit\s+push\b",
     r"\bgit\s+commit\b",
     r"\bgh\s+pr\s+(create|merge|edit)\b",
+    r"\btools/gh-merge\.sh\b",   # the safe `gh pr merge` wrapper IS a merge
     r"\bvercel\s+(deploy|--prod)\b",
 ]
 BUILD_TEST_PATTERNS = [
@@ -113,6 +131,88 @@ def write_state(n: int, fp: str) -> None:
         pass
 
 
+def read_platform_flag() -> str | None:
+    """Return the pending not-live label, or None when nothing is pending.
+
+    Stored as 'epoch\\tlabel'. A marker past PLATFORM_FLAG_TTL_SEC is treated
+    as absent (and left on disk; the next write overwrites it)."""
+    try:
+        with open(PLATFORM_FLAG_FILE, "r", encoding="utf-8") as f:
+            raw = f.read().strip()
+    except Exception:
+        return None
+    if "\t" not in raw:
+        return None
+    ts_str, label = raw.split("\t", 1)
+    try:
+        ts = float(ts_str)
+    except ValueError:
+        return None
+    if time.time() - ts > PLATFORM_FLAG_TTL_SEC:
+        return None
+    return label or None
+
+
+def write_platform_flag(label: str) -> None:
+    try:
+        with open(PLATFORM_FLAG_FILE, "w", encoding="utf-8") as f:
+            f.write(f"{time.time()}\t{label}")
+    except Exception:
+        pass
+
+
+def clear_platform_flag() -> None:
+    try:
+        os.remove(PLATFORM_FLAG_FILE)
+    except Exception:
+        pass
+
+
+def merged_pr_number(view: str) -> str | None:
+    """PR number from `gh pr merge N` or the `tools/gh-merge.sh N` wrapper.
+
+    None when the number is omitted (gh resolves the PR from the current
+    branch); the caller degrades to an unnumbered label."""
+    m = re.search(
+        r"\b(?:gh\s+pr\s+merge|gh-merge\.sh)\s+(?:--?\S+\s+)*(\d+)\b", view
+    )
+    return m.group(1) if m else None
+
+
+def pr_touches_platform(pr: str | None) -> bool | None:
+    """True / False when the PR's file list is readable; None when it is not.
+
+    None means undeterminable (no gh, offline, timeout, PR not resolvable from
+    the current branch). Callers must treat None as 'assume it did' so the
+    advisory still fires; precision is an improvement, never a new blind spot.
+
+    Test seam: POST_ACTION_GATE_PR_FILES (newline-separated paths, or the
+    literal 'ERROR' to force the undeterminable branch) bypasses the gh call.
+    """
+    seam = os.environ.get("POST_ACTION_GATE_PR_FILES")
+    if seam is not None:
+        if seam.strip() == "ERROR":
+            return None
+        paths = [ln.strip() for ln in seam.splitlines() if ln.strip()]
+        return any(p.startswith(PLATFORM_PREFIXES) for p in paths) if paths else None
+    argv = ["gh", "pr", "view"]
+    if pr:
+        argv.append(pr)
+    argv += ["--json", "files", "-q", ".files[].path"]
+    try:
+        proc = subprocess.run(
+            argv, capture_output=True, text=True, timeout=GH_TIMEOUT_SEC,
+        )
+    except Exception:
+        return None
+    if proc.returncode != 0:
+        return None
+    paths = [ln.strip() for ln in proc.stdout.splitlines() if ln.strip()]
+    if not paths:
+        return None
+    return any(p.startswith(PLATFORM_PREFIXES) for p in paths)
+
+
 def emit(text: str) -> None:
     print(json.dumps({
         "hookSpecificOutput": {
@@ -147,6 +247,21 @@ def main() -> int:
 
     advisories = []
 
+    # The force-deploy is what makes a merged platform page live, so it is what
+    # clears the marker. Checked before the ship arm; a force-deploy is not
+    # itself ship-class, so the two can never fight over one command.
+    if re.search(r"vercel-force-deploy", view):
+        pending = read_platform_flag()
+        clear_platform_flag()
+        if pending:
+            log_fire(f"PLATFORM-LIVE cleared pending={pending}")
+            advisories.append(
+                f"[PLATFORM DEPLOY] Force-deploy ran; the not-live marker for {pending} "
+                "is cleared. Close the deploy verification gate before declaring "
+                "anything live: fetch the no-slash URL and confirm the NEW build is "
+                "served, not the prior one."
+            )
+
     if is_ship:
         log_fire(f"SHIP cmd={cmd[:80]}")
         advisories.append(
@@ -157,21 +272,45 @@ def main() -> int:
             "no-undo actions. After deploy, run the deploy verification gate (WebFetch the URL, "
             "check 200 + key content)."
         )
-        # Platform-merge-is-not-live (rule_behaviors sub-clause; the thrice-
-        # deferred structural candidate, register 2026-07-14 jochen + 06-09
-        # volabyg): the Vercel git integration lags, so a merge is NOT a
-        # deploy. Fires on every PR merge (no network call in a hook); the
-        # condition is stated inline.
-        if re.search(r"\bgh\s+pr\s+merge\b", view) or "gh-merge" in view:
-            advisories.append(
-                "[MERGE-NOT-LIVE] If this merge touched platform/ paths: the page is "
-                "NOT live yet. Vercel's git integration lags (23h-stale prod, "
-                "2026-06-09). Run tools/vercel-force-deploy.sh from a clean "
-                "origin/main worktree, then re-fetch the no-slash URL and confirm "
-                "the new build before declaring anything live. A 404/stale page "
-                "right after a merge means 'not force-deployed yet', not 'CDN "
-                "cache'."
-            )
+        # Platform-merge-is-not-live (rule_behaviors sub-clause; register
+        # 2026-07-14 jochen + 06-09 volabyg): the Vercel git integration lags,
+        # so a merge is NOT a deploy. The advisory is scoped to merges that
+        # actually touched platform/ paths, and it sets a marker that survives
+        # until the force-deploy clears it.
+        is_merge = bool(re.search(r"\bgh\s+pr\s+merge\b", view)) or "gh-merge" in view
+        if is_merge:
+            pr = merged_pr_number(view)
+            touched = pr_touches_platform(pr)
+            if touched is not False:
+                label = f"PR #{pr}" if pr else "the merged PR"
+                lead = (
+                    f"{label} merged platform/ paths."
+                    if touched
+                    else f"{label} may have merged platform/ paths; the PR file list "
+                         "could not be read, so this assumes it did."
+                )
+                write_platform_flag(label)
+                log_fire(f"MERGE-NOT-LIVE {label} touched={touched}")
+                advisories.append(
+                    f"[MERGE-NOT-LIVE] {lead} The page "
+                    "is NOT live yet. Vercel's git integration lags (23h-stale prod, "
+                    "2026-06-09). Run tools/vercel-force-deploy.sh from a clean "
+                    "origin/main worktree, then re-fetch the no-slash URL and confirm "
+                    "the new build before declaring anything live. A 404/stale page "
+                    "right after a merge means 'not force-deployed yet', not 'CDN "
+                    "cache'."
+                )
+        else:
+            # Any later ship-class command while a platform merge is still
+            # un-deployed re-surfaces the marker, so 'not live' persists
+            # instead of scrolling away with the merge turn.
+            pending = read_platform_flag()
+            if pending:
+                advisories.append(
+                    f"[PLATFORM NOT LIVE] {pending} merged platform/ paths and "
+                    "tools/vercel-force-deploy.sh has not run since. Nothing on "
+                    "unpauseai.com reflects that merge yet."
+                )
 
     if is_build:
         if is_exempt(view):

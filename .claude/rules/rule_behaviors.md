@@ -52,11 +52,27 @@ Surface in checkpoint. This layer fires on direction changes, not just debug fai
 6. If genuinely blocked: state "LIMITATION: {what}. USER ACTION NEEDED: {what + why}." Never frame as a choice.
 Asking for information findable in project files = friction event (`agent-deferred`).
 
+**B1 enforcement is two-stage, and the first stage is the one that matters.**
+`stop-b1-gate.py` (Stop) catches a deferral only after the response exists, so
+the whole turn has to be redone; a 2026-07-22 hook-log census measured 608
+blocks against 2554 clean stops (~19% of turns) holding flat across all of
+July, with 92% of blocks landing in bursts of 2+ within an hour. Containment
+without cure. So a block now also increments `b1_blocks` in the session state,
+and `input-classifier.py` (UserPromptSubmit) spends it as a `[B1 PRIMER]` on
+the NEXT turn, before any closing text is written: bounded, reversible,
+yours-to-take steps get done, not offered. One primer per block, so a burst is
+primed each time instead of nagging every prompt. Read the primer as
+pre-generation instruction, not as a report on the past. Tests:
+`tools/tests/test_b1_primer.py`.
+
 **B2 — "I'm about to mark something done."** Before declaring any task, subtask, or batch operation complete:
 1. Did I enumerate ALL targets before starting? (grep/search for the full set — e.g., all `google-email:sendAnEmail` modules, all env vars, all specs)
 2. Did I verify EACH target, not just the ones I touched?
 3. Did I test the behavior, not just the config? Name the specific test performed (e.g., "triggered webhook and verified response", "fetched page and checked content"). If you can't name the test, you haven't done it.
 4. For deploy: did I trigger a smoke test via API/CLI in the same session?
+5. If any input came from a BACKGROUND phase (a fan-out, a subagent batch, a long-running job), did I confirm that phase actually finished? Partial output from a dead phase reads exactly like a finished result, and nothing in the harness announces the death.
+
+**Background-work liveness (B2 sub-clause).** At launch, register the wait in one call: `uv run tools/bg_watch.py watch --label "{what}" --eta {minutes}` (add `--heartbeat {path}` when the job writes progress somewhere; a heartbeat that keeps advancing rolls the deadline forward, so a healthy job stays silent). From then on detection is automatic: the PostToolUse meter names the watch on every tool call once it has gone quiet past its interval, which is precisely the window in which the failure hides. Clear it with `uv run tools/bg_watch.py done {id}` when the work has genuinely completed, never merely because output appeared. Registration is the only part that depends on you; skipping it on a phase you then consume is a `verification-theater` friction event. Source: 2026-07-22, a 10-lens adversarial-verify fan-out died five minutes in, went undetected for 76 minutes, and 35 of 38 findings shipped presented as verified.
 
 **B3 — "I'm about to diagnose a failure."** Before proposing any root cause:
 1. Read the FULL error message — not just the operation that failed. Distinguish constraint/value errors from missing-object errors.
@@ -82,7 +98,7 @@ Total: N targets
 
 **Deploy verification gate:** After any deploy to production (Vercel, Railway, etc.): (1) WebFetch the deployed URL, (2) check page loads (200), key content present, (3) for HTML deliverables: run `uv run tools/validate-html.py` on the source files, (4) for multi-page sets: validate ALL pages not just the changed one, (5) state: "Verified: {URL} — {checks passed}." Skipping = friction event (`verification-theater`).
 
-**Platform-merge-is-not-live sub-clause:** a merge to `main` does NOT reliably auto-deploy the platform — the Vercel git integration lags (23h-stale prod caught 2026-06-09, volabyg). A platform page is live ONLY after `tools/vercel-force-deploy.sh` has run AND a `curl -sL` / WebFetch of the no-slash URL returns the new build. (a) After any platform merge, run `vercel-force-deploy.sh` from a clean `origin/main` worktree (never a dirty feature branch — it deploys `$CWD/platform`; see [[reference_vercel_force_deploy_uses_cwd_tree]]) before declaring anything live. (b) B3 attribution: a 404 or stale content on a just-merged platform page is "I have not force-deployed yet" until proven otherwise — run the force-deploy and re-fetch FIRST; never reach for "CDN cache" or re-ship a PR hoping a fresh build clears it (doing exactly that cost an extra diagnosis cycle on 2026-06-09). Structural candidate (not yet built): a post-merge hook that marks platform-path PR merges not-live until the force-deploy runs.
+**Platform-merge-is-not-live sub-clause:** a merge to `main` does NOT reliably auto-deploy the platform — the Vercel git integration lags (23h-stale prod caught 2026-06-09, volabyg). A platform page is live ONLY after `tools/vercel-force-deploy.sh` has run AND a `curl -sL` / WebFetch of the no-slash URL returns the new build. (a) After any platform merge, run `vercel-force-deploy.sh` from a clean `origin/main` worktree (never a dirty feature branch — it deploys `$CWD/platform`; see [[reference_vercel_force_deploy_uses_cwd_tree]]) before declaring anything live. (b) B3 attribution: a 404 or stale content on a just-merged platform page is "I have not force-deployed yet" until proven otherwise — run the force-deploy and re-fetch FIRST; never reach for "CDN cache" or re-ship a PR hoping a fresh build clears it (doing exactly that cost an extra diagnosis cycle on 2026-06-09). Structural enforcement (built 2026-07-22, `.claude/hooks/post-action-gate.py`): on a PR merge the hook reads the merged PR's file list (`gh pr view --json files`, 6s budget, fail-open) and, when the merge touched `platform/` paths, emits `[MERGE-NOT-LIVE]` and writes a not-live marker. The marker re-surfaces as `[PLATFORM NOT LIVE]` on every later ship-class command and is cleared only by a `vercel-force-deploy` run (12h TTL so a forgotten marker cannot nag forever). Merges that touched no `platform/` path stay silent, so the advisory is a marker rather than noise. Two gaps remain by design: the hook cannot see whether the post-deploy URL fetch actually happened (that half is still the deploy verification gate above, agent-enforced), and when `gh` is unreachable it assumes the merge did touch platform paths and warns anyway.
 
 **Start building gate:** Pre-flight: (1) read `infrastructure.yaml` for canonical names/IDs, (2) resolve target instance, (3) define expected outcomes before executing.
 

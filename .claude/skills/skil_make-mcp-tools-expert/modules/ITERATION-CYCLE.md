@@ -95,12 +95,12 @@ See also: `webhook-inspector` skill for a dedicated webhook payload capture work
    - Compare the source schema against the blueprint's mapper references
    - If structural mismatch (nested vs flat, different field names) → fix mapper FIRST
 9. **Test with real source data** (form submission, API event, etc.)
-10. **Post-execution outcome verification** (see `.claude/rules/make/post-execution-verification.md`):
+10. **Post-execution outcome verification** (see `.claude/skills/skil_make-mcp-tools-expert/modules/POST-EXECUTION-VERIFICATION.md`):
     - Don't stop at "status: success" — verify the actual data in target systems
     - Check expected vs actual output field by field
     - If mismatch → diagnose where data was lost/transformed incorrectly
 11. **If real data fails but clean JSON worked** → structural/naming mismatch between source and mapper
-12. **After fixing** → apply operationalization loop (see `.claude/rules/operationalization-loop.md`)
+12. **After fixing** → apply the self-annealing operationalization ladder (see `.claude/rules/rule_behaviors.md`, Layer 1)
 
 ---
 

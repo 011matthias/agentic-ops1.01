@@ -59,3 +59,7 @@ Load ONE module at a time based on your current task.
 | Basic task reference | [basic-tasks](references/basic-tasks.md) | trigger-pack |
 | Advanced task reference | [advanced-tasks](references/advanced-tasks.md) | trigger-pack |
 | Scheduled task reference | [scheduled-tasks](references/scheduled-tasks.md) | trigger-pack |
+| Full trigger.config.ts reference (custom + advanced build extensions) | [config](references/config.md) | trigger-pack |
+| Full realtime reference (public tokens, run object properties) | [realtime](references/realtime.md) | trigger-pack |
+| Env vars, dev vs prod keys, CI/CD and multi-environment setup | [environment-setup](references/environment-setup.md) | trigger-pack |
+| Project layout, monorepos, multiple or collocated task dirs | [project-structure](references/project-structure.md) | trigger-pack |

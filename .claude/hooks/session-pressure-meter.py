@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PostToolUse(all tools): session-pressure meter.
+"""PostToolUse(all tools): session-pressure meter + background-work liveness.
 
 Counts tool calls + distinct files this session and emits a band-crossing
 advisory ONCE per band (moderate -> high -> critical), so the agent is told
@@ -7,6 +7,17 @@ when rule_session-pressure.md thresholds are reached instead of relying on a
 mental count. Session boundary is keyed off the hook payload's `session_id`
 (handled in session_state.ensure_session): a new id resets counts, an
 unchanged id across a compaction preserves them.
+
+It carries two more best-effort riders, both independent of the pressure logic:
+the sibling-session heartbeat refresh (tools/session_registry.py) and the
+background-work liveness check (tools/bg_watch.py). Both live HERE rather than
+in hooks of their own because this hook already fires on every tool call with
+`matcher: ""`; a second all-tools hook would double the subprocess spawns for
+an entire session to reach the same payload. When a registered background watch
+has gone silent past its expected interval, its advisory is emitted alongside
+(or instead of) the pressure one. That per-tool-call cadence is the whole point:
+the 2026-07-22 incident it exists for was 76 minutes of continued tool calls
+after a verify fan-out had silently died.
 
 Defensive: any error -> exit 0, no output. The meter must never break a tool
 call, and a missed increment is cheaper than a broken session.
@@ -33,6 +44,14 @@ try:
     import session_registry  # noqa: E402
 except Exception:
     session_registry = None
+
+# Optional: background-work liveness. Fires a loud advisory when work the agent
+# registered with `tools/bg_watch.py watch` has gone silent past its expected
+# interval. Best-effort and independent of the pressure logic. See bg_watch.py.
+try:
+    import bg_watch  # noqa: E402
+except Exception:
+    bg_watch = None
 
 _ADVISORY = {
     "moderate": (
@@ -77,6 +96,9 @@ def main() -> int:
         except Exception:
             pass
 
+    messages = []
+
+    # Pressure half. Isolated so a failure here still lets the liveness half run.
     try:
         session_state.ensure_session(session_id)
         state = session_state.bump_tool(tool_name, file_path)
@@ -84,18 +106,31 @@ def main() -> int:
         emitted = state.get("pressure_band_emitted")
         if band and session_state.band_is_new(band, emitted):
             session_state.mark_band_emitted(band)
-            msg = _ADVISORY[band].format(
+            messages.append(_ADVISORY[band].format(
                 calls=state.get("tool_calls", 0),
                 files=len(state.get("distinct_files", []) or []),
-            )
+            ))
+    except Exception:
+        pass
+
+    # Background-work liveness half. Silent unless a registered watch is overdue,
+    # and rate-limited to one advisory per watch per bg_watch.RENOTIFY_SECONDS.
+    if bg_watch is not None:
+        try:
+            messages.extend(bg_watch.due_advisories(cwd=payload.get("cwd")))
+        except Exception:
+            pass
+
+    if messages:
+        try:
             print(json.dumps({
                 "hookSpecificOutput": {
                     "hookEventName": "PostToolUse",
-                    "additionalContext": msg,
+                    "additionalContext": "\n\n".join(messages),
                 }
             }))
-    except Exception:
-        return 0
+        except Exception:
+            return 0
     return 0
 
 

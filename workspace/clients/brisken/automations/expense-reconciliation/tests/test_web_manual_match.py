@@ -57,7 +57,7 @@ def _files():
 
 def _create_run(client) -> str:
     resp = client.post(
-        "/runs",
+        "/api/runs",
         files=_files(),
         data={
             "account_id": "amex-9001",
@@ -65,10 +65,11 @@ def _create_run(client) -> str:
             "account_card_currency": "USD",
             "receipts_source": "csv",
         },
-        follow_redirects=False,
     )
-    assert resp.status_code == 303, resp.text
-    return resp.headers["location"].rstrip("/").rsplit("/", 1)[-1]
+    assert resp.status_code == 200, resp.text
+    job = client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
+    return job["run_id"]
 
 
 def _view(client, run_id) -> dict:
@@ -100,7 +101,7 @@ def test_manual_match_freed_receipt_to_unmatched_charge(client):
     # Free the receipt by rejecting its current charge; it must reappear in
     # the unmatched-receipt list so it can be re-assigned.
     client.post(
-        f"/runs/{run_id}/decisions",
+        f"/api/runs/{run_id}/decisions",
         json={"transaction_id": holder_tx, "status": "rejected"},
     )
     view = _view(client, run_id)
@@ -108,7 +109,7 @@ def test_manual_match_freed_receipt_to_unmatched_charge(client):
 
     # Hand-match the freed receipt to the unmatched charge.
     resp = client.post(
-        f"/runs/{run_id}/manual-match",
+        f"/api/runs/{run_id}/manual-match",
         json={"transaction_id": target_tx, "document_id": freed_doc},
     )
     assert resp.status_code == 200, resp.text
@@ -132,7 +133,7 @@ def test_manual_match_steals_auto_matched_receipt(client):
     thief_tx = unmatched_tx[0]
 
     resp = client.post(
-        f"/runs/{run_id}/manual-match",
+        f"/api/runs/{run_id}/manual-match",
         json={"transaction_id": thief_tx, "document_id": stolen_doc},
     )
     assert resp.status_code == 200, resp.text
@@ -158,7 +159,7 @@ def test_manual_match_unknown_receipt_rejected(client):
     run_id = _create_run(client)
     tx_id = _snapshot(client, run_id)["transactions"][0]["transaction_id"]
     resp = client.post(
-        f"/runs/{run_id}/manual-match",
+        f"/api/runs/{run_id}/manual-match",
         json={"transaction_id": tx_id, "document_id": "does-not-exist"},
     )
     assert resp.status_code == 400

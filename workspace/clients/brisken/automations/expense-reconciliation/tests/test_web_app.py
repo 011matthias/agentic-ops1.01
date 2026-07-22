@@ -1,9 +1,14 @@
-"""End-to-end tests for the local browser UI (FastAPI TestClient).
+"""End-to-end tests for the JSON API (FastAPI TestClient).
 
 Drives the real app over the bundled examples: upload -> reconcile ->
-workbench render -> reviewer decision -> export. The decision round-trip
+render model -> reviewer decision -> export. The decision round-trip
 asserts the editable layer actually changes the persisted state and the
-summary, not just that the page renders.
+summary, not just that the endpoint answers.
+
+Runs are created the way the SPA does it: POST /api/runs (always async),
+then the finished job is read from GET /jobs/{id} — TestClient executes
+background tasks before the response returns, so the job is settled by
+the time the test polls.
 """
 from __future__ import annotations
 
@@ -45,9 +50,16 @@ def _statement_files():
     }
 
 
+def _run_from_resp(client, resp) -> str:
+    assert resp.status_code == 200, resp.text
+    job = client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
+    return job["run_id"]
+
+
 def _create_run(client) -> str:
     resp = client.post(
-        "/runs",
+        "/api/runs",
         files=_statement_files(),
         data={
             "account_id": "amex-9001",
@@ -55,33 +67,13 @@ def _create_run(client) -> str:
             "account_card_currency": "USD",
             "receipts_source": "csv",
         },
-        follow_redirects=False,
     )
-    assert resp.status_code == 303, resp.text
-    location = resp.headers["location"]
-    return location.rstrip("/").rsplit("/", 1)[-1]
-
-
-def test_index_loads(client):
-    resp = client.get("/")
-    assert resp.status_code == 200
-    assert "Reconcile a month" in resp.text
-
-
-def test_run_renders_workbench(client):
-    run_id = _create_run(client)
-    resp = client.get(f"/runs/{run_id}")
-    assert resp.status_code == 200
-    assert "Transactions" in resp.text
-    assert "Match rate" in resp.text
-    # The auto-detected statement column map maps the example headers, so
-    # the example transactions ingested and rendered.
-    assert "amex-9001" in resp.text
+    return _run_from_resp(client, resp)
 
 
 def test_api_workbench_returns_json_render_model(client):
-    # JSON twin of the workbench for the SPA front end: the same build_view
-    # render model, serialized (Decimal/date handled by jsonable_encoder).
+    # The render model for the SPA workbench: the build_view dict,
+    # serialized (Decimal/date handled by jsonable_encoder).
     run_id = _create_run(client)
     resp = client.get(f"/api/runs/{run_id}")
     assert resp.status_code == 200
@@ -90,7 +82,9 @@ def test_api_workbench_returns_json_render_model(client):
     for key in ("summary", "rows", "unmatched_receipts", "category_options"):
         assert key in body
     assert "match_rate" in body["summary"]
-    # unknown run -> JSON 404, never an HTML redirect
+    # Tier-1 triage + the duplicate scan ride the same model.
+    assert "duplicate_groups" in body
+    # unknown run -> JSON 404, never a redirect
     missing = client.get("/api/runs/does-not-exist", follow_redirects=False)
     assert missing.status_code == 404
     assert missing.json()["error"]
@@ -106,7 +100,7 @@ def test_decision_roundtrip_updates_summary(client):
 
     # Reject the first transaction; reconciled count must drop by one.
     resp = client.post(
-        f"/runs/{run_id}/decisions",
+        f"/api/runs/{run_id}/decisions",
         json={"transaction_id": tx_id, "status": "rejected"},
     )
     assert resp.status_code == 200
@@ -132,7 +126,7 @@ def test_category_override_persists(client):
     assert doc_id is not None
 
     resp = client.post(
-        f"/runs/{run_id}/categories",
+        f"/api/runs/{run_id}/categories",
         json={
             "document_id": doc_id,
             "line_index": 0,
@@ -167,21 +161,20 @@ def test_unmappable_statement_returns_error(client):
             "text/csv",
         ),
     }
-    resp = client.post(
-        "/runs", files=bad, data={"receipts_source": "csv"}, follow_redirects=False
-    )
+    resp = client.post("/api/runs", files=bad, data={"receipts_source": "csv"})
     assert resp.status_code == 400
-    assert "auto-detect" in resp.text.lower()
+    assert "auto-detect" in resp.json()["error"].lower()
 
 
 def test_ai_requested_without_key_falls_back(client, monkeypatch):
     # Requesting AI categorization with no server key must NOT block the
     # run. It falls back to the keyword classifier, produces a complete
-    # reconciliation, and surfaces an informational notice (cross-cutting
-    # requirement: AI-unavailable is a notice, not a hard error).
+    # reconciliation, and surfaces the flag in the render model
+    # (cross-cutting requirement: AI-unavailable is a notice, not a hard
+    # error).
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     resp = client.post(
-        "/runs",
+        "/api/runs",
         files=_statement_files(),
         data={
             "account_id": "amex-9001",
@@ -190,43 +183,27 @@ def test_ai_requested_without_key_falls_back(client, monkeypatch):
             "receipts_source": "csv",
             "use_llm": "1",
         },
-        follow_redirects=False,
     )
-    assert resp.status_code == 303, resp.text
-    run_id = resp.headers["location"].rstrip("/").rsplit("/", 1)[-1]
+    run_id = _run_from_resp(client, resp)
 
-    wb = client.get(f"/runs/{run_id}")
-    assert wb.status_code == 200
-    # The informational notice rendered, and the reconciliation still ran.
-    assert "no API key is set" in wb.text
-    assert "Transactions" in wb.text
-    # Effective AI state is off (fell back), not the requested "on".
-    assert "AI categorization off" in wb.text
+    body = client.get(f"/api/runs/{run_id}").json()
+    # The reconciliation still ran; effective AI state is off (fell back),
+    # and the explicit-request-without-key flag is up for the SPA notice.
+    assert body["rows"]
+    assert body["llm_enabled"] is False
+    assert body["summary"]["ai_unavailable"] is True
 
 
-def test_workbench_renders_triage_and_duplicate_sections(client):
+def test_fresh_run_is_not_ready_to_post(client):
+    # A fresh run has matched rows the reviewer has not ratified yet, so
+    # the post gate stays closed until decisions land.
     run_id = _create_run(client)
-    resp = client.get(f"/runs/{run_id}")
-    assert resp.status_code == 200
-    # Tier-1 triage stat + duplicate scan always render in the workbench.
-    assert "Dup groups" in resp.text
+    summary = client.get(f"/api/runs/{run_id}").json()["summary"]
+    assert summary["n_undecided"] > 0
+    assert summary["ready_to_post"] is False
 
 
-# ── PR A — review speed (confirm-all-matched + ready-to-post bar) ──────
-
-
-def test_ready_bar_renders_and_gates_download(client):
-    # A fresh run has matched rows the reviewer has not ratified yet, so the
-    # ready bar reads "Not ready" and the report download link is disabled.
-    run_id = _create_run(client)
-    resp = client.get(f"/runs/{run_id}")
-    assert resp.status_code == 200
-    assert "Confirm all matched" in resp.text
-    assert "Not ready yet" in resp.text
-    assert "undecided" in resp.text
-    # The gated download carries the `disabled` class until review is clean.
-    assert 'id="download-report"' in resp.text
-    assert "disabled" in resp.text.split('id="download-report"', 1)[1][:120]
+# ── PR A — review speed (confirm-all-matched) ──────────────────────────
 
 
 def test_confirm_all_matched_reconciles_and_opens_post_gate(client):
@@ -237,7 +214,7 @@ def test_confirm_all_matched_reconciles_and_opens_post_gate(client):
     db.close()
     assert n_matched > 0  # the example month has matched rows to confirm
 
-    resp = client.post(f"/runs/{run_id}/decisions/confirm-matched")
+    resp = client.post(f"/api/runs/{run_id}/decisions/confirm-matched")
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is True
@@ -255,7 +232,7 @@ def test_confirm_all_matched_reconciles_and_opens_post_gate(client):
     assert sum(1 for d in decisions.values() if d.status == "confirmed") == n_matched
 
     # Re-running confirms nothing new (idempotent; pending-only).
-    again = client.post(f"/runs/{run_id}/decisions/confirm-matched").json()
+    again = client.post(f"/api/runs/{run_id}/decisions/confirm-matched").json()
     assert again["confirmed"] == 0
 
 
@@ -268,10 +245,10 @@ def test_confirm_all_matched_does_not_stomp_an_explicit_reject(client):
     db.close()
 
     client.post(
-        f"/runs/{run_id}/decisions",
+        f"/api/runs/{run_id}/decisions",
         json={"transaction_id": matched_tx, "status": "rejected"},
     )
-    client.post(f"/runs/{run_id}/decisions/confirm-matched")
+    client.post(f"/api/runs/{run_id}/decisions/confirm-matched")
 
     db = RunStore(client._data_root / "recon-web.sqlite")
     decisions = db.get_decisions(run_id)
@@ -302,11 +279,6 @@ def _files_no_currency():
     }
 
 
-def _run_id(resp) -> str:
-    assert resp.status_code == 303, resp.text
-    return resp.headers["location"].rstrip("/").rsplit("/", 1)[-1]
-
-
 def _snapshot(client, run_id):
     db = RunStore(client._data_root / "recon-web.sqlite")
     run = db.get_run(run_id)
@@ -318,7 +290,7 @@ def test_legal_entity_derived_from_account_map(client):
     # The legal entity comes from the account -> entity map, not a typed
     # field. Both transactions and receipts carry the mapped entity.
     resp = client.post(
-        "/runs",
+        "/api/runs",
         files=_statement_files(),
         data={
             "account_id": "amex-9001",
@@ -326,9 +298,8 @@ def test_legal_entity_derived_from_account_map(client):
             "account_card_currency": "USD",
             "receipts_source": "csv",
         },
-        follow_redirects=False,
     )
-    run = _snapshot(client, _run_id(resp))
+    run = _snapshot(client, _run_from_resp(client, resp))
     assert run.snapshot["transactions"]
     assert all(
         t["legal_entity_id"] == "brisken-llc" for t in run.snapshot["transactions"]
@@ -342,16 +313,15 @@ def test_legal_entity_falls_back_to_account_when_unmapped(client):
     # No map: the entity is the account name itself, never a fabricated
     # "brisken" default. The account is visibly its own (unmapped) entity.
     resp = client.post(
-        "/runs",
+        "/api/runs",
         files=_statement_files(),
         data={
             "account_id": "amex-9001",
             "account_card_currency": "USD",
             "receipts_source": "csv",
         },
-        follow_redirects=False,
     )
-    run = _snapshot(client, _run_id(resp))
+    run = _snapshot(client, _run_from_resp(client, resp))
     assert all(
         t["legal_entity_id"] == "amex-9001" for t in run.snapshot["transactions"]
     )
@@ -362,7 +332,7 @@ def test_unknown_currency_flagged_not_defaulted(client):
     # The receipt must NOT be stamped USD: it is flagged unknown and left
     # unmatched (Dirk 2026-06-16).
     resp = client.post(
-        "/runs",
+        "/api/runs",
         files=_files_no_currency(),
         data={
             "account_id": "amex-9001",
@@ -370,12 +340,8 @@ def test_unknown_currency_flagged_not_defaulted(client):
             "receipts_source": "csv",
             "receipts_default_currency": "",
         },
-        follow_redirects=False,
     )
-    run_id = _run_id(resp)
-    wb = client.get(f"/runs/{run_id}")
-    assert wb.status_code == 200
-    assert "unknown currency" in wb.text.lower()
+    run_id = _run_from_resp(client, resp)
     # The one receipt had an unknown currency, so it matched nothing.
     run = _snapshot(client, run_id)
     assert run.summary["n_matched"] == 0
@@ -386,7 +352,7 @@ def test_currency_default_applies_when_set(client):
     # Same data, but the reviewer states the currency: it is applied and the
     # receipt reconciles. Confirms blank-vs-set is the only difference.
     resp = client.post(
-        "/runs",
+        "/api/runs",
         files=_files_no_currency(),
         data={
             "account_id": "amex-9001",
@@ -394,19 +360,18 @@ def test_currency_default_applies_when_set(client):
             "receipts_source": "csv",
             "receipts_default_currency": "USD",
         },
-        follow_redirects=False,
     )
-    run_id = _run_id(resp)
+    run_id = _run_from_resp(client, resp)
     run = _snapshot(client, run_id)
     assert run.summary["n_matched"] == 1
     assert run.snapshot["receipts"][0]["detected_currency"] == "USD"
 
 
 def test_operator_state_surfaces_operator_runs(client):
-    """The dev-side notifier polls /api/operator/state; an operator
-    'run now' upload creates an (unpublished) run that must appear under
-    `operator_runs` with its summary, so a new upload can ping the dev.
-    Regression for the 2026-07-20 notifier blind spot."""
+    """The dev-side notifier polls /api/operator/state; a 'run now' upload
+    creates an (unpublished) run that must appear under `operator_runs`
+    with its summary, so a new upload can ping the dev. Regression for the
+    2026-07-20 notifier blind spot."""
     run_id = _create_run(client)
 
     state = client.get("/api/operator/state").json()
@@ -421,7 +386,7 @@ def test_operator_state_surfaces_operator_runs(client):
 
     # Publishing keeps it in operator_runs (announced once) and now also
     # lists it under published_runs (the separate user-facing ping).
-    client.post(f"/runs/{run_id}/publish", follow_redirects=False)
+    client.post(f"/api/runs/{run_id}/publish")
     state = client.get("/api/operator/state").json()
     assert run_id in {r["run_id"] for r in state["operator_runs"]}
     published = {r["run_id"]: r for r in state["published_runs"]}

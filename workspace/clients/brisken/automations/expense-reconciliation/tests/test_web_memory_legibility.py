@@ -85,9 +85,9 @@ def test_reclassification_removes_line_from_learned_count():
 def test_forget_route_ok_and_validation(tmp_path):
     app = create_app(tmp_path)
     with TestClient(app) as c:
-        ok = c.post("/runs/r1/forget", json={"legal_entity_id": "ent", "vendor": "Uber"})
+        ok = c.post("/api/runs/r1/forget", json={"legal_entity_id": "ent", "vendor": "Uber"})
         assert ok.status_code == 200
         assert ok.json()["ok"] is True
         # missing vendor -> bad request
-        bad = c.post("/runs/r1/forget", json={"legal_entity_id": "ent"})
+        bad = c.post("/api/runs/r1/forget", json={"legal_entity_id": "ent"})
         assert bad.status_code == 400

@@ -44,10 +44,29 @@ def _scannable(d: Path) -> list[Path]:
     ]
 
 
+def _freshness_caveat(tools_dir: Path) -> None:
+    """One stderr line when this checkout is behind origin/main: the scan sees
+    only the WORKING TREE, so a tool added upstream is invisible here (stale-
+    checkout blind spot, register 2026-07-22). Only fires for the real repo
+    (test runs pass tmp dirs); fail-open on any error."""
+    if tools_dir != TOOLS:
+        return
+    try:
+        import importlib.util
+        p = TOOLS / "repo_freshness.py"
+        spec = importlib.util.spec_from_file_location("repo_freshness", p)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        mod.warn_if_stale("check-index scan", repo=TOOLS.parent)
+    except Exception:
+        pass
+
+
 def main(tools_dir: Path = TOOLS, index_path: Path = INDEX) -> int:
     if not index_path.is_file():
         print(f"[check-index] MISSING: {index_path}", file=sys.stderr)
         return 1
+    _freshness_caveat(tools_dir)
     index_text = index_path.read_text(encoding="utf-8")
     tools = sorted(
         {p.name for p in _scannable(tools_dir)}

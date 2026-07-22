@@ -247,39 +247,45 @@ Notifier env (dev-side, gitignored `../../context/.env`):
 `EXPENSE_RECON_OPERATOR_CODE`, and `EXPENSE_RECON_NOTIFY_USER` (Chris's
 email; the ready-ping is dev-copy-only until set).
 
-## Browser UI (review workbench)
+## Web app (JSON API + the SPA review workbench)
 
-Chris does not have to hand-edit a JSON config or read the xlsx. The
-same pipeline is wrapped in a web app (hosted per "Testing mode" above,
-or run locally on loopback):
+Criss does not have to hand-edit a JSON config or read the xlsx. The
+same pipeline is wrapped in a FastAPI JSON API (hosted per "Testing
+mode" above, or run locally on loopback). The browser UI is the
+Lovable-built SPA at `brisken-reconcile-dash.lovable.app` (repo
+`011matthias/brisken-expense-review`); the server itself answers JSON
+plus file downloads only — the old server-rendered Jinja workbench was
+retired 2026-07-22 once the SPA reached parity. Interactive API docs
+are at `/docs` when run locally.
 
 ```bash
 cd workspace/clients/brisken/automations/expense-reconciliation
 uv sync --extra web                     # installs the web dependencies
-uv run expense-recon-web                # opens http://127.0.0.1:8000
+uv run expense-recon-web                # serves http://127.0.0.1:8000
 uv run expense-recon-web --port 9000 --data ./runs   # alternate port + data dir
 ```
 
-It binds to loopback (127.0.0.1) only, so it is reachable from the
-browser on that machine and nowhere else; every statement, receipt, and
-generated report stays on the machine running the server. To turn on AI
+It binds to loopback (127.0.0.1) only, so it is reachable from that
+machine and nowhere else; every statement, receipt, and generated
+report stays on the machine running the server. To turn on AI
 categorization and FX judgment, set `OPENAI_API_KEY` in the server's
 environment before launching (the keyword fallback runs without it).
 
-What it does:
+What the API drives (via the SPA):
 
-1. Upload one card statement (`.csv` / `.xlsx`) and the receipts CSV.
+1. Upload one card statement (`.csv` / `.xlsx`) and the receipts CSV or
+   Zoho report PDF (`POST /api/runs`, or `POST /api/intakes` to queue).
    The statement column map is auto-detected (the `inspect` heuristic);
    override a field only if the guess is wrong.
 2. The run goes through the exact CLI pipeline (`cli.reconcile`): ingest,
    categorize, deterministic match, LLM judgment for FX / ambiguous.
-3. The review workbench shows every transaction with its candidate
-   receipt(s), match type, confidence, and per-line category. Chris can
-   confirm a match, reject it, pick the right receipt among candidates,
-   and reclassify a line's category. Each edit persists (SQLite) and the
-   summary updates live.
+3. The SPA's review workbench (`GET /api/runs/{id}`) shows every
+   transaction with its candidate receipt(s), match type, confidence,
+   and per-line category. Criss can confirm a match, reject it, pick the
+   right receipt among candidates, and reclassify a line's category.
+   Each edit persists (SQLite) and the summary updates live.
 4. Download the xlsx report with her decisions and reclassifications
-   applied.
+   applied (`GET /runs/{id}/report.xlsx`).
 
 Runs persist under the data dir (`recon-web-data/` by default): the
 SQLite db plus a per-run folder with the uploads and the generated

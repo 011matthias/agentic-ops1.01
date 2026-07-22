@@ -183,3 +183,62 @@ def test_normalize_session_frontmatter_fail_open():
         "no frontmatter at all"
     assert rs.normalize_session_frontmatter("---\nunclosed") == "---\nunclosed"
     assert rs.normalize_session_frontmatter("") == ""
+
+
+SHARD = """---
+date: 2020-01-01
+sessions: 1
+projects_touched: [brisken]
+friction_events: 1
+work_types: [client-dev]
+---
+
+### Session 1 — Shard Work
+**Friction:** 1 — thing
+"""
+
+
+def test_fold_session_shards_noop_without_sessions_dir(tmp_path):
+    lines: list[str] = []
+    rs.fold_session_shards(str(tmp_path), True, lines)
+    assert lines == []
+
+
+def test_fold_session_shards_folds_and_normalizes(tmp_path):
+    sessions = tmp_path / "docs" / "sessions"
+    sessions.mkdir(parents=True)
+    (sessions / "2020-01-01-abc12345.md").write_text(SHARD, encoding="utf-8")
+    lines: list[str] = []
+    rs.fold_session_shards(str(tmp_path), True, lines)
+    assert any("session-fold: folded 1 shard(s)" in ln for ln in lines)
+    assert not (sessions / "2020-01-01-abc12345.md").exists()
+    text = (sessions / "2020-01-01.md").read_text(encoding="utf-8")
+    assert "Shard Work" in text and "<!-- folded:" in text
+
+
+def test_fold_session_shards_dry_run_writes_nothing(tmp_path):
+    sessions = tmp_path / "docs" / "sessions"
+    sessions.mkdir(parents=True)
+    (sessions / "2020-01-01-abc12345.md").write_text(SHARD, encoding="utf-8")
+    lines: list[str] = []
+    rs.fold_session_shards(str(tmp_path), False, lines)
+    assert any("would fold" in ln for ln in lines)
+    assert (sessions / "2020-01-01-abc12345.md").exists()
+    assert not (sessions / "2020-01-01.md").exists()
+
+
+def test_fold_session_shards_fail_open(tmp_path, monkeypatch):
+    """A broken merge tool must log and continue, never raise (the sweep
+    still commits raw shards under the union rules)."""
+    sessions = tmp_path / "docs" / "sessions"
+    sessions.mkdir(parents=True)
+    import importlib.util as ilu
+
+    def boom(*a, **k):
+        raise RuntimeError("merge tool unloadable")
+
+    monkeypatch.setattr(ilu, "spec_from_file_location", boom)
+    lines: list[str] = []
+    rs.fold_session_shards(str(tmp_path), True, lines)  # must not raise
+    assert any("session-fold: skipped" in ln and "shards left as-is" in ln
+               for ln in lines)

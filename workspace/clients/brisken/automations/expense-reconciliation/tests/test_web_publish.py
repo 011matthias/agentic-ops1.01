@@ -1,6 +1,9 @@
-"""Testing-mode publish lifecycle: user uploads -> operator runs the intake
--> publishes -> the user reviews the published run -> unpublish hides it.
-Runs under the sync seam (conftest sets EXPENSE_RECON_WEB_SYNC=1)."""
+"""Publish lifecycle on the JSON API: upload an intake -> operator runs it
+-> publishes -> unpublish. Publish flips the intake status the dashboard
+and the dev-side notifier read. Runs under the sync seam (conftest sets
+EXPENSE_RECON_WEB_SYNC=1), so /api/intakes/{id}/run answers {run_id}
+directly. Auth is covered in test_web_auth; these clients run ungated.
+"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -21,9 +24,6 @@ from expense_recon.web.store import (  # noqa: E402
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 
-USER_CODE = "user-code-1"
-OP_CODE = "operator-code-1"
-
 
 def _files():
     return {
@@ -41,126 +41,79 @@ def _files():
 
 
 @pytest.fixture
-def app_env(monkeypatch):
-    monkeypatch.setenv("EXPENSE_RECON_ACCESS_CODE", USER_CODE)
-    monkeypatch.setenv("EXPENSE_RECON_OPERATOR_CODE", OP_CODE)
-    monkeypatch.setenv("EXPENSE_RECON_INSECURE_COOKIE", "1")
-
-
-def _client(app):
-    return TestClient(app)
-
-
-def _login(client, code):
-    resp = client.post("/login", data={"code": code}, follow_redirects=False)
-    assert resp.status_code == 303
-
-
-def test_full_lifecycle(tmp_path, app_env):
+def client(tmp_path):
     app = create_app(tmp_path)
+    with TestClient(app) as c:
+        c._data_root = tmp_path
+        yield c
 
-    # 1. user uploads
-    user = _client(app)
-    _login(user, USER_CODE)
-    resp = user.post(
-        "/intakes",
+
+def test_full_lifecycle(client):
+    # 1. upload an intake (queued, nothing runs)
+    resp = client.post(
+        "/api/intakes",
         files=_files(),
         data={"card_name": "Corporate card 2838", "month": "2026-06"},
-        follow_redirects=False,
     )
-    assert resp.status_code == 303
-    resp = user.get("/")
-    assert "Received" in resp.text
+    assert resp.status_code == 200, resp.text
+    intake_id = resp.json()["intake_id"]
 
-    with RunStore(tmp_path / "recon-web.sqlite") as store:
-        intake_id = store.list_intakes()[0].intake_id
-
-    # 2. operator runs the intake (sync seam -> 303 to workbench)
-    op = _client(app)
-    _login(op, OP_CODE)
-    prep = op.get(f"/intakes/{intake_id}/prepare")
-    assert prep.status_code == 200
-    assert "statement.example.csv" in prep.text
-    resp = op.post(
-        f"/intakes/{intake_id}/run",
+    # 2. run the intake (sync seam -> the run id comes straight back)
+    resp = client.post(
+        f"/api/intakes/{intake_id}/run",
         data={"account_id": "amex-9001", "account_card_currency": "USD"},
-        follow_redirects=False,
     )
-    assert resp.status_code == 303, resp.text
-    run_id = resp.headers["location"].rstrip("/").rsplit("/", 1)[-1]
+    assert resp.status_code == 200, resp.text
+    run_id = resp.json()["run_id"]
 
-    with RunStore(tmp_path / "recon-web.sqlite") as store:
+    with RunStore(client._data_root / "recon-web.sqlite") as store:
         intake = store.get_intake(intake_id)
         run = store.get_run(run_id)
     assert intake.status == INTAKE_PROCESSING
     assert run.intake_id == intake_id
     assert run.published is False
 
-    # 3. user cannot see the unpublished run (404, id unconfirmable)
-    assert user.get(f"/runs/{run_id}").status_code == 404
-    assert user.get(f"/runs/{run_id}/report.xlsx").status_code == 404
-    assert (
-        user.post(
-            f"/runs/{run_id}/decisions",
-            json={"transaction_id": "x", "status": "confirmed"},
-        ).status_code
-        == 404
-    )
+    # 3. the run is reviewable and publish flips run + intake state
+    assert client.get(f"/api/runs/{run_id}").status_code == 200
+    resp = client.post(f"/api/runs/{run_id}/publish")
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True, "run_id": run_id, "published": True}
 
-    # 4. operator reviews + publishes
-    wb = op.get(f"/runs/{run_id}")
-    assert wb.status_code == 200
-    assert "Publish for review" in wb.text
-    resp = op.post(f"/runs/{run_id}/publish", follow_redirects=False)
-    assert resp.status_code == 303
-
-    with RunStore(tmp_path / "recon-web.sqlite") as store:
+    with RunStore(client._data_root / "recon-web.sqlite") as store:
         intake = store.get_intake(intake_id)
         run = store.get_run(run_id)
     assert intake.status == INTAKE_READY
     assert intake.run_id == run_id
     assert run.published is True
 
-    # 5. user sees + fully reviews the published run
-    home = user.get("/")
-    assert "Ready to review" in home.text
-    wb = user.get(f"/runs/{run_id}")
-    assert wb.status_code == 200
-    assert "Publish for review" not in wb.text  # operator control hidden
-    assert "Commit to memory" not in wb.text
-    # decisions work for the user (no LLM involved)
-    tx_id = None
-    with RunStore(tmp_path / "recon-web.sqlite") as store:
+    # 4. decisions still work on a published run
+    with RunStore(client._data_root / "recon-web.sqlite") as store:
         run = store.get_run(run_id)
-    for m in run.snapshot["outcome"]["matches"]:
-        tx_id = m["transaction_id"]
-        break
-    if tx_id is not None:
-        resp = user.post(
-            f"/runs/{run_id}/decisions",
-            json={"transaction_id": tx_id, "status": "confirmed"},
+    matches = run.snapshot["outcome"]["matches"]
+    if matches:
+        resp = client.post(
+            f"/api/runs/{run_id}/decisions",
+            json={"transaction_id": matches[0]["transaction_id"],
+                  "status": "confirmed"},
         )
         assert resp.status_code == 200
 
-    # 6. unpublish hides it again
-    resp = op.post(f"/runs/{run_id}/unpublish", follow_redirects=False)
-    assert resp.status_code == 303
-    assert user.get(f"/runs/{run_id}").status_code == 404
-    with RunStore(tmp_path / "recon-web.sqlite") as store:
+    # 5. unpublish reverts run + intake state
+    resp = client.post(f"/api/runs/{run_id}/unpublish")
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True, "run_id": run_id, "published": False}
+    with RunStore(client._data_root / "recon-web.sqlite") as store:
+        assert store.get_run(run_id).published is False
         assert store.get_intake(intake_id).status == INTAKE_PROCESSING
 
 
-def test_publish_unknown_run_404(tmp_path, app_env):
-    app = create_app(tmp_path)
-    op = _client(app)
-    _login(op, OP_CODE)
-    assert op.post("/runs/nope/publish").status_code == 404
+def test_publish_unknown_run_404(client):
+    resp = client.post("/api/runs/nope/publish")
+    assert resp.status_code == 404
+    assert resp.json() == {"error": "run not found"}
 
 
-def test_intake_without_receipts_cannot_run(tmp_path, app_env):
-    app = create_app(tmp_path)
-    user = _client(app)
-    _login(user, USER_CODE)
+def test_intake_without_receipts_cannot_run(client):
     files = {
         "statement": (
             "statement.example.csv",
@@ -168,15 +121,13 @@ def test_intake_without_receipts_cannot_run(tmp_path, app_env):
             "text/csv",
         )
     }
-    resp = user.post(
-        "/intakes", files=files, data={"card_name": "Corp 2838"},
-        follow_redirects=False,
+    resp = client.post(
+        "/api/intakes", files=files, data={"card_name": "Corp 2838"}
     )
-    assert resp.status_code == 303
-    with RunStore(tmp_path / "recon-web.sqlite") as store:
-        intake_id = store.list_intakes()[0].intake_id
-    op = _client(app)
-    _login(op, OP_CODE)
-    resp = op.post(f"/intakes/{intake_id}/run", data={"account_id": "amex-9001"})
+    assert resp.status_code == 200, resp.text
+    intake_id = resp.json()["intake_id"]
+    resp = client.post(
+        f"/api/intakes/{intake_id}/run", data={"account_id": "amex-9001"}
+    )
     assert resp.status_code == 400
-    assert "no receipts file yet" in resp.text
+    assert "no receipts file yet" in resp.json()["error"]

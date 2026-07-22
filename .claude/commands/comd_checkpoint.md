@@ -181,9 +181,9 @@ Key findings, investigation results, and intermediate state that would be expens
 
 ## Append Session Log
 
-After writing the checkpoint, append a session log entry to `docs/sessions/{YYYY-MM-DD}.md`:
+After writing the checkpoint, append a session log entry to this session's SHARD file `docs/sessions/{YYYY-MM-DD}-{sid}.md`, where `{sid}` = the first 8 characters of the current session id (fallback: a short unique slug for this session, e.g. from the topic). Never write the plain `docs/sessions/{YYYY-MM-DD}.md` directly — concurrent sessions each own their shard, and the nightly sweep folds shards into the canonical daily file via `tools/merge-session-logs.py --apply` (run it manually to fold early). Session numbers are per-shard; the fold recomputes day-level counters and numbering.
 
-1. If the file doesn't exist, create it with frontmatter:
+1. If the shard file doesn't exist, create it with frontmatter:
    ```yaml
    ---
    date: {TODAY}
