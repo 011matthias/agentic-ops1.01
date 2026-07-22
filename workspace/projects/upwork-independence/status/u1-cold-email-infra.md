@@ -24,10 +24,10 @@ Meji/Brisken client property, off-limits. Purchases are GATED (owner decision
 | Element | State | Status | Next action | Blocker | Detail |
 |---|---|---|---|---|---|
 | Ready-to-purchase checklist | done | Written 2026-07-22, prices live-fetched same day: Porkbun $11.08/.com/yr, GWS Starter EUR 6.80/mbx/mo, Instantly Growth $47/mo, Apollo Free/$49+, NeverBounce TBD (bot-walled). 5 domain candidates RDAP-verified available. Model-feedback flag: real fixed stack ~2x the scorer's EUR 40/mo assumption | Owner approval line-by-line (checklist §10) | purchase gate | `../context/cold-email-purchase-checklist.md` |
-| Sending domains (2-3) | blocked | Nothing registered; unpauseai.com never cold-sends | — | purchase gate | checklist |
-| Mailboxes + warm-up | blocked | 3-4 wk warm-up is the calendar gate on all downstream | — | purchase gate + domains | checklist |
-| Instantly workspace | blocked | Own ESP account; credential -> vault + `../context/.env` | — | purchase gate | checklist |
-| Apollo account | blocked | Own list-building; meji filter-spec pattern reusable once credential exists | — | purchase gate | checklist |
+| Sending domains (2-3) | approved | Owner APPROVED 2026-07-22 ($33.24/yr, 3 domains); not yet registered — needs payment method + registrar credential (vault reads denied this session) | Register on an owner-run purchase session | execution access | checklist §10 |
+| Mailboxes + warm-up | approved, provider open | Owner APPROVED 6 mailboxes but asked whether Zoho undercuts Google Workspace; Zoho price UNVERIFIED (JS-injected, 2 fetch + 3 browser attempts failed). Zoho bills annually per its own page vs GWS monthly-flex | Quote Zoho + check provider cold-outreach terms, then buy | provider decision | checklist §11 |
+| Instantly workspace | approved | Owner APPROVED Growth ($47/mo); not yet purchased | Buy on the purchase session | execution access | checklist §10 |
+| Apollo account | not approved | Owner asked how the free tier works without a subscription: $0 plan, 900 credits, no card; but bulk EXPORT limits on free are UNVERIFIED and export is the capability we need | Test export on a real free account before relying on it | owner | checklist §11 |
 | NeverBounce account | blocked | Verification; necessary-but-insufficient (MX pre-filter beside it) | — | purchase gate | checklist |
 | First campaign build | not-started | UK/US-only list sourcing (UWG §7 structural), B5 gate + readiness audit inherited | — | warm-up complete + u5 kit | `rule_instantly_invasive` |
 

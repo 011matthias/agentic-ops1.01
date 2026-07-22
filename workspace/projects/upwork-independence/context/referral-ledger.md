@@ -86,3 +86,35 @@ Reasoning, briefly:
 
 One-page ask asset: decision deferred; it only matters once the drafts
 gate opens, and its shape follows the offer decision above.
+
+## Revised recommendation after owner challenge (2026-07-22)
+
+The owner's response to the offer question was to challenge the premise:
+"you want to ask current clients for referrals?" That question lands
+before the offer question, which this ledger had skipped.
+
+Read the table again with it in mind: four of the five independent sources
+are people who currently pay us or recently did. So "run the referral
+channel" concretely means going to Dirk mid-delivery, and to Gurmej on a
+live retainer, and asking them to spend their own credibility introducing
+us to their network. That is a real withdrawal from the working
+relationship, priced at zero in the model because the model counts only
+our hours.
+
+Revised recommendation, superseding the offer definition above:
+
+- **Do not run referral as a channel now.** No asks, with or without an
+  offer attached. The 0.154 modeled effort is better spent on u2 (content)
+  and u3 (LinkedIn), both of which reach DACH legally and compound without
+  spending relationship capital.
+- **Keep it opportunistic.** If a client volunteers an intro, take it and
+  thank them concretely. That needs no program and no commission table.
+- **Jochen is a different conversation.** His assessments generate delivery
+  work that has to go somewhere; that is a partnership or subcontract
+  discussion with its own economics, and it belongs with u7.
+
+With the channel not running, the offer question has no live answer: there
+is no ask to attach terms to. Revisit if the owner opens the channel, or if
+the Jochen partnership becomes concrete.
+
+Status: recommendation, owner call open. Nothing sent; drafts gate intact.

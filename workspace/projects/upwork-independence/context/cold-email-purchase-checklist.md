@@ -156,8 +156,54 @@ pool validations (u4 pattern).
 
 ## 10. Purchase-approval checklist (each line needs its own owner yes)
 
-- [ ] Domains: tryunpauseai.com, unpause-ai.com, unpauseautomation.com ($33.24/yr)
-- [ ] Google Workspace: 6 x Business Starter monthly (EUR 40.80/mo)
-- [ ] Instantly Growth ($47/mo)
-- [ ] Apollo (start Free, $0; upgrade needs its own approval)
+Owner reviewed 2026-07-22:
+
+- [x] **APPROVED** Domains: tryunpauseai.com, unpause-ai.com, unpauseautomation.com ($33.24/yr)
+- [~] **APPROVED, provider open** Mailboxes: 6 accounts. Owner asked whether
+  Zoho undercuts Google Workspace; see §11. Do not buy until the provider
+  question closes.
+- [x] **APPROVED** Instantly Growth ($47/mo)
+- [ ] Apollo: owner asked how a free tier works without a subscription; see
+  §11. Not approved.
 - [ ] NeverBounce credits (TBD; quote on purchase day)
+
+**Execution status: nothing purchased.** All four vendors need a payment
+method plus account credentials the agent cannot reach (the local vault
+holds `porkbun`, `apollo`, `workspace-super-admin` entries, but vault reads
+are denied by the session permission classifier). Purchase day is an
+owner-run session, or needs a vault-read permission rule.
+
+## 11. Open questions raised at approval (2026-07-22)
+
+**Zoho vs Google Workspace for the mailboxes.** Zoho Mail's paid tiers list
+below Google Workspace, so the owner's instinct is probably right on price;
+the exact figure is **UNVERIFIED** today. Zoho injects prices via JS: two
+WebFetch paths returned the page with the numbers absent, and three browser
+attempts hung on the EU consent overlay. Quote it on purchase day or from a
+logged-in Zoho session.
+
+The price delta is not the deciding factor. At 6 mailboxes the spread
+between providers is single-digit EUR per month, against a channel whose
+whole value depends on landing in inboxes. What should decide it:
+
+- Zoho Mail's paid tiers bill **annually** (its own pricing page states "no
+  monthly plans" for Mail Lite / Mail Premium), so the cheap line item is a
+  12-month commitment, while Google Workspace runs month-to-month. For an
+  unproven channel, monthly-cancellable at a higher rate can cost less than
+  an annual lock at a lower one.
+- Cold outreach is the load-bearing use case, and provider tolerance for it
+  differs. Verify the current acceptable-use terms of whichever provider is
+  chosen before buying, and confirm Instantly's supported connection method
+  for it. UNVERIFIED as of 2026-07-22.
+
+Recommendation stands at Google Workspace monthly-flex until a sourced Zoho
+number plus a terms check says otherwise.
+
+**How Apollo can be free.** Apollo runs a permanent free plan: an account
+with no card and no subscription, listed at $0 with 900 credits on the
+pricing page (the credit period is not stated on that page). Paid tiers are
+per-seat and billed annually ($49 / $79 / $119). The catch to verify before
+relying on it: free and low tiers historically restrict **bulk export**,
+which is the exact capability list-building needs. Treat the free tier as
+UNVERIFIED for export until tested with a real account; if export is
+gated, the list step needs either a paid seat or a different source.
