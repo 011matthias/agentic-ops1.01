@@ -189,8 +189,7 @@ details[open] summary { border-bottom: 1px solid var(--border); }
 </script>
 </head>
 <body>
-
-<!-- Navigation -->
+
 <nav class="site-nav">
     <div class="nav-left">
         <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
@@ -215,8 +214,7 @@ details[open] summary { border-bottom: 1px solid var(--border); }
         <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
     </div>
 </nav>
-
-<!-- Sidebar -->
+
 <aside class="sidebar">
     <div class="sidebar-label">FAQ sections</div>
     <ul class="step-list">
@@ -241,19 +239,16 @@ details[open] summary { border-bottom: 1px solid var(--border); }
         </li>
     </ul>
 </aside>
-
-<!-- Main Content -->
+
 <div class="main-content">
 <div class="content-inner">
-
-<!-- Hero -->
+
 <section class="hero">
     <div class="hero-badge">FAQ</div>
     <h1>Frequently Asked Questions</h1>
     <p class="hero-sub">Common questions about the email compliance monitor and AI chat system.</p>
 </section>
-
-<!-- General -->
+
 <h2 id="general">General</h2>
 
 <details>
@@ -276,8 +271,7 @@ details[open] summary { border-bottom: 1px solid var(--border); }
         <p>Yes. Phase 1 stands alone as a complete email compliance monitoring system. Phase 2 can be scoped separately whenever you're ready.</p>
     </div>
 </details>
-
-<!-- Technical -->
+
 <h2 id="technical">Technical</h2>
 
 <details>
@@ -307,8 +301,7 @@ details[open] summary { border-bottom: 1px solid var(--border); }
         <p>Failed processing goes to a dead letter queue. When the API recovers, queued emails process automatically. You'll get a Slack alert if the queue backs up beyond a configurable threshold.</p>
     </div>
 </details>
-
-<!-- GDPR & Compliance -->
+
 <h2 id="gdpr">GDPR &amp; Compliance</h2>
 
 <details>
@@ -345,8 +338,7 @@ details[open] summary { border-bottom: 1px solid var(--border); }
         <p>The system includes a procedure document for handling SARs. Data is structured and searchable, so locating a specific person's data is a database query, not a manual hunt.</p>
     </div>
 </details>
-
-<!-- Pricing -->
+
 <h2 id="pricing">Pricing</h2>
 
 <details>
@@ -362,8 +354,7 @@ details[open] summary { border-bottom: 1px solid var(--border); }
         <p>AWS infrastructure: estimated $50-150/month. Anthropic API: estimated $20-100/month depending on email volume. No ongoing developer fees -- the system is designed for your team to manage.</p>
     </div>
 </details>
-
-<!-- Post-Deployment -->
+
 <h2 id="post-deploy">Post-Deployment</h2>
 
 <details>
@@ -386,8 +377,7 @@ details[open] summary { border-bottom: 1px solid var(--border); }
         <p>CloudWatch dashboards show AWS costs and Anthropic API usage in real time. Billing alerts trigger automatically if spending exceeds configurable thresholds.</p>
     </div>
 </details>
-
-<!-- CTA -->
+
 <section class="cta-section">
     <h2>Ready to get started?</h2>
     <p>Review the timeline and investment, then let's talk.</p>
@@ -441,8 +431,7 @@ links.forEach(function(a) {
     });
 });
 </script>
-
-<!-- Access Gate -->
+
 <div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
   <div style="text-align:center;max-width:360px;padding:24px;">
     <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;">

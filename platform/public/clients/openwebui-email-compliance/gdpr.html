@@ -242,8 +242,7 @@ tr:hover td { background: var(--blue-bg); }
 </script>
 </head>
 <body>
-
-<!-- Navigation -->
+
 <nav class="site-nav">
     <div class="nav-left">
         <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
@@ -268,8 +267,7 @@ tr:hover td { background: var(--blue-bg); }
         <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
     </div>
 </nav>
-
-<!-- Sidebar -->
+
 <aside class="sidebar">
     <div class="sidebar-label">GDPR Compliance</div>
     <ul class="step-list">
@@ -302,19 +300,16 @@ tr:hover td { background: var(--blue-bg); }
         </li>
     </ul>
 </aside>
-
-<!-- Main Content -->
+
 <div class="main-content">
 <div class="content-inner">
-
-<!-- Hero -->
+
 <section class="hero" id="top">
     <div class="hero-badge">Compliance</div>
     <h1>GDPR Compliance Architecture</h1>
     <p class="hero-sub">How every component of this system is designed with UK GDPR requirements from the ground up -- not bolted on after the fact.</p>
 </section>
-
-<!-- Why GDPR Matters Here -->
+
 <h2 id="why-gdpr">Why GDPR Matters Here</h2>
 
 <div class="callout orange">
@@ -332,8 +327,7 @@ tr:hover td { background: var(--blue-bg); }
 </ul>
 
 <p>Every technical decision in this system flows from these requirements.</p>
-
-<!-- Data Processing -->
+
 <h2 id="processing">Data Processing</h2>
 
 <table>
@@ -377,8 +371,7 @@ tr:hover td { background: var(--blue-bg); }
     <div class="callout-title">Key design decision</div>
     <p>AI analysis results (sentiment scores, tags, severity) are stored. Raw email content is NOT stored by default -- only references and metadata. This is data minimization in practice.</p>
 </div>
-
-<!-- Data Minimization -->
+
 <h2 id="minimization">Data Minimization</h2>
 
 <p>Here's what happens at each stage of the pre-processing pipeline:</p>
@@ -411,8 +404,7 @@ tr:hover td { background: var(--blue-bg); }
 </div>
 
 <p>At each stage, we're asking: "Do we need this data?" If not, it doesn't enter the pipeline.</p>
-
-<!-- Retention Lifecycle -->
+
 <h2 id="retention">Retention Lifecycle</h2>
 
 <div class="lifecycle">
@@ -470,8 +462,7 @@ tr:hover td { background: var(--blue-bg); }
 </table>
 
 <p>Every transition is logged. You'll have a complete audit trail showing what was archived, when, and when it was purged.</p>
-
-<!-- International Transfers -->
+
 <h2 id="transfers">International Transfers</h2>
 
 <p>Anthropic's Claude API is hosted in the US. Sending email content to their API for analysis constitutes an international transfer under UK GDPR.</p>
@@ -489,8 +480,7 @@ tr:hover td { background: var(--blue-bg); }
     <div class="callout-title">Anthropic's position</div>
     <p>Anthropic's API terms explicitly support zero-retention mode for API calls. Data sent via the API is not used for model training and is not stored after processing. This is documented in their data processing agreements.</p>
 </div>
-
-<!-- Rights and Requests -->
+
 <h2 id="rights">Rights and Requests</h2>
 
 <p>Here's how the system supports GDPR data subject rights:</p>
@@ -527,8 +517,7 @@ tr:hover td { background: var(--blue-bg); }
 </table>
 
 <p>The human review queue for severity 4-5 alerts is a design feature, not a limitation. It ensures that no critical decision about a complaint is made purely by AI.</p>
-
-<!-- DPIA Overview -->
+
 <h2 id="dpia">DPIA Overview</h2>
 
 <p>A Data Processing Impact Assessment is required for this system. We'll provide a completed template as part of Phase 1.</p>
@@ -543,8 +532,7 @@ tr:hover td { background: var(--blue-bg); }
 </ol>
 
 <p>The DPIA covers both the email monitoring pipeline and the AI chat interface. It's designed for your DPO or compliance team to review and sign off.</p>
-
-<!-- CTA -->
+
 <section class="cta-section">
     <h2>Ready to discuss compliance requirements?</h2>
     <p>See the Onboarding page to share your current data handling policies.</p>
@@ -598,8 +586,7 @@ links.forEach(function(a) {
     });
 });
 </script>
-
-<!-- Access Gate -->
+
 <div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
   <div style="text-align:center;max-width:360px;padding:24px;">
     <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;">
