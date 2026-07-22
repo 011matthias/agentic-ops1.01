@@ -10,6 +10,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## upwork-independence
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-22 | Upwork Independence Week-1 Batch | misc | [Checkpoint](docs/2026-07-22%20-%20Upwork%20Independence%20Week-1%20Batch/Checkpoint.md) |
 | 2026-07-22 | Upwork Independence Execution Kickoff | system-infra | [Checkpoint](docs/2026-07-22%20-%20Upwork%20Independence%20Execution%20Kickoff/Checkpoint.md) |
 | 2026-07-22 | Upwork-Independence Pricing Tiers | misc | [Checkpoint](docs/2026-07-22%20-%20Upwork-Independence%20Pricing%20Tiers/Checkpoint.md) |
 | 2026-07-21 | Upwork-Independence GTM Optimize | misc | [→](docs/2026-07-21%20-%20Upwork-Independence%20GTM%20Optimize/Checkpoint.md) |
