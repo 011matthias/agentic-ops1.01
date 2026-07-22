@@ -1,3 +1,4 @@
 round	commit	score	delta	status	description
 0	0db7003	219045.0	0	baseline	baseline (asset as-is)
 1	df629f7	217504.0	-1541	keep	Strip HTML comments outside script/style blocks, conditional comments preserved.
+2	010baba	215901.0	-1603	keep	Remove CSS rules whose selector names a class/id appearing nowhere else in the file (markup, attributes and script text all count as present).
