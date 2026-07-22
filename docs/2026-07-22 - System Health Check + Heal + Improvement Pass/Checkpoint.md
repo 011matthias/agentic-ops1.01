@@ -57,3 +57,28 @@ Full three-phase pass: health-check battery over the whole checker estate, heal 
 - Land the fan-out PR (if still open), then residual ledger sync PR (this checkpoint rides in it).
 - At sibling quiesce: `git pull --ff-only` in the shared tree; if refused, the refusal list is ledger-PR-2 (same temp-index recipe).
 - `uv run tools/doctor.py` is now the standing health-check entry; `--deep` before big sessions.
+
+---
+
+## Round 2 (same session, owner: "continue build")
+
+Seven more PRs, all CI-green: #355 B1 primer, #357 validator blind spot + MERGE-NOT-LIVE marker, #358 anti-slop detectors, #360 doctor SKIP fix, #361 background-work liveness, #362 skill-map cleanup, plus #345 (a sibling's ledger row about #342) merged on green. Battery re-run against `origin/main` at `493453b`: **11 PASS, 1 SKIP (by design), 0 RED** — an actual run, which round 1 did not do.
+
+### The correction that mattered
+
+Round 1's summary said the battery was "fully green". It was not. I had fixed 2 skill-map dead pointers seen in a truncated `| tail` view and reported the verdict without re-running the checker. The real count was 14 dead pointers plus 13 unreachable modules across 8 skills (27 findings; the sub-agent that cleared them found 9 more MEDIUMs than the brief named). Two lessons, both logged: a claim about a checker's verdict is only ever that checker's last run, and never size a fix from truncated output.
+
+### Builds
+
+1. **B1 primer** (#355) — the register's #1 friction class (`agent-deferred`, 158 rows) had only a Stop-hook catch, which fires after the deferring text exists and costs a turn redo. Hook-log census: **608 BLOCK vs 2554 clean stops (~19% of turns), flat across all of July**, and **92% of blocks inside bursts** (largest 26). So a block now increments session state and `input-classifier` spends it as a `[B1 PRIMER]` on the next turn, before any closing text is written. One primer per block. No new hook script.
+2. **Anti-slop detectors** (#358) — the two `rule_anti_slop` "not yet built" candidates, overdue since 2026-06-12. Both LOW/advisory, stdlib-only, using an NLP-free "lead skeleton" over the first 4 tokens; an all-placeholder skeleton never counts as a template, which is what keeps the rule's own "NOT slop" cases silent. Calibrated over 958 markdown files down to 3 true positives; the 598-row friction register is silent by design.
+3. **Liveness detector** (#361) — `bg_watch.py` plus an arm on the existing all-tools meter. One rule covers both shapes: overdue when `now - (heartbeat mtime or registration) >= eta`. Live proof shows it firing ~66 minutes earlier than the 76-minute silent-death incident. Honest limit: registration is agent-initiated.
+4. **Validator blind spot + MERGE-NOT-LIVE** (#357) — `check_em_dashes` skipped any line starting with `*` (a JS-comment heuristic), silently exempting every markdown bullet and bold-lead line; now gated to JS/TS suffixes (fixture: 1 HIGH to 4 HIGH). The MERGE-NOT-LIVE advisory fired on every merge and marked nothing; it now reads the merged PR's file list, fires only for `platform/` paths, and persists a marker that re-surfaces until a force-deploy clears it. Also found: the `gh-merge.sh` wrapper path was unreachable, so wrapper merges produced no advisory at all.
+5. **doctor SKIP** (#360) — the tool I shipped in round 1 REDded in every worktree because it asserts gitignored per-checkout state, and I had documented that as a prose caveat instead of fixing it. Home-clone-only checks now SKIP outside the primary clone; a test pins `wire-hooks` as the only exempt check.
+6. **skill-map** (#362) — 27 findings cleared. No module was deleted: all were live content unreachable only because the reverse check reads SKILL.md and some modules are loaded by agents instead. The single-skill test contract was replaced with a whole-tree one, so new drift fails CI.
+
+### Still open
+
+- `check-skill-map.py` reads only backticked paths, so stale `skil_`-prefix targets inside markdown links (about 10 across the pack spines) stay invisible. Build in flight at checkpoint time.
+- The shared tree was never pulled: 4-5 sibling sessions were active throughout, and `git pull` would have moved HEAD under them mid-task. It reconciles at quiesce; nothing in it is unlanded.
+- Decision menu from round 1 stands (PR #300 close, platform force-deploy + Vercel token revoke, stale spec `p2.ops1`, 2 stale status files, `autoMode.allow` paste).
