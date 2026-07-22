@@ -55,6 +55,31 @@ merging. Re-pin flow after a user-approved scorer change:
 ship the PINS.json diff in the same PR - the diff line is the review
 surface. `uv run tools/pin_scorer.py check` is the human-run verifier.
 
+## Authoring a new scorer
+
+Start from `docs/optimize/scorer-template.py.txt` (a conforming skeleton
+plus the paired-guard notes; it is `.py.txt` and lives outside this
+directory on purpose, because anything matching `tools/scorers/*.py` is
+picked up as a scorer and would fail CI as unpinned):
+
+```
+cp docs/optimize/scorer-template.py.txt tools/scorers/<target>.py
+```
+
+Then edit, add the `tools/INDEX.md` row, open the PR, and after review
+`SCORER_LOCK_ALLOW=1 uv run tools/pin_scorer.py pin <target>.py` with the
+PINS.json diff in the same PR.
+
+`tools/tests/test_scorer_contract.py` checks the clauses a content hash
+cannot see: the direction header, that a `SCORE:` line is emitted, that a
+non-zero exit path exists, and - behaviorally - that the scorer refuses an
+asset it cannot possibly have measured. Run it before opening the PR so a
+nonconformance costs one seam touch, not two:
+
+```
+uv run --no-project --with pytest pytest tools/tests/test_scorer_contract.py
+```
+
 ## Fit check before adding a scorer
 
 All three must hold for the target asset (else the optimize loop is the
