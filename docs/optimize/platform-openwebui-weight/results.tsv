@@ -1,0 +1,9 @@
+round	commit	score	delta	status	description
+0	0db7003	219045.0	0	baseline	baseline (asset as-is)
+1	df629f7	217504.0	-1541	keep	Strip HTML comments outside script/style blocks, conditional comments preserved.
+2	010baba	215901.0	-1603	keep	Remove CSS rules whose selector names a class/id appearing nowhere else in the file (markup, attributes and script text all count as present).
+3	36f9f45	211235.0	-4666	keep	Drop indentation and blank lines inside <style>, readable one-declaration-per-line form retained. Deliberately NOT the full-minification variant: run 1's SUMMARY flagged that as an owner decision not to be inherited across client sites.
+4	6a2d362	209211.0	-2024	keep	Strip indentation, blank lines and whole-line // comments inside inline <script>. Line-oriented only, no intra-line changes.
+5	0346321	198371.0	-10840	keep	Collapse markup indentation only where the whitespace run sits entirely between '>' and '<'. pre/textarea/style/script excluded; text-node inter-word spacing untouched. Run 1 predicted this would be the biggest lever.
+6	7abda73	198371.0	NA	discard	PROBE CONFIRMED, discarding: guard-text-preserved failed the gdpr.html section deletion (logs/r6-guard1.log names it DRIFT) while validate-html passed the smaller page. The content floor fires on this page set too, so run 1's guard result is not site-specific. Section restored to the r5 state.
+7	-	NA	NA	stopped	Converged at 219,045 -> 198,371 B (-9.4%): the CSS reachability pruner yields 0 B on a re-run, and the two remaining levers are both known non-levers - shared-stylesheet extraction is score-neutral by construction (inherited dead end) and full CSS minification was deliberately declined per run 1's recorded sensitivity.
