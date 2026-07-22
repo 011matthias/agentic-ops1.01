@@ -24,7 +24,7 @@ corpus + ~120h marginal, pool 25 (ASSUMPTION), EUR20k/client.
 | Element | State | Status | Next action | Blocker | Detail |
 |---|---|---|---|---|---|
 | Sprint-zero platform fixes | not-started | 4 pre-existing defects gate corpus visibility: sitemap.ts + llms.txt omit /blog /faq /pricing /compare; renderer lacks tables; validate-platform-content.py skips content/blog/**; no machine-readable pricing | One `platform/uwi-aeo-sprint-zero` PR | — | recon wf_fe3b27c9-aa5 |
-| Editorial backlog | not-started | ~25-40 buyer-intent pieces derived from ICP via ai-seo content-patterns | Derive after `../context/icp.md` exists | icp.md | ai-seo skill references/ |
+| Editorial backlog | not-started | ~25-40 buyer-intent pieces derived from ICP via ai-seo content-patterns; query seeds live in icp.md §channel-filter-derivation | Derive the piece list from icp.md demand taxonomy | — | `../context/icp.md` (landed 2026-07-22) |
 | Corpus production | not-started | The ~200h fixed build; blog blind spot in validator must close first | Start after backlog + sprint zero | sprint zero | `platform/src/content/blog/` |
 | Monthly probe loop | not-started | ai_visibility_probe.py baselined 2026-06, never re-run; needs schedule + PERPLEXITY_API_KEY | Schedule monthly run + JSON diff | — | `workspace/projects/ai-visibility/` |
 | Author/entity decision | not-started | Article JSON-LD hardcodes 'Nicolas Neumann' sole author | Owner decision before first new post | owner | `[slug]/page.tsx` |

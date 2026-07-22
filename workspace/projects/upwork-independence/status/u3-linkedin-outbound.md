@@ -23,7 +23,7 @@ account-risk). Three from-zero elements below. Starts weeks 3-6.
 |---|---|---|---|---|---|
 | Owned identity | not-started | No company page, no profile assets, no LinkedIn link on the platform site | Company-page content + profile positioning | — | recon: zero owned assets |
 | Sales Nav seat | blocked | Brisken's seat is client-scoped, off-limits; model amortizes EUR25/mo | — | purchase gate | `../infrastructure.yaml` |
-| ICP recipes | not-started | Clone the Brisken radar/persona recipe SHAPE; content is net-new from icp.md | After `../context/icp.md` | icp.md | `workspace/clients/brisken/context/lead-generation/targeting/sales-nav-targeting.md` (shape only) |
+| ICP recipes | not-started | Clone the Brisken radar/persona recipe SHAPE; persona + filters now defined in icp.md (DE included — LinkedIn is DE-legal) | Write the Sales Nav recipes off icp.md | — | `../context/icp.md` (landed 2026-07-22) |
 | Message cadences | not-started | Connection-request + DM sequences; no skill home exists (extend cold-email principles) | Draft after recipes | — | — |
 | Human-send split | not-started | Budget human send-time as a first-class element (~520h is NOT fully agent-executable) | Split table when workstream activates | — | human-in-seat doctrine |
 | Pipeline tracking | not-started | Lead-Desk pattern clone or tracked ledger; no UnpauseAI pipeline state exists anywhere | Decide with u5 | — | `project_brisken_lead_desk` (pattern) |
