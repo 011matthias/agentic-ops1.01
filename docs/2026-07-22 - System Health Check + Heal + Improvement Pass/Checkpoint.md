@@ -79,6 +79,6 @@ Round 1's summary said the battery was "fully green". It was not. I had fixed 2 
 
 ### Still open
 
-- `check-skill-map.py` reads only backticked paths, so stale `skil_`-prefix targets inside markdown links (about 10 across the pack spines) stay invisible. Build in flight at checkpoint time.
+- ~~`check-skill-map.py` reads only backticked paths, so stale `skil_`-prefix targets inside markdown links stay invisible.~~ **Closed by #366.** The lead of "about 10" was a small slice: 282 markdown-link pointers existed in the first-party skill tree and **119 were dead**, across three distinct classes (62 pack-consolidation prefix loss, 43 sibling basename drift where upstream underscore names never matched the on-disk hyphen names, 10 module-to-spine links, plus 5 others). Zero false positives; every repoint verified against a real file. Links now resolve against the containing file's directory only, which is what a reader following the link actually gets, and that stricter base is what surfaced the 10 `[SKILL.md](SKILL.md)` links the permissive prose roots had been silently resolving.
 - The shared tree was never pulled: 4-5 sibling sessions were active throughout, and `git pull` would have moved HEAD under them mid-task. It reconciles at quiesce; nothing in it is unlanded.
 - Decision menu from round 1 stands (PR #300 close, platform force-deploy + Vercel token revoke, stale spec `p2.ops1`, 2 stale status files, `autoMode.allow` paste).
