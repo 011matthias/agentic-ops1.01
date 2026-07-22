@@ -98,3 +98,51 @@ funded AEO/content inbound engine; keep demo-first-local as fill, not focus; and
 treat Upwork as transitional, not a channel to invest in.** Before acting on the
 exact split, validate the per-channel reachable pools and whether ~1,800 hours is
 really all the acquisition time available, since both bind the answer.
+
+---
+
+*The two sections below were retrofitted 2026-07-22 so `optimize_overview.py
+--prior-art upwork-independence` can read this run. They transcribe the r2-r4
+probes and the "Model limitations the winner leans on" and "cross-model tension"
+sections above; no new analysis.*
+
+## Dead ends
+
+Three boundary probes, all discarded. A later run should not re-derive them
+against this model:
+
+- **Demo-first-local does not earn acquisition budget (r2: +0.15 local,
+  2735.75).** A local client costs ~27 h to win for ~EUR4k, while the same hours
+  win a B2B client worth ~EUR30k. See the sensitivity below before reading this
+  as "drop local" outright; GTM-v2 reached the opposite conclusion on delivery
+  grounds and both are right about different things.
+- **All-in on one channel fails (r3: all cold-email, 1432.69 vs 3013.27).**
+  Cold-email's reachable pool caps at 50 clients, so hours past saturation are
+  wasted. The market-reach ceiling is real and diversification is how you beat it.
+- **AEO/content earns its slots (r4: drop content, 2737.76).** It needs ~200 h of
+  corpus build and a 5-month ramp, then wins ~22 clients (~EUR275k) that the
+  already-near-saturated B2B pools do not replace.
+
+Settled and not worth a round: Upwork was scored only as a contrast baseline
+(EUR0.85M vs the owned portfolio's EUR3.0M for the same delivery capacity). It is
+the thing being replaced, not a channel to optimize.
+
+## Sensitivities
+
+- **Both budgets bind simultaneously**, which is what makes the answer an
+  efficient frontier rather than a ranking: 1,798 of 1,800 acquisition hours are
+  used AND the 110-client delivery serviceable cap is binding. Move either and
+  the mix moves.
+- **The per-channel reachable pools** (cold 50, LinkedIn 30, referral 15, content
+  25) drive both the diversification and the client count, and are
+  ASSUMPTION-tagged. The RANKING (B2B-heavy, content-funded, demo-dropped) is
+  more stable than the exact split.
+- **Per-client values are inherited from GTM-v2** (B2B ~EUR30k, local ~EUR4k).
+  That 7x gap is the entire reason B2B dominates acquisition; if local's care
+  annuity is richer than modelled, local's acquisition priority rises.
+- **This run and GTM-v2 disagree about local, and the disagreement is real, not
+  an error to resolve by picking one.** Local is cheap to DELIVER (GTM-v2 kept a
+  24% local book for the recurring-care annuity) and expensive to WIN (dropped
+  here). When ACQUISITION hours bind, local loses. Do not inherit either verdict
+  standalone: the reconciliation is to run local as spare-capacity fill or where
+  a demo doubles as AEO proof, never as a use of scarce outbound hours.
