@@ -56,4 +56,4 @@ expensive to win — run as spare-capacity fill / AEO proof only.
 
 | Week (Mon) | u1 | u2 | u3 | u4 | u5 | u6 | u7 | Total | Note |
 |---|---|---|---|---|---|---|---|---|---|
-| 2026-07-20 | — | — | — | — | — | — | — | 0 | program scaffolded 07-22 |
+| 2026-07-20 | ~1 | ~2.5 | — | ~1 | — | — | — | ~4.5 | scaffold 07-22 + week-1 batch 07-22 (u1 checklist, u2 backlog + 3 posts, u4 ledger); agent-session ESTIMATES, owner corrects |
