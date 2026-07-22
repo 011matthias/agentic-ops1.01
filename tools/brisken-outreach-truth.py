@@ -53,7 +53,10 @@ import re
 import sys
 from pathlib import Path
 
-import requests
+try:
+    import requests
+except ImportError:  # CI test env execs this module without live deps;
+    requests = None  # the pure logic stays importable, transport unused.
 
 # Windows consoles default to cp1252; an emoji in a subject line kills the
 # print (the register 2026-07-17 charmap class -- hit live by this very tool's
@@ -66,8 +69,12 @@ for _stream in (sys.stdout, sys.stderr):
 
 MAILBOXES = ("dirk.neumann@brisken.com", "matthias.silva@brisken.com")
 GRAPH = "https://graph.microsoft.com/v1.0"
+# Tightened 2026-07-22 per feedback_brisken_outreach_truth_is_mailbox step 5:
+# the short list mis-flagged Jose Vergel ("out of THE office" variant) as a
+# genuine reply. Shared with brisken-outreach-reconcile.py (imports this).
 OOO_RE = re.compile(
-    r"automatic reply|automatische antwort|out of office|abwesen|auto-?reply",
+    r"automatic reply|automatische antwort|out of (the )?office|abwesen"
+    r"|auto-?reply|risposta automatica|annual leave|on vacation",
     re.IGNORECASE,
 )
 PAGE_CAP = 300  # safety cap on paging per query
