@@ -724,3 +724,44 @@ def test_resume_completes_an_interrupted_stop(tmp_path):
     assert state(repo) is None, "a stopped run must never resurrect"
     assert [r[4] for r in tsv_rows(repo)].count("stopped") == 1
     assert tsv_rows(repo)[-1][4] == "stopped"
+
+
+def test_start_commits_every_run_dir_file_not_just_the_manifest(tmp_path):
+    """A guard DATA file written by the setup interview must be committed at
+    lock-on, not left untracked.
+
+    cmd_start deliberately exempts docs/optimize/<tag>/ from its clean-tree
+    requirement, because the setup interview just wrote the manifest there. But
+    it staged only the manifest and results.tsv, so any OTHER file the
+    interview wrote there stayed untracked - most importantly a guard's
+    baseline data file, which the manifest declares in guard_files and which
+    the engine hash-anchors in guard_shas.
+
+    Consequences on the shipped engine: the very first `round` aborts with
+    "changes OUTSIDE the asset scope" and calls it a harness event, and the
+    run's integrity anchor points at content git does not track. Found by the
+    first optimize run against a production asset (platform-alpha-research-
+    weight), where the guard's text baseline is exactly such a file.
+    """
+    repo = make_repo(tmp_path, numbers=("5", "4", "3"), guard=True)
+    data = repo / "docs" / "optimize" / "t1" / "baseline.json"
+    data.write_text('{"floor": 0}\n', encoding="utf-8")
+    man = repo / "docs" / "optimize" / "t1" / "RUN.md"
+    man.write_text(
+        man.read_text(encoding="utf-8").replace(
+            "guard_files:\n  - toy-guard.py\n",
+            "guard_files:\n  - toy-guard.py\n  - docs/optimize/t1/baseline.json\n"),
+        encoding="utf-8")
+
+    engine(repo, "start", "t1")
+
+    porcelain = _git(repo, "status", "--porcelain").stdout
+    assert "baseline.json" not in porcelain, (
+        f"guard data file left uncommitted by lock-on:\n{porcelain}")
+    assert _git(repo, "ls-files", "docs/optimize/t1/baseline.json").stdout.strip(), \
+        "guard data file is not tracked after lock-on"
+
+    # ...and the immediate consequence: round 1 must not abort on a dirty tree.
+    (repo / "numbers.txt").write_text("1\n1\n1\n", encoding="utf-8")
+    proc = engine(repo, "round", "--desc", "shrink", expect=None)
+    assert "OUTSIDE the asset scope" not in proc.stdout + proc.stderr, proc.stdout

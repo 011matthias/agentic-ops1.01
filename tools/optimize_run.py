@@ -566,7 +566,22 @@ def cmd_start(tag: str) -> int:
             "'discard on guard-fail' from a baseline that already fails")
 
     git(repo, "checkout", "-b", branch)
-    git(repo, "add", "--", state["manifest"])
+    # Stage the WHOLE run directory, not just the manifest. The dirty-tree
+    # check above deliberately exempts docs/optimize/<tag>/ because the setup
+    # interview just wrote there - and it writes more than RUN.md. A guard's
+    # baseline data file (declared in guard_files, hash-anchored in
+    # guard_shas below) lives here too; staging only the manifest left it
+    # untracked, which aborted the very first round on "changes OUTSIDE the
+    # asset scope" and left the run's integrity anchor pointing at content
+    # git did not track.
+    git(repo, "add", "--", f"docs/optimize/{tag}")
+    # Declared guard_files may sit outside the run directory (a validator in
+    # tools/); those are ordinary tracked files the clean-tree check already
+    # covered, so adding them here is a no-op unless the author put a new one
+    # in place - in which case locking an untracked guard would be worse.
+    for gf in state.get("guard_files", []):
+        if os.path.isfile(os.path.join(repo, *gf.split("/"))):
+            git(repo, "add", "--", gf)
     if git(repo, "diff", "--cached", "--quiet", check=False).returncode != 0:
         git(repo, "commit", "-m", f"experiment({tag}): lock-on: run manifest")
 
