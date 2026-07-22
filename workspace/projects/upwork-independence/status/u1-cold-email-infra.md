@@ -23,7 +23,7 @@ Meji/Brisken client property, off-limits. Purchases are GATED (owner decision
 
 | Element | State | Status | Next action | Blocker | Detail |
 |---|---|---|---|---|---|
-| Ready-to-purchase checklist | not-started | The current deliverable: registrar choice, 2-3 domain candidates, mailbox plan, ESP/list/verify tiers with EUR/mo, DNS-auth runbook, day-1-after-go sequence | Write `../context/cold-email-purchase-checklist.md` | — | this file |
+| Ready-to-purchase checklist | done | Written 2026-07-22, prices live-fetched same day: Porkbun $11.08/.com/yr, GWS Starter EUR 6.80/mbx/mo, Instantly Growth $47/mo, Apollo Free/$49+, NeverBounce TBD (bot-walled). 5 domain candidates RDAP-verified available. Model-feedback flag: real fixed stack ~2x the scorer's EUR 40/mo assumption | Owner approval line-by-line (checklist §10) | purchase gate | `../context/cold-email-purchase-checklist.md` |
 | Sending domains (2-3) | blocked | Nothing registered; unpauseai.com never cold-sends | — | purchase gate | checklist |
 | Mailboxes + warm-up | blocked | 3-4 wk warm-up is the calendar gate on all downstream | — | purchase gate + domains | checklist |
 | Instantly workspace | blocked | Own ESP account; credential -> vault + `../context/.env` | — | purchase gate | checklist |
@@ -34,8 +34,10 @@ Meji/Brisken client property, off-limits. Purchases are GATED (owner decision
 ## Open decisions / gates
 
 - PURCHASE GATE: every account needs its own explicit owner approval.
-- Registrar + mailbox provider choice lands in the checklist (recommendation
-  with EUR/mo, owner picks).
+- Registrar + mailbox recommendation landed in the checklist (Porkbun +
+  Google Workspace monthly-flex); owner picks per line at purchase time.
+- Sender display names: owner decision at purchase, tied to the u2
+  author/entity decision.
 
 ## Pointers
 
