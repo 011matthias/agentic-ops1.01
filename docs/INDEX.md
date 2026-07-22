@@ -200,6 +200,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-22 | System Health Check + Heal + Improvement Pass | system-infra | [→](docs/2026-07-22%20-%20System%20Health%20Check%20+%20Heal%20+%20Improvement%20Pass/Checkpoint.md) |
 | 2026-07-22 | Optimize Loop S-Series Implementation | system-infra | [→](docs/2026-07-22%20-%20Optimize%20Loop%20S-Series%20Implementation/Checkpoint.md) |
 | 2026-07-22 | Optimize Loop Audit + Hardening | system-infra | [→](docs/2026-07-22%20-%20Optimize%20Loop%20Audit%20+%20Hardening/Checkpoint.md) |
 | 2026-07-20 | System Development | system-infra | [→](docs/2026-07-20%20-%20System%20Development/Checkpoint.md) |
