@@ -338,6 +338,22 @@ def _mark_swept_today(today: _dt.date) -> None:
         pass
 
 
+def _freshness_caveat() -> None:
+    """One stderr line when this checkout is behind origin/main. The sweep
+    derives staleness from the WORKING TREE, so status updates that landed
+    upstream are invisible here and a file can read stale when it is not
+    (stale-checkout blind spot, register 2026-07-21/22). Fail-open."""
+    try:
+        import importlib.util
+        p = Path(__file__).resolve().parent / "repo_freshness.py"
+        spec = importlib.util.spec_from_file_location("repo_freshness", p)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        mod.warn_if_stale("project_status --sweep-stale", repo=REPO_ROOT)
+    except Exception:
+        pass
+
+
 def _print_sweep(findings: list[dict]) -> None:
     n = len(findings)
     print(f"[project-status] {n} status file(s) stale or malformed. "
@@ -350,6 +366,7 @@ def _print_sweep(findings: list[dict]) -> None:
             bits.extend(f["problems"])
         print(f"  {f['client']}/{f['file']}: {'; '.join(bits)}")
     print("  (run: uv run tools/project_status.py --client <X> --check)")
+    _freshness_caveat()
 
 
 def main(argv: list[str] | None = None) -> int:
