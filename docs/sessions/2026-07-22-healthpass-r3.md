@@ -15,3 +15,13 @@ work_types: [system-infra, client-dev]
 **Gates:** B1:2 B2:6 B3:2 B4:0 B7:1 skipped:0 — the B7 hit mattered: the handoff called reconcile "unbuilt", enumeration found `brisken-outreach-truth.py` already covering scan/derive, so reconcile was built as a layer importing it instead of a duplicate.
 **Autonomy:** 0 human interventions (fully autonomous continuation session; Band-3 items left untouched per handoff).
 **Outcome:** origin/main green at close. Owner decision menu grew by three items (apply the 4 reconcile upgrades or leave for Dirk; residual validator findings as a next system-dev round; freshness bootstrap fallback). Round-1/2 Band-3 menu unchanged.
+
+### Session — health pass round 3, continuation (owner: "continue")
+**Type:** system-infra
+**Focus:** The remaining agent-doable handoff items: the G1 §3 stash structural guard, the residual validator findings, and the optimize-audit adversarial verify (35 unverified findings).
+**Projects:** sys
+**Built:** 3 PRs merged CI-green: #383 git-stash-gate (20th canonical hook; create/destroy -> ask, drain forms pass; 19 behavioral tests), #389 residual validator fixes (all 10 remaining audit findings; A2/C4 calibrated with 0-regression sweeps; D2's promised cross-page checks implemented and immediately caught a real wiring gap; 34 tests), #391 optimize verify follow-ups (guard-pins.json into both always-on deny sets, zero-guard loud warning, stop --reason required; +7 tests). Read-only adversarial verify of the optimize audit: 21 stale / 11 confirmed / 3 partial / 0 refuted — no misreadings; residual confirmed items persisted in the checkpoint.
+**Friction:** 0 new (classifier push flakiness did not recur; PowerShell used for ship-chain commands throughout).
+**Gates:** B1:1 B2:8 B3:1 B4:0 B7:0 skipped:0
+**Autonomy:** 0 human interventions.
+**Outcome:** doctor.py HEALTHY on final origin/main. Session totals across rounds 3+3b: 8 PRs (#374, #380, #381, #383, #389, #391 + 2 ledger), 2 agents' worth of adversarial verification, decision menu updated (zero-guard hard-die option added; freshness item downgraded after the bootstrap-circularity insight).
