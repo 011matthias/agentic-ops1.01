@@ -128,6 +128,17 @@ def test_always_deny_redirect_into_pins(no_state):
     assert _classify(proc) == "deny"
 
 
+def test_always_deny_redirect_into_guard_pins(no_state):
+    proc = _shell("echo '{}' > tools/guard-pins.json", no_state)
+    assert _classify(proc) == "deny"
+
+
+def test_always_deny_ps_setcontent_guard_pins(no_state):
+    proc = _shell(r"Set-Content -Path tools\guard-pins.json -Value 'x'",
+                  no_state, tool="PowerShell")
+    assert _classify(proc) == "deny"
+
+
 def test_pass_running_scorer(no_state):
     proc = _shell("uv run tools/scorers/page-weight.py page.html", no_state)
     assert _classify(proc) == "pass"

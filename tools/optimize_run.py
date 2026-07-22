@@ -576,6 +576,14 @@ def cmd_start(tag: str) -> int:
               "items - it is the run's hypothesis queue. RUN.md LOCKS at "
               "lock-on, so a catalog cannot be added later; add it now or "
               "accept ad-hoc hypotheses for the whole run.")
+    if not state.get("guards"):
+        print("WARNING: manifest declares ZERO guards. Guards carry the "
+              "anti-overfit floor (rule_optimize_loop; RECIPES rule 3 makes "
+              "a held-out score-floor guard MANDATORY for constructed "
+              "metrics). A guardless run can keep an overfit 'win' with "
+              "every lock intact, and RUN.md locks at lock-on so guards "
+              "cannot be added later. Stop now and add one unless the "
+              "metric is a natural scalar and the omission is deliberate.")
 
     # Cross-check declared guards against the reviewed guard-pin registry
     # (tools/guard-pins.json). guard_shas below anchors guards for the run's
@@ -935,6 +943,12 @@ def cmd_resume() -> int:
 
 
 def cmd_stop(reason: str) -> int:
+    # Mirrors round --desc: the journal is the durable record, and 7/7 real
+    # runs ended via stop, so an empty reason is a hole in every journal
+    # (2026-07-22 verify, finding #30).
+    if not reason or not reason.strip():
+        die("--reason is required: one line on WHY the run is stopping "
+            "(converged / budget / superseded / stale lock / ...)")
     repo = repo_root()
     state = load_state(repo, corrupt_ok=True)
     if state is None:
@@ -1001,7 +1015,7 @@ def main() -> int:
                         "`probe` and does not count toward PLATEAU. A probe "
                         "that improves anyway is kept and flagged loudly.")
     sub.add_parser("resume")
-    p = sub.add_parser("stop"); p.add_argument("--reason", default="")
+    p = sub.add_parser("stop"); p.add_argument("--reason", required=True)
     sub.add_parser("status")
     args = ap.parse_args()
     if args.cmd == "start":

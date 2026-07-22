@@ -72,10 +72,16 @@ MACHINERY_LOCKED = (
     "tools/pin_scorer.py",
     ".claude/commands/comd_optimize.md",
     ".claude/rules/rule_optimize_loop.md",
+    "tools/guard-pins.json",
 )
 
+# tools/guard-pins.json rides the always-on scorer surface: weakening a guard
+# and re-pinning it is the same act as moving the metric (2026-07-22 verify,
+# finding #24 residual — the registry previously had no always-on shell lock).
 SCORER_TARGET_RE = re.compile(
-    r"tools/scorers/[^\s\"';|&)]*(\.py|pins\.json)\b", re.IGNORECASE)
+    r"(?:tools/scorers/[^\s\"';|&)]*(?:\.py|pins\.json)"
+    r"|tools/guard-pins\.json)\b",
+    re.IGNORECASE)
 
 # Write-shaped shell constructs. Each regex captures a "clause" whose
 # path-ish tokens are candidate write targets.
@@ -244,9 +250,10 @@ def handle_shell(cmd: str, state: dict | None | str) -> int:
         else:
             decision("deny", (
                 f"[optimize-run] shell write to locked scorer surface "
-                f"{scorer_hits[0]} (tools/scorers/ is never agent-writable "
-                "by shell; Write/Edit + scorer-lock-gate govern authoring, "
-                "pin_scorer.py governs pins)."
+                f"{scorer_hits[0]} (tools/scorers/ and tools/guard-pins.json "
+                "are never agent-writable by shell; Write/Edit + "
+                "scorer-lock-gate govern authoring, pin_scorer.py governs "
+                "pins)."
             ))
             return 0
 

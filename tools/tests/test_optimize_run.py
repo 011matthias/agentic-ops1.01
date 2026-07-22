@@ -464,7 +464,7 @@ def test_stop_with_missing_branch_still_unlocks(tmp_path):
     engine(repo, "start", "t1")
     _git(repo, "checkout", "-q", "main")
     _git(repo, "branch", "-q", "-D", "optimize/t1")
-    out = engine(repo, "stop").stdout
+    out = engine(repo, "stop", "--reason", "stale lock").stdout
     assert "locks off" in out.lower()
     assert state(repo) is None
 
@@ -555,7 +555,7 @@ def test_stop_clears_corrupt_state(tmp_path):
     engine(repo, "start", "t1")
     stp = repo / ".claude" / "optimize" / "run.json"
     stp.write_text("{ this is not json", encoding="utf-8")
-    out = engine(repo, "stop").stdout
+    out = engine(repo, "stop", "--reason", "corrupt state cleanup").stdout
     assert "unparseable" in out and "locks OFF" in out
     assert not stp.exists()
 
@@ -857,3 +857,34 @@ def test_start_accepts_a_guard_matching_its_pin(tmp_path):
     assert "does not match its reviewed pin" not in proc.stderr
     assert "no entry in tools/guard-pins.json" not in proc.stdout
     assert state(repo) is not None
+
+
+# --- 2026-07-22 verify follow-ups (findings #22 warn-path, #30) -------------
+
+def test_stop_requires_reason(tmp_path):
+    """Bare `stop` is an argparse error; an all-whitespace reason dies.
+
+    Mirrors round --desc: 7/7 real runs ended via stop, so an optional
+    reason was a hole in every journal (verify finding #30)."""
+    repo = make_repo(tmp_path)
+    engine(repo, "stop", expect=2)
+    proc = engine(repo, "stop", "--reason", "   ", expect=1)
+    assert "--reason is required" in (proc.stdout + proc.stderr)
+
+
+def test_start_warns_on_zero_guards(tmp_path):
+    """A guardless manifest locks on but says so LOUDLY (verify finding #22:
+    guards carry the anti-overfit floor; RUN.md locks at lock-on so guards
+    cannot be added later). Warning, not refusal: the held-out mandate is
+    scoped to constructed metrics, which the engine cannot detect."""
+    repo = make_repo(tmp_path)
+    out = engine(repo, "start", "t1").stdout
+    assert "ZERO guards" in out
+    engine(repo, "stop", "--reason", "test done")
+
+
+def test_start_with_guard_has_no_zero_guard_warning(tmp_path):
+    repo = make_repo(tmp_path, numbers=("5", "4", "3"), guard=True)
+    out = engine(repo, "start", "t1").stdout
+    assert "ZERO guards" not in out
+    engine(repo, "stop", "--reason", "test done")
