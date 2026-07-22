@@ -8,16 +8,21 @@ Two tiers, because one is not enough HERE specifically:
 
 * **Per-IP** — N failures inside a window locks that caller out, with the
   lockout doubling for every further failure. This is the tier that stops
-  an ordinary online guessing run.
+  an ordinary online guessing run. The address has to come from the
+  ``Fly-Client-IP`` header: the container runs uvicorn without
+  ``--proxy-headers``, so ``request.client.host`` is Fly's own proxy
+  (``fdaa:``…, identical for every caller in the world) and keying on it
+  would collapse all callers into one bucket — meaning any attacker could
+  lock the operator out. Verified against the live app 2026-07-22: Fly's
+  proxy OVERWRITES a client-supplied ``Fly-Client-IP``, so the value is
+  the real peer and cannot be forged.
 * **Global** — a much larger budget of failures across ALL callers inside
-  the same window. This exists because the per-IP key is not trustworthy:
-  the container runs uvicorn without ``--proxy-headers``, so
-  ``request.client.host`` is Fly's proxy (identical for every caller in
-  the world) and the real address has to come from the ``Fly-Client-IP``
-  header. Fly's proxy sets that header, but nothing in this process can
-  prove a value was not client-supplied, so an attacker who rotates it
-  gets a fresh per-IP bucket every request. The global budget is the tier
-  they cannot rotate around.
+  the same window. Forging the header is not the gap this covers; address
+  ROTATION is. A caller on IPv6 typically holds a whole /64 (or wider), so
+  keying on a bare /128 would hand them an unlimited supply of fresh
+  buckets. `client_ip` therefore keys IPv6 on its /64 prefix, and the
+  global budget catches what is left: a wider allocation, or a genuinely
+  distributed attack.
 
 Only FAILED attempts are recorded, and a success clears the caller's
 record, so the legitimate operator never walks into a lockout by using
@@ -39,12 +44,18 @@ Env vars (all optional; defaults are the shipped policy):
 """
 from __future__ import annotations
 
+import ipaddress
 import math
 import os
 from dataclasses import dataclass
 
 # Cap the stored identity so a hostile header cannot bloat the table.
 _MAX_KEY_LEN = 64
+
+# An IPv6 caller is bucketed by prefix, not by address: a single end site
+# normally holds a /64, so keying on the /128 would give one attacker 2**64
+# fresh buckets. IPv4 is keyed on the full address.
+_IPV6_PREFIX = 64
 
 
 @dataclass(frozen=True)
@@ -95,14 +106,34 @@ def policy() -> Policy:
     )
 
 
-def client_ip(request) -> str:
-    """Best available caller identity.
+def bucket_key(raw: str) -> str:
+    """The throttle bucket for a caller address.
 
-    ``Fly-Client-IP`` first (Fly's proxy sets it; without it every hosted
-    caller collapses to the proxy's own address), then the first hop of
-    ``X-Forwarded-For``, then the socket peer for local/dev use. Treated as
-    a bucketing hint, never as proof of origin — see the module docstring
-    on why the global tier exists.
+    IPv6 collapses to its /64 prefix so one end site is one bucket; IPv4
+    keeps the full address. Anything unparseable is used verbatim (local
+    dev sends things like ``testclient``), truncated so a hostile value
+    cannot bloat the table.
+    """
+    candidate = raw.strip()
+    if not candidate:
+        return "unknown"
+    try:
+        addr = ipaddress.ip_address(candidate)
+    except ValueError:
+        return candidate[:_MAX_KEY_LEN]
+    if addr.version == 6:
+        net = ipaddress.IPv6Network(f"{addr}/{_IPV6_PREFIX}", strict=False)
+        return str(net)
+    return str(addr)
+
+
+def client_ip(request) -> str:
+    """Best available caller identity, as a throttle bucket.
+
+    ``Fly-Client-IP`` first (Fly's proxy sets it, and overwrites any
+    client-supplied value; without it every hosted caller would collapse
+    into the proxy's own address), then the first hop of
+    ``X-Forwarded-For``, then the socket peer for local/dev use.
     """
     headers = getattr(request, "headers", None)
     if headers is not None:
@@ -111,10 +142,10 @@ def client_ip(request) -> str:
             if raw:
                 first = raw.split(",")[0].strip()
                 if first:
-                    return first[:_MAX_KEY_LEN]
+                    return bucket_key(first)
     client = getattr(request, "client", None)
     host = getattr(client, "host", None) if client else None
-    return (host or "unknown")[:_MAX_KEY_LEN]
+    return bucket_key(host or "unknown")
 
 
 def _lock_seconds(failures: int, pol: Policy) -> int:

@@ -223,9 +223,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 {"token": auth.issue_token(auth.ROLE_OPERATOR), "role": auth.ROLE_OPERATOR}
             )
         # One shared code is this app's entire security boundary, so an
-        # attempt is throttled BEFORE the code is checked: per-IP with a
-        # doubling lockout, plus a global budget that a caller forging
-        # Fly-Client-IP cannot rotate around. See web/ratelimit.py.
+        # attempt is throttled BEFORE the code is checked: per-caller with
+        # a doubling lockout (bucketed by IPv6 /64, so one end site cannot
+        # rotate addresses for fresh buckets), plus a global budget for the
+        # distributed case. See web/ratelimit.py.
         caller = ratelimit.client_ip(request)
         now = time.time()
         with open_store() as store:
