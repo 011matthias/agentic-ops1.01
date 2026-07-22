@@ -110,13 +110,17 @@ is banned for isolation outright.
 - **Backstop (existing).** [[rule_no_auto_commit]]'s
   `no-auto-commit-gate.py` already blocks direct commit/push to
   `main`, forcing ledger updates through a PR.
-- **Structural candidate (not yet built).** A PreToolUse guard on
-  Edit/Write that warns when the target path is
-  `workspace/clients/{X}/...` for a project whose prefix does not
-  match the current `client/{X}/...` branch. Suggested in the
-  2026-06-12 checkpoint + friction register twice; build it on the
-  next recurrence (log `infrastructure-deferred` if it appears in a
-  third checkpoint unbuilt).
+- **Structural guard (built 2026-07-22).**
+  `.claude/hooks/branch-isolation-gate.py` (PreToolUse Write|Edit,
+  wired in `wire-hooks.py`) advises when the target path is a TRACKED
+  `workspace/clients/{X}/...` file and the current branch is not a
+  client-X branch (`client/{X}/...`, legacy `{X}/...`, or a sanctioned
+  per-client family like brisken's `leadgen/`). Gitignored targets
+  (the `context/` home) are exempt — they never commit. Advisory, not
+  deny: cross-cutting system changes stay possible, but the wrong-branch
+  edit is loud in the same turn. Suggested twice in 2026-06-12
+  checkpoints; the trigger recurrence was the 2026-07-22 dirty-main
+  pile. Tests: `tools/tests/test_branch_isolation_gate.py`.
 
 **Self-detection.** A cross-project edit on the wrong branch, a ledger
 file committed on a feature branch, or a stash used for isolation is a
