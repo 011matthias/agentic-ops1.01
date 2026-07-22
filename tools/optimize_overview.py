@@ -209,8 +209,77 @@ def journaled_runs(root: str) -> dict[str, dict]:
             "meta": meta,
             "summary": summary,
             "has_summary": os.path.isfile(os.path.join(d, "SUMMARY.md")),
+            "dir": d,
         }
     return runs
+
+
+# The two SUMMARY.md sections a later run actually needs. Free-form prose is
+# unreadable by anything, and the doctrine's promise that "a documented dead
+# end prevents re-running the same experiments" had no read path at all: all
+# three observed knowledge transfers happened by an operator remembering.
+PRIOR_ART_HEADINGS = ("Dead ends", "Sensitivities")
+
+
+def summary_sections(text: str, wanted=PRIOR_ART_HEADINGS) -> dict[str, str]:
+    """Pull the named `## <heading>` sections out of a SUMMARY.md.
+
+    Matching is case-insensitive and ignores a trailing colon so a run that
+    wrote `## Dead Ends` is not silently invisible. Anything up to the next
+    heading of the same or higher level belongs to the section.
+    """
+    out: dict[str, str] = {}
+    current: str | None = None
+    buf: list[str] = []
+    for line in text.splitlines():
+        m = re.match(r"^(#{2,3})\s+(.*?)\s*:?\s*$", line)
+        if m:
+            if current:
+                out[current] = "\n".join(buf).strip()
+                buf = []
+            title = m.group(2).strip().lower()
+            current = next((w for w in wanted if w.lower() == title), None)
+            continue
+        if current:
+            buf.append(line)
+    if current:
+        out[current] = "\n".join(buf).strip()
+    return {k: v for k, v in out.items() if v}
+
+
+def print_prior_art(runs: dict[str, dict], project: str) -> int:
+    """What a new run on this project should read before writing a manifest."""
+    hits = [(tag, info) for tag, info in sorted(runs.items())
+            if str(info["meta"].get("project") or "") == project]
+    if not hits:
+        print(f"PRIOR ART: no previous runs for project {project!r}. "
+              "This is the first; nothing to inherit.")
+        return 0
+    print(f"PRIOR ART for project {project!r} ({len(hits)} previous run(s))\n")
+    missing = []
+    for tag, info in hits:
+        path = os.path.join(info["dir"], "SUMMARY.md")
+        print(f"=== {tag} ===")
+        if not os.path.isfile(path):
+            print("  (no SUMMARY.md - nothing to inherit from this run)\n")
+            continue
+        with open(path, encoding="utf-8") as f:
+            sections = summary_sections(f.read())
+        if not sections:
+            missing.append(tag)
+            print("  (SUMMARY.md has no `## Dead ends` / `## Sensitivities` "
+                  "section - its knowledge is not machine-readable)\n")
+            continue
+        for head in PRIOR_ART_HEADINGS:
+            if head in sections:
+                print(f"  ## {head}")
+                for ln in sections[head].splitlines():
+                    print(f"    {ln}")
+                print()
+    if missing:
+        print(f"NOTE: {len(missing)} run(s) predate the heading contract "
+              f"({', '.join(missing)}); read their SUMMARY.md by hand.")
+    return 0
 
 
 PLANNING_MODEL_RE = re.compile(r"^workspace/projects/[^/]+/[^/]+\.json$",
@@ -362,10 +431,18 @@ def main(argv: list[str] | None = None) -> int:
                          "silent otherwise. Always exits 0.")
     ap.add_argument("--once-per-day", action="store_true",
                     help="with --sweep: advise at most once per calendar day")
+    ap.add_argument("--prior-art", metavar="PROJECT",
+                    help="before writing a new manifest: print the `## Dead "
+                         "ends` and `## Sensitivities` of every previous run "
+                         "on this project slug, so a new run inherits them "
+                         "instead of rediscovering them")
     args = ap.parse_args(argv)
 
     if args.sweep:
         return run_sweep(args.once_per_day)
+
+    if args.prior_art:
+        return print_prior_art(journaled_runs(repo_root()), args.prior_art)
 
     repo = repo_root()
     active = active_runs(repo)

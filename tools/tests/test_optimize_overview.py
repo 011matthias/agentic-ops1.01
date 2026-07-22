@@ -268,3 +268,70 @@ def test_unparseable_timestamp_does_not_crash_the_overview(tmp_path):
            "1\tbbbbbbb\t90.0\t-10\tkeep\tone\talso-bad\n")
     out = _run(repo, "--scoreboard")   # _run asserts exit 0
     assert "minutes per round     n/a" in out, out
+
+
+def _with_summary(repo: Path, tag: str, project: str, summary: str) -> None:
+    _write(repo, f"docs/optimize/{tag}/RUN.md",
+           f"---\ntag: {tag}\nproject: {project}\ndirection: minimize\n---\nx\n")
+    _write(repo, f"docs/optimize/{tag}/results.tsv",
+           "round\tcommit\tscore\tdelta\tstatus\tdescription\n"
+           "0\taaaaaaa\t10.0\t0\tbaseline\tbase\n")
+    _write(repo, f"docs/optimize/{tag}/SUMMARY.md", summary)
+
+
+def test_prior_art_surfaces_dead_ends_and_sensitivities(tmp_path):
+    """The doctrine's promise - 'a documented dead end prevents re-running the
+    same experiments' - had no read path. This is that path."""
+    repo = make_fixture_repo(tmp_path)
+    _with_summary(repo, "platform-a", "platform",
+                  "# a\n\n## Kept changes\n\nKEPTBODYSENTINEL\n\n"
+                  "## Dead ends\n\n- extraction is score-neutral\n\n"
+                  "## Sensitivities\n\n- minification is a judgment call\n\n"
+                  "## What a human should review\n\nREVIEWBODYSENTINEL\n")
+    out = _run(repo, "--prior-art", "platform")
+    assert "extraction is score-neutral" in out
+    assert "minification is a judgment call" in out
+    # ...and NOT the sections a new manifest does not need. Distinctive
+    # sentinels, because a plain word like "nothing" also occurs in the
+    # tool's own "nothing to inherit" line and would pass vacuously.
+    assert "KEPTBODYSENTINEL" not in out
+    assert "REVIEWBODYSENTINEL" not in out
+
+
+def test_prior_art_is_scoped_to_the_project_slug(tmp_path):
+    repo = make_fixture_repo(tmp_path)
+    _with_summary(repo, "platform-a", "platform",
+                  "## Dead ends\n\n- platform lesson\n")
+    _with_summary(repo, "brisken-a", "brisken",
+                  "## Dead ends\n\n- brisken lesson\n")
+    out = _run(repo, "--prior-art", "platform")
+    assert "platform lesson" in out
+    assert "brisken lesson" not in out, "leaked another project's journal"
+
+
+def test_prior_art_names_runs_that_predate_the_heading_contract(tmp_path):
+    """Four runs shipped before the contract existed. Silently showing
+    nothing for them would read as 'no prior art', which is the opposite of
+    the truth and worse than saying so."""
+    repo = make_fixture_repo(tmp_path)
+    _with_summary(repo, "platform-old", "platform",
+                  "# old\n\n## Model limitations\n\nfreeform prose\n")
+    out = _run(repo, "--prior-art", "platform")
+    assert "no `## Dead ends`" in out
+    assert "predate the heading contract" in out
+    assert "platform-old" in out
+
+
+def test_prior_art_on_a_first_run_says_so(tmp_path):
+    repo = make_fixture_repo(tmp_path)
+    out = _run(repo, "--prior-art", "no-such-project")
+    assert "This is the first" in out
+
+
+def test_prior_art_heading_match_is_case_and_colon_tolerant(tmp_path):
+    """A run that wrote `## Dead Ends:` must not be invisible."""
+    repo = make_fixture_repo(tmp_path)
+    _with_summary(repo, "platform-c", "platform",
+                  "## Dead Ends:\n\n- still counts\n")
+    out = _run(repo, "--prior-art", "platform")
+    assert "still counts" in out
