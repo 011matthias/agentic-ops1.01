@@ -54,6 +54,16 @@ structurally refuses unpinned scorers.
 
 ## Step 2: Setup interview (Karpathy protocol)
 
+0. **Read the prior art first:** `uv run tools/optimize_overview.py
+   --prior-art <project-slug>`. It prints the `## Dead ends` and
+   `## Sensitivities` of every previous run on that project. Inherit them in
+   the manifest rather than rediscovering them: a dead end that cost a round
+   once should cost zero rounds afterwards, and a sensitivity another run
+   flagged (a lever it deliberately declined) must not be silently re-applied
+   here. Say in the manifest prose which entries you inherited and which you
+   are overriding, so a reviewer can see the transfer happened. Runs that
+   predate the heading contract are named explicitly; read those by hand.
+
 1. Agree a run tag with the user (short slug; `optimize/<tag>` must be a
    fresh branch).
 2. Write the manifest `docs/optimize/<tag>/RUN.md` - YAML frontmatter:
@@ -165,6 +175,15 @@ winner is a prompt to fix the model, usually in a `-v2` run.
 kept changes with their deltas, dead ends worth remembering, and what a
 human should review. (SUMMARY.md is written after unlock; during the run
 it would be a locked-path write.)
+
+**Two headings are a contract, not a style preference.** `## Dead ends` and
+`## Sensitivities` are what `--prior-art` parses, so anything you record
+outside them is invisible to the next run and survives only if a human
+remembers it. Put in `## Dead ends` what a later run must not spend a round
+rediscovering (a lever that is score-neutral by construction, a probe that
+confirmed a bound). Put in `## Sensitivities` what a later run must not
+blindly inherit: a lever you took that is really the owner's judgment call,
+and the blind spots your guards do not cover.
 
 ## Step 8: Ship
 
