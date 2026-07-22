@@ -28,10 +28,12 @@ skill.
 ## The home
 
 `workspace/clients/{client}/status/` — tracked (NOT under the gitignored
-`context/`), beside `infrastructure.yaml` and `PROJECT-BOUNDARIES.md`. One file
-per workstream; one general-reference file per group that has shared context.
-Naming: `{spec-id}-{slug}.md` (e.g. `p2-rome.md`, `p1-expense-reconciliation.md`,
-`p2-lead-gen-general.md`).
+`context/`), beside `infrastructure.yaml` and `PROJECT-BOUNDARIES.md`. Internal
+projects use the same convention at `workspace/projects/{project}/status/`
+(first: upwork-independence, 2026-07-22; `tools/project_status.py` scans both
+roots). One file per workstream; one general-reference file per group that has
+shared context. Naming: `{spec-id}-{slug}.md` (e.g. `p2-rome.md`,
+`p1-expense-reconciliation.md`, `p2-lead-gen-general.md`, `u1-cold-email-infra.md`).
 
 ## Step 1 — Find the workstream boundaries
 

@@ -1,0 +1,34 @@
+# Upwork-independence program infrastructure roster.
+# Rows flip absent -> live as accounts are purchased (each purchase needs its
+# own explicit owner approval — decision 2026-07-22: plan-only, no purchases).
+# Credentials land in the local vault + context/.env (gitignored), never here.
+type: internal
+notes: >
+  Owned-acquisition program (scope code uwi). Strategy layer:
+  docs/optimize/upwork-independence-*/SUMMARY.md. Execution state:
+  status/*.md. The three *.json files at the project root are optimize-run
+  assets and stay byte-stable outside optimize runs.
+
+accounts:
+  sending_domains:      # 2-3 secondaries; unpauseai.com NEVER cold-sends
+    status: absent
+    detail: status/u1-cold-email-infra.md
+  mailboxes:
+    status: absent
+    detail: status/u1-cold-email-infra.md
+  esp_instantly:
+    status: absent
+    note: Meji's Instantly/Apollo are client property, off-limits
+  list_apollo:
+    status: absent
+  verify_neverbounce:
+    status: absent
+  linkedin_sales_nav_seat:
+    status: absent
+    detail: status/u3-linkedin-outbound.md
+  make_com:
+    status: live
+    note: nicolas.neumann@unpauseai.com account (orchestrator glue)
+  resend_transactional:
+    status: live
+    note: transactional only; structurally unsuitable for cold outbound
