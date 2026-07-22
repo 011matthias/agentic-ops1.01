@@ -57,6 +57,41 @@ def _card_keys(s: str | None) -> set[str]:
     return keys
 
 
+def _tx_card_keys(tx: Transaction) -> set[str]:
+    """Card identifiers for a charge (WS3, 2026-07-21).
+
+    The per-row `card_last4` wins when the source printed one (the CSV /
+    xlsx "Card" column); otherwise the account id carries the card, which
+    is how the Chase PDF parser has always worked (`account_id` IS the
+    cycle-marker card number). A source with neither returns the empty
+    set, which means "unknown card" everywhere downstream — never
+    "different card".
+    """
+    return _card_keys(tx.card_last4) or _card_keys(tx.account_id)
+
+
+def _card_score(tx: Transaction, receipt: Receipt) -> float:
+    """Card agreement in [0,1] between the charge and the receipt's Zoho
+    payment mode (WS3, 2026-07-21).
+
+    1.0 when the two name the same card, 0.0 when both name a card and
+    they do not overlap, 0.5 when either side names none. The 0.5 middle
+    is deliberate: an unknown card is not evidence against a pair, so it
+    must not sort below a genuine card contradiction.
+
+    Card scoping (`MatchingConfig.card_scoping`) already removes most
+    contradicted pairs before they are scored. This score is what remains
+    useful after it: the tie-break when scoping is off or when a receipt's
+    payment mode names a card the statement does not contain, and the
+    reviewer-facing "why did these two pair" signal on every Match.
+    """
+    tx_keys = _tx_card_keys(tx)
+    rec_keys = _card_keys(receipt.payment_mode)
+    if not tx_keys or not rec_keys:
+        return 0.5
+    return 1.0 if (tx_keys & rec_keys) else 0.0
+
+
 def vendor_similarity(stmt_vendor: str | None, receipt_vendor: str | None) -> float:
     """Fuzzy similarity in [0,1] between a statement vendor string and a
     receipt's detected vendor (ANNEALING A3 / 3.9).
@@ -114,13 +149,20 @@ def _vendor_score(tx: Transaction, receipt: Receipt, cfg: "MatchingConfig") -> f
     return vendor_similarity(tx.vendor_from_statement, receipt.detected_vendor)
 
 
-def _signal(tx: Transaction, receipt: Receipt, cfg: "MatchingConfig") -> tuple[float, float]:
-    """(reference-match, vendor-score) tie-break signal for one candidate
-    pair. Reference first because an exact reference hit is a stronger
-    identity signal than fuzzy vendor text; vendor-score includes the
-    learned-alias boost."""
+def _signal(
+    tx: Transaction, receipt: Receipt, cfg: "MatchingConfig"
+) -> tuple[float, float, float]:
+    """(reference-match, card-score, vendor-score) tie-break signal for one
+    candidate pair, strongest identity signal first.
+
+    Reference is an exact hit on a printed number. Card is a hard fact
+    from two independent systems (the bank's card column and Zoho's
+    payment mode), so it outranks the fuzzy vendor text, which banks
+    truncate. Vendor-score last, including the learned-alias boost.
+    """
     return (
         1.0 if reference_match(tx, receipt) else 0.0,
+        _card_score(tx, receipt),
         _vendor_score(tx, receipt, cfg),
     )
 
@@ -175,6 +217,7 @@ _TUNABLE_INT = frozenset({
 _TUNABLE_FLOAT = frozenset({
     "high_confidence", "probable_confidence", "possible_confidence",
     "blend_amount_weight", "blend_date_weight", "blend_vendor_weight",
+    "blend_card_weight",
 })
 _TUNABLE_BOOL = frozenset({"card_scoping"})
 
@@ -268,6 +311,12 @@ class MatchingConfig:
     blend_amount_weight: float = 0.55
     blend_date_weight: float = 0.30
     blend_vendor_weight: float = 0.15
+    # Card agreement in the triage blend (WS3, 2026-07-21). Ships at 0.0:
+    # the card is a TIE-BREAK and a transparency field, and a non-zero
+    # weight here would need the other three renormalized (they sum to
+    # 1.0). Left tunable so the optimize loop can price the signal if a
+    # month of multi-card data says it is worth folding into the sort.
+    blend_card_weight: float = 0.0
 
     @classmethod
     def from_dict(cls, data: Mapping) -> "MatchingConfig":
@@ -364,9 +413,9 @@ class MatchingConfig:
 
 def _blend_score(
     amount_score: float, date_score: float, vendor_score: float,
-    cfg: MatchingConfig,
+    card_score: float, cfg: MatchingConfig,
 ) -> int:
-    """Blend the three matching signals into a 0-100 triage score.
+    """Blend the matching signals into a 0-100 triage score.
 
     Amount agreement is the strongest signal, then date proximity, then
     fuzzy vendor agreement (a corroborator, not a gate; bank exports
@@ -374,10 +423,14 @@ def _blend_score(
     matches surface first; it does NOT change which bucket a pair lands
     in (that stays deterministic via match_type / confidence). Weights
     live on MatchingConfig (default 0.55/0.30/0.15).
+
+    Card agreement is carried too but ships at weight 0.0, so the score
+    is byte-for-byte its pre-WS3 self until an operator prices it.
     """
     s = (cfg.blend_amount_weight * amount_score
          + cfg.blend_date_weight * date_score
-         + cfg.blend_vendor_weight * vendor_score)
+         + cfg.blend_vendor_weight * vendor_score
+         + cfg.blend_card_weight * card_score)
     return max(0, min(100, round(s * 100.0)))
 
 
@@ -388,6 +441,7 @@ def _match_on_amount(
     *,
     charge_amount: Decimal,
     vendor_score: float,
+    card_score: float,
     fx_currency: str | None,
 ) -> Match | None:
     """Exact/probable match comparing the receipt total to `charge_amount`
@@ -441,10 +495,11 @@ def _match_on_amount(
             confidence=cfg.possible_confidence,
             reason=reason,
             requires_review=True,
-            score=_blend_score(amount_score, 0.5, vendor_score, cfg),
+            score=_blend_score(amount_score, 0.5, vendor_score, card_score, cfg),
             amount_score=amount_score,
             date_score=0.5,
             vendor_score=vendor_score,
+            card_score=card_score,
         )
 
     candidate_dates = [tx.transaction_date]
@@ -469,10 +524,13 @@ def _match_on_amount(
             match_type=MatchType.EXACT,
             confidence=cfg.high_confidence,
             reason=reason,
-            score=_blend_score(amount_score, date_score, vendor_score, cfg),
+            score=_blend_score(
+                amount_score, date_score, vendor_score, card_score, cfg
+            ),
             amount_score=amount_score,
             date_score=date_score,
             vendor_score=vendor_score,
+            card_score=card_score,
         )
 
     if (amount_exact or amount_probable) and (date_exact or date_probable):
@@ -492,10 +550,13 @@ def _match_on_amount(
             confidence=cfg.probable_confidence,
             reason=reason,
             requires_review=True,
-            score=_blend_score(amount_score, date_score, vendor_score, cfg),
+            score=_blend_score(
+                amount_score, date_score, vendor_score, card_score, cfg
+            ),
             amount_score=amount_score,
             date_score=date_score,
             vendor_score=vendor_score,
+            card_score=card_score,
         )
 
     return None
@@ -522,6 +583,9 @@ def match_one(
     # Vendor similarity feeds the graded 0-100 triage score in every
     # branch (3.9 signal reused); a confirmed alias (PR 2c) pins it to 1.0.
     vendor_score = _vendor_score(tx, receipt, cfg)
+    # Card agreement (WS3) rides along on every Match for the tie-break and
+    # the reviewer; it enters the blended score only at a non-zero weight.
+    card_score = _card_score(tx, receipt)
 
     # Currency mismatch -> FX judgment layer, but ONLY for plausible
     # pairs. This is the EUR-on-USD-card case Dirk specified on the
@@ -560,6 +624,7 @@ def match_one(
                 cfg,
                 charge_amount=tx.original_amount,
                 vendor_score=vendor_score,
+                card_score=card_score,
                 fx_currency=tx.original_currency,
             )
             if exact_fx is not None:
@@ -630,10 +695,14 @@ def match_one(
                             )
                         ),
                         requires_review=not clean,
-                        score=_blend_score(amount_score, date_score, vendor_score, cfg),
+                        score=_blend_score(
+                            amount_score, date_score, vendor_score,
+                            card_score, cfg,
+                        ),
                         amount_score=amount_score,
                         date_score=date_score,
                         vendor_score=vendor_score,
+                        card_score=card_score,
                     )
             # Deviation beyond the review threshold: not resolvable at the
             # reference rate; the band / FX_JUDGMENT path below applies.
@@ -695,10 +764,13 @@ def match_one(
                 f"date diff {date_diff}d, {rate_note}. Requires FX judgment."
             ),
             requires_review=True,
-            score=_blend_score(amount_score, date_score, vendor_score, cfg),
+            score=_blend_score(
+                amount_score, date_score, vendor_score, card_score, cfg
+            ),
             amount_score=amount_score,
             date_score=date_score,
             vendor_score=vendor_score,
+            card_score=card_score,
         )
 
     # Same-currency path: compare the receipt total to the posted amount.
@@ -708,6 +780,7 @@ def match_one(
         cfg,
         charge_amount=tx.amount,
         vendor_score=vendor_score,
+        card_score=card_score,
         fx_currency=None,
     )
 
@@ -720,28 +793,32 @@ class _Candidate:
     match: Match
     is_determ: bool
     ref_signal: float
+    card_signal: float
     vendor_signal: float
 
     @property
-    def sort_key(self) -> tuple[int, float, float, float]:
+    def sort_key(self) -> tuple[int, float, float, float, float]:
         # Deterministic matches outrank FX for the same receipt; then
-        # confidence; then reference hit; then vendor similarity.
+        # confidence; then reference hit; then card agreement; then
+        # vendor similarity.
         return (
             1 if self.is_determ else 0,
             self.match.confidence,
             self.ref_signal,
+            self.card_signal,
             self.vendor_signal,
         )
 
 
 def _ties(a: _Candidate, b: _Candidate) -> bool:
-    """Two candidates are a genuine tie only when confidence AND both
-    3.9 signals match — i.e. the vendor / reference tie-break could not
+    """Two candidates are a genuine tie only when confidence AND every
+    tie-break signal match — i.e. reference, card, and vendor could not
     separate them. Such a tx is ambiguous; a human picks."""
     return (
         a.is_determ == b.is_determ
         and abs(a.match.confidence - b.match.confidence) < 0.001
         and abs(a.ref_signal - b.ref_signal) < 0.001
+        and abs(a.card_signal - b.card_signal) < 0.001
         and abs(a.vendor_signal - b.vendor_signal) < 0.01
     )
 
@@ -787,19 +864,27 @@ def match_month(
     # can't map) is left unscoped so a real match is never excluded (the
     # reconciliation guarantee). The reimbursement routing for personal/cash
     # is a separate, Dirk-gated path. Keyed off the digit overlap between the
-    # marker account_id and the payment-mode label (see `_card_keys`).
+    # charge's card and the payment-mode label (see `_card_keys`).
+    #
+    # WS3 (2026-07-21): scoping now keys on the CHARGE's card keys
+    # (`_tx_card_keys`: the per-row `card_last4` when the source printed a
+    # card column, else the account id) instead of the account id alone.
+    # Identical behaviour for a single-account source, since there the two
+    # are the same string; on a multi-card tabular export it is the
+    # difference between scoping working and being a no-op.
+    tx_card_keys = {tx.transaction_id: _tx_card_keys(tx) for tx in transactions}
+    present_keys: set[str] = set()
+    for keys in tx_card_keys.values():
+        present_keys |= keys
+
     receipt_scope: dict[str, set[str]] = {}
     if cfg.card_scoping:
-        account_keys = {tx.account_id: _card_keys(tx.account_id) for tx in transactions}
         for r in receipts:
             pm_keys = _card_keys(r.payment_mode)
             if not pm_keys:
                 continue
-            scope = {
-                acct for acct, akeys in account_keys.items() if akeys & pm_keys
-            }
-            if scope:
-                receipt_scope[r.document_id] = scope
+            if pm_keys & present_keys:
+                receipt_scope[r.document_id] = pm_keys
 
     cands_by_tx: dict[str, list[_Candidate]] = {}
     for tx in transactions:
@@ -807,17 +892,18 @@ def match_month(
             if receipt.legal_entity_id != tx.legal_entity_id:
                 continue  # entity scope per v2 spec §4.2
             scope = receipt_scope.get(receipt.document_id)
-            if scope is not None and tx.account_id not in scope:
+            if scope is not None and not (scope & tx_card_keys[tx.transaction_id]):
                 continue  # receipt's payment mode names a different card
             scored = match_one(tx, receipt, cfg)
             if scored is None:
                 continue
-            ref_sig, vendor_sig = _signal(tx, receipt, cfg)
+            ref_sig, card_sig, vendor_sig = _signal(tx, receipt, cfg)
             cands_by_tx.setdefault(tx.transaction_id, []).append(
                 _Candidate(
                     match=scored,
                     is_determ=scored.match_type != MatchType.FX_JUDGMENT,
                     ref_signal=ref_sig,
+                    card_signal=card_sig,
                     vendor_signal=vendor_sig,
                 )
             )

@@ -55,6 +55,31 @@ merging. Re-pin flow after a user-approved scorer change:
 ship the PINS.json diff in the same PR - the diff line is the review
 surface. `uv run tools/pin_scorer.py check` is the human-run verifier.
 
+## Authoring a new scorer
+
+Start from `docs/optimize/scorer-template.py.txt` (a conforming skeleton
+plus the paired-guard notes; it is `.py.txt` and lives outside this
+directory on purpose, because anything matching `tools/scorers/*.py` is
+picked up as a scorer and would fail CI as unpinned):
+
+```
+cp docs/optimize/scorer-template.py.txt tools/scorers/<target>.py
+```
+
+Then edit, add the `tools/INDEX.md` row, open the PR, and after review
+`SCORER_LOCK_ALLOW=1 uv run tools/pin_scorer.py pin <target>.py` with the
+PINS.json diff in the same PR.
+
+`tools/tests/test_scorer_contract.py` checks the clauses a content hash
+cannot see: the direction header, that a `SCORE:` line is emitted, that a
+non-zero exit path exists, and - behaviorally - that the scorer refuses an
+asset it cannot possibly have measured. Run it before opening the PR so a
+nonconformance costs one seam touch, not two:
+
+```
+uv run --no-project --with pytest pytest tools/tests/test_scorer_contract.py
+```
+
 ## Fit check before adding a scorer
 
 All three must hold for the target asset (else the optimize loop is the
@@ -70,4 +95,7 @@ wrong tool):
 | Scorer | Metric | Direction |
 |---|---|---|
 | `page-weight.py FILE.html [...]` | Total local page weight in bytes (HTML + referenced local assets) | minimize |
-| `gtm-roi.py PLAN.json` | Upwork-independence GTM blended contribution-margin per working hour (EUR/hr above the hourly-work opportunity cost), 30-mo horizon, over a locked economic model | maximize |
+| `gtm-roi.py PLAN.json` | Upwork-independence GTM v1 blended contribution-margin per working hour (EUR/hr above the hourly-work opportunity cost), 30-mo horizon, over a locked economic model | maximize |
+| `gtm-roi-v2.py PLAN.json` | Upwork-independence GTM v2 TOTAL contribution surplus (kEUR above the opportunity cost) over the 30-mo horizon; adds care-price elasticity + subcontracting/freed-hour reinvestment so care and capacity land on interior optima instead of bounds. NOT score-comparable to v1 (different metric) | maximize |
+| `leadgen-portfolio.py PLAN.json` | Upwork-independence CLIENT-ACQUISITION portfolio: net won-client value (kEUR) over the 30-mo horizon from splitting a fixed acquisition hours+cash budget across the five OWNED channels (demo-first, cold-email, LinkedIn, referral, AEO/content), pool-capped per channel and bounded by delivery serviceability. Answers "how do we win clients"; holds delivery/pricing (from GTM v2) fixed | maximize |
+| `pricing-tiers.py PLAN.json` | Upwork-independence PRICING MENU: total contribution surplus (kEUR) over the 30-mo horizon from a good/better/best {price,scope} menu that a 3-segment prospect population self-selects into (second-degree price discrimination / versioning), bounded by delivery capacity. Answers "what exactly do we sell, and at what price"; prints the tiering lift over the best single flat price; holds GTM v2 delivery economics + leadgen acquisition fixed | maximize |

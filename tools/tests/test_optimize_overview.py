@@ -102,6 +102,108 @@ def test_empty_repo_reports_no_runs(tmp_path):
     assert "no runs found" in _run(repo)
 
 
+def test_scoreboard_measures_the_loop_itself(tmp_path):
+    repo = make_fixture_repo(tmp_path)
+    out = _run(repo, "--scoreboard")
+    assert "SCOREBOARD" in out
+    # brisken run: 3 experiment rows (keep, discard, keep) -> 2 keeps;
+    # sys run: 1 (keep); platform run has no journal.
+    assert "experiment rounds     4" in out
+    assert "3/4 (75%)" in out
+    # no manifest declares assets -> nothing classifies as production
+    assert "0/3 production" in out
+
+
+def test_scoreboard_counts_production_assets(tmp_path):
+    """The production-vs-planning split is the metric the harness most needs:
+    a loop that only optimizes its own planning JSON is advising itself."""
+    repo = tmp_path / "kinds"
+    repo.mkdir()
+    _git(repo.parent, "init", "-q", str(repo))
+    _write(repo, "docs/optimize/plan-run/RUN.md",
+           "---\ntag: plan-run\nproject: p\ndirection: maximize\n"
+           "assets:\n  - workspace/projects/upwork/gtm-plan.json\n---\nx\n")
+    _write(repo, "docs/optimize/plan-run/results.tsv",
+           "round\tcommit\tscore\tdelta\tstatus\tdescription\n"
+           "0\ta\t1\t0\tbaseline\tb\n1\t-\tNA\tNA\tstopped\tdone\n")
+    _write(repo, "docs/optimize/real-run/RUN.md",
+           "---\ntag: real-run\nproject: p\ndirection: minimize\n"
+           "assets:\n  - platform/public/clients/acme/**\n---\nx\n")
+    _write(repo, "docs/optimize/real-run/results.tsv",
+           "round\tcommit\tscore\tdelta\tstatus\tdescription\n"
+           "0\ta\t9\t0\tbaseline\tb\n1\t-\tNA\tNA\tstopped\tdone\n")
+    out = _run(repo, "--scoreboard")
+    assert "1/2 production" in out
+    assert "1 planning-model" in out
+
+
+def test_stale_checkout_names_the_runs_it_cannot_see(tmp_path):
+    """This view derives from the working tree, so a checkout behind
+    origin/main under-reports closed runs and silently skews every metric.
+    That is not hypothetical: it is what a 13-PR-stale main did during the
+    audit that motivated this check (1 of 4 runs shown, keep rate 80% vs the
+    true 48%)."""
+    repo = make_fixture_repo(tmp_path)
+    _git(repo, "config", "user.email", "t@t.local")
+    _git(repo, "config", "user.name", "T")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "checkout state")
+    head = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+                          capture_output=True, text=True).stdout.strip()
+
+    # a run that landed on origin/main but is not in this checkout
+    _write(repo, "docs/optimize/newer-run/RUN.md",
+           "---\ntag: newer-run\nproject: sys\ndirection: minimize\n---\nx\n")
+    _write(repo, "docs/optimize/newer-run/results.tsv",
+           "round\tcommit\tscore\tdelta\tstatus\tdescription\n"
+           "0\ta\t5\t0\tbaseline\tb\n1\t-\tNA\tNA\tstopped\tdone\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "landed on origin/main")
+    ahead = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+                           capture_output=True, text=True).stdout.strip()
+    _git(repo, "update-ref", "refs/remotes/origin/main", ahead)
+    _git(repo, "reset", "-q", "--hard", head)
+
+    out = _run(repo, "--scoreboard")
+    assert "STALE CHECKOUT" in out
+    assert "newer-run" in out
+    assert "MISSING 1 run(s)" in out
+
+
+def test_completeness_is_unknown_without_an_origin_ref(tmp_path):
+    """No origin/main to compare against is not the same as 'complete';
+    claiming a match it never checked would be exactly the kind of
+    unearned confidence this harness exists to prevent."""
+    repo = make_fixture_repo(tmp_path)
+    out = _run(repo, "--scoreboard")
+    assert "STALE CHECKOUT" not in out
+    assert "UNKNOWN (no origin/main ref" in out
+
+
+def test_sweep_is_silent_on_a_clean_fleet(tmp_path):
+    """A SessionStart sweep that chatters on every session gets ignored;
+    silence when there is nothing to decide is what makes it wirable."""
+    repo = tmp_path / "clean"
+    repo.mkdir()
+    _git(repo.parent, "init", "-q", str(repo))
+    _write(repo, "docs/optimize/done-run/RUN.md",
+           "---\ntag: done-run\nproject: p\ndirection: minimize\n---\nx\n")
+    _write(repo, "docs/optimize/done-run/results.tsv",
+           "round\tcommit\tscore\tdelta\tstatus\tdescription\n"
+           "0\ta\t10\t0\tbaseline\tb\n1\t-\tNA\tNA\tstopped\tdone\n")
+    _write(repo, "docs/optimize/done-run/SUMMARY.md", "s\n")
+    assert _run(repo, "--sweep").strip() == ""
+
+
+def test_sweep_surfaces_runs_needing_a_decision(tmp_path):
+    repo = make_fixture_repo(tmp_path)
+    out = _run(repo, "--sweep")
+    assert "need attention" in out
+    assert "sys-teach-demo: INTERRUPTED" in out          # no stopped row
+    assert "platform-weight-v1: ACTIVE" in out           # live run state
+    assert "brisken-recon-v1" not in out                 # closed WITH summary
+
+
 def test_manifest_without_project_groups_unassigned(tmp_path):
     repo = tmp_path / "legacy"
     repo.mkdir()
@@ -117,3 +219,52 @@ def test_manifest_without_project_groups_unassigned(tmp_path):
     assert "CLOSED" in out
     assert "summary=NO" in out            # closed without SUMMARY.md warns
     assert "closed without SUMMARY.md" in out
+
+
+
+def test_legacy_six_column_journal_reports_no_timing(tmp_path):
+    """Runs closed before the timestamp column must keep parsing.
+
+    results.tsv is append-only and every run closed before 2026-07-22 carries
+    six-column rows. A parser that assumed seven would silently drop them from
+    the scoreboard - the same under-reporting the STALE CHECKOUT guard exists
+    to prevent, arriving from the other direction. The whole fixture repo here
+    is six-column, so the timing line must say so rather than guess.
+    """
+    repo = make_fixture_repo(tmp_path)
+    out = _run(repo, "--scoreboard")
+    assert "minutes per round     n/a (0/3 runs carry timestamps)" in out, out
+    # ...and the historical six-column runs are still counted, not dropped.
+    assert "experiment rounds     4" in out, out
+
+
+def test_timestamped_journal_yields_minutes_per_round(tmp_path):
+    repo = make_fixture_repo(tmp_path)
+    _write(repo, "docs/optimize/timed-run/RUN.md",
+           "---\ntag: timed-run\nproject: sys\ndirection: minimize\n---\nx\n")
+    _write(repo, "docs/optimize/timed-run/results.tsv",
+           "round\tcommit\tscore\tdelta\tstatus\tdescription\ttimestamp\n"
+           "0\taaaaaaa\t100.0\t0\tbaseline\tbase\t2026-07-22T10:00:00\n"
+           "1\tbbbbbbb\t90.0\t-10\tkeep\tone\t2026-07-22T10:02:00\n"
+           "2\tccccccc\t85.0\t-5\tkeep\ttwo\t2026-07-22T10:06:00\n")
+    _write(repo, "docs/optimize/timed-run/SUMMARY.md", "s\n")
+    out = _run(repo, "--scoreboard")
+    # 6 minutes spanned / 2 experiment rounds = 3.0
+    assert "minutes per round     3.0 median over 1/4 timed run(s)" in out, out
+
+
+def test_unparseable_timestamp_does_not_crash_the_overview(tmp_path):
+    """A hand-mangled stamp must degrade to 'no timing', never raise.
+
+    optimize_overview is a read-only reporting surface wired into the
+    SessionStart sweep; it is required to fail open.
+    """
+    repo = make_fixture_repo(tmp_path)
+    _write(repo, "docs/optimize/bad-stamp/RUN.md",
+           "---\ntag: bad-stamp\nproject: sys\ndirection: minimize\n---\nx\n")
+    _write(repo, "docs/optimize/bad-stamp/results.tsv",
+           "round\tcommit\tscore\tdelta\tstatus\tdescription\ttimestamp\n"
+           "0\taaaaaaa\t100.0\t0\tbaseline\tbase\tnot-a-date\n"
+           "1\tbbbbbbb\t90.0\t-10\tkeep\tone\talso-bad\n")
+    out = _run(repo, "--scoreboard")   # _run asserts exit 0
+    assert "minutes per round     n/a" in out, out

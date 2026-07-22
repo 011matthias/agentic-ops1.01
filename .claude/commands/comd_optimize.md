@@ -84,7 +84,8 @@ Read `git log --oneline -5` and the tail of `results.tsv` first - git is
 your memory; do not re-run a journaled dead end.
 
 1. **One hypothesis.** State in one sentence what change should move the
-   score and why.
+   score and why. If the round is a boundary probe (a predicted discard
+   that confirms an optimum), say so and pass `--probe` (Step 5b).
 2. **One change.** Edit asset files only. The gate denies everything else.
 3. **Execute:** `uv run tools/optimize_run.py round --desc "<hypothesis>"`.
    The engine commits, scores under timeout, runs guards, keeps or reverts,
@@ -112,6 +113,34 @@ simplification win. Weigh the complexity cost against the improvement
 magnitude: a tiny gain from hacky code is a discard (`round --discard
 --desc "why"`); an equal score from strictly simpler code is a keep
 (`round --simplification --desc "..."`).
+
+## Step 5b: Verifying convergence (do this before you claim it)
+
+A run that stops climbing has not found an optimum; it has run out of
+ideas. Two idioms separate the two, and both are cheap:
+
+**Boundary probes (`round --probe`).** Before declaring convergence, spend
+rounds deliberately PREDICTING a discard: push a kept lever further, pull
+it back, drop a component, collapse two settings into one. State the
+prediction and the reason in `--desc` ("expect DISCARD: past the pool cap
+the extra hours reinvest neutrally, so 32 is the knee not a peg-to-max").
+A probe that discards as predicted converts "I stopped improving" into "I
+tested the boundary and it held". A probe that IMPROVES is the most
+valuable round the loop can produce: the optimum was not where you thought,
+and the engine keeps it and says so loudly. Probes journal as `probe` and
+do NOT count toward PLATEAU, so run them freely; that is what the flag is
+for. Do not raise `consecutive_reverts` to make room for probes, which is
+what runs did before the flag existed.
+
+**The pegged-at-bound tell.** When a winning lever sits exactly on its
+declared min or max, the model has no resistance there and the number is
+an artifact of where you set the bound, not a discovered optimum. Name
+every pegged lever in SUMMARY.md as a sensitivity to validate before
+anyone acts on it. This is not theoretical: gtm-v1 converged with care
+price at its ceiling and build price at its floor, and gtm-v2 (which added
+the missing elasticity) moved both off their bounds and overturned the
+specific numbers while confirming the strategic direction. A pegged
+winner is a prompt to fix the model, usually in a `-v2` run.
 
 ## Step 6: Modes and stopping
 

@@ -38,6 +38,13 @@ REQUIRED_KEYS: tuple[str, ...] = ("transaction_date", "amount", "vendor")
 # 3.15 (2026-07-20): "type" maps the export's debit/credit column (Chase
 # activity CSV "Type": Sale / Payment / Return / ...) so the row's sign
 # can be canonicalized per source instead of trusted blindly.
+# WS3 (2026-07-21): "card" maps the per-row card column a tabular export
+# prints beside every charge (Chase activity CSV "Card": 2838 / 3645 /
+# 3876 / 0340) into `Transaction.card_last4`. The statement PDF has always
+# carried this identity in `account_id` via its per-card cycle markers; on
+# the CSV / xlsx path `account_id` names the whole account, so without this
+# key a multi-card export looks like one card and card-scoped matching
+# silently does nothing.
 OPTIONAL_KEYS: tuple[str, ...] = (
     "posting_date",
     "transaction_currency",
@@ -45,6 +52,7 @@ OPTIONAL_KEYS: tuple[str, ...] = (
     "original_currency",
     "fx_rate",
     "type",
+    "card",
 )
 
 # Type-column values that mark a CREDIT (money back to the card): the

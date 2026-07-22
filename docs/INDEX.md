@@ -5,11 +5,23 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## b2b-cold-outreach (p028 prospect)
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-21 | Upwork-Independence GTM Optimize | misc | [→](docs/2026-07-21%20-%20Upwork-Independence%20GTM%20Optimize/Checkpoint.md) |
 | 2026-06-11 | P028 B2B Cold Outreach Proposal | comms | [Mini-Checkpoint-1](docs/2026-06-11%20-%20P028%20B2B%20Cold%20Outreach%20Proposal/Mini-Checkpoint-1.md) |
 
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-22 | Brisken Bank Fee Portal Dirk Review Fixes | client-dev | [→](docs/2026-07-22%20-%20Brisken%20Bank%20Fee%20Portal%20Dirk%20Review%20Fixes/Checkpoint.md) |
+| 2026-07-22 | Brisken Nestle StratiFy Contact Intelligence | comms | [→](docs/2026-07-22%20-%20Brisken%20Nestle%20StratiFy%20Contact%20Intelligence/Checkpoint.md) |
+| 2026-07-22 | Brisken TreasuryCentral V3 Page Rebuild | client-dev | [Checkpoint](docs/2026-07-22%20-%20Brisken%20TreasuryCentral%20V3%20Page%20Rebuild/Checkpoint.md) |
+| 2026-07-22 | Brisken Expense-Recon WS3 Matching + API Twins | client-dev | [→](docs/2026-07-22%20-%20Brisken%20Expense-Recon%20WS3%20Matching%20+%20API%20Twins/Checkpoint.md) |
+| 2026-07-22 | Brisken Lead Desk Next-Step Fix + Sheet Reconciliation | client-dev | [Checkpoint](docs/2026-07-22%20-%20Brisken%20Lead%20Desk%20Next-Step%20Fix%20+%20Sheet%20Reconciliation/Checkpoint.md) |
+| 2026-07-22 | Brisken TC Overview Dirk Review Integration | client-dev | [Checkpoint](docs/2026-07-22%20-%20Brisken%20TC%20Overview%20Dirk%20Review%20Integration/Checkpoint.md) |
+| 2026-07-21 | Brisken Expense-Recon Vision + Adjudication | client-dev | [Checkpoint](docs/2026-07-21%20-%20Brisken%20Expense-Recon%20Vision%20+%20Adjudication/Checkpoint.md) |
+| 2026-07-21 | Brisken Rome T3 Wave Sent | client-dev | [Checkpoint](docs/2026-07-21%20-%20Brisken%20Rome%20T3%20Wave%20Sent/Checkpoint.md) |
+| 2026-07-21 | Brisken Expense-Recon LLM Categorization | client-dev | [Checkpoint](docs/2026-07-21%20-%20Brisken%20Expense-Recon%20LLM%20Categorization/Checkpoint.md) |
+| 2026-07-21 | Brisken Expense-Recon Backend Phases + Local-Repro | client-dev | [Checkpoint](docs/2026-07-21%20-%20Brisken%20Expense-Recon%20Backend%20Phases%20+%20Local-Repro/Checkpoint.md) |
+| 2026-07-21 | Brisken Expense-Recon Lovable Extend + Spec-Backend Deploy | client-dev | [Checkpoint](docs/2026-07-21%20-%20Brisken%20Expense-Recon%20Lovable%20Extend%20+%20Spec-Backend%20Deploy/Checkpoint.md) |
 | 2026-07-20 | Brisken Expense-Recon Spec Incorporation | client-dev | [Checkpoint](docs/2026-07-20%20-%20Brisken%20Expense-Recon%20Spec%20Incorporation/Checkpoint.md) |
 | 2026-07-20 | Brisken Expense-Recon FX + Notifier | client-dev | [Checkpoint](docs/2026-07-20%20-%20Brisken%20Expense-Recon%20FX%20%2B%20Notifier/Checkpoint.md) |
 | 2026-07-17 | Brisken Deck Use-Case Elaboration | client-dev | [Checkpoint](docs/2026-07-17%20-%20Brisken%20Deck%20Use-Case%20Elaboration/Checkpoint.md) |
@@ -182,7 +194,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
-| 2026-07-21 | Upwork-Independence GTM Optimize | misc | [→](docs/2026-07-21%20-%20Upwork-Independence%20GTM%20Optimize/Checkpoint.md) |
+| 2026-07-22 | Optimize Loop Audit + Hardening | system-infra | [→](docs/2026-07-22%20-%20Optimize%20Loop%20Audit%20+%20Hardening/Checkpoint.md) |
 | 2026-07-20 | System Development | system-infra | [→](docs/2026-07-20%20-%20System%20Development/Checkpoint.md) |
 | 2026-07-17 | Ruff Push Gate CI Prevention | system-infra | [→](docs/2026-07-17%20-%20Ruff%20Push%20Gate%20CI%20Prevention/Checkpoint.md) |
 | 2026-07-17 | Optimize Onboarding + Brisken Match Labeling | system-infra | [→](docs/2026-07-17%20-%20Optimize%20Onboarding%20+%20Brisken%20Match%20Labeling/Checkpoint.md) |

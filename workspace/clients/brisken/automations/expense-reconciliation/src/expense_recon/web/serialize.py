@@ -57,6 +57,7 @@ def categorization_to_dict(c: Categorization | None) -> dict | None:
         "confidence": c.confidence,
         "source": c.source.value,
         "reasoning": c.reasoning,
+        "decision": c.decision,
     }
 
 
@@ -69,6 +70,8 @@ def categorization_from_dict(d: dict | None) -> Categorization | None:
         confidence=d["confidence"],
         source=ClassificationSource(d["source"]),
         reasoning=d.get("reasoning", ""),
+        # .get keeps pre-WS2 snapshots loadable (no decision key).
+        decision=d.get("decision"),
     )
 
 
@@ -156,6 +159,7 @@ def receipt_to_dict(r: Receipt) -> dict:
         "base_amount": _dec(r.base_amount),
         "reimbursable": r.reimbursable,
         "expense_location": r.expense_location,
+        "data_quality_note": r.data_quality_note,
     }
 
 
@@ -180,6 +184,8 @@ def receipt_from_dict(d: dict) -> Receipt:
         base_amount=_as_dec(d.get("base_amount")),
         reimbursable=d.get("reimbursable"),
         expense_location=d.get("expense_location"),
+        # .get keeps pre-WS2 snapshots loadable (no data_quality_note key).
+        data_quality_note=d.get("data_quality_note"),
     )
 
 
@@ -195,6 +201,7 @@ def match_to_dict(m: Match) -> dict:
         "amount_score": m.amount_score,
         "date_score": m.date_score,
         "vendor_score": m.vendor_score,
+        "card_score": m.card_score,
     }
 
 
@@ -210,6 +217,9 @@ def match_from_dict(d: dict) -> Match:
         amount_score=d.get("amount_score", 0.0),
         date_score=d.get("date_score", 0.0),
         vendor_score=d.get("vendor_score", 0.0),
+        # Absent from snapshots written before WS3; 0.0 reads as "not
+        # scored" exactly like the three above, so an old run still loads.
+        card_score=d.get("card_score", 0.0),
     )
 
 

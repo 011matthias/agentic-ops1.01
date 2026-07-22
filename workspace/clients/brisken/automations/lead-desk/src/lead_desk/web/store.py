@@ -87,7 +87,7 @@ CONTACT_COLUMNS = (
     "tier", "tier_reason", "lead_type", "persona", "signal",
     "outreach_status",
     "suppressed", "suppress_reason", "suppressed_at", "suppressed_by",
-    "crm_owner", "demo_owner", "next_step", "next_step_due",
+    "crm_owner", "demo_owner", "next_step", "next_step_due", "next_step_at",
     "source", "in_our_booth", "scanned_at_booth", "if_we_know_them",
     "brisken_customer", "attendee_type", "sponsor_opt_in", "no_show",
     "fob_encoded", "booth_registered_at", "crm_last_activity",
@@ -401,6 +401,22 @@ _MIGRATIONS: dict[int, list] = {
     # suppressed 'duplicate' row pointing at its survivor, so the next sheet
     # sync cannot resurrect it as a fresh active contact.
     4: [_add_column("contacts", "merged_into", "TEXT")],
+    # v5: next_step authored-time. Without it the board cannot tell a stale
+    # pre-reply plan (a "No reply yet / nudge on <date>" next_step written
+    # before the contact replied) from a genuine post-reply plan, so it kept
+    # surfacing "No reply yet" as the action next to a captured reply
+    # (Asako Teruki / NYK, 2026-07-21). Going forward every next_step write is
+    # stamped accurately (update_fields / upsert_contact). The one-time backfill
+    # can only DATE legacy rows, so it stamps created_at (a safe lower bound;
+    # updated_at is UNSAFE - a sheet sync bumps it past the reply) ONLY for
+    # plans that literally assert "No reply yet", which a captured reply
+    # contradicts. Everything else stays NULL = honored verbatim, so a genuine
+    # post-reply note (e.g. "HOT: he asked for a call") is never suppressed.
+    5: [
+        _add_column("contacts", "next_step_at", "TEXT"),
+        "UPDATE contacts SET next_step_at = created_at "
+        "WHERE next_step LIKE 'No reply yet%' AND next_step_at IS NULL",
+    ],
 }
 
 # Highest applied migration. On a fresh DB the runner applies 1..N in order;
@@ -496,6 +512,11 @@ class ContactStore:
 
     def upsert_contact(self, data: dict, now: str) -> None:
         """Insert or refresh a contact keyed by natural_key (idempotent)."""
+        # A first-adopt next_step (sheet column) is authored now; stamp its
+        # time so a later reply can supersede it. Re-sync drops next_step from
+        # the payload (APP_OWNED_ON_RESYNC), so this never re-stamps a hold.
+        if data.get("next_step") and "next_step_at" not in data:
+            data = {**data, "next_step_at": now}
         cols = [c for c in CONTACT_COLUMNS if c in data]
         if "natural_key" not in cols or "contact_id" not in cols:
             raise ValueError("upsert_contact needs contact_id and natural_key")
@@ -572,6 +593,10 @@ class ContactStore:
                 "survivor": survivor_id, "loser": loser_id}
 
     def update_fields(self, contact_id: str, fields: dict, now: str) -> None:
+        # Stamp when next_step was (re)authored so the board can tell a fresh
+        # plan from one overtaken by a later reply (see the v5 migration).
+        if "next_step" in fields and "next_step_at" not in fields:
+            fields = {**fields, "next_step_at": now}
         cols = [c for c in fields if c in CONTACT_COLUMNS
                 and c not in ("contact_id", "natural_key")]
         if not cols:

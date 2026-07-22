@@ -142,3 +142,21 @@ def test_read_csv_headers_handles_bom(tmp_path: Path):
     csv_path.write_bytes(b"\xef\xbb\xbfDate,Amount,Description\n")
     headers = read_csv_headers(csv_path)
     assert headers == ["Date", "Amount", "Description"]
+
+
+def test_guess_maps_the_card_column():
+    """WS3: the hosted upload path guesses the column map, so the Card
+    column has to be recognised there or a multi-card statement silently
+    loses its per-charge card."""
+    headers = ["Transaction Date", "Post Date", "Description", "Amount", "Card", "Type"]
+    mapping, missing = guess_column_map(headers)
+    assert mapping["card"] == "Card"
+    assert missing == []
+
+
+def test_card_patterns_do_not_claim_cardholder_columns():
+    """`Card Member` is the cardholder's name, not the card. Claiming it
+    would scope every receipt to a card that is really a person, hiding
+    real matches — worse than not mapping at all."""
+    mapping, _ = guess_column_map(["Date", "Description", "Amount", "Card Member"])
+    assert "card" not in mapping

@@ -1,0 +1,13 @@
+{
+  "_schema": "guard-text-preserved/1",
+  "pages": {
+    "platform/public/clients/alpha-research/brief.html": "01586b99a2a3d8fd586876c54763385b24e24d2552f1010a2d6fb2fdfa9cb60a",
+    "platform/public/clients/alpha-research/faq.html": "19e83c22c50e3c47e6f641057e991e7e7f4694bd59fe39abf4872f5b9fb0b566",
+    "platform/public/clients/alpha-research/index.html": "8c276b988dd1431c5647dcf4ff1c74b923b64aa40a85fbc469586574ff92d27d",
+    "platform/public/clients/alpha-research/investment.html": "5cc64d8a2bffd2d8535ac299d39dc9eece1cb418334ef9231c2f13f64042da75",
+    "platform/public/clients/alpha-research/onboarding.html": "24745bd28f31a4ac26bc1e4e2690bf87b70c0a17af8207103b1dff2dd4f54e4d",
+    "platform/public/clients/alpha-research/solution.html": "3535cc6dcc0468a3d89b57c78a8453e9335a167d850fc3ebf24266c3fcc38fa6",
+    "platform/public/clients/alpha-research/timeline.html": "ebbb89ef7c73fcfd92575b888ec846f381f9bdf6ee01655a2fd9b3450277784e",
+    "platform/public/clients/alpha-research/workflow.html": "6ecc682e8b2032a39519958dde0fac9d8a87801f667e13db54f669ff71fd9609"
+  }
+}

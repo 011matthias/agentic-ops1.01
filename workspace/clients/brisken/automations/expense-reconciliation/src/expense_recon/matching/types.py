@@ -71,6 +71,15 @@ class Categorization:
     mapped Brisken Zoho chart-of-accounts entry (e.g.,
     "6420 - Office Equipment"); None until chart-of-accounts ingest
     is wired in slice 4.
+
+    `decision` (WS2, 2026-07-21) records the top-level adjudication verdict
+    from `categorize.adjudicate_categorization`: whether the tool's own
+    category/account was inserted over the Zoho report's on a heavy
+    root-group mismatch (`"ai_override_heavy"`), the report's category was
+    kept because both resolve to the same Zoho root-group
+    (`"kept_er"`), or the comparison could not be made and the report's
+    category was kept conservatively (`"review_unresolved"`). None when no
+    adjudication ran (no chart wired, or override_er_category off).
     """
 
     category: str | None
@@ -78,6 +87,7 @@ class Categorization:
     confidence: float
     source: ClassificationSource
     reasoning: str = ""
+    decision: str | None = None
 
 
 @dataclass(frozen=True)
@@ -163,6 +173,24 @@ class Transaction:
     # no purchase receipt ever pair-matches a credit.
     is_credit: bool = False
 
+    # The card this charge was made on, when the source names it PER ROW
+    # (WS3, 2026-07-21). The Chase statement PDF groups charges under a
+    # per-card cycle marker and the PDF parser already puts that number in
+    # `account_id`; the tabular exports (CSV / xlsx) instead print a "Card"
+    # column beside every row while `account_id` names the whole account.
+    # Mapping that column here gives the matcher a real per-charge card
+    # identity without churning `account_id` (and therefore `transaction_id`,
+    # which the store and the reviewer's dispositions key on).
+    #
+    # `matching.deterministic._tx_card_keys` prefers this field and falls
+    # back to `account_id`, so a source that carries no card column behaves
+    # byte-for-byte as before. Without it a multi-card statement is invisible
+    # to card scoping: on the real 01-05-2026 corpserv export all 134 rows
+    # carried account_id "chase-2838-family" while the rows themselves span
+    # cards 2838 / 3645 / 3876 / 0340, so software charges on 3645 were free
+    # to FX-false-pair with EUR meal receipts paid on 2838.
+    card_last4: str | None = None
+
 
 @dataclass(frozen=True)
 class Receipt:
@@ -234,6 +262,14 @@ class Receipt:
     reimbursable: bool | None = None
     expense_location: str | None = None
 
+    # Vision receipt-image extraction (WS2, 2026-07-21). When the LLM reads
+    # the receipt IMAGE and its amount/currency/card disagrees with the
+    # deterministic EXPENSE SUMMARY row, the summary value is KEPT for
+    # matching (the deterministic backbone) and the disagreement is recorded
+    # here as a short human-readable note, surfaced in the workbench. None
+    # when vision agreed with the summary, or vision did not run.
+    data_quality_note: str | None = None
+
     @property
     def has_receipt_image(self) -> bool:
         """True when the expense carries any receipt-image reference (a
@@ -270,6 +306,15 @@ class Match:
     amount_score: float = 0.0
     date_score: float = 0.0
     vendor_score: float = 0.0
+    # Card agreement between the charge's card and the receipt's Zoho
+    # payment mode (WS3, 2026-07-21): 1.0 when they name the same card,
+    # 0.0 when both name a card and they differ, 0.5 when either side does
+    # not name one (unknown corroborates nothing). It is a TIE-BREAK in the
+    # bipartite assignment and a review-transparency field; it enters the
+    # blended triage score only if the operator sets a non-zero
+    # `blend_card_weight`. 0.0 also means "not scored" on a
+    # reviewer-built match, same convention as the three sub-scores above.
+    card_score: float = 0.0
 
 
 @dataclass(frozen=True)

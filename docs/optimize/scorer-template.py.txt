@@ -1,0 +1,116 @@
+# TEMPLATE - copy to tools/scorers/<target>.py and edit. Kept as .py.txt on
+# purpose: anything matching tools/scorers/*.py is picked up by
+# pin_scorer.scorer_files(), so a template living there would fail CI as an
+# UNPINNED scorer and be flagged by the contract suite.
+#
+# Copy:  cp docs/optimize/scorer-template.py.txt tools/scorers/<target>.py
+# Then:  edit -> tools/INDEX.md row -> PR -> after review,
+#        SCORER_LOCK_ALLOW=1 uv run tools/pin_scorer.py pin <target>.py
+#        (ship the PINS.json diff in the SAME PR: that one line is the
+#        review surface where a human signs off that the metric is honest)
+#
+# The scorer locks the moment it exists: scorer-lock-gate.py denies agent
+# edits to an existing tools/scorers/*.py, because the agent that optimizes
+# against a metric must not be able to move it.
+
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
+# direction: minimize
+"""Scorer: <one line - what number this produces, in what unit>.
+
+<What is measured, and why that number is the honest proxy for "good" on
+this asset. Be concrete: a reader must be able to tell whether a change
+that moves this number is actually an improvement in the real world.>
+
+Deterministic: <say why - pure file reads / fixed fixtures / median-of-N.
+If the underlying signal is noisy (timing, network), take the median of N
+INSIDE this file and say so here. The engine re-scores on resume and warns
+on any mismatch, so nondeterminism surfaces as a REPRODUCIBILITY MISMATCH.>
+
+Contract (tools/scorers/README.md):
+  - last stdout line is exactly `SCORE: <number>`
+  - exit 0 ONLY on a real measurement; any failure exits non-zero
+  - the `# direction:` header above must match PINS.json AND the manifest
+Enforced by tools/tests/test_scorer_contract.py + test_scorer_pins.py.
+"""
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+
+def measure(target: Path) -> tuple[float, list[str]]:
+    """Return (score, notes). Notes are free-form detail printed above the
+    SCORE line; they land in docs/optimize/<tag>/logs/r<N>.log and are what
+    makes a surprising round diagnosable after the fact. Explain WHY the
+    number moved, not just what it is."""
+    raise NotImplementedError("measure the asset here")
+
+
+def main(argv: list[str]) -> int:
+    if not argv:
+        print(f"usage: {Path(__file__).name} ASSET [...]", file=sys.stderr)
+        return 2
+    targets = [Path(a) for a in argv]
+    missing = [str(p) for p in targets if not p.exists()]
+    if missing:
+        # Exit 0 tells the engine "this score is real". Never do that for an
+        # input you could not read: a partial measurement scored as a win
+        # would poison the hill-climb, and a keep is hard to unwind.
+        print(f"asset(s) not found: {missing}", file=sys.stderr)
+        return 2
+
+    total = 0.0
+    for t in targets:
+        score, notes = measure(t)
+        total += score
+        print(f"{t}:")
+        for n in notes:
+            print(f"  {n}")
+
+    # LAST line, exactly this shape. The engine reads the last match.
+    print(f"SCORE: {total}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
+
+
+# ---------------------------------------------------------------------------
+# THE PAIRED GUARD (a separate file in tools/, NOT in tools/scorers/)
+#
+# A scorer alone lets "better score, broken asset" through. Guards are what
+# stop that: the engine discards an experiment failing ANY guard even when
+# its score beats the best. Guards are argv commands (no shell operators),
+# are auto-locked for the run, and the manifest is refused outright if a
+# guard script sits inside the asset globs (it would be agent-writable).
+#
+# Two kinds, and most targets want both:
+#
+#   1. Correctness guard - the asset still WORKS. Point it at a shared
+#      validator (tools/validate-*.py, a test suite) rather than writing a
+#      bespoke one: shared validators are high-visibility, so a
+#      stop -> weaken-the-guard -> restart move shows up loudly in the diff.
+#
+#   2. Anti-overfit guard - MANDATORY for a constructed metric
+#      (RECIPES.md rule 3). Split the ground truth: the scorer sees the
+#      training slice, and this guard asserts the HELD-OUT slice never drops
+#      below its baseline. Without it a run optimizes the benchmark rather
+#      than the thing (the Shopify Liquid autoresearch PR: 53% "faster",
+#      never merged, flagged as benchmark overfit).
+#
+#      A pessimistic-case guard over the SAME model is NOT a held-out guard.
+#      It tests robustness to bad assumptions, not generalization, and it
+#      shares the scorer's blind spots - if the model is simply wrong, both
+#      agree and the run converges confidently on nothing.
+#
+# Guard skeleton:
+#
+#     def main(argv):
+#         ok, detail = check(Path(argv[0]))
+#         print(detail)
+#         return 0 if ok else 1      # non-zero = discard the experiment
+# ---------------------------------------------------------------------------

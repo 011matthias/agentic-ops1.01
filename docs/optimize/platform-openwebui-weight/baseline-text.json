@@ -1,0 +1,13 @@
+{
+  "_schema": "guard-text-preserved/1",
+  "pages": {
+    "platform/public/clients/openwebui-email-compliance/faq.html": "62a50470289c62e03d559ebb8807bf100bcf622308c28c76956c99224401cbf8",
+    "platform/public/clients/openwebui-email-compliance/gdpr.html": "0deea5291367934e07eee3772835ee8a7905a84db2752c2108f5274f16216908",
+    "platform/public/clients/openwebui-email-compliance/index.html": "2a44f37e6e339201a979e0478d7074bd9988ec3c2cef27b1b55489370f115dbc",
+    "platform/public/clients/openwebui-email-compliance/investment.html": "8105cb7ef9fcdacd03594e24161d6349ef3d956a5792cda4178eef0e162e1fe7",
+    "platform/public/clients/openwebui-email-compliance/onboarding.html": "c0200d357d2bbff410cfa80c21a543d8b0caadc5ead66a63a10046e65336afda",
+    "platform/public/clients/openwebui-email-compliance/solution.html": "bb16174dbf0552ce88dd95f7aa41d28fbb00145293421f98571867604eb891f2",
+    "platform/public/clients/openwebui-email-compliance/timeline.html": "499b28a153958f41283852b8ec72c9d97ec439b3a719f780b2f6c91cca730824",
+    "platform/public/clients/openwebui-email-compliance/workflow.html": "5d62a0a77a27f4634f77bf0b52dd1ccb6b52eb3c2a06a0c38611b135caa81f75"
+  }
+}

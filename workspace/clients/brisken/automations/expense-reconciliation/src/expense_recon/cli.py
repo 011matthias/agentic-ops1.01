@@ -49,8 +49,12 @@ The config is a JSON file (stdlib only — no YAML dep) of the shape:
       },
       "matching": {                            # optional (2026-07-17) — load
         "tuning_path": "match-tuning.json"     #   MatchingConfig tunables from
-      }                                        #   a file (the optimize asset)
-    }
+      },                                       #   a file (the optimize asset)
+      "categorization": {                      # optional (2026-07-21) — when
+        "override_er_category": true           #   true, the tool's OWN category
+      }                                        #   + Zoho account win over the
+    }                                          #   report's (reverses 2026-06-16;
+                                               #   default false = report wins)
 
 What this slice does NOT do (deferred):
 - Receipt OCR / Claude-vision extraction — receipts come in already-
@@ -73,14 +77,14 @@ import json
 import logging
 import sys
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
 import os
 from decimal import Decimal
 
-from .categorize import categorize_receipts
+from .categorize import adjudicate_receipts, categorize_receipts
 from .categorize_charges import categorize_charges, derive_subscription_status
 from .ingest._common import ParseIssue
 from .ingest.chart_of_accounts import ChartOfAccounts
@@ -93,8 +97,8 @@ from .ingest.statement_pdf import parse_statement_pdf_tolerant
 from .ingest.statement_xlsx import parse_statement_xlsx_tolerant
 from .llm.client import LLMClient, OpenAIClient
 from .llm.cost import CostTracker
-from .matching.deterministic import match_month
-from .matching.judgment import judge_ambiguous, judge_fx_match
+from .matching.deterministic import MatchingConfig, match_month
+from .matching.judgment import judge_ambiguous, judge_fx_match, judge_unmatched
 from .matching.types import Categorization, Match, MatchOutcome, Receipt, Transaction
 from .output.reconciled_csv import write_reconciled_csv
 from .output.report_xlsx import write_report
@@ -258,6 +262,51 @@ def _load_receipts(
     )
 
 
+def _apply_vision_receipts(
+    cfg: dict,
+    config_dir: Path,
+    receipts: list[Receipt],
+    llm_client: LLMClient | None,
+) -> tuple[list[Receipt], list[ParseIssue]]:
+    """WS2 vision stage: read the report PDF's receipt IMAGES and attach each
+    receipt's real merchant + line items to its EXPENSE SUMMARY row.
+
+    Gated by `categorization.vision_receipts: true` AND an LLM client AND a
+    `receipts.source` of `expense_report_pdf` (the receipt-image pages live in
+    the consolidated report PDF). A no-op returning the receipts unchanged in
+    every other case — the summary stays the deterministic matching backbone.
+    """
+    if not (cfg.get("categorization") or {}).get("vision_receipts", False):
+        return receipts, []
+    if llm_client is None or not receipts:
+        return receipts, []
+
+    r = cfg.get("receipts") or {}
+    if "path" not in r:
+        return receipts, []
+    path = (config_dir / r["path"]).resolve()
+    source = r.get("source") or (
+        "folder" if path.is_dir()
+        else "expense_report_pdf" if path.suffix.lower() == ".pdf"
+        else "csv"
+    )
+    if source != "expense_report_pdf" or not path.exists():
+        return receipts, []
+
+    from .ingest.expense_report_images import extract_receipt_images
+
+    try:
+        return extract_receipt_images(
+            path, client=llm_client, summary_receipts=receipts
+        )
+    except Exception as exc:  # noqa: BLE001 - vision must never break a run
+        logger.warning("vision receipt-image pass failed: %s", exc, exc_info=True)
+        return receipts, [
+            ParseIssue(path.name, 0, f"vision receipt-image pass failed: {exc}",
+                       severity="warning")
+        ]
+
+
 def _apply_judgment(
     outcome: MatchOutcome, tx_by_id, rec_by_id, client: LLMClient | None
 ) -> None:
@@ -278,7 +327,24 @@ def _apply_judgment(
         if tx is None or rec is None:
             judged.append(m)
             continue
-        judged.append(judge_fx_match(tx, rec, client=client))
+        verdict = judge_fx_match(tx, rec, client=client)
+        # The judgment layer builds a fresh Match around the model's
+        # verdict, which dropped the deterministic sub-scores the matcher
+        # had already computed. Carry them over: every FX row otherwise
+        # reaches the workbench scoring 0/100 on amount, date, vendor, and
+        # card, so the review queue could not sort them and the reviewer
+        # could not see WHY a pair was proposed. The verdict itself
+        # (match_type, confidence, reason) still comes from the judgment.
+        judged.append(
+            replace(
+                verdict,
+                score=m.score,
+                amount_score=m.amount_score,
+                date_score=m.date_score,
+                vendor_score=m.vendor_score,
+                card_score=m.card_score,
+            )
+        )
     # In-place: MatchOutcome is frozen (E6); rebinding the attribute
     # would raise. Slice-assignment revises the same list object.
     outcome.judgment_required[:] = judged
@@ -312,6 +378,104 @@ def _apply_ambiguous_judgment(
         rebuilt.append(pick)
         rebuilt.extend(others)
     outcome.ambiguous[:] = rebuilt
+
+
+# WS3 (2026-07-21) second-chance pass defaults. Read from the run config's
+# `matching` block; every one of them only ever narrows the pass.
+_SECOND_PASS_TOP_K = 3
+_SECOND_PASS_MAX_CALLS = 40
+_SECOND_PASS_MIN_CONFIDENCE = 0.6
+
+
+def _apply_unmatched_judgment(
+    outcome: MatchOutcome,
+    transactions: list[Transaction],
+    receipts: list[Receipt],
+    client: LLMClient | None,
+    match_cfg: MatchingConfig,
+    cfg: dict,
+) -> None:
+    """Optional second-chance LLM pass over the leftovers (WS3).
+
+    Off unless the run config sets `matching.llm_second_pass_unmatched`.
+    For each unmatched transaction it asks the model about a bounded
+    shortlist of still-free receipts (see `judge_unmatched`) and, on a
+    confident verdict, moves the pair from `unmatched` into
+    `judgment_required`.
+
+    The reconciliation guarantee holds by construction: ids only ever
+    move between those two buckets, a receipt is claimed at most once, and
+    nothing lands in `matches` — every rescue is review-flagged. Off, or
+    without a client, this is a no-op.
+    """
+    block = cfg.get("matching") or {}
+    if not block.get("llm_second_pass_unmatched"):
+        return
+    if client is None or not outcome.unmatched_transactions:
+        return
+
+    top_k = int(block.get("llm_second_pass_top_k", _SECOND_PASS_TOP_K))
+    max_calls = int(block.get("llm_second_pass_max_calls", _SECOND_PASS_MAX_CALLS))
+    min_confidence = float(
+        block.get("llm_second_pass_min_confidence", _SECOND_PASS_MIN_CONFIDENCE)
+    )
+    date_window = int(
+        block.get("llm_second_pass_date_window_days", match_cfg.fx_date_window_days)
+    )
+
+    tx_by_id = {tx.transaction_id: tx for tx in transactions}
+    rec_by_id = {r.document_id: r for r in receipts}
+    free_docs = list(outcome.unmatched_receipts)
+
+    calls_used = 0
+    rescued_tx: set[str] = set()
+    claimed_docs: set[str] = set()
+    for tx_id in outcome.unmatched_transactions:
+        if calls_used >= max_calls:
+            break
+        tx = tx_by_id.get(tx_id)
+        if tx is None:
+            continue
+        available = [
+            rec_by_id[doc]
+            for doc in free_docs
+            if doc not in claimed_docs and doc in rec_by_id
+        ]
+        if not available:
+            break
+        judged, calls = judge_unmatched(
+            tx,
+            available,
+            client=client,
+            cfg=match_cfg,
+            top_k=top_k,
+            date_window_days=date_window,
+            min_confidence=min_confidence,
+        )
+        calls_used += calls
+        if judged is None:
+            continue
+        outcome.judgment_required.append(judged)
+        rescued_tx.add(tx_id)
+        claimed_docs.add(judged.document_id)
+
+    if not rescued_tx:
+        logger.info(
+            "second-chance pass: no rescue from %d LLM call(s)", calls_used
+        )
+        return
+
+    # In-place: MatchOutcome is frozen (E6), so revise the same list objects.
+    outcome.unmatched_transactions[:] = [
+        tx_id for tx_id in outcome.unmatched_transactions if tx_id not in rescued_tx
+    ]
+    outcome.unmatched_receipts[:] = [
+        doc for doc in outcome.unmatched_receipts if doc not in claimed_docs
+    ]
+    logger.info(
+        "second-chance pass: %d transaction(s) moved to judgment from "
+        "%d LLM call(s)", len(rescued_tx), calls_used,
+    )
 
 
 @dataclass
@@ -412,9 +576,20 @@ def reconcile(
         "ingested %d transactions, %d receipts", len(transactions), len(receipts)
     )
 
+    # WS2 (2026-07-21): read the report PDF's receipt IMAGES with vision and
+    # attach each receipt's real merchant + line items to its EXPENSE SUMMARY
+    # row BEFORE categorization, so the ~half of summary rows with no printed
+    # vendor take the vendor-aware / LINE categorization path instead of REVIEW.
+    # Gated by `categorization.vision_receipts` + an LLM client; a no-op
+    # otherwise (the summary stays the deterministic backbone for matching).
+    _stage("receipt-images")
+    receipts, vision_issues = _apply_vision_receipts(
+        cfg, config_dir, receipts, llm_client
+    )
+
     parse_errors: list[tuple[str, int, str]] = [
         (issue.file_name, issue.line_number, issue.message)
-        for issue in (*stmt_issues, *receipt_issues)
+        for issue in (*stmt_issues, *receipt_issues, *vision_issues)
     ]
     if parse_errors:
         logger.warning("%d parse error(s) — see Errors sheet", len(parse_errors))
@@ -425,15 +600,23 @@ def reconcile(
     # cached CSV) and narrow it to the owner-approved operating-expense
     # groups, so the categorizer picks a real Zoho leaf account per LD-2.
     chart_of_accounts, zoho_cfg = _build_chart_of_accounts(cfg, config_dir)
-    account_labels: list[str] | None = None
-    if chart_of_accounts is not None:
-        postable = chart_of_accounts.postable_expense_accounts(
-            scope_groups=zoho_cfg.get("scope_groups")
-        )
-        account_labels = chart_of_accounts.llm_account_labels(postable)
+    # WS2 (2026-07-21): when there is no `zoho:` block (the hosted web run,
+    # built from an upload form) fall back to the per-entity `coa_validation`
+    # chart the COA-gate provisioning injects, so the categorizer gets the
+    # in-scope account labels AND the root-group adjudication has a chart to
+    # resolve against on hosted runs. Without this the account override and
+    # the adjudication were no-ops on every hosted upload (only the CLI's
+    # explicit `zoho:` block wired a chart).
+    cat_chart, account_labels, scope_groups = _resolve_categorizer_chart(
+        cfg, config_dir, chart_of_accounts, zoho_cfg
+    )
+    # The categorizer chart (COA-validation fallback included) is the one the
+    # export + workbench should see as "the run's chart".
+    chart_of_accounts = cat_chart
+    if cat_chart is not None and account_labels is not None:
         logger.info(
             "chart of accounts: %d accounts, %d in-scope postable",
-            len(chart_of_accounts), len(postable),
+            len(cat_chart), len(account_labels),
         )
 
     # BLUEPRINT LD-2: categorize per line item BEFORE matching so the
@@ -442,10 +625,28 @@ def reconcile(
     # vendor-fallback path to Tier-1 LEARNED; a good line read still wins.
     if learned is None:
         learned = _load_learned(cfg, config_dir)
+    # 2026-07-21 owner decision: when categorization.override_er_category is
+    # set, the tool's own category + account are authoritative and the Zoho
+    # report's often-wrong GL account no longer clobbers a correct pick.
+    # Default False preserves the 2026-06-16 "report is authoritative" rule.
+    override_er_category = bool(
+        (cfg.get("categorization") or {}).get("override_er_category", False)
+    )
     _stage("categorizing")
     receipts = categorize_receipts(
-        receipts, client=llm_client, chart_of_accounts=account_labels, learned=learned
+        receipts, client=llm_client, chart_of_accounts=account_labels, learned=learned,
+        override_er_category=override_er_category,
     )
+
+    # WS2 (2026-07-21): top-level adjudication. Under override_er_category the
+    # tool's account no longer wins unconditionally -- only on a HEAVY mismatch
+    # (a different Zoho root-group between the tool's pick and the report's
+    # category). Same root-group => the report's category is kept. Deterministic
+    # (no LLM call); runs only with a chart to resolve root-groups against.
+    if override_er_category and cat_chart is not None:
+        receipts = adjudicate_receipts(
+            receipts, cat_chart, scope_groups=scope_groups
+        )
 
     # PR 2c: learned vendor aliases + per-merchant FX feed match scoring /
     # tie-break (never bucket membership). Empty memory => default config.
@@ -456,14 +657,8 @@ def reconcile(
     match_cfg = None
     tuning_path = (cfg.get("matching") or {}).get("tuning_path")
     if tuning_path:
-        from .matching.deterministic import MatchingConfig
-
         match_cfg = MatchingConfig.from_file(config_dir / tuning_path)
     if match_memory:
-        from dataclasses import replace
-
-        from .matching.deterministic import MatchingConfig
-
         match_cfg = replace(
             match_cfg or MatchingConfig(),
             vendor_aliases=match_memory.vendor_aliases,
@@ -485,6 +680,12 @@ def reconcile(
     rec_by_id = {r.document_id: r for r in receipts}
     _apply_judgment(outcome, tx_by_id, rec_by_id, llm_client)
     _apply_ambiguous_judgment(outcome, tx_by_id, rec_by_id, llm_client)
+    # WS3: opt-in second chance for the leftovers, after the deterministic
+    # buckets are settled so it only ever sees genuinely free receipts.
+    _apply_unmatched_judgment(
+        outcome, transactions, receipts, llm_client,
+        match_cfg or MatchingConfig(), cfg,
+    )
 
     # Slice 10: categorize the receiptless charges (unmatched after
     # judgment). Reads the outcome only; the result is a side-map so no
@@ -496,6 +697,7 @@ def reconcile(
         client=llm_client,
         chart_of_accounts=account_labels,
         learned=learned,
+        override_er_category=override_er_category,
     )
     if charge_categorizations:
         n_categorized = sum(
@@ -1010,6 +1212,55 @@ def _build_chart_of_accounts(
             f"config.zoho.coa_source {source!r} not supported (use 'api' or 'csv')"
         )
     return coa, z
+
+
+def _resolve_categorizer_chart(
+    cfg: dict,
+    config_dir: Path,
+    chart_of_accounts: ChartOfAccounts | None,
+    zoho_cfg: dict,
+) -> tuple[ChartOfAccounts | None, list[str] | None, list[str] | None]:
+    """Resolve the chart + in-scope account labels + scope_groups the
+    categorizer and the WS2 adjudication use.
+
+    Prefers the `zoho:` block's chart (the CLI path). When there is none — the
+    hosted web run built from an upload form carries only the per-entity
+    `coa_validation` block the COA-gate provisioning injects — it builds the
+    chart from THAT block instead, so the account override and the root-group
+    adjudication fire on hosted runs (previously no-ops there). Returns
+    `(None, None, None)` when no chart can be built. Fail-open on the fallback:
+    a bad `coa_validation` chart leaves the categorizer label-less rather than
+    breaking the run (the export-time gate reports the real error separately).
+    """
+    if chart_of_accounts is not None:
+        scope = zoho_cfg.get("scope_groups")
+        postable = chart_of_accounts.postable_expense_accounts(scope_groups=scope)
+        return chart_of_accounts, chart_of_accounts.llm_account_labels(postable), scope
+
+    block = cfg.get("coa_validation")
+    if not (
+        isinstance(block, dict)
+        and block.get("enabled", True)
+        and block.get("chart_path")
+        and block.get("org_id")
+    ):
+        return None, None, None
+
+    from .coa_gate import load_entity_chart
+
+    try:
+        chart_path = (config_dir / block["chart_path"]).resolve()
+        chart = load_entity_chart(chart_path, block["org_id"])
+    except (KeyError, FileNotFoundError, ValueError, OSError) as exc:
+        logger.warning(
+            "categorizer chart from coa_validation failed (%s); "
+            "categorizing without account labels", exc,
+        )
+        return None, None, None
+
+    scope = block.get("scope_groups")
+    postable = chart.postable_expense_accounts(scope_groups=scope)
+    return chart, chart.llm_account_labels(postable), scope
 
 
 def _build_coa_gate(cfg: dict, config_dir: Path):

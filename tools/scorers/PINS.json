@@ -1,14 +1,29 @@
 {
+  "gtm-roi-v2.py": {
+    "direction": "maximize",
+    "pinned": "2026-07-21",
+    "sha": "b6e0e17bf0c3ec5df658d70e8df71ae55bbe53f6"
+  },
   "gtm-roi.py": {
     "direction": "maximize",
     "pinned": "2026-07-21",
     "pr": 0,
     "sha": "d70ae527db3dbcc28db75ca43840342dd5cbb59d"
   },
+  "leadgen-portfolio.py": {
+    "direction": "maximize",
+    "pinned": "2026-07-21",
+    "sha": "adad0c2350a0690e6e631cdd6601f6f63565445a"
+  },
   "page-weight.py": {
     "direction": "minimize",
     "pinned": "2026-07-17",
     "pr": 247,
     "sha": "f8ab2bfcbd07326fbecc34011ed0e498657688f3"
+  },
+  "pricing-tiers.py": {
+    "direction": "maximize",
+    "pinned": "2026-07-21",
+    "sha": "e5327b0204087663a5b85e92276e08901bc2ecd0"
   }
 }

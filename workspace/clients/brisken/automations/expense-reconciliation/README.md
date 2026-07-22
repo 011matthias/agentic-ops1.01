@@ -305,7 +305,8 @@ to the config file's directory:
     "column_map": {
       "transaction_date": "Date",
       "amount": "Amount",
-      "vendor": "Description"
+      "vendor": "Description",
+      "card": "Card"
     },
     "sheet_name": null
   },
@@ -316,6 +317,31 @@ to the config file's directory:
   "output": { "path": "report-may.xlsx" }
 }
 ```
+
+**Map `card` whenever the export prints one.** A statement that spans
+several cards (Chase prints 2838 / 3645 / 3876 / 0340 in a `Card` column)
+otherwise looks like a single card to the matcher, and a charge on one
+card is free to pair with a receipt the expense report says was paid on
+another. The hosted upload path guesses this column automatically; a
+hand-written `run.json` has to name it. The statement PDF parser needs no
+mapping, since its per-card cycle markers already carry the identity.
+
+Optional `matching` block:
+
+```json
+"matching": {
+  "tuning_path": "match-tuning.json",
+  "llm_second_pass_unmatched": false
+}
+```
+
+`llm_second_pass_unmatched` (default off) asks the model about a bounded
+shortlist of leftover receipts for each unmatched charge, to catch a real
+FX pair whose implied rate fell outside the deterministic band. It only
+ever moves a charge from unmatched into the review queue; it never
+auto-matches. Bounded by `llm_second_pass_top_k` (3),
+`llm_second_pass_max_calls` (40), `llm_second_pass_min_confidence` (0.6),
+and `llm_second_pass_date_window_days` (the FX date window).
 
 Receipts CSV columns (header row):
 

@@ -6,45 +6,44 @@
 <title>Workflow -- Email Compliance Monitor | UnpauseAI</title>
 <style>
 :root {
-    --bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
-    --blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
-    --purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
-    --green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
-    --orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
-    --border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
-    --nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
-    --th-bg: #1e40af;
+--bg: #ffffff; --text: #1a1a1a; --text2: #6b7280; --text-strong: #111827;
+--blue: #2563eb; --blue-dark: #1e40af; --blue-light: #dbeafe; --blue-bg: #eff6ff;
+--purple: #7c3aed; --purple-light: #ede9fe; --purple-bg: #f5f3ff; --purple-dark: #5b21b6;
+--green: #059669; --green-light: #d1fae5; --green-bg: #ecfdf5; --green-dark: #047857;
+--orange: #d97706; --orange-light: #fef3c7; --orange-bg: #fffbeb; --orange-dark: #b45309;
+--border: #e5e7eb; --surface: #f8fafc; --surface2: #f1f5f9;
+--nav-bg: #ffffff; --card-shadow: 0 1px 3px rgba(0,0,0,.08);
+--th-bg: #1e40af;
 }
 [data-theme="dark"] {
-    --bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
-    --blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
-    --purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
-    --green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
-    --orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
-    --border: #334155; --surface: #1e293b; --surface2: #1e293b;
-    --nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
-    --th-bg: #1e3a5f;
+--bg: #0f172a; --text: #e2e8f0; --text2: #94a3b8; --text-strong: #f1f5f9;
+--blue: #3b82f6; --blue-dark: #93c5fd; --blue-light: #1e3a5f; --blue-bg: #172554;
+--purple: #a78bfa; --purple-light: #2e1065; --purple-bg: #1e1040; --purple-dark: #c4b5fd;
+--green: #34d399; --green-light: #064e3b; --green-bg: #022c22; --green-dark: #6ee7b7;
+--orange: #fbbf24; --orange-light: #78350f; --orange-bg: #451a03; --orange-dark: #fcd34d;
+--border: #334155; --surface: #1e293b; --surface2: #1e293b;
+--nav-bg: #1e293b; --card-shadow: 0 1px 3px rgba(0,0,0,.3);
+--th-bg: #1e3a5f;
 }
 @media print {
-    .site-nav, .sidebar, .mobile-nav-toggle, .cta-section { display: none !important; }
-    .main-content { margin-left: 0 !important; }
-    body { padding-top: 0 !important; }
-    h2 { page-break-before: always; }
-    h2:first-of-type { page-break-before: avoid; }
+.site-nav, .sidebar, .mobile-nav-toggle, .cta-section { display: none !important; }
+.main-content { margin-left: 0 !important; }
+body { padding-top: 0 !important; }
+h2 { page-break-before: always; }
+h2:first-of-type { page-break-before: avoid; }
 }
 * { box-sizing: border-box; margin: 0; }
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
-    transition: background .2s, color .2s;
+font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+color: var(--text); background: var(--bg); line-height: 1.65; font-size: 15px;
+transition: background .2s, color .2s;
 }
-
 /* Navigation */
 .site-nav {
-    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
-    background: var(--nav-bg); border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
+position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+background: var(--nav-bg); border-bottom: 1px solid var(--border);
+display: flex; align-items: center; justify-content: space-between;
+padding: 0 24px; height: 56px; box-shadow: var(--card-shadow); transition: background .2s;
 }
 .nav-left { display: flex; align-items: center; gap: 12px; }
 .nav-logo { display: flex; align-items: center; gap: 6px; font-size: 15px; text-decoration: none; }
@@ -54,66 +53,63 @@ body {
 .nav-client { font-size: 14px; font-weight: 600; color: var(--text); }
 .nav-links { display: flex; gap: 2px; }
 .nav-links a {
-    font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
-    color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
+font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 6px;
+color: var(--text2); text-decoration: none; transition: background .15s, color .15s;
 }
 .nav-links a:hover { background: var(--surface2); color: var(--text); }
 .nav-links a.active { background: var(--blue-light); color: var(--blue); font-weight: 700; }
 .nav-right { display: flex; align-items: center; gap: 8px; }
 .nav-status {
-    display: inline-flex; align-items: center; gap: 5px;
-    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
-    background: var(--blue-light); color: var(--blue);
+display: inline-flex; align-items: center; gap: 5px;
+padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+background: var(--blue-light); color: var(--blue);
 }
 @keyframes navpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 .nav-theme {
-    background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 6px; padding: 4px 10px; cursor: pointer;
-    font-size: 13px; color: var(--text2); transition: background .15s;
+background: var(--surface2); border: 1px solid var(--border);
+border-radius: 6px; padding: 4px 10px; cursor: pointer;
+font-size: 13px; color: var(--text2); transition: background .15s;
 }
 .nav-theme:hover { background: var(--border); }
-
 /* Sidebar */
 .sidebar {
-    position: fixed; top: 56px; left: 0; width: 220px;
-    height: calc(100vh - 56px); overflow-y: auto;
-    background: var(--nav-bg); border-right: 1px solid var(--border);
-    padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
+position: fixed; top: 56px; left: 0; width: 220px;
+height: calc(100vh - 56px); overflow-y: auto;
+background: var(--nav-bg); border-right: 1px solid var(--border);
+padding: 20px 0; z-index: 50; transition: transform .25s, background .2s;
 }
 .sidebar-label {
-    font-size: 10px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
+font-size: 10px; font-weight: 700; text-transform: uppercase;
+letter-spacing: .06em; color: var(--text2); padding: 0 16px; margin-bottom: 12px;
 }
 .step-list { list-style: none; padding: 0; }
 .step-item { position: relative; }
 .step-link {
-    display: flex; align-items: center; gap: 10px;
-    padding: 8px 16px; font-size: 13px; font-weight: 500;
-    color: var(--text2); text-decoration: none; transition: all .15s;
-    border-left: 3px solid transparent;
+display: flex; align-items: center; gap: 10px;
+padding: 8px 16px; font-size: 13px; font-weight: 500;
+color: var(--text2); text-decoration: none; transition: all .15s;
+border-left: 3px solid transparent;
 }
 .step-link:hover { background: var(--surface2); color: var(--text); }
 .step-link.active { background: var(--blue-light); color: var(--blue-dark); border-left-color: var(--blue); font-weight: 700; }
 .step-num {
-    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
-    flex-shrink: 0; transition: all .15s;
+width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+font-size: 11px; font-weight: 700; border: 2px solid var(--border); color: var(--text2);
+flex-shrink: 0; transition: all .15s;
 }
 .step-link.active .step-num { border-color: var(--blue); background: var(--blue); color: #fff; }
 .step-line {
-    position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
-    background: var(--border);
+position: absolute; left: 26px; top: 38px; width: 2px; height: calc(100% - 30px);
+background: var(--border);
 }
 .step-item:last-child .step-line { display: none; }
-
 /* Main Content */
 .main-content { margin-left: 220px; padding: 56px 0 0 0; }
 .content-inner { max-width: 800px; margin: 0 auto; padding: 40px 30px 60px; }
-
 /* Sections */
 h2 {
-    font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
-    padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
+font-size: 22px; color: var(--blue-dark); border-bottom: 2px solid var(--blue);
+padding-bottom: 8px; margin-top: 56px; margin-bottom: 20px; scroll-margin-top: 80px;
 }
 h3 { font-size: 17px; color: var(--text2); margin-top: 28px; margin-bottom: 12px; scroll-margin-top: 80px; }
 p { margin-bottom: 16px; color: var(--text); }
@@ -122,11 +118,10 @@ a:hover { text-decoration: underline; }
 strong { color: var(--text-strong); }
 ul, ol { padding-left: 24px; margin-bottom: 16px; }
 li { margin-bottom: 6px; }
-
 /* Callout */
 .callout {
-    border-left: 4px solid var(--blue); background: var(--blue-bg);
-    padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
+border-left: 4px solid var(--blue); background: var(--blue-bg);
+padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 24px 0;
 }
 .callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
 .callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
@@ -134,37 +129,34 @@ li { margin-bottom: 6px; }
 .callout.green .callout-title, .callout.green p { color: var(--green-dark); }
 .callout.orange { border-color: var(--orange); background: var(--orange-bg); }
 .callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
-
 /* Table */
 table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
 th { background: var(--th-bg); color: #fff; text-align: left; padding: 10px 14px; font-weight: 600; }
 td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
 tr:nth-child(even) td { background: var(--surface); }
 tr:hover td { background: var(--blue-bg); }
-
 /* Flow Diagram */
 .flow-diagram {
-    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-    margin: 24px 0; padding: 20px; border-radius: 12px;
-    border: 2px solid var(--blue); background: var(--blue-bg);
-    font-size: 13px;
+display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+margin: 24px 0; padding: 20px; border-radius: 12px;
+border: 2px solid var(--blue); background: var(--blue-bg);
+font-size: 13px;
 }
 .flow-node {
-    padding: 6px 12px; border-radius: 6px; font-weight: 600;
-    background: var(--surface); border: 1px solid var(--border); color: var(--text-strong);
+padding: 6px 12px; border-radius: 6px; font-weight: 600;
+background: var(--surface); border: 1px solid var(--border); color: var(--text-strong);
 }
 .flow-node.start { background: var(--blue); color: #fff; border-color: var(--blue); }
 .flow-node.ai { background: var(--purple); color: #fff; border-color: var(--purple); }
 .flow-node.end { background: var(--green); color: #fff; border-color: var(--green); }
 .flow-arrow { color: var(--text2); }
-
 /* Architecture Diagram */
 .arch-diagram {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 24px 0;
+display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 24px 0;
 }
 .arch-box {
-    padding: 20px; border-radius: 12px; border: 2px solid var(--border);
-    background: var(--surface);
+padding: 20px; border-radius: 12px; border: 2px solid var(--border);
+background: var(--surface);
 }
 .arch-box h4 { font-size: 14px; font-weight: 700; margin-bottom: 8px; }
 .arch-box.sys1 { border-color: var(--blue); }
@@ -179,41 +171,39 @@ tr:hover td { background: var(--blue-bg); }
 .arch-box.sys1 ul li::before { background: var(--blue); }
 .arch-box.sys2 ul li::before { background: var(--purple); }
 .arch-box.shared ul li::before { background: var(--green); }
-
 /* Lifecycle */
 .lifecycle {
-    display: flex; gap: 4px; margin: 24px 0; flex-wrap: wrap; align-items: center;
+display: flex; gap: 4px; margin: 24px 0; flex-wrap: wrap; align-items: center;
 }
 .lc-stage {
-    padding: 12px 16px; border-radius: 8px; text-align: center;
-    border: 1px solid var(--border); background: var(--surface); flex: 1; min-width: 100px;
+padding: 12px 16px; border-radius: 8px; text-align: center;
+border: 1px solid var(--border); background: var(--surface); flex: 1; min-width: 100px;
 }
 .lc-stage .lc-name { font-size: 13px; font-weight: 700; color: var(--text-strong); }
 .lc-stage .lc-note { font-size: 11px; color: var(--text2); margin-top: 4px; }
 .lc-arrow { color: var(--text2); font-size: 18px; flex-shrink: 0; }
-
 /* Demo */
 .demo-section {
-    padding: 24px; border-radius: 12px; border: 2px solid var(--blue);
-    background: var(--blue-bg); margin: 24px 0;
+padding: 24px; border-radius: 12px; border: 2px solid var(--blue);
+background: var(--blue-bg); margin: 24px 0;
 }
 .demo-section h3 { color: var(--blue-dark); margin-top: 0; }
 .demo-textarea {
-    width: 100%; min-height: 100px; padding: 12px; border: 1px solid var(--border);
-    border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical;
-    background: var(--bg); color: var(--text); margin-bottom: 12px;
+width: 100%; min-height: 100px; padding: 12px; border: 1px solid var(--border);
+border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical;
+background: var(--bg); color: var(--text); margin-bottom: 12px;
 }
 .demo-btn {
-    display: inline-flex; align-items: center; gap: 8px;
-    background: var(--blue); color: #fff; padding: 10px 24px; border-radius: 8px;
-    font-size: 14px; font-weight: 600; border: none; cursor: pointer;
-    transition: background .15s;
+display: inline-flex; align-items: center; gap: 8px;
+background: var(--blue); color: #fff; padding: 10px 24px; border-radius: 8px;
+font-size: 14px; font-weight: 600; border: none; cursor: pointer;
+transition: background .15s;
 }
 .demo-btn:hover { background: var(--blue-dark); }
 .demo-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .demo-result {
-    margin-top: 16px; padding: 16px; border-radius: 8px;
-    background: var(--bg); border: 1px solid var(--border); min-height: 40px;
+margin-top: 16px; padding: 16px; border-radius: 8px;
+background: var(--bg); border: 1px solid var(--border); min-height: 40px;
 }
 .demo-result .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .demo-result .result-item { padding: 8px 12px; border-radius: 6px; background: var(--surface); }
@@ -221,386 +211,340 @@ tr:hover td { background: var(--blue-bg); }
 .demo-result .result-value { font-size: 14px; font-weight: 600; color: var(--text-strong); }
 .demo-result .result-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .demo-result .tag { padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; background: var(--orange-light); color: var(--orange-dark); }
-
 /* Footer */
 .footer { text-align: center; color: var(--text2); font-size: 13px; padding: 20px 0 40px; }
-
 /* Tablet */
 @media (max-width: 1100px) {
-    .nav-links a { font-size: 12px; padding: 5px 8px; }
-    .nav-status { display: none; }
+.nav-links a { font-size: 12px; padding: 5px 8px; }
+.nav-status { display: none; }
 }
-
 /* Mobile */
 .mobile-nav-toggle { display: none; background: none; border: none; cursor: pointer; padding: 8px; color: var(--text); }
 @media (max-width: 768px) {
-    .sidebar { transform: translateX(-100%); width: 260px; }
-    .sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
-    .main-content { margin-left: 0 !important; }
-    .mobile-nav-toggle { display: block; }
-    .nav-links { display: none; }
-    .arch-diagram { grid-template-columns: 1fr; }
-    .arch-box.shared { grid-column: auto; }
-    .flow-diagram { flex-direction: column; align-items: stretch; }
-    .flow-arrow { text-align: center; transform: rotate(90deg); }
-    .lifecycle { flex-direction: column; }
-    .lc-arrow { transform: rotate(90deg); text-align: center; }
-    .demo-result .result-grid { grid-template-columns: 1fr; }
+.sidebar { transform: translateX(-100%); width: 260px; }
+.sidebar.open { transform: translateX(0); box-shadow: 4px 0 12px rgba(0,0,0,.1); }
+.main-content { margin-left: 0 !important; }
+.mobile-nav-toggle { display: block; }
+.nav-links { display: none; }
+.arch-diagram { grid-template-columns: 1fr; }
+.arch-box.shared { grid-column: auto; }
+.flow-diagram { flex-direction: column; align-items: stretch; }
+.flow-arrow { text-align: center; transform: rotate(90deg); }
+.lifecycle { flex-direction: column; }
+.lc-arrow { transform: rotate(90deg); text-align: center; }
+.demo-result .result-grid { grid-template-columns: 1fr; }
 }
 </style>
-<script>
-(function(){var t=localStorage.getItem('oec-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();
-</script>
+<script>(function(){var t=localStorage.getItem('oec-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark')})();</script>
 </head>
 <body>
-
-<!-- Navigation -->
 <nav class="site-nav">
-    <div class="nav-left">
-        <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
-        </button>
-        <a href="/clients/openwebui-email-compliance/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
-        <span class="nav-sep">|</span>
-        <span class="nav-client">Email Compliance Monitor</span>
-    </div>
-    <div class="nav-links">
-        <a href="/clients/openwebui-email-compliance/">Overview</a>
-        <a href="/clients/openwebui-email-compliance/solution">Solution</a>
-        <a href="/clients/openwebui-email-compliance/workflow" class="active">Workflow</a>
-        <a href="/clients/openwebui-email-compliance/timeline">Timeline</a>
-        <a href="/clients/openwebui-email-compliance/investment">Investment</a>
-        <a href="/clients/openwebui-email-compliance/faq">FAQ</a>
-        <a href="/clients/openwebui-email-compliance/gdpr">GDPR</a>
-        <a href="/clients/openwebui-email-compliance/onboarding">Onboarding</a>
-    </div>
-    <div class="nav-right">
-        <span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
-        <button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
-    </div>
+<div class="nav-left">
+<button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')" aria-label="Menu">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+</button>
+<a href="/clients/openwebui-email-compliance/" class="nav-logo"><span class="logo-bold">Unpause</span><span class="logo-accent">AI</span></a>
+<span class="nav-sep">|</span>
+<span class="nav-client">Email Compliance Monitor</span>
+</div>
+<div class="nav-links">
+<a href="/clients/openwebui-email-compliance/">Overview</a>
+<a href="/clients/openwebui-email-compliance/solution">Solution</a>
+<a href="/clients/openwebui-email-compliance/workflow" class="active">Workflow</a>
+<a href="/clients/openwebui-email-compliance/timeline">Timeline</a>
+<a href="/clients/openwebui-email-compliance/investment">Investment</a>
+<a href="/clients/openwebui-email-compliance/faq">FAQ</a>
+<a href="/clients/openwebui-email-compliance/gdpr">GDPR</a>
+<a href="/clients/openwebui-email-compliance/onboarding">Onboarding</a>
+</div>
+<div class="nav-right">
+<span class="nav-status"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;animation:navpulse 2s infinite"></span> Proposal</span>
+<button class="nav-theme" onclick="toggleTheme()">Toggle theme</button>
+</div>
 </nav>
-
-<!-- Sidebar -->
 <aside class="sidebar">
-    <div class="sidebar-label">Workflow details</div>
-    <ul class="step-list">
-        <li class="step-item">
-            <a href="#architecture" class="step-link active"><span class="step-num">1</span> Architecture</a>
-            <div class="step-line"></div>
-        </li>
-        <li class="step-item">
-            <a href="#email-flow" class="step-link"><span class="step-num">2</span> Email Flow</a>
-            <div class="step-line"></div>
-        </li>
-        <li class="step-item">
-            <a href="#data-flow" class="step-link"><span class="step-num">3</span> Data Flow</a>
-            <div class="step-line"></div>
-        </li>
-        <li class="step-item">
-            <a href="#gdpr-lifecycle" class="step-link"><span class="step-num">4</span> GDPR Lifecycle</a>
-            <div class="step-line"></div>
-        </li>
-        <li class="step-item">
-            <a href="#demo" class="step-link"><span class="step-num">5</span> Live Demo</a>
-        </li>
-    </ul>
+<div class="sidebar-label">Workflow details</div>
+<ul class="step-list">
+<li class="step-item">
+<a href="#architecture" class="step-link active"><span class="step-num">1</span> Architecture</a>
+<div class="step-line"></div>
+</li>
+<li class="step-item">
+<a href="#email-flow" class="step-link"><span class="step-num">2</span> Email Flow</a>
+<div class="step-line"></div>
+</li>
+<li class="step-item">
+<a href="#data-flow" class="step-link"><span class="step-num">3</span> Data Flow</a>
+<div class="step-line"></div>
+</li>
+<li class="step-item">
+<a href="#gdpr-lifecycle" class="step-link"><span class="step-num">4</span> GDPR Lifecycle</a>
+<div class="step-line"></div>
+</li>
+<li class="step-item">
+<a href="#demo" class="step-link"><span class="step-num">5</span> Live Demo</a>
+</li>
+</ul>
 </aside>
-
-<!-- Main Content -->
 <div class="main-content">
 <div class="content-inner">
-
 <h2 id="architecture" style="margin-top:24px">System Architecture</h2>
 <p>Two independent systems sharing a common infrastructure layer. Each can operate on its own, but together they give your team both automated email intelligence and an internal AI assistant.</p>
-
 <div class="arch-diagram">
-    <div class="arch-box sys1">
-        <h4>System 1: Email Compliance Monitor</h4>
-        <ul>
-            <li>M365/Gmail event subscription</li>
-            <li>Pre-processing + PII stripping</li>
-            <li>Claude API analysis (zero retention)</li>
-            <li>Severity-based alert routing</li>
-            <li>Automated retention lifecycle</li>
-        </ul>
-    </div>
-    <div class="arch-box sys2">
-        <h4>System 2: AI Chat Interface</h4>
-        <ul>
-            <li>Open WebUI (self-hosted on AWS)</li>
-            <li>Staff authentication + roles</li>
-            <li>Anthropic Claude API backend</li>
-            <li>Per-user conversation history</li>
-            <li>Usage tracking + cost controls</li>
-        </ul>
-    </div>
-    <div class="arch-box shared">
-        <h4>Shared Infrastructure</h4>
-        <ul>
-            <li>AWS hosting (EC2/ECS + supporting services)</li>
-            <li>CloudWatch monitoring + billing alerts</li>
-            <li>Retry logic + dead letter queue</li>
-            <li>GDPR compliance layer (DPIA, audit trail, retention automation)</li>
-        </ul>
-    </div>
+<div class="arch-box sys1">
+<h4>System 1: Email Compliance Monitor</h4>
+<ul>
+<li>M365/Gmail event subscription</li>
+<li>Pre-processing + PII stripping</li>
+<li>Claude API analysis (zero retention)</li>
+<li>Severity-based alert routing</li>
+<li>Automated retention lifecycle</li>
+</ul>
 </div>
-
+<div class="arch-box sys2">
+<h4>System 2: AI Chat Interface</h4>
+<ul>
+<li>Open WebUI (self-hosted on AWS)</li>
+<li>Staff authentication + roles</li>
+<li>Anthropic Claude API backend</li>
+<li>Per-user conversation history</li>
+<li>Usage tracking + cost controls</li>
+</ul>
+</div>
+<div class="arch-box shared">
+<h4>Shared Infrastructure</h4>
+<ul>
+<li>AWS hosting (EC2/ECS + supporting services)</li>
+<li>CloudWatch monitoring + billing alerts</li>
+<li>Retry logic + dead letter queue</li>
+<li>GDPR compliance layer (DPIA, audit trail, retention automation)</li>
+</ul>
+</div>
+</div>
 <h2 id="email-flow">Email Processing Flow</h2>
 <p>Here's exactly what happens when an email arrives in the monitored mailbox, step by step.</p>
-
 <div class="flow-diagram">
-    <span class="flow-node start">New Email</span>
-    <span class="flow-arrow">&rarr;</span>
-    <span class="flow-node">Event Webhook</span>
-    <span class="flow-arrow">&rarr;</span>
-    <span class="flow-node">Extract Body</span>
-    <span class="flow-arrow">&rarr;</span>
-    <span class="flow-node">Strip PII</span>
-    <span class="flow-arrow">&rarr;</span>
-    <span class="flow-node ai">Claude Analysis</span>
-    <span class="flow-arrow">&rarr;</span>
-    <span class="flow-node">Score + Tag</span>
-    <span class="flow-arrow">&rarr;</span>
-    <span class="flow-node">Route by Severity</span>
-    <span class="flow-arrow">&rarr;</span>
-    <span class="flow-node end">Store + Alert</span>
+<span class="flow-node start">New Email</span>
+<span class="flow-arrow">&rarr;</span>
+<span class="flow-node">Event Webhook</span>
+<span class="flow-arrow">&rarr;</span>
+<span class="flow-node">Extract Body</span>
+<span class="flow-arrow">&rarr;</span>
+<span class="flow-node">Strip PII</span>
+<span class="flow-arrow">&rarr;</span>
+<span class="flow-node ai">Claude Analysis</span>
+<span class="flow-arrow">&rarr;</span>
+<span class="flow-node">Score + Tag</span>
+<span class="flow-arrow">&rarr;</span>
+<span class="flow-node">Route by Severity</span>
+<span class="flow-arrow">&rarr;</span>
+<span class="flow-node end">Store + Alert</span>
 </div>
-
 <h3>Step-by-step breakdown</h3>
 <ol>
-    <li><strong>New Email arrives</strong> -- Microsoft Graph or Gmail API sends a push notification to your AWS endpoint. No polling, no delay.</li>
-    <li><strong>Event Webhook receives</strong> -- Lambda function (or container) picks up the event, validates the signature, and fetches the email content.</li>
-    <li><strong>Extract Body</strong> -- HTML is parsed to plain text. Attachments are noted but not processed (configurable). Headers are extracted for metadata.</li>
-    <li><strong>Strip PII</strong> -- Names, phone numbers, email addresses, and other identifiable data are masked before the content reaches the AI. Original is stored separately under access controls.</li>
-    <li><strong>Claude Analysis</strong> -- Sanitized content is sent to Anthropic's API with zero-retention enabled. Claude returns sentiment, complaint detection, tags, severity, and recommended action.</li>
-    <li><strong>Score + Tag</strong> -- The AI output is validated and normalized. Confidence scores below your threshold are flagged for manual review instead of auto-routing.</li>
-    <li><strong>Route by Severity</strong> -- Severity 4-5 triggers immediate alerts. Severity 3 goes to the daily digest queue. Severity 1-2 is logged silently.</li>
-    <li><strong>Store + Alert</strong> -- Results land in your data store with the full audit trail. Alerts fire to Slack and/or email based on your configuration.</li>
+<li><strong>New Email arrives</strong> -- Microsoft Graph or Gmail API sends a push notification to your AWS endpoint. No polling, no delay.</li>
+<li><strong>Event Webhook receives</strong> -- Lambda function (or container) picks up the event, validates the signature, and fetches the email content.</li>
+<li><strong>Extract Body</strong> -- HTML is parsed to plain text. Attachments are noted but not processed (configurable). Headers are extracted for metadata.</li>
+<li><strong>Strip PII</strong> -- Names, phone numbers, email addresses, and other identifiable data are masked before the content reaches the AI. Original is stored separately under access controls.</li>
+<li><strong>Claude Analysis</strong> -- Sanitized content is sent to Anthropic's API with zero-retention enabled. Claude returns sentiment, complaint detection, tags, severity, and recommended action.</li>
+<li><strong>Score + Tag</strong> -- The AI output is validated and normalized. Confidence scores below your threshold are flagged for manual review instead of auto-routing.</li>
+<li><strong>Route by Severity</strong> -- Severity 4-5 triggers immediate alerts. Severity 3 goes to the daily digest queue. Severity 1-2 is logged silently.</li>
+<li><strong>Store + Alert</strong> -- Results land in your data store with the full audit trail. Alerts fire to Slack and/or email based on your configuration.</li>
 </ol>
-
 <div class="callout green">
-    <div class="callout-title">End-to-end latency</div>
-    <p>From email arrival to alert delivery: typically under 30 seconds. The Claude API call is the longest step (~2-5 seconds). Everything else is sub-second.</p>
+<div class="callout-title">End-to-end latency</div>
+<p>From email arrival to alert delivery: typically under 30 seconds. The Claude API call is the longest step (~2-5 seconds). Everything else is sub-second.</p>
 </div>
-
 <h2 id="data-flow">Data Flow</h2>
 <p>Understanding where data moves is critical for GDPR. Here's the full picture.</p>
-
 <table>
-    <tr><th>Data Type</th><th>Source</th><th>Destination</th><th>Retention</th><th>GDPR Basis</th></tr>
-    <tr><td>Raw email content</td><td>M365/Gmail</td><td>AWS (encrypted at rest)</td><td>Configurable (default 90 days)</td><td>Legitimate interest</td></tr>
-    <tr><td>Sanitized email text</td><td>Pre-processor</td><td>Anthropic API</td><td>Zero (not retained by Anthropic)</td><td>Legitimate interest</td></tr>
-    <tr><td>Analysis results</td><td>Claude API response</td><td>AWS data store</td><td>Configurable (default 1 year)</td><td>Legitimate interest</td></tr>
-    <tr><td>Alert notifications</td><td>Severity router</td><td>Slack / Email</td><td>Per platform defaults</td><td>Legitimate interest</td></tr>
-    <tr><td>Chat conversations</td><td>Staff input</td><td>Open WebUI (AWS)</td><td>User-controlled deletion</td><td>Consent (staff)</td></tr>
-    <tr><td>Chat API calls</td><td>Open WebUI</td><td>Anthropic API</td><td>Zero (not retained by Anthropic)</td><td>Consent (staff)</td></tr>
-    <tr><td>Audit logs</td><td>All systems</td><td>CloudWatch + S3</td><td>2 years minimum</td><td>Legal obligation</td></tr>
+<tr><th>Data Type</th><th>Source</th><th>Destination</th><th>Retention</th><th>GDPR Basis</th></tr>
+<tr><td>Raw email content</td><td>M365/Gmail</td><td>AWS (encrypted at rest)</td><td>Configurable (default 90 days)</td><td>Legitimate interest</td></tr>
+<tr><td>Sanitized email text</td><td>Pre-processor</td><td>Anthropic API</td><td>Zero (not retained by Anthropic)</td><td>Legitimate interest</td></tr>
+<tr><td>Analysis results</td><td>Claude API response</td><td>AWS data store</td><td>Configurable (default 1 year)</td><td>Legitimate interest</td></tr>
+<tr><td>Alert notifications</td><td>Severity router</td><td>Slack / Email</td><td>Per platform defaults</td><td>Legitimate interest</td></tr>
+<tr><td>Chat conversations</td><td>Staff input</td><td>Open WebUI (AWS)</td><td>User-controlled deletion</td><td>Consent (staff)</td></tr>
+<tr><td>Chat API calls</td><td>Open WebUI</td><td>Anthropic API</td><td>Zero (not retained by Anthropic)</td><td>Consent (staff)</td></tr>
+<tr><td>Audit logs</td><td>All systems</td><td>CloudWatch + S3</td><td>2 years minimum</td><td>Legal obligation</td></tr>
 </table>
-
 <div class="callout orange">
-    <div class="callout-title">Key GDPR note</div>
-    <p>The Anthropic API zero-retention setting means email content is processed and returned but never stored on Anthropic's servers. This is critical for the UK-to-US data transfer analysis -- the data transits through US infrastructure but isn't retained there.</p>
+<div class="callout-title">Key GDPR note</div>
+<p>The Anthropic API zero-retention setting means email content is processed and returned but never stored on Anthropic's servers. This is critical for the UK-to-US data transfer analysis -- the data transits through US infrastructure but isn't retained there.</p>
 </div>
-
 <h2 id="gdpr-lifecycle">GDPR Data Lifecycle</h2>
 <p>Every piece of data follows a defined lifecycle. No orphaned records, no forgotten data.</p>
-
 <div class="lifecycle">
-    <div class="lc-stage" style="border-color:var(--blue)">
-        <div class="lc-name" style="color:var(--blue-dark)">Capture</div>
-        <div class="lc-note">Email received, event logged</div>
-    </div>
-    <span class="lc-arrow">&rarr;</span>
-    <div class="lc-stage" style="border-color:var(--purple)">
-        <div class="lc-name" style="color:var(--purple-dark)">Minimize</div>
-        <div class="lc-note">PII stripped, data reduced</div>
-    </div>
-    <span class="lc-arrow">&rarr;</span>
-    <div class="lc-stage" style="border-color:var(--orange)">
-        <div class="lc-name" style="color:var(--orange-dark)">Process</div>
-        <div class="lc-note">AI analysis, zero retention</div>
-    </div>
-    <span class="lc-arrow">&rarr;</span>
-    <div class="lc-stage">
-        <div class="lc-name">Store</div>
-        <div class="lc-note">Encrypted, access-controlled</div>
-    </div>
-    <span class="lc-arrow">&rarr;</span>
-    <div class="lc-stage" style="border-color:var(--green)">
-        <div class="lc-name" style="color:var(--green-dark)">Archive</div>
-        <div class="lc-note">Cold storage after X days</div>
-    </div>
-    <span class="lc-arrow">&rarr;</span>
-    <div class="lc-stage" style="border-color:#dc2626">
-        <div class="lc-name" style="color:#dc2626">Purge</div>
-        <div class="lc-note">Permanent deletion after Y days</div>
-    </div>
+<div class="lc-stage" style="border-color:var(--blue)">
+<div class="lc-name" style="color:var(--blue-dark)">Capture</div>
+<div class="lc-note">Email received, event logged</div>
 </div>
-
+<span class="lc-arrow">&rarr;</span>
+<div class="lc-stage" style="border-color:var(--purple)">
+<div class="lc-name" style="color:var(--purple-dark)">Minimize</div>
+<div class="lc-note">PII stripped, data reduced</div>
+</div>
+<span class="lc-arrow">&rarr;</span>
+<div class="lc-stage" style="border-color:var(--orange)">
+<div class="lc-name" style="color:var(--orange-dark)">Process</div>
+<div class="lc-note">AI analysis, zero retention</div>
+</div>
+<span class="lc-arrow">&rarr;</span>
+<div class="lc-stage">
+<div class="lc-name">Store</div>
+<div class="lc-note">Encrypted, access-controlled</div>
+</div>
+<span class="lc-arrow">&rarr;</span>
+<div class="lc-stage" style="border-color:var(--green)">
+<div class="lc-name" style="color:var(--green-dark)">Archive</div>
+<div class="lc-note">Cold storage after X days</div>
+</div>
+<span class="lc-arrow">&rarr;</span>
+<div class="lc-stage" style="border-color:#dc2626">
+<div class="lc-name" style="color:#dc2626">Purge</div>
+<div class="lc-note">Permanent deletion after Y days</div>
+</div>
+</div>
 <h3>Lifecycle compliance notes</h3>
 <ul>
-    <li><strong>Capture:</strong> Only business email addresses are monitored. Personal accounts are excluded by design.</li>
-    <li><strong>Minimize:</strong> Data minimization happens before AI processing. The AI never sees raw PII unless explicitly configured to (e.g., for name-based complaint tracking).</li>
-    <li><strong>Process:</strong> Anthropic's zero-retention API means no data persistence on their infrastructure. The transfer is documented in the DPIA.</li>
-    <li><strong>Store:</strong> All stored data is encrypted at rest (AES-256) and in transit (TLS 1.2+). Access requires authenticated AWS credentials with role-based permissions.</li>
-    <li><strong>Archive:</strong> After the active retention period, data moves to S3 Glacier or equivalent cold storage. Still accessible for audit purposes, but not for active queries.</li>
-    <li><strong>Purge:</strong> Automated permanent deletion. The audit trail records that deletion happened, but the data itself is irrecoverable. This satisfies the right to erasure requirements.</li>
+<li><strong>Capture:</strong> Only business email addresses are monitored. Personal accounts are excluded by design.</li>
+<li><strong>Minimize:</strong> Data minimization happens before AI processing. The AI never sees raw PII unless explicitly configured to (e.g., for name-based complaint tracking).</li>
+<li><strong>Process:</strong> Anthropic's zero-retention API means no data persistence on their infrastructure. The transfer is documented in the DPIA.</li>
+<li><strong>Store:</strong> All stored data is encrypted at rest (AES-256) and in transit (TLS 1.2+). Access requires authenticated AWS credentials with role-based permissions.</li>
+<li><strong>Archive:</strong> After the active retention period, data moves to S3 Glacier or equivalent cold storage. Still accessible for audit purposes, but not for active queries.</li>
+<li><strong>Purge:</strong> Automated permanent deletion. The audit trail records that deletion happened, but the data itself is irrecoverable. This satisfies the right to erasure requirements.</li>
 </ul>
-
 <h2 id="demo">Live Demo</h2>
 <p>Paste or type an email below to see how the AI analysis works. This calls the same classification logic that the production system will use.</p>
-
 <div class="demo-section">
-    <h3 style="margin-bottom:12px">Email Analysis Demo</h3>
+<h3 style="margin-bottom:12px">Email Analysis Demo</h3>
     <textarea id="demo-input" class="demo-textarea" placeholder="Paste an email here to analyze it...&#10;&#10;Example: I've been waiting two weeks for someone to respond to my complaint about the billing error. If this isn't resolved by Friday, I'll be contacting the Financial Ombudsman.">I've been waiting two weeks for someone to respond to my complaint about the billing error. If this isn't resolved by Friday, I'll be contacting the Financial Ombudsman.</textarea>
     <button class="demo-btn" onclick="runDemo()" id="demo-btn">Analyze Email</button>
-    <div id="demo-result" class="demo-result" style="display:none"></div>
+<div id="demo-result" class="demo-result" style="display:none"></div>
 </div>
-
 <div class="callout">
-    <div class="callout-title">About this demo</div>
-    <p>This demo connects to a live API endpoint. If the endpoint isn't available, it'll show an example result so you can see the output format. In production, this same analysis runs automatically on every incoming email.</p>
+<div class="callout-title">About this demo</div>
+<p>This demo connects to a live API endpoint. If the endpoint isn't available, it'll show an example result so you can see the output format. In production, this same analysis runs automatically on every incoming email.</p>
 </div>
-
 <footer class="footer" style="border-top: 1px solid var(--border); padding: 24px 0 40px;">
-    <p>Built and maintained by <a href="https://unpauseai.com" target="_blank" rel="noopener">UnpauseAI</a></p>
-    <p style="margin-top:4px;"><a href="https://unpauseai.com/privacy">Privacy Policy</a> &middot; <a href="https://unpauseai.com/terms">Terms of Service</a></p>
-    <p style="margin-top:4px; font-size: 12px;">Last updated: March 2026</p>
+<p>Built and maintained by <a href="https://unpauseai.com" target="_blank" rel="noopener">UnpauseAI</a></p>
+<p style="margin-top:4px;"><a href="https://unpauseai.com/privacy">Privacy Policy</a> &middot; <a href="https://unpauseai.com/terms">Terms of Service</a></p>
+<p style="margin-top:4px; font-size: 12px;">Last updated: March 2026</p>
 </footer>
-
 </div>
 </div>
 
-<script>
-function toggleTheme() {
-    var el = document.documentElement;
-    var t = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-    el.setAttribute('data-theme', t);
-    localStorage.setItem('oec-theme', t);
+<script>function toggleTheme() {
+var el = document.documentElement;
+var t = el.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+el.setAttribute('data-theme', t);
+localStorage.setItem('oec-theme', t);
 }
-
 var links = document.querySelectorAll('.step-link');
 var sections = [];
 links.forEach(function(a) {
-    var id = a.getAttribute('href').replace('#','');
-    var el = document.getElementById(id);
-    if (el) sections.push({ el: el, link: a });
+var id = a.getAttribute('href').replace('#','');
+var el = document.getElementById(id);
+if (el) sections.push({ el: el, link: a });
 });
-
 function updateActive() {
-    var scrollY = window.scrollY + 120;
-    var active = sections[0];
-    for (var i = 0; i < sections.length; i++) {
-        if (sections[i].el.offsetTop <= scrollY) active = sections[i];
-    }
-    links.forEach(function(l) { l.classList.remove('active'); });
-    if (active) active.link.classList.add('active');
+var scrollY = window.scrollY + 120;
+var active = sections[0];
+for (var i = 0; i < sections.length; i++) {
+if (sections[i].el.offsetTop <= scrollY) active = sections[i];
+}
+links.forEach(function(l) { l.classList.remove('active'); });
+if (active) active.link.classList.add('active');
 }
 window.addEventListener('scroll', updateActive);
 updateActive();
-
 links.forEach(function(a) {
-    a.addEventListener('click', function(e) {
-        e.preventDefault();
-        var id = this.getAttribute('href').replace('#','');
-        var el = document.getElementById(id);
-        if (el) el.scrollIntoView({ behavior: 'smooth' });
-        document.querySelector('.sidebar').classList.remove('open');
-    });
+a.addEventListener('click', function(e) {
+e.preventDefault();
+var id = this.getAttribute('href').replace('#','');
+var el = document.getElementById(id);
+if (el) el.scrollIntoView({ behavior: 'smooth' });
+document.querySelector('.sidebar').classList.remove('open');
 });
-
+});
 function formatResult(data) {
-    var sentiment = data.sentiment || 'unknown';
-    var complaint = data.complaint_detected ? 'Yes' : 'No';
-    var confidence = data.confidence ? (data.confidence + '%') : 'N/A';
-    var severity = data.severity || 'N/A';
-    var action = data.suggested_action || 'No action suggested';
-    var tags = data.tags || [];
-
-    var sentimentColor = sentiment === 'negative' ? '#dc2626' : sentiment === 'positive' ? 'var(--green)' : 'var(--text2)';
-
-    var html = '<div class="result-grid">';
-    html += '<div class="result-item"><div class="result-label">Sentiment</div><div class="result-value" style="color:' + sentimentColor + '">' + sentiment.charAt(0).toUpperCase() + sentiment.slice(1) + '</div></div>';
-    html += '<div class="result-item"><div class="result-label">Complaint Detected</div><div class="result-value">' + complaint + ' (' + confidence + ')</div></div>';
-    html += '<div class="result-item"><div class="result-label">Severity</div><div class="result-value">' + severity + ' / 5</div></div>';
-    html += '<div class="result-item"><div class="result-label">Suggested Action</div><div class="result-value">' + action + '</div></div>';
-    html += '</div>';
-
-    if (tags.length > 0) {
-        html += '<div class="result-tags" style="margin-top:12px">';
-        for (var i = 0; i < tags.length; i++) {
-            html += '<span class="tag">' + tags[i] + '</span>';
-        }
-        html += '</div>';
-    }
-
-    return html;
+var sentiment = data.sentiment || 'unknown';
+var complaint = data.complaint_detected ? 'Yes' : 'No';
+var confidence = data.confidence ? (data.confidence + '%') : 'N/A';
+var severity = data.severity || 'N/A';
+var action = data.suggested_action || 'No action suggested';
+var tags = data.tags || [];
+var sentimentColor = sentiment === 'negative' ? '#dc2626' : sentiment === 'positive' ? 'var(--green)' : 'var(--text2)';
+var html = '<div class="result-grid">';
+html += '<div class="result-item"><div class="result-label">Sentiment</div><div class="result-value" style="color:' + sentimentColor + '">' + sentiment.charAt(0).toUpperCase() + sentiment.slice(1) + '</div></div>';
+html += '<div class="result-item"><div class="result-label">Complaint Detected</div><div class="result-value">' + complaint + ' (' + confidence + ')</div></div>';
+html += '<div class="result-item"><div class="result-label">Severity</div><div class="result-value">' + severity + ' / 5</div></div>';
+html += '<div class="result-item"><div class="result-label">Suggested Action</div><div class="result-value">' + action + '</div></div>';
+html += '</div>';
+if (tags.length > 0) {
+html += '<div class="result-tags" style="margin-top:12px">';
+for (var i = 0; i < tags.length; i++) {
+html += '<span class="tag">' + tags[i] + '</span>';
 }
-
+html += '</div>';
+}
+return html;
+}
 function getFallbackResult() {
-    var data = {
-        sentiment: 'negative',
-        complaint_detected: true,
-        confidence: 94,
-        severity: 4,
-        suggested_action: 'Escalate to complaints team immediately. Regulatory body mentioned -- respond within 24 hours.',
-        tags: ['complaint', 'legal risk', 'escalation', 'urgent']
-    };
-    return '<p style="font-size:12px;color:var(--text2);margin-bottom:12px">(Demo result -- API endpoint not available)</p>' + formatResult(data);
+var data = {
+sentiment: 'negative',
+complaint_detected: true,
+confidence: 94,
+severity: 4,
+suggested_action: 'Escalate to complaints team immediately. Regulatory body mentioned -- respond within 24 hours.',
+tags: ['complaint', 'legal risk', 'escalation', 'urgent']
+};
+return '<p style="font-size:12px;color:var(--text2);margin-bottom:12px">(Demo result -- API endpoint not available)</p>' + formatResult(data);
 }
-
 async function runDemo() {
-    var input = document.getElementById('demo-input').value;
-    if (!input.trim()) return;
-
-    var resultDiv = document.getElementById('demo-result');
-    var btn = document.getElementById('demo-btn');
-    resultDiv.style.display = 'block';
-    resultDiv.innerHTML = '<p style="color:var(--text2)">Analyzing...</p>';
-    btn.disabled = true;
-
-    var controller = new AbortController();
-    var timeout = setTimeout(function() { controller.abort(); }, 10000);
-
-    try {
-        var res = await fetch('https://unpauseai.com/api/modules/email-compliance-demo', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email_text: input }),
-            signal: controller.signal
-        });
-        clearTimeout(timeout);
-        if (!res.ok) throw new Error('API error');
-        var data = await res.json();
-        resultDiv.innerHTML = formatResult(data);
-    } catch(e) {
-        clearTimeout(timeout);
-        resultDiv.innerHTML = getFallbackResult();
-    }
-    btn.disabled = false;
+var input = document.getElementById('demo-input').value;
+if (!input.trim()) return;
+var resultDiv = document.getElementById('demo-result');
+var btn = document.getElementById('demo-btn');
+resultDiv.style.display = 'block';
+resultDiv.innerHTML = '<p style="color:var(--text2)">Analyzing...</p>';
+btn.disabled = true;
+var controller = new AbortController();
+var timeout = setTimeout(function() { controller.abort(); }, 10000);
+try {
+var res = await fetch('https://unpauseai.com/api/modules/email-compliance-demo', {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify({ email_text: input }),
+signal: controller.signal
+});
+clearTimeout(timeout);
+if (!res.ok) throw new Error('API error');
+var data = await res.json();
+resultDiv.innerHTML = formatResult(data);
+} catch(e) {
+clearTimeout(timeout);
+resultDiv.innerHTML = getFallbackResult();
 }
-</script>
-
-<!-- Access Gate -->
+btn.disabled = false;
+}</script>
+
 <div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;transition:opacity .3s;">
-  <div style="text-align:center;max-width:360px;padding:24px;">
-    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg>
-      <span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span>
-    </div>
-    <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Email Compliance Monitor</h2>
-    <p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Enter your access code to continue.</p>
-    <div style="display:flex;gap:8px;">
-      <input id="auth-input" type="password" placeholder="Access code" autocomplete="off" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;" onkeydown="if(event.key==='Enter')checkAuth()" />
-      <button onclick="checkAuth()" style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">Enter</button>
-    </div>
-    <p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Incorrect code. Please try again.</p>
-  </div>
+<div style="text-align:center;max-width:360px;padding:24px;">
+<div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:0 auto 20px;">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="40" height="40"><rect width="32" height="32" rx="7" fill="#2563eb"/><rect x="9" y="8" width="4.5" height="16" rx="1.5" fill="white"/><polygon points="18,8 23,16 18,24" fill="white"/></svg>
+<span style="font-size:22px;letter-spacing:-0.025em;"><span style="font-weight:700;">Unpause</span><span style="font-weight:700;color:#2563eb;">AI</span></span>
 </div>
-<script>
-var OEC_CODE='openwebui-ec';
+<h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px;">Email Compliance Monitor</h2>
+<p style="font-size:14px;color:var(--text2);margin-bottom:24px;">Enter your access code to continue.</p>
+<div style="display:flex;gap:8px;">
+<input id="auth-input" type="password" placeholder="Access code" autocomplete="off" style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;background:var(--surface);color:var(--text);outline:none;" onkeydown="if(event.key==='Enter')checkAuth()" />
+<button onclick="checkAuth()" style="padding:10px 20px;border:none;border-radius:8px;background:linear-gradient(135deg,#2563eb,#7c3aed);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">Enter</button>
+</div>
+<p id="auth-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none;">Incorrect code. Please try again.</p>
+</div>
+</div>
+<script>var OEC_CODE='openwebui-ec';
 function checkAuth(){var v=document.getElementById('auth-input').value;if(v===OEC_CODE){localStorage.setItem('oec-access','granted');var g=document.getElementById('auth-gate');g.style.opacity='0';setTimeout(function(){g.style.display='none'},300)}else{document.getElementById('auth-error').style.display='block';document.getElementById('auth-input').value='';document.getElementById('auth-input').focus()}}
-(function(){if(localStorage.getItem('oec-access')==='granted'){document.getElementById('auth-gate').style.display='none'}else{var i=document.getElementById('auth-input');if(i)i.focus()}})();
-</script>
+(function(){if(localStorage.getItem('oec-access')==='granted'){document.getElementById('auth-gate').style.display='none'}else{var i=document.getElementById('auth-input');if(i)i.focus()}})();</script>
 </body>
 </html>

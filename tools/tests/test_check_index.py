@@ -52,3 +52,40 @@ def test_missing_index_fails(tmp_path):
 def test_live_tree_passes():
     # The real tools/ tree must already satisfy the gate (regression guard).
     assert ci.main() == 0
+
+
+def test_scorers_subdirectory_is_scanned(tmp_path):
+    """tools/scorers/*.py must be covered too (scorer contract clause 7).
+
+    iterdir() over tools/ alone never descends, so before this a new scorer
+    could ship with no INDEX.md row and nothing would say so - the contract
+    clause existed with no tripwire behind it.
+    """
+    (tmp_path / "a.py").write_text("x", encoding="utf-8")
+    (tmp_path / "scorers").mkdir()
+    (tmp_path / "scorers" / "new-metric.py").write_text("x", encoding="utf-8")
+    (tmp_path / "INDEX.md").write_text("| `a.py` | does a |\n", encoding="utf-8")
+    assert ci.main(tmp_path, tmp_path / "INDEX.md") == 1
+
+
+def test_scorer_listed_inside_a_prose_cell_passes(tmp_path):
+    """Real scorers share ONE INDEX row, named inline rather than one row each.
+
+    The backtick test must accept that shape, or enforcing the clause would
+    force a pointless reformat of the existing scorers row.
+    """
+    (tmp_path / "a.py").write_text("x", encoding="utf-8")
+    (tmp_path / "scorers").mkdir()
+    (tmp_path / "scorers" / "new-metric.py").write_text("x", encoding="utf-8")
+    (tmp_path / "INDEX.md").write_text(
+        "| `a.py` | does a |\n"
+        "| `scorers/{name}.py` | Scorers: `new-metric.py ASSET` (a thing). |\n",
+        encoding="utf-8")
+    assert ci.main(tmp_path, tmp_path / "INDEX.md") == 0
+
+
+def test_missing_scorers_dir_is_not_an_error(tmp_path):
+    """A tools/ tree without scorers/ (any other repo) must still pass."""
+    (tmp_path / "a.py").write_text("x", encoding="utf-8")
+    (tmp_path / "INDEX.md").write_text("| `a.py` | does a |\n", encoding="utf-8")
+    assert ci.main(tmp_path, tmp_path / "INDEX.md") == 0

@@ -92,6 +92,40 @@ def test_header_and_one_row_per_statement_line(tmp_path):
     assert rows[2][_C["Match Status"]] == "UNMATCHED"
 
 
+def test_matched_row_carries_ai_category_and_account(tmp_path):
+    """The tool's OWN category + posting account surface in the AI columns
+    for a matched row, beside the report's own Zoho Category, and stay blank
+    on an unmatched line."""
+    matched_line = LineItem(
+        description="Adobe subscription", line_total=Decimal("180"),
+        categorization=Categorization(
+            category="Software & Subscriptions",
+            zoho_account="E600020-01 - Software & Subscriptions",
+            confidence=0.95, source=ClassificationSource.VENDOR, reasoning="t",
+        ),
+    )
+    rec = _receipt([matched_line], zoho_category="E100010-31 - Travel Expense | Food")
+    outcome = MatchOutcome(
+        matches=[Match("t1", "r1", MatchType.EXACT, 0.99, "x", False)],
+        unmatched_transactions=["t2"],
+    )
+    out = write_reconciled_csv(
+        outcome, [_tx("t1"), _tx("t2")], [rec], tmp_path / "reconciled.csv"
+    )
+    with out.open(encoding="utf-8") as fh:
+        rows = list(csv.reader(fh))
+    matched, unmatched = rows[1], rows[2]
+    # The report's label and the tool's own label sit side by side.
+    assert matched[_C["Zoho Category"]] == "E100010-31 - Travel Expense | Food"
+    assert matched[_C["AI Category"]] == "Software & Subscriptions"
+    assert matched[_C["AI Zoho Account"]] == "E600020-01 - Software & Subscriptions"
+    assert matched[_C["AI Category Source"]] == ClassificationSource.VENDOR.value
+    # Blank on the unmatched line (no receipt).
+    assert unmatched[_C["AI Category"]] == ""
+    assert unmatched[_C["AI Zoho Account"]] == ""
+    assert unmatched[_C["AI Category Source"]] == ""
+
+
 def test_matched_row_carries_expense_enrichment():
     tx = _tx()
     rec = _receipt(
@@ -338,3 +372,51 @@ def test_review_no_signal_charge_stays_blank_not_noise():
     )
     assert rows[0][_C["Charge Category"]] == ""
     assert rows[0][_C["Charge Category Source"]] == ""
+
+
+# ── WS2 Category Decision column (2026-07-21) ───────────────────────
+
+
+def _decided_line(desc, amount, *, decision, category="Software & Subscriptions"):
+    return LineItem(
+        description=desc, line_total=Decimal(amount),
+        categorization=Categorization(
+            category=category, zoho_account=None, confidence=0.9,
+            source=ClassificationSource.LINE, reasoning="t", decision=decision,
+        ),
+    )
+
+
+def test_category_decision_column_heavy_override():
+    rec = _receipt([_decided_line("Claude sub", "180", decision="ai_override_heavy")])
+    rows = build_reconciled_rows(_matched(), [_tx()], [rec])
+    assert rows[0][_C["Category Decision"]] == "AI override (heavy)"
+
+
+def test_category_decision_column_kept_er():
+    rec = _receipt([_decided_line("Hotel", "180", decision="kept_er")])
+    rows = build_reconciled_rows(_matched(), [_tx()], [rec])
+    assert rows[0][_C["Category Decision"]] == "kept ER"
+
+
+def test_category_decision_heavy_wins_precedence():
+    rec = _receipt([
+        _decided_line("A", "100", decision="kept_er"),
+        _decided_line("B", "80", decision="ai_override_heavy"),
+    ])
+    rows = build_reconciled_rows(_matched(), [_tx()], [rec])
+    assert rows[0][_C["Category Decision"]] == "AI override (heavy)"
+
+
+def test_category_decision_blank_when_not_adjudicated():
+    # A matched receipt whose lines carry no decision (override off / no chart).
+    rec = _receipt([_line("Coffee", "180")])  # _line sets no decision
+    rows = build_reconciled_rows(_matched(), [_tx()], [rec])
+    assert rows[0][_C["Category Decision"]] == ""
+
+
+def test_category_decision_blank_when_unmatched():
+    # Unmatched transaction -> no receipt -> blank decision cell.
+    outcome = MatchOutcome(unmatched_transactions=["t1"])
+    rows = build_reconciled_rows(outcome, [_tx()], [])
+    assert rows[0][_C["Category Decision"]] == ""

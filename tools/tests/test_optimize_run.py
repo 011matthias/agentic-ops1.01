@@ -9,6 +9,7 @@ The engine executes everything a fumble could corrupt - so these tests
 assert BEHAVIOR: branch history shape, TSV rows, git tree state after
 keep/discard/crash, lock-state lifecycle.
 """
+import datetime as _dt
 import json
 import shutil
 import subprocess
@@ -568,3 +569,243 @@ def test_round_still_dies_on_corrupt_state(tmp_path):
         "{bad", encoding="utf-8")
     proc = engine(repo, "round", "--desc", "x", expect=1)
     assert "unparseable" in proc.stderr
+
+
+# --- E4: confirmation probes must not be punished as failed climbs ----------
+
+def test_probe_discards_without_counting_toward_plateau(tmp_path):
+    """A boundary probe PREDICTS a discard to confirm an optimum is real.
+
+    Counting it like a failed climb punished the one technique that verifies
+    convergence: gtm-v2 (r5-r8) and pricing-tiers (r3-r6) each ran 4 planned
+    discards against a default limit of 5, and every run after v1 silently
+    worked around it by raising consecutive_reverts in its manifest.
+    """
+    repo = make_repo(tmp_path, stop={"consecutive_reverts": 2})
+    engine(repo, "start", "t1")                      # baseline 9
+    for i in range(4):
+        edit_numbers(repo, ("9", str(9 + i)))        # always worse
+        out = engine(repo, "round", "--probe", "--desc",
+                     f"expect DISCARD: boundary probe {i}").stdout
+        assert f"r{i + 1}: PROBE" in out
+        assert "PLATEAU" not in out
+    assert state(repo)["consecutive_non_keeps"] == 0
+    assert [r[4] for r in tsv_rows(repo)] == ["baseline"] + ["probe"] * 4
+    # a genuine failed climb still counts
+    edit_numbers(repo, ("9", "9"))
+    engine(repo, "round", "--desc", "a real hypothesis that loses")
+    assert state(repo)["consecutive_non_keeps"] == 1
+
+
+def test_probe_that_unexpectedly_improves_is_kept_and_flagged(tmp_path):
+    """The prediction was wrong, which is the most informative outcome the
+    loop can produce - keep it and say so rather than bury it."""
+    repo = make_repo(tmp_path)                       # baseline 9
+    engine(repo, "start", "t1")
+    edit_numbers(repo, ("1", "1"))                   # 2: better, not worse
+    out = engine(repo, "round", "--probe", "--desc",
+                 "expect DISCARD: assumed we were already at the floor").stdout
+    assert "r1: KEEP" in out
+    assert "PROBE UNEXPECTEDLY IMPROVED" in out
+    assert state(repo)["best_score"] == 2
+    assert tsv_rows(repo)[-1][4] == "keep"
+
+
+def test_start_warns_when_the_manifest_has_no_action_catalog(tmp_path):
+    repo = make_repo(tmp_path)
+    out = engine(repo, "start", "t1").stdout
+    assert "no '## Action catalog' section" in out
+    assert "LOCK-ON" in out                          # warning, not a refusal
+
+
+# --- E1: the wall-clock budget bounds ACTIVE burn, not calendar time --------
+
+def test_wallclock_budget_excludes_idle_session_gaps(tmp_path):
+    """A run resumed after a session gap must still be runnable.
+
+    started_at was frozen at lock-on and never adjusted, so any run picked up
+    the next day was permanently WALL-CLOCK EXHAUSTED - and the engine's own
+    advice ("raise the budget in a NEW run") is impossible because RUN.md is
+    locked. That structurally killed the cross-session `continuous` mode the
+    command doc promises.
+    """
+    repo = make_repo(tmp_path, budgets={"wall_clock_minutes": 60})
+    engine(repo, "start", "t1")
+    t0 = _dt.datetime.fromisoformat(state(repo)["started_at"])
+    next_session = (t0 + _dt.timedelta(days=2)).isoformat(timespec="seconds")
+    a_minute_later = (t0 + _dt.timedelta(days=2, minutes=1)).isoformat(
+        timespec="seconds")
+
+    # The run sat idle for two days; resuming banks that gap as idle, not burn.
+    engine(repo, "resume", env={"OPTIMIZE_NOW": next_session})
+    assert state(repo)["idle_minutes"] > 2800
+
+    edit_numbers(repo, ("2", "3"))
+    out = engine(repo, "round", "--desc", "round after an overnight gap",
+                 env={"OPTIMIZE_NOW": a_minute_later}).stdout
+    assert "r1: KEEP" in out
+
+
+def test_wallclock_budget_still_binds_on_continuous_burn(tmp_path):
+    """The idle carve-out must not defang the budget for a run that really
+    does burn past it without ever being resumed."""
+    repo = make_repo(tmp_path, budgets={"wall_clock_minutes": 60})
+    engine(repo, "start", "t1")
+    t0 = _dt.datetime.fromisoformat(state(repo)["started_at"])
+    way_later = (t0 + _dt.timedelta(minutes=90)).isoformat(timespec="seconds")
+    edit_numbers(repo, ("2", "3"))
+    proc = engine(repo, "round", "--desc", "burned past the budget",
+                  env={"OPTIMIZE_NOW": way_later}, expect=1)
+    assert "WALL-CLOCK EXHAUSTED" in proc.stderr
+
+
+# --- E2: a crash in the append -> journal-commit window must not eat a keep --
+
+def test_resume_recovers_keep_from_uncommitted_append_window(tmp_path):
+    """append_tsv() writes the row, then the journal commit lands.
+
+    A SIGKILL between them left HEAD at the experiment commit with a dirty
+    results.tsv - and cmd_resume's dirty-tree branch fired BEFORE the
+    adopt-journal branch, hard-resetting to the stale on-disk base_sha. The
+    scored, guard-passed win was destroyed with no crash row, and because the
+    on-disk best_score and TSV anchors were equally stale the reproducibility
+    check still passed. Silent loss.
+    """
+    repo = make_repo(tmp_path)                        # baseline 9
+    engine(repo, "start", "t1")
+    edit_numbers(repo, ("2", "3"))                    # 5 = a real win
+
+    # Simulate the crash: experiment commit landed, journal row written but
+    # NOT committed, run-state cache untouched (save_state never ran).
+    _git(repo, "add", "--", "numbers.txt")
+    _git(repo, "commit", "-q", "-m", "experiment(t1): r1: shrink both numbers")
+    exp_sha = _git(repo, "rev-parse", "HEAD").stdout.strip()
+    tsv = repo / "docs" / "optimize" / "t1" / "results.tsv"
+    tsv.write_text(
+        tsv.read_text(encoding="utf-8")
+        + f"1\t{exp_sha[:7]}\t5\t-4\tkeep\tshrink both numbers\n",
+        encoding="utf-8")
+
+    out = engine(repo, "resume").stdout
+    assert (repo / "numbers.txt").read_text().splitlines() == ["2", "3"], out
+    st = state(repo)
+    assert st["round"] == 1 and st["best_score"] == 5.0, out
+    assert [r[4] for r in tsv_rows(repo)] == ["baseline", "keep"], out
+    assert not _git(repo, "status", "--porcelain").stdout.strip()
+    # and the recovered round is a normal base for the next one
+    edit_numbers(repo, ("1", "1"))
+    assert "r2: KEEP" in engine(repo, "round", "--desc", "shrink again").stdout
+
+
+# --- E3: a crash inside stop must not resurrect the run ---------------------
+
+def test_resume_completes_an_interrupted_stop(tmp_path):
+    """cmd_stop journals its row as round+1, which is exactly the row number
+    cmd_resume's adopt-branch tests for. A crash between the stop commit and
+    os.remove(state) therefore made the next resume adopt the `stopped` row as
+    an ordinary non-keep round and bring the run back to life, with future
+    rounds appending after a `stopped` row in the durable journal."""
+    repo = make_repo(tmp_path)
+    engine(repo, "start", "t1")
+    edit_numbers(repo, ("2", "3"))
+    engine(repo, "round", "--desc", "shrink")
+    st_before_stop = state(repo)
+
+    engine(repo, "stop", "--reason", "converged")
+    assert state(repo) is None
+    # Simulate the crash: the stop row is committed, but the state file
+    # removal never happened.
+    stp = repo / ".claude" / "optimize" / "run.json"
+    stp.parent.mkdir(parents=True, exist_ok=True)
+    stp.write_text(json.dumps(st_before_stop), encoding="utf-8")
+
+    out = engine(repo, "resume").stdout
+    assert "already stopped" in out.lower(), out
+    assert state(repo) is None, "a stopped run must never resurrect"
+    assert [r[4] for r in tsv_rows(repo)].count("stopped") == 1
+    assert tsv_rows(repo)[-1][4] == "stopped"
+
+
+def test_start_commits_every_run_dir_file_not_just_the_manifest(tmp_path):
+    """A guard DATA file written by the setup interview must be committed at
+    lock-on, not left untracked.
+
+    cmd_start deliberately exempts docs/optimize/<tag>/ from its clean-tree
+    requirement, because the setup interview just wrote the manifest there. But
+    it staged only the manifest and results.tsv, so any OTHER file the
+    interview wrote there stayed untracked - most importantly a guard's
+    baseline data file, which the manifest declares in guard_files and which
+    the engine hash-anchors in guard_shas.
+
+    Consequences on the shipped engine: the very first `round` aborts with
+    "changes OUTSIDE the asset scope" and calls it a harness event, and the
+    run's integrity anchor points at content git does not track. Found by the
+    first optimize run against a production asset (platform-alpha-research-
+    weight), where the guard's text baseline is exactly such a file.
+    """
+    repo = make_repo(tmp_path, numbers=("5", "4", "3"), guard=True)
+    data = repo / "docs" / "optimize" / "t1" / "baseline.json"
+    data.write_text('{"floor": 0}\n', encoding="utf-8")
+    man = repo / "docs" / "optimize" / "t1" / "RUN.md"
+    man.write_text(
+        man.read_text(encoding="utf-8").replace(
+            "guard_files:\n  - toy-guard.py\n",
+            "guard_files:\n  - toy-guard.py\n  - docs/optimize/t1/baseline.json\n"),
+        encoding="utf-8")
+
+    engine(repo, "start", "t1")
+
+    porcelain = _git(repo, "status", "--porcelain").stdout
+    assert "baseline.json" not in porcelain, (
+        f"guard data file left uncommitted by lock-on:\n{porcelain}")
+    assert _git(repo, "ls-files", "docs/optimize/t1/baseline.json").stdout.strip(), \
+        "guard data file is not tracked after lock-on"
+
+    # ...and the immediate consequence: round 1 must not abort on a dirty tree.
+    (repo / "numbers.txt").write_text("1\n1\n1\n", encoding="utf-8")
+    proc = engine(repo, "round", "--desc", "shrink", expect=None)
+    assert "OUTSIDE the asset scope" not in proc.stdout + proc.stderr, proc.stdout
+
+
+def test_every_journal_row_carries_a_timestamp(tmp_path):
+    """append_tsv stamps every row, including baseline and stopped.
+
+    Per-round timing used to be reconstructable only from round-commit dates,
+    which are unreachable from any ref once a run branch is squash-merged and
+    deleted - true for 3 of the first 4 runs. The column is written in the one
+    append path so no caller can forget it and no caller can choose the value.
+
+    OPTIMIZE_NOW pins the clock so the assertion is exact rather than a
+    "looks like a date" smell test.
+    """
+    repo = make_repo(tmp_path)
+    engine(repo, "start", "t1", env={"OPTIMIZE_NOW": "2026-07-22T09:00:00"})
+    (repo / "numbers.txt").write_text("1\n1\n", encoding="utf-8")
+    engine(repo, "round", "--desc", "shrink",
+           env={"OPTIMIZE_NOW": "2026-07-22T09:07:00"})
+    engine(repo, "stop", "--reason", "done",
+           env={"OPTIMIZE_NOW": "2026-07-22T09:09:00"})
+
+    header, *rows = (repo / "docs" / "optimize" / "t1" / "results.tsv") \
+        .read_text(encoding="utf-8").strip().split("\n")
+    assert header.split("\t")[-1] == "timestamp"
+    assert rows, "no journal rows written"
+    stamps = [r.split("\t")[6] for r in rows]
+    assert all(len(r.split("\t")) == 7 for r in rows), rows
+    assert stamps[0] == "2026-07-22T09:00:00", "baseline row unstamped"
+    assert stamps[-1] == "2026-07-22T09:09:00", "stopped row unstamped"
+    assert "2026-07-22T09:07:00" in stamps, "experiment row unstamped"
+
+
+def test_timestamp_is_appended_last_so_positional_readers_survive(tmp_path):
+    """The column goes at the END because every reader indexes by position.
+
+    resume reconciles on row[0]/row[4]; optimize_overview reads row[2]/row[4].
+    Inserting the stamp anywhere else would silently reinterpret four
+    already-shipped journals.
+    """
+    repo = make_repo(tmp_path)
+    engine(repo, "start", "t1", env={"OPTIMIZE_NOW": "2026-07-22T09:00:00"})
+    row = tsv_rows(repo)[0]
+    assert row[0] == "0" and row[4] == "baseline", row
+    assert row[6].startswith("2026-07-22"), row

@@ -163,7 +163,27 @@ def path_is_open(path: str) -> bool:
 
 
 def path_requires_operator(path: str, method: str) -> bool:
+    """True when this path+method is operator-only.
+
+    Every rule is matched against BOTH the raw path and the same path with
+    a leading ``/api`` removed, because most mutations are mounted twice:
+    once bare for the server-rendered pages and once under ``/api`` for the
+    SPA. The rules are ``^``-anchored, so without the second match a twin
+    would silently escape its rule; ``^/runs/[^/]+/publish$`` does not match
+    ``/api/runs/x/publish``, and the user role could publish through the
+    SPA surface. Checking the canonical form means a new twin inherits its
+    rule automatically instead of needing a duplicate regex nobody
+    remembers to add.
+
+    Union, not replacement: the explicitly ``/api``-prefixed rules (e.g.
+    ``^/api/operator($|/)``, whose bare form has no rule) keep matching.
+    """
+    candidates = [path]
+    if path.startswith("/api/"):
+        candidates.append(path[len("/api"):])
     for pattern, methods in _OPERATOR_RULES:
-        if pattern.match(path) and (methods is None or method.upper() in methods):
+        if methods is not None and method.upper() not in methods:
+            continue
+        if any(pattern.match(candidate) for candidate in candidates):
             return True
     return False

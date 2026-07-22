@@ -77,12 +77,24 @@ budgets:
 mode: converge             # converge | continuous | supervised
 stop:
   goal_score: <number>     # optional
-  consecutive_reverts: 5
+  consecutive_reverts: 5   # confirmation probes do NOT count (see below)
 ---
 
-Prose: why this run, what a reviewer should look at, optional action
-catalog (prioritized hypothesis menu with expected impact).
+Prose: why this run, what a reviewer should look at, and the action
+catalog (prioritized hypothesis menu with expected impact). Write the
+catalog: RUN.md locks at lock-on, so a run that starts without one can
+never add a structured hypothesis queue, and the engine warns at `start`
+when the section is missing. In every run so far the keeps mapped roughly
+1:1 onto catalog items.
 ```
+
+**Do not raise `consecutive_reverts` to make room for boundary probes.**
+That was the workaround before `round --probe` existed (gtm-v2 and
+pricing-tiers each ran 4 planned discards in a row against a limit of 5,
+and every run after v1 quietly set it to 6). A probe journals as `probe`
+and is excluded from the PLATEAU counter, so the default is correct as
+shipped. Raise the limit only when genuine failed climbs, not
+confirmations, are tripping it.
 
 ## Many projects, one oversight surface
 
