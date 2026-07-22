@@ -153,8 +153,6 @@ li { margin-bottom: 6px; }
 }
 .callout-title { font-size: 13px; font-weight: 700; color: var(--blue-dark); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
 .callout p { margin: 0; color: var(--blue-dark); font-size: 14px; }
-.callout.green { border-color: var(--green); background: var(--green-bg); }
-.callout.green .callout-title, .callout.green p { color: var(--green-dark); }
 .callout.orange { border-color: var(--orange); background: var(--orange-bg); }
 .callout.orange .callout-title, .callout.orange p { color: var(--orange-dark); }
 
@@ -168,7 +166,6 @@ li { margin-bottom: 6px; }
 .zone-blue { background: var(--blue-bg); border-color: color-mix(in srgb, var(--blue) 20%, var(--border)); }
 .zone-purple { background: var(--purple-bg); border-color: color-mix(in srgb, var(--purple) 20%, var(--border)); }
 .zone-green { background: var(--green-bg); border-color: color-mix(in srgb, var(--green) 20%, var(--border)); }
-.zone-icon { font-size: 28px; margin-bottom: 8px; }
 .zone-title { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
 .zone-blue .zone-title { color: var(--blue-dark); }
 .zone-purple .zone-title { color: var(--purple-dark); }
@@ -210,21 +207,18 @@ li { margin-bottom: 6px; }
 }
 .tl-card:hover { transform: translateY(-2px); box-shadow: var(--card-shadow); }
 .tl-card.phase2 { border-left-color: var(--purple); }
-.tl-card.phase3 { border-left-color: var(--green); }
 .tl-badge {
     display: inline-block; font-size: 11px; font-weight: 700;
     padding: 3px 10px; border-radius: 20px; margin-bottom: 8px;
 }
 .tl-card .tl-badge { background: var(--blue-light); color: var(--blue); }
 .tl-card.phase2 .tl-badge { background: var(--purple-light); color: var(--purple); }
-.tl-card.phase3 .tl-badge { background: var(--green-light); color: var(--green); }
 .tl-title { font-size: 15px; font-weight: 600; color: var(--text-strong); margin-bottom: 4px; }
 .tl-price { font-size: 12px; color: var(--text2); margin-bottom: 10px; }
 .tl-items { list-style: none; padding: 0; }
 .tl-items li { font-size: 12px; color: var(--text); padding: 2px 0; display: flex; align-items: center; gap: 6px; }
 .tl-items li::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--blue); flex-shrink: 0; }
 .tl-card.phase2 .tl-items li::before { background: var(--purple); }
-.tl-card.phase3 .tl-items li::before { background: var(--green); }
 
 /* Investment */
 .invest-total {
