@@ -124,7 +124,7 @@ common set) need no gloss. See `rule_human_communication.md` section 7.
 
 - `workspace/proposals/volabyg-lead-automation/video-script.md` is the
   canonical Variant A likely-cause walkthrough.
-- `workspace/proposals/n8n-multi-client-ops/video-script.md` adapts the spine
+- `workspace/proposals/cold-email-manager/video-script.md` adapts the spine
   to an operator application (no single "broken thing" to diagnose).
 
 Adapt the spine, not the specifics.

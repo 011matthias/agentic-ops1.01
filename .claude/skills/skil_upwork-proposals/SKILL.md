@@ -25,7 +25,7 @@ Load only what you need per task. For a full proposal (letter + video), load all
 - **`/new-proposal {prospect}`** — Creates the proposal page (platform landing page with pricing, timeline, phases)
 - **`feedback_upwork_formatting.md`** — Upwork-specific text formatting (plain text, numbered sections, line breaks)
 - **`/draft`** — For follow-up messages after proposal is sent
-- **Menovia example** — `workspace/proposals/menovia/proposal-video-script.md` (live reference)
+- **Live example** — `workspace/proposals/volabyg-lead-automation/video-script.md` (live reference)
 
 ## Workflow
 

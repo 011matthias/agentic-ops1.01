@@ -5,8 +5,13 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## b2b-cold-outreach (p028 prospect)
 | Date | Topic | Type | Link |
 |------|-------|------|------|
-| 2026-07-21 | Upwork-Independence GTM Optimize | misc | [→](docs/2026-07-21%20-%20Upwork-Independence%20GTM%20Optimize/Checkpoint.md) |
 | 2026-06-11 | P028 B2B Cold Outreach Proposal | comms | [Mini-Checkpoint-1](docs/2026-06-11%20-%20P028%20B2B%20Cold%20Outreach%20Proposal/Mini-Checkpoint-1.md) |
+
+## upwork-independence
+| Date | Topic | Type | Link |
+|------|-------|------|------|
+| 2026-07-22 | Upwork-Independence Pricing Tiers | misc | [Checkpoint](docs/2026-07-22%20-%20Upwork-Independence%20Pricing%20Tiers/Checkpoint.md) |
+| 2026-07-21 | Upwork-Independence GTM Optimize | misc | [→](docs/2026-07-21%20-%20Upwork-Independence%20GTM%20Optimize/Checkpoint.md) |
 
 ## brisken
 | Date | Topic | Type | Link |
@@ -196,6 +201,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | Date | Topic | Type | Link |
 |------|-------|------|------|
 | 2026-07-22 | System Health Check + Heal + Improvement Pass | system-infra | [→](docs/2026-07-22%20-%20System%20Health%20Check%20+%20Heal%20+%20Improvement%20Pass/Checkpoint.md) |
+| 2026-07-22 | Optimize Loop S-Series Implementation | system-infra | [→](docs/2026-07-22%20-%20Optimize%20Loop%20S-Series%20Implementation/Checkpoint.md) |
 | 2026-07-22 | Optimize Loop Audit + Hardening | system-infra | [→](docs/2026-07-22%20-%20Optimize%20Loop%20Audit%20+%20Hardening/Checkpoint.md) |
 | 2026-07-20 | System Development | system-infra | [→](docs/2026-07-20%20-%20System%20Development/Checkpoint.md) |
 | 2026-07-17 | Ruff Push Gate CI Prevention | system-infra | [→](docs/2026-07-17%20-%20Ruff%20Push%20Gate%20CI%20Prevention/Checkpoint.md) |
