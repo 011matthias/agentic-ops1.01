@@ -75,8 +75,47 @@ def test_run_check_classifies_timeout(monkeypatch):
         raise subprocess.TimeoutExpired(cmd=a[0], timeout=1)
 
     monkeypatch.setattr(d.subprocess, "run", fake_run)
-    r = d._run_check(d.CHECKS[0])
+    # must NOT be a home_clone_only check: that short-circuits to SKIP before
+    # the mocked subprocess is ever reached.
+    r = d._run_check(next(c for c in d.CHECKS if not c.home_clone_only))
     assert r["timed_out"] is True and r["ok"] is False
+
+
+def test_home_clone_only_check_skips_in_worktree(monkeypatch):
+    # A linked worktree has no gitignored settings.local.json, so the wiring
+    # assertion would REDden every run there. It must SKIP, not fail, and must
+    # never even launch the subprocess.
+    d = _load()
+    monkeypatch.setattr(d, "in_home_clone", lambda: False)
+    launched = []
+    monkeypatch.setattr(d.subprocess, "run",
+                        lambda *a, **k: launched.append(a) or (_ for _ in ()).throw(AssertionError))
+    check = next(c for c in d.CHECKS if c.home_clone_only)
+    r = d._run_check(check)
+    assert r["skipped"] is True and r["ok"] is True
+    assert launched == []
+
+
+def test_home_clone_only_check_runs_in_primary_clone(monkeypatch):
+    d = _load()
+    monkeypatch.setattr(d, "in_home_clone", lambda: True)
+    monkeypatch.setattr(d.subprocess, "run",
+                        lambda *a, **k: subprocess.CompletedProcess(a[0], 0, "ok\n", ""))
+    check = next(c for c in d.CHECKS if c.home_clone_only)
+    r = d._run_check(check)
+    assert r["skipped"] is False and r["ok"] is True
+
+
+def test_only_wire_hooks_is_home_clone_only():
+    d = _load()
+    assert [c.name for c in d.CHECKS if c.home_clone_only] == ["wire-hooks"]
+
+
+def test_skipped_check_is_not_red(monkeypatch):
+    d = _load()
+    skipped = {"name": "x", "group": "g", "ok": True, "skipped": True,
+               "exit": None, "timed_out": False, "seconds": 0.0, "tail": ["s"]}
+    assert not [r for r in [skipped] if not r["ok"]]
 
 
 def test_run_check_classifies_red(monkeypatch):
@@ -86,5 +125,7 @@ def test_run_check_classifies_red(monkeypatch):
         return subprocess.CompletedProcess(a[0], 1, stdout="boom\n", stderr="")
 
     monkeypatch.setattr(d.subprocess, "run", fake_run)
-    r = d._run_check(d.CHECKS[0])
+    # must NOT be a home_clone_only check: that short-circuits to SKIP before
+    # the mocked subprocess is ever reached.
+    r = d._run_check(next(c for c in d.CHECKS if not c.home_clone_only))
     assert r["ok"] is False and r["exit"] == 1 and r["tail"] == ["boom"]

@@ -51,11 +51,26 @@ class Check:
     args: tuple[str, ...]      # argv after `uv run`, repo-relative script first
     timeout: int
     group: str
+    # Checks that only mean something in the session's home clone. The
+    # enforcement wiring lives in the gitignored .claude/settings.local.json,
+    # so a secondary worktree NEVER has it and wire-hooks --check would report
+    # ENFORCEMENT LAYER DOWN there every single time. A health tool that cries
+    # wolf in the place people run it from trains them to ignore it, so those
+    # checks report SKIP outside the home clone instead of a false RED. In the
+    # home clone the check runs normally, where a missing block IS a real RED.
+    home_clone_only: bool = False
+
+
+def in_home_clone() -> bool:
+    """True when REPO is a primary clone (.git is a directory), False in a
+    linked worktree (.git is a file holding a gitdir: pointer)."""
+    return (REPO / ".git").is_dir()
 
 
 CHECKS: tuple[Check, ...] = (
     # state — enforcement + checkout freshness
-    Check("wire-hooks", ("tools/wire-hooks.py", "--check"), 60, "state"),
+    Check("wire-hooks", ("tools/wire-hooks.py", "--check"), 60, "state",
+          home_clone_only=True),
     Check("repo-freshness", ("tools/repo_freshness.py",), 60, "state"),
     Check("scorer-pins", ("tools/pin_scorer.py", "check"), 60, "state"),
     # integrity — registries + staleness
@@ -81,6 +96,12 @@ HEALS: tuple[Check, ...] = (
 
 
 def _run_check(check: Check) -> dict:
+    if check.home_clone_only and not in_home_clone():
+        return {
+            "name": check.name, "group": check.group, "ok": True,
+            "skipped": True, "exit": None, "timed_out": False, "seconds": 0.0,
+            "tail": ["skipped: not the home clone (gitignored per-checkout state)"],
+        }
     cmd = ["uv", "run", "--directory", str(REPO), str(REPO / check.args[0]),
            *check.args[1:]]
     started = _dt.datetime.now()
@@ -104,6 +125,7 @@ def _run_check(check: Check) -> dict:
         "name": check.name,
         "group": check.group,
         "ok": exit_code == 0,
+        "skipped": False,
         "exit": exit_code,
         "timed_out": timed_out,
         "seconds": round(seconds, 1),
@@ -114,9 +136,12 @@ def _run_check(check: Check) -> dict:
 def _print_table(results: list[dict]) -> None:
     width = max(len(r["name"]) for r in results)
     for r in results:
-        status = "PASS" if r["ok"] else ("TIMEOUT" if r["timed_out"] else "RED")
+        if r.get("skipped"):
+            status = "SKIP"
+        else:
+            status = "PASS" if r["ok"] else ("TIMEOUT" if r["timed_out"] else "RED")
         line = f"  {r['name']:<{width}}  {status:<7} {r['seconds']:>6.1f}s"
-        if not r["ok"] and r["tail"]:
+        if (not r["ok"] or r.get("skipped")) and r["tail"]:
             line += f"  {r['tail'][-1][:100]}"
         print(line)
 
@@ -181,6 +206,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[doctor] battery ({len(results)} checks):")
         _print_table(results)
         verdict = "HEALTHY" if not reds else f"{len(reds)} RED"
+        n_skipped = sum(1 for r in results if r.get("skipped"))
+        if n_skipped:
+            verdict += f" ({n_skipped} skipped)"
         where = f"  (report: {out_path})" if out_path else ""
         print(f"[doctor] {verdict}{where}")
     return 1 if reds else 0
