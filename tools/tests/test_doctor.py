@@ -111,13 +111,6 @@ def test_only_wire_hooks_is_home_clone_only():
     assert [c.name for c in d.CHECKS if c.home_clone_only] == ["wire-hooks"]
 
 
-def test_skipped_check_is_not_red(monkeypatch):
-    d = _load()
-    skipped = {"name": "x", "group": "g", "ok": True, "skipped": True,
-               "exit": None, "timed_out": False, "seconds": 0.0, "tail": ["s"]}
-    assert not [r for r in [skipped] if not r["ok"]]
-
-
 def test_run_check_classifies_red(monkeypatch):
     d = _load()
 
