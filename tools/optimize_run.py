@@ -237,6 +237,28 @@ def blob_sha_of(repo: str, rel: str) -> str:
     return pin_helpers(repo).blob_sha(os.path.join(repo, *rel.split("/")))
 
 
+def _load_guard_pins(repo: str) -> dict:
+    """The reviewed guard-pin registry, or {} when the repo has none.
+
+    Read straight from the file rather than through pin_helpers so that a
+    checkout predating the registry (or a fixture repo in the engine tests)
+    simply has no pins, instead of failing to import.
+    """
+    path = os.path.join(repo, "tools", "guard-pins.json")
+    if not os.path.isfile(path):
+        return {}
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        # A corrupt registry must not brick lock-on; the run still gets its
+        # per-run guard_shas anchor. Surface it and continue.
+        print("WARNING: tools/guard-pins.json is unreadable; guard pins not "
+              "cross-checked this run.")
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 def validate_manifest(repo: str, tag: str, meta: dict) -> dict:
     """Cross-check manifest vs PINS vs scorer header; return normalized run."""
     ph = pin_helpers(repo)
@@ -554,6 +576,34 @@ def cmd_start(tag: str) -> int:
               "items - it is the run's hypothesis queue. RUN.md LOCKS at "
               "lock-on, so a catalog cannot be added later; add it now or "
               "accept ad-hoc hypotheses for the whole run.")
+
+    # Cross-check declared guards against the reviewed guard-pin registry
+    # (tools/guard-pins.json). guard_shas below anchors guards for the run's
+    # DURATION, but it reads the live tree, so a guard weakened BETWEEN runs
+    # was previously locked in at start with nothing to compare against -
+    # and guards carry the whole anti-overfit floor (RECIPES rule 3).
+    # Drift is fatal; absence is advisory, so existing manifests keep working.
+    _gpins = _load_guard_pins(repo)
+    _unpinned = []
+    for gf in state.get("guard_files", []):
+        if not gf.endswith(".py"):
+            continue
+        pin = _gpins.get(gf)
+        if pin is None:
+            _unpinned.append(gf)
+            continue
+        live = blob_sha_of(repo, gf)
+        if live != pin.get("sha"):
+            die(f"guard {gf} does not match its reviewed pin "
+                f"(pin={pin.get('sha')} live={live}). Either restore it, or "
+                "re-pin under the user-approved seam "
+                f"(SCORER_LOCK_ALLOW=1 uv run tools/pin_scorer.py pin-guard {gf}) "
+                "and ship the guard-pins.json diff for review.")
+    if _unpinned:
+        print("WARNING: guard(s) with no entry in tools/guard-pins.json: "
+              + ", ".join(_unpinned)
+              + ". They are locked for this run but nothing binds them to a "
+                "reviewed hash between runs; pin them under the seam.")
 
     # Score + guard the baseline BEFORE creating anything: a broken harness
     # must leave no branch, no commit, no state behind.

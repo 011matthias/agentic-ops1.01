@@ -7,7 +7,8 @@ the owner's 2026-07-17 directive ("no mistakes can be made"):
 
 1. **Instructions** - the run manifest `docs/optimize/<tag>/RUN.md` -
    human-approved at setup, LOCKED for the run's duration.
-2. **Scoring** - `tools/scorers/**` + `tools/scorers/PINS.json` - locked
+2. **Scoring** - `tools/scorers/**` + `tools/scorers/PINS.json`, and the
+   GUARDS that carry the anti-overfit floor (`tools/guard-pins.json`) - locked
    ALWAYS (in and out of runs), hash-pinned, re-verified every round.
 3. **Asset** - the manifest's `assets` globs - the ONLY agent-writable
    repo surface while a run is active.
@@ -42,8 +43,11 @@ merge (CI), and remain a `scorer-lock-bypass`-class friction event.
 ## The two seams (user-order-only, always surfaced)
 
 - `SCORER_LOCK_ALLOW=1` - scorer authoring/maintenance + `pin_scorer.py
-  pin`. The PINS.json diff ships in the PR; reviewer sign-off is the
-  honesty gate.
+  pin`, and guard re-pinning via `pin_scorer.py pin-guard`. The PINS.json /
+  guard-pins.json diff ships in the PR; reviewer sign-off is the honesty
+  gate. A guard defines the FLOOR an experiment must clear, so moving one is
+  the same class of act as moving the metric and goes through the same seam;
+  `start` refuses a declared guard whose hash diverges from its reviewed pin.
 - `OPTIMIZE_SCOPE_ALLOW=1` - mid-run out-of-scope edit (e.g. urgent
   hotfix). Downgrades deny to a loud advisory. Alternative: `stop`, fix,
   re-run.

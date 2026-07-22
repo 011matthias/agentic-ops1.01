@@ -809,3 +809,51 @@ def test_timestamp_is_appended_last_so_positional_readers_survive(tmp_path):
     row = tsv_rows(repo)[0]
     assert row[0] == "0" and row[4] == "baseline", row
     assert row[6].startswith("2026-07-22"), row
+
+
+def test_start_refuses_a_guard_that_drifted_from_its_reviewed_pin(tmp_path):
+    """A guard weakened BETWEEN runs must not be locked in at the next start.
+
+    guard_shas anchors guards for the run's DURATION, but it reads the live
+    tree, so before the guard-pin registry there was nothing to compare a
+    guard against at lock-on. Guards carry the whole RECIPES rule-3
+    anti-overfit floor, so that window mattered more than its size suggests.
+    """
+    repo = make_repo(tmp_path, numbers=("5", "4", "3"), guard=True)
+    (repo / "tools" / "guard-pins.json").write_text(
+        json.dumps({"toy-guard.py": {"sha": "0" * 40, "pinned": "2026-07-22"}},
+                   indent=2), encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "pin the guard")
+
+    proc = engine(repo, "start", "t1", expect=1)
+    assert "does not match its reviewed pin" in proc.stderr, proc.stderr
+    assert "pin-guard" in proc.stderr, "must name the re-pin seam command"
+    # A refused lock-on leaves nothing behind.
+    assert state(repo) is None
+    assert _git(repo, "branch", "--list", "optimize/t1").stdout.strip() == ""
+
+
+def test_start_warns_but_proceeds_when_a_guard_is_unpinned(tmp_path):
+    """Absence is advisory, not fatal: every manifest shipped before the
+    registry existed names unpinned guards and must keep working."""
+    repo = make_repo(tmp_path, numbers=("5", "4", "3"), guard=True)
+    proc = engine(repo, "start", "t1")
+    assert "no entry in tools/guard-pins.json" in proc.stdout, proc.stdout
+    assert "toy-guard.py" in proc.stdout
+    assert state(repo) is not None, "advisory must not block lock-on"
+
+
+def test_start_accepts_a_guard_matching_its_pin(tmp_path):
+    repo = make_repo(tmp_path, numbers=("5", "4", "3"), guard=True)
+    sha = _pin.blob_sha(str(repo / "toy-guard.py"))
+    (repo / "tools" / "guard-pins.json").write_text(
+        json.dumps({"toy-guard.py": {"sha": sha, "pinned": "2026-07-22"}},
+                   indent=2), encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "pin the guard")
+
+    proc = engine(repo, "start", "t1")
+    assert "does not match its reviewed pin" not in proc.stderr
+    assert "no entry in tools/guard-pins.json" not in proc.stdout
+    assert state(repo) is not None
