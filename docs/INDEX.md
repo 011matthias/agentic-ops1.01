@@ -5,8 +5,13 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## b2b-cold-outreach (p028 prospect)
 | Date | Topic | Type | Link |
 |------|-------|------|------|
-| 2026-07-21 | Upwork-Independence GTM Optimize | misc | [→](docs/2026-07-21%20-%20Upwork-Independence%20GTM%20Optimize/Checkpoint.md) |
 | 2026-06-11 | P028 B2B Cold Outreach Proposal | comms | [Mini-Checkpoint-1](docs/2026-06-11%20-%20P028%20B2B%20Cold%20Outreach%20Proposal/Mini-Checkpoint-1.md) |
+
+## upwork-independence
+| Date | Topic | Type | Link |
+|------|-------|------|------|
+| 2026-07-22 | Upwork-Independence Pricing Tiers | misc | [Checkpoint](docs/2026-07-22%20-%20Upwork-Independence%20Pricing%20Tiers/Checkpoint.md) |
+| 2026-07-21 | Upwork-Independence GTM Optimize | misc | [→](docs/2026-07-21%20-%20Upwork-Independence%20GTM%20Optimize/Checkpoint.md) |
 
 ## brisken
 | Date | Topic | Type | Link |
