@@ -2,3 +2,4 @@ round	commit	score	delta	status	description
 0	b60117d	262197.0	0	baseline	baseline (asset as-is)
 1	88fd0b5	260300.0	-1897	keep	Strip HTML comments outside script/style blocks, conditional comments preserved. Pure representation; expect ~1.9 kB.
 2	54a03cb	256349.0	-3951	keep	Remove CSS rules whose selector names a class/id that appears nowhere else in the file (markup, attributes AND script text all count as 'present', so JS-toggled classes survive). Conservative static reachability, per-page.
+3	7ee3ed7	251507.0	-4842	keep	Drop leading indentation and blank lines inside <style> only. One declaration still per line, so the CSS stays readable and diffable; this is the half of minification that costs nothing in maintainability.
