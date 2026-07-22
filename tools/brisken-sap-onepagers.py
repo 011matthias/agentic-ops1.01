@@ -65,6 +65,22 @@ def lchip(key: str) -> str:
     return (f'<span class="lchip"><img src="data:image/png;base64,{LOGOS[key]}" alt=""></span>')
 
 
+# The brisken mark is a 92 KB base64 blob and appears in two places on a web
+# page (nav + print letterhead). Inlining it twice put ~92 KB of duplicate text
+# in every page; defining it once in CSS and pointing both at it does not.
+# Native size 718x157, so width:height is 4.573:1; both users set an explicit
+# box because a background image has no intrinsic size to lay out from.
+LOGO_CSS = (
+    f'.blogo{{background-image:url("data:image/png;base64,{LOGOS["brisken"]}");'
+    'background-repeat:no-repeat;background-position:left center;'
+    'background-size:contain;display:block;flex:0 0 auto;}'
+)
+
+
+def blogo(cls: str) -> str:
+    return f'<span class="blogo {cls}" role="img" aria-label="Brisken"></span>'
+
+
 # --------------------------------------------------------------------------- #
 BASE_CSS = r"""
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -320,81 +336,62 @@ def body_bank_fee_portal():
     return f'''<main>
   <div class="hero">
     <div>
-      <div class="eyebrow">Bank fee control</div>
+      <div class="eyebrow">Bank fee statements</div>
       <h1>Bank Fee<br>Portal</h1>
-      <p class="promise">Check every bank charge against what you actually agreed, line by line.</p>
-      <p class="rename">Overcharges slip through because nobody reconciles fees against the agreement.</p>
+      <p class="promise">Every bank's fee statement, whatever format it arrives in, turned into data your fee analyzer can actually read.</p>
+      <p class="rename">The statements that arrive off-format never reach the analyzer, so their fees never get reviewed.</p>
     </div>
     <div class="panel">
-      <div class="vlab">Charged vs agreed</div>
-      <div class="fee">
-        <div class="chart">
-          <div class="cbar"><div class="col" style="height:52mm;background:linear-gradient(180deg,#cbd5e1,#94a3b8);"><div class="over"></div></div><div class="clab"><b>Charged</b>what the bank billed</div></div>
-          <div class="cbar"><div class="col" style="height:31mm;background:var(--ac);"></div><div class="clab"><b>Agreed</b>what you negotiated</div></div>
-        </div>
-        <div class="ledger">
-          <div class="lhead">Line by line</div>
-          <div class="lrow"><span>Wire transfer fee</span><span class="ltag ok">matches</span></div>
-          <div class="lrow"><span>FX conversion margin</span><span class="ltag flag">flagged</span></div>
-          <div class="lrow"><span>Custody fee</span><span class="ltag ok">matches</span></div>
-          <div class="lrow"><span>Cash management</span><span class="ltag ok">matches</span></div>
-          <div class="lrow"><span>Payment processing</span><span class="ltag flag">flagged</span></div>
-        </div>
+      <div class="vlab">Any format in &middot; one structure out</div>
+      <div class="rflow">
+        <div class="rrow"><span class="dpill">CAMT.086</span><span class="dpill">XML</span><span class="dpill">TWIST BSB</span><span class="dpill">Bank proprietary</span></div>
+        <div class="rside">One fee statement per bank, every bank a different shape</div>
+        <div class="stem"></div>
+        <div class="dai">reads &middot; validates &middot; enriches</div>
+        <div class="stem"></div>
+        <div class="outs"><span class="out">Bank Fee Analyzer</span><span class="out">TMS</span><span class="out">Analytics</span></div>
+        <div class="vcap">The portal prepares the data. The analyzer runs the comparison.</div>
       </div>
     </div>
   </div>
   <div>
     <div class="band-lab">How it works</div>
     <div class="steps">
-      <div class="step"><div class="sn">1</div><div class="st">Load</div><div class="sd">Every bank statement and fee line, from every account.</div></div>
-      <div class="step"><div class="sn">2</div><div class="st">Match</div><div class="sd">Each charge against your negotiated agreement.</div></div>
-      <div class="step"><div class="sn">3</div><div class="st">Flag</div><div class="sd">Every variance, with a line-level trail behind it.</div></div>
+      <div class="step"><div class="sn">1</div><div class="st">Read</div><div class="sd">Every fee statement, from every account, in any format.</div></div>
+      <div class="step"><div class="sn">2</div><div class="st">Validate and enrich</div><div class="sd">Checked, and the derived fees calculated rather than left buried.</div></div>
+      <div class="step"><div class="sn">3</div><div class="st">Deliver</div><div class="sd">Into your Bank Fee Analyzer, TMS or analytics, plus a dashboard.</div></div>
     </div>
   </div>
-  {dark_band("What it <span>recovers</span>", [
-      "Overcharges that would otherwise be paid without a second look",
-      "The audit trail behind every fee, in one place, not scattered across statements"], mark="+")}
+  {dark_band("What it <span>puts in reach</span>", [
+      "The banks whose statement format never reached the fee review before",
+      "Derived fees calculated during enrichment, instead of left buried in the file"], mark="+")}
 </main>'''
 
 
 def body_treasurycentral():
-    import math
-    nodes = ["Cash", "Investments", "Debt", "FX", "Market Data", "Governance"]
-    cx, cy = 75.0, 37.0
-    rx, ry = 56.0, 28.0
-    node_html, spokes = "", ""
-    for i, name in enumerate(nodes):
-        ang = -90 + i * 60
-        rad = math.radians(ang)
-        x = cx + rx * math.cos(rad)
-        y = cy + ry * math.sin(rad)
-        spokes += (f'<line x1="{cx:.1f}" y1="{cy:.1f}" x2="{x:.1f}" y2="{y:.1f}" '
-                   f'stroke="var(--ac)" stroke-width="0.5" stroke-opacity="0.35"/>')
-        node_html += (f'<div class="rad-node" style="left:{x / 150 * 100:.1f}%;top:{y / 74 * 100:.1f}%;">{name}</div>')
-    svg = f'<svg viewBox="0 0 150 74" preserveAspectRatio="none" fill="none">{spokes}</svg>'
+    pillars = "".join(f'<div class="pil">{x}</div>'
+                      for x in ["Market data governance", "Autonomous trading"])
     return f'''<main>
   <div class="hero stack">
-    <div class="eyebrow">The treasury cockpit</div>
+    <div class="eyebrow">The treasury workspace</div>
     <h1>Treasury<span class="ac">Central</span></h1>
-    <p class="promise">Cash, investments, debt, FX and market data in one screen, on your SAP data.</p>
+    <p class="promise">Where your people and AI agents run treasury together, on top of your SAP systems.</p>
   </div>
-  <div class="panel">
-    <div class="vlab">One cockpit &middot; six domains</div>
-    <div class="radial">
-      {svg}
-      <div class="rad-core"><div class="c1">Treasury<span class="ac">Central</span></div><div class="c2">the cockpit</div></div>
-      {node_html}
-    </div>
+  <div class="arch">
+    <div class="arch-top">Treasury<span class="ac">Central</span><span class="lab">the treasury workspace</span></div>
+    <div class="arch-conn"></div>
+    <div class="arch-pillars">{pillars}</div>
+    <div class="arch-base">on <b>OnePilot</b>, on your SAP data</div>
   </div>
   <div class="cols2">
     <div>
-      <div class="band-lab">One place to act</div>
-      <p class="p">See the position and act on it in one screen, across all six treasury domains. Governance is built in, not bolted on afterwards.</p>
+      <div class="band-lab">One workspace</div>
+      <p class="p">The treasurer's day on one surface, with people and AI agents working together and the process orchestrated end to end. Governance is built in, not bolted on afterwards.</p>
     </div>
     <div>
-      <div class="band-lab">What it delivers</div>
-      {dots(["No separate data store to reconcile; it works on the SAP data you already trust.",
-             "Every move logged, every action inside your controls."])}
+      <div class="band-lab">Two applications underneath</div>
+      {dots(["Market data governance and autonomous trading, run on OnePilot.",
+             "No separate data store; it works on the SAP data you already trust, every action inside your controls."])}
     </div>
   </div>
 </main>'''
@@ -444,7 +441,7 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
 .wnav{position:sticky;top:0;z-index:40;display:flex;justify-content:space-between;align-items:center;
   gap:16px;padding:11px 26px;background:rgba(255,255,255,.92);border-bottom:1px solid #e6ebf2;}
 .wnav .nl{display:flex;align-items:center;gap:11px;min-width:0;}
-.wnav .nl .nlogo{height:22px;display:block;}
+.wnav .nl .nlogo{height:22px;width:101px;display:block;}
 .wnav .nl .sep{color:#cbd5e1;}
 .wnav .nl .plabel{font-family:'Space Grotesk';font-weight:600;font-size:14px;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .wnav .nr{display:flex;align-items:center;gap:14px;flex:0 0 auto;}
@@ -554,6 +551,75 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
 .wtable td.hl{color:#0f172a;font-weight:500;background:var(--glow);}
 .wtable-note{font-size:14px;color:#94a3b8;margin-top:14px;line-height:1.55;}
 
+/* print-only letterhead: the nav (the only Brisken mark on screen) is hidden in
+   print, so the downloaded PDF would otherwise open with nothing identifying
+   Brisken on it. This block is invisible on screen and heads page 1 in print. */
+.wprint-head{display:none;}
+
+/* ---- TreasuryCentral: OnePilot is the field, not a box -------------------
+   Dirk's V3 model (TreasuryCentral-Architecture-Handoff.md, SharePoint
+   MARKETING / WIP PPTX 2026, 2026-07-21), sections 2.2 and 3: OnePilot is
+   not a box among boxes, it is the whole environment, and everything floats
+   inside it. There is no "outside".
+   His own verdict on the V3 render was "still very boring, boxes everywhere"
+   (35 bordered tiles in two grids), so the rosters here are flowing text on
+   the field and the workspace card is the only bordered element. */
+.tcf{position:relative;overflow:hidden;border-radius:16px;padding:24px;
+  background:radial-gradient(130% 100% at 50% -22%,#232466,#111634 52%,#080b1d);
+  box-shadow:inset 0 0 0 1px rgba(129,140,248,.3);}
+.tcf .fl{font-family:'Space Grotesk';font-size:10.5px;font-weight:600;letter-spacing:.2em;
+  text-transform:uppercase;color:#767f9f;margin-bottom:15px;text-align:center;}
+.tcf .fl b{color:#a5b0ff;font-weight:600;}
+.tcf .sep{color:#525b8a;margin:0 3px;font-weight:400;}
+.tcf .it{white-space:nowrap;}
+
+/* the workspace: the one card in the diagram */
+.tcws{position:relative;border:1px solid rgba(129,140,248,.55);border-radius:12px;padding:19px 21px;
+  background:linear-gradient(180deg,rgba(99,102,241,.19),rgba(99,102,241,.05));
+  box-shadow:0 0 46px -8px rgba(99,102,241,.45);}
+.tcws .nm{font-family:'Space Grotesk';font-size:24px;font-weight:700;color:#fff;letter-spacing:-.5px;line-height:1;}
+.tcws .nm .ac{color:#a5b0ff;}
+.tcws .sub{font-family:'Space Grotesk';font-size:10.5px;font-weight:600;letter-spacing:.19em;
+  text-transform:uppercase;color:#8990b4;margin-top:8px;}
+.tcws .ln{font-size:14.5px;line-height:1.55;color:#c9cee6;margin-top:13px;}
+.tcws .cap{font-size:13px;font-weight:600;color:#a5b0ff;margin-top:13px;}
+.tcws .cap .sep{color:#6a72a8;margin:0 7px;}
+/* the real product shot, in place of V3's striped image placeholder */
+.tcshot{margin:16px 0 0;padding:0;}
+.tcshot img{display:block;width:100%;height:auto;border-radius:8px;
+  border:1px solid rgba(148,163,184,.22);}
+.tcshot figcaption{font-size:11.5px;color:#7e86a8;margin-top:8px;}
+.tcapps{margin-top:16px;padding-top:15px;border-top:1px solid rgba(148,163,184,.2);
+  font-size:14px;font-weight:600;line-height:2;color:#e7eaf6;}
+.tcapps .own{color:#a5b0ff;}
+.tcdesk{margin-top:14px;padding-top:13px;border-top:1px solid rgba(148,163,184,.14);
+  font-size:13px;color:#99a1c0;line-height:1.75;}
+.tcdesk .dk{font-family:'Space Grotesk';font-size:9.5px;font-weight:600;letter-spacing:.17em;
+  text-transform:uppercase;color:#6f7793;margin-right:11px;}
+
+/* OnePilot woven through the stack: a thread, never a layer box */
+.tcw{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;margin:21px 0 17px;}
+.tcw .wn{font-family:'Space Grotesk';font-size:14.5px;font-weight:700;color:#a5b0ff;white-space:nowrap;}
+.tcw .wr{flex:1 1 60px;height:1px;background:linear-gradient(90deg,rgba(129,140,248,.65),rgba(129,140,248,.06));}
+.tcw .wt{font-size:12.5px;line-height:1.5;color:#8b93b8;max-width:56ch;}
+
+/* the two rosters: label plus flowing text, no tiles */
+.tcb+.tcb{margin-top:17px;}
+.tcb .bl{font-family:'Space Grotesk';font-size:9.5px;font-weight:600;letter-spacing:.19em;
+  text-transform:uppercase;color:#6f7793;margin-bottom:9px;}
+.tcb .bi{font-size:14px;line-height:1.95;color:#c4cade;}
+.tcb .bi b{color:#fff;font-weight:700;}
+.tcb .bi .q{color:#7e86a8;font-size:12.5px;}
+
+/* hero panel runs the same field at reduced density */
+.tcf.compact{padding:19px;}
+.tcf.compact .tcws{padding:16px 17px;}
+.tcf.compact .tcws .nm{font-size:21px;}
+.tcf.compact .tcws .ln{font-size:13.5px;margin-top:11px;}
+.tcf.compact .tcw{margin:16px 0 13px;}
+.tcf.compact .tcb .bi{font-size:13px;line-height:1.85;}
+@media(max-width:900px){.tcw .wt{max-width:none;}}
+
 /* proof strip + closing CTA + footer */
 .wproof{padding:44px 0;text-align:center;}
 .wproof .proof{margin-top:0;}
@@ -578,6 +644,14 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
   *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
   html,body{background:#fff !important;}
   .wnav,.wcta-band{display:none !important;}
+  /* Brisken letterhead on page 1 of every downloaded PDF */
+  .wprint-head{display:flex !important;align-items:center;justify-content:space-between;gap:12mm;
+    padding:0 0 4mm;margin-bottom:6mm;border-bottom:1px solid #e6ebf2;border-top:1.3mm solid var(--ac);
+    padding-top:4mm;break-after:avoid;}
+  .wprint-head .plogo{height:9mm;width:41mm;display:block;}
+  .wprint-head .pright{display:flex;align-items:center;gap:3mm;font-size:10pt;color:#475569;font-weight:500;white-space:nowrap;}
+  .wprint-head .psap{background:#0a6ed1;color:#fff;font-weight:700;font-size:8.5pt;padding:1mm 2mm;border-radius:1.2mm;letter-spacing:.5px;}
+  .wprint-head .pdoc{font-family:'Space Grotesk';font-weight:600;color:#0f172a;}
   .inner{max-width:none !important;padding:0 !important;}
   section,.wband,.whero,.wproof{border-bottom:none !important;}
   .whero{background:none !important;}
@@ -597,10 +671,29 @@ body{width:auto;height:auto;min-height:100vh;background:#f4f7fb;color:#334155;
   .wstat .n{font-size:34px !important;}
   .wfaq p{font-size:12.5px !important;max-width:none !important;}
   .wfaq details{padding:12px 0 !important;}
+  /* the open-state toggle is a rotated "+", which prints as a red x next to
+     every question and reads as an error mark on paper. Screen-only affordance. */
+  .wfaq summary::after{display:none !important;}
   .wcard .cd{font-size:12px !important;}
   .wproof{padding:6mm 0 !important;}
   .wfoot{background:#fff !important;padding:6mm 0 0 !important;}
   a{color:inherit !important;}
+  /* the OnePilot field keeps its dark ground in the PDF (colour-adjust is
+     forced above); only the density comes down to A4.
+     The shared .wband break-inside:avoid would move this whole band, product
+     shot and all, to the next page and strand an 80%-empty page behind it, so
+     this one band may break; the field itself still may not. */
+  .wband:has(.tcf){break-inside:auto !important;}
+  .tcshot img{max-height:62mm;object-fit:contain;object-position:left top;}
+  .tcf{break-inside:avoid;padding:5mm !important;}
+  .tcws{padding:4mm !important;}
+  .tcws .nm{font-size:17px !important;}
+  .tcws .ln{font-size:11.5px !important;margin-top:2.5mm !important;}
+  .tcws .cap{font-size:11px !important;margin-top:2.5mm !important;}
+  .tcapps{font-size:11.5px !important;line-height:1.75 !important;margin-top:3mm !important;padding-top:3mm !important;}
+  .tcdesk{font-size:10.5px !important;line-height:1.6 !important;}
+  .tcw{margin:4mm 0 3.5mm !important;}
+  .tcb .bi{font-size:11.5px !important;line-height:1.75 !important;}
 }
 """
 
@@ -641,17 +734,29 @@ DECK_CSS = r"""
 # the restraint of the shipped one-pagers (no unbacked "live customer" line).
 LAST_UPDATED = "2026-07-14"
 
+# Brisken's own primary call to action, verified live 2026-07-22:
+# www.brisken.com's single nav CTA is "Book a demo" -> /demo, a working form
+# ("See TreasuryCentral running on SAP"). The product pages reuse it rather than
+# inventing a contact route.
+DEMO_URL = "https://www.brisken.com/demo"
+
+
+def dl_name(p) -> str:
+    """Filename the browser saves the PDF under. The served path stays
+    /{short}.pdf (index.html and the deck pages link to it), but a file landing
+    in someone's Downloads folder has to say Brisken on it."""
+    return "Brisken-" + p["title"].replace(" ", "-").replace("&", "and") + ".pdf"
+
 
 def _cta_buttons(p, hero=True):
+    """Primary action is always the demo: a reader who wants the product needs a
+    way to ask for it, and a download link is not one."""
     pdf = f'/{p["short"]}.pdf'
-    deck = p.get("deck")
-    if deck:
-        primary = f'<a class="wbtn primary" href="{deck}">See the full deck &rarr;</a>'
-        second = f'<a class="wbtn ghost" href="{pdf}" download>Download as PDF</a>'
-    else:
-        primary = f'<a class="wbtn primary" href="{pdf}" download>Download as PDF</a>'
-        second = '<a class="wbtn ghost" href="/">All resources</a>'
-    return primary + second
+    out = [f'<a class="wbtn primary" href="{DEMO_URL}">{p.get("cta_btn", "Book a demo")} &rarr;</a>']
+    if p.get("deck"):
+        out.append(f'<a class="wbtn ghost" href="{p["deck"]}">See the full deck</a>')
+    out.append(f'<a class="wbtn ghost" href="{pdf}" download="{dl_name(p)}">Download as PDF</a>')
+    return "".join(out)
 
 
 def web_hero(p, eyebrow, h1, promise, points, visual, rename="", bare=False):
@@ -752,20 +857,29 @@ def web_chips(items):
 
 def web_cta_band(p):
     deck = p.get("deck")
-    btns = []
+    # Default closing copy per product shape. The old default promised "the full
+    # deck" on the four products that have no deck; only the two that do get it.
     if deck:
-        btns.append(f'<a class="wbtn primary" href="{deck}">See the full deck &rarr;</a>')
-    btns.append(f'<a class="wbtn primary" href="/{p["short"]}.pdf" download>Download as PDF</a>' if not deck
-                else f'<a class="wbtn ghost" href="/{p["short"]}.pdf" download>Download as PDF</a>')
+        h2 = p.get("cta_h", "Want the full picture?")
+        para = p.get("cta_p", "The deck goes deeper. A demo shows it running on SAP.")
+    else:
+        h2 = p.get("cta_h", "See it running on SAP")
+        para = p.get("cta_p", "Bring your own systems and formats to the call; we will walk through what the fit looks like.")
+    btns = [f'<a class="wbtn primary" href="{DEMO_URL}">{p.get("cta_btn", "Book a demo")} &rarr;</a>']
+    if deck:
+        btns.append(f'<a class="wbtn ghost" href="{deck}">See the full deck</a>')
+    btns.append(f'<a class="wbtn ghost" href="/{p["short"]}.pdf" download="{dl_name(p)}">Download as PDF</a>')
     btns.append('<a class="wbtn ghost" href="https://www.brisken.com">www.brisken.com</a>')
-    return (f'<section class="wcta-band"><div class="inner"><h2>{p.get("cta_h", "Want the full picture?")}</h2>'
-            f'<p>{p.get("cta_p", "The one-pager is the summary. The full deck and the team go deeper.")}</p>'
+    return (f'<section class="wcta-band"><div class="inner"><h2>{h2}</h2>'
+            f'<p>{para}</p>'
             f'<div class="wcta" style="justify-content:center;">{"".join(btns)}</div></div></section>')
 
 
-def web_footer():
+def web_footer(p=None):
+    # Per-product stamp: a page that was not touched must not claim today's date.
+    updated = (p or {}).get("updated", LAST_UPDATED)
     return (f'<footer class="wfoot"><b>Brisken</b>, an SAP Co-Innovation Partner &middot; '
-            f'<a href="https://www.brisken.com">www.brisken.com</a><br>Last updated: {LAST_UPDATED}</footer>')
+            f'<a href="https://www.brisken.com">www.brisken.com</a><br>Last updated: {updated}</footer>')
 
 
 # ---- per-product visuals (reuse the A4 brand widgets, laid out for a panel) --
@@ -797,38 +911,117 @@ def vis_remittance():
 
 
 def vis_bank_fee():
-    # Shorter bars, and a chart box tall enough to contain the bar PLUS its
-    # caption (the .cbar is bar + caption; with align-items:flex-end a caption
-    # that overflows the box pushes the bar top up into the label). Extra height
-    # keeps clear air between the "Charged vs agreed" label and the bars.
-    return ('<div class="wvlab">Charged vs agreed</div>'
-            '<div class="chart" style="height:60mm;">'
-            '<div class="cbar"><div class="col" style="height:40mm;background:linear-gradient(180deg,#cbd5e1,#94a3b8);"><div class="over"></div></div><div class="clab"><b>Charged</b>what the bank billed</div></div>'
-            '<div class="cbar"><div class="col" style="height:24mm;background:var(--ac);"></div><div class="clab"><b>Agreed</b>what you negotiated</div></div>'
-            '</div>'
-            '<div class="ledger" style="margin-top:16px;"><div class="lhead">Line by line</div>'
-            '<div class="lrow"><span>Wire transfer fee</span><span class="ltag ok">matches</span></div>'
-            '<div class="lrow"><span>FX conversion margin</span><span class="ltag flag">flagged</span></div>'
-            '<div class="lrow"><span>Custody fee</span><span class="ltag ok">matches</span></div>'
-            '<div class="lrow"><span>Cash management</span><span class="ltag ok">matches</span></div>'
-            '<div class="lrow"><span>Payment processing</span><span class="ltag flag">flagged</span></div></div>')
+    # 2026-07-21 Dirk review: the previous visual was a charged-vs-agreed bar
+    # chart over a "matches / flagged" ledger, i.e. a picture of the comparison
+    # the portal does NOT run. Replaced with the mechanism it does run: every
+    # statement format in, validated and enriched, delivered to the analyzer.
+    fmts = ["CAMT.086", "XML", "TWIST BSB", "Bank proprietary"]
+    pills = "".join(f'<span class="dpill">{f}</span>' for f in fmts)
+    outs = "".join(f'<span class="out">{o}</span>'
+                   for o in ["Bank Fee Analyzer", "TMS", "Analytics"])
+    return ('<div class="wvlab">Any format in &middot; one structure out</div>'
+            '<div class="rflow">'
+            f'<div class="rrow">{pills}</div>'
+            '<div class="rside">One fee statement per bank, every bank a different shape</div>'
+            '<div class="stem"></div>'
+            '<div class="dai">reads &middot; validates &middot; enriches</div>'
+            '<div class="stem"></div>'
+            f'<div class="outs">{outs}</div>'
+            '<div class="vcap">The portal prepares the data. The analyzer runs the comparison.</div>'
+            '</div>')
+
+
+# Dirk's V3 architecture model, taken from TreasuryCentral-Architecture-Handoff.md
+# (SharePoint MARKETING / WIP PPTX 2026, written 2026-07-21, sent 21:30 the same
+# evening). Rosters are his, verbatim except "&" spelled out: apps from 2.3,
+# desktop from 2.4, counterparties from 2.5, enterprise systems from 2.6.
+TC_APPS = ["Market Data Governance", "SmartTrading", "Liquidity Portal", "ESG Portal",
+           "Credit Data Portal", "Bank Statement Generator", "Bank Fee Portal",
+           "Bank Messaging Gate"]
+TC_DESK = ["Mail", "Teams", "Calendar", "Documents and office"]
+TC_EXTERNAL = ["Data providers", "Trading venues", "Banks", "Central banks",
+               "Government offices", "Credit and rating agencies", "Exchanges",
+               "Custodians", "Clearing houses", "Payment networks", "Authorities",
+               "Tariffs and customs"]
+TC_ENTERPRISE = ["Other ERPs", "Databases", "Data lakes", "BI and analytics",
+                 "Trading and OMS", "Risk systems", "Import and export",
+                 "Document management", "APIs and connectors", "Best-of-breed apps"]
+# 6.1 and 6.2 of the handoff, the two woven OnePilot lines.
+TC_WOVEN1 = "one governed layer that brings every source into the workspace, visible, accessible, actionable"
+TC_WOVEN2 = "and every enterprise system too, one governed layer for data, process and control"
+
+
+def _tcflow(items):
+    """A roster as flowing text. Dirk's V3 drew each of these as a bordered
+    tile, which is what made him call his own diagram boxes everywhere.
+    Each term is nowrap so a two-word product name breaks between terms and
+    never through one ("Bank Messaging / Gate"). The literal spaces around the
+    separator are load-bearing: they are the only break opportunities left once
+    the terms themselves cannot break, and without them the row overflows the
+    field instead of wrapping."""
+    return ' <span class="sep">&middot;</span> '.join(f'<span class="it">{i}</span>' for i in items)
+
+
+def _tcwoven(text=""):
+    t = f'<span class="wt">{text}</span>' if text else ""
+    return f'<div class="tcw"><span class="wn">Brisken OnePilot</span><span class="wr"></span>{t}</div>'
 
 
 def vis_treasurycentral():
-    import math
-    nodes = ["Cash", "Investments", "Debt", "FX", "Market Data", "Governance"]
-    cx, cy, rx, ry = 75.0, 37.0, 56.0, 28.0
-    node_html, spokes = "", ""
-    for i, name in enumerate(nodes):
-        rad = math.radians(-90 + i * 60)
-        x = cx + rx * math.cos(rad)
-        y = cy + ry * math.sin(rad)
-        spokes += f'<line x1="{cx:.1f}" y1="{cy:.1f}" x2="{x:.1f}" y2="{y:.1f}" stroke="var(--ac)" stroke-width="0.5" stroke-opacity="0.35"/>'
-        node_html += f'<div class="rad-node" style="left:{x / 150 * 100:.1f}%;top:{y / 74 * 100:.1f}%;">{name}</div>'
-    svg = f'<svg viewBox="0 0 150 74" preserveAspectRatio="none" fill="none">{spokes}</svg>'
-    return (f'<div class="wvlab">One cockpit &middot; six domains</div>'
-            f'<div class="radial">{svg}<div class="rad-core"><div class="c1">Treasury<span class="ac">Central</span></div>'
-            f'<div class="c2">the cockpit</div></div>{node_html}</div>')
+    """Hero panel: the one idea, at panel scale. The full roster is the
+    architecture band further down the page, so this states the relationship
+    (the workspace sits inside the field) without repeating the detail."""
+    return ('<div class="wvlab">It&rsquo;s all OnePilot &middot; TreasuryCentral is the workspace inside it</div>'
+            '<div class="tcf compact">'
+            '<div class="tcws">'
+            '<div class="nm">Treasury<span class="ac">Central</span></div>'
+            '<div class="sub">The treasury workspace</div>'
+            '<div class="ln">Where your people and AI agents run treasury together, '
+            'the whole treasury day on one surface.</div>'
+            f'<div class="cap">{_tcflow(["Orchestration", "Automation", "Monitoring", "Compliance"])}</div>'
+            '</div>'
+            + _tcwoven()
+            + '<div class="tcb"><div class="bl">Everything treasury deals with</div>'
+            f'<div class="bi">{_tcflow(["Banks", "Trading venues", "Data providers", "Central banks", "Authorities"])}</div></div>'
+            '<div class="tcb"><div class="bl">Everything the business runs on</div>'
+            f'<div class="bi">{_tcflow(["<b>SAP</b>", "Other ERPs", "Data lakes", "Trading and OMS", "Best-of-breed apps"])}</div></div>'
+            '</div>')
+
+
+def tc_architecture():
+    """The full V3 model at band width. One field, one card, two woven threads,
+    two rosters as text.
+
+    The workspace card carries a real product shot where Dirk's V3 had a
+    striped "[IMAGE] humans + agents collaborating in TC" placeholder (handoff
+    5). Source: SharePoint MARKETING, "260621_ONEPILOT for Financial Planning
+    - screenshots only (TreasuryCentral Design).pptx", the investment-dashboard
+    frame, cropped to the content area. The crop drops the left nav on purpose:
+    it carried dirk.neumann@brisken.com, which does not belong on a published
+    page. Dataset in the shot is demo data."""
+    shot = _b64("treasurycentral-workspace")
+    apps = (_tcflow(TC_APPS) + '<span class="sep">&middot;</span>'
+            '<span class="own">+ the use cases your own team builds</span>')
+    return ('<div class="tcf">'
+            '<div class="fl">It&rsquo;s all OnePilot &middot; <b>TreasuryCentral</b> is the treasury workspace inside it</div>'
+            '<div class="tcws">'
+            '<div class="nm">Treasury<span class="ac">Central</span></div>'
+            '<div class="sub">The treasury workspace</div>'
+            '<div class="ln">Where humans and agents collaborate, the whole treasury day on one surface.</div>'
+            f'<div class="cap">{_tcflow(["Orchestration", "Automation", "Monitoring", "Compliance"])}</div>'
+            f'<figure class="tcshot"><img src="data:image/png;base64,{shot}" alt="The TreasuryCentral workspace: an investment dashboard in OnePilot, showing request status, volume by transaction type and top products by volume." loading="lazy">'
+            '<figcaption>The workspace today: the investment dashboard, running in OnePilot.</figcaption></figure>'
+            f'<div class="tcapps">{apps}</div>'
+            f'<div class="tcdesk"><span class="dk">Your workstation, now in the workspace</span>{_tcflow(TC_DESK)}</div>'
+            '</div>'
+            + _tcwoven(TC_WOVEN1)
+            + '<div class="tcb"><div class="bl">External services and counterparties</div>'
+            f'<div class="bi">{_tcflow(TC_EXTERNAL)}</div></div>'
+            + _tcwoven(TC_WOVEN2)
+            + '<div class="tcb"><div class="bl">Enterprise systems and data</div>'
+            f'<div class="bi"><span class="it"><b>SAP</b></span> <span class="it q">on-prem, private cloud, public cloud</span>'
+            f'<span class="sep">&middot;</span>{_tcflow(TC_ENTERPRISE)}</div></div>'
+            '</div>')
 
 
 def vis_onepilot():
@@ -1007,59 +1200,70 @@ def web_body_remittance(p):
 
 
 def web_body_bank_fee(p):
+    # 2026-07-21 Dirk review, verbatim: "we do not do the analysis itself, we
+    # could, but we do not"; a comparative-analysis claim would need us to read
+    # the bank statements too and pair the portal with the SAP Bank Fee Analyzer.
+    # Every claim below is one of REF s23's four Application Features (reads any
+    # format / validates and enriches to calculate derived fees / sends to a Bank
+    # Fee Analyzer, TMS or analytics / one dashboard for on-demand analysis),
+    # sourced via deliverables/tc-overview-redesign/CHANGELOG-substance-pass.md
+    # S29. The charged-vs-agreed comparison is attributed to the analyzer
+    # throughout, never to the portal.
     return (
         web_hero(
-            p, "Bank fee control", 'Bank <span class="ac">Fee Portal</span>',
-            "Check every bank charge against what you actually agreed, line by line.",
-            ["Loads every bank fee statement in any format: CAMT.086, TWIST BSB and proprietary.",
-             "Matches each charge against your negotiated agreement and flags every variance.",
-             "A line-level audit trail behind every fee, in one place, not scattered across statements.",
-             "Sits in front of SAP's own bank-fee analysis, so every bank reaches the review."],
+            p, "Bank fee statements", 'Bank <span class="ac">Fee Portal</span>',
+            "Every bank's fee statement, whatever format it arrives in, turned into data your fee analyzer can actually read.",
+            ["Reads every bank fee statement format: CAMT.086, XML, TWIST BSB and each bank's own layout.",
+             "Validates each statement and enriches it, calculating the derived fees that are hard to catch by hand.",
+             "Delivers the structured result to your Bank Fee Analyzer, your TMS or your analytics.",
+             "One dashboard for on-demand analysis across every account and every bank."],
             vis_bank_fee())
         + web_band("The problem",
-                   '<p class="wlede">Bank fee statements arrive in three shapes: the older TWIST BSB format, the ISO 20022 CAMT.086 that is replacing it, and each bank\'s own proprietary layout. SAP added native bank-fee analysis in S/4HANA 1809, but it expects clean CAMT.086 in. The statements that arrive in any other format never reach the analyzer, so the fees on them never get reviewed.</p>'
-                   '<p class="wlede" style="margin-bottom:0;">Fee leakage is rarely a single dramatic overcharge; it is the slow drift between a contracted rate and what the bank actually applies, on exactly those statements nobody reviews. The Bank Fee Portal sits in front and accepts every format, normalizes it, and feeds the analysis, so the fee review covers every bank, not just the ones that happen to send clean files.</p>',
+                   '<p class="wlede">Bank fee statements arrive in four shapes: the older TWIST BSB format, the ISO 20022 CAMT.086 that is replacing it, plain XML, and each bank\'s own proprietary layout. SAP added native bank-fee analysis in S/4HANA 1809, but it expects clean CAMT.086 in. The statements that arrive in any other format never reach the analyzer, so the fees on them never get reviewed.</p>'
+                   '<p class="wlede" style="margin-bottom:0;">Derived fees make it harder still: the charge that has to be calculated out of the file rather than read off it is the one a person checking by hand misses. The Bank Fee Portal sits in front, accepts every format, validates and enriches each statement, and delivers the result into the analyzer, so the fee review covers every bank rather than only the ones that happen to send clean files.</p>',
                    h2="Getting every bank's statement into the fee review")
+        + web_band("Where we stop",
+                   '<p class="wlede" style="margin-bottom:0;">Brisken reads the fee statements, validates them, calculates the derived fees and hands over the structured result. Comparing what a bank charged against what you negotiated runs in SAP\'s Bank Fee Analyzer, or in whichever TMS or analytics tool you already own; that comparison also needs your bank statements alongside the fee statements. The portal is what gets every bank into it, including the ones whose format never made it in before.</p>',
+                   h2="The portal prepares the data; the analyzer runs the comparison", alt=True)
         + web_band("How it works", web_steps([
-            ("1", "Load", "Every bank statement and fee line, from every account, in any format: CAMT.086, TWIST BSB or proprietary."),
-            ("2", "Match", "Each charge is compared against the fee you negotiated in the agreement."),
-            ("3", "Flag", "Every variance is surfaced, with a line-level trail behind it."),
-        ]), h2="Every statement in, every variance flagged",
-            lede="The portal ingests the statements, enriches each fee line for cost analytics, and feeds SAP's analysis, so the comparison of charged against agreed can run on every account.", alt=True)
+            ("1", "Read", "Every fee statement, from every account, in CAMT.086, XML, TWIST BSB or the bank's own layout."),
+            ("2", "Validate and enrich", "Each statement is checked and enriched, with the derived fees calculated rather than left buried in the file."),
+            ("3", "Deliver", "The structured result goes to your Bank Fee Analyzer, TMS or analytics, plus a dashboard for on-demand analysis."),
+        ]), h2="Every statement in, one structure out",
+            lede="Configured once per bank, the ingest then runs on its own.")
         + web_band("How it compares", web_table(
-            ["", "Bank Fee Portal in front of SAP", "SAP-native analysis alone", "Manual / spreadsheet"],
-            [("Input formats accepted", ["TWIST BSB, CAMT.086, proprietary, normalized in", "Clean CAMT.086", "Whatever a person can open"]),
+            ["", "Bank Fee Portal in front of the analyzer", "The analyzer alone", "Manual / spreadsheet"],
+            [("Input formats accepted", ["CAMT.086, XML, TWIST BSB, proprietary, normalized in", "Clean CAMT.086", "Whatever a person can open"]),
              ("Off-format statements", ["Parsed and delivered into the analysis", "Stall outside the app", "Re-keyed by hand, if at all"]),
-             ("Overcharge detection", ["Every bank reaches the comparison", "Only banks already on CAMT.086", "Spot-checks, not line by line"]),
-             ("Effort per cycle", ["Ingest is configured once, runs on its own", "Manual conversion for off-format banks", "Hours of clerical work each run"]),
-             ("Audit trail", ["Logged ingest, exception alerts", "Within the app for loaded data", "None beyond the spreadsheet"])],
-            note="The portal sits in front of SAP's own bank-fee analysis; it does not replace it. SAP's native analysis is capable once the data is in; the portal's job is getting every bank's statement, in any format, into it."),
-            h2="The portal versus the two usual paths")
-        + web_band("What it recovers", dark_band("What it <span>recovers</span>", [
-            "Overcharges that would otherwise be paid without a second look",
-            "The audit trail behind every fee, in one place, not scattered across statements"], mark="+"), alt=True)
-        + web_band("What it delivers", web_dots2([
-            "Every fee line enriched for cost analytics and surfaced on a dashboard.",
-            "Each charge matched against the negotiated agreement, with a line-level trail.",
-            "Every variance flagged, so overcharges are seen before they are paid.",
-            "One place for every account's fees, in every format, not scattered across statements."]))
+             ("Derived fees", ["Calculated during enrichment", "Only what the file already states", "Easy to miss by hand"]),
+             ("Who runs the comparison", ["Your Bank Fee Analyzer, TMS or analytics", "The same analyzer, on fewer banks", "A person, on spot-checks"]),
+             ("Banks reaching the review", ["Every bank that sends a statement", "Only banks already on CAMT.086", "Whatever got opened in time"]),
+             ("Effort per cycle", ["Ingest is configured once, runs on its own", "Manual conversion for off-format banks", "Hours of clerical work each run"])],
+            note="The portal sits in front of the fee analysis; it does not replace it and does not perform it. The analyzer is capable once the data is in. The portal's job is getting every bank's statement, in any format, into it."),
+            h2="The portal versus the two usual paths", alt=True)
+        + web_band("What it puts in reach", dark_band("What it <span>puts in reach</span>", [
+            "The banks whose statement format never reached the fee review before",
+            "Derived fees calculated during enrichment, instead of left buried in the file",
+            "One dashboard across every account, instead of fee data scattered across statements"], mark="+"))
         + web_band("Why format matters",
-                   web_callout("Format coverage is overcharge coverage.",
-                               "You cannot audit a fee statement you never managed to load. The bank that sends a proprietary file is the bank whose fees go unchecked, so getting that statement into the analysis is what makes the discrepancy visible. The portal sits in front and accepts every format, so no bank is left out of the review."), alt=True)
+                   web_callout("A statement you cannot load is a bank you cannot review.",
+                               "The bank that sends a proprietary file is the bank whose fees go unchecked, however good the analyzer is. Getting that statement in, structured and enriched, is what puts it in front of the analysis at all. The portal accepts every format, so no bank is left out on a technicality."), alt=True)
         + web_band("Built on the standard",
-                   '<p class="wlede" style="margin-bottom:0;">CAMT.086 is the ISO 20022 bank-fee-statement format that replaces the older TWIST BSB. SAP added native bank-fee analysis in S/4HANA release 1809, delivered as a Fiori app that compares charged fees against expected ones, but it reads clean CAMT.086 only. Banks have not standardized on it; many still send TWIST BSB or a proprietary layout, and those are exactly the statements the portal exists to normalize and bring in.</p>',
+                   '<p class="wlede" style="margin-bottom:0;">CAMT.086 is the ISO 20022 bank-fee-statement format that replaces the older TWIST BSB. SAP added native bank-fee analysis in S/4HANA release 1809, delivered as a Fiori app that compares charged fees against expected ones, but it reads clean CAMT.086 only. Banks have not standardized on it; many still send TWIST BSB, plain XML or a proprietary layout, and those are exactly the statements the portal exists to normalize and bring in.</p>',
                    h2="Where SAP's native analysis stops")
         + web_band("Works with", web_chips([
-            ("CAMT.086 (ISO 20022)", None), ("TWIST BSB", None), ("Proprietary formats", None),
-            ("&rarr;", None), ("SAP bank-fee analysis", None), ("Any Bank Fee Analyzer", None)]),
-            h2="Any statement format in, one analysis out", alt=True)
+            ("CAMT.086 (ISO 20022)", None), ("XML", None), ("TWIST BSB", None), ("Proprietary formats", None),
+            ("&rarr;", None), ("SAP Bank Fee Analyzer", None), ("Any TMS", None), ("Analytics", None)]),
+            h2="Any statement format in, one structure out", alt=True)
         + web_band("Common questions", web_faq([
+            ("Does the Bank Fee Portal compare charged fees against my agreement?",
+             "No. That comparison runs in SAP's Bank Fee Analyzer, or in the TMS or analytics tool you already use, and it needs your bank statements alongside the fee statements. The portal reads every bank's fee statement in any format, validates it, calculates the derived fees and delivers the structured result into that tool. Paired with an analyzer, it is what lets the comparison cover every bank instead of only the ones sending clean CAMT.086."),
             ("How do I automate CAMT.086 bank fee statement analysis in SAP?",
-             "CAMT.086 is the ISO 20022 bank-fee-statement format that replaces TWIST BSB. SAP added native bank-fee analysis in S/4HANA 1809 via a Fiori app, but it expects clean CAMT.086 in; banks still send proprietary and TWIST formats. A bank-fee portal ingests any format, enriches for analytics, and distributes to the analyzer, so the fee review is not gated on format."),
-            ("How do I detect bank overcharges or fee leakage with SAP treasury?",
-             "Bank fee statements are rarely audited line by line, so contracted rates and applied charges drift apart unnoticed. Loading the statements as structured data lets the system compare charged against expected fees and flag discrepancies. The portal's job is getting every statement, in any format, into that analysis so the comparison can run at all."),
+             "CAMT.086 is the ISO 20022 bank-fee-statement format that replaces TWIST BSB. SAP added native bank-fee analysis in S/4HANA 1809 via a Fiori app, but it expects clean CAMT.086 in; banks still send XML, TWIST and proprietary formats. A bank-fee portal reads any format, validates and enriches it, and distributes it to the analyzer, so the fee review is not gated on format."),
             ("How do I process TWIST BSB or proprietary bank fee statements into SAP?",
-             "Banks issue fee statements in TWIST BSB, the older industry format, in CAMT.086, and in their own proprietary layouts. SAP's native analysis expects CAMT.086, so the off-format statements stall. A format-agnostic portal parses TWIST BSB and proprietary files, normalizes them to the structure SAP's analyzer reads, and delivers them in, so no bank is left out of the review."),
+             "Banks issue fee statements in TWIST BSB, the older industry format, in CAMT.086, in plain XML, and in their own proprietary layouts. SAP's native analysis expects CAMT.086, so the off-format statements stall. A format-agnostic portal parses them, normalizes them to the structure the analyzer reads, and delivers them in, so no bank is left out of the review."),
+            ("What are derived fees, and why do they get missed?",
+             "A derived fee is one you have to calculate out of the statement rather than read off it, for example a margin or a volume-tiered charge implied by the underlying figures. A person checking a statement by hand sees the stated lines and misses the implied ones. The portal calculates them during enrichment, so they arrive at the analyzer as data rather than staying buried in the file."),
         ]))
     )
 
@@ -1067,39 +1271,42 @@ def web_body_bank_fee(p):
 def web_body_treasurycentral(p):
     return (
         web_hero(
-            p, "The treasury cockpit", 'Treasury<span class="ac">Central</span>',
-            "Cash, investments, debt, FX and market data in one screen, on your SAP data.",
-            ["One view of the money: cash, investments and debt across entities, reconciled to SAP.",
-             "FX and market data validated before they reach a decision.",
-             "Audit trail, manage-by-exception, four-eye and segregation of duties on every record."],
-            vis_treasurycentral())
+            p, "The treasury workspace", 'Treasury<span class="ac">Central</span>',
+            "Where your people and AI agents run treasury together, on the systems you already have.",
+            ["The whole treasury day on one surface: orchestration, automation, monitoring and compliance.",
+             "The treasury applications run inside it, alongside the use cases your own team builds.",
+             "Every source, counterparty and enterprise system reached through one governed layer, on your SAP data."],
+            vis_treasurycentral(), bare=True)
         + web_band("The problem",
-                   '<p class="wlede">Most SAP finance teams run several brittle, hand-built feeds to move market data, trades, bank files and remittances in and out of SAP. They break when a field changes or the person who built them leaves: no audit trail, no owner, no monitoring. Between them, the treasurer\'s day goes to moving data between screens instead of using it.</p>'
-                   '<p class="wlede" style="margin-bottom:0;">TreasuryCentral is OnePilot scoped to the treasurer: cash, investments, debt, FX, market data and governance on one screen, on your SAP data. The cockpit is what you see; OnePilot is the layer that moves the data in and out of SAP, governed end to end. It takes the brittle feeds off your team, and the treasurer stays in command.</p>',
+                   '<p class="wlede">A treasurer\'s day goes into the gaps between systems: grey-scale processing through endless SAP GUIs, and data parsed by hand out of one system and into the next process step. Around those gaps sit brittle, hand-built feeds that break when a field changes or the person who built them leaves, with no audit trail, no owner and no monitoring.</p>'
+                   '<p class="wlede" style="margin-bottom:0;">TreasuryCentral closes the gaps. It is the treasury workspace where humans and agents collaborate, and its value is bringing the business context for treasury together in one place. Underneath it, OnePilot reaches every source, counterparty and enterprise system, so the context a decision needs is already in the room instead of three screens away.</p>',
                    h2="The treasurer's day on one surface")
-        + web_band("What you get", web_cards([
-            ("One view of the money", "Cash, investments and debt",
-             "Cash positions roll up from every bank account and entity, reconciled to the statements already in SAP, so the group number is current instead of a Monday spreadsheet pull. Investments, debt and intercompany loans sit on the same screen with their maturities and interest, and every figure links back to the SAP record it came from."),
-            ("FX and market data, governed", "Numbers you can trace",
-             "Spot and forward rates, yield curves and prices arrive from Bloomberg, Refinitiv, 360T and central-bank feeds, normalized once and checked for gaps and outliers before anything posts. FX exposure by currency and entity updates as positions move, with the source and the validation recorded against each value, so a hedge decision rests on numbers you can trace."),
-            ("Control built in", "Governed by design",
-             "Every value carries where it came from, who approved it and when, so an audit follows the trail without a reconstruction project. Limits and tolerances are set once; only the records that breach them surface for a person, and a second approver signs off before a payment or a deal is released."),
+        + web_band("What the workspace is", web_cards([
+            ("Humans and agents", "One surface, worked together",
+             "Cash, investments, debt and exposure roll up from every entity, reconciled to the statements already in SAP, so the group number is current instead of a Monday spreadsheet pull. Permissioned agents do the repetitive work underneath, ingesting, validating, posting and reconciling, and surface only what needs a decision. They work inside the context the backing systems provide, which is what makes the output worth acting on."),
+            ("The applications inside it", "Treasury apps, and the ones you build",
+             "Market data governance, SmartTrading, liquidity, ESG, credit data, bank statements, bank fees and bank messaging each run as an app in the workspace, on the same governed layer. The slot that matters most is the empty one: your team builds its own use cases into solid apps here, on OnePilot, with the connectivity and the audit trail the delivered apps use."),
+            ("Your workstation, replaced", "Mail, Teams, calendar, documents",
+             "Treasury collaboration does not happen inside a treasury system. It happens across mail, chat, a calendar and a folder of attachments, and then gets re-keyed. Those sit in the workspace next to the treasury apps, so the conversation about a position and the position itself are finally in one place."),
         ]), alt=True)
-        + web_band("What it takes off your team", web_dots2([
-            "Market data: rates, curves and prices from every provider, governed into SAP.",
-            "Trades: captured at the venue and booked in SAP TRM, straight through.",
-            "Bank files: fee statements in any format, matched against the agreement.",
-            "Remittances: unstructured advice read by AI and posted to S/4HANA."]),
-            h2="The brittle feeds it replaces",
-            lede="The apps that run underneath TreasuryCentral each take one hand-built feed off your team, governed end to end, so the cockpit shows a number you can act on rather than one you have to assemble.")
+        + web_band("The architecture", tc_architecture(),
+                   h2="There is no outside",
+                   lede="Describing OnePilot as connecting to outside systems is a technical view, and the wrong one for how treasury actually works. Every source, counterparty and enterprise system sits inside the governed layer, and the workspace is where you meet them. What goes away: grey-scale processing through endless SAP GUIs, and manual data parsing between systems and process steps.")
+        + web_band("Governed by design",
+                   '<p class="wlede" style="margin:0;">Every value carries where it came from, who approved it and when, so an audit follows the trail without a reconstruction project. Limits and tolerances are set once; only the records that breach them surface for a person, and a second approver signs off before a payment or a deal is released. The workspace, the treasury apps and the ones you build yourself all run inside the same controls, on the SAP data you already trust, with no separate store to reconcile.</p>',
+                   h2="One set of controls across the workspace and every app", alt=True)
         + web_band("Common questions", web_faq([
             ("What is TreasuryCentral?",
-             "TreasuryCentral is the treasury edition of OnePilot. It puts the treasurer's whole day on one surface: cash, FX, market data, trades, bank files and remittances, governed end to end, on your SAP data."),
-            ("What runs underneath TreasuryCentral?",
-             "The treasury apps run on OnePilot, the governed AI layer that moves data in and out of SAP. TreasuryCentral is OnePilot scoped to the treasurer, so market data, trades, bank files and remittances all flow through one governed layer, on your SAP data."),
+             "TreasuryCentral is the treasury workspace where humans and AI agents collaborate. It brings the business context for treasury together in one place, the whole day on one surface, and orchestrates, automates, monitors and controls the work that runs across it."),
+            ("How does TreasuryCentral relate to OnePilot?",
+             "Technically all of it is OnePilot. TreasuryCentral is a treasury-centric use case of the platform, and the apps inside it are OnePilot applications wrapped into a treasury value proposition. OnePilot is not a layer the workspace sits on top of and calls out from; it is the environment everything runs inside, which is why a counterparty and an enterprise system are reached the same governed way."),
+            ("Which applications run inside it?",
+             "Market data governance, SmartTrading, liquidity, ESG, credit data, bank statement generation, bank fees and bank messaging, plus the use cases your own team builds as apps on OnePilot."),
+            ("Can our own team build use cases in it?",
+             "Yes, and it is the point. Customers build their own use cases into solid apps in the workspace, on OnePilot, using the same connectivity, governance and audit trail as the applications we deliver."),
             ("Does it need a separate data store?",
              "No. It works on the SAP data you already trust, so there is no separate store to reconcile. Every move is logged, and every action stays inside your controls."),
-        ]), alt=True)
+        ]))
     )
 
 
@@ -1179,8 +1386,22 @@ WEB_META = {
     "market-data-hub": dict(deck="/market-data-hub-deck.html"),
     "smart-trading": dict(deck="/smart-trading-deck.html"),
     "remittance-advice-gate": dict(),
-    "bank-fee-portal": dict(),
-    "treasurycentral": dict(),
+    # 2026-07-21 Dirk review: the page claimed the charged-vs-agreed analysis
+    # ("we do not do the analysis itself"), carried no call to action, and its
+    # PDF said nothing about Brisken. Copy now claims only REF s23's four
+    # application features; CTA + letterhead come from the shared layer.
+    "bank-fee-portal": dict(
+        updated="2026-07-22",
+        cta_h="See it running on your fee statements",
+        cta_p="Bring the formats your banks actually send; we will show what the portal reads and what it hands to your analyzer."),
+    # 2026-07-21 21:30 Dirk review: "the site is a little messy", the diagram
+    # needed replacing, and his own V3 render was "still very boring, boxes
+    # everywhere". Page now runs his V3 model (workspace inside the OnePilot
+    # field, the full app roster, the workstation) with the rosters as text.
+    "treasurycentral": dict(
+        updated="2026-07-22",
+        cta_h="See the workspace running on your SAP",
+        cta_p="Bring the systems and counterparties your treasury actually deals with; we will show what moves into the workspace and what stays where it is."),
     "onepilot": dict(),
 }
 
@@ -1207,6 +1428,16 @@ def _head(p, extra_css=""):
 <style>:root{{--ac:{p['accent']};--ac2:{p['accent2']};--glow:{p['glow']};}}{BASE_CSS}{extra_css}</style></head>'''
 
 
+def _print_head(p):
+    """Brisken letterhead for the downloaded PDF. Hidden on screen (the sticky
+    nav already carries the mark there); heads page 1 of the print render, which
+    otherwise opened with no Brisken identity on it at all."""
+    return (f'<div class="wprint-head">'
+            f'{blogo("plogo")}'
+            f'<div class="pright"><span class="pdoc">{p["title"]}</span>'
+            f'<span class="psap">SAP</span> Co-Innovation Partner</div></div>')
+
+
 def page(p):  # print / PDF: bare A4 sheet
     return f'{_head(p)}\n<body>{_sheet(p)}</body></html>'
 
@@ -1215,20 +1446,21 @@ def page_web(p):  # native web page: full-bleed responsive product page
     short = p["short"]
     pw = {**p, **WEB_META.get(short, {})}
     body = WEB_BODIES[short](pw)
-    return f'''{_head(pw, WEB_CSS)}
+    return f'''{_head(pw, WEB_CSS + LOGO_CSS)}
 <body>
 <div class="wnav">
   <a class="nl" href="/">
-    <img class="nlogo" src="data:image/png;base64,{LOGOS['brisken']}" alt="Brisken">
+    {blogo("nlogo")}
     <span class="sep">&middot;</span><span class="plabel">{pw['title']}</span>
   </a>
   <div class="nr"><a class="nback" href="/">&larr; All resources</a>
-  <a class="ndl" href="/{short}.pdf" download>Download PDF</a></div>
+  <a class="ndl" href="/{short}.pdf" download="{dl_name(pw)}">Download PDF</a></div>
 </div>
+{_print_head(pw)}
 {body}
 <section class="wproof"><div class="inner">{PROOF}</div></section>
 {web_cta_band(pw)}
-{web_footer()}
+{web_footer(pw)}
 </body></html>'''
 
 
@@ -1269,16 +1501,17 @@ DECKS = [
 def page_deck(d):
     pts = "".join(f"<li>{x}</li>" for x in d["points"])
     pdf = f'/{d["pdf"]}.pdf'
-    return f'''{_head(d, WEB_CSS + DECK_CSS)}
+    return f'''{_head(d, WEB_CSS + DECK_CSS + LOGO_CSS)}
 <body>
 <div class="wnav">
   <a class="nl" href="/">
-    <img class="nlogo" src="data:image/png;base64,{LOGOS['brisken']}" alt="Brisken">
+    {blogo("nlogo")}
     <span class="sep">&middot;</span><span class="plabel">{d['title']}</span>
   </a>
   <div class="nr"><a class="nback" href="/">&larr; All resources</a>
-  <a class="ndl" href="{pdf}" download>Download PDF</a></div>
+  <a class="ndl" href="{pdf}" download="{dl_name(d)}">Download PDF</a></div>
 </div>
+{_print_head(d)}
 <section class="whero"><div class="inner">
   <div class="hcopy">
     <div class="weyebrow">Full deck &middot; {d['pages']} pages</div>
@@ -1286,8 +1519,8 @@ def page_deck(d):
     <p class="wpromise">{d['promise']}</p>
     <ul class="wpoints">{pts}</ul>
     <div class="wcta">
-      <a class="wbtn primary" href="{pdf}" download>Download the deck</a>
-      <a class="wbtn ghost" href="/">All resources</a>
+      <a class="wbtn primary" href="{DEMO_URL}">Book a demo &rarr;</a>
+      <a class="wbtn ghost" href="{pdf}" download="{dl_name(d)}">Download the deck</a>
     </div>
   </div>
   <div class="wvisual deckcard">
@@ -1305,7 +1538,7 @@ def page_deck(d):
   <div class="deckframe"><iframe class="deckview" src="{pdf}#toolbar=0&navpanes=0&view=FitH" title="{d['h1']} deck" loading="lazy"></iframe></div>
   <div class="deck-fallback">This deck opens best on a larger screen.<br><a href="{pdf}">Download the PDF</a> to view all {d['pages']} pages.</div>
 </div></section>
-{web_footer()}
+{web_footer(d)}
 </body></html>'''
 
 
@@ -1327,8 +1560,13 @@ def render(html_path: Path, pdf_path: Path):
     tmp_out = pdf_path.with_name(pdf_path.name + ".tmp")
     tmp_out.unlink(missing_ok=True)
     with tempfile.TemporaryDirectory(prefix="sap-onepager-") as prof:
+        # --virtual-time-budget: without it Chrome prints before the Google-Fonts
+        # webfonts arrive, so every PDF shipped in Times New Roman + Arial while
+        # the site itself rendered in Space Grotesk + IBM Plex Sans. Part of
+        # Dirk's 2026-07-21 "nothing says anything about brisken" on the PDF:
+        # the download did not even carry the brand typography.
         cmd = [str(CHROME), "--headless=new", "--disable-gpu", "--no-pdf-header-footer",
-               "--no-first-run", "--no-default-browser-check",
+               "--no-first-run", "--no-default-browser-check", "--virtual-time-budget=8000",
                f"--user-data-dir={prof}", f"--print-to-pdf={tmp_out}", html_path.as_uri()]
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         if r.returncode != 0:
@@ -1355,21 +1593,36 @@ def main() -> int:
     ap.add_argument("--web-out", type=Path, default=WEB_OUT_DEFAULT, help=f"web-page HTML output dir (default: {WEB_OUT_DEFAULT})")
     ap.add_argument("--web-only", action="store_true",
                     help="write only the web-page HTML; skip the Chrome PDF render and the gate")
+    ap.add_argument("--only", action="append", metavar="SHORT",
+                    help="regenerate only these products/decks by short name (repeatable), "
+                         "e.g. --only bank-fee-portal. Leaves every other artefact untouched, "
+                         "so a single reviewed page can ship without re-rendering the set.")
     args = ap.parse_args()
+
+    products, decks = PRODUCTS, DECKS
+    if args.only:
+        wanted = set(args.only)
+        known = {p["short"] for p in PRODUCTS} | {d["short"] for d in DECKS}
+        unknown = wanted - known
+        if unknown:
+            sys.exit(f"--only: unknown name(s) {sorted(unknown)}; known: {sorted(known)}")
+        products = [p for p in PRODUCTS if p["short"] in wanted]
+        decks = [d for d in DECKS if d["short"] in wanted]
+        print(f"--only: {sorted(wanted)}")
 
     # The downloadable PDF is a render of the SAME web page (via its @media print
     # stylesheet), so the download and the site have identical content.
     web = args.web_out.resolve()
     web.mkdir(parents=True, exist_ok=True)
-    for p in PRODUCTS:
+    for p in products:
         (web / f'{p["short"]}.html').write_text(page_web(p), encoding="utf-8")
-    print(f"web pages: {len(PRODUCTS)} written -> {web}")
+    print(f"web pages: {len(products)} written -> {web}")
 
     # The 3 full-deck pages: same nav/hero/band frame as the one-pagers, wrapping
     # the existing deck PDFs (no re-render; the deck PDFs are already built).
-    for d in DECKS:
+    for d in decks:
         (web / f'{d["short"]}.html').write_text(page_deck(d), encoding="utf-8")
-    print(f"deck pages: {len(DECKS)} written -> {web}")
+    print(f"deck pages: {len(decks)} written -> {web}")
 
     if args.web_only:
         print("web-only: skipped PDF render")
@@ -1380,7 +1633,7 @@ def main() -> int:
 
     print("PRODUCT | PDF pages | size KB")
     pdfs: list[Path] = []
-    for p in PRODUCTS:
+    for p in products:
         hp = web / f'{p["short"]}.html'          # render the served page itself
         pdf = web / f'{p["short"]}.pdf'
         render(hp, pdf)
