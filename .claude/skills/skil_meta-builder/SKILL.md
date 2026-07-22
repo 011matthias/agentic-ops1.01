@@ -19,6 +19,19 @@ Creates skills, slash commands, and agents for The Crucible workspace.
 
 See [DECISION-TREE.md](modules/DECISION-TREE.md) for detailed flowchart.
 
+## Other Primitives
+
+When the primitive is not a command, skill, or agent, load the matching guide:
+
+| If the user wants... | Guide |
+|---------------------|-------|
+| A hook that fires on a tool event | [HOOKS-GUIDE.md](modules/HOOKS-GUIDE.md) |
+| An MCP server wired into the session | [MCP-GUIDE.md](modules/MCP-GUIDE.md) |
+| A memory / CLAUDE.md fact store change | [MEMORY-GUIDE.md](modules/MEMORY-GUIDE.md) |
+| A custom output style | [OUTPUT-STYLES-GUIDE.md](modules/OUTPUT-STYLES-GUIDE.md) |
+| A plugin bundling several primitives | [PLUGINS-GUIDE.md](modules/PLUGINS-GUIDE.md) |
+| A settings.json / permissions change | [SETTINGS-GUIDE.md](modules/SETTINGS-GUIDE.md) |
+
 ## Questions to Ask
 
 Before creating a primitive, clarify:

@@ -70,6 +70,16 @@ EXAMPLE_PATH_DOCS = {
     "COMMAND-GUIDE.md", "AGENT-GUIDE.md", "DECISION-TREE.md",
 }
 
+# Repo paths a skill CREATES on demand rather than ships. They are genuine
+# pointers (the skill reads and writes them by exactly this path), so weakening
+# them into prose would lose signal; they simply do not exist at rest, so
+# resolution is the wrong test. Keep this list tiny and literal: an entry here
+# is a promise that some skill's documented procedure creates the file.
+RUNTIME_CREATED = {
+    ".claude/queue/pending.md",   # skil_prompt-queue creates on first drain/add
+    ".claude/queue/done.md",      # skil_prompt-queue creates on first archive
+}
+
 
 def looks_like_path(s: str) -> bool:
     s = s.strip()
@@ -126,7 +136,7 @@ def audit_skill(skill_dir: Path, cross_skill_refs: frozenset[str] = frozenset())
                 continue
             for cand in BACKTICK.findall(line):
                 cand = cand.strip()
-                if not looks_like_path(cand):
+                if not looks_like_path(cand) or cand in RUNTIME_CREATED:
                     continue
                 roots = [md.parent, skill_dir, *RESOLUTION_ROOTS]
                 if not any((r / cand).exists() for r in roots):

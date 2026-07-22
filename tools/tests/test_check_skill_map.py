@@ -22,11 +22,15 @@ def run_tool(*args: str) -> subprocess.CompletedProcess:
     )
 
 
+def test_full_first_party_tree_is_clean():
+    # The pack-consolidation drift backlog was burned down 2026-07-22, so the
+    # CI-clean contract is now the WHOLE first-party tree, not one skill. A new
+    # dead pointer or orphaned module fails here instead of accumulating.
+    proc = run_tool()
+    assert proc.returncode == 0, f"skill map drift:\n{proc.stdout}{proc.stderr}"
+
+
 def test_web_build_skill_is_clean():
-    # The full first-party tree carries a known pre-existing drift backlog
-    # (pack consolidations left dead cross-references; burned down fix-on-touch
-    # via the post-write-gate advisory). The CI-clean contract starts with the
-    # skill that introduced the tool.
     proc = run_tool(str(REPO / ".claude" / "skills" / "skil_web-build" / "SKILL.md"))
     assert proc.returncode == 0, f"skil_web-build has map drift:\n{proc.stdout}{proc.stderr}"
 
@@ -120,3 +124,20 @@ def test_illustrative_paths_skipped_real_drift_still_flagged(tmp_path):
     dead = [h["message"] for h in _run_fixture(tmp_path)["hits"]
             if h["category"] == "dead-pointer"]
     assert len(dead) == 1 and "real-ghost.md" in dead[0], dead
+
+
+def test_runtime_created_paths_not_flagged(tmp_path):
+    # C3: skil_prompt-queue documents `.claude/queue/pending.md` / `done.md` as
+    # real pointers it creates on first use, so absence at rest is not drift. A
+    # sibling path under the same dir that nothing creates still fires.
+    sk = tmp_path / ".claude" / "skills" / "skil_queue"
+    sk.mkdir(parents=True)
+    (sk / "SKILL.md").write_text(
+        "# Queue\n\n"
+        "- `.claude/queue/pending.md` is the queue.\n"      # allowlisted -> skipped
+        "- `.claude/queue/done.md` is the archive.\n"       # allowlisted -> skipped
+        "- `.claude/queue/invented.md` is not real.\n",     # not allowlisted -> flagged
+        encoding="utf-8")
+    dead = [h["message"] for h in _run_fixture(tmp_path)["hits"]
+            if h["category"] == "dead-pointer"]
+    assert len(dead) == 1 and "invented.md" in dead[0], dead

@@ -1,6 +1,6 @@
 # Skill Sources
 
-Repo mapping for skills `sales-do` may need to fetch from GitHub when not installed locally. Kept in sync with `skills/sales-third-party/SKILL.md`.
+Repo mapping for skills `sales-do` may need to fetch from GitHub when not installed locally. Kept in sync with the upstream `/sales-third-party` catalog skill (not vendored in this repo).
 
 ## How to use
 
@@ -40,4 +40,4 @@ Any `sales-*` skill not listed below → **`sales-skills/sales`** (branch `main`
 
 ## Maintenance
 
-When `skills/sales-third-party/SKILL.md` adds, removes, or moves a skill, mirror the change here. The two files describe the same external surface — `sales-third-party` is the human-browsable catalog; this file is the machine-resolvable source map.
+When the upstream `/sales-third-party` catalog adds, removes, or moves a skill, mirror the change here. The two describe the same external surface: `sales-third-party` is the human-browsable catalog; this file is the machine-resolvable source map.
