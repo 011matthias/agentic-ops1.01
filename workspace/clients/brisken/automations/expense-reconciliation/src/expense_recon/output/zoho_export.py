@@ -123,6 +123,49 @@ def _amount(value: Decimal | None) -> str:
     return f"{value:.2f}"
 
 
+_CENT = Decimal("0.01")
+
+
+def _posting_amounts(
+    line_totals: "list[Decimal]", charged: Decimal
+) -> list[Decimal]:
+    """Allocate the CHARGED amount across a receipt's line items.
+
+    The journal posts in the statement currency, because the bank
+    statement is the source of truth for what the company actually paid
+    (Chris's process, 2026-07-15). A receipt's line items are in the
+    receipt's own currency: a BRL meal on a USD card lists BRL line
+    totals while the card was charged USD. Writing those line totals
+    into the journal posts the wrong number in the wrong currency — on
+    the real April run a 9.18 USD charge exported as 46.00 of BRL
+    debits, roughly 5x the true amount.
+
+    Each line keeps its share of the charge, proportional to its own
+    total, with the rounding residual applied to the largest line so the
+    debits sum EXACTLY to `charged` and double-entry holds to the cent.
+    This also absorbs the common case where the parsed lines do not sum
+    to the receipt's printed total (April: lines 46.00 vs printed
+    47.50) — the bank's number wins, rather than the journal disagreeing
+    with the statement.
+
+    Same-currency receipts whose lines already sum to the charge are
+    unaffected: the allocation is the identity.
+    """
+    total = sum(line_totals, Decimal("0"))
+    if total <= 0:
+        # No usable split (all-zero or negative lines): put the whole
+        # charge on the first line rather than emitting zero debits.
+        return [charged] + [Decimal("0")] * (len(line_totals) - 1)
+    out = [
+        (charged * lt / total).quantize(_CENT) for lt in line_totals
+    ]
+    residual = charged - sum(out, Decimal("0"))
+    if residual:
+        biggest = max(range(len(out)), key=lambda i: out[i])
+        out[biggest] += residual
+    return out
+
+
 def _str(value: str | None) -> str:
     """A reference cell: the value, or blank when unknown (never guessed)."""
     return value or ""
@@ -339,15 +382,26 @@ def build_journal_rows(
             ] + provenance)
             line_total_sum += tx.amount
         else:
-            for item in items:
+            # Post in the statement currency: allocate the charged amount
+            # across the lines (see _posting_amounts). The receipt's own
+            # figure rides along in Notes so the conversion is auditable.
+            posting = _posting_amounts([i.line_total for i in items], tx.amount)
+            rec_ccy = (rec.detected_currency or "").upper()
+            for item, posted in zip(items, posting):
+                if posted == 0:
+                    continue  # a 0.00 debit is noise in a Books import
                 account, notes = _debit_account_and_note(
                     item.categorization, chart_of_accounts
                 )
+                if posted != item.line_total:
+                    notes = (
+                        f"{notes} · receipt {item.line_total:.2f} {rec_ccy}".rstrip()
+                    )
                 rows.append([
                     date_str, account, item.description, ref,
-                    notes, _amount(item.line_total), "",
+                    notes, _amount(posted), "",
                 ] + provenance)
-                line_total_sum += item.line_total
+                line_total_sum += posted
 
         # Balancing credit to the card / bank account — or, for a
         # reimbursable_personal entry (§17), to the reimbursement clearing

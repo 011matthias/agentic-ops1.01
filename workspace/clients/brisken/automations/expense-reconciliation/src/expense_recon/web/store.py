@@ -83,7 +83,37 @@ VALID_DUP_RESOLUTIONS = (DUP_IGNORE, DUP_CONFIRMED)
 # applies). Snapshotted into each run's `config["policy"]` at creation so a
 # run reproduces under the policy that was live when it ran, not whatever
 # the setting later becomes.
-SETTINGS_DEFAULTS: dict = {"export_approved_only": False}
+#
+# Master data (2026-07-22). The hosted surface had no home for the
+# operator input the pipeline needs, so three capabilities were dead on
+# every hosted run while working locally from a config file:
+#
+#   fx_reference_rates  {"BRL:USD": "0.192448"} — the month's reference
+#     rate per currency pair. Without one, a cross-currency receipt can
+#     only reach the implied-rate band / LLM judgment: the real April run
+#     matched 0 of 94 while the same two files matched 29/36 locally with
+#     a rate file. Month-scoped operator input, never derived from Zoho's
+#     per-line rate (wrong by up to 12.8%, LD-5).
+#   card_entities  {"2838": "Corporate Services"} — maps a card to the
+#     legal entity whose chart of accounts guards the export. Without it
+#     `resolve_legal_entity` falls back to the raw card id, matching no
+#     COA entity, so the gate silently never fires (`has_coa: false`).
+#   card_accounts  {"2838": "1010 Chase Corporate"} — the Zoho bank/card
+#     account each card's balancing credit posts to. Without it every
+#     journal entry credits the visible `Card: 2838` placeholder.
+#
+# All three are read at run creation and snapshotted into the run's own
+# config, so an existing run keeps the master data it ran under.
+SETTINGS_DEFAULTS: dict = {
+    "export_approved_only": False,
+    "fx_reference_rates": {},
+    "card_entities": {},
+    "card_accounts": {},
+}
+
+# Settings keys holding a {str: str} map. Values are kept as STRINGS: a
+# Decimal FX rate keeps full precision as text, a json float does not.
+SETTINGS_MAP_KEYS = ("fx_reference_rates", "card_entities", "card_accounts")
 
 # Background-job states (durable: a Fly machine can scale to zero mid-run;
 # a job row that is still `running` at boot was interrupted).

@@ -693,12 +693,21 @@ def _write_unmatched(
     _autosize(ws)
 
 
-def _write_errors(wb: Workbook, parse_errors: list[tuple[str, int, str]]) -> None:
+def _write_errors(wb: Workbook, parse_errors: list[tuple]) -> None:
+    """The Errors sheet, now severity-aware (2026-07-22).
+
+    Each issue carries its own severity as an optional 4th element; an
+    older snapshot's 3-tuple reads as "error", exactly as before. Only a
+    real error takes the red unmatched fill, so an advisory note no longer
+    looks like a failed row.
+    """
     ws = wb.create_sheet("Errors")
-    _write_header_row(ws, ("File", "Line", "Error"))
-    for file_name, line_no, msg in parse_errors:
-        ws.append([file_name, line_no, msg])
-        _fill_last_row(ws, FILL_UNMATCHED)
+    _write_header_row(ws, ("File", "Line", "Severity", "Message"))
+    for file_name, line_no, msg, *rest in parse_errors:
+        severity = (rest[0] if rest else "error") or "error"
+        ws.append([file_name, line_no, severity, msg])
+        if severity == "error":
+            _fill_last_row(ws, FILL_UNMATCHED)
     _autosize(ws)
 
 
