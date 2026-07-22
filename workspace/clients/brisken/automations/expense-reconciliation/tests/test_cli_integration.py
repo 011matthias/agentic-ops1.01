@@ -379,16 +379,19 @@ def test_duplicate_receipt_document_id_lands_in_errors_sheet(tmp_path: Path):
 
     # Header row + at least one error row for the duplicate.
     assert errors.max_row >= 2
+    # Columns are File, Line, Severity, Message (Severity added 2026-07-22
+    # so an advisory note stops being counted and coloured as an error).
     error_messages = []
     for row in errors.iter_rows(min_row=2, values_only=True):
         if row[0]:  # File column
-            error_messages.append((row[0], row[1], row[2]))
+            error_messages.append((row[0], row[1], row[2], row[3]))
 
     assert any(
         "receipts.csv" in str(file)
         and line == 3
+        and severity == "error"
         and "duplicate" in str(msg).lower()
-        for file, line, msg in error_messages
+        for file, line, severity, msg in error_messages
     ), f"Expected dup-id error on receipts.csv:3; got: {error_messages}"
 
 
@@ -449,7 +452,10 @@ def test_bad_row_in_receipts_collects_to_errors_continues_with_good_rows(
         row for row in errors.iter_rows(min_row=2, values_only=True) if row[0]
     ]
     assert any(
-        "receipts.csv" in str(r[0]) and r[1] == 3 and "date" in str(r[2]).lower()
+        "receipts.csv" in str(r[0])
+        and r[1] == 3
+        and r[2] == "error"
+        and "date" in str(r[3]).lower()
         for r in error_messages
     ), f"Expected bad-date error on receipts.csv:3; got: {error_messages}"
 
@@ -505,7 +511,10 @@ def test_bad_row_in_statement_collects_to_errors_continues(tmp_path: Path):
         row for row in errors.iter_rows(min_row=2, values_only=True) if row[0]
     ]
     assert any(
-        "statement.csv" in str(r[0]) and r[1] == 3 and "number" in str(r[2]).lower()
+        "statement.csv" in str(r[0])
+        and r[1] == 3
+        and r[2] == "error"
+        and "number" in str(r[3]).lower()
         for r in error_messages
     ), f"Expected bad-amount error on statement.csv:3; got: {error_messages}"
 

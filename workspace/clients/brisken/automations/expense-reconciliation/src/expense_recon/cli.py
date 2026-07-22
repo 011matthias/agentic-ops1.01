@@ -386,6 +386,18 @@ _SECOND_PASS_TOP_K = 3
 _SECOND_PASS_MAX_CALLS = 40
 _SECOND_PASS_MIN_CONFIDENCE = 0.6
 
+# `matching` block keys this module consumes itself; everything else in the
+# block is a MatchingConfig tunable and is passed through to `from_dict`,
+# which raises on an unknown key (a silent typo would measure nothing).
+_MATCHING_NON_TUNABLE = frozenset({
+    "tuning_path",
+    "llm_second_pass_unmatched",
+    "llm_second_pass_top_k",
+    "llm_second_pass_max_calls",
+    "llm_second_pass_min_confidence",
+    "llm_second_pass_date_window_days",
+})
+
 
 def _apply_unmatched_judgment(
     outcome: MatchOutcome,
@@ -587,14 +599,20 @@ def reconcile(
         cfg, config_dir, receipts, llm_client
     )
 
-    parse_errors: list[tuple[str, int, str]] = [
-        (issue.file_name, issue.line_number, issue.message)
+    # 2026-07-22: carry each issue's SEVERITY through as a 4th element.
+    # It was dropped here, so the workbench counted an advisory note
+    # ("sign convention inferred", where the parser did the right thing)
+    # as an error: the real April run reported "6 parse errors" of which
+    # none was an error in the user's sense. Readers tolerate the old
+    # 3-tuple, so snapshots written before today still load.
+    parse_errors: list[tuple[str, int, str, str]] = [
+        (issue.file_name, issue.line_number, issue.message, issue.severity)
         for issue in (*stmt_issues, *receipt_issues, *vision_issues)
     ]
     if parse_errors:
-        logger.warning("%d parse error(s) — see Errors sheet", len(parse_errors))
-        for file_name, line_no, msg in parse_errors:
-            logger.debug("parse error %s:%s %s", file_name, line_no, msg)
+        logger.warning("%d parse issue(s) — see Errors sheet", len(parse_errors))
+        for file_name, line_no, msg, *_ in parse_errors:
+            logger.debug("parse issue %s:%s %s", file_name, line_no, msg)
 
     # BLUEPRINT 4.9: load Brisken's chart of accounts (live API pull or
     # cached CSV) and narrow it to the owner-approved operating-expense
@@ -654,10 +672,29 @@ def reconcile(
     # scalars (MatchingConfig.from_file); learned memory merges on top.
     if match_memory is None:
         match_memory = _load_match_memory(cfg, config_dir)
+    # 2026-07-22: the same tunables may also be given INLINE in the
+    # `matching` block, which is how the hosted surface passes the month's
+    # FX reference rates from stored settings — there is no tuning file on
+    # the server, and inlining carries the rates into `run.local.json`, so a
+    # run pulled off the volume reproduces the hosted match. Inline keys win
+    # over the file's, so a run can override one rate without copying the
+    # whole file. The second-pass keys are consumed elsewhere in this module
+    # and are not MatchingConfig tunables, so they never reach from_dict.
     match_cfg = None
-    tuning_path = (cfg.get("matching") or {}).get("tuning_path")
+    matching_block = dict(cfg.get("matching") or {})
+    tuning_path = matching_block.pop("tuning_path", None)
+    inline = {
+        k: v
+        for k, v in matching_block.items()
+        if k not in _MATCHING_NON_TUNABLE
+    }
     if tuning_path:
-        match_cfg = MatchingConfig.from_file(config_dir / tuning_path)
+        tuning = json.loads(
+            (config_dir / tuning_path).read_text(encoding="utf-8")
+        )
+        match_cfg = MatchingConfig.from_dict({**tuning, **inline})
+    elif inline:
+        match_cfg = MatchingConfig.from_dict(inline)
     if match_memory:
         match_cfg = replace(
             match_cfg or MatchingConfig(),

@@ -31,7 +31,13 @@ from expense_recon.web.store import Decision, RunRow, RunStore
 
 def test_settings_default_is_off(tmp_path):
     with RunStore(tmp_path / "recon-web.sqlite") as store:
-        assert store.get_settings() == {"export_approved_only": False}
+        settings = store.get_settings()
+        assert settings["export_approved_only"] is False
+        # The master-data maps (2026-07-22) default empty, so a fresh
+        # install matches the pre-master-data behaviour exactly.
+        assert settings["fx_reference_rates"] == {}
+        assert settings["card_entities"] == {}
+        assert settings["card_accounts"] == {}
 
 
 def test_settings_roundtrip(tmp_path):

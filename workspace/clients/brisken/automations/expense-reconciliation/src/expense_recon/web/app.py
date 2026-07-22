@@ -39,6 +39,7 @@ import os
 import time
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, Form, Request, UploadFile
@@ -59,6 +60,7 @@ from .service import (
     RunInputError,
     build_memory_view,
     build_view,
+    bulk_decisions,
     commit_to_memory,
     compare_runs,
     create_intake,
@@ -81,6 +83,7 @@ from .store import (
     INTAKE_RECEIVED,
     JOB_DONE,
     JOB_ERROR,
+    SETTINGS_MAP_KEYS,
     STATUS_CONFIRMED,
     VALID_DISPOSITIONS,
     VALID_DUP_RESOLUTIONS,
@@ -143,6 +146,12 @@ def _run_job(db_path: Path, job_id: str, prepared: PreparedRun) -> None:
                 store.set_intake_status(
                     prepared.intake_id, INTAKE_RECEIVED, updated_at=_now_iso()
                 )
+
+
+# Upper bound on one bulk-decision call. A month is ~100 charges, so this
+# is far above any real batch; it exists so a malformed client cannot
+# open a huge write transaction.
+_BULK_DECISION_LIMIT = 1000
 
 
 def create_app(data_root: str | Path | None = None) -> FastAPI:
@@ -485,6 +494,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 {"error": "No receipts file uploaded."}, status_code=400
             )
 
+        with open_store() as store:
+            settings = store.get_settings()
         try:
             prepared = prepare_run(
                 app.state.data_root,
@@ -496,6 +507,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 now_iso=_now_iso(),
                 operator=_operator(),
                 learning_db_path=app.state.learning_db_path,
+                settings=settings,
             )
         except RunInputError as exc:
             return JSONResponse({"error": exc.message}, status_code=400)
@@ -532,6 +544,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     ):
         with open_store() as store:
             intake = store.get_intake(intake_id)
+            settings = store.get_settings()
         if intake is None:
             return _not_found("Upload not found")
 
@@ -566,6 +579,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 now_iso=_now_iso(),
                 operator=_operator(),
                 learning_db_path=app.state.learning_db_path,
+                settings=settings,
             )
         except RunInputError as exc:
             return _error_page(exc.message, headers=exc.headers)
@@ -848,6 +862,43 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         patch: dict = {}
         if "export_approved_only" in body:
             patch["export_approved_only"] = bool(body["export_approved_only"])
+        # Master-data maps (FX reference rates, card -> legal entity, card
+        # -> Zoho bank account). Values normalize to trimmed strings; a
+        # blank value drops the key, which is how the UI deletes a row. An
+        # FX rate must parse as a positive number: a typo here would
+        # silently mis-match a whole month, so it is rejected at the edge
+        # instead of being swallowed at match time.
+        for key in SETTINGS_MAP_KEYS:
+            if key not in body:
+                continue
+            raw = body[key]
+            if not isinstance(raw, dict):
+                return JSONResponse(
+                    {"error": f"{key} must be an object"}, status_code=400
+                )
+            cleaned: dict[str, str] = {}
+            for k, v in raw.items():
+                name = str(k).strip()
+                value = str(v).strip()
+                if not name or not value:
+                    continue
+                if key == "fx_reference_rates":
+                    from_ccy, _, to_ccy = name.partition(":")
+                    if not from_ccy.strip() or not to_ccy.strip():
+                        return JSONResponse(
+                            {"error": f"rate key {name!r} must be 'FROM:TO'"},
+                            status_code=400,
+                        )
+                    try:
+                        if Decimal(value) <= 0:
+                            raise ValueError(value)
+                    except (ArithmeticError, ValueError):
+                        return JSONResponse(
+                            {"error": f"rate {name} must be a positive number"},
+                            status_code=400,
+                        )
+                cleaned[name] = value
+            patch[key] = cleaned
         with open_store() as store:
             settings = store.set_settings(patch, _now_iso())
         return JSONResponse(settings)
@@ -926,6 +977,56 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return JSONResponse(
             {"ok": True, "confirmed": len(pairs), "summary": view["summary"]}
         )
+
+    @app.post("/api/runs/{run_id}/decisions/bulk")
+    async def post_bulk_decisions(run_id: str, request: Request):
+        """Confirm or reject a named set of charges in one call (2026-07-22).
+
+        The review bucket held 34 rows on the real April run and could only
+        be cleared one row at a time. The client sends the ids it is acting
+        on, so the scope is explicit and auditable rather than the server
+        guessing "everything that looks like this". Confirming uses each
+        charge's own top candidate and skips any charge without one.
+        """
+        body = await request.json()
+        tx_ids = body.get("transaction_ids")
+        status = body.get("status")
+        if not isinstance(tx_ids, list) or not tx_ids:
+            return JSONResponse(
+                {"error": "transaction_ids must be a non-empty list"},
+                status_code=400,
+            )
+        if status not in VALID_STATUSES:
+            return JSONResponse(
+                {"error": f"status must be one of {sorted(VALID_STATUSES)}"},
+                status_code=400,
+            )
+        tx_ids = [str(t) for t in tx_ids]
+        if len(tx_ids) > _BULK_DECISION_LIMIT:
+            return JSONResponse(
+                {"error": f"at most {_BULK_DECISION_LIMIT} rows per call"},
+                status_code=400,
+            )
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found"}, status_code=404)
+            decisions = store.get_decisions(run_id)
+            writes = bulk_decisions(run, decisions, tx_ids, status)
+            for tx_id, doc_id in writes:
+                store.set_decision(run_id, tx_id, status, doc_id, _now_iso())
+            decisions = store.get_decisions(run_id)
+            overrides = store.get_category_overrides(run_id)
+            resolutions = store.get_duplicate_resolutions(run_id)
+        view = build_view(run, decisions, overrides, resolutions)
+        # `skipped` is the honest half of the count: rows already decided,
+        # or (when confirming) rows with no candidate to confirm against.
+        return JSONResponse({
+            "ok": True,
+            "updated": len(writes),
+            "skipped": len(tx_ids) - len(writes),
+            "summary": view["summary"],
+        })
 
     @app.post("/api/runs/{run_id}/categories")
     async def post_category(run_id: str, request: Request):
