@@ -58,7 +58,13 @@ import yaml
 # repo mid-run, which the engine's own strict dirty-tree check then flags.
 sys.dont_write_bytecode = True
 
-TSV_HEADER = "round\tcommit\tscore\tdelta\tstatus\tdescription\n"
+# `timestamp` is APPENDED last on purpose: every reader indexes by position
+# (row[0] round, row[2] score, row[4] status), and the four runs closed before
+# 2026-07-22 have six-column rows on main. A trailing column is therefore
+# additive - old journals still parse, new ones carry the round timing that
+# squash-merge otherwise destroys (per-round commit dates are unreachable from
+# any ref once a run branch is merged and deleted).
+TSV_HEADER = "round\tcommit\tscore\tdelta\tstatus\tdescription\ttimestamp\n"
 SCORE_RE = re.compile(r"^SCORE:\s*(-?\d+(?:\.\d+)?)\s*$", re.MULTILINE)
 VALID_MODES = ("converge", "continuous", "supervised")
 
@@ -179,6 +185,9 @@ def verify_tsv(repo: str, state: dict) -> None:
 def append_tsv(repo: str, state: dict, row: list[str]) -> None:
     verify_tsv(repo, state)
     path = tsv_path(repo, state["tag"])
+    # Stamped here, in the ONE write path, so no caller can forget it and no
+    # caller can choose the value.
+    row = [*row, _now().isoformat(timespec="seconds")]
     clean = [str(c).replace("\t", " ").replace("\n", " ") for c in row]
     with open(path, "a", encoding="utf-8", newline="\n") as f:
         f.write("\t".join(clean) + "\n")

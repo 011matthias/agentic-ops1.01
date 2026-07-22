@@ -765,3 +765,47 @@ def test_start_commits_every_run_dir_file_not_just_the_manifest(tmp_path):
     (repo / "numbers.txt").write_text("1\n1\n1\n", encoding="utf-8")
     proc = engine(repo, "round", "--desc", "shrink", expect=None)
     assert "OUTSIDE the asset scope" not in proc.stdout + proc.stderr, proc.stdout
+
+
+def test_every_journal_row_carries_a_timestamp(tmp_path):
+    """append_tsv stamps every row, including baseline and stopped.
+
+    Per-round timing used to be reconstructable only from round-commit dates,
+    which are unreachable from any ref once a run branch is squash-merged and
+    deleted - true for 3 of the first 4 runs. The column is written in the one
+    append path so no caller can forget it and no caller can choose the value.
+
+    OPTIMIZE_NOW pins the clock so the assertion is exact rather than a
+    "looks like a date" smell test.
+    """
+    repo = make_repo(tmp_path)
+    engine(repo, "start", "t1", env={"OPTIMIZE_NOW": "2026-07-22T09:00:00"})
+    (repo / "numbers.txt").write_text("1\n1\n", encoding="utf-8")
+    engine(repo, "round", "--desc", "shrink",
+           env={"OPTIMIZE_NOW": "2026-07-22T09:07:00"})
+    engine(repo, "stop", "--reason", "done",
+           env={"OPTIMIZE_NOW": "2026-07-22T09:09:00"})
+
+    header, *rows = (repo / "docs" / "optimize" / "t1" / "results.tsv") \
+        .read_text(encoding="utf-8").strip().split("\n")
+    assert header.split("\t")[-1] == "timestamp"
+    assert rows, "no journal rows written"
+    stamps = [r.split("\t")[6] for r in rows]
+    assert all(len(r.split("\t")) == 7 for r in rows), rows
+    assert stamps[0] == "2026-07-22T09:00:00", "baseline row unstamped"
+    assert stamps[-1] == "2026-07-22T09:09:00", "stopped row unstamped"
+    assert "2026-07-22T09:07:00" in stamps, "experiment row unstamped"
+
+
+def test_timestamp_is_appended_last_so_positional_readers_survive(tmp_path):
+    """The column goes at the END because every reader indexes by position.
+
+    resume reconciles on row[0]/row[4]; optimize_overview reads row[2]/row[4].
+    Inserting the stamp anywhere else would silently reinterpret four
+    already-shipped journals.
+    """
+    repo = make_repo(tmp_path)
+    engine(repo, "start", "t1", env={"OPTIMIZE_NOW": "2026-07-22T09:00:00"})
+    row = tsv_rows(repo)[0]
+    assert row[0] == "0" and row[4] == "baseline", row
+    assert row[6].startswith("2026-07-22"), row
