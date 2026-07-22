@@ -20,6 +20,9 @@ from hooklib import FIXTURES, permission_decision, run_hook
 FX = FIXTURES / "no-auto-commit-gate"
 AUTH = str(FX / "auth.jsonl")        # user message: "ok ship it to PR and merge"
 NO_AUTH = str(FX / "no-auth.jsonl")  # user message with no ship-order keyword
+# Names the override explicitly, which a non-green merge requires (a generic
+# ship word must NOT authorize landing code the user never saw pass).
+MERGE_ANYWAY = str(FX / "merge-anyway.jsonl")
 
 
 def _run(cmd, transcript, tmp_path, branch=None, ci=None):
@@ -103,9 +106,35 @@ def test_merge_ci_red_asks(tmp_path):
     assert permission_decision(_run("gh pr merge 5 --squash", NO_AUTH, tmp_path, branch="feature", ci="red").stdout) == "ask"
 
 
-def test_merge_ci_red_with_explicit_order_allows(tmp_path):
-    # "merge anyway" override: CI red but the user explicitly authorized.
-    assert _allowed(_run("gh pr merge 5 --squash", AUTH, tmp_path, branch="feature", ci="red"))
+def test_merge_ci_red_with_explicit_override_allows(tmp_path):
+    # An order that NAMES the override ("merge anyway") clears a red merge.
+    assert _allowed(_run("gh pr merge 5 --squash", MERGE_ANYWAY, tmp_path,
+                         branch="feature", ci="red"))
+
+
+def test_merge_ci_red_generic_ship_word_still_asks(tmp_path):
+    """The 2026-07-22 incident, pinned.
+
+    The transcript says "ok ship it to PR and merge" -- a generic ship order
+    that authorizes every other gated-floor action. It must NOT authorize a
+    NON-GREEN merge: that lands code the user never saw pass. Live cost: a
+    stale "deploy" order (meant for a Vercel deploy) auto-merged a PR whose
+    hooks job had just failed, turning main red.
+    """
+    assert permission_decision(
+        _run("gh pr merge 5 --squash", AUTH, tmp_path,
+             branch="feature", ci="red").stdout) == "ask"
+
+
+def test_merge_ci_pending_generic_ship_word_asks(tmp_path):
+    assert permission_decision(
+        _run("gh pr merge 5 --squash", AUTH, tmp_path,
+             branch="feature", ci="pending").stdout) == "ask"
+
+
+def test_generic_ship_word_still_authorizes_other_floor_actions(tmp_path):
+    """The narrowing is merge-specific: a push to main still clears on it."""
+    assert _allowed(_run("git push origin main", AUTH, tmp_path, branch="main"))
 
 
 def test_D_merge_missing_transcript_defaults_ask(tmp_path):
