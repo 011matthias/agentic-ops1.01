@@ -571,6 +571,53 @@ def test_round_still_dies_on_corrupt_state(tmp_path):
     assert "unparseable" in proc.stderr
 
 
+# --- E4: confirmation probes must not be punished as failed climbs ----------
+
+def test_probe_discards_without_counting_toward_plateau(tmp_path):
+    """A boundary probe PREDICTS a discard to confirm an optimum is real.
+
+    Counting it like a failed climb punished the one technique that verifies
+    convergence: gtm-v2 (r5-r8) and pricing-tiers (r3-r6) each ran 4 planned
+    discards against a default limit of 5, and every run after v1 silently
+    worked around it by raising consecutive_reverts in its manifest.
+    """
+    repo = make_repo(tmp_path, stop={"consecutive_reverts": 2})
+    engine(repo, "start", "t1")                      # baseline 9
+    for i in range(4):
+        edit_numbers(repo, ("9", str(9 + i)))        # always worse
+        out = engine(repo, "round", "--probe", "--desc",
+                     f"expect DISCARD: boundary probe {i}").stdout
+        assert f"r{i + 1}: PROBE" in out
+        assert "PLATEAU" not in out
+    assert state(repo)["consecutive_non_keeps"] == 0
+    assert [r[4] for r in tsv_rows(repo)] == ["baseline"] + ["probe"] * 4
+    # a genuine failed climb still counts
+    edit_numbers(repo, ("9", "9"))
+    engine(repo, "round", "--desc", "a real hypothesis that loses")
+    assert state(repo)["consecutive_non_keeps"] == 1
+
+
+def test_probe_that_unexpectedly_improves_is_kept_and_flagged(tmp_path):
+    """The prediction was wrong, which is the most informative outcome the
+    loop can produce - keep it and say so rather than bury it."""
+    repo = make_repo(tmp_path)                       # baseline 9
+    engine(repo, "start", "t1")
+    edit_numbers(repo, ("1", "1"))                   # 2: better, not worse
+    out = engine(repo, "round", "--probe", "--desc",
+                 "expect DISCARD: assumed we were already at the floor").stdout
+    assert "r1: KEEP" in out
+    assert "PROBE UNEXPECTEDLY IMPROVED" in out
+    assert state(repo)["best_score"] == 2
+    assert tsv_rows(repo)[-1][4] == "keep"
+
+
+def test_start_warns_when_the_manifest_has_no_action_catalog(tmp_path):
+    repo = make_repo(tmp_path)
+    out = engine(repo, "start", "t1").stdout
+    assert "no '## Action catalog' section" in out
+    assert "LOCK-ON" in out                          # warning, not a refusal
+
+
 # --- E1: the wall-clock budget bounds ACTIVE burn, not calendar time --------
 
 def test_wallclock_budget_excludes_idle_session_gaps(tmp_path):

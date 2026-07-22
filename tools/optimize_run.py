@@ -20,7 +20,10 @@ Subcommands:
                                        baseline score + guards, state file
   round --desc "<hypothesis>"          one experiment: commit -> score ->
         [--simplification] [--rework]  guards -> keep/revert -> journal
-        [--discard]
+        [--discard] [--probe]          (--probe = a predicted discard that
+                                       confirms an optimum; excluded from the
+                                       PLATEAU counter, kept + flagged if it
+                                       improves anyway)
   resume                               crash/interrupt recovery + repro check;
                                        banks the idle gap since the last engine
                                        activity so a run picked up in a later
@@ -207,6 +210,18 @@ def parse_manifest(repo: str, tag: str) -> dict:
     if not isinstance(meta, dict):
         die("manifest frontmatter is not a mapping")
     return meta
+
+
+def manifest_body(repo: str, tag: str) -> str:
+    """The manifest's prose body (everything after the frontmatter block)."""
+    mpath = os.path.join(repo, "docs", "optimize", tag, "RUN.md")
+    try:
+        with open(mpath, encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        return ""
+    return re.sub(r"^---\r?\n.*?\r?\n---\r?\n", "", text, count=1,
+                  flags=re.DOTALL)
 
 
 def blob_sha_of(repo: str, rel: str) -> str:
@@ -523,6 +538,13 @@ def cmd_start(tag: str) -> int:
                 resolved.append(rel)
     if not resolved:
         print("WARNING: asset globs currently match zero files.")
+    if not re.search(r"^##+\s*Action catalog", manifest_body(repo, tag),
+                     re.MULTILINE | re.IGNORECASE):
+        print("WARNING: manifest has no '## Action catalog' section. Every "
+              "run so far carried one and its keeps mapped ~1:1 to catalog "
+              "items - it is the run's hypothesis queue. RUN.md LOCKS at "
+              "lock-on, so a catalog cannot be added later; add it now or "
+              "accept ad-hoc hypotheses for the whole run.")
 
     # Score + guard the baseline BEFORE creating anything: a broken harness
     # must leave no branch, no commit, no state behind.
@@ -585,7 +607,7 @@ def _refuse_off_branch(repo: str, state: dict) -> None:
 
 
 def cmd_round(desc: str, simplification: bool, rework: bool,
-              forced_discard: bool) -> int:
+              forced_discard: bool, probe: bool = False) -> int:
     repo = repo_root()
     state = load_state(repo)
     if state is None:
@@ -648,12 +670,22 @@ def cmd_round(desc: str, simplification: bool, rework: bool,
     verdict: str
     if status != "ok":
         verdict = "crash"
-    elif forced_discard:
+    elif forced_discard and not probe:
         verdict = "discard"
     elif improved(state, score, allow_equal=simplification):
         ok, failed_guard = run_guards(repo, state, f"r{n}")
         if ok:
             verdict = "keep"
+            if probe:
+                # A probe is a prediction that the score will NOT improve.
+                # When it improves anyway, the prediction was wrong and the
+                # optimum is not where the run thought it was - the single
+                # most informative outcome the loop can produce. Keep it and
+                # say so loudly rather than burying it in the journal.
+                print(f"PROBE UNEXPECTEDLY IMPROVED: r{n} was predicted to "
+                      "discard but beat the best score. The current optimum "
+                      "was not the boundary you assumed - re-read the asset "
+                      "before the next hypothesis.")
         else:
             verdict = "guard_fail"
             print(f"guard failed: {failed_guard!r} (see logs/r{n}-guard*.log). "
@@ -661,7 +693,7 @@ def cmd_round(desc: str, simplification: bool, rework: bool,
                   f"`round --rework --desc \"...\"` "
                   f"({state['rework_count']}/{state['budgets']['max_rework_attempts']} used).")
     else:
-        verdict = "discard"
+        verdict = "probe" if probe else "discard"
 
     if verdict == "keep":
         prior_best = state["best_score"]
@@ -681,7 +713,14 @@ def cmd_round(desc: str, simplification: bool, rework: bool,
             save_state(repo, state)
             return 0
         git(repo, "reset", "--hard", state["base_sha"])
-        state["consecutive_non_keeps"] += 1
+        if verdict != "probe":
+            # A confirmed probe is evidence the current optimum is real, not
+            # a failed climb. Counting it toward PLATEAU punished the very
+            # technique that verifies convergence: gtm-v2 and pricing-tiers
+            # each ran 4 planned discards in a row against a default limit of
+            # 5, and every run after v1 silently worked around it by raising
+            # consecutive_reverts in its manifest.
+            state["consecutive_non_keeps"] += 1
         state["rework_count"] = 0
         state["pending_rework"] = None
         delta = "NA"
@@ -882,6 +921,11 @@ def main() -> int:
     p.add_argument("--simplification", action="store_true")
     p.add_argument("--rework", action="store_true")
     p.add_argument("--discard", action="store_true")
+    p.add_argument("--probe", action="store_true",
+                   help="boundary probe: this round PREDICTS a discard, to "
+                        "confirm the current optimum is real. Journals status "
+                        "`probe` and does not count toward PLATEAU. A probe "
+                        "that improves anyway is kept and flagged loudly.")
     sub.add_parser("resume")
     p = sub.add_parser("stop"); p.add_argument("--reason", default="")
     sub.add_parser("status")
@@ -890,7 +934,7 @@ def main() -> int:
         return cmd_start(args.tag)
     if args.cmd == "round":
         return cmd_round(args.desc, args.simplification, args.rework,
-                         args.discard)
+                         args.discard, args.probe)
     if args.cmd == "resume":
         return cmd_resume()
     if args.cmd == "stop":
