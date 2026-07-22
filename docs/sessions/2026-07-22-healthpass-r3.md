@@ -25,3 +25,13 @@ work_types: [system-infra, client-dev]
 **Gates:** B1:1 B2:8 B3:1 B4:0 B7:0 skipped:0
 **Autonomy:** 0 human interventions.
 **Outcome:** doctor.py HEALTHY on final origin/main. Session totals across rounds 3+3b: 8 PRs (#374, #380, #381, #383, #389, #391 + 2 ledger), 2 agents' worth of adversarial verification, decision menu updated (zero-guard hard-die option added; freshness item downgraded after the bootstrap-circularity insight).
+
+### Session — health pass round 3, owner-decision execution
+**Type:** system-infra + client ops
+**Focus:** Executed the owner's answers to the round-3 decision menu (deploy, sheet write, close #300, build S1 re-validation + optimize low-sev fixes).
+**Projects:** sys, brisken
+**Built:** #394 merged CI-green (optimize guard-timeout attribution: distinct verdict excluded from the rework park, own budget key, shared tree-kill, wall-clock default reconciled 240 -> 120 and pinned by a skeleton-equality test; +4 tests). Live sheet write applied via brisken-outreach-reconcile --write: 7 cells, whole-sheet diff CLEAN, 0 concurrent edits, backup retained. PR #300 closed.
+**Friction:** 1 — `wrong-target-averted` (self-caught, no damage): the Vercel CLI session holds only the user's own team, not the akkton org that owns the platform project; supplying the single available scope would have created a phantom "platform" project instead of deploying unpauseai.com. Caught by reading .vercel/project.json + the scope-gate docstring before running, not after. Deploy surfaced to the owner as a genuine LIMITATION.
+**Gates:** B1:1 B2:4 B3:2 B4:1 B5-analog:1 (invasive sheet write: scope-of-effects + explicit owner yes + pre-write readiness audit, which caught the 4->7 drift) skipped:0
+**Autonomy:** 4 owner decisions collected up front; 0 interventions during execution.
+**Outcome:** doctor.py HEALTHY on final origin/main. S1 unblocked with the blocking memory corrected in place (the recorded blocker was wrong on all three claims; real cause is a matcher FX bug with ~30 points of config headroom). One owner-blocking item remains: Vercel re-auth for the platform deploy.
