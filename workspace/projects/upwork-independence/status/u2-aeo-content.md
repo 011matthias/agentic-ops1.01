@@ -27,7 +27,7 @@ corpus + ~120h marginal, pool 25 (ASSUMPTION), EUR20k/client.
 | Editorial backlog | done | 33 pieces derived 2026-07-22 from icp.md demand taxonomy, buyer problem language, ranked intent x pool (P1 x8, P2 x19, P3 x6); sourcing rules embedded (prototypes only, no client data) | Re-rank as probe data arrives | — | `../context/editorial-backlog.md` |
 | Corpus production | active | First 3 P1 pieces drafted 2026-07-22 (contractor-left takeover, no-replies diagnostic, SPF/DKIM/DMARC minimum); validate-platform-content.py 0 findings; PR merge gated on author/entity decision | Merge first-posts PR after author decision; continue down P1 | author decision | `platform/src/content/blog/` |
 | Monthly probe loop | not-started | ai_visibility_probe.py baselined 2026-06, never re-run; needs schedule + PERPLEXITY_API_KEY | Schedule monthly run + JSON diff | — | `workspace/projects/ai-visibility/` |
-| Author/entity decision | active | Article JSON-LD hardcodes 'Nicolas Neumann' sole author; surfaced to owner 2026-07-22 with recommendation (per-post author frontmatter, Organization publisher) | Owner answer; then apply in first-posts PR | owner | `[slug]/page.tsx` |
+| Author/entity decision | done | Owner decided 2026-07-22: per-post `author` frontmatter (hardcode becomes fallback for old posts), new posts credited 'Matthias Neumann', publisher stays Organization UnpauseAI; applied in first-posts PR | — | — | `[slug]/page.tsx` |
 
 ## Open decisions / gates
 
