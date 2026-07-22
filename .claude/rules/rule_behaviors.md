@@ -57,6 +57,9 @@ Asking for information findable in project files = friction event (`agent-deferr
 2. Did I verify EACH target, not just the ones I touched?
 3. Did I test the behavior, not just the config? Name the specific test performed (e.g., "triggered webhook and verified response", "fetched page and checked content"). If you can't name the test, you haven't done it.
 4. For deploy: did I trigger a smoke test via API/CLI in the same session?
+5. If any input came from a BACKGROUND phase (a fan-out, a subagent batch, a long-running job), did I confirm that phase actually finished? Partial output from a dead phase reads exactly like a finished result, and nothing in the harness announces the death.
+
+**Background-work liveness (B2 sub-clause).** At launch, register the wait in one call: `uv run tools/bg_watch.py watch --label "{what}" --eta {minutes}` (add `--heartbeat {path}` when the job writes progress somewhere; a heartbeat that keeps advancing rolls the deadline forward, so a healthy job stays silent). From then on detection is automatic: the PostToolUse meter names the watch on every tool call once it has gone quiet past its interval, which is precisely the window in which the failure hides. Clear it with `uv run tools/bg_watch.py done {id}` when the work has genuinely completed, never merely because output appeared. Registration is the only part that depends on you; skipping it on a phase you then consume is a `verification-theater` friction event. Source: 2026-07-22, a 10-lens adversarial-verify fan-out died five minutes in, went undetected for 76 minutes, and 35 of 38 findings shipped presented as verified.
 
 **B3 — "I'm about to diagnose a failure."** Before proposing any root cause:
 1. Read the FULL error message — not just the operation that failed. Distinguish constraint/value errors from missing-object errors.
