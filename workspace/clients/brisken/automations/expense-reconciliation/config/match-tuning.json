@@ -5,17 +5,26 @@
   "date_probable_window_days": 5,
   "high_confidence": 0.99,
   "probable_confidence": 0.85,
-  "possible_confidence": 0.60,
+  "possible_confidence": 0.6,
   "fx_date_window_days": 5,
   "fx_rate_bands": {
-    "BRL:USD": ["0.15", "0.26"],
-    "EUR:USD": ["1.00", "1.45"],
-    "DKK:USD": ["0.13", "0.18"]
+    "BRL:USD": [
+      "0.15",
+      "0.26"
+    ],
+    "EUR:USD": [
+      "1.00",
+      "1.45"
+    ],
+    "DKK:USD": [
+      "0.13",
+      "0.18"
+    ]
   },
   "fx_reference_rates": {},
   "fx_reference_match_pct": "0.03",
   "fx_reference_review_pct": "0.13",
-  "fx_base_amount_match_pct": "0.02",
+  "fx_base_amount_match_pct": "0.01",
   "fx_base_amount_review_pct": "0.13",
   "fx_band_score_span_pct": "0.15",
   "fx_self_derived_rates": true,
@@ -24,6 +33,6 @@
   "fx_self_derived_review": false,
   "card_scoping": true,
   "blend_amount_weight": 0.55,
-  "blend_date_weight": 0.30,
+  "blend_date_weight": 0.3,
   "blend_vendor_weight": 0.15
 }
