@@ -296,7 +296,14 @@ class MatchingConfig:
     # per-line rate can be off by up to 12.8%, so the clean threshold is
     # tight and the review level exists — and review-grade base-amount
     # ranks BELOW a clean reference-rate match in the ladder.
-    fx_base_amount_match_pct: Decimal = Decimal("0.02")
+    # 0.01 (not the labeler's 0.02): tuned by optimize run
+    # brisken-recon-tuning-v1 (2026-07-23). Tightening demoted a
+    # coincidental rival into the review zone, which made a TRUE pair
+    # bilaterally unique and promoted it — the knee is bracketed
+    # (0.005 loses, 0.01 wins, 0.02 loses). Promoted into the dataclass
+    # default because the hosted image ships only src/ and never reads
+    # the tuning file.
+    fx_base_amount_match_pct: Decimal = Decimal("0.01")
     fx_base_amount_review_pct: Decimal = Decimal("0.13")
 
     # ── Self-derived per-run reference rates (2026-07-23) ──────────
