@@ -1,4 +1,37 @@
-# Brisken deck-foundation-v2 (clone-and-patch deck build)
+# Brisken deck build system (native v3 + clone-and-patch v2)
+
+## Native pipeline (v3) — the NEW-generation family
+
+The from-scratch engine behind the Dirk-approved
+`NEW - Brisken - TreasuryCentral Solutions Overview 2026-07-21.pptx`,
+promoted out of its session scratchpad into `native/`. Standard:
+`DESIGN.md` (tokens, slide grammar, content contracts, gates). Decks are
+drawn from a blank presentation on a single design-token system; each
+deck's identity is one palette entry (accent + layout signature) and one
+content spec. Adding a deck = one yaml + one Palette; no new layout code.
+
+```
+uv run native/compose.py <deck>    # native/specs/<deck>.yaml -> dist pptx + gates
+uv run native/render.py <deck>     # PowerPoint COM -> PDF + QA PNGs + native gates
+uv run native/montage.py <deck>    # contact sheets for the visual review
+CDP_PORT=9223 uv run upload.py <deck>    # unchanged: Asset Testing ONLY
+```
+
+Native decks: `overview` (regression baseline: composing it reproduces the
+approved deck part-for-part), `market-data-hub`, `mdh-commodities`,
+`smart-trading`, `digital-co-worker`. Assets come deterministically from
+the reference mirror via `native/assets.py` (md5-pinned: the SAP Certified
+badge is image12, NOT image34 which is Fortitude Re art). Fonts are named
+system fonts (Century Gothic / Segoe UI), NOT embedded; `native/render.py`
+enforces that, replacing the v2 embedded-font gate. Tests:
+`native/tests/` (CI: `deckgen-native-tests.yml`).
+
+**v2 status:** the clone-and-patch pipeline below is superseded for
+product decks (its `... 2026-08 PROPOSAL` artifacts stay in Asset Testing
+until Dirk rules on them) and remains the reference for the library /
+donor mechanics and the Sanofi/Zalando prospect decks until their rebuild.
+
+## Clone-and-patch pipeline (v2)
 
 Builds Brisken product-deck **proposals** on the design foundation of Dirk's
 own `OnePilot Solutions Overview 2026.pptx` (owner directive 2026-07-17: take
