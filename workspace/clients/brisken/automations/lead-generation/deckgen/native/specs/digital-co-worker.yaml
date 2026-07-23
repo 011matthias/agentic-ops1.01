@@ -1,0 +1,164 @@
+# Digital Co-Worker — NEW-generation native deck (14 slides).
+# Copy sources, no invention: [OV] = the approved Overview build (S18 app
+# slide + functional_dcw + use-case slides S21/S22/S23, verbatim, with
+# Dirk's review decisions baked in: workload-removed freed column, "every
+# action logged", "SAP process steps" / "Records & notes", S22
+# customer-master wording, S23 format-list reorder), [V2] =
+# deckgen/specs/digital-co-worker.yaml (Bank Statement Intake +
+# Cash-Management Assistant substance). The Cash-Management Assistant keeps
+# its internal-demo label (truth rule). Success: Agriculture + Chemicals
+# (REF s29/s30 + Dirk's fills) — the two DCW deployments. Badge on the
+# functional slide is a deliberate family decision (Dirk's certification
+# mark, printed on his own product decks' functional diagrams).
+deck: digital-co-worker
+output: "NEW - Brisken - Digital Co-Worker 2026-07-23"
+palette: digital-co-worker
+slides:
+  - type: cover
+    eyebrow: "TreasuryCentral, powered by OnePilot"
+    title: "Digital Co-Worker"
+    sub: "A TreasuryCentral application"
+    tagline: "An AI colleague for the manual middle."
+
+  - type: short_version
+    head: "One application, in four lines."
+    focal: 2
+    cards:
+      - {label: "What it is", body: "An AI co-worker for every person on your team; it does the busywork across your systems, in chat or in the background."}
+      - {label: "What it replaces", body: "The manual middle of every request: read, check, open the system, key in, write back."}
+      - {label: "What you get", body: "Less busywork, more judgment; every step checked and logged."}
+      - {label: "Who it is for", body: "Every person on your team, inside your SAP landscape."}
+    note: "Then the use cases, followed end to end."
+
+  - type: problem
+    kick: "The problem"
+    head: "Real work is a dozen small steps across a dozen systems."
+    bands:
+      - {label: "A request arrives", body: "An email, a message, a form."}
+      - {label: "The manual middle", body: "Read it, check the balance, open the system, key in the record, write back."}
+      - {label: "Your systems", body: "SAP, email, files."}
+
+  - type: hierarchy
+    focal_app: dcw
+    footnote: "The Digital Co-Worker is the AI application inside TreasuryCentral, the shipped edition of OnePilot. Its use cases run in production at chemicals and agricultural customers."
+
+  - type: app
+    kick: "Digital Co-Worker"
+    head: "An AI colleague for the manual middle."
+    gloss: "It does the busywork of a request across your systems: read it, check the balance, open SAP, key it in, write back."
+    problem:
+      - "Real work is a dozen small steps across a dozen systems."
+      - "A request arrives as an email, a message or a form, and a person works it by hand."
+    steps:
+      - "Reads the request: an email, a message, a form."
+      - "Pulls what it needs from your systems."
+      - "Carries out each step and drafts it in SAP, every action logged."
+      - "Confirms in chat; the moves that matter wait for a person."
+    freed:
+      - "Reading each request, checking balances, keying into SAP, writing back."
+      - "The copy-paste across a dozen systems, all day."
+      - "You keep the judgment; the busywork is gone."
+    connects: "CONNECTS TO   email · files · forms  →  SAP S/4HANA & ECC   ·   outputs SAP process steps, records, confirmations, replies"
+
+  - type: functional
+    kick: "Digital Co-Worker · functional overview"
+    head: "Any document, any trigger, into SAP."
+    product: "Digital Co-Worker"
+    sources: ["Emails / requests", "Remittance advices / invoices", "Funding requests", "Bank statements", "Any document, any trigger"]
+    dests: ["SAP process steps", "Records & notes", "Confirmations", "Replies"]
+    note: "Any document in, the right action out, with a person on the moves that matter."
+    badge: true
+
+  - type: usecase
+    kick: "Use case · Intercompany Funding Request"
+    title: "Intercompany Funding Request"
+    gloss: "Intercompany funding: when one company in a group lends cash to another, run through the group's own in-house bank."
+    before: "At a chemicals group, subsidiaries email the in-house bank (the group's own internal bank) to ask for funding. A treasury analyst reads each email and keys it into SAP by hand, across email, SAP in-house cash and the live cash position. Volume spikes at month-end."
+    steps:
+      - "Reads the funding email."
+      - "Pulls out amount, currency, entity and value date."
+      - "Checks the group cash position and the intercompany limit."
+      - "Drafts the funding memo in SAP."
+      - "Routes it for approval."
+      - "On sign-off, posts and confirms back to the requester."
+    checkpoint: "A person approves the moves that matter."
+
+  - type: usecase
+    kick: "Use case · Remittance Advice Gate"
+    title: "Remittance Advice Gate"
+    gloss: "Remittance advice: the note a payer sends listing which invoices a payment covers."
+    before: "Remittance advices arrive by email, sometimes in the body, sometimes as an attachment, in every layout. A person reads each one and keys it into SAP by hand."
+    steps:
+      - "Reads the email, body or attachment, in any format."
+      - "Identifies and structures the advice data."
+      - "Validates it against your SAP customer master and invoices."
+      - "Delivers it to SAP S/4HANA, or a processor like Serrala or HighRadius."
+      - "Flags anything odd for review."
+    checkpoint: "A person sets the guardrails and reviews the exceptions."
+
+  - type: usecase
+    kick: "Use case · Bank Statement Intake"
+    title: "Bank Statement Intake"
+    gloss: "camt.053 / MT940: the standard electronic bank-statement formats SAP reads."
+    before: "A logistics group banks with dozens of institutions; several send statements the SAP bank-connectivity channel never sees, each in its own format. They sit in a mailbox or a data lake, and the day's cash operations wait on them."
+    steps:
+      - "Reads a statement in any format: PDF, CSV or a proprietary line-item report."
+      - "Turns it into camt.053 or MT940, or any target format."
+      - "Validates it and delivers it to SAP cash management in time for the day's cash operations."
+      - "Monitors completeness and timeliness across every bank."
+    checkpoint: "Alerts on anything missing or odd; a person steps in only then."
+
+  - type: usecase
+    kick: "Use case · Cash-Management Assistant"
+    title: "Cash-Management Assistant"
+    gloss: "Our internal demo: cash positioning with the Digital Co-Worker, entirely in chat. Shown as a working demo, not a customer deployment."
+    before: "Cash decisions need timely information, pulled from several systems at once. Where is the cash, and what should move today?"
+    steps:
+      - "You ask where the cash is, in plain language."
+      - "It pulls the position across your accounts; no report to run."
+      - "It suggests payment requests from the position."
+      - "It answers follow-ups in chat and shows the result."
+    checkpoint: "The moves that matter wait for a person to sign off."
+
+  - type: usecase
+    kick: "Use case · Cash Flow & Exposure Hub"
+    title: "Cash Flow & Exposure Hub"
+    gloss: "Exposure: the money at risk from currency or price moves, which treasury hedges."
+    before: "Cash-management and FX-exposure data comes in Excel, CSV and PDF from departments that do not use SAP. Someone converts and maps each one into SAP by hand, in time for cash and hedging decisions."
+    steps:
+      - "Collects cash-flow and exposure data from any source, any format."
+      - "Validates it and maps it into your SAP naming."
+      - "Integrates it with cash and exposure management in S/4HANA or ECC."
+      - "Enriches it for analytics and reporting."
+      - "Monitors every flow for completeness and timeliness."
+    checkpoint: "A person acts on the position; the assembling is done."
+
+  - type: governance
+    kick: "Governance"
+    head: "Governed, in plain terms."
+    intro: "The same four controls run under every application, the AI included: it is grounded in SAP, not free-floating, and keeps a human in the loop on the moves that matter. What each control means, and why it matters:"
+    focal: 1
+    cards:
+      - {label: "Audit trail", body: "Every action is logged and can be reviewed later, end to end. Nothing happens off the record."}
+      - {label: "Four-eyes / segregation of duty", body: "The person who enters something is not the one who approves it. A human stays in the loop (HITL) on the moves that matter."}
+      - {label: "Anomaly alerts", body: "The system flags what looks wrong before it posts, not after, so a bad value is caught on the way in."}
+      - {label: "Manage by exception", body: "People only touch the cases that need judgment. The rest just runs, and you hear about the odd one out."}
+    footline: "AI grounded in SAP, with a human in the loop.    ·    Certified to ISO 27001 and SOC 1 Type II."
+
+  - type: success
+    head: "Live deployments, real industries."
+    intro: "Two production deployments, each replacing a manual or custom-built way of working."
+    stories:
+      - industry: "Agriculture"
+        deployment: "SAP S/4HANA, private cloud"
+        what: "Remittance Advice Gate, run by the Digital Co-Worker."
+        highlight: "Guardrails set; the person taken out of the routine path."
+        replaced: "Replaced an expensive custom third-party solution."
+      - industry: "Chemicals"
+        deployment: "SAP S/4HANA, on-premise"
+        what: "The intercompany funding process, run by the Digital Co-Worker."
+        highlight: "A complex process with many SAP touch-points, fully automated."
+        replaced: "Replaced a manual solution."
+
+  - type: contact
+    head: "Let's map your first request."

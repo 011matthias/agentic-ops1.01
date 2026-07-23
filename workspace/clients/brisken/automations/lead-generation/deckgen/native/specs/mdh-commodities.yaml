@@ -1,0 +1,108 @@
+# Market Data Hub for Commodities — NEW-generation native deck (10 slides).
+# Copy sources, no invention: [V2] = deckgen/specs/mdh-commodities.yaml
+# (Dirk-reviewed pilot-deck substance), [OV] = the approved Overview build
+# (governance + contact patterns), [MSG] = MESSAGING.md. No success story is
+# sourced for commodities, so none ships; the customer-industry footnote on
+# the hierarchy slide is the only proof line (as in the V2 platform-context
+# caption, subject = OnePilot). Badge on the functional slide is a deliberate
+# family decision (Dirk's certification mark, printed on his own product
+# decks' functional diagrams, REF s13).
+deck: mdh-commodities
+output: "NEW - Brisken - Market Data Hub Commodities 2026-07-23"
+palette: mdh-commodities
+slides:
+  - type: cover
+    eyebrow: "TreasuryCentral, powered by OnePilot"
+    title: "Market Data Hub"
+    sub: "for Commodities"
+    tagline: "One governed price curve for every commodity you trade."
+
+  - type: short_version
+    head: "One application, in four lines."
+    focal: 2
+    cards:
+      - {label: "What it is", body: "One governed price curve for every commodity you trade, assembled from every component that moves it."}
+      - {label: "What it replaces", body: "Curves built by hand, differing desk to desk."}
+      - {label: "What you get", body: "Risk and trading priced off the same governed curve, with a full audit trail."}
+      - {label: "Who it is for", body: "Treasury and trading teams on SAP with commodity exposure."}
+    note: "The pages ahead follow one price from the ground to the desk."
+
+  - type: problem
+    kick: "The problem"
+    head: "Every commodity price has a dozen moving parts. Someone builds the curve by hand."
+    bands:
+      - {label: "Components and sources", body: "Freight, storage, quality, local taxes, provider feeds."}
+      - {label: "The manual middle", body: "Collecting components, adjusting by port and time horizon, reconciling by hand."}
+      - {label: "Risk and trading", body: "Prices that differ desk to desk."}
+
+  - type: hierarchy
+    focal_app: mdh
+    footnote: "Market Data Hub for Commodities runs as an application inside TreasuryCentral, the shipped edition of OnePilot. OnePilot runs in production across commodity, oil & gas, chemicals, food & drink, financial-services and agricultural treasuries."
+
+  - type: app
+    kick: "Market Data Hub for Commodities"
+    head: "One price, followed from the ground to the desk."
+    gloss: "A commodity price is composite: the underlying quote plus freight, storage, quality adjustments and local taxes, combined per tenor (how far out on the timeline) and per delivery point."
+    problem:
+      - "The same commodity prices differently by delivery point, as freight, storage, port fees and the local market all differ."
+      - "Today the curve is built by hand in spreadsheets, so prices differ desk to desk and no one can show how a number was reached."
+    steps:
+      - "Collects feeds, exchange quotes, freight and storage rates."
+      - "Combines them into one price per tenor, per delivery point."
+      - "Builds the curve from today out to a year."
+      - "Feeds it to risk, the trading desk and SAP Treasury."
+    freed:
+      - "Building the curve by hand in spreadsheets."
+      - "Reconciling prices that differ desk to desk, and showing how a number was reached."
+      - "Assembling the audit trail by hand."
+    connects: "CONNECTS TO   provider feeds · exchange quotes · freight & storage rates · internal spreadsheets  →  risk management, trading desk, SAP Treasury, any downstream system"
+
+  - type: functional
+    kick: "Market Data Hub for Commodities · functional overview"
+    head: "The curve, from components to the desk."
+    product: "Market Data Hub for Commodities"
+    sources: ["Provider feeds & exchanges", "Forward views", "Freight & storage rates", "Components from the ground"]
+    dests: ["Risk management", "Trading desk", "SAP Treasury", "Any downstream system"]
+    note: "Every input validated on the way in; every change versioned and audited."
+    badge: true
+
+  - type: usecase
+    kick: "Use case · Commodity Price Curves"
+    title: "Commodity Price Curves"
+    gloss: "Building the curve: today's spot (the price for delivery now), then 30, 60 and 90-day tenors, out to a year."
+    before: "Follow one price today: the underlying quote is only the start. Freight, storage, quality and local taxes all move it, and someone combines them in a spreadsheet, per delivery point, per tenor."
+    steps:
+      - "Starts with today's spot and builds the curve along the timeline: 30, 60 and 90 days, out to a year."
+      - "Combines the underlying quote with freight, storage, quality adjustments and local taxes."
+      - "Prices per tenor, per delivery point."
+      - "Validates every input on the way in and flags anomalies."
+    checkpoint: "Anomalies wait for a person's approval; every change is versioned and audited."
+    actor: "THE MARKET DATA HUB"
+
+  - type: usecase
+    kick: "Use case · Valuation and Exposure Prices"
+    title: "Valuation and Exposure Prices"
+    gloss: "Mark-to-market: valuing today's positions at today's market price. Exposure: the money at risk from price moves."
+    before: "Valuation runs off prices pulled by hand from several venues; a late or wrong price moves the day's P&L (profit and loss). Risk, trading and accounting each source their own price, so the numbers disagree."
+    steps:
+      - "Collects end-of-day and settlement prices from the exchanges and providers, on schedule."
+      - "Governs them: validated on the way in, versioned and audited."
+      - "Feeds SAP position valuation and exposure management, tied to the positions they value."
+      - "Gives risk, trading and accounting the same governed number."
+    checkpoint: "A person reviews the flagged prices; the numbers agree."
+    actor: "THE MARKET DATA HUB"
+
+  - type: governance
+    kick: "Governance"
+    head: "Governed, in plain terms."
+    intro: "The same four controls run under every application, the AI included: it is grounded in SAP, not free-floating, and keeps a human in the loop on the moves that matter. What each control means, and why it matters:"
+    focal: 1
+    cards:
+      - {label: "Audit trail", body: "Every action is logged and can be reviewed later, end to end. Nothing happens off the record."}
+      - {label: "Four-eyes / segregation of duty", body: "The person who enters something is not the one who approves it. A human stays in the loop (HITL) on the moves that matter."}
+      - {label: "Anomaly alerts", body: "The system flags what looks wrong before it posts, not after, so a bad value is caught on the way in."}
+      - {label: "Manage by exception", body: "People only touch the cases that need judgment. The rest just runs, and you hear about the odd one out."}
+    footline: "AI grounded in SAP, with a human in the loop.    ·    Certified to ISO 27001 and SOC 1 Type II."
+
+  - type: contact
+    head: "Let's price your first curve."
