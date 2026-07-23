@@ -487,10 +487,13 @@ class Deck:
                "color": MUTED, "line_spacing": 1.2}])
         gap = 0.36
         n = len(stories)
-        cwd = (CW - gap * (n - 1)) / n
+        # Cap card width so 1-2 stories center at sane width; for n=3 the cap
+        # is inert and the geometry equals the approved Overview exactly.
+        cwd = min((CW - gap * (n - 1)) / n, 4.5)
+        x0 = MARGIN + (CW - (n * cwd + (n - 1) * gap)) / 2
         y, h = 2.66, 3.82
         for i, st in enumerate(stories):
-            x = MARGIN + i * (cwd + gap)
+            x = x0 + i * (cwd + gap)
             D.rect(s, x, y, cwd, h, fill=NEUTRAL, rounded=True, radius=0.05)
             D.rect(s, x + 0.28, y + 0.3, 0.4, 0.055,
                    fill=(self.pal.bright if i == 0 else self.pal.accent))
