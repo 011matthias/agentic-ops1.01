@@ -82,6 +82,14 @@ LIMITS = {
 }
 
 
+# NOTE on app-slide column overflow (the 2026-07-23 class: an over-long
+# steps column renders BEHIND the CONNECTS strip): a chars-per-line
+# estimator cannot separate approved copy (est. 11 lines, renders fine)
+# from a real overflow (est. 12, hidden text) — tried and retired same day.
+# The deterministic guards below (item counts, use-case step char cap)
+# stay; app-column overflow is owned by the G4 render + per-slide visual
+# review (DESIGN.md), which must include a close look at each app slide's
+# card bottoms against the CONNECTS strip.
 def _walk_strings(node):
     if isinstance(node, str):
         yield node
@@ -117,6 +125,11 @@ def validate_spec(spec: dict) -> list[str]:
                             f"(overflow collides with the layout — split the slide)")
         if t == "problem" and isinstance(sl.get("bands"), list) and len(sl["bands"]) != 3:
             errs.append(f"slide {i} (problem): needs exactly 3 bands")
+        if t == "usecase" and isinstance(sl.get("steps"), list):
+            for s in sl["steps"]:
+                if len(s) > 124:
+                    errs.append(f"slide {i} (usecase): step exceeds 124 chars and would "
+                                f"wrap past its row: {s[:60]!r}")
     for s in _walk_strings(spec):
         if "—" in s:
             errs.append(f"em-dash in spec text: {s[:80]!r}")

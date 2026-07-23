@@ -152,6 +152,13 @@ def test_usecase_overflow_guard():
     assert any("max 6" in e for e in errs)
 
 
+def test_usecase_step_length_guard():
+    sl = dict(ALL_TYPES_SPEC[10])
+    sl["steps"] = ["x" * 130]
+    errs = compose.validate_spec(_mini_spec([sl]))
+    assert any("124 chars" in e for e in errs)
+
+
 def test_problem_needs_three_bands():
     sl = dict(ALL_TYPES_SPEC[11])
     sl["bands"] = sl["bands"][:2]

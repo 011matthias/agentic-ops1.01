@@ -134,7 +134,12 @@ Failures loop back to the SPEC or the engine, never to the artifact.
   font gates), then contact sheets (`native/montage.py`) read
   slide-by-slide: overflow, collisions, footer sequence, badge identity,
   accent consistency. Budget 2-3 iterations; the Overview loop caught 8+
-  real layout bugs this way.
+  real layout bugs this way. MANDATORY extra: review each APP slide at
+  full size (not only the contact sheet) and check the three card bottoms
+  against the CONNECTS strip — an over-long column renders BEHIND the
+  strip and is invisible at contact-sheet scale (caught once, 2026-07-23;
+  a chars-per-line build guard was tried and retired the same day because
+  it could not separate approved copy from real overflow).
 - **G5 upload** — `deckgen/upload.py <deck>` (CDP :9223), per-deck, never
   `--all`. Asset Testing is the only expressible destination.
 - **G6 re-download verify** — pull the uploaded pair back and
