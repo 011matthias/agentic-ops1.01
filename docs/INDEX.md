@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-23 | Expense-Recon Follow-Through | client-dev | [→](docs/2026-07-23%20-%20Expense-Recon%20Follow-Through/Checkpoint.md) |
 | 2026-07-23 | Recon Match Accuracy | client-dev | [→](docs/2026-07-23%20-%20Recon%20Match%20Accuracy/Checkpoint.md) |
 | 2026-07-22 | Brisken Expense-Recon SPA Cutover + Fly UI Deletion Attempt | client-dev | [Checkpoint](docs/2026-07-22%20-%20Brisken%20Expense-Recon%20SPA%20Cutover%20+%20Fly%20UI%20Deletion%20Attempt/Checkpoint.md) |
 | 2026-07-22 | Brisken Bank Fee Portal Dirk Review Fixes | client-dev | [→](docs/2026-07-22%20-%20Brisken%20Bank%20Fee%20Portal%20Dirk%20Review%20Fixes/Checkpoint.md) |
