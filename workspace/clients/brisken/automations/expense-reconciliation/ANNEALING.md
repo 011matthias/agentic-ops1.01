@@ -15,6 +15,65 @@ Trigger = the moment this becomes urgent enough to revisit.
 
 ---
 
+## Resolved 2026-07-23 — matcher-v2 card-contradiction gate (the ~14 no_charge frontier)
+
+`brisken-recon-tuning-v1` left a precision frontier its SUMMARY named: 14
+no_charge receipts across the 6 labelled months auto-matched to a
+coincidental charge (-2.0 each), that (date, amount) alone could not
+separate; "vendor/context signals" were flagged as the next structural
+idea. Resolved.
+
+**The 14 are one thing.** They concentrate entirely in the travel months
+(9 Rome-2025, 2 Copenhagen-2024, 3 Lisbon-2024); the 3 BRL admin months
+are clean. Every one is a receipt whose Zoho `payment_mode` names a card
+ABSENT from the statement being reconciled (a trip where some receipts
+were paid on the Cloud 6013/2155 card, not the 2838 family),
+coincidentally base-matching an unrelated same-vendor / same-day 2838
+charge.
+
+**Vendor is NOT separable; card is.** Measured on the pinned scorer
+fixture: `vendor_similarity` overlaps heavily between the 14 coincidences
+and the 55 true deterministic pairs (26/55 true pairs score < 0.2 because
+banks truncate foreign vendor strings to aggregators like SUMUP / MP* /
+B91*; some coincidences score 1.00, two people at the same restaurant). A
+vendor gate at every threshold loses far more true pairs than it kills.
+Card is a clean split: 14/14 coincidences have `card_score` 0.0 (receipt
+card differs from the charge card), 0/55 true pairs do (all 1.0).
+
+**The gate.** A clean bilaterally-unique FX_BASE_AMOUNT / FX_REFERENCE
+candidate also forfeits its auto-resolution right when the charge's card
+and the receipt's payment_mode both name a card and they DIFFER
+(`card_signal == 0.0`, behind the existing `card_scoping` trust switch).
+Card scoping already drops contradicted pairs whose receipt names a
+PRESENT card, so a surviving 0.0 means the receipt's card is entirely
+absent, its true charge on another statement. Demotes to FX_JUDGMENT,
+never drops, so the reconciliation guarantee holds and a rare mis-carded
+true pair still surfaces for review.
+
+**Not circular.** payment_mode is an independent, always-present Zoho
+field, never part of the labeling evidence tiers E1-E4 (all amount /
+reference). The matcher was already building candidates on the same
+base-amount evidence the labeler used, but never using card to REJECT,
+exactly where it false-positived.
+
+**Measured (pinned scorer + guard, both unchanged):** train 31.5 -> 49.5,
+all-6 37.2 -> 65.2; determ_ok 55/95 UNCHANGED (0 true pairs lost);
+determ_wrong 0 held; nc_matched 14 -> 0; guard 4/4 PASS (holdout composite
+5.7 -> 15.7). Full module suite 783 green + 3 new pinning tests in
+`test_fx_ladder.py`. Hosted parity holds (defaults-only score ==
+tuning-file score, 65.2), so the fix reaches the src-only Docker image
+with no config change. Structural change in `matching/deterministic.py`,
+measured on the LOCKED scorer/guard, same class as PR #405's uniqueness
+gate; not a config hill-climb (the gate is binary, nothing to tune).
+
+**Residual.** Handles the dominant absent-card no_charge variety. A future
+no_charge receipt paid on a PRESENT card whose charge is merely outside
+the export window would carry `card_score` 1.0 and stay review noise.
+Strict improvement at zero recall cost. Distinct open WS3 item: the
+ADOBE/ANTHROPIC receiptless-charge FX-false-pairing.
+
+---
+
 ## Resolved 2026-06-07 — hardening + plumbing batch (no client input)
 
 Shipped without real data, all mock-tested (98/98 suite green). These

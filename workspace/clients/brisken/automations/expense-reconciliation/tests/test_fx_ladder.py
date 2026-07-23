@@ -222,6 +222,53 @@ def test_exact_fx_is_not_subject_to_the_uniqueness_gate():
     assert len(outcome.matches) + len(outcome.ambiguous) >= 1
 
 
+# ── card-contradiction gate (matcher-v2, 2026-07-23) ───────────────────
+
+
+def test_absent_card_coincidence_is_demoted_to_judgment():
+    """A bilaterally-unique clean base-amount pair whose receipt was paid on
+    a card ABSENT from this statement is a same-vendor/same-day coincidence,
+    not a match: its true charge is on the other card's statement. Demote to
+    judgment even though (date, amount) agree cleanly and uniquely. This is
+    the 14/14 no_charge false-positive class on the labelled fixture."""
+    tx = _tx()  # account_id "2838" is the only card present
+    r = _receipt()
+    object.__setattr__(r, "payment_mode", "3 - Cloud 6013 / 2155 (Chase)")
+    outcome = match_month([tx], [r], MatchingConfig())
+    assert outcome.matches == []
+    assert any(
+        m.match_type is MatchType.FX_JUDGMENT
+        and "absent from this statement" in m.reason
+        for m in outcome.judgment_required
+    )
+
+
+def test_same_card_unique_pair_still_auto_resolves():
+    """Control: the identical unique clean pair, but the receipt's payment
+    mode names the card the charge is on. Card corroborates — it keeps its
+    deterministic right. Guards against the gate over-firing on true pairs
+    (0/55 true fixture pairs were lost to it)."""
+    tx = _tx()  # card 2838
+    r = _receipt()
+    object.__setattr__(r, "payment_mode", "1 - CorpServ 2838/1672 (Chase)")
+    outcome = match_month([tx], [r], MatchingConfig())
+    assert len(outcome.matches) == 1
+    assert outcome.matches[0].match_type is MatchType.FX_BASE_AMOUNT
+
+
+def test_card_gate_inert_when_card_scoping_off():
+    """The contradiction gate rides the same trust switch as card scoping:
+    a run that declares card data untrustworthy (card_scoping=False) does
+    not apply the contradiction either, so the absent-card pair keeps its
+    prior uniqueness-only behaviour."""
+    tx = _tx()
+    r = _receipt()
+    object.__setattr__(r, "payment_mode", "3 - Cloud 6013 / 2155 (Chase)")
+    outcome = match_month([tx], [r], MatchingConfig(card_scoping=False))
+    assert len(outcome.matches) == 1
+    assert outcome.matches[0].match_type is MatchType.FX_BASE_AMOUNT
+
+
 # ── band-scoring fix ───────────────────────────────────────────────────
 
 

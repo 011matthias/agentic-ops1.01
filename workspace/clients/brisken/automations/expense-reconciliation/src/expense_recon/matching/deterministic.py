@@ -1219,10 +1219,33 @@ def match_month(
             if c.match.match_type not in _RATE_DERIVED:
                 continue
             doc = c.match.document_id
-            if len(claimants_by_doc.get(doc, ())) == 1 and len(
-                docs_by_tx.get(tx_id, ())
-            ) == 1:
-                continue  # bilaterally unique: keeps its deterministic right
+            unique = (
+                len(claimants_by_doc.get(doc, ())) == 1
+                and len(docs_by_tx.get(tx_id, ())) == 1
+            )
+            # Card-contradiction gate (2026-07-23, matcher-v2). A rate-derived
+            # pair also forfeits its auto-resolution right when the charge's
+            # card and the receipt's Zoho payment mode both name a card and
+            # they DIFFER (card_signal == 0.0). Card scoping (above) has already
+            # dropped contradicted pairs whose receipt names a card PRESENT in
+            # the statement, so a surviving 0.0 here means the receipt was paid
+            # on a card entirely ABSENT from this statement — its true charge
+            # sits on another card's statement, and the clean base-amount hit to
+            # a present-card charge is a same-vendor / same-day coincidence
+            # (measured: 14/14 no_charge auto-matches on the labelled fixture
+            # carry an absent card; 0/55 true deterministic pairs do). payment_mode
+            # is an independent, always-present Zoho field — never part of the
+            # labeling evidence tiers E1–E4 — so this is a real signal, not a
+            # re-derivation of the base-amount agreement the fixture was built on.
+            card_contradicts = cfg.card_scoping and c.card_signal == 0.0
+            if unique and not card_contradicts:
+                continue  # bilaterally unique, card not contradicted: keep it
+            why = (
+                "the receipt's payment card is absent from this statement "
+                "(paid on another card)"
+                if card_contradicts
+                else "another charge or receipt agrees just as cleanly"
+            )
             demoted = replace(
                 c.match,
                 match_type=MatchType.FX_JUDGMENT,
@@ -1230,9 +1253,8 @@ def match_month(
                 requires_review=True,
                 reason=(
                     c.match.reason.rstrip(".")
-                    + ". Demoted to judgment: this rate-derived pairing is "
-                    "not unique (another charge or receipt agrees just as "
-                    "cleanly)."
+                    + f". Demoted to judgment: this rate-derived pairing is "
+                    f"not conclusive ({why})."
                 ),
             )
             cands[i] = _Candidate(
