@@ -11,14 +11,20 @@ mailboxes themselves, per feedback_brisken_outreach_truth_is_mailbox +
 rule_brisken_graph_first. Replaces the ad-hoc .scratch scan scripts rebuilt in
 4 straight sessions (register 2026-07-11/14/16/17).
 
-Method (the memory's prescription, verbatim):
-  - ONE corpus pull per mailbox: GET /users/{mbx}/messages with
-    `$filter=sentDateTime ge {since} and isDraft eq false` (the messages
-    collection spans ALL folders -- Dirk files sent Rome mail into custom
-    folders like "TA Cook 2026 Rome - Outreach", so a SentItems+Inbox scan
-    produces false "not contacted" negatives).
+Method:
+  - OUTBOUND (the sends): an all-folders sweep. Enumerate every mail folder in
+    the mailbox and, per folder, pull only messages whose `from` IS the mailbox
+    owner (`$filter=from/emailAddress/address eq '{mbx}' and sentDateTime ge
+    {since} and isDraft eq false`). This catches a send no matter which folder
+    Dirk later filed it into. The old design used the `/users/{mbx}/messages`
+    aggregate, which does NOT reliably surface Sent-Items/filed sends -- it
+    false-negatived 21 of the 24 real 2026-07-21 T3 sends. The per-folder
+    `from==owner` filter keeps each response tiny, so the full-tree walk stays
+    cheap despite touching hundreds of folders.
+  - INBOUND (replies / OOO): the aggregate `/users/{mbx}/messages` (reliable
+    for inbound; it surfaced the OOO auto-replies the old tool caught).
   - A real send is `isDraft eq false`; a parked draft is NOT a send (drafts
-    are pulled separately and reported as draft_only).
+    are pulled separately from the Drafts folder and reported as draft_only).
   - Inbound from the contact counts as a reply only when the subject is not
     an OOO auto-reply ("Automatic reply", "Automatische Antwort",
     "Out of office", "Abwesen...").
@@ -53,10 +59,7 @@ import re
 import sys
 from pathlib import Path
 
-try:
-    import requests
-except ImportError:  # CI test env execs this module without live deps;
-    requests = None  # the pure logic stays importable, transport unused.
+import requests
 
 # Windows consoles default to cp1252; an emoji in a subject line kills the
 # print (the register 2026-07-17 charmap class -- hit live by this very tool's
@@ -69,12 +72,8 @@ for _stream in (sys.stdout, sys.stderr):
 
 MAILBOXES = ("dirk.neumann@brisken.com", "matthias.silva@brisken.com")
 GRAPH = "https://graph.microsoft.com/v1.0"
-# Tightened 2026-07-22 per feedback_brisken_outreach_truth_is_mailbox step 5:
-# the short list mis-flagged Jose Vergel ("out of THE office" variant) as a
-# genuine reply. Shared with brisken-outreach-reconcile.py (imports this).
 OOO_RE = re.compile(
-    r"automatic reply|automatische antwort|out of (the )?office|abwesen"
-    r"|auto-?reply|risposta automatica|annual leave|on vacation",
+    r"automatic reply|automatische antwort|out of office|abwesen|auto-?reply",
     re.IGNORECASE,
 )
 PAGE_CAP = 300  # safety cap on paging per query
@@ -143,22 +142,90 @@ def paged_get(url: str, token: str, params: dict | None = None) -> list[dict]:
 
 
 SELECT = ("subject,sentDateTime,receivedDateTime,from,toRecipients,"
-          "ccRecipients,bccRecipients,parentFolderId,isDraft")
+          "ccRecipients,bccRecipients,parentFolderId,isDraft,internetMessageId")
 
 
-def pull_corpus(mbx: str, token: str, since: str) -> tuple[list[dict], list[dict]]:
-    """(sent-or-received real messages, drafts) for one mailbox, ALL folders."""
+def list_folders(mbx: str, token: str) -> list[dict]:
+    """Every mail folder in the mailbox, recursively (each dict carries a
+    `_path` display name + `totalItemCount`).
+
+    The outbound sweep visits each folder so a send FILED OUT of Sent Items is
+    still found. Dirk files Rome outreach into per-company folders (e.g.
+    `22 - SALES / Adidas`, `... / DSV`); the old `/users/{mbx}/messages`
+    aggregate did not surface those Sent-copies, so it reported real sends as
+    "no trace" (2026-07-21 T3 wave: 21/24 false negatives). See
+    [[feedback_brisken_outreach_truth_is_mailbox]].
+    """
     assert mbx in MAILBOXES, f"mailbox {mbx!r} not in hard allowlist"
-    base = f"{GRAPH}/users/{mbx}/messages"
-    real = paged_get(base, token, {
+    out: list[dict] = []
+
+    def walk(fid: str | None, prefix: str) -> None:
+        base = (f"{GRAPH}/users/{mbx}/mailFolders/{fid}/childFolders"
+                if fid else f"{GRAPH}/users/{mbx}/mailFolders")
+        for f in paged_get(base, token, {
+            "$top": "100",
+            "$select": "id,displayName,totalItemCount,childFolderCount",
+        }):
+            f["_path"] = f"{prefix}{f.get('displayName', '?')}"
+            out.append(f)
+            if f.get("childFolderCount", 0):
+                walk(f["id"], f"{f['_path']} / ")
+
+    walk(None, "")
+    return out
+
+
+def pull_outbound(mbx: str, token: str, since: str) -> list[dict]:
+    """Every real message SENT FROM this mailbox since `since`, across ALL
+    folders. Per folder we ask ONLY for messages whose `from` is the mailbox
+    owner, so responses stay tiny even though the whole tree is walked. This is
+    the reliable outbound corpus (the fix): "filter the outreach that went out
+    of the mailbox" regardless of which folder Dirk later filed it into. Dedup
+    by message id.
+    """
+    assert mbx in MAILBOXES, f"mailbox {mbx!r} not in hard allowlist"
+    seen: dict[str, dict] = {}
+    flt = (f"from/emailAddress/address eq '{mbx}' "
+           f"and sentDateTime ge {since}T00:00:00Z and isDraft eq false")
+    for f in list_folders(mbx, token):
+        if not f.get("totalItemCount"):
+            continue
+        try:
+            msgs = paged_get(
+                f"{GRAPH}/users/{mbx}/mailFolders/{f['id']}/messages", token,
+                {"$filter": flt, "$select": SELECT, "$top": "100"})
+        except requests.HTTPError as e:
+            print(f"WARN: outbound query failed for [{f['_path']}]: {e}",
+                  file=sys.stderr)
+            continue
+        for m in msgs:
+            m["_folder"] = f["_path"]
+            seen[m.get("id") or m.get("internetMessageId") or repr(m)] = m
+    return list(seen.values())
+
+
+def pull_inbound(mbx: str, token: str, since: str) -> list[dict]:
+    """Real messages received since `since`, via the aggregate `/messages`
+    (reliable for inbound: it surfaced the OOO replies the old tool caught).
+    Only from==contact rows are used downstream, so the aggregate's outbound
+    blind spot is irrelevant here.
+    """
+    assert mbx in MAILBOXES, f"mailbox {mbx!r} not in hard allowlist"
+    return paged_get(f"{GRAPH}/users/{mbx}/messages", token, {
         "$filter": f"sentDateTime ge {since}T00:00:00Z and isDraft eq false",
         "$select": SELECT, "$top": "100",
     })
-    drafts = paged_get(base, token, {
-        "$filter": "isDraft eq true",
-        "$select": SELECT, "$top": "100",
-    })
-    return real, drafts
+
+
+def pull_drafts(mbx: str, token: str) -> list[dict]:
+    """Unsent drafts (Drafts folder). A parked draft is NOT a send."""
+    assert mbx in MAILBOXES, f"mailbox {mbx!r} not in hard allowlist"
+    try:
+        return paged_get(
+            f"{GRAPH}/users/{mbx}/mailFolders/drafts/messages", token,
+            {"$filter": "isDraft eq true", "$select": SELECT, "$top": "100"})
+    except requests.HTTPError:
+        return []
 
 
 def folder_name(mbx: str, fid: str, token: str, cache: dict) -> str:
@@ -192,29 +259,44 @@ def scan(contacts: list[str], since: str) -> list[dict]:
     creds = load_env()
     token = get_token(creds)
     fcache: dict = {}
-    corpora = {mbx: pull_corpus(mbx, token, since) for mbx in MAILBOXES}
+    # Outbound = all-folders sweep (reliable); inbound = aggregate; drafts =
+    # Drafts folder. Split so a send filed out of Sent Items is still caught.
+    corpora = {mbx: {
+        "out": pull_outbound(mbx, token, since),
+        "in": pull_inbound(mbx, token, since),
+        "drafts": pull_drafts(mbx, token),
+    } for mbx in MAILBOXES}
     mbx_set = {m.lower() for m in MAILBOXES}
 
     results = []
     for contact in contacts:
         c = contact.strip().lower()
         outbound, inbound, ooo, draft_hits = [], [], [], []
-        for mbx, (real, drafts) in corpora.items():
-            for msg in real:
+        for mbx, corp in corpora.items():
+            for msg in corp["out"]:
                 sender, rcpt = addrs(msg)
-                hit = {
-                    "mailbox": mbx,
-                    "date": msg.get("sentDateTime"),
-                    "subject": (msg.get("subject") or "")[:90],
-                    "folder": folder_name(mbx, msg.get("parentFolderId", ""),
-                                          token, fcache),
-                }
                 if sender in mbx_set and c in rcpt:
-                    outbound.append(hit)
-                elif sender == c:
+                    outbound.append({
+                        "mailbox": mbx,
+                        "date": msg.get("sentDateTime"),
+                        "subject": (msg.get("subject") or "")[:90],
+                        "folder": msg.get("_folder", "?"),
+                        "internet_message_id": msg.get("internetMessageId"),
+                    })
+            for msg in corp["in"]:
+                sender, _ = addrs(msg)
+                if sender == c:
+                    hit = {
+                        "mailbox": mbx,
+                        "date": (msg.get("sentDateTime")
+                                 or msg.get("receivedDateTime")),
+                        "subject": (msg.get("subject") or "")[:90],
+                        "folder": folder_name(mbx, msg.get("parentFolderId", ""),
+                                              token, fcache),
+                    }
                     (ooo if OOO_RE.search(msg.get("subject") or "")
                      else inbound).append(hit)
-            for msg in drafts:
+            for msg in corp["drafts"]:
                 _, rcpt = addrs(msg)
                 if c in rcpt:
                     draft_hits.append({
