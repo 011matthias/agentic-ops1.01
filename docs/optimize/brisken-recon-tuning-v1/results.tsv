@@ -4,3 +4,4 @@ round	commit	score	delta	status	description	timestamp
 2	306848e	31.5	+0.7	keep	tighten fx_base_amount_match_pct 0.02->0.01: true Zoho conversions agree to well under 1pct, coincidences are uniform over the band; each nc kill is +2.0, each true pair lost to review costs only 0.7	2026-07-23T15:28:30
 3	9b13d8b	29.8	NA	discard	push the winning lever: fx_base_amount_match_pct 0.01->0.005; if true conversions are near-exact this sheds more nc coincidences at little cost	2026-07-23T15:28:52
 4	1c6970b	30.6	NA	discard	fx_date_window_days 5->3 (r1 at 2 overshot: uniqueness promotions +7 determ but deferred -8 and nc +3; 3 should keep most promotions while losing fewer day-3..5 pairs)	2026-07-23T15:29:24
+5	b2c252a	25.7	NA	discard	fx_reference_match_pct 0.03->0.015: same precision logic that won r2, applied to the derived-rate reference path	2026-07-23T15:29:44
