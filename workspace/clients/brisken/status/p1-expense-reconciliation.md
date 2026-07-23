@@ -4,7 +4,7 @@ workstream: p1-expense-reconciliation
 group: ""
 spec: p1
 state: active
-updated: 2026-07-22
+updated: 2026-07-23
 ---
 
 # Brisken / Expense Reconciliation (p1)
@@ -33,6 +33,7 @@ this table is the index, not a second record.
 | Receipt OCR (vision + PDF text) | done | BLUEPRINT slice 2 |
 | LLM categorizer (gpt-4o-mini, OpenAI Brisken key) | live | BLUEPRINT "Provider Pivot" |
 | Deterministic matcher | done | BLUEPRINT slice 3 |
+| Date+amount accuracy program (scorer + structure + tuning) | live (PRs #404/#405/#406, deployed 2026-07-23) | Owner directive "date+time+amount, most accurate": time verified nonexistent in all sources → date+amount. Pinned scorer `recon-match-accuracy` (95 labelled pairs, 2024 holdout guard) + FX_BASE_AMOUNT path + self-derived monthly rates + band-scoring fix + review-zone deferral + bilateral-uniqueness gate + tuned `fx_base_amount_match_pct=0.01`. Train composite 8.9→31.5, determ-correct 3→55/95, **0 wrong** at every step; live April re-run (no LLM) 20 clean + 13 teed-up review, byte-identical to local replay. Journal: `docs/optimize/brisken-recon-tuning-v1/`; ANNEALING 2026-07-23 entry |
 | Card as a matching signal (WS3) | live (PR #317, deployed 2026-07-22) | `Transaction.card_last4` + optional `card` column map (CSV/xlsx + hosted guess); card-scoped candidates now key on the CHARGE's card, not the account id. On the real 01-05 month software-vs-Food FX-false-pairs 4 -> 0. Also: `Match.card_score` (tie-break + workbench), card into the FX-judgment prompt, optional `matching.llm_second_pass_unmatched` (OFF) |
 | Sign canonicalization + refunds bucket + deterministic FX (Tier-1) | done (PR #285) | BLUEPRINT 3.15; no-LLM 0/36->29/36 on Criss's April |
 | Dev notifier: operator "run now" uploads fire an email | **live + scheduled 2026-07-22** | `tools/brisken-recon-notify.py`. Was doubly broken: unscheduled AND dead since the v31 cutover (logged in via the deleted `POST /login`, and all 4 mail links pointed into the deleted HTML UI, including the publish ping that goes to the USER). PR #373 moves it to `/api/login` + bearer, handles the throttle's 429, and points links at `APP_URL` (the SPA). Registered as Windows task `BriskenReconNotify` (15-min repeat), `LastTaskResult 0` over two fires, 0 missed; state baselined so the first fire did not mail the backlog. NOTE: the task runs from the PRIMARY clone (it needs the gitignored `context/.env`), which currently carries the fix as an uncommitted local edit identical to main — `git checkout -- tools/brisken-recon-notify.py` before pulling there |

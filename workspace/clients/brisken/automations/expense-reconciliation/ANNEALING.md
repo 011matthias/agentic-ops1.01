@@ -51,6 +51,47 @@ matcher calibration (A1–A7), real-data validation, slice 4 posting.
 
 ---
 
+## Resolved 2026-07-23 — date+amount accuracy program (measured end to end)
+
+Owner directive: matching driven by date + amount, most accurate.
+Time-of-day verified nonexistent in every source (bank CSV/PDF, ER PDF,
+vision schema) — the program is date+amount. Shipped as PRs #404 (scorer
+`tools/scorers/recon-match-accuracy.py` + holdout guard, both pinned),
+#405 (matcher structure), #406 (optimize run + tuned default), deployed
+to Fly and live-verified.
+
+- **The metric:** +1.0 deterministic-correct / +0.3 deferred-correct /
+  −2.0 deterministic-wrong or no_charge false positive over the 6
+  labelled months (95 confirmed pairs); train = four 2025-26 months,
+  holdout = the two 2024 months, guard-enforced.
+- **Structure (#405):** `FX_BASE_AMOUNT` deterministic path off the ER
+  report's own per-receipt conversion (the E3 signal, 0/92 deterministic
+  at baseline); self-derived per-run reference rates (statement-FX-line
+  median, else receipt-rate median n≥3, band-clamped, configured wins);
+  band candidates scored by amount agreement under the best rate instead
+  of midpoint distance; review-zone (2–13%) DEFERS instead of
+  auto-matching (it had auto-matched 38/46 no-charge receipts);
+  **bilateral-uniqueness gate** — clean rate-derived evidence resolves
+  deterministically only when exclusive both ways (the labeling
+  `auto_pairs` criterion); assignment sort key gains the amount+date
+  blend so contested receipts stop being decided by vendor fuzz.
+- **Tuning (#406, optimize run brisken-recon-tuning-v1):** 7 rounds,
+  winner `fx_base_amount_match_pct` 0.02→0.01 (knee bracketed both
+  sides), promoted into the dataclass default (the hosted image never
+  reads the tuning file). Dead ends + inert levers journaled in
+  `docs/optimize/brisken-recon-tuning-v1/SUMMARY.md`.
+- **Arc (train composite):** 8.9 → 30.8 (structure) → 31.5 (tuned);
+  holdout 5.5 → 5.7 with 13/22 deterministic; deterministic-correct
+  3/95 → 55/95 overall with **0 wrong deterministic matches** at every
+  step. Live April re-run (no LLM): 20 clean + 13 teed-up review,
+  byte-identical to the local replay of the same inputs.
+- **Known frontier:** ~9 train no-charge receipts remain bilaterally-
+  unique coincidences within 1% — indistinguishable on (date, amount)
+  alone; next structural idea is vendor/context signals, only if this
+  must shrink further.
+
+---
+
 ## What already works (do not regress)
 
 Brief deliberate list so annealing changes don't break what's clean.
