@@ -25,5 +25,10 @@
     "direction": "maximize",
     "pinned": "2026-07-21",
     "sha": "e5327b0204087663a5b85e92276e08901bc2ecd0"
+  },
+  "recon-match-accuracy.py": {
+    "direction": "maximize",
+    "pinned": "2026-07-23",
+    "sha": "f4a144b20b485d1b504c45f82d9acf754cac7875"
   }
 }
