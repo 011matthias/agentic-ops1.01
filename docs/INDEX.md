@@ -11,6 +11,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-23 | Recon Matcher V2 | client-dev | [→](docs/2026-07-23%20-%20Recon%20Matcher%20V2/Checkpoint.md) |
+| 2026-07-23 | Recon Spec Gap Register | client-dev | [Mini-Checkpoint-1](docs/2026-07-23%20-%20Recon%20Spec%20Gap%20Register/Mini-Checkpoint-1.md) |
 | 2026-07-23 | Recon Spec Gap Register | client-dev | [Mini-Checkpoint-2](docs/2026-07-23%20-%20Recon%20Spec%20Gap%20Register/Mini-Checkpoint-2.md) |
 | 2026-07-23 | Expense-Recon Follow-Through | client-dev | [→](docs/2026-07-23%20-%20Expense-Recon%20Follow-Through/Checkpoint.md) |
 | 2026-07-23 | Recon Match Accuracy | client-dev | [→](docs/2026-07-23%20-%20Recon%20Match%20Accuracy/Checkpoint.md) |
