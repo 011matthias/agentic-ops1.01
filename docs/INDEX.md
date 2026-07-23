@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-23 | Brisken Hours Log + Overlap Purge | misc | [→](docs/2026-07-23%20-%20Brisken%20Hours%20Log%20+%20Overlap%20Purge/Checkpoint.md) |
 | 2026-07-23 | Post-Rome Outreach Truth | client-dev | [→](docs/2026-07-23%20-%20Post-Rome%20Outreach%20Truth/Checkpoint.md) |
 | 2026-07-23 | Recon Matcher V2 | client-dev | [→](docs/2026-07-23%20-%20Recon%20Matcher%20V2/Checkpoint.md) |
 | 2026-07-23 | Recon Spec Gap Register | client-dev | [Mini-Checkpoint-1](docs/2026-07-23%20-%20Recon%20Spec%20Gap%20Register/Mini-Checkpoint-1.md) |
