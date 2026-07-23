@@ -38,6 +38,30 @@
           "term": "RWZ",
           "pattern": "\\bRWZ\\b",
           "source": "same fix: Dirk's Zalando edit removed RWZ together with Evonik; both customer names banned in client-facing material"
+        },
+        {
+          "term": "your live SAP data",
+          "source": "Dirk comment on Sanofi slide 2, 2026-07-19 (MESSAGING.md): 'SAP data is always live', the phrase is illogical. Say 'across your SAP systems and data' / 'in your SAP context'."
+        },
+        {
+          "term": "SAP OneExposure",
+          "source": "Dirk comment S9 on the NEW Overview, 2026-07-21: too specific; generalize to deployment types / 'exposure & risk systems'."
+        },
+        {
+          "term": "AI Digital Workforce",
+          "source": "Owner naming lock 2026-07-21: the AI app is 'Digital Co-Worker' across all decks; 'AI Digital Workforce' is the superseded brisken.com name."
+        },
+        {
+          "term": "ChatGPT",
+          "source": "Scrubbed from all deck proposals 2026-07-17 for consistency with the Overview revision (Dirk's own line generalized; his call to restore per deck)."
+        },
+        {
+          "term": "central repository",
+          "source": "Dirk comment on Sanofi slide 2, 2026-07-19 (MESSAGING.md): no central-repository claim; 'we don't hold the data; we connect the dots'."
+        },
+        {
+          "term": "cockpit",
+          "source": "Dirk comment on Sanofi slide 2, 2026-07-19 (MESSAGING.md): cockpit instills old tech; say workspace / spaces."
         }
       ],
       "exempt": [
@@ -55,6 +79,21 @@
           "path": "comms-log.md",
           "term": "*",
           "reason": "internal comms record; quotes the banned phrasing when logging a leak. Not shipped to the client."
+        },
+        {
+          "path": "*CHANGELOG*",
+          "term": "*",
+          "reason": "internal provenance record beside a deliverable; documents terminology swaps by quoting the banned phrasing on purpose. Not shipped to the client."
+        },
+        {
+          "path": "*MESSAGING.md",
+          "term": "*",
+          "reason": "the terminology map itself; records each banned phrase next to its replacement. Internal, not shipped."
+        },
+        {
+          "path": "*DESIGN.md",
+          "term": "*",
+          "reason": "the deck design standard; references the banned-terms list it enforces. Internal, not shipped."
         },
 
         {

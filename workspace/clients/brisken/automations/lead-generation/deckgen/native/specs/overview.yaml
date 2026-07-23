@@ -1,0 +1,308 @@
+# TreasuryCentral Solutions Overview — transcription of the Dirk-approved
+# build (tc-overview-new/build2.py, review-integrated 2026-07-21/22).
+# This spec is the engine's regression baseline: composing it must reproduce
+# the approved deck visually unchanged. Copy provenance:
+# deliverables/tc-overview-redesign/CHANGELOG-substance-pass.md.
+deck: overview
+output: "NEW - Brisken - TreasuryCentral Solutions Overview 2026-07-21"
+palette: overview
+slides:
+  - type: cover
+    eyebrow: "Powered by OnePilot"
+    title: "TreasuryCentral"
+    sub: "Solutions Overview"
+    tagline: "The autonomous treasury, grounded in your SAP context."
+
+  - type: divider
+    num: "01"
+    title: "About"
+    sub: "Who we are, and who already runs on us."
+
+  - type: short_version
+    head: "One platform tour, in four lines."
+    focal: 2
+    cards:
+      - {label: "What it is", body: "The OnePilot platform and the applications that run on it, in one tour."}
+      - {label: "What it replaces", body: "A dozen separate product pitches, and the manual middle between your systems."}
+      - {label: "What you get", body: "The platform, three applications, working use cases, and the customers running them."}
+      - {label: "Who it is for", body: "Treasury and finance teams on SAP."}
+    note: "Start with who we are; the platform follows."
+
+  - type: about
+    kick: "About Brisken"
+    head: "An SAP co-innovation partner, live in production."
+    intro: "Brisken builds treasury software on SAP and runs it for SAP treasury teams. Not a roadmap: real customers, in production today."
+    focal: 1
+    cards:
+      - {label: "SAP co-innovation partner", body: "SAP Co-Innovation Partner and Partner Edge member; SAP Industry Cloud for Financial Services and for Commodities."}
+      - {label: "Built on SAP", body: "OnePilot runs on SAP's own cloud, inside your landscape. Your book of records (the official system where the numbers are final) stays in SAP."}
+      - {label: "Live in production", body: "Deployed across financial services, chemicals, food & drink, oil & gas, commodity and agricultural treasuries."}
+    footnote: "Market-data partners: 360T, CME, Refinitiv, Bloomberg, OANDA.   Headquarters: Houston, TX."
+
+  - type: customers
+    head: "Treasury teams already run on it."
+    caption: "A selection of treasury and finance teams live on OnePilot applications."
+
+  - type: divider
+    num: "02"
+    title: "The Platform"
+    sub: "One platform underneath every application, grounded in SAP."
+
+  - type: hub
+    kick: "The platform"
+    head: "Your systems, connected.\nYour record, untouched."
+    intro: "We run on top of your SAP systems and data. Whatever you need to do elsewhere, we connect, integrate and automate it, so the process runs, effort drops, and your SAP record is updated."
+    focal: 2
+    cards:
+      - {label: "Systems connected", body: "Banks, market data, counterparties, email and spreadsheets, joined once."}
+      - {label: "Data flowing where it's needed", body: "Pushed or pulled to every target, on a schedule or on demand: SAP and non-SAP systems."}
+      - {label: "Your record stays in SAP", body: "Your book of records (the official system of record, here SAP) stays where it is. We connect your systems and push the updates into it."}
+
+  - type: hierarchy
+
+  - type: functional
+    kick: "Platform · functional overview"
+    head: "How it fits your architecture."
+    product: "TreasuryCentral"
+    sources: ["Market data & exchanges", "Banks & counterparties", "Central banks & agencies", "Email, files & spreadsheets", "SAP, Oracle, Snowflake"]
+    dests: ["SAP: on-prem, private & public cloud", "Non-SAP systems, cloud & on-prem", "Databases & analytics", "Portals & file storage"]
+    note: "Connects both ways over RFC/OData, AMQP, SFTP, REST, HTTP, email and Excel. Your book of records stays in SAP."
+    badge: true
+
+  - type: governance
+    kick: "The platform · governance"
+    head: "Governed, in plain terms."
+    intro: "The same four controls run under every application, the AI included: it is grounded in SAP, not free-floating, and keeps a human in the loop on the moves that matter. What each control means, and why it matters:"
+    focal: 1
+    cards:
+      - {label: "Audit trail", body: "Every action is logged and can be reviewed later, end to end. Nothing happens off the record."}
+      - {label: "Four-eyes / segregation of duty", body: "The person who enters something is not the one who approves it. A human stays in the loop (HITL) on the moves that matter."}
+      - {label: "Anomaly alerts", body: "The system flags what looks wrong before it posts, not after, so a bad value is caught on the way in."}
+      - {label: "Manage by exception", body: "People only touch the cases that need judgment. The rest just runs, and you hear about the odd one out."}
+    footline: "AI grounded in SAP, with a human in the loop.    ·    Certified to ISO 27001 and SOC 1 Type II."
+
+  - type: divider
+    num: "03"
+    title: "Market Data Hub"
+    sub: "One source for every rate you rely on."
+
+  - type: app
+    kick: "Market Data Hub"
+    head: "One source for every rate you rely on."
+    gloss: "Market data means the FX and interest rates, commodity prices and credit ratings a treasury runs on. Today they arrive from a dozen places."
+    problem:
+      - "Your rates live in a dozen places, lined up by hand."
+      - "Re-keying, fixing formats, chasing bad values, reconciling before month-end."
+    steps:
+      - "Pulls every rate from any source: Bloomberg, Refinitiv, 360T, OANDA, central banks."
+      - "Checks each value on arrival for anomalies, completeness and accuracy."
+      - "Calculates and shapes it: inversions, triangulation, your own formulas."
+      - "Pushes it into SAP and non-SAP systems, on schedule or on demand."
+    freed:
+      - "Re-keying rates and fixing formats."
+      - "Chasing bad values and reconciling by hand."
+      - "Assembling the audit trail by hand."
+      - "The month-end everyone dreads."
+    connects: "CONNECTS TO   Bloomberg · Refinitiv · 360T · OANDA · central banks  →  SAP ECC & S/4HANA, non-SAP systems   ·   via API, OData, SFTP, email, Excel add-in"
+
+  - type: functional
+    kick: "Market Data Hub · functional overview"
+    head: "Market data, into your SAP context."
+    product: "Market Data Hub"
+    sources: ["Bloomberg, Refinitiv, 360T", "Central banks & agencies", "Exchanges & aggregators", "Websites & internal sources"]
+    dests: ["SAP ECC & S/4HANA", "Exposure & risk systems", "Analytics & databases", "Non-SAP systems"]
+    note: "Any protocol, on a schedule or on demand. Every value checked on the way in."
+
+  - type: divider
+    num: "04"
+    title: "Smart Trading"
+    sub: "Autonomous trading, from the venue to booked in SAP."
+
+  - type: app
+    kick: "Brisken Smart Trading (BST)"
+    head: "Autonomous trading, booked in SAP."
+    gloss: "Autonomous trading means the trade carries itself from the decision to the booked deal, with no manual re-keying."
+    problem:
+      - "You trade on a venue, then you book in SAP."
+      - "Today a person joins the two by hand: re-keying the ticket, chasing the approval, building the deal entry."
+    steps:
+      - "Reads the exposure (the money at risk from currency or price moves) from your SAP positions."
+      - "Sends the request to the venue; approval runs under your own rules."
+      - "Matches the fill that comes back and shapes it for SAP."
+      - "Books the deal in SAP Treasury, checked and logged."
+    freed:
+      - "Re-keying tickets and chasing approvals."
+      - "Building deal entries by hand."
+      - "Manual FX runs 10 to 15 minutes a trade (The Association of Corporate Treasurers)."
+    connects: "CONNECTS TO   360T · FXall · Bloomberg FX GO · Citi Pulse · BidFX  →  SAP Treasury (TRM/FAM), ECC, S/4HANA   ·   any OMS or TMS"
+
+  - type: functional
+    kick: "Smart Trading · functional overview"
+    head: "The trade, straight through to SAP."
+    product: "Smart Trading"
+    sources: ["360T, FXall, Bloomberg FX GO", "Citi Pulse, BidFX", "Any OMS or TMS", "Banks & brokers"]
+    dests: ["SAP TRM & FAM", "SAP ECC & S/4HANA", "SAP Analytics Cloud", "Analytics platforms"]
+    note: "The trade flows from the venue into SAP Treasury on its own, checked and logged."
+
+  - type: divider
+    num: "05"
+    title: "Digital Co-Worker"
+    sub: "An AI colleague for the manual middle."
+
+  - type: app
+    kick: "Digital Co-Worker"
+    head: "An AI colleague for the manual middle."
+    gloss: "It does the busywork of a request across your systems: read it, check the balance, open SAP, key it in, write back."
+    problem:
+      - "Real work is a dozen small steps across a dozen systems."
+      - "A request arrives as an email, a message or a form, and a person works it by hand."
+    steps:
+      - "Reads the request: an email, a message, a form."
+      - "Pulls what it needs from your systems."
+      - "Carries out each step and drafts it in SAP, every action logged."
+      - "Confirms in chat; the moves that matter wait for a person."
+    freed:
+      - "Reading each request, checking balances, keying into SAP, writing back."
+      - "The copy-paste across a dozen systems, all day."
+      - "You keep the judgment; the busywork is gone."
+    connects: "CONNECTS TO   email · files · forms  →  SAP S/4HANA & ECC   ·   outputs SAP process steps, records, confirmations, replies"
+
+  - type: functional
+    kick: "Digital Co-Worker · functional overview"
+    head: "Any document, any trigger, into SAP."
+    product: "Digital Co-Worker"
+    sources: ["Emails / requests", "Remittance advices / invoices", "Funding requests", "Bank statements", "Any document, any trigger"]
+    dests: ["SAP process steps", "Records & notes", "Confirmations", "Replies"]
+    note: "Any document in, the right action out, with a person on the moves that matter."
+
+  - type: divider
+    num: "06"
+    title: "Use Cases"
+    sub: "The Digital Co-Worker, at work in the manual middle."
+
+  - type: usecase
+    kick: "Use case · Intercompany Funding Request"
+    title: "Intercompany Funding Request"
+    gloss: "Intercompany funding: when one company in a group lends cash to another, run through the group's own in-house bank."
+    before: "At a chemicals group, subsidiaries email the in-house bank (the group's own internal bank) to ask for funding. A treasury analyst reads each email and keys it into SAP by hand, across email, SAP in-house cash and the live cash position. Volume spikes at month-end."
+    steps:
+      - "Reads the funding email."
+      - "Pulls out amount, currency, entity and value date."
+      - "Checks the group cash position and the intercompany limit."
+      - "Drafts the funding memo in SAP."
+      - "Routes it for approval."
+      - "On sign-off, posts and confirms back to the requester."
+    checkpoint: "A person approves the moves that matter."
+
+  - type: usecase
+    kick: "Use case · Remittance Advice Gate"
+    title: "Remittance Advice Gate"
+    gloss: "Remittance advice: the note a payer sends listing which invoices a payment covers."
+    before: "Remittance advices arrive by email, sometimes in the body, sometimes as an attachment, in every layout. A person reads each one and keys it into SAP by hand."
+    steps:
+      - "Reads the email, body or attachment, in any format."
+      - "Identifies and structures the advice data."
+      - "Validates it against your SAP customer master and invoices."
+      - "Delivers it to SAP S/4HANA, or a processor like Serrala or HighRadius."
+      - "Flags anything odd for review."
+    checkpoint: "A person sets the guardrails and reviews the exceptions."
+
+  - type: usecase
+    kick: "Use case · Cash Flow & Exposure Hub"
+    title: "Cash Flow & Exposure Hub"
+    gloss: "Exposure: the money at risk from currency or price moves, which treasury hedges."
+    before: "Cash-management and FX-exposure data comes in Excel, CSV and PDF from departments that do not use SAP. Someone converts and maps each one into SAP by hand, in time for cash and hedging decisions."
+    steps:
+      - "Collects cash-flow and exposure data from any source, any format."
+      - "Validates it and maps it into your SAP naming."
+      - "Integrates it with cash and exposure management in S/4HANA or ECC."
+      - "Enriches it for analytics and reporting."
+      - "Monitors every flow for completeness and timeliness."
+    checkpoint: "A person acts on the position; the assembling is done."
+
+  - type: divider
+    num: "07"
+    title: "Success Stories"
+    sub: "Three live deployments, in three real industries."
+
+  - type: success
+    head: "Live deployments, real industries."
+    intro: "Three production deployments, each replacing a manual or custom-built way of working."
+    stories:
+      - industry: "Financial Services"
+        deployment: "SAP S/4HANA, public cloud"
+        what: "A single OnePilot deployment governing several financial-data domains at once."
+        highlight: "One platform to govern all data integrations and controls."
+        replaced: "Replaced a manual solution."
+      - industry: "Agriculture"
+        deployment: "SAP S/4HANA, private cloud"
+        what: "Remittance Advice Gate, run by the Digital Co-Worker."
+        highlight: "Guardrails set; the person taken out of the routine path."
+        replaced: "Replaced an expensive custom third-party solution."
+      - industry: "Chemicals"
+        deployment: "SAP S/4HANA, on-premise"
+        what: "The intercompany funding process, run by the Digital Co-Worker."
+        highlight: "A complex process with many SAP touch-points, fully automated."
+        replaced: "Replaced a manual solution."
+
+  - type: contact
+
+  - type: divider
+    num: "08"
+    title: "Appendix"
+    sub: "More applications on the platform."
+
+  - type: compare
+    kick: "Appendix · Legacy vs OnePilot"
+    head: "Why custom and legacy apps get replaced."
+    left_label: "CUSTOM & LEGACY APPLICATIONS"
+    left_items:
+      - "Custom-built and cumbersome, with unstable integrations."
+      - "Frequent technical issues and a lot of maintenance."
+      - "Inflexible: hard to change as the markets change."
+      - "Old technology: no AI, no in-memory computing, no cloud."
+    right_label: "ONEPILOT APPS"
+    right_items:
+      - "Off-the-shelf. No custom code."
+      - "A managed subscription: third-party run, low maintenance."
+      - "100% configurable; connects to any app, process or data source."
+      - "A cloud app: no hardware cost, scalable, AI-ready."
+
+  - type: usecase
+    kick: "Appendix · Bank Fee Portal"
+    title: "Bank Fee Portal"
+    gloss: "A bank fee statement is the bank's own record of what it charged you."
+    before: "Banks send fee statements in many formats: CAMT.086 (the standard bank-fee format), XML, Twist BSB, and each bank's own. Someone reads and checks them by hand, so derived fees and overcharges are hard to catch."
+    steps:
+      - "Reads fee statements in any format."
+      - "Validates and enriches them to calculate derived fees."
+      - "Sends the data to a Bank Fee Analyzer, TMS or analytics."
+      - "One dashboard for on-demand fee analysis."
+    checkpoint: "A person reviews the flagged charges."
+    actor: "THE BANK FEE PORTAL"
+
+  - type: usecase
+    kick: "Appendix · Credit Data Hub"
+    title: "Credit Data Hub"
+    gloss: "A credit rating is an agency's score of how likely a counterparty is to pay."
+    before: "Ratings for banks, customers and counterparties come from several agencies, some by API, some only as a PDF. Someone re-keys them into SAP by hand, and a stale rating means a limit decision on old data."
+    steps:
+      - "Collects credit data from any provider, by API or from a PDF."
+      - "Extracts the rating and credit report attributes into structured data."
+      - "Feeds SAP Credit Management and business partner, or any risk system."
+      - "Alerts when a rating changes."
+    checkpoint: "A person owns the limit decision; the data is current."
+    actor: "THE CREDIT DATA HUB"
+
+  - type: usecase
+    kick: "Appendix · ESG Data Hub"
+    title: "ESG Data Hub"
+    gloss: "ESG data is environmental, social and governance scores used for reporting."
+    before: "ESG data arrives from many providers in many formats, plus internal reports that are unstructured. Someone reconciles the sources by hand each reporting cycle."
+    steps:
+      - "Collects ESG data from any source and provider."
+      - "Normalizes, structures and enriches it."
+      - "Feeds SAP Sustainability Control Tower (SAP's ESG-reporting module) or other tools."
+      - "Runs on a schedule, monitored end to end."
+    checkpoint: "A person signs off the disclosure; the numbers hold up."
+    actor: "THE ESG DATA HUB"
