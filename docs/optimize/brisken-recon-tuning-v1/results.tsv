@@ -1,3 +1,4 @@
 round	commit	score	delta	status	description	timestamp
 0	929f30e	30.8	0	baseline	baseline (asset as-is)	2026-07-23T15:27:14
 1	3c85e30	29.4	NA	discard	narrow fx_date_window_days 5->2: true FX pairs cluster at 0-1 days (receipt date == tx date, posting covers bank delay); nc coincidences need the wide window to find an accidental partner	2026-07-23T15:27:40
+2	306848e	31.5	+0.7	keep	tighten fx_base_amount_match_pct 0.02->0.01: true Zoho conversions agree to well under 1pct, coincidences are uniform over the band; each nc kill is +2.0, each true pair lost to review costs only 0.7	2026-07-23T15:28:30
