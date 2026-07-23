@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import time
 import uuid
 from datetime import datetime, timezone
@@ -634,6 +635,49 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 )
         return JSONResponse({"ok": True, "run_id": run_id, "published": False})
 
+    # ── Rename / delete a run (F9). The operator accumulates test runs and
+    # needs to relabel or clear them; deleting also removes the on-disk
+    # upload/export tree so the volume does not grow without bound.
+    runs_root = (data_root_path / "runs").resolve()
+
+    @app.post("/api/runs/{run_id}/rename")
+    async def rename_run(run_id: str, request: Request):
+        try:
+            data = await request.json()
+        except Exception:  # noqa: BLE001 - malformed body is a client error
+            return JSONResponse({"error": "invalid json"}, status_code=400)
+        label = str((data or {}).get("label", "")).strip()[:200] if isinstance(data, dict) else ""
+        if not label:
+            return JSONResponse({"error": "label is required"}, status_code=400)
+        with open_store() as store:
+            if not store.set_run_label(run_id, label):
+                return _not_found("Run not found")
+        return JSONResponse({"ok": True, "run_id": run_id, "label": label})
+
+    @app.post("/api/runs/{run_id}/delete")
+    def delete_run(run_id: str):
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return _not_found("Run not found")
+            store.delete_run(run_id)
+            # A deleted run must not leave its intake pointing at a gone run;
+            # put the intake back in the queue so it can be re-run.
+            if run.intake_id is not None:
+                store.set_intake_status(
+                    run.intake_id, INTAKE_RECEIVED, run_id=None,
+                    updated_at=_now_iso(),
+                )
+        # Remove the on-disk work tree, but only inside data_root/runs — never
+        # follow a stored path outside the volume.
+        try:
+            work_dir = Path(run.work_dir).resolve()
+            if runs_root in work_dir.parents and work_dir.is_dir():
+                shutil.rmtree(work_dir, ignore_errors=True)
+        except (OSError, ValueError):
+            pass
+        return JSONResponse({"ok": True, "run_id": run_id, "deleted": True})
+
     # ── Operator state API: polled by the dev-side notifier (server stays
     # API-free per the One Assessment precedent; mail is sent from a dev
     # machine, never from this box).
@@ -642,6 +686,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             intakes = store.list_intakes()
             all_runs = store.list_runs()
+            active_jobs = store.list_active_jobs()
         published = [r for r in all_runs if r.published]
         return JSONResponse(
             {
@@ -685,6 +730,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     }
                     for r in published
                 ],
+                # In-flight pipeline work (F3): a run row appears only once
+                # its pipeline finished, so a mid-flight upload is otherwise
+                # invisible. The dashboard shows these as "processing".
+                "processing": active_jobs,
                 "feedback": {
                     "count": len(_read_feedback()),
                 },
