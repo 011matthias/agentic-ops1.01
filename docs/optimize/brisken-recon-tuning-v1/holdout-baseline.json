@@ -1,0 +1,7 @@
+{
+ "holdout_composite": 5.7,
+ "holdout_wrongs": 5,
+ "determ_wrong_ceiling": 17,
+ "_ceiling_note": "all-6 wrongs at capture = 14 (0 determ_wrong + 14 nc_matched) + 3 slack; owner-reviewed at lock-on",
+ "_captured_against": "PR #405 code (fx ladder + uniqueness gate), scorer #404"
+}
