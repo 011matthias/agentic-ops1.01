@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import difflib
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from collections.abc import Mapping
 from decimal import Decimal
 
@@ -887,37 +887,66 @@ def match_one(
                     f"{_rate_phrase()}: deviation {float(ref_dev) * 100:.1f}%."
                 ),
             )
+        # Review-zone evidence (clean-threshold .. review_pct) DEFERS to the
+        # judgment bucket rather than resolving deterministically
+        # (2026-07-23, measured on the labelled fixture): treating the
+        # review zone as a match turned every coincidental within-13%
+        # charge into a deterministic pairing — 38 of the 46 receipts
+        # human-labelled "no charge exists" got auto-matched. Precision
+        # owns the matches bucket; the review zone tees the candidate up
+        # for the FX judgment layer / reviewer with its scores and reason.
         if base_dev is not None and base_dev <= cfg.fx_base_amount_review_pct:
-            return _fx_det_match(
-                MatchType.FX_BASE_AMOUNT,
-                clean=False,
-                amount_score=max(
-                    0.0,
-                    1.0 - float(base_dev) / float(cfg.fx_base_amount_review_pct),
-                ),
+            amount_score = max(
+                0.0,
+                1.0 - float(base_dev) / float(cfg.fx_base_amount_review_pct),
+            )
+            return Match(
+                transaction_id=tx.transaction_id,
+                document_id=receipt.document_id,
+                match_type=MatchType.FX_JUDGMENT,
+                confidence=0.5,  # placeholder; LLM layer revises
                 reason=(
                     f"Charge {tx.amount} {tx.transaction_currency} vs the ER "
                     f"report's own conversion {receipt.base_amount}: deviation "
                     f"{float(base_dev) * 100:.1f}% (above "
-                    f"{float(cfg.fx_base_amount_match_pct) * 100:.0f}%; a "
-                    f"single Zoho per-line rate can drift — review)."
+                    f"{float(cfg.fx_base_amount_match_pct) * 100:.0f}% — too "
+                    f"loose to auto-match; a single Zoho per-line rate can "
+                    f"drift). Requires FX judgment."
                 ),
+                requires_review=True,
+                score=_blend_score(
+                    amount_score, date_score, vendor_score, card_score, cfg
+                ),
+                amount_score=amount_score,
+                date_score=date_score,
+                vendor_score=vendor_score,
+                card_score=card_score,
             )
         if ref is not None and ref_dev is not None and ref_dev <= cfg.fx_reference_review_pct:
-            return _fx_det_match(
-                MatchType.FX_REFERENCE,
-                clean=False,
-                amount_score=max(
-                    0.0,
-                    1.0 - float(ref_dev) / float(cfg.fx_reference_review_pct),
-                ),
+            amount_score = max(
+                0.0,
+                1.0 - float(ref_dev) / float(cfg.fx_reference_review_pct),
+            )
+            return Match(
+                transaction_id=tx.transaction_id,
+                document_id=receipt.document_id,
+                match_type=MatchType.FX_JUDGMENT,
+                confidence=0.5,  # placeholder; LLM layer revises
                 reason=(
                     f"Charge {tx.amount} {tx.transaction_currency} vs receipt "
                     f"{receipt.detected_total} {receipt.detected_currency} at "
                     f"{_rate_phrase()}: deviation {float(ref_dev) * 100:.1f}% "
                     f"(above {float(cfg.fx_reference_match_pct) * 100:.0f}%; "
-                    f"DCC markup / tip territory — review)."
+                    f"DCC markup / tip territory). Requires FX judgment."
                 ),
+                requires_review=True,
+                score=_blend_score(
+                    amount_score, date_score, vendor_score, card_score, cfg
+                ),
+                amount_score=amount_score,
+                date_score=date_score,
+                vendor_score=vendor_score,
+                card_score=card_score,
             )
 
         # No deterministic FX evidence. The band / FX_JUDGMENT path below
@@ -1153,6 +1182,58 @@ def match_month(
                     card_signal=card_sig,
                     vendor_signal=vendor_sig,
                 )
+            )
+
+    # Bilateral-uniqueness gate on rate-derived FX evidence (2026-07-23).
+    # A clean FX_BASE_AMOUNT / FX_REFERENCE candidate resolves
+    # deterministically ONLY when the pairing is exclusive both ways: the
+    # receipt has no other clean rate-derived claimant, and the charge no
+    # other clean rate-derived candidate. This is the labeled fixture's
+    # own AUTO criterion (labeling.auto_pairs): base-amount agreement was
+    # never conclusive evidence by itself — measured on the fixture,
+    # without this gate 26 of the June-2025 month's 31 receipts labelled
+    # "no charge exists" sat within 2% of SOME charge in a ±5-day window
+    # and auto-matched. Contested pairs are demoted to FX_JUDGMENT (the
+    # candidate, its scores and its reason survive for the judgment layer
+    # / reviewer; only the auto-resolution right is withdrawn). Exact
+    # evidence (same-currency EXACT/PROBABLE, statement-original-amount
+    # exact-FX) is bank-printed on both sides and is NOT subject to this
+    # gate — its baseline precision was clean.
+    _RATE_DERIVED = (MatchType.FX_BASE_AMOUNT, MatchType.FX_REFERENCE)
+    claimants_by_doc: dict[str, set[str]] = {}
+    docs_by_tx: dict[str, set[str]] = {}
+    for tx_id, cands in cands_by_tx.items():
+        for c in cands:
+            if c.match.match_type in _RATE_DERIVED:
+                claimants_by_doc.setdefault(c.match.document_id, set()).add(tx_id)
+                docs_by_tx.setdefault(tx_id, set()).add(c.match.document_id)
+    for tx_id, cands in cands_by_tx.items():
+        for i, c in enumerate(cands):
+            if c.match.match_type not in _RATE_DERIVED:
+                continue
+            doc = c.match.document_id
+            if len(claimants_by_doc.get(doc, ())) == 1 and len(
+                docs_by_tx.get(tx_id, ())
+            ) == 1:
+                continue  # bilaterally unique: keeps its deterministic right
+            demoted = replace(
+                c.match,
+                match_type=MatchType.FX_JUDGMENT,
+                confidence=0.5,
+                requires_review=True,
+                reason=(
+                    c.match.reason.rstrip(".")
+                    + ". Demoted to judgment: this rate-derived pairing is "
+                    "not unique (another charge or receipt agrees just as "
+                    "cleanly)."
+                ),
+            )
+            cands[i] = _Candidate(
+                match=demoted,
+                is_determ=False,
+                ref_signal=c.ref_signal,
+                card_signal=c.card_signal,
+                vendor_signal=c.vendor_signal,
             )
 
     # Pass 1: detect genuinely ambiguous transactions (top deterministic
