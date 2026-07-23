@@ -281,6 +281,7 @@ def _rows_from_match(
         MatchType.PROBABLE,
         MatchType.FX_JUDGMENT,
         MatchType.FX_REFERENCE,
+        MatchType.FX_BASE_AMOUNT,
         MatchType.AMBIGUOUS,
     ) and match.reason:
         note_bits.append(match.reason)
