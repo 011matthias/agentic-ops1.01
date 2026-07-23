@@ -4,16 +4,17 @@ workstream: p2-outreach
 group: lead-generation
 spec: p2
 state: active
-updated: 2026-06-21
+updated: 2026-07-22
 general_ref: status/p2-lead-gen-general.md
 ---
 
 # Brisken / Outreach (p2)
 
 The outbound motion: borrowed-trust (AEO answer pages + a published research
-report) under a precision-LinkedIn tail. Cold email is retired (Brisken already
-ran ~150 mailboxes / ~2M cold emails for 0 leads; the buy is too high-risk to
-grant a meeting cold). Shared lead-gen context is in
+report) under a precision-LinkedIn tail. Cold email is retired as an IN-HOUSE
+channel (Brisken already ran ~150 mailboxes / ~2M cold emails for 0 leads); a
+free EXTERNAL vendor trial (getken.ai) is running as of 2026-07 on the vendor's
+own infra, judged on meetings booked. Shared lead-gen context is in
 `status/p2-lead-gen-general.md`.
 
 ## Elements
@@ -25,7 +26,8 @@ grant a meeting cold). Shared lead-gen context is in
 | LinkedIn page rewrite + 4-post batch | done | Ready for Dirk look | Approve + go live | Dirk page go-live (gate 4) | `context/lead-generation/outreach-assets/linkedin-reposition.md` |
 | Research channel (series + hub + AEO wiring) | done | Spec ready | Stand up on publish | Publish decision | `context/lead-generation/outreach-assets/research-channel.md` |
 | Forwardable proof (Calvin / Remittance) | in-progress | Best forwardable proof asset kept | Build the forwardable clip brief | none | `deliverables/lead-generation/aeo-outreach/mdh-forwardable-colgate.html` |
-| Cold-email sending infra | paused | Retired as a channel 2026-06-12 | None (dormant) | none | `project_brisken_outreach_domains` memory; spec p2 last_changes |
+| Cold-email sending infra | paused | Retired as an in-house channel 2026-06-12 | None (dormant) | none | `project_brisken_outreach_domains` memory; spec p2 last_changes |
+| Getken vendor cold-email trial | in-progress | Reply sent 2026-07-22: launch approved conditional on his qualifier + tenure fixes, our suppression-list dedup, TreasuryCentral-lead naming (deck attached). Free trial, 834-prospect pool, vendor infra 90/day | Build suppression list, send by Thu 2026-07-24 | Owner decision: plain vs hashed list | Thread in matthias.silva mailbox (from cristian@getken.ai); checkpoint `docs/2026-07-22 - Brisken Getken Trial Reply/` |
 
 ## Open decisions / gates
 
