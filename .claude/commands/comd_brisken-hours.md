@@ -87,8 +87,12 @@ commit. For each row:
 
 - **Date** = the day the work happened.
 - **Start / End** = a conservative window grounded in the commit times and the
-  checkpoint mtime. Never overlap an already-logged row (check the prior rows in
-  `--status` / the tab). A session is typically 1 to 4 hours.
+  checkpoint mtime. A wall-clock minute is billed ONCE across ALL THREE tabs
+  (owner directive 2026-07-23): parallel agent sessions serialize into the real
+  span, they do not stack. Rows are not chronologically ordered in the sheets
+  and `--status` shows only the last row by position, so plan slots against the
+  day's full row set; the tool's overlap gate refuses any row that overlaps an
+  existing row in any tab. A session is typically 1 to 4 hours.
 - **Task** = COMPACT, lowercase, ~4 to 8 words, human voice, like
   "expandable cards, bigger hero, dns recon" — NOT a 15-word laundry list.
   No em-dashes, no `--`, no `->`, no parenthetical pile-ups, no slash-runs
