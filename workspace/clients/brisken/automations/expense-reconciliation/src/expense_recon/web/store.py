@@ -351,6 +351,30 @@ class RunStore:
         ).fetchone()
         return self._row_to_run(row) if row else None
 
+    def set_run_label(self, run_id: str, label: str) -> bool:
+        """Rename a run. Returns True when a row was updated (F9)."""
+        cur = self.conn.execute(
+            "UPDATE runs SET label = ? WHERE run_id = ?", (label, run_id)
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def delete_run(self, run_id: str) -> bool:
+        """Drop a run and its per-run edit rows. Returns True when the run
+        existed. The on-disk work_dir is removed by the caller (the store
+        owns the db, not the volume); dropping the edit rows here keeps the
+        db from carrying orphaned decisions/overrides for a gone run (F9)."""
+        cur = self.conn.execute("DELETE FROM runs WHERE run_id = ?", (run_id,))
+        self.conn.execute("DELETE FROM decisions WHERE run_id = ?", (run_id,))
+        self.conn.execute(
+            "DELETE FROM category_overrides WHERE run_id = ?", (run_id,)
+        )
+        self.conn.execute(
+            "DELETE FROM duplicate_resolutions WHERE run_id = ?", (run_id,)
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
     @staticmethod
     def _row_to_run(row: sqlite3.Row) -> RunRow:
         return RunRow(
@@ -511,6 +535,26 @@ class RunStore:
             (status, run_id, error, stage, updated_at, job_id),
         )
         self.conn.commit()
+
+    def list_active_jobs(self) -> list[dict]:
+        """Jobs still `running`: the in-flight pipeline work the dashboard
+        should show as processing (F3). A run row only exists once its
+        pipeline finished, so without this a mid-flight upload is invisible
+        between kickoff and completion."""
+        rows = self.conn.execute(
+            "SELECT job_id, intake_id, stage, created_at FROM jobs "
+            "WHERE status = ? ORDER BY created_at",
+            (JOB_RUNNING,),
+        ).fetchall()
+        return [
+            {
+                "job_id": r["job_id"],
+                "intake_id": r["intake_id"],
+                "stage": r["stage"],
+                "created_at": r["created_at"],
+            }
+            for r in rows
+        ]
 
     def set_job_stage(self, job_id: str, stage: str, updated_at: str) -> None:
         self.conn.execute(

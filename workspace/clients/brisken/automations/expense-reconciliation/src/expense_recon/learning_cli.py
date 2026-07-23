@@ -262,9 +262,13 @@ ACCOUNT_TO_CATEGORY: dict[str, str] = {
 _ACCOUNT_WORD_RE = re.compile(r"[a-z]+")
 
 # Per-data-center default domains when ZOHO_API_DOMAIN / ZOHO_ACCOUNTS_DOMAIN
-# are not set explicitly. Brisken's tenant is EU, hence the default.
+# are not set explicitly. Brisken Books reports its DC as "com" (US .com).
 _ZOHO_DC_DOMAINS: dict[str, tuple[str, str]] = {
     "us": ("https://www.zohoapis.com", "https://accounts.zoho.com"),
+    # Alias of "us": Brisken's Books tenant sets ZOHO_DC=com. Without this
+    # the value fell through to the eu default below and the token refresh
+    # 401'd with invalid_client.
+    "com": ("https://www.zohoapis.com", "https://accounts.zoho.com"),
     "eu": ("https://www.zohoapis.eu", "https://accounts.zoho.eu"),
     "in": ("https://www.zohoapis.in", "https://accounts.zoho.in"),
     "au": ("https://www.zohoapis.com.au", "https://accounts.zoho.com.au"),
