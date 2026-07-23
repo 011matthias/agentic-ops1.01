@@ -285,6 +285,34 @@ tbody tr:nth-child(even) {
 """
 
 
+# Opt-in override for short documents (weekly reports, one/two-page notes) where
+# a page per H2 wastes paper and reads as padded. Sections stay visually
+# distinct via a hairline rule instead of a hard page break. Default output is
+# unchanged; only --flow applies this.
+FLOW_CSS = """
+h2 {
+  page-break-before: auto;
+  break-before: auto;
+  margin-top: 0.95em;
+  padding-top: 0.45em;
+  border-top: 1pt solid #e2e8f0;
+}
+
+h2:first-of-type {
+  margin-top: 0.8em;
+  padding-top: 0;
+  border-top: none;
+}
+
+/* Short docs are read in one pass, so the generous block spacing that suits a
+   chaptered report just pushes a thin tail page. Tighten the vertical rhythm
+   without touching type size or line-height (legibility is unchanged). */
+h3 { margin-top: 0.85em; margin-bottom: 0.3em; }
+p, ul, ol { margin-top: 0.35em; margin-bottom: 0.55em; }
+table { margin-top: 0.5em; margin-bottom: 0.6em; }
+"""
+
+
 HTML_TEMPLATE = """<!doctype html>
 <html lang="en">
 <head>
@@ -301,12 +329,14 @@ __BODY__
 """
 
 
-def build_html(md_text: str, title: str, footer_text: str) -> str:
+def build_html(md_text: str, title: str, footer_text: str, flow: bool = False) -> str:
     md = MarkdownIt("commonmark", {"html": False, "linkify": True, "typographer": False})
     md.enable("table")
     body_html = md.render(md_text)
 
     css = CSS.replace("__FOOTER_TEXT__", html.escape(footer_text, quote=True))
+    if flow:
+        css += FLOW_CSS
     return (
         HTML_TEMPLATE
         .replace("__TITLE__", html.escape(title))
@@ -381,6 +411,10 @@ def main(argv: list[str]) -> int:
                     help="Override footer text (default: '{title}  |  Confidential').")
     ap.add_argument("--keep-html", action="store_true",
                     help="Leave the intermediate HTML file next to the PDF for debugging.")
+    ap.add_argument("--flow", action="store_true",
+                    help="Let sections flow instead of starting each H2 on a new page. "
+                         "Use for short documents (weekly reports, one-page notes) where "
+                         "a page per section wastes paper.")
     args = ap.parse_args(argv)
 
     in_path = Path(args.input).resolve()
@@ -403,7 +437,7 @@ def main(argv: list[str]) -> int:
     footer_text = args.footer if args.footer is not None else f"{title}  |  Confidential"
 
     edge = find_edge()
-    html_str = build_html(md_text, title=title, footer_text=footer_text)
+    html_str = build_html(md_text, title=title, footer_text=footer_text, flow=args.flow)
 
     used_engine = edge
 
