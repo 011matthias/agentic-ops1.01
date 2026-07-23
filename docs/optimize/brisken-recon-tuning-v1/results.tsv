@@ -6,3 +6,4 @@ round	commit	score	delta	status	description	timestamp
 4	1c6970b	30.6	NA	discard	fx_date_window_days 5->3 (r1 at 2 overshot: uniqueness promotions +7 determ but deferred -8 and nc +3; 3 should keep most promotions while losing fewer day-3..5 pairs)	2026-07-23T15:29:24
 5	b2c252a	25.7	NA	discard	fx_reference_match_pct 0.03->0.015: same precision logic that won r2, applied to the derived-rate reference path	2026-07-23T15:29:44
 6	b2dfd0c	31.5	NA	discard	widen fx_base_amount_review_pct 0.13->0.18: deferral is cheap (+0.3, no -2 risk); catch the unresolved tail whose Zoho rate drifted 13-18pct	2026-07-23T15:30:20
+7	d5c05b6	31.5	NA	discard	blend_card_weight 0->0.10: card agreement enters the sort, so a judgment slot contested by two candidates goes to the one whose payment mode names the charge's card (deferred_ok +0.3 per flip)	2026-07-23T15:30:49
