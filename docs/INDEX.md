@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-22 | Brisken Getken Trial Reply | comms | [Checkpoint](docs/2026-07-22%20-%20Brisken%20Getken%20Trial%20Reply/Checkpoint.md) |
 | 2026-07-22 | Brisken Expense-Recon SPA Cutover + Fly UI Deletion Attempt | client-dev | [Checkpoint](docs/2026-07-22%20-%20Brisken%20Expense-Recon%20SPA%20Cutover%20+%20Fly%20UI%20Deletion%20Attempt/Checkpoint.md) |
 | 2026-07-22 | Brisken Bank Fee Portal Dirk Review Fixes | client-dev | [→](docs/2026-07-22%20-%20Brisken%20Bank%20Fee%20Portal%20Dirk%20Review%20Fixes/Checkpoint.md) |
 | 2026-07-22 | Brisken Nestle StratiFy Contact Intelligence | comms | [→](docs/2026-07-22%20-%20Brisken%20Nestle%20StratiFy%20Contact%20Intelligence/Checkpoint.md) |
@@ -195,6 +196,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-22 | System Health Check + Heal + Improvement Pass | system-infra | [→](docs/2026-07-22%20-%20System%20Health%20Check%20+%20Heal%20+%20Improvement%20Pass/Checkpoint.md) |
 | 2026-07-22 | Optimize Loop Audit + Hardening | system-infra | [→](docs/2026-07-22%20-%20Optimize%20Loop%20Audit%20+%20Hardening/Checkpoint.md) |
 | 2026-07-20 | System Development | system-infra | [→](docs/2026-07-20%20-%20System%20Development/Checkpoint.md) |
 | 2026-07-17 | Ruff Push Gate CI Prevention | system-infra | [→](docs/2026-07-17%20-%20Ruff%20Push%20Gate%20CI%20Prevention/Checkpoint.md) |
