@@ -88,7 +88,7 @@ are omitted. §1–§38 are walked below (38 requirement-bearing sections; the
 | 19 | Multi-receipt / split cases (MVP simplified) | PARTIAL | per-line split across categories (one receipt → N journal entries, LD-2) built | Multi-receipt-per-transaction and split business/personal are not first-class; spec itself left this "to confirm with Chris". |
 | 20 | Three-layer currency (transaction / account-card / book) | PARTIAL | 3-layer docstrings on `types.py` (E7); FX path live | LD-5 collapsed the account-card layer to USD (Brisken has no EU/UK card); per-entity configurable book currency is tied to multi-entity (deferred). FX (transaction ccy ≠ USD) is the live, heavily-built path. |
 | 21 | Zoho integration: API journal replication; file-export MVP fast-path; receipt attachment | PARTIAL | file export IMPLEMENTED (`zoho_export.py`); `zoho/client.py` exists (`list_expenses`); POST /journals (4b) gated | Receipt URL + report reference carried in the export; push-onto-the-Zoho-record gated on API access. |
-| 22 | Chart of accounts: hierarchical; manual/upload/edit/map to Zoho GL | PARTIAL | COA ingest + validation gate (`coa_gate.py`, PR #202/#203/#205) live | Category-management UI is the emerging master-data settings work (settings API live; SPA settings screen merged-not-published). Maps to Dirk note #2. |
+| 22 | Chart of accounts: hierarchical; manual/upload/edit/map to Zoho GL | PARTIAL | COA ingest + validation gate (`coa_gate.py`, PR #202/#203/#205) live | Category-management UI is the emerging master-data settings work (settings API live; SPA settings screen published/live). Maps to Dirk note #2. |
 | 23 | Data model (Tenant/User/Role/Scope) | DEFERRED | single-tenant, single operator | |
 | 23 | Data model: LegalEntity, FinancialAccount | PARTIAL | `card_entities` {2838→Corporate Services} + `card_accounts` maps; `store/statements.py` per account | Card→entity/account maps, not managed entity/account objects with responsible-user or RBAC scope. |
 | 23 | Data model: Statement, Transaction, Receipt/Document | IMPLEMENTED | `store/statements.py`; `matching/types.py`; `hosting/` | |
@@ -110,7 +110,7 @@ are omitted. §1–§38 are walked below (38 requirement-bearing sections; the
 | 27.5 | Mobile capture page | DEFERRED | descoped | |
 | 27.6 | Reconciliation review table (main screen) | IMPLEMENTED | web review-workbench | |
 | 27.7 | Posting/export screen | PARTIAL | export CSV download built; Zoho post gated | |
-| 27.8–27.12 | Settings screens (chart of accounts / accounts+entities / users+access / automation policy / Zoho mapping) | PARTIAL | settings API live (`fx_reference_rates`+`card_entities`+`card_accounts`); SPA settings screen merged-not-published | Users+access screen DEFERRED (no RBAC); automation-policy screen PLANNED (§14). This cluster is exactly Dirk note #2. |
+| 27.8–27.12 | Settings screens (chart of accounts / accounts+entities / users+access / automation policy / Zoho mapping) | PARTIAL | settings API live (`fx_reference_rates`+`card_entities`+`card_accounts`); SPA settings screen published/live (chunk `settings-CsopqaDN.js`) | Users+access screen DEFERRED (no RBAC); automation-policy screen PLANNED (§14). This cluster is exactly Dirk note #2. |
 | 28 | Automation-policy configuration fields | PLANNED | §14; not built (default-OFF) | |
 | 29 | Error handling + warnings (flags) | IMPLEMENTED | Errors sheet (B1); `ParseIssue`; COA-gate diversions; FX/missing-receipt/duplicate flags | |
 | 30 | MVP success criteria (9) | PARTIAL | criteria 2–8 enablers built; criterion 1 (multi-tenant/RBAC) DEFERRED; criterion 9 (time-on-task, zero lost) UNPROVEN | The business test ("Chris runs a real month") has not happened on the tuned tool. |
@@ -156,19 +156,22 @@ nothing in the matching engine has to change to fix it.
 
 Maps to spec §22 (COA), §23 (LegalEntity/FinancialAccount), §20
 (currencies), §27.8–27.12 (settings screens). **Mostly addressed since
-the note, but not visible and not complete:**
+the note:**
 - The settings backend is live and manages `fx_reference_rates`,
   `card_entities`, `card_accounts` (`web/store.py` `SETTINGS_DEFAULTS`;
-  `GET/PUT /api/settings`, PR set live 2026-07-23).
-- The SPA settings screen is **merged-not-published** on Lovable (status
-  gate: "Lovable merge != live"), so Dirk cannot see it yet. **Highest
-  leverage, near-zero build: an owner Publish click.**
+  `GET/PUT /api/settings`, set live 2026-07-23).
+- The SPA settings screen is **published and live** on
+  `brisken-reconcile-dash.lovable.app` (verified 2026-07-23: the deployed
+  chunk `settings-CsopqaDN.js` carries the master-data editor with
+  `fx_reference_rates` / `card_entities` / `card_accounts` / legal-entity /
+  reference-rate fields). An earlier "merged-not-published" read was
+  corrected the same day.
 - Two real remainders: **fx rates "pull them from a source" is not built**
   (rates are a manual map + per-run self-derivation; code comments say the
   authoritative rate source is "§38-TBD"; no external rate API in `src/`);
-  and **legal entities / banks / bank accounts / categories / currencies
-  as first-class managed objects** are only present as card→entity and
-  card→account maps, not full CRUD.
+  and the **entity / bank / account model is card-scoped maps** (card→entity,
+  card→account) rather than full first-class managed objects for banks,
+  accounts, and currencies.
 
 **Note 3: Zoho Expense auto-pull (17:21).**
 > "connect it to Zoho expense and pull this in automatically - any receipt
@@ -218,41 +221,39 @@ here.)
 
 ### Real gaps, prioritized (inside working-tool scope)
 
-1. **Publish the SPA settings screen** (owner action, ~0 build). It is
-   merged-not-published on Lovable; publishing makes the master-data UI
-   visible and directly answers note #2 and part of note #4. Blocks four
-   sessions of follow-through per the checkpoint. **Do this first.**
-2. **Reconcile the spec to the build** (small, documentation). Add a
+1. **Reconcile the spec to the build** (small, documentation). Add a
    working-tool section to the spec (or a v3) stating the single-tenant
    descope and the slice-based order, closing ANNEALING E4. This is the
    most direct answer to note #4's "I don't see the doc reflected", and
-   half of that note is the doc being stale.
-3. **Reframe the entry workflow to expenses-first** (note #1, medium,
+   half of that note is the doc being stale. **Do this first** (nothing
+   else needs building for it, and it is what note #4 literally asks).
+2. **Reframe the entry workflow to expenses-first** (note #1, medium,
    product). Make expenses/receipts the accumulating primary surface and
    the statement load the month-end reconcile step, so the operator is not
    dropped into "find and upload a statement" as step one.
-4. **FX rate auto-pull from a source** (note #2, medium, build). Add an
+3. **FX rate auto-pull from a source** (note #2, medium, build). Add an
    external reference-rate fetch to replace the manual `fx_reference_rates`
-   map; the self-derived per-run rate stays as fallback.
-5. **Live Zoho Expense auto-pull** (note #3, medium/large, gated). Build
+   map; the self-derived per-run rate stays as fallback. The rest of note
+   #2 (the master-data settings surface) is already shipped and published.
+4. **Live Zoho Expense auto-pull** (note #3, medium/large, gated). Build
    the Zoho Expense API ingest; gated on the token expense-scope re-consent
    (owner gate #2). The ER-PDF path is the interim.
-6. **Per-use AI consent prompt (§25.6)** (small/medium, build). The spec
+5. **Per-use AI consent prompt (§25.6)** (small/medium, build). The spec
    marks it non-negotiable; it is not built. Pair with a short written
    no-training posture note for the OpenAI provider.
-7. **Manual expense-add UI** (note #3 second half, medium). Guided single
+6. **Manual expense-add UI** (note #3 second half, medium). Guided single
    receipt: upload → parse → fill → add.
-8. **Chris-validated full month (§30.9, §8, done-state)** (validation, not
+7. **Chris-validated full month (§30.9, §8, done-state)** (validation, not
    build). Send Criss the SPA URL + operator code (owner) and have her run
    a real month on the tuned matcher; this is the only thing that turns the
    north-star from "enabled" to "proven".
-9. **Live Zoho API journal posting (4b) + line-item idempotency (4.8)**
+8. **Live Zoho API journal posting (4b) + line-item idempotency (4.8)**
    (medium, gated on Zoho access). File export is the interim.
-10. **Retention config + GDPR deletion (§9.1, §25.4)** (low urgency
-    internal, prerequisite for any commercialization).
+9. **Retention config + GDPR deletion (§9.1, §25.4)** (low urgency
+   internal, prerequisite for any commercialization).
 
-Items 1, 2, 3, 4, 6, 7 need no external gate and are the fastest path to
-making Dirk's four notes visibly answered. Items 5, 8, 9 wait on an owner
+Items 1, 2, 3, 5, 6 need no external gate and are the fastest path to
+making Dirk's four notes visibly answered. Items 4, 7, 8 wait on an owner
 action (Zoho re-consent, send-Criss-the-link).
 
 ### Descoped, not gaps (do not build unless commercializing)
@@ -290,7 +291,8 @@ so they are not mistaken for gaps against the v2 spec:
 The engine the spec describes is built and, on matching/FX/categorization,
 past what the spec asked for. What the spec leads with, the multi-tenant
 SaaS platform, was deliberately set aside to ship a working tool, and the
-spec was never updated to say so. What is genuinely still thin inside the
-working tool is the settings/master-data surface (built, not yet published),
-the expenses-first workflow, the live Zoho Expense pull, and the AI consent
-prompt. Those four, plus updating the spec itself, are the list above.
+spec was never updated to say so. The settings/master-data surface Dirk
+asked for is now built and published; what is genuinely still thin inside
+the working tool is the expenses-first workflow, the fx-rate auto-pull, the
+live Zoho Expense pull, and the AI consent prompt. Those, plus updating the
+spec itself, are the list above.
