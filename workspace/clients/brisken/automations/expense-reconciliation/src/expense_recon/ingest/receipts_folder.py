@@ -103,6 +103,34 @@ def parse_receipts_folder(
     return receipts, issues
 
 
+def parse_receipt_file(
+    file: str | Path,
+    legal_entity_id: str,
+    client: LLMClient,
+    default_currency: str | None = None,
+) -> Receipt:
+    """Extract ONE receipt file (image or PDF) into a Receipt.
+
+    The single-file twin of `parse_receipts_folder`, for receipts that
+    arrive outside the ER export (e.g. emailed to the operator and
+    uploaded from the workbench, 2026-07-24). Raises on an unsupported
+    type or extraction failure — the caller surfaces the error to the
+    operator instead of collecting ParseIssues.
+    """
+    file = Path(file)
+    suffix = file.suffix.lower()
+    if suffix not in IMAGE_MIME and suffix != ".pdf":
+        raise ValueError(f"unsupported receipt file type {suffix!r}")
+    extraction, ocr_text = _extract_file(file, suffix, client)
+    return _to_receipt(
+        extraction,
+        document_id=file.name,
+        legal_entity_id=legal_entity_id,
+        default_currency=default_currency,
+        ocr_text=ocr_text,
+    )
+
+
 def _extract_file(
     file: Path, suffix: str, client: LLMClient
 ) -> tuple[ExtractedReceipt, str]:

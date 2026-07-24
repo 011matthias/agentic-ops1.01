@@ -59,6 +59,7 @@ from .service import (
     PreparedRun,
     RunForm,
     RunInputError,
+    attach_emailed_receipt,
     build_memory_view,
     build_view,
     bulk_decisions,
@@ -1119,6 +1120,37 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             overrides = store.get_category_overrides(run_id)
         view = build_view(run, decisions, overrides)
         return JSONResponse({"ok": True, "summary": view["summary"]})
+
+    @app.post("/api/runs/{run_id}/transactions/{transaction_id}/receipt")
+    async def post_manual_receipt(
+        run_id: str, transaction_id: str, request: Request
+    ):
+        # Owner directive 2026-07-24: some receipts reach Criss by email,
+        # not through the Zoho ER export, so their charges sit in
+        # unmatched with nothing to pair. Upload one against a specific
+        # charge; it joins the run's receipt pool and the pair is
+        # recorded as a confirmed decision (same path as manual match).
+        form = await request.form()
+        upload = form.get("file")
+        if upload is None or not getattr(upload, "filename", None):
+            return JSONResponse({"error": "file required"}, status_code=400)
+        data = await upload.read()
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found"}, status_code=404)
+            err, document_id = attach_emailed_receipt(
+                store, run, transaction_id, upload.filename, data, _now_iso()
+            )
+            if err:
+                return JSONResponse({"error": err}, status_code=400)
+            run = store.get_run(run_id)  # snapshot changed above
+            decisions = store.get_decisions(run_id)
+            overrides = store.get_category_overrides(run_id)
+        view = build_view(run, decisions, overrides)
+        return JSONResponse(
+            {"ok": True, "document_id": document_id, "summary": view["summary"]}
+        )
 
     @app.post("/api/runs/{run_id}/forget")
     async def post_forget(run_id: str, request: Request):
