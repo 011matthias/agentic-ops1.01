@@ -29,6 +29,7 @@ import base64
 import hashlib
 import hmac
 import os
+import re
 import secrets
 import time
 
@@ -39,11 +40,72 @@ SESSION_MAX_AGE = 60 * 60 * 12  # 12 hours
 LOGIN_MAX_FAILS = 8
 LOGIN_WINDOW = 300  # seconds
 
+# Magic-link (passwordless) login. A raw url-safe token (256 bits) is emailed;
+# only its sha256 is stored (store.login_tokens), and each is single-use with a
+# short TTL so a leaked or intercepted link has a small, one-shot window.
+MAGIC_TOKEN_TTL = 15 * 60  # seconds
+
+# Deliberately permissive shape check (not full RFC 5322): reject the obviously
+# malformed before we ever create a pending row or a token. No length blow-ups.
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def normalize_email(raw: str | None) -> str:
+    return (raw or "").strip().lower()
+
+
+def valid_email(raw: str | None) -> bool:
+    e = normalize_email(raw)
+    return bool(e) and len(e) <= 254 and _EMAIL_RE.match(e) is not None
+
+
+# Seeded approved admins - the two known operators (also the hard mail
+# allowlist in graph_mail). New DBs seed these via the v6 migration so an
+# admin-approval gate is never left with zero approvers. Overridable at deploy
+# time via LEAD_DESK_ADMIN_EMAILS (comma-separated) for future operators.
+_DEFAULT_ADMIN_EMAILS = ("matthias.silva@brisken.com", "dirk.neumann@brisken.com")
+
+
+def _env_admin_emails() -> tuple[str, ...]:
+    raw = os.environ.get("LEAD_DESK_ADMIN_EMAILS", "").strip()
+    extra = tuple(normalize_email(e) for e in raw.split(",") if normalize_email(e))
+    # Dedupe, preserve order, defaults first.
+    seen: dict[str, None] = {}
+    for e in _DEFAULT_ADMIN_EMAILS + extra:
+        seen.setdefault(e, None)
+    return tuple(seen)
+
+
+# Concrete tuple the store migration seeds from (evaluated at import).
+SEED_ADMIN_EMAILS = _env_admin_emails()
+
+
+def is_seed_admin(email: str | None) -> bool:
+    return normalize_email(email) in SEED_ADMIN_EMAILS
+
+
+# -- magic-link tokens --------------------------------------------------------
+
+def new_magic_token() -> tuple[str, str]:
+    """Return (raw_token, token_hash). The raw token goes in the emailed link;
+    only the hash is persisted, so a DB read never yields a usable link."""
+    raw = secrets.token_urlsafe(32)  # 256 bits of entropy
+    return raw, hash_magic_token(raw)
+
+
+def hash_magic_token(raw: str) -> str:
+    return hashlib.sha256((raw or "").encode("utf-8")).hexdigest()
+
 # Reachable without a session cookie: the login flow, the health probe, the
 # favicon, the ingest sink, and the worker outbox API (each API guards itself
 # with its own secret).
 OPEN_PATHS = frozenset({
     "/login", "/logout", "/healthz", "/favicon.ico", "/events",
+    # Passwordless login: the email-a-link submit and the link-verify landing
+    # are reached BEFORE a session exists, so they sit outside the cookie gate
+    # (each self-throttles / validates a single-use token). /admin/* stays
+    # gated + admin-only, so it is intentionally NOT here.
+    "/login/magic", "/auth/verify",
     # /sync self-guards: its handler checks cookie OR ingest bearer. Without
     # this the cookie gate rejected the documented external-cron ingest path.
     "/sync",
@@ -166,6 +228,26 @@ def record_login_fail(ip: str, now: float | None = None) -> None:
 
 def record_login_success(ip: str) -> None:
     _LOGIN_FAILS.pop(ip, None)
+
+
+# -- magic-link request throttle (separate from the code-login fail counter so
+#    legit link requests never lock out the access-code break-glass) ----------
+
+MAGIC_MAX_REQS = 5
+MAGIC_WINDOW = 300  # seconds
+_MAGIC_REQS: dict[str, list[float]] = {}
+
+
+def magic_blocked(ip: str, now: float | None = None) -> bool:
+    now = now if now is not None else time.time()
+    fresh = [t for t in _MAGIC_REQS.get(ip, []) if now - t < MAGIC_WINDOW]
+    _MAGIC_REQS[ip] = fresh
+    return len(fresh) >= MAGIC_MAX_REQS
+
+
+def record_magic_request(ip: str, now: float | None = None) -> None:
+    now = now if now is not None else time.time()
+    _MAGIC_REQS.setdefault(ip, []).append(now)
 
 
 def cookie_is_secure() -> bool:

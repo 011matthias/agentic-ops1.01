@@ -32,7 +32,7 @@
   h1 { font-size: 18px; margin: 0 0 4px; color: var(--heading); text-align: center; }
   p.sub { color: var(--muted); font-size: 13.5px; margin: 0 0 20px; text-align: center; }
   label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
-  input[type="password"] {
+  input[type="email"], input[type="password"] {
     width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border);
     border-radius: 8px; padding: 10px 12px; font-size: 15px;
   }
@@ -45,6 +45,17 @@
     background: var(--orange-bg); color: var(--orange); border: 1px solid var(--orange);
     border-radius: 8px; padding: 9px 12px; font-size: 13.5px; margin-bottom: 16px;
   }
+  .notice {
+    background: var(--green-bg); color: var(--green); border: 1px solid var(--green);
+    border-radius: 8px; padding: 9px 12px; font-size: 13.5px; margin-bottom: 16px;
+  }
+  .divider { display: flex; align-items: center; gap: 10px; color: var(--muted);
+    font-size: 12px; margin: 20px 0 4px; }
+  .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  details { margin-top: 6px; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 13px; list-style: none; text-align: center; }
+  details summary::-webkit-details-marker { display: none; }
+  details summary:hover { color: var(--text); }
   .foot { color: var(--muted); font-size: 12px; margin-top: 18px; text-align: center; }
   .theme-toggle {
     position: fixed; top: 14px; right: 14px; width: auto; margin: 0;
@@ -56,18 +67,34 @@
 </head>
 <body>
   <button type="button" class="theme-toggle" onclick="(function(){var d=document.documentElement;var c=d.getAttribute('data-theme')==='dark'?'light':'dark';d.setAttribute('data-theme',c);localStorage.setItem('theme',c);})()" aria-label="Toggle theme">Theme</button>
-  <form class="card" method="post" action="/login">
+  <div class="card">
     <div class="brand">
       <img class="brand-logo brand-logo--light" src="/static/brisken-logo-light.png" alt="Brisken">
       <img class="brand-logo brand-logo--dark" src="/static/brisken-logo-dark.png" alt="Brisken">
     </div>
     <h1>Lead Desk</h1>
-    <p class="sub">Enter your access code to continue.</p>
+    <p class="sub">Enter your email and we'll send you a one-time sign-in link.</p>
+    {% if notice %}<div class="notice">{{ notice }}</div>{% endif %}
     {% if error %}<div class="alert">{{ error }}</div>{% endif %}
-    <label for="code">Access code</label>
-    <input type="password" id="code" name="code" autocomplete="current-password" autofocus required>
-    <button type="submit">Sign in</button>
+
+    <form method="post" action="/login/magic">
+      <label for="email">Work email</label>
+      <input type="email" id="email" name="email" autocomplete="email"
+             placeholder="you@brisken.com" autofocus required>
+      <button type="submit">Email me a sign-in link</button>
+    </form>
+
+    <div class="divider">or</div>
+    <details>
+      <summary>Use an access code</summary>
+      <form method="post" action="/login">
+        <label for="code">Access code</label>
+        <input type="password" id="code" name="code" autocomplete="current-password" required>
+        <button type="submit">Sign in with code</button>
+      </form>
+    </details>
+
     <div class="foot">UnpauseAI</div>
-  </form>
+  </div>
 </body>
 </html>
