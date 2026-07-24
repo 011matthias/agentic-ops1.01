@@ -1201,7 +1201,7 @@ def _build_chart_of_accounts(
         {
           "zoho": {
             "enabled": true,                  // optional, default true
-            "coa_source": "api",              // "api" | "csv"
+            "coa_source": "api",              // "api" | "csv" | "none"
             "coa_csv_path": "chart.csv",      // required when source == "csv"
             "coa_column_map": { ... },        // optional, csv only
             "scope_groups": [                 // approved root-group names;
@@ -1231,6 +1231,14 @@ def _build_chart_of_accounts(
         return None, {}
 
     source = z.get("coa_source", "api")
+    if source == "none":
+        # The zoho block carries run config (card_accounts, export flags)
+        # but explicitly no chart source. The hosted upload path fabricates
+        # such a block from stored master data; its categorizer chart comes
+        # from the coa_validation fallback in _resolve_categorizer_chart,
+        # and a live API pull would demand ZOHO_* env vars the hosted
+        # environment does not have.
+        return None, z
     if source == "csv":
         if "coa_csv_path" not in z:
             raise ConfigError("config.zoho.coa_csv_path required when coa_source is 'csv'")
@@ -1246,7 +1254,7 @@ def _build_chart_of_accounts(
         coa = ChartOfAccounts.from_api(client.list_chart_of_accounts())
     else:
         raise ConfigError(
-            f"config.zoho.coa_source {source!r} not supported (use 'api' or 'csv')"
+            f"config.zoho.coa_source {source!r} not supported (use 'api', 'csv' or 'none')"
         )
     return coa, z
 

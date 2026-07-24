@@ -99,12 +99,40 @@ def test_card_account_lands_in_zoho_block():
     settings = {"card_accounts": {"2838": "1010 Chase Corporate"}}
     cfg = apply_master_data({}, _form("2838"), settings)
     assert cfg["zoho"]["card_accounts"]["2838"] == "1010 Chase Corporate"
+    # The fabricated block must declare "no chart source": without it,
+    # _build_chart_of_accounts defaults to a live API pull and every hosted
+    # upload dies on missing ZOHO_* credentials (2026-07-24 regression).
+    assert cfg["zoho"]["coa_source"] == "none"
 
 
 def test_card_account_ignores_a_different_card():
     settings = {"card_accounts": {"9999": "Other card"}}
     cfg = apply_master_data({}, _form("2838"), settings)
     assert "zoho" not in cfg
+
+
+def test_card_account_keeps_an_explicit_chart_source():
+    settings = {"card_accounts": {"2838": "1010 Chase Corporate"}}
+    cfg = {"zoho": {"coa_source": "csv", "coa_csv_path": "chart.csv"}}
+    out = apply_master_data(cfg, _form("2838"), settings)
+    assert out["zoho"]["coa_source"] == "csv"
+
+
+def test_master_data_zoho_block_skips_chart_pull(tmp_path, monkeypatch):
+    """End-to-end pin: the settings-injected zoho block passes the chart
+    builder without demanding Zoho API credentials, and card_accounts
+    survives for the journal export."""
+    from expense_recon.cli import _build_chart_of_accounts
+
+    for var in (
+        "ZOHO_CLIENT_ID", "ZOHO_CLIENT_SECRET", "ZOHO_REFRESH_TOKEN", "ZOHO_ORG_ID"
+    ):
+        monkeypatch.delenv(var, raising=False)
+    settings = {"card_accounts": {"2838": "1010 Chase Corporate"}}
+    cfg = apply_master_data({}, _form("2838"), settings)
+    coa, zoho_cfg = _build_chart_of_accounts(cfg, tmp_path)
+    assert coa is None
+    assert zoho_cfg["card_accounts"]["2838"] == "1010 Chase Corporate"
 
 
 # ── the matcher actually consumes an inline block ──────────────────────

@@ -402,6 +402,12 @@ def apply_master_data(
             card_accounts = dict(zoho.get("card_accounts") or {})
             card_accounts.setdefault(account_id, resolved)
             zoho["card_accounts"] = card_accounts
+            # A zoho block with no coa_source defaults to a live API chart
+            # pull, which demands ZOHO_* credentials the hosted environment
+            # does not have (2026-07-24: every upload died on it). This block
+            # exists only to carry card_accounts; the hosted categorizer
+            # chart comes from the coa_validation fallback.
+            zoho.setdefault("coa_source", "none")
             out["zoho"] = zoho
     return out
 
