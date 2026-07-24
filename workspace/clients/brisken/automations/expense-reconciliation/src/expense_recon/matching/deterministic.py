@@ -220,7 +220,7 @@ _TUNABLE_INT = frozenset({
 _TUNABLE_FLOAT = frozenset({
     "high_confidence", "probable_confidence", "possible_confidence",
     "blend_amount_weight", "blend_date_weight", "blend_vendor_weight",
-    "blend_card_weight",
+    "blend_card_weight", "fx_judgment_suggest_floor",
 })
 _TUNABLE_BOOL = frozenset({
     "card_scoping", "fx_self_derived_rates", "fx_self_derived_review",
@@ -305,6 +305,20 @@ class MatchingConfig:
     # the tuning file.
     fx_base_amount_match_pct: Decimal = Decimal("0.01")
     fx_base_amount_review_pct: Decimal = Decimal("0.13")
+
+    # ── FX-judgment suggestion floor (2026-07-24) ──────────────────
+    # A judged pair whose model same-purchase confidence lands BELOW
+    # this floor is not shown as a suggestion. On the April 2026 hosted
+    # run the workbench proposed a USD OpenAI subscription against a
+    # BRL construction-materials receipt at p=0.10, with the model's own
+    # reason saying "likely NOT the same purchase" (owner call
+    # 2026-07-24: such pairs must not be suggested). The pair is unbound
+    # instead: charge and receipt fall to the plain unmatched buckets,
+    # so nothing is silently dropped and the reconciliation guarantee
+    # holds. 0.0 disables the floor. The no-LLM stub verdict (0.5)
+    # always passes, so offline no-API runs and the pinned scorer path
+    # are byte-for-byte unaffected.
+    fx_judgment_suggest_floor: float = 0.2
 
     # ── Self-derived per-run reference rates (2026-07-23) ──────────
     # When no reference rate is configured for a pair, derive the month's

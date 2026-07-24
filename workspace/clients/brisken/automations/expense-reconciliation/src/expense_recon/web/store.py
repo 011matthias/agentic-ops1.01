@@ -359,6 +359,16 @@ class RunStore:
         self.conn.commit()
         return cur.rowcount > 0
 
+    def update_run_snapshot(self, run_id: str, snapshot: dict) -> bool:
+        """Persist a revised snapshot (manual receipt attach, 2026-07-24).
+        Returns True when a row was updated."""
+        cur = self.conn.execute(
+            "UPDATE runs SET snapshot = ? WHERE run_id = ?",
+            (json.dumps(snapshot), run_id),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
     def delete_run(self, run_id: str) -> bool:
         """Drop a run and its per-run edit rows. Returns True when the run
         existed. The on-disk work_dir is removed by the caller (the store
