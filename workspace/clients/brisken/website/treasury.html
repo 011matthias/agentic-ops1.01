@@ -627,89 +627,43 @@
   .mm-back:hover { border-color: var(--teal); color: var(--teal-strong); }
   .mm-section[data-view="overview"] .mm-back { display: none; }
 
-  /* the nested field (overview): OnePilot is the field, TreasuryCentral the workspace inside it */
-  .mm-graph { position: relative; max-width: 1000px; margin: 46px auto 0; }
+  /* the node graph (overview): OnePilot the field on top, TreasuryCentral the workspace, four standardized nodes below */
+  .mm-graph { position: relative; max-width: 940px; margin: 54px auto 0; height: clamp(560px, 64vh, 700px); }
   .mm-section[data-view="open"] .mm-graph { pointer-events: none; }
+  .mm-edges { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+  .mm-edge { fill: none; stroke: var(--border-strong); stroke-width: 1.4; vector-effect: non-scaling-stroke; }
+  .mm-flow { fill: none; stroke: var(--teal); stroke-width: 2; stroke-dasharray: 4 13; opacity: .42; vector-effect: non-scaling-stroke; animation: mmDash 5s linear infinite; }
+  @keyframes mmDash { to { stroke-dashoffset: -34; } }
 
-  .mm-field { position: relative; border: 1.5px solid var(--border-strong); border-radius: 28px; padding: 40px clamp(14px, 3vw, 30px) 24px; background:
-      radial-gradient(130% 100% at 50% -12%, color-mix(in srgb, var(--teal) 10%, transparent), transparent 62%),
-      var(--surface); box-shadow: var(--shadow); }
-  .mm-field::before { content: ""; position: absolute; inset: 6px; border: 1px dashed color-mix(in srgb, var(--teal) 32%, transparent); border-radius: 22px; pointer-events: none; }
-
-  /* the OnePilot legend straddling the top edge: the boundary of the field, and it opens the platform */
-  .mm-field-tab { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 11px; max-width: calc(100% - 26px); background: var(--navy); border: 1.5px solid var(--teal); border-radius: var(--radius-pill); padding: 11px 24px; cursor: pointer; box-shadow: var(--shadow-lift); transition: transform .16s, box-shadow .16s, border-color .16s; }
-  .mm-field-tab:hover { transform: translateX(-50%) translateY(-2px); border-color: #7fe3ec; }
-  .mm-field-tab:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
-  .mm-field-tab[aria-expanded="true"] { border-color: #7fe3ec; }
-  .mm-field-mark { width: 25px; height: 25px; color: #7fe3ec; display: inline-flex; flex: none; }
-  .mm-field-mark svg { width: 25px; height: 25px; }
-  .mm-field-txt { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0; }
-  .mm-field-name { font-family: var(--font-display); font-weight: 600; font-size: 18px; color: #fff; line-height: 1.05; }
-  .mm-field-tag { font-size: 11.5px; color: #8fd9e0; line-height: 1.2; }
-
-  .mm-inner { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.55fr) minmax(0, 1fr); align-items: stretch; gap: clamp(9px, 1.7vw, 20px); margin-top: 18px; }
-
-  /* the source zones around the workspace */
-  .mm-zone { display: flex; flex-direction: column; gap: 9px; padding: 15px 15px 16px; border: 1px solid var(--border); border-radius: 16px; background: color-mix(in srgb, var(--surface-2) 55%, transparent); text-align: left; }
-  button.mm-zone { cursor: pointer; font: inherit; color: inherit; transition: border-color .16s, box-shadow .16s, transform .16s; }
-  button.mm-zone:hover { border-color: var(--teal); box-shadow: var(--shadow); transform: translateY(-2px); }
-  button.mm-zone:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
-  button.mm-zone[aria-expanded="true"] { border-color: var(--teal); }
-  .mm-zone-h { font-family: var(--font-display); font-weight: 600; font-size: 13px; color: var(--heading); line-height: 1.25; }
-  .mm-zone-flow { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--teal-strong); }
-  .mm-zone-flow svg { width: 22px; height: 12px; flex: none; }
-  .mm-chips { display: flex; flex-wrap: wrap; gap: 5px; }
-  .mm-chip { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: var(--radius-pill); border: 1px solid var(--border); background: var(--surface); font-size: 11.5px; color: var(--text); line-height: 1.3; white-space: nowrap; }
-  .mm-chip.is-sap { border-color: var(--teal); font-weight: 700; color: var(--heading); }
-  .mm-zone-more { font-family: var(--font-mono); font-size: 10.5px; color: var(--teal-strong); }
-
-  /* the workspace at the center */
-  .mm-core { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
-  .mm-node { display: inline-flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 18px; padding: 14px 18px; box-shadow: var(--shadow); font-family: var(--font-body); text-align: center; transition: transform .16s, border-color .16s, box-shadow .16s; }
-  .mm-node:hover { border-color: var(--teal); box-shadow: var(--shadow-lift); transform: translateY(-3px); }
+  .mm-node { position: absolute; left: var(--nx); top: var(--ny); transform: translate(-50%,-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; width: max-content; max-width: 210px; cursor: pointer; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 18px; padding: 15px 18px; box-shadow: var(--shadow); font-family: var(--font-body); text-align: center; transition: transform .16s, border-color .16s, box-shadow .16s; }
+  .mm-node:hover { border-color: var(--teal); box-shadow: var(--shadow-lift); transform: translate(-50%,-50%) translateY(-3px); }
   .mm-node:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
   .mm-node[aria-expanded="true"] { border-color: var(--teal); }
-  .mm-node-cue { width: 26px; height: 26px; color: var(--teal-strong); display: inline-flex; }
-  .mm-node-cue svg { width: 26px; height: 26px; }
+  .mm-node-cue { width: 25px; height: 25px; color: var(--teal-strong); display: inline-flex; }
+  .mm-node-cue svg { width: 25px; height: 25px; }
   .mm-node-name { font-family: var(--font-display); font-weight: 600; font-size: 15px; color: var(--heading); line-height: 1.2; }
-  .mm-node-sub { font-size: 11.5px; color: var(--muted); line-height: 1.3; }
+  .mm-node-sub { font-size: 11px; color: var(--muted); line-height: 1.3; }
 
-  .mm-node.is-tc { align-self: center; width: 100%; max-width: 340px; border-color: var(--teal); border-width: 1.5px; border-radius: 22px; padding: 20px 26px; background: radial-gradient(150% 130% at 50% 0%, color-mix(in srgb, var(--teal) 11%, var(--surface)), var(--surface)); }
+  /* OnePilot: the emphasized field on top, a link out to the platform */
+  .mm-node.is-hub { text-decoration: none; flex-direction: row; gap: 13px; background: var(--navy); border-color: var(--teal); border-width: 2px; box-shadow: var(--shadow-lift); border-radius: 30px; padding: 20px 38px; max-width: 340px; }
+  .mm-node.is-hub:hover { border-color: #7fe3ec; }
+  .mm-hub-txt { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+  .mm-node.is-hub .mm-node-name { color: #fff; font-size: 25px; }
+  .mm-node.is-hub .mm-node-sub { color: #8fd9e0; font-size: 12px; }
+  .mm-node.is-hub .mm-node-cue { color: #7fe3ec; width: 34px; height: 34px; }
+  .mm-node.is-hub .mm-node-cue svg { width: 34px; height: 34px; }
+  .mm-hub-go { align-self: center; display: inline-flex; align-items: center; font-family: var(--font-mono); font-size: 11px; letter-spacing: .03em; color: #7fe3ec; }
+
+  /* TreasuryCentral: the workspace at the center */
+  .mm-node.is-tc { border-color: var(--teal); border-width: 1.5px; border-radius: 22px; padding: 18px 30px; max-width: 300px; background: radial-gradient(150% 130% at 50% 0%, color-mix(in srgb, var(--teal) 11%, var(--surface)), var(--surface)); }
   .mm-node.is-tc .mm-node-cue { width: 30px; height: 30px; }
   .mm-node.is-tc .mm-node-cue svg { width: 30px; height: 30px; }
   .mm-node.is-tc .mm-node-name { font-size: 22px; }
   .mm-node.is-tc .mm-node-name .ac { color: var(--teal-strong); }
-  .mm-node.is-tc .mm-node-sub { font-size: 12.5px; }
+  .mm-node.is-tc .mm-node-sub { font-size: 12px; }
 
-  .mm-apps { display: flex; flex-direction: column; gap: 8px; }
-  .mm-apps-h, .mm-desk-h { font-family: var(--font-mono); font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); text-align: center; }
-  .mm-appchips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
-  .mm-appchip { display: inline-flex; align-items: center; gap: 6px; padding: 7px 13px; border-radius: var(--radius-pill); border: 1px solid var(--border-strong); background: var(--surface); font-family: var(--font-body); font-size: 12.5px; font-weight: 500; color: var(--text); cursor: pointer; transition: border-color .14s, color .14s, transform .14s, box-shadow .14s; }
-  .mm-appchip:hover { border-color: var(--teal); color: var(--teal-strong); transform: translateY(-2px); box-shadow: var(--shadow); }
-  .mm-appchip:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
-  .mm-appchip[aria-expanded="true"] { border-color: var(--teal); color: var(--teal-strong); }
-  .mm-appchip-cue { width: 15px; height: 15px; display: inline-flex; color: var(--teal-strong); flex: none; }
-  .mm-appchip-cue svg { width: 15px; height: 15px; }
-  .mm-apps-more { text-align: center; font-size: 11.5px; color: var(--muted); line-height: 1.45; margin: 0; }
-  .mm-apps-more a { color: var(--accent-strong); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent-strong) 40%, transparent); white-space: nowrap; }
-  .mm-desk { display: flex; flex-direction: column; gap: 6px; padding-top: 11px; border-top: 1px dashed var(--border); }
-  .mm-desk-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; }
-  .mm-desk-item { display: inline-flex; align-items: center; padding: 3px 11px; border-radius: var(--radius-pill); background: var(--surface-2); font-size: 11px; color: var(--muted); }
-
-  /* the governed layer woven between the sources and the workspace */
-  .mm-weave { margin-top: 16px; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 13px 16px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--teal) 30%, transparent); background: color-mix(in srgb, var(--teal-bg) 60%, transparent); }
-  .mm-weave-name { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-display); font-weight: 600; font-size: 12.5px; color: var(--teal-strong); }
-  .mm-weave-name svg { width: 15px; height: 15px; }
-  .mm-weave-t { font-size: 12px; color: var(--text); text-align: center; line-height: 1.5; max-width: 640px; }
-
-  /* the "why now" pill centered under the field */
-  .mm-why-wrap { display: flex; justify-content: center; margin-top: 14px; }
-  .mm-section[data-view="open"] .mm-why-wrap { pointer-events: none; }
-  .mm-node.is-why { flex-direction: row; align-items: center; justify-content: center; gap: 11px; width: min(360px, 84vw); max-width: 360px; padding: 13px 28px; border-radius: var(--radius-pill); border-style: dashed; }
-  .mm-node.is-why:hover { transform: translateY(-3px); }
-  .mm-node.is-why .mm-node-cue { width: 22px; height: 22px; }
-  .mm-node.is-why .mm-node-cue svg { width: 22px; height: 22px; }
-  .mm-node.is-why .mm-node-name { font-size: 15px; }
+  /* the four standardized category nodes below the workspace */
+  .mm-graph .mm-node.is-cat { width: 198px; max-width: 198px; min-height: 106px; justify-content: center; }
 
   /* open-read area (full-width, centered) */
   .mm-open { max-width: 880px; margin: 0 auto; }
@@ -759,29 +713,26 @@
     .hero-grid { padding: 40px 0 30px; gap: 18px; }
     .hero-split { gap: 30px; margin-top: 8px; }
     .hero-research .big-stat { font-size: 54px; }
-    /* phone: the field stacks, the workspace first, then the sources it spans */
-    .mm-graph { margin-top: 26px; }
-    .mm-field { padding: 30px 12px 20px; border-radius: 20px; }
-    .mm-field::before { inset: 5px; border-radius: 15px; }
-    .mm-field-tab { top: -17px; padding: 9px 16px; gap: 8px; max-width: calc(100% - 20px); }
-    .mm-field-name { font-size: 15.5px; }
-    .mm-field-tag { display: none; }
-    .mm-inner { grid-template-columns: 1fr; gap: 11px; margin-top: 14px; }
-    .mm-core { order: -1; }
-    .mm-node.is-tc { max-width: none; }
-    .mm-weave { margin-top: 13px; }
+    /* phone: the graph stacks, OnePilot then TreasuryCentral then the four nodes */
+    .mm-graph { height: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: stretch; margin-top: 26px; }
+    .mm-edges { display: none; }
+    .mm-node { position: static; transform: none; width: 100%; max-width: none; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 14px 12px; }
+    .mm-node:hover { transform: none; }
+    .mm-node.is-hub { grid-column: 1 / -1; order: 1; max-width: none; justify-self: stretch; flex-direction: row; justify-content: center; border-radius: 18px; padding: 16px 16px; }
+    .mm-node.is-hub .mm-node-name { font-size: 20px; }
+    .mm-node.is-tc { grid-column: 1 / -1; order: 2; max-width: none; justify-self: stretch; border-radius: 16px; padding: 15px 16px; }
+    .mm-node.is-tc .mm-node-name { font-size: 18px; }
+    .mm-graph .mm-node.is-cat { order: 3; width: 100%; max-width: none; min-height: 92px; }
     .float-demo { right: 14px; bottom: 70px; }
     .hero-split .hero-research .mini-stats { width: 100%; max-width: 100%; }
     .hero-split .hero-research .mini { grid-template-columns: 76px minmax(0, 1fr); }
     .faq-section table { display: block; overflow-x: auto; max-width: 100%; }
-    .mm-node.is-why { width: 100%; max-width: none; border-radius: 16px; justify-content: center; }
-    .mm-why-wrap { margin-top: 10px; }
     .mm-read table { display: block; overflow-x: auto; max-width: 100%; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .mm-node, .mm-loc, .mm-appchip, .mm-field-tab, button.mm-zone { transition: none !important; }
-    .mm-node:hover, .mm-appchip:hover, button.mm-zone:hover { transform: none; }
-    .mm-field-tab:hover { transform: translateX(-50%); }
+    .mm-node, .mm-loc { transition: none !important; }
+    .mm-node:hover { transform: translate(-50%,-50%); }
+    .mm-flow { animation: none !important; }
     .mm-panel { animation: none !important; }
   }
 
@@ -791,7 +742,7 @@
   .mm-section[data-view="open"] .mm-backdrop { opacity: 1; pointer-events: auto; }
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .mm-backdrop { background: rgba(2,18,43,.72); } }
 
-  .mm-section[data-view="open"] .mm-open { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 71; width: min(880px, calc(100vw - 32px)); max-height: min(86vh, 860px); overflow: auto; margin: 0; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 16px; box-shadow: var(--shadow-lift); padding: 22px 30px 30px; }
+  .mm-section[data-view="open"] .mm-open { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 71; width: min(860px, calc(100vw - 32px)); height: min(80vh, 640px); overflow: auto; margin: 0; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 16px; box-shadow: var(--shadow-lift); padding: 22px 30px 30px; }
   .mm-section[data-view="open"] .mm-open .mm-crumbs { margin-top: 2px; }
   .mm-section[data-view="open"] .mm-open .mm-back { margin: 10px auto 0; }
   .mm-section[data-view="open"] .mm-open .mm-locator { margin-top: 16px; }
@@ -1008,59 +959,53 @@
   </div>
 
   <div class="mm-graph" aria-label="OnePilot platform map">
-    <div class="mm-field">
-      <button class="mm-field-tab mm-open-tier" type="button" data-tier="onepilot" id="node-onepilot" aria-expanded="false" aria-controls="onepilot">
-        <span class="mm-field-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3 4 14h7l-1 7 9-11h-7z"/></svg></span>
-        <span class="mm-field-txt"><span class="mm-field-name">OnePilot</span><span class="mm-field-tag">the governed field, there is no outside</span></span>
-      </button>
+    <svg class="mm-edges" viewBox="0 0 1000 600" preserveAspectRatio="none" aria-hidden="true">
+      <path class="mm-edge" d="M500 96 C500 140 500 182 500 216"/>
+      <path class="mm-edge" d="M472 256 C340 300 180 380 128 456"/>
+      <path class="mm-edge" d="M492 262 C450 340 405 412 378 470"/>
+      <path class="mm-edge" d="M508 262 C556 340 597 412 624 470"/>
+      <path class="mm-edge" d="M528 256 C660 300 820 380 872 456"/>
+      <path class="mm-flow" d="M500 96 C500 140 500 182 500 216"/>
+      <path class="mm-flow" style="animation-delay:-1s" d="M472 256 C340 300 180 380 128 456"/>
+      <path class="mm-flow" style="animation-delay:-2s" d="M492 262 C450 340 405 412 378 470"/>
+      <path class="mm-flow" style="animation-delay:-3s" d="M508 262 C556 340 597 412 624 470"/>
+      <path class="mm-flow" style="animation-delay:-1.5s" d="M528 256 C660 300 820 380 872 456"/>
+    </svg>
 
-      <div class="mm-inner">
-        <div class="mm-zone">
-          <span class="mm-zone-h">Everything treasury deals with</span>
-          <span class="mm-zone-flow"><svg viewBox="0 0 22 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 6h16M13 2l5 4-5 4"/></svg>into the workspace</span>
-          <span class="mm-chips"><span class="mm-chip">Banks</span><span class="mm-chip">Central banks</span><span class="mm-chip">Trading venues</span><span class="mm-chip">Data providers</span><span class="mm-chip">Exchanges</span><span class="mm-chip">Custodians</span><span class="mm-chip">Clearing houses</span><span class="mm-chip">Payment networks</span><span class="mm-chip">Authorities</span></span>
-        </div>
+    <a class="mm-node is-hub" href="https://onepilot.brisken.com/" style="--nx:50%;--ny:9%" aria-label="OnePilot, the governed platform, opens onepilot.brisken.com">
+      <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3 4 14h7l-1 7 9-11h-7z"/></svg></span>
+      <span class="mm-hub-txt"><span class="mm-node-name">OnePilot</span><span class="mm-node-sub">the governed field, there is no outside</span></span>
+      <span class="mm-hub-go" aria-hidden="true">Visit &rarr;</span>
+    </a>
 
-        <div class="mm-core">
-          <button class="mm-node is-tc mm-open-tier" type="button" data-tier="treasury-central" id="node-treasury-central" aria-expanded="false" aria-controls="treasury-central">
-            <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 9v11"/></svg></span>
-            <span class="mm-node-name">Treasury<span class="ac">Central</span></span>
-            <span class="mm-node-sub">the treasury workspace</span>
-          </button>
-          <div class="mm-apps">
-            <span class="mm-apps-h">The apps, in the workspace</span>
-            <div class="mm-appchips">
-              <button class="mm-appchip mm-open-tier" type="button" data-tier="mdh" id="node-mdh" aria-expanded="false" aria-controls="mdh"><span class="mm-appchip-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg></span>Market Data Hub</button>
-              <button class="mm-appchip mm-open-tier" type="button" data-tier="bst" id="node-bst" aria-expanded="false" aria-controls="bst"><span class="mm-appchip-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg></span>Brisken Smart Trading</button>
-              <button class="mm-appchip mm-open-tier" type="button" data-tier="rag" id="node-rag" aria-expanded="false" aria-controls="rag"><span class="mm-appchip-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 8l9 6 9-6"/></svg></span>Remittance Advice Gate</button>
-            </div>
-            <p class="mm-apps-more">On the same platform: Cash Flow and Exposure Hub, Bank Fee Portal, Credit Data Hub, ESG Data Hub, plus the AI Digital Workforce, and the use cases your own team builds. <a href="https://onepilot.brisken.com/">See the full platform &rarr;</a></p>
-          </div>
-          <div class="mm-desk">
-            <span class="mm-desk-h">Your workstation, now in the workspace</span>
-            <div class="mm-desk-row"><span class="mm-desk-item">Mail</span><span class="mm-desk-item">Teams</span><span class="mm-desk-item">Calendar</span><span class="mm-desk-item">Documents</span></div>
-          </div>
-        </div>
+    <button class="mm-node is-tc mm-open-tier" type="button" data-tier="treasury-central" id="node-treasury-central" aria-expanded="false" aria-controls="treasury-central" style="--nx:50%;--ny:40%">
+      <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 9v11"/></svg></span>
+      <span class="mm-node-name">Treasury<span class="ac">Central</span></span>
+      <span class="mm-node-sub">the treasury workspace</span>
+    </button>
 
-        <button class="mm-zone mm-open-tier" type="button" data-tier="sap" id="node-sap" aria-expanded="false" aria-controls="sap">
-          <span class="mm-zone-h">Everything the business runs on</span>
-          <span class="mm-zone-flow"><svg viewBox="0 0 22 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 6h18M6 2 2 6l4 4M16 2l4 4-4 4"/></svg>in and out, both ways</span>
-          <span class="mm-chips"><span class="mm-chip is-sap">SAP</span><span class="mm-chip">Other ERPs</span><span class="mm-chip">Databases</span><span class="mm-chip">Data lakes</span><span class="mm-chip">BI and analytics</span><span class="mm-chip">Trading and OMS</span><span class="mm-chip">Risk systems</span><span class="mm-chip">Document management</span><span class="mm-chip">APIs and connectors</span></span>
-          <span class="mm-zone-more">Open the foundation &rarr;</span>
-        </button>
-      </div>
+    <button class="mm-node is-cat mm-open-tier" type="button" data-tier="deals-with" id="node-deals-with" aria-expanded="false" aria-controls="deals-with" style="--nx:12%;--ny:80%">
+      <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-6 9 6M5 10v9h14v-9M3 20h18M9 19v-5h6v5"/></svg></span>
+      <span class="mm-node-name">What treasury deals with</span>
+      <span class="mm-node-sub">banks, markets, authorities</span>
+    </button>
 
-      <div class="mm-weave">
-        <span class="mm-weave-name"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h18M12 3v18"/></svg>Brisken OnePilot</span>
-        <span class="mm-weave-t">One governed layer brings every source into the workspace, visible, accessible, actionable, and every enterprise system too: one layer for data, process and control.</span>
-      </div>
-    </div>
-  </div>
+    <button class="mm-node is-cat mm-open-tier" type="button" data-tier="apps" id="node-apps" aria-expanded="false" aria-controls="apps" style="--nx:38%;--ny:86%">
+      <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg></span>
+      <span class="mm-node-name">Applications</span>
+      <span class="mm-node-sub">the apps in the workspace</span>
+    </button>
 
-  <div class="mm-why-wrap">
-    <button class="mm-node is-why" type="button" data-tier="why-now" id="node-why-now" aria-expanded="false" aria-controls="why-now">
+    <button class="mm-node is-cat mm-open-tier" type="button" data-tier="sap" id="node-sap" aria-expanded="false" aria-controls="sap" style="--nx:62%;--ny:86%">
+      <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4z"/><path d="M3 7v10l9 4 9-4V7M3 12l9 4 9-4"/></svg></span>
+      <span class="mm-node-name">What the business runs on</span>
+      <span class="mm-node-sub">SAP and enterprise systems</span>
+    </button>
+
+    <button class="mm-node is-cat mm-open-tier" type="button" data-tier="why-now" id="node-why-now" aria-expanded="false" aria-controls="why-now" style="--nx:88%;--ny:80%">
       <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.3a2.8 2.8 0 0 1 5.4 1c0 1.9-2.8 2.5-2.8 2.5"/><path d="M12 17h.01"/></svg></span>
       <span class="mm-node-name">Why now</span>
+      <span class="mm-node-sub">the S/4HANA window</span>
     </button>
   </div>
 
@@ -1070,13 +1015,11 @@
     </nav>
     <button class="mm-back" type="button" hidden>&#8592; Back</button>
     <div class="mm-locator" role="tablist" aria-label="Map nodes">
-      <button class="mm-loc" type="button" role="tab" data-tier="onepilot"><span class="mm-loc-n">1</span>OnePilot</button>
-      <button class="mm-loc" type="button" role="tab" data-tier="treasury-central"><span class="mm-loc-n">2</span>TreasuryCentral</button>
-      <button class="mm-loc" type="button" role="tab" data-tier="mdh"><span class="mm-loc-n">3</span>Market Data</button>
-      <button class="mm-loc" type="button" role="tab" data-tier="bst"><span class="mm-loc-n">4</span>Smart Trading</button>
-      <button class="mm-loc" type="button" role="tab" data-tier="rag"><span class="mm-loc-n">5</span>Remittance</button>
-      <button class="mm-loc" type="button" role="tab" data-tier="sap"><span class="mm-loc-n">6</span>SAP</button>
-      <button class="mm-loc" type="button" role="tab" data-tier="why-now"><span class="mm-loc-n">7</span>Why now</button>
+      <button class="mm-loc" type="button" role="tab" data-tier="treasury-central"><span class="mm-loc-n">1</span>TreasuryCentral</button>
+      <button class="mm-loc" type="button" role="tab" data-tier="deals-with"><span class="mm-loc-n">2</span>Deals with</button>
+      <button class="mm-loc" type="button" role="tab" data-tier="apps"><span class="mm-loc-n">3</span>Applications</button>
+      <button class="mm-loc" type="button" role="tab" data-tier="sap"><span class="mm-loc-n">4</span>Business runs on</button>
+      <button class="mm-loc" type="button" role="tab" data-tier="why-now"><span class="mm-loc-n">5</span>Why now</button>
     </div>
     <div class="mm-read">
         <section class="mm-panel" id="treasury-central" hidden aria-labelledby="node-treasury-central">
@@ -1085,6 +1028,7 @@
           <span class="eyebrow">The cockpit</span>
           <h2>TreasuryCentral, powered by <a href="https://onepilot.brisken.com/" style="color:inherit;text-decoration:none;border-bottom:2px solid color-mix(in srgb,var(--accent-strong) 55%,transparent);">OnePilot</a>: one cockpit for the whole treasury</h2>
           <p class="section-sub">Cash, investments, debt, FX, market risk management and governance on one screen, on your SAP data. It is OnePilot scoped to the treasurer; the apps run on OnePilot, which moves the data in and out of SAP, governed end to end.</p>
+          <p class="section-sub" style="margin-top:-6px;">Your workstation lives in it too: Mail, Teams, Calendar and Documents, on the same surface.</p>
           <div class="grid-3 grid-exp">
             <div class="card card-exp">
               <h3 class="qa-q card-exp-q"><button type="button" class="qa-toggle card-exp-toggle" aria-expanded="false" aria-controls="tc-money"><span class="qa-qt">One view of the money</span><svg class="qa-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button></h3>
@@ -1112,72 +1056,22 @@
             </div>
           </div>
         </section>
-        <section class="mm-panel" id="mdh" hidden aria-labelledby="node-mdh">
-          <span class="eyebrow">Application</span>
-          <h2>Market Data Hub</h2>
-          <p class="section-sub">Govern rates, curves and prices from every provider into SAP from one place, no code. The hub ingests each feed once, normalizes it, and distributes into SAP TRM with an audit trail and exception alerts.</p>
-          <p class="card-partners" style="justify-content:center;">Bloomberg &middot; Refinitiv &middot; 360T &middot; OANDA &middot; CME &middot; Deutsche Boerse</p>
-        </section>
-        <section class="mm-panel" id="bst" hidden aria-labelledby="node-bst">
-          <span class="eyebrow">Application</span>
-          <h2>Brisken Smart Trading</h2>
-          <p class="section-sub">Straight-through capture from execution venue to SAP deal creation, no re-keying. Trades flow into Treasury and Risk Management as governed deals, reconciled to source.</p>
-        </section>
-        <section class="mm-panel" id="rag" hidden aria-labelledby="node-rag">
-          <span class="eyebrow">Application</span>
-          <h2>Remittance Advice Gate</h2>
-          <p class="section-sub">AI reads messy remittance advice in any format, a direct link, a PDF, a CSV or an email, and posts it into SAP S/4HANA, so the team stops retyping. Live today on a governed AI gate, a ChatGPT-powered deployment at an agricultural-sector customer.</p>
-        </section>
-        <section class="mm-panel" id="onepilot" hidden aria-labelledby="node-onepilot">
-          <span class="eyebrow">The platform</span>
-          <h2>OnePilot, the platform it all runs on</h2>
-          <p class="section-sub">A governed, no-code platform over your SAP landscape. OnePilot Agents learn your systems and recommend each mapping; you approve it, and the feed runs governed end to end, SAP and non-SAP, both ways.</p>
-          <div class="flow">
-            <div class="flow-step"><span class="num">1</span><b>Ingest</b><span>Any source and format: Bloomberg, Refinitiv, 360T, OANDA, central banks, banks, files, email.</span></div>
-            <div class="flow-step"><span class="num">2</span><b>Validate and normalize</b><span>Cleansing, mapping, calculations, anomaly detection, before anything reaches SAP.</span></div>
-            <div class="flow-step"><span class="num">3</span><b>Governance</b><span>Audit trail, manage-by-exception, segregation of duties and four-eye on every record.</span></div>
-            <div class="flow-step"><span class="num">4</span><b>Distribute into SAP</b><span>Straight into S/4HANA, TRM, Cash and Credit Management. No ABAP, no custom interface.</span></div>
+        <section class="mm-panel" id="apps" hidden aria-labelledby="node-apps">
+          <span class="eyebrow">The applications</span>
+          <h2>The apps, in the workspace</h2>
+          <p class="section-sub">Each app is a job you can buy on its own; run them together and you get TreasuryCentral. All run on <a href="https://onepilot.brisken.com/" style="color:var(--accent-strong);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--accent-strong) 40%,transparent);">OnePilot</a>, which moves the data in and out of SAP, governed end to end.</p>
+          <div class="grid-3">
+            <div class="card"><h3>Market Data Hub</h3><p>Govern rates, curves and prices from every provider into SAP from one place, no code. Ingested once, normalized, distributed into SAP TRM with an audit trail and exception alerts.</p><p class="card-partners">Bloomberg &middot; Refinitiv &middot; 360T &middot; OANDA &middot; CME &middot; Deutsche Boerse</p></div>
+            <div class="card"><h3>Brisken Smart Trading</h3><p>Straight-through capture from execution venue to SAP deal creation, no re-keying. Trades flow into Treasury and Risk Management as governed deals, reconciled to source.</p></div>
+            <div class="card"><h3>Remittance Advice Gate</h3><p>AI reads messy remittance advice in any format, a direct link, a PDF, a CSV or an email, and posts it into SAP S/4HANA. Live today on a governed AI gate at an agricultural-sector customer.</p></div>
           </div>
-          <div class="ttv">
-            <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3L4 14h7l-1 7 9-11h-7z"/></svg></span>
-            <div class="ttv-body">
-              <h3>Live in weeks, not a rebuild</h3>
-              <p>OnePilot is configured, not coded. A new feed is set up on a managed product, so it goes live in weeks rather than a multi-quarter integration project your team has to build and then own.</p>
-            </div>
-            <div class="ttv-tag">Weeks<small>time to first feed</small></div>
-          </div>
-          <p class="section-sub" style="margin-top:22px;">Connectivity covers RFC and OData, SFTP, SOAP and REST, AMQP, email, an Excel add-in, XLSX, CSV and TXT, plus LLM and browser automation, push and pull. Off-the-shelf, third-party-managed, low-maintenance.</p>
-          <p class="section-sub" style="margin-top:14px;">Beyond the three headline apps, the same platform also runs Cash Flow &amp; Exposure Hub, Bank Fee Portal, Credit Data Hub, ESG Data Hub and the AI Digital Workforce.</p>
-          <p class="section-sub" style="margin-top:14px;"><a href="https://onepilot.brisken.com/" style="color:var(--accent-strong);font-weight:600;text-decoration:none;">OnePilot is the platform behind TreasuryCentral. See the full platform &rarr;</a></p>
-          <div id="ai" style="margin-top:32px;padding-top:26px;border-top:1px solid var(--border);">
-            <span class="eyebrow">OnePilot Agents</span>
-            <h3 style="font-size:18px;margin:6px 0 10px;">OnePilot runs it. You stay in command.</h3>
-            <p style="max-width:620px;margin-left:auto;margin-right:auto;">You set the rules and approve exceptions; OnePilot Agents fly the operation underneath every app, inside your controls. Cockpit and pilot, not a chat box bolted on or a dashboard you babysit.</p>
-            <div class="cmdstack">
-              <div class="cmd-tier">
-                <span class="cmd-role">Command</span><b>You</b>
-                <span class="cmd-desc">Set the policy, approve exceptions. Nothing moves outside the rules you define.</span>
-              </div>
-              <div class="cmd-link"><small>approve &middot; oversee</small><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></div>
-              <div class="cmd-tier">
-                <span class="cmd-role">What you see</span><b>TreasuryCentral</b>
-                <span class="cmd-desc">The cockpit: cash, investments, debt, FX and governance on one screen.</span>
-              </div>
-              <div class="cmd-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></div>
-              <div class="cmd-tier cmd-pilot">
-                <span class="cmd-role">The platform</span><b>OnePilot Agents fly it</b>
-                <span class="cmd-desc">The repetitive work: ingest, validate, post and reconcile, end to end.</span>
-                <div class="cmd-guards">
-                  <span class="cmd-guard">four-eye</span><span class="cmd-guard">segregation of duties</span><span class="cmd-guard">full audit log</span>
-                </div>
-              </div>
-              <div class="cmd-link"><small>governed &middot; both ways</small><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></div>
-              <div class="cmd-tier">
-                <span class="cmd-role">Systems of record</span><b>SAP and your sources</b>
-                <span class="cmd-desc">Into S/4HANA, TRM, Cash and Credit Management. Every record traceable.</span>
-              </div>
-            </div>
-          </div>
+          <p class="section-sub" style="margin-top:16px;">On the same platform: Cash Flow and Exposure Hub, Bank Fee Portal, Credit Data Hub, ESG Data Hub, plus the AI Digital Workforce, and the use cases your own team builds. <a href="https://onepilot.brisken.com/" style="color:var(--accent-strong);font-weight:600;text-decoration:none;">See the full platform &rarr;</a></p>
+        </section>
+        <section class="mm-panel" id="deals-with" hidden aria-labelledby="node-deals-with">
+          <span class="eyebrow">What treasury deals with</span>
+          <h2>Every external service and counterparty, into the workspace</h2>
+          <p class="section-sub">Treasury connects to banks, markets and public bodies every day. OnePilot brings each of those feeds onto one governed layer inside the workspace: visible, accessible and reconciled, with the source and the check recorded on every value.</p>
+          <p class="card-partners" style="justify-content:center;margin-top:6px;">Banks &middot; Central banks &middot; Trading venues &middot; Data providers &middot; Exchanges &middot; Custodians &middot; Clearing houses &middot; Payment networks &middot; Credit and rating agencies &middot; Government offices &middot; Authorities</p>
         </section>
         <section class="mm-panel" id="sap" hidden aria-labelledby="node-sap">
           <span class="eyebrow">The foundation</span>
@@ -1419,8 +1313,10 @@
 (function(){
   var map = document.getElementById('map');
   if (!map) return;
-  var TIERS = ['treasury-central','onepilot','mdh','bst','rag','sap','why-now'];
-  var LABEL = { 'treasury-central':'TreasuryCentral', onepilot:'OnePilot', mdh:'Market Data Hub', bst:'Brisken Smart Trading', rag:'Remittance Advice Gate', sap:'SAP applications & data', 'why-now':'Why now' };
+  var TIERS = ['treasury-central','deals-with','apps','sap','why-now'];
+  var LABEL = { 'treasury-central':'TreasuryCentral', 'deals-with':'What treasury deals with', apps:'Applications', sap:'What the business runs on', 'why-now':'Why now' };
+  // legacy per-app hashes (redirect targets in vercel.json) resolve to the Applications panel
+  function normTier(h){ return (h==='mdh'||h==='bst'||h==='rag') ? 'apps' : h; }
   var crumbs = map.querySelector('.mm-crumbs');
   var back = map.querySelector('.mm-back');
   var mmOpen = map.querySelector('.mm-open');
@@ -1518,7 +1414,7 @@
   }, true);
 
   function applyHash(){
-    var h = location.hash.replace(/^#/,'');
+    var h = normTier(location.hash.replace(/^#/,''));
     if (h==='' || h==='map'){ if (S.view!=='overview') closeTier(false); return; }
     if (TIERS.indexOf(h)!==-1){ openTier(h, null); map.scrollIntoView({ behavior: reduced()?'auto':'smooth', block:'start' }); }
   }
@@ -1526,13 +1422,13 @@
   window.addEventListener('hashchange', function(){ applyHash(); });
   document.addEventListener('click', function(ev){
     var a = ev.target.closest && ev.target.closest('a[href^="#"]'); if (!a) return;
-    var id = a.getAttribute('href').slice(1);
+    var id = normTier(a.getAttribute('href').slice(1));
     if (TIERS.indexOf(id)===-1) return;
     ev.preventDefault();
     openTier(id,'panel'); map.scrollIntoView({ behavior: reduced()?'auto':'smooth', block:'start' });
   });
 
-  var initial = location.hash.replace(/^#/,'');
+  var initial = normTier(location.hash.replace(/^#/,''));
   if (TIERS.indexOf(initial)!==-1) openTier(initial, null);
   else render(null);
   allowPush = true;
