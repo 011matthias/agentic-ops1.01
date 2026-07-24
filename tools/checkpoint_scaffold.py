@@ -222,8 +222,34 @@ def dump_context(data: dict) -> str:
     return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
 
 
-def merge_context_yaml(root: Path, payload: dict, checkpoint_rel: str) -> Path:
-    path = root / "docs" / "sessions" / f"{payload['date']}-context.yaml"
+def main_worktree(root: Path) -> Path:
+    """The primary clone's path for a git working tree.
+
+    The gitignored context YAML must live in the primary clone (where /resume
+    reads it), never a throwaway linked worktree that gets removed after the
+    checkpoint's docs PR merges. When `root` is a linked worktree, git's
+    common-dir is `<primary>/.git`, so the primary clone is its parent.
+    Fail-open to `root` on any git error (non-repo, git absent, submodule .git
+    file) so finalize never dies on this.
+    """
+    try:
+        common = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            capture_output=True, text=True, timeout=15,
+        )
+        if common.returncode != 0 or not common.stdout.strip():
+            return root
+        common_dir = Path(common.stdout.strip())
+        # common_dir is <primary>/.git (or <primary>/.git/ ...); primary is its parent
+        primary = common_dir.parent if common_dir.name == ".git" else root
+        return primary if (primary / "docs" / "sessions").is_dir() else root
+    except Exception:
+        return root
+
+
+def merge_context_yaml(root: Path, payload: dict, checkpoint_rel: str, context_root: Path | None = None) -> Path:
+    base = context_root or root
+    path = base / "docs" / "sessions" / f"{payload['date']}-context.yaml"
     data: dict = {}
     if path.exists():
         try:
@@ -390,15 +416,18 @@ def cmd_finalize(root: Path, args: argparse.Namespace) -> int:
     fname = checkpoint_filename(folder, payload.get("mini", False))
     rel = f"docs/{payload['date']} - {payload['topic']}/{fname}"
 
+    ctx_root = Path(args.context_root).resolve() if args.context_root else main_worktree(root)
+
     n, log_path = update_session_log(root, payload)
     link_text = fname.removesuffix(".md") if payload.get("mini") else "→"
     index_path = insert_index_row(root, payload, link_text, encode_link(rel))
-    yaml_path = merge_context_yaml(root, payload, rel)
+    yaml_path = merge_context_yaml(root, payload, rel, context_root=ctx_root)
     reg_path = append_register_rows(root, payload)
 
     print(f"session entry #{n} appended: {log_path}")
     print(f"INDEX row inserted: {index_path}")
-    print(f"context YAML merged: {yaml_path}")
+    note = "" if ctx_root == root else f"  (primary clone, not the worktree {root.name})"
+    print(f"context YAML merged: {yaml_path}{note}")
     if reg_path:
         print(f"friction rows appended: {reg_path} ({len(payload['friction_rows'])})")
     prose = folder / fname
@@ -423,6 +452,11 @@ def main(argv: list[str] | None = None) -> int:
 
     p_fin = sub.add_parser("finalize", help="apply the checkpoint payload to the ledgers")
     p_fin.add_argument("--payload", required=True, help="JSON file, or '-' for stdin")
+    p_fin.add_argument(
+        "--context-root",
+        help="where the gitignored context YAML is written (default: auto-detected "
+        "primary clone, so a linked worktree does not orphan it). Override only to force a path.",
+    )
 
     p_arc = sub.add_parser("archive-register", help="move old resolved rows to the archive")
     p_arc.add_argument("--days", type=int, default=60)

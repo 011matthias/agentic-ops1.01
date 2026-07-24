@@ -3,6 +3,8 @@
 import datetime as dt
 import importlib.util
 import json
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -16,9 +18,13 @@ spec.loader.exec_module(cs)
 
 
 def run_finalize(root: Path, payload: dict) -> int:
+    # Pin --context-root to root so the YAML target is deterministic regardless
+    # of whether the pytest tmp dir happens to sit inside a git repo.
     p = root / "payload.json"
     p.write_text(json.dumps(payload), encoding="utf-8")
-    return cs.main(["--root", str(root), "finalize", "--payload", str(p)])
+    return cs.main(
+        ["--root", str(root), "finalize", "--payload", str(p), "--context-root", str(root)]
+    )
 
 
 def base_payload(**over) -> dict:
@@ -148,3 +154,63 @@ class TestArchiveRegister:
         )
         assert cs.main(["--root", str(tmp_path), "archive-register"]) == 0
         assert not (docs / "friction-register-archive.md").exists()
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git not available")
+class TestContextRootWorktree:
+    """When finalize runs in a linked worktree, the gitignored context YAML
+    must land in the PRIMARY clone (where /resume reads it), not the throwaway
+    worktree. The committed ledgers still land in the worktree."""
+
+    def _git(self, *args: str, cwd: Path) -> None:
+        subprocess.run(["git", *args], cwd=str(cwd), check=True,
+                       capture_output=True, text=True)
+
+    def test_context_yaml_lands_in_primary_not_worktree(self, tmp_path: Path):
+        primary = tmp_path / "primary"
+        primary.mkdir()
+        self._git("init", "-q", cwd=primary)
+        self._git("config", "user.email", "t@t.t", cwd=primary)
+        self._git("config", "user.name", "t", cwd=primary)
+        (primary / "docs" / "sessions").mkdir(parents=True)
+        (primary / "seed.txt").write_text("seed", encoding="utf-8")
+        self._git("add", "-A", cwd=primary)
+        self._git("commit", "-qm", "seed", cwd=primary)
+
+        wt = tmp_path / "wt"
+        self._git("worktree", "add", "-q", str(wt), "HEAD", cwd=primary)
+
+        payload = base_payload(work_type="client-dev", projects=["brisken"], section="brisken")
+        pfile = wt / "payload.json"
+        pfile.write_text(json.dumps(payload), encoding="utf-8")
+        # No --context-root: it must auto-detect the primary clone.
+        assert cs.main(["--root", str(wt), "finalize", "--payload", str(pfile)]) == 0
+
+        # Committed ledgers land in the worktree...
+        assert (wt / "docs" / "INDEX.md").exists()
+        assert (wt / "docs" / "sessions" / "2026-07-23.md").exists()
+        # ...but the gitignored context YAML lands in the PRIMARY clone.
+        assert (primary / "docs" / "sessions" / "2026-07-23-context.yaml").exists()
+        assert not (wt / "docs" / "sessions" / "2026-07-23-context.yaml").exists()
+
+    def test_explicit_context_root_overrides_autodetect(self, tmp_path: Path):
+        primary = tmp_path / "primary"
+        primary.mkdir()
+        self._git("init", "-q", cwd=primary)
+        self._git("config", "user.email", "t@t.t", cwd=primary)
+        self._git("config", "user.name", "t", cwd=primary)
+        (primary / "docs" / "sessions").mkdir(parents=True)
+        self._git("commit", "-q", "--allow-empty", "-m", "seed", cwd=primary)
+        wt = tmp_path / "wt"
+        self._git("worktree", "add", "-q", str(wt), "HEAD", cwd=primary)
+        forced = tmp_path / "forced"
+        (forced / "docs" / "sessions").mkdir(parents=True)
+
+        pfile = wt / "payload.json"
+        pfile.write_text(json.dumps(base_payload()), encoding="utf-8")
+        assert cs.main(
+            ["--root", str(wt), "finalize", "--payload", str(pfile),
+             "--context-root", str(forced)]
+        ) == 0
+        assert (forced / "docs" / "sessions" / "2026-07-23-context.yaml").exists()
+        assert not (primary / "docs" / "sessions" / "2026-07-23-context.yaml").exists()
