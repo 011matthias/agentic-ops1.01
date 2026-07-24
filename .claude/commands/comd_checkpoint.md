@@ -205,6 +205,8 @@ Payload (write to `.scratch/` — gitignored):
 
 The script bumps the session-log frontmatter, appends the derived `### Session {N}` entry, inserts the INDEX row (URL-encoded), merges the context YAML (add/update touched clients, others preserved), and appends the register rows. In mini mode omit `friction_rows`/`gates`/`autonomy`.
 
+**Worktree note:** when the checkpoint's committed ledger edits go through a `docs/...` worktree (because siblings are live, per rule_branch_isolation §1), run `finalize` with `--root` = the worktree. The gitignored context YAML is auto-written to the **primary clone** (finalize detects the linked worktree via git and merges into `<primary>/docs/sessions/`, preserving any sibling's same-day entry) so it is never orphaned in the throwaway worktree. Do not hand-write it into the main tree; that risks clobbering a sibling's client context. Override the target only with `--context-root` if the auto-detect is wrong.
+
 **Register archive:** if `pre` printed the >200 KB advisory, also run `uv run tools/checkpoint_scaffold.py archive-register` so the split ships in the same docs PR as this checkpoint's ledger edits (rule_branch_isolation §1).
 
 ## 9. Confirm
