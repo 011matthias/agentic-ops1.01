@@ -2,7 +2,7 @@
 date: 2026-07-22
 session: recon-login-hardening
 projects_touched: [brisken]
-friction_events: 2
+friction_events: 1
 work_types: [client-dev]
 ---
 

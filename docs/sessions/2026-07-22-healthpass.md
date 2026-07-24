@@ -2,7 +2,7 @@
 date: 2026-07-22
 session: healthpass
 projects_touched: [sys, brisken]
-friction_events: 2
+friction_events: 6
 work_types: [system-infra]
 ---
 
