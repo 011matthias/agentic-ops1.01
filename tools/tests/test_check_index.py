@@ -89,3 +89,35 @@ def test_missing_scorers_dir_is_not_an_error(tmp_path):
     (tmp_path / "a.py").write_text("x", encoding="utf-8")
     (tmp_path / "INDEX.md").write_text("| `a.py` | does a |\n", encoding="utf-8")
     assert ci.main(tmp_path, tmp_path / "INDEX.md") == 0
+
+
+# --- whole-name-in-table-row matching (2026-07-22 residual fix: the old
+# backtick-prefix substring test accepted a prose mention anywhere and a
+# prefix of a longer name) ----------------------------------------------------
+
+def test_prefix_of_longer_name_does_not_count(tmp_path):
+    (tmp_path / "a.py").write_text("x", encoding="utf-8")
+    (tmp_path / "INDEX.md").write_text(
+        "| `a.py.legacy-wrapper` | wraps a |\n", encoding="utf-8")
+    assert ci.main(tmp_path, tmp_path / "INDEX.md") == 1
+
+
+def test_prose_mention_outside_table_row_does_not_count(tmp_path):
+    (tmp_path / "a.py").write_text("x", encoding="utf-8")
+    (tmp_path / "INDEX.md").write_text(
+        "Removed tools: `a.py` was retired 2026-07-01.\n", encoding="utf-8")
+    assert ci.main(tmp_path, tmp_path / "INDEX.md") == 1
+
+
+def test_name_with_args_in_row_still_counts(tmp_path):
+    (tmp_path / "a.py").write_text("x", encoding="utf-8")
+    (tmp_path / "INDEX.md").write_text(
+        "| `a.py --dry-run FILE` | does a |\n", encoding="utf-8")
+    assert ci.main(tmp_path, tmp_path / "INDEX.md") == 0
+
+
+def test_bare_name_in_row_still_counts(tmp_path):
+    (tmp_path / "a.py").write_text("x", encoding="utf-8")
+    (tmp_path / "INDEX.md").write_text(
+        "| `a.py` | does a |\n", encoding="utf-8")
+    assert ci.main(tmp_path, tmp_path / "INDEX.md") == 0

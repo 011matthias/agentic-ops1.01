@@ -5,9 +5,10 @@
 """Per-project status-file tooling: scaffold new ones, flag stale/malformed ones.
 
 Backs the project-status convention (rule_project_status.md + skil_project-status).
-Each discrete workstream inside a client gets ONE maintained status file under
-`workspace/clients/{client}/status/`, a roll-up of the important elements inside
-it. Shared context (a group's vision / marketing plan) lives in a group general
+Each discrete workstream inside a client (or internal project) gets ONE
+maintained status file under `workspace/clients/{client}/status/` or
+`workspace/projects/{project}/status/`, a roll-up of the important elements
+inside it. Shared context (a group's vision / marketing plan) lives in a group general
 reference file in the same folder. This tool does the mechanical parts the
 convention needs:
 
@@ -50,6 +51,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CLIENTS_DIR = REPO_ROOT / "workspace" / "clients"
+# Internal projects carry status files too (upwork-independence was the first,
+# 2026-07-22). Same convention, second root; clients shadow projects on a slug
+# collision, mirroring comd_resume's resolution order.
+PROJECTS_DIR = REPO_ROOT / "workspace" / "projects"
 
 # Core frontmatter keys every status file (workstream or general-ref) must carry.
 REQUIRED_KEYS = ("project", "workstream", "state", "updated")
@@ -144,15 +149,35 @@ def evaluate_file(path: Path, today: _dt.date, max_age_days: int) -> dict:
     }
 
 
+def _roots() -> tuple[Path, ...]:
+    """Both status roots, clients first (comd_resume resolution order). Read
+    live from the module globals so tests that repoint them are honored."""
+    return (CLIENTS_DIR, PROJECTS_DIR)
+
+
+def slug_dir(slug: str) -> Path | None:
+    """Resolve a client OR internal-project slug. None if neither root has it."""
+    for root in _roots():
+        d = root / slug
+        if d.is_dir():
+            return d
+    return None
+
+
 def status_dir(client: str) -> Path:
-    return CLIENTS_DIR / client / "status"
+    d = slug_dir(client)
+    return (d / "status") if d else (CLIENTS_DIR / client / "status")
+
+
+def _status_files_in(d: Path) -> list[Path]:
+    return sorted(p for p in d.glob("*.md") if p.name.lower() != "readme.md")
 
 
 def list_status_files(client: str) -> list[Path]:
     d = status_dir(client)
     if not d.is_dir():
         return []
-    return sorted(p for p in d.glob("*.md") if p.name.lower() != "readme.md")
+    return _status_files_in(d)
 
 
 def check(client: str, today: _dt.date, max_age_days: int) -> tuple[list[dict], int]:
@@ -210,9 +235,12 @@ def scaffold(
     today: _dt.date,
     general_ref: str = "",
 ) -> Path:
-    d = status_dir(client)
-    if not (CLIENTS_DIR / client).is_dir():
-        raise SystemExit(f"client folder not found: {CLIENTS_DIR / client}")
+    base = slug_dir(client)
+    if base is None:
+        raise SystemExit(
+            f"no client or project folder named {client!r} under "
+            f"{CLIENTS_DIR} or {PROJECTS_DIR}")
+    d = base / "status"
     d.mkdir(parents=True, exist_ok=True)
     dest = d / f"{workstream}.md"
     if dest.exists():
@@ -255,20 +283,30 @@ def _print_check(client: str, rows: list[dict], code: int, max_age_days: int) ->
 
 
 def sweep_stale(today: _dt.date, max_age_days: int = DEFAULT_MAX_AGE_DAYS) -> list[dict]:
-    """Across every client with a status/ folder, return the files that are stale
-    or malformed (each row carries its client). Empty list = everything fresh.
+    """Across every client AND internal project with a status/ folder, return
+    the files that are stale or malformed (each row carries its slug under the
+    'client' key). Empty list = everything fresh.
 
     This is what makes currency NOT depend on someone remembering to run --check:
     it is wired into SessionStart (see tools/wire-hooks.py) so rot surfaces on its
     own every session.
     """
     findings: list[dict] = []
-    if not CLIENTS_DIR.is_dir():
-        return findings
-    for client_dir in sorted(p for p in CLIENTS_DIR.iterdir() if p.is_dir()):
+    seen: set[str] = set()
+    dirs: list[Path] = []
+    for root in _roots():
+        if not root.is_dir():
+            continue
+        for d in sorted(p for p in root.iterdir() if p.is_dir()):
+            # Clients shadow projects on a slug collision (comd_resume order).
+            if d.name in seen:
+                continue
+            seen.add(d.name)
+            dirs.append(d)
+    for client_dir in dirs:
         if not (client_dir / "status").is_dir():
             continue
-        for p in list_status_files(client_dir.name):
+        for p in _status_files_in(client_dir / "status"):
             row = evaluate_file(p, today, max_age_days)
             if not (row["stale"] or row["problems"]):
                 continue
@@ -338,6 +376,22 @@ def _mark_swept_today(today: _dt.date) -> None:
         pass
 
 
+def _freshness_caveat() -> None:
+    """One stderr line when this checkout is behind origin/main. The sweep
+    derives staleness from the WORKING TREE, so status updates that landed
+    upstream are invisible here and a file can read stale when it is not
+    (stale-checkout blind spot, register 2026-07-21/22). Fail-open."""
+    try:
+        import importlib.util
+        p = Path(__file__).resolve().parent / "repo_freshness.py"
+        spec = importlib.util.spec_from_file_location("repo_freshness", p)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        mod.warn_if_stale("project_status --sweep-stale", repo=REPO_ROOT)
+    except Exception:
+        pass
+
+
 def _print_sweep(findings: list[dict]) -> None:
     n = len(findings)
     print(f"[project-status] {n} status file(s) stale or malformed. "
@@ -350,11 +404,13 @@ def _print_sweep(findings: list[dict]) -> None:
             bits.extend(f["problems"])
         print(f"  {f['client']}/{f['file']}: {'; '.join(bits)}")
     print("  (run: uv run tools/project_status.py --client <X> --check)")
+    _freshness_caveat()
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Per-project status-file tooling.")
-    ap.add_argument("--client", help="client slug under workspace/clients/")
+    ap.add_argument("--client", help="client or project slug (workspace/clients/ "
+                                     "first, then workspace/projects/)")
     ap.add_argument("--check", action="store_true", help="report status files, flag stale/malformed")
     ap.add_argument("--scaffold", metavar="WORKSTREAM", help="write a template status file")
     ap.add_argument("--group", default="", help="parent group for the scaffolded file")

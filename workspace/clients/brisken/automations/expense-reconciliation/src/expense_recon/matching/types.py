@@ -32,6 +32,12 @@ class MatchType(str, Enum):
     POSSIBLE = "possible"          # weaker signal; review required
     FX_JUDGMENT = "fx_judgment"    # currencies differ; LLM judgment needed
     FX_REFERENCE = "fx_reference"  # cross-currency, deterministic via monthly reference rate (3.15)
+    # Cross-currency, deterministic via the ER report's own per-receipt
+    # base-currency conversion (Zoho's "1 BRL = x USD" line -> base_amount).
+    # Its own type, not FX_REFERENCE reuse: the workbench and the accuracy
+    # scorer must tell "matched on Zoho's per-receipt conversion" apart from
+    # "matched on the month's reference rate" (2026-07-23).
+    FX_BASE_AMOUNT = "fx_base_amount"
     AMBIGUOUS = "ambiguous"        # multiple equally-strong candidates
 
 

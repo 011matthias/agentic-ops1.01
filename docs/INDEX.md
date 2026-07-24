@@ -13,6 +13,12 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 |------|-------|------|------|
 | 2026-07-23 | Brisken Product Decks NEW Wave | client-dev | [->](docs/2026-07-23%20-%20Brisken%20Product%20Decks%20NEW%20Wave/Checkpoint.md) |
 | 2026-07-23 | Brisken Planner Audit | client-dev | [→](docs/2026-07-23%20-%20Brisken%20Planner%20Audit/Checkpoint.md) |
+| 2026-07-23 | Brisken Hours Log + Overlap Purge | misc | [→](docs/2026-07-23%20-%20Brisken%20Hours%20Log%20+%20Overlap%20Purge/Checkpoint.md) |
+| 2026-07-23 | Post-Rome Outreach Truth | client-dev | [→](docs/2026-07-23%20-%20Post-Rome%20Outreach%20Truth/Checkpoint.md) |
+| 2026-07-23 | Recon Matcher V2 | client-dev | [→](docs/2026-07-23%20-%20Recon%20Matcher%20V2/Checkpoint.md) |
+| 2026-07-23 | Recon Spec Gap Register | client-dev | [Mini-Checkpoint-1](docs/2026-07-23%20-%20Recon%20Spec%20Gap%20Register/Mini-Checkpoint-1.md) |
+| 2026-07-23 | Recon Spec Gap Register | client-dev | [Mini-Checkpoint-2](docs/2026-07-23%20-%20Recon%20Spec%20Gap%20Register/Mini-Checkpoint-2.md) |
+| 2026-07-23 | Expense-Recon Follow-Through | client-dev | [→](docs/2026-07-23%20-%20Expense-Recon%20Follow-Through/Checkpoint.md) |
 | 2026-07-23 | Recon Match Accuracy | client-dev | [→](docs/2026-07-23%20-%20Recon%20Match%20Accuracy/Checkpoint.md) |
 | 2026-07-22 | Brisken Expense-Recon SPA Cutover + Fly UI Deletion Attempt | client-dev | [Checkpoint](docs/2026-07-22%20-%20Brisken%20Expense-Recon%20SPA%20Cutover%20+%20Fly%20UI%20Deletion%20Attempt/Checkpoint.md) |
 | 2026-07-22 | Brisken Bank Fee Portal Dirk Review Fixes | client-dev | [→](docs/2026-07-22%20-%20Brisken%20Bank%20Fee%20Portal%20Dirk%20Review%20Fixes/Checkpoint.md) |

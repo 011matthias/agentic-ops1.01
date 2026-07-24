@@ -10,6 +10,7 @@ The end-to-end strip path shells out to `uv run tools/strip-em-dash.py`, so it
 requires uv on PATH (CI installs it; local dev has it).
 """
 import importlib.util
+import json
 
 from hooklib import HOOKS, run_hook
 
@@ -52,3 +53,24 @@ def test_end_to_end_skips_out_of_scope(tmp_path):
     p = run_hook("em-dash-strip-gate.py", {"tool_input": {"file_path": str(f)}})
     assert "—" in f.read_text(encoding="utf-8")  # untouched
     assert p.stdout.strip() == ""
+
+
+def test_end_to_end_strips_tight_dash_and_reports(tmp_path):
+    """2026-07-22 blind-spot fix: tight `word—word` used to survive the strip
+    (spaced-only grammar), so the hook stayed silent. Now the tight form is
+    stripped to `, ` and the hook's report path fires (replaced > 0)."""
+    d = tmp_path / "proposals"
+    d.mkdir()
+    f = d / "draft.md"
+    f.write_text("Ships well—fast turnaround.\n", encoding="utf-8")
+    p = run_hook("em-dash-strip-gate.py", {"tool_input": {"file_path": str(f)}})
+    assert f.read_text(encoding="utf-8") == "Ships well, fast turnaround.\n"
+    out = json.loads(p.stdout)
+    assert "auto-stripped" in out["systemMessage"]
+
+
+def test_scope_includes_txt_cover_letters():
+    # .txt joined the human-to-human set (2026-07-22): Upwork cover letters.
+    assert edg.in_human_to_human_scope(
+        "/x/platform/src/content/proposals/menovia-upwork-cover-letter.txt"
+    )

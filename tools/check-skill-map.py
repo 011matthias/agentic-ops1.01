@@ -11,9 +11,11 @@ is the same failure class check-index.py kills for tools/, applied to the
 skill layer (drift-check pattern from googleworkspace/cli, adopted 2026-06-11).
 
 Three checks per skill:
-  1. forward  — every backtick path named in the skill's .md files resolves
-                (relative to the skill dir, the repo root, or the local-web
-                project root). Placeholdered paths ({slug}, *, …) are skipped.
+  1. forward  — every backtick path AND every markdown-link target
+                (`[text](../x/Y.md)`) named in the skill's .md files resolves
+                (relative to the containing file's dir, the skill dir, the repo
+                root, or the local-web project root). Placeholdered paths
+                ({slug}, *, …) are skipped.
   2. reverse  — every modules/ references/ components/ *.md under the skill
                 dir is referenced by name at least once in SKILL.md.
   3. rule IDs — every `<!-- rule:... -->` anchor is unique across the skill
@@ -39,9 +41,18 @@ SKILLS = REPO / ".claude" / "skills"
 RESOLUTION_ROOTS = [REPO, REPO / "workspace" / "projects" / "local-web"]
 
 BACKTICK = re.compile(r"`([^`\n]+)`")
+# Inline markdown links + images: `[text](target)` / `![alt](target)`, with an
+# optional <…> wrapper and an optional "title" after the target. Reference-style
+# links (`[text][ref]`) are not inline pointers and are out of scope.
+MD_LINK = re.compile(r"!?\[[^\]\n]*\]\(\s*(<[^>\n]*>|[^)\s]+)")
 RULE_ID = re.compile(r"<!--\s*rule:([a-z0-9-]+)\s*-->")
 PLACEHOLDER = re.compile(r"[{}*<>$|]|\.\.\.|…")
+URL_SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
 PATH_SUFFIXES = (".md", ".py", ".cjs", ".mjs", ".sh", ".css", ".astro", ".yaml", ".yml", ".json", ".toml")
+# Link targets may also point at shipped assets (a diagram in a skill's
+# references/). A broken image is the same drift class as a broken module link,
+# so image suffixes are checked too — they just never appear in backticks.
+IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp")
 SKILL_DIRS = ("modules", "references", "components")
 # Namespaces that resolve per-client / per-project at runtime (workspace/
 # clients/{client}/context/... etc.) or against a user's home — conventions,
@@ -70,6 +81,16 @@ EXAMPLE_PATH_DOCS = {
     "COMMAND-GUIDE.md", "AGENT-GUIDE.md", "DECISION-TREE.md",
 }
 
+# Repo paths a skill CREATES on demand rather than ships. They are genuine
+# pointers (the skill reads and writes them by exactly this path), so weakening
+# them into prose would lose signal; they simply do not exist at rest, so
+# resolution is the wrong test. Keep this list tiny and literal: an entry here
+# is a promise that some skill's documented procedure creates the file.
+RUNTIME_CREATED = {
+    ".claude/queue/pending.md",   # skil_prompt-queue creates on first drain/add
+    ".claude/queue/done.md",      # skil_prompt-queue creates on first archive
+}
+
 
 def looks_like_path(s: str) -> bool:
     s = s.strip()
@@ -82,6 +103,54 @@ def looks_like_path(s: str) -> bool:
     if PLACEHOLDER.search(s):
         return False
     return "/" in s and s.lower().endswith(PATH_SUFFIXES)
+
+
+def link_target_path(raw: str) -> str | None:
+    """Normalize one markdown-link target to a repo-checkable relative path, or
+    None when it is not a file pointer at all.
+
+    Not pointers: external schemes (http:, https:, mailto:, tel:, …), pure
+    anchors (`#section`), site-absolute targets (`/docs/x`), `@`-import
+    examples, placeholdered paths, the runtime-namespace SKIP_PREFIXES, and
+    anything without a known file suffix. Fragments and queries are stripped
+    before resolution so `FILE.md#section` tests as `FILE.md`."""
+    t = raw.strip()
+    if t.startswith("<") and t.endswith(">"):
+        t = t[1:-1].strip()
+    if not t or t.startswith("#"):          # pure anchor — in-page, not a file
+        return None
+    if URL_SCHEME.match(t):                 # http/https/mailto/tel/data/…
+        return None
+    t = t.split("#", 1)[0].split("?", 1)[0]  # drop fragment + query
+    if not t or t.startswith(("/", "@", "-")):
+        return None
+    if t.startswith(SKIP_PREFIXES) or PLACEHOLDER.search(t):
+        return None
+    return t if t.lower().endswith(PATH_SUFFIXES + IMAGE_SUFFIXES) else None
+
+
+def line_pointers(line: str) -> list[tuple[str, bool]]:
+    """Every file pointer on one line as (path, link_only), first-seen order,
+    deduped.
+
+    `link_only` is True for a markdown-link target and drives the stricter
+    resolution base in audit_skill: a link has exactly ONE correct base, the
+    containing file's directory, because that is what a reader following it
+    actually gets. Backticked paths are prose and stay on the permissive root
+    list (they are legitimately repo- or skill-dir-relative).
+
+    A path that appears BOTH backticked and linked on one line (the idiomatic
+    ``[`x/Y.md`](x/Y.md)``) is emitted once, as the backtick form, so the pair
+    can never be reported twice."""
+    out: list[tuple[str, bool]] = []
+    seen: set[str] = set()
+    cands = [(c.strip(), False) for c in BACKTICK.findall(line) if looks_like_path(c.strip())]
+    cands += [(t, True) for raw in MD_LINK.findall(line) if (t := link_target_path(raw))]
+    for c, link_only in cands:
+        if c not in seen:
+            seen.add(c)
+            out.append((c, link_only))
+    return out
 
 
 def skill_md_files(skill_dir: Path) -> list[Path]:
@@ -124,15 +193,15 @@ def audit_skill(skill_dir: Path, cross_skill_refs: frozenset[str] = frozenset())
                 continue
             if in_fence or "Example:" in line:
                 continue
-            for cand in BACKTICK.findall(line):
-                cand = cand.strip()
-                if not looks_like_path(cand):
+            for cand, link_only in line_pointers(line):
+                if cand in RUNTIME_CREATED:
                     continue
-                roots = [md.parent, skill_dir, *RESOLUTION_ROOTS]
+                roots = [md.parent] if link_only else [md.parent, skill_dir, *RESOLUTION_ROOTS]
                 if not any((r / cand).exists() for r in roots):
+                    what = "link target" if link_only else "pointer"
                     hits.append({
                         "line": i, "category": "dead-pointer", "severity": "HIGH",
-                        "message": f"{md.relative_to(skill_dir)}: `{cand}` resolves nowhere",
+                        "message": f"{md.relative_to(skill_dir)}: {what} `{cand}` resolves nowhere",
                         "snippet": line.strip()[:120],
                     })
 

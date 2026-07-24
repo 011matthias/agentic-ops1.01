@@ -29,7 +29,7 @@ def client(tmp_path):
 
 def _create_run(client) -> str:
     resp = client.post(
-        "/runs",
+        "/api/runs",
         files={
             "statement": (
                 "statement.example.csv",
@@ -50,10 +50,11 @@ def _create_run(client) -> str:
             "account_card_currency": "USD",
             "receipts_source": "csv",
         },
-        follow_redirects=False,
     )
-    assert resp.status_code == 303, resp.text
-    return resp.headers["location"].rstrip("/").rsplit("/", 1)[-1]
+    assert resp.status_code == 200, resp.text
+    job = client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
+    return job["run_id"]
 
 
 def test_commit_memory_writes_learning_store(client):
@@ -70,16 +71,16 @@ def test_commit_memory_writes_learning_store(client):
 
     # Reviewer confirms that match and reclassifies the coffee line.
     assert client.post(
-        f"/runs/{run_id}/decisions",
+        f"/api/runs/{run_id}/decisions",
         json={"transaction_id": tx_id, "status": "confirmed", "chosen_document_id": "rcpt-001"},
     ).status_code == 200
     assert client.post(
-        f"/runs/{run_id}/categories",
+        f"/api/runs/{run_id}/categories",
         json={"document_id": "rcpt-001", "line_index": 0,
               "category": "Meals & Entertainment", "zoho_account": None},
     ).status_code == 200
 
-    resp = client.post(f"/runs/{run_id}/commit-memory")
+    resp = client.post(f"/api/runs/{run_id}/commit-memory")
     assert resp.status_code == 200, resp.text
     learned = resp.json()["learned"]
     assert learned["confirmed_pairs"] >= 1
@@ -95,7 +96,7 @@ def test_commit_memory_writes_learning_store(client):
 
 
 def test_commit_memory_unknown_run_404(client):
-    resp = client.post("/runs/nope/commit-memory")
+    resp = client.post("/api/runs/nope/commit-memory")
     assert resp.status_code == 404
 
 
@@ -106,18 +107,18 @@ def test_learned_category_consulted_on_next_run(client):
     # upgrades.
     run1 = _create_run(client)
     assert client.post(
-        f"/runs/{run1}/categories",
+        f"/api/runs/{run1}/categories",
         json={"document_id": "rcpt-002", "line_index": 0,
               "category": "Meals & Entertainment", "zoho_account": None},
     ).status_code == 200
-    learned = client.post(f"/runs/{run1}/commit-memory").json()["learned"]
+    learned = client.post(f"/api/runs/{run1}/commit-memory").json()["learned"]
     assert learned["merchant_categories"] >= 1
 
-    # A brand-new run over the same data now recalls the category.
+    # A brand-new run over the same data now recalls the category; the
+    # render model counts the memory-filled line for the SPA's provenance UI.
     run2 = _create_run(client)
-    page = client.get(f"/runs/{run2}").text
-    assert "LEARNED" in page
-    assert "learned from your" in page  # provenance label is visible
+    view = client.get(f"/api/runs/{run2}").json()
+    assert view["summary"]["n_learned_lines"] >= 1
 
     # And it actually lands on the Delancey receipt, not somewhere else.
     db = RunStore(client._data_root / "recon-web.sqlite")

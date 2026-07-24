@@ -15,6 +15,65 @@ Trigger = the moment this becomes urgent enough to revisit.
 
 ---
 
+## Resolved 2026-07-23 — matcher-v2 card-contradiction gate (the ~14 no_charge frontier)
+
+`brisken-recon-tuning-v1` left a precision frontier its SUMMARY named: 14
+no_charge receipts across the 6 labelled months auto-matched to a
+coincidental charge (-2.0 each), that (date, amount) alone could not
+separate; "vendor/context signals" were flagged as the next structural
+idea. Resolved.
+
+**The 14 are one thing.** They concentrate entirely in the travel months
+(9 Rome-2025, 2 Copenhagen-2024, 3 Lisbon-2024); the 3 BRL admin months
+are clean. Every one is a receipt whose Zoho `payment_mode` names a card
+ABSENT from the statement being reconciled (a trip where some receipts
+were paid on the Cloud 6013/2155 card, not the 2838 family),
+coincidentally base-matching an unrelated same-vendor / same-day 2838
+charge.
+
+**Vendor is NOT separable; card is.** Measured on the pinned scorer
+fixture: `vendor_similarity` overlaps heavily between the 14 coincidences
+and the 55 true deterministic pairs (26/55 true pairs score < 0.2 because
+banks truncate foreign vendor strings to aggregators like SUMUP / MP* /
+B91*; some coincidences score 1.00, two people at the same restaurant). A
+vendor gate at every threshold loses far more true pairs than it kills.
+Card is a clean split: 14/14 coincidences have `card_score` 0.0 (receipt
+card differs from the charge card), 0/55 true pairs do (all 1.0).
+
+**The gate.** A clean bilaterally-unique FX_BASE_AMOUNT / FX_REFERENCE
+candidate also forfeits its auto-resolution right when the charge's card
+and the receipt's payment_mode both name a card and they DIFFER
+(`card_signal == 0.0`, behind the existing `card_scoping` trust switch).
+Card scoping already drops contradicted pairs whose receipt names a
+PRESENT card, so a surviving 0.0 means the receipt's card is entirely
+absent, its true charge on another statement. Demotes to FX_JUDGMENT,
+never drops, so the reconciliation guarantee holds and a rare mis-carded
+true pair still surfaces for review.
+
+**Not circular.** payment_mode is an independent, always-present Zoho
+field, never part of the labeling evidence tiers E1-E4 (all amount /
+reference). The matcher was already building candidates on the same
+base-amount evidence the labeler used, but never using card to REJECT,
+exactly where it false-positived.
+
+**Measured (pinned scorer + guard, both unchanged):** train 31.5 -> 49.5,
+all-6 37.2 -> 65.2; determ_ok 55/95 UNCHANGED (0 true pairs lost);
+determ_wrong 0 held; nc_matched 14 -> 0; guard 4/4 PASS (holdout composite
+5.7 -> 15.7). Full module suite 783 green + 3 new pinning tests in
+`test_fx_ladder.py`. Hosted parity holds (defaults-only score ==
+tuning-file score, 65.2), so the fix reaches the src-only Docker image
+with no config change. Structural change in `matching/deterministic.py`,
+measured on the LOCKED scorer/guard, same class as PR #405's uniqueness
+gate; not a config hill-climb (the gate is binary, nothing to tune).
+
+**Residual.** Handles the dominant absent-card no_charge variety. A future
+no_charge receipt paid on a PRESENT card whose charge is merely outside
+the export window would carry `card_score` 1.0 and stay review noise.
+Strict improvement at zero recall cost. Distinct open WS3 item: the
+ADOBE/ANTHROPIC receiptless-charge FX-false-pairing.
+
+---
+
 ## Resolved 2026-06-07 — hardening + plumbing batch (no client input)
 
 Shipped without real data, all mock-tested (98/98 suite green). These
@@ -48,6 +107,47 @@ this note.
 
 Still gated on Chris's data / Zoho access: D2 vision OCR, the A-series
 matcher calibration (A1–A7), real-data validation, slice 4 posting.
+
+---
+
+## Resolved 2026-07-23 — date+amount accuracy program (measured end to end)
+
+Owner directive: matching driven by date + amount, most accurate.
+Time-of-day verified nonexistent in every source (bank CSV/PDF, ER PDF,
+vision schema) — the program is date+amount. Shipped as PRs #404 (scorer
+`tools/scorers/recon-match-accuracy.py` + holdout guard, both pinned),
+#405 (matcher structure), #406 (optimize run + tuned default), deployed
+to Fly and live-verified.
+
+- **The metric:** +1.0 deterministic-correct / +0.3 deferred-correct /
+  −2.0 deterministic-wrong or no_charge false positive over the 6
+  labelled months (95 confirmed pairs); train = four 2025-26 months,
+  holdout = the two 2024 months, guard-enforced.
+- **Structure (#405):** `FX_BASE_AMOUNT` deterministic path off the ER
+  report's own per-receipt conversion (the E3 signal, 0/92 deterministic
+  at baseline); self-derived per-run reference rates (statement-FX-line
+  median, else receipt-rate median n≥3, band-clamped, configured wins);
+  band candidates scored by amount agreement under the best rate instead
+  of midpoint distance; review-zone (2–13%) DEFERS instead of
+  auto-matching (it had auto-matched 38/46 no-charge receipts);
+  **bilateral-uniqueness gate** — clean rate-derived evidence resolves
+  deterministically only when exclusive both ways (the labeling
+  `auto_pairs` criterion); assignment sort key gains the amount+date
+  blend so contested receipts stop being decided by vendor fuzz.
+- **Tuning (#406, optimize run brisken-recon-tuning-v1):** 7 rounds,
+  winner `fx_base_amount_match_pct` 0.02→0.01 (knee bracketed both
+  sides), promoted into the dataclass default (the hosted image never
+  reads the tuning file). Dead ends + inert levers journaled in
+  `docs/optimize/brisken-recon-tuning-v1/SUMMARY.md`.
+- **Arc (train composite):** 8.9 → 30.8 (structure) → 31.5 (tuned);
+  holdout 5.5 → 5.7 with 13/22 deterministic; deterministic-correct
+  3/95 → 55/95 overall with **0 wrong deterministic matches** at every
+  step. Live April re-run (no LLM): 20 clean + 13 teed-up review,
+  byte-identical to the local replay of the same inputs.
+- **Known frontier:** ~9 train no-charge receipts remain bilaterally-
+  unique coincidences within 1% — indistinguishable on (date, amount)
+  alone; next structural idea is vendor/context signals, only if this
+  must shrink further.
 
 ---
 

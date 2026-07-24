@@ -759,6 +759,6 @@ return [{
 - Hashing: Use crypto module
 
 **See Also**:
-- [SKILL.md](SKILL.md) - Overview
-- [COMMON_PATTERNS.md](COMMON_PATTERNS.md) - Real usage examples
-- [ERROR_PATTERNS.md](ERROR_PATTERNS.md) - Error prevention
+- [SKILL.md](../SKILL.md) - Overview
+- [COMMON-PATTERNS.md](COMMON-PATTERNS.md) - Real usage examples
+- [ERROR-PATTERNS.md](ERROR-PATTERNS.md) - Error prevention

@@ -2,19 +2,33 @@
 # /// script
 # requires-python = ">=3.11"
 # ///
-"""Strip em-dashes (` — `) from prose in markdown files.
+"""Strip em-dashes from prose in markdown files.
 
-Replaces ` — ` (space, em-dash, space) with `; ` (semicolon, space) in prose
-lines. Skips fenced code blocks (``` ... ```) so legitimate dash usage in code
+Two grammatical forms, two substitutions (2026-07-22 blind-spot fix — the
+spaced-only strip let tight `word—word` and `&mdash;` ship unstripped):
+
+  spaced  ` — ` / ` -- ` / ` &mdash; `  ->  `; `  (semicolon joins clauses)
+  tight   `word—word` / `word&mdash;word` -> `, ` (semicolon would be wrong
+          punctuation mid-clause: `well—fast` reads as `well, fast`)
+
+Tight `word--word` is deliberately NOT auto-stripped (too likely to be a
+CLI flag, filename, or identifier); the validators flag it for human review.
+
+Skips fenced code blocks (``` ... ```) so legitimate dash usage in code
 stays intact. Skips indented code blocks (4+ leading spaces, non-list lines).
+Idempotent: a second run makes zero replacements.
 
 Usage:
     uv run tools/strip-em-dash.py FILE [FILE ...]
 
 Reports per-file count of replacements + any remaining em-dashes after.
 """
+import re
 import sys
 from pathlib import Path
+
+SPACED = re.compile(r" (?:—|&mdash;|--) ")
+TIGHT = re.compile(r"(?<=\w)(?:—|&mdash;)(?=\w)")
 
 
 def strip_em_dashes(path: Path) -> tuple[int, int]:
@@ -37,20 +51,19 @@ def strip_em_dashes(path: Path) -> tuple[int, int]:
         if line.startswith("    ") and not stripped.startswith(("-", "*", "+")):
             out.append(line)
             continue
-        # Replace ` — ` (em-dash) and ` -- ` (double-hyphen substitute) with `; ` in prose
-        em_count = line.count(" — ")
-        dd_count = line.count(" -- ")
-        new_line = line.replace(" — ", "; ").replace(" -- ", "; ")
-        if new_line != line:
-            replacements += em_count + dd_count
+        # Spaced forms (` — ` / ` -- ` / ` &mdash; `) -> `; `;
+        # tight forms (`word—word` / `word&mdash;word`) -> `, `.
+        new_line, n_spaced = SPACED.subn("; ", line)
+        new_line, n_tight = TIGHT.subn(", ", new_line)
+        replacements += n_spaced + n_tight
         out.append(new_line)
 
     new_text = "".join(out)
     path.write_text(new_text, encoding="utf-8")
 
-    # Count remaining em-dashes (these survived because they were inside code or
-    # not surrounded by spaces).
-    remaining = new_text.count("—")
+    # Count remaining em-dashes (these survived because they were inside code
+    # or in a mixed-spacing shape neither pattern covers).
+    remaining = new_text.count("—") + new_text.count("&mdash;")
     return replacements, remaining
 
 

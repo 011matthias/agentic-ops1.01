@@ -23,6 +23,9 @@ rotting one.
 
 `workspace/clients/{client}/status/` — tracked (NOT under the gitignored
 `context/`), beside `infrastructure.yaml` and `PROJECT-BOUNDARIES.md`.
+Internal projects carry the same convention at
+`workspace/projects/{project}/status/` (first: upwork-independence,
+2026-07-22); `tools/project_status.py` resolves both roots, clients first.
 
 - One file per workstream: `{spec-id}-{slug}.md` (e.g. `p2-rome.md`,
   `p1-expense-reconciliation.md`).

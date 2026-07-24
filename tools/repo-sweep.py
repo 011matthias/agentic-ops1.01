@@ -36,6 +36,13 @@ Micro-mode: --normalize-sessions FILE... repairs the union-merge artifact in
 docs/sessions/*.md (duplicated frontmatter counters, colliding Session
 numbers) by recomputing everything from the body. Idempotent, fail-open.
 
+Session-log fan-out: before batching docs/, per-session shard files
+(docs/sessions/YYYY-MM-DD-<sid>.md, written by /comd_checkpoint and
+/comd_eod-capture) are folded into the canonical daily file via
+tools/merge-session-logs.py, so the sweep commits folded canonical files,
+not shards. Fail-open: a fold failure logs and the sweep continues with the
+shards as-is (the .gitattributes union rules still cover them).
+
 Default is dry-run. The scheduled task passes --execute.
 Log: %USERPROFILE%/.repo-sweep.log (one block per run).
 """
@@ -245,6 +252,46 @@ def normalize_session_frontmatter(text: str) -> str:
         return result
     except Exception:
         return text
+
+
+def fold_session_shards(repo: str, execute: bool, lines: list[str]) -> None:
+    """Fold docs/sessions shard files (YYYY-MM-DD-<sid>.md) into the canonical
+    daily files (tools/merge-session-logs.py) before the docs batch commits,
+    then normalize the folded files' frontmatter. Fail-open: any failure logs
+    and the sweep continues -- the union rules still cover raw shards."""
+    sessions_dir = os.path.join(repo, "docs", "sessions")
+    if not os.path.isdir(sessions_dir):
+        return
+    try:
+        import importlib.util
+        tool = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "merge-session-logs.py")
+        spec = importlib.util.spec_from_file_location("merge_session_logs", tool)
+        msl = sys.modules.get(spec.name)
+        if msl is None:
+            msl = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = msl  # dataclass resolution needs the registry
+            spec.loader.exec_module(msl)
+        for r in msl.run_fold(sessions_dir, apply=execute):
+            if r.error:
+                lines.append(f"  session-fold: {r.date}: ERROR {r.error}")
+                continue
+            if not (r.folded or r.redundant):
+                continue
+            verb = "folded" if execute else "would fold"
+            lines.append(f"  session-fold: {verb} {len(r.folded)} shard(s), "
+                         f"{len(r.redundant)} redundant -> docs/sessions/{r.date}.md")
+            if execute and r.folded:
+                full = str(r.canonical)
+                try:
+                    text = open(full, encoding="utf-8").read()
+                    fixed = normalize_session_frontmatter(text)
+                    if fixed != text:
+                        open(full, "w", encoding="utf-8", newline="\n").write(fixed)
+                except OSError:
+                    pass
+    except Exception as ex:
+        lines.append(f"  session-fold: skipped ({ex}); shards left as-is")
 
 
 def run(args: list[str], cwd: str) -> subprocess.CompletedProcess:
@@ -514,6 +561,16 @@ def sweep_repo(cfg: dict, execute: bool, quiesce_minutes: int) -> None:
     if age_min < quiesce_minutes:
         lines.append(f"  skip: newest change {age_min:.0f}m ago (< quiesce {quiesce_minutes}m)")
         return log(lines)
+
+    # Fold session-log shards into the canonical daily files BEFORE batching
+    # docs/, so the sweep commits folded files, not shards. After the quiesce
+    # gate on purpose: the fold's fresh writes must not trip it.
+    fold_session_shards(repo, execute, lines)
+    if execute:
+        entries = dirty_entries(repo)  # the fold changed the tree
+        if not entries:
+            lines.append("  clean after session fold; nothing to sweep")
+            return log(lines)
 
     groups, skipped = plan(repo, entries)
     for s in skipped:

@@ -205,10 +205,16 @@ def prepare_run(
     operator: str | None,
     learning_db_path: Path | None = None,
     intake_id: str | None = None,
+    settings: dict | None = None,
 ) -> PreparedRun:
     """Save the uploads and resolve everything the pipeline needs, fast and
     fail-fast. Raises `RunInputError` for a user-fixable problem (an
     unmappable statement). No pipeline run and no DB row yet.
+
+    `settings` (2026-07-22) is the stored master data (`store.get_settings`):
+    the month's FX reference rates, the card -> legal-entity map, and the
+    card -> Zoho bank-account map. Omitted / empty => byte-for-byte the
+    prior behaviour, so the CLI and the tests are unaffected.
 
     The uploaded statement + receipts are written into
     `data_root/runs/<run_id>/`, and a self-contained no-API-key
@@ -285,7 +291,17 @@ def prepare_run(
     # EXPENSE_RECON_COA_PROVISION) keyed on the run's legal entity, so the
     # export is validated against the paying entity's chart. Env unset /
     # entity not provisioned => cfg unchanged (fail-open). See coa_provision.
-    cfg = apply_coa_provisioning(cfg, form.resolve_legal_entity())
+    # Master data (2026-07-22): the month's FX reference rates, the card ->
+    # legal-entity map, and the card -> Zoho bank-account map, all from the
+    # stored settings. Without these a hosted run had no reference rate (so
+    # every cross-currency receipt fell through to LLM judgment: the real
+    # April run matched 0 of 94 where the same files matched 29/36 locally
+    # with a rate file), resolved no COA entity, and credited a placeholder
+    # card account. Written into the run config, so `run.local.json` carries
+    # them too and a pulled-down run reproduces the hosted match.
+    cfg = apply_master_data(cfg, form, settings)
+    entity = resolve_entity(form, settings)
+    cfg = apply_coa_provisioning(cfg, entity)
 
     # Local-repro config: write a self-contained `run.local.json` next to the
     # uploaded files so pulling this run dir off the /data volume (flyctl
@@ -319,6 +335,105 @@ def prepare_run(
     )
 
 
+def resolve_entity(form: RunForm, settings: dict | None) -> str:
+    """The run's legal entity: the settings `card_entities` map first, then
+    the form's own account -> entity mapping.
+
+    `RunForm.resolve_legal_entity` falls back to the raw account id when no
+    mapping exists, which is what silently disabled the COA gate on every
+    hosted run: an operator types the card number ("2838"), which matches no
+    entity key in the COA provisioning ("Corporate Services"), so the run
+    came back `has_coa: false` with no warning. The settings map is the home
+    for that association. Matching is exact on the account id, then on its
+    trailing digits, so "2838" and "card-2838" resolve the same way.
+    """
+    mapped = (settings or {}).get("card_entities") or {}
+    account_id = (form.account_id or "").strip()
+    if mapped and account_id:
+        for key, entity in mapped.items():
+            key = str(key).strip()
+            if key and (key == account_id or account_id.endswith(key)) and entity:
+                return str(entity)
+    return form.resolve_legal_entity()
+
+
+def apply_master_data(
+    cfg: dict, form: RunForm, settings: dict | None
+) -> dict:
+    """Return `cfg` with the stored master data folded in: the month's FX
+    reference rates as an inline `matching` block, and the card's Zoho bank
+    account as the `zoho.card_accounts` entry the journal's balancing credit
+    resolves against.
+
+    The rates are inlined rather than written as a `matching.tuning_path`
+    because they are per-run master data, not a file on the machine — this
+    also carries them into `run.local.json`, so pulling a run off the volume
+    reproduces the hosted match exactly. Empty settings => `cfg` unchanged.
+    """
+    settings = settings or {}
+    rates = {
+        str(k).strip(): str(v).strip()
+        for k, v in (settings.get("fx_reference_rates") or {}).items()
+        if str(k).strip() and str(v).strip()
+    }
+    accounts = settings.get("card_accounts") or {}
+    if not rates and not accounts:
+        return cfg
+
+    out = dict(cfg)
+    if rates:
+        matching = dict(out.get("matching") or {})
+        matching.setdefault("fx_reference_rates", rates)
+        out["matching"] = matching
+    account_id = (form.account_id or "").strip()
+    if accounts and account_id:
+        resolved = next(
+            (
+                str(v)
+                for k, v in accounts.items()
+                if str(k).strip()
+                and (str(k).strip() == account_id or account_id.endswith(str(k).strip()))
+                and v
+            ),
+            None,
+        )
+        if resolved:
+            zoho = dict(out.get("zoho") or {})
+            card_accounts = dict(zoho.get("card_accounts") or {})
+            card_accounts.setdefault(account_id, resolved)
+            zoho["card_accounts"] = card_accounts
+            out["zoho"] = zoho
+    return out
+
+
+def parse_issue_severity(issue: "tuple") -> str:
+    """The severity of one parse issue, tolerant of the pre-2026-07-22
+    3-tuple (which reads as "error", its behaviour at the time)."""
+    return (issue[3] if len(issue) > 3 else "error") or "error"
+
+
+def count_parse_issues(issues: "list[tuple]") -> dict[str, int]:
+    """Split parse issues into real errors vs advisory notes.
+
+    The workbench used to call every issue an error. On the real April run
+    that read "6 parse errors" where one was the parser correctly inferring
+    the Chase sign convention and five were receipt images that carried no
+    matching expense row: nothing there was an error in the user's sense,
+    and a count that cries wolf gets ignored.
+    """
+    errors = sum(1 for i in issues if parse_issue_severity(i) == "error")
+    return {"errors": errors, "notes": len(issues) - errors}
+
+
+# Near-miss thresholds (2026-07-22). A charge only carries the "near miss"
+# hint when a free receipt is within this much of its amount and this many
+# days of its date. Both are deliberately wider than the matcher's own
+# probable bands (0.20 / 5 days) — the point is to show the pair the matcher
+# just barely rejected — but narrow enough that a receiptless subscription
+# charge no longer points at an unrelated receipt.
+_NEAR_MISS_AMOUNT_PCT = Decimal("0.35")
+_NEAR_MISS_DATE_DAYS = 10
+
 LOCAL_RUN_CONFIG_NAME = "run.local.json"
 # Config blocks stripped from the local-repro config: `llm` (never call the
 # paid API from a local test run) and `coa_validation` (its chart paths live
@@ -340,6 +455,69 @@ def _write_local_run_config(work_dir: Path, cfg: dict) -> None:
         )
     except OSError:
         pass  # provenance still lives in the DB; a missing file is not fatal
+
+
+def _setup_advisories(
+    cfg: dict,
+    transactions: list,
+    receipts: list,
+    *,
+    has_coa: bool,
+) -> list[dict]:
+    """Actionable notices about master data this run needed and did not have.
+
+    Each entry is `{setting, message}`: the settings key to fix and one
+    plain sentence naming what its absence cost THIS run. Silence used to
+    be the failure mode — the real April run reported 0 matches and
+    `has_coa: false` with nothing on screen tying either to a missing
+    setting, so the tool looked broken rather than unconfigured.
+    """
+    out: list[dict] = []
+
+    # Cross-currency receipts with no reference rate for their pair: the
+    # single cause of the 0-of-94 April run.
+    configured = {
+        str(k).split(":")[0].upper()
+        for k in ((cfg.get("matching") or {}).get("fx_reference_rates") or {})
+    }
+    card_ccy = (
+        transactions[0].account_card_currency if transactions else "USD"
+    ).upper()
+    missing: dict[str, int] = {}
+    for r in receipts:
+        ccy = (r.detected_currency or "").upper()
+        if ccy and ccy != card_ccy and ccy not in configured:
+            missing[ccy] = missing.get(ccy, 0) + 1
+    for ccy, count in sorted(missing.items(), key=lambda kv: -kv[1]):
+        out.append({
+            "setting": "fx_reference_rates",
+            "message": (
+                f"{count} receipt(s) are in {ccy} but no {ccy}:{card_ccy} "
+                f"reference rate is set, so they cannot match "
+                f"deterministically. Add this month's rate in Settings."
+            ),
+        })
+
+    if not has_coa:
+        out.append({
+            "setting": "card_entities",
+            "message": (
+                "No chart of accounts was resolved for this run, so posting "
+                "accounts are not validated and the journal exports "
+                "placeholder accounts. Map this card to its legal entity in "
+                "Settings."
+            ),
+        })
+
+    if not ((cfg.get("zoho") or {}).get("card_accounts") or {}):
+        out.append({
+            "setting": "card_accounts",
+            "message": (
+                "This card has no Zoho bank account, so every journal entry "
+                "balances to a 'Card: ...' placeholder. Map it in Settings."
+            ),
+        })
+    return out
 
 
 def _statement_source_advisory(
@@ -409,7 +587,8 @@ def execute_run(
         "n_unmatched_tx": len(outcome.unmatched_transactions),
         "n_refunds": len(outcome.refunds),
         "n_unmatched_rec": len(outcome.unmatched_receipts),
-        "n_parse_errors": len(result.parse_errors),
+        "n_parse_errors": count_parse_issues(result.parse_errors)["errors"],
+        "n_parse_notes": count_parse_issues(result.parse_errors)["notes"],
         "match_rate": round(len(outcome.matches) / n_tx * 100, 1) if n_tx else 0.0,
         "llm_cost_usd": (
             str(result.cost_tracker.total_cost_usd) if result.cost_tracker else "0"
@@ -425,6 +604,17 @@ def execute_run(
     )
     if advisory:
         summary["statement_advisory"] = advisory
+    # 2026-07-22: master data that is MISSING now says so. Absent settings
+    # used to fail silently — the April run came back 0-matched and
+    # has_coa:false with nothing on screen explaining that no FX reference
+    # rate and no entity mapping existed. Each advisory names the setting
+    # and what it cost this run, so the fix is one click away.
+    summary["setup_advisories"] = _setup_advisories(
+        prepared.cfg,
+        result.transactions,
+        result.receipts,
+        has_coa=result.chart_of_accounts is not None,
+    )
     snapshot = snapshot_to_dict(
         result.transactions, result.receipts, outcome, result.parse_errors
     )
@@ -666,6 +856,7 @@ def prepare_intake_run(
     now_iso: str,
     operator: str | None,
     learning_db_path: Path | None = None,
+    settings: dict | None = None,
 ) -> PreparedRun:
     """Prepare a pipeline run from a stored intake's files (the operator's
     run-from-queue path). Reads the uploaded bytes back from the intake's
@@ -689,6 +880,7 @@ def prepare_intake_run(
         operator=operator,
         learning_db_path=learning_db_path,
         intake_id=intake.intake_id,
+        settings=settings,
     )
 
 
@@ -1024,6 +1216,47 @@ def matched_autopick_decisions(
         if decision is not None and decision.status != STATUS_PENDING:
             continue
         out.append((tx_id, doc_id))
+    return out
+
+
+def bulk_decisions(
+    run: RunRow,
+    decisions: dict[str, Decision],
+    transaction_ids: "list[str]",
+    status: str,
+) -> list[tuple[str, str | None]]:
+    """The (transaction_id, document_id) writes for a bulk confirm / reject.
+
+    Confirming takes each charge's own top candidate, exactly as confirming
+    that row by hand would; rejecting clears the document. A charge with no
+    candidate cannot be confirmed and is skipped, so a bulk action can never
+    invent a pairing. Ids already acted on are skipped, mirroring
+    `matched_autopick_decisions` — a bulk click never stomps an explicit
+    earlier verdict.
+
+    Added 2026-07-22: the review bucket was 34 rows on the real April run
+    with no way to clear them except one at a time.
+    """
+    _, _, outcome, _ = snapshot_from_dict(run.snapshot)
+    top_doc: dict[str, str] = {}
+    for bucket in (outcome.matches, outcome.judgment_required, outcome.ambiguous):
+        for m in bucket:
+            best = top_doc.get(m.transaction_id)
+            if best is None:
+                top_doc[m.transaction_id] = m.document_id
+    wanted = list(dict.fromkeys(transaction_ids))  # de-dup, keep order
+    out: list[tuple[str, str | None]] = []
+    for tx_id in wanted:
+        decision = decisions.get(tx_id)
+        if decision is not None and decision.status != STATUS_PENDING:
+            continue
+        if status == STATUS_CONFIRMED:
+            doc_id = top_doc.get(tx_id)
+            if not doc_id:
+                continue  # nothing to confirm against; never fabricate a pair
+            out.append((tx_id, doc_id))
+        else:
+            out.append((tx_id, None))
     return out
 
 
@@ -1454,24 +1687,37 @@ def build_view(
     def _near_miss(tx: Transaction) -> dict | None:
         if not free_recs or tx.amount is None:
             return None
-        # closest by absolute amount difference; same currency preferred.
-        best = min(
-            free_recs,
-            key=lambda r: (
-                0 if r.detected_currency == tx.transaction_currency else 1,
-                abs(tx.amount - r.detected_total),
-            ),
-        )
+        # 2026-07-22: a near miss must actually be NEAR. This used to return
+        # the closest free receipt however far away it was, so every
+        # receiptless subscription charge (ANTHROPIC, GOOGLE Workspace) wore
+        # a "NEAR MISS" chip pointing at an unrelated BRL meal — a signal
+        # that fires on everything tells the reviewer nothing. Restricted to
+        # the case the chip claims: the SAME currency, a comparable amount,
+        # and a plausible posting gap. Cross-currency pairs are not compared
+        # by raw amount (10.32 USD vs 60.00 BRL is meaningless); when one is
+        # genuinely plausible the FX candidate path already surfaces it as a
+        # candidate, which carries the rate reasoning this chip cannot.
+        same_ccy = [
+            r for r in free_recs if r.detected_currency == tx.transaction_currency
+        ]
+        if not same_ccy:
+            return None
+        best = min(same_ccy, key=lambda r: abs(tx.amount - r.detected_total))
+        amount_diff = abs(tx.amount - best.detected_total)
+        if tx.amount and amount_diff / abs(tx.amount) > _NEAR_MISS_AMOUNT_PCT:
+            return None
         date_diff = (
             abs((best.detected_date - tx.transaction_date).days)
             if best.detected_date and tx.transaction_date
             else None
         )
+        if date_diff is not None and date_diff > _NEAR_MISS_DATE_DAYS:
+            return None
         return {
             "vendor": best.detected_vendor or "",
             "total": _fmt_amount(best.detected_total),
             "currency": best.detected_currency or "",
-            "amount_diff": _fmt_amount(abs(tx.amount - best.detected_total)),
+            "amount_diff": _fmt_amount(amount_diff),
             "date_diff_days": date_diff,
         }
 
@@ -1606,7 +1852,13 @@ def build_view(
         "invariant_ok": (
             n_reconciled + n_review + n_unmatched_tx + n_refunds
         ) == n_tx,
-        "n_parse_errors": len(parse_errors),
+        "n_parse_errors": count_parse_issues(parse_errors)["errors"],
+        # Carried from the run's stored summary: both advisories are decided
+        # at run time from the inputs. `statement_advisory` was written at
+        # creation but never rebuilt here, so it had never actually reached
+        # the review screen.
+        "statement_advisory": run.summary.get("statement_advisory"),
+        "setup_advisories": run.summary.get("setup_advisories", []),
         "llm_cost_usd": run.summary.get("llm_cost_usd", "0"),
         "ai_unavailable": run.summary.get("ai_unavailable", False),
         "n_duplicate_groups": len(duplicate_charges) + len(duplicate_receipts),
@@ -1623,6 +1875,7 @@ def build_view(
         "has_image_info": has_image_info,
         "n_missing_receipt_image": n_missing_receipt_image,
         # L1 — fill-color annotations from the statement workbook.
+        "n_parse_notes": count_parse_issues(parse_errors)["notes"],
         "n_already_posted": sum(
             1 for t in transactions if t.entry_status == "posted"
         ),
@@ -1647,6 +1900,18 @@ def build_view(
         "duplicate_groups": duplicate_groups,
         "category_options": list(EXPENSE_CATEGORIES),
         "parse_errors": parse_errors,
+        # Severity-tagged view of the same issues, so the UI can separate a
+        # real error from an advisory note (2026-07-22). `parse_errors`
+        # keeps its raw shape for any existing reader.
+        "parse_issues": [
+            {
+                "file": i[0],
+                "line": i[1],
+                "message": i[2],
+                "severity": parse_issue_severity(i),
+            }
+            for i in parse_errors
+        ],
         # L3: xlsx statements can be written back with the resolved accounts.
         "writeback_available": writeback_available(run),
     }

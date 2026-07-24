@@ -84,9 +84,16 @@ CHECKS: list[dict] = [
 
 
 SUPPRESS_RE = re.compile(r"<!--\s*deliverable-allow:\s*([\w,\s-]+?)\s*(?:\|\s*reason:\s*(.*?))?\s*-->")
-RELATIVE_LINK_RE = re.compile(r'<a\s+[^>]*href=["\'](?!https?://|mailto:|#|/|tel:|javascript:)([^"\']+)["\']', re.IGNORECASE)
-SCRIPT_SRC_RE = re.compile(r'<script\s+[^>]*src=["\']([^"\']+)["\']', re.IGNORECASE)
-LINK_HREF_RE = re.compile(r'<link\s+[^>]*href=["\']([^"\']+)["\']', re.IGNORECASE)
+HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+# Any href that is not a scheme URL (http:, https:, mailto:, tel:, data:,
+# javascript:, ...), not absolute (/...), and not a pure #anchor is a
+# relative path — including the extensionless form (href="solution") that
+# Vercel cleanUrls actually produces on nested routes. `\s`/`[^>]*` both
+# match newlines, so a multi-line `<a\n href=...>` is covered when this
+# runs over the WHOLE text (not line-by-line).
+RELATIVE_LINK_RE = re.compile(
+    r'<a\s[^>]*?href=["\'](?![a-zA-Z][a-zA-Z0-9+.\-]*:|#|/)([^"\']+)["\']',
+    re.IGNORECASE)
 
 
 def parse_suppressions(text: str) -> set[str]:
@@ -111,34 +118,38 @@ def check_relative_paths(text: str) -> list[dict]:
     """Vercel cleanUrls breaks relative paths between static pages.
 
     Flag <a href="..."> that uses a path relative to the current page.
-    Skip mailto/tel/javascript/anchor/absolute-https/absolute-root.
+    Skip scheme URLs / anchors / absolute-root (excluded by the regex).
+    Runs over the whole text so anchors split across lines (`<a\\n href=`)
+    are caught; line numbers derive from the match offset.
     """
     hits = []
-    for i, line in enumerate(text.splitlines(), 1):
-        for m in RELATIVE_LINK_RE.finditer(line):
-            href = m.group(1)
-            # Skip same-page anchors
-            if href.startswith("#"):
-                continue
-            # We've already excluded http(s)://, mailto:, tel:, javascript:, /
-            # in the regex; everything left is a relative path.
-            if href.startswith("./") or href.startswith("../") or "/" in href or href.endswith(".html") or href.endswith(".htm"):
-                hits.append({
-                    "line": i,
-                    "category": "relative-path",
-                    "severity": "HIGH",
-                    "message": f"Relative path '{href}' breaks on Vercel cleanUrls. Use absolute path starting with /.",
-                    "snippet": line.strip()[:160],
-                })
+    for m in RELATIVE_LINK_RE.finditer(text):
+        href = m.group(1).strip()
+        if not href:
+            continue
+        line = text.count("\n", 0, m.start()) + 1
+        snippet = " ".join(m.group(0).split())
+        hits.append({
+            "line": line,
+            "category": "relative-path",
+            "severity": "HIGH",
+            "message": f"Relative path '{href}' breaks on Vercel cleanUrls. Use absolute path starting with /.",
+            "snippet": snippet[:160],
+        })
     return hits
 
 
 def check_qol_features(text: str, suppressed: set[str]) -> list[dict]:
+    # Strip HTML comments first: a feature string inside a comment is not a
+    # working feature (2026-07-22 blind-spot fix — commented-out boilerplate
+    # satisfied all three HIGH ship-blocker checks). Suppression markers are
+    # parsed from the raw text by the caller before this runs.
+    live = HTML_COMMENT_RE.sub("", text)
     hits = []
     for check in CHECKS:
         if check["id"] in suppressed:
             continue
-        all_present = all(re.search(p, text, re.IGNORECASE) for p in check["patterns"])
+        all_present = all(re.search(p, live, re.IGNORECASE) for p in check["patterns"])
         if not all_present:
             hits.append({
                 "line": 1,

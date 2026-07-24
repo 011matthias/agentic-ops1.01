@@ -41,7 +41,7 @@ def client(tmp_path):
 
 def _create_run(client) -> str:
     resp = client.post(
-        "/runs",
+        "/api/runs",
         files={
             "statement": (
                 "statement.example.csv",
@@ -55,10 +55,11 @@ def _create_run(client) -> str:
             ),
         },
         data={"account_id": "amex-9001", "account_card_currency": "USD"},
-        follow_redirects=False,
     )
-    assert resp.status_code == 303, resp.text
-    return resp.headers["location"].rstrip("/").rsplit("/", 1)[-1]
+    assert resp.status_code == 200, resp.text
+    job = client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
+    return job["run_id"]
 
 
 def test_snapshot_carries_charge_categorizations_for_unmatched(client):
@@ -128,11 +129,11 @@ def test_build_view_pre_slice10_snapshot_renders_none():
     assert row["charge_category"] is None
 
 
-def test_workbench_page_renders_suggestion(client):
+def test_render_model_serves_no_suggestion_rows(client):
     """The no-receipt STAPLES charge in the example fixtures has no
-    keyword hit (REVIEW, no category) — the page must render its plain
-    no-receipt row without a suggestion chip, and stay 200."""
+    keyword hit (REVIEW, no category) — the render model must serve its
+    plain no-receipt row with a null charge_category, and stay 200."""
     run_id = _create_run(client)
-    resp = client.get(f"/runs/{run_id}")
+    resp = client.get(f"/api/runs/{run_id}")
     assert resp.status_code == 200
-    assert "No receipt yet" in resp.text
+    assert any(r["charge_category"] is None for r in resp.json()["rows"])

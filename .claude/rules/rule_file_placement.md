@@ -56,6 +56,7 @@ gitignored.
 | `.github/` · `.agents/` | CI workflows · vendored skill assets (NOT `.claude/agents/`) |
 | `api-docs/` | fetched API docs (**gi**) |
 | `workspace/projects/local-web/` | local prototype sites |
+| `workspace/projects/upwork-independence/` | owned-acquisition program: optimize assets (root, byte-stable) · `status/` workstream files · tracked `context/` (`.env` → **gi**) |
 
 **Ephemeral / never-commit**
 

@@ -209,6 +209,21 @@ def test_cli_seed_zoho_seeds_unanimous_vendor(tmp_path, capsys, monkeypatch):
     assert cfg.accounts_domain == "https://accounts.zoho.eu"
 
 
+def test_zoho_config_com_dc_maps_to_us_domains(monkeypatch):
+    # Brisken Books reports its DC as "com"; it must resolve to the US
+    # domains, not fall through to the eu default (which 401'd invalid_client
+    # on token refresh before the "com" alias was added).
+    for var in ("ZOHO_API_DOMAIN", "ZOHO_ACCOUNTS_DOMAIN", "ZOHO_REFRESH_TOKEN"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("ZOHO_CLIENT_ID", "cid")
+    monkeypatch.setenv("ZOHO_CLIENT_SECRET", "sec")
+    monkeypatch.setenv("ZOHO_BOOKS_REFRESH_TOKEN", "books-tok")
+    monkeypatch.setenv("ZOHO_DC", "com")
+    cfg = learning_cli._zoho_config_from_env("822741658")
+    assert cfg.api_domain == "https://www.zohoapis.com"
+    assert cfg.accounts_domain == "https://accounts.zoho.com"
+
+
 def test_cli_seed_zoho_skips_mixed_vendor(tmp_path, capsys, monkeypatch):
     db = tmp_path / "learning.sqlite"
     _wire_zoho(monkeypatch, [

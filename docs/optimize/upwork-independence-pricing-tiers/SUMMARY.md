@@ -78,3 +78,56 @@ absolute EUR scales with the assumed prospect distribution.
 (30 prospects) and value curve (how much a funded scaleup will really pay for
 done-for-you volume), and the micro segment's size (150) and whether it actually
 converts at EUR650/mo. Validate these against real quotes, then the menu prices follow.
+
+---
+
+*The two sections below were retrofitted 2026-07-22 so `optimize_overview.py
+--prior-art upwork-independence` can read this run. They transcribe the r3-r6
+probe table and the honest-number caveat above. One addition beyond
+transcription, flagged inline: the journal's stop reason is `user stop`, not a
+convergence signal.*
+
+## Dead ends
+
+Four boundary probes, all discarded. Each priced one piece of the menu, so a
+later run should not re-derive them:
+
+- **Raising the premium price alone fails (r3: best EUR6300 to EUR8500,
+  3103.65).** The scale segment defects DOWN to the cheaper mid tier, where it
+  gets more surplus. This is an incentive-compatibility ceiling, not a demand
+  ceiling.
+- **The entry tier must stay deliberately thin (r4: good scope 0.20 to 0.45,
+  769.48).** Fattening it toward the mid tier's 0.55 makes the core segment trade
+  down and cannibalize. This is the single largest discard in the run.
+- **The entry tier earns its place (r5: drop it, 3971.96, -803).** Folding good
+  up to better loses the numerous micro segment entirely.
+- **The premium tier earns its place (r6: collapse best into better, 3103.65,
+  -1671).** Without a distinct high tier the scale segment pays EUR1850 instead
+  of EUR6300.
+
+## Sensitivities
+
+- **The run ended on `user stop`, not on plateau or a convergence check.** The
+  journal's final row reads `stopped / user stop`, while this SUMMARY's headline
+  says "converged". The four probes did map the menu's boundaries, but no
+  plateau or budget signal fired, so treat the result as "no further hypothesis
+  was tested", not "the search was exhausted". This is exactly the
+  ran-out-of-ideas versus found-an-optimum distinction, and it is why
+  `upwork-independence-gtm-v2-confirm` was worth running against gtm-v2.
+- **`best.scope = 1.0` is the one lever pegged at a bound in the winner.** This
+  SUMMARY argues it is a genuine result rather than a no-resistance artifact,
+  because the model carries convex delivery cost and scope-scaling oversight that
+  push back on high scope. Inherit the argument WITH the pegging, not instead of
+  it. Every price and the good/better scopes land interior.
+- **The premium price and the mid tier are incentive-coupled.** They cannot be
+  moved independently: capturing premium willingness requires thinning the mid
+  tier in the SAME move so the scale segment still prefers best. A later run that
+  treats these as two separate levers will reproduce r3.
+- **The segment economics are ASSUMPTION-tagged planning estimates** of the B2B
+  prospect willingness-to-pay distribution (reviewed on PR #311). The RANKING is
+  robust; the absolute EUR scales with the assumed distribution.
+- **Highest-sensitivity inputs:** the scale segment's size (30) and value curve,
+  and the micro segment's size (150) and whether it converts at EUR650/mo.
+- **The mid tier lands BELOW GTM-v2's single retainer** (EUR1850 vs ~EUR2500)
+  because the menu monetizes the ends of the distribution instead. Do not read
+  the two numbers as a contradiction or inherit EUR2500 into a tiered menu.

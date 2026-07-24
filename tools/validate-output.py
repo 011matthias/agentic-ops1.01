@@ -11,6 +11,10 @@ misspellings (UnpausAI for UnpauseAI, nicholas.neuman for nicolas.neumann),
 em-dash usage (per feedback_no_em_dashes), placeholder leakage, and
 LLM-tell phrases that signal generated-not-thought content.
 
+Also carries the two structural slop detectors rule_anti_slop specifies:
+`symmetry-collapse` and `per-category-narration`, both LOW / advisory, both
+markdown-only. See the block above check_structural_slop().
+
 Called by post-write-gate.py for any file in deliverable or comms scope.
 Also runnable standalone for ad-hoc auditing.
 
@@ -55,12 +59,24 @@ RULES: list[tuple[str, str, str, str]] = [
      "Surname is 'Neumann' (double-n), not 'Neuman'."),
 
     # === Em-dash and double-hyphen substitute (feedback_no_em_dashes) ===
+    # Four grammatical forms, one rule class (2026-07-22 blind-spot fix: the
+    # spaced-only patterns missed tight `word—word`, `&mdash;`, and tight
+    # `word--word`, which shipped unflagged).
     (r" — ",
      "em-dash", "MEDIUM",
      "Em-dash banned in prose. Use comma, semicolon, colon, or period."),
+    (r"(?<! )—|—(?! )",
+     "em-dash", "MEDIUM",
+     "Tight em-dash (no surrounding spaces) is still an em-dash. Use comma, semicolon, colon, or period."),
+    (r"&mdash;",
+     "em-dash", "MEDIUM",
+     "&mdash; entity is an em-dash. Use comma, semicolon, colon, or period."),
     (r" -- ",
      "em-dash-substitute", "MEDIUM",
      "Double-hyphen as em-dash substitute is banned. Use comma/semicolon/colon."),
+    (r"(?<=\w)--(?=\w)",
+     "em-dash-substitute", "MEDIUM",
+     "Tight double-hyphen between words is an em-dash substitute. Use comma/semicolon/colon."),
 
     # === Verification-theater patterns (from 2026-03-23) ===
     # Plausible-sounding round-number stats with no source
@@ -147,12 +163,29 @@ CLAIM_PATTERNS = [
     r"\b(?:we'?re|we are) (?:losing|bleeding|burning) (?:leads|opportunities|revenue|money|deliverability)\b",
 ]
 CLAIM_RE = [re.compile(p, re.IGNORECASE) for p in CLAIM_PATTERNS]
-# Hypothesis / hedge cues -> not the regressed shape (a flat assertion). If
-# the claim line is hedged, do not flag.
+# Hypothesis / hedge cues -> not the regressed shape (a flat assertion). The
+# hedge must sit in the SAME clause/sentence as the claim: "Deliverability
+# has dropped sharply; we should probably revisit X" hedges the follow-up,
+# not the claim, so it still flags (2026-07-22 residual fix — a hedge
+# anywhere on the line used to drop the flag).
 HEDGE_RE = re.compile(
     r"\b(?:could|would|might|may|possibly|potentially|if\s|risk(?:s|ed)?\b|"
     r"i\s+(?:suspect|think|believe|worry)|seems?\s+to|appears?\s+to|likely|"
     r"probably|hypothes|my\s+(?:guess|hunch))\b", re.IGNORECASE)
+# Clause boundaries for hedge scoping: sentence enders + semicolon/colon.
+# Commas deliberately do NOT split ("has dropped, which could hurt us"
+# keeps its hedge).
+_CLAUSE_SPLIT_RE = re.compile(r"[.;:!?]")
+
+
+def _claim_clause_hedged(line: str, claim_start: int) -> bool:
+    """True when the clause containing the claim match carries a hedge cue."""
+    start = 0
+    for m in _CLAUSE_SPLIT_RE.finditer(line):
+        if start <= claim_start < m.start():
+            return bool(HEDGE_RE.search(line[start:m.start()]))
+        start = m.end()
+    return bool(HEDGE_RE.search(line[start:]))
 # Source-attribution cues. Presence within +/-2 lines == the claim is tied
 # to queried evidence -> not flagged.
 SOURCE_RE = re.compile(
@@ -175,9 +208,12 @@ def check_unsourced_claims(
             continue
         if "unsourced-claim" in suppress.get(i, set()):
             continue
-        if not any(rx.search(line) for rx in CLAIM_RE):
+        claim_matches = [m for rx in CLAIM_RE for m in rx.finditer(line)]
+        if not claim_matches:
             continue
-        if HEDGE_RE.search(line):  # a hypothesis is not the regressed shape
+        # A hypothesis is not the regressed shape — but only when the hedge
+        # sits in the same clause as the claim (see HEDGE_RE note).
+        if all(_claim_clause_hedged(line, m.start()) for m in claim_matches):
             continue
         window = "\n".join(
             lines[j - 1] for j in range(max(1, i - 2), min(len(lines), i + 2) + 1)
@@ -408,6 +444,501 @@ def check_cells(path: Path) -> list[dict]:
     return hits
 
 
+# === Structural slop detectors (rule_anti_slop.md Enforcement, 2026-07-22) ===
+# rule_anti_slop listed two detectors as "future enforcement candidates"; the
+# friction register flagged the prose-volume/symmetry one "structural OVERDUE"
+# on 2026-06-12 (row 208). Both are heuristics over markdown structure with no
+# NLP dependency, so both ship at LOW severity: the tool's own legend calls LOW
+# a nudge, and a false MEDIUM/HIGH here would drown the post-write-gate signal
+# that the brand / placeholder / unsourced-claim rules carry.
+#
+# symmetry-collapse       -> "Three-part lists where two work" + protocol step 2
+# per-category-narration  -> "Per-category narration on intuitive variance"
+#
+# Both require TWO independent signals before firing (tight length clustering
+# AND a shared literal opening template), because either alone matches ordinary
+# prose. The rule's own "What is NOT slop" list is the calibration target:
+# variable sentence shape, unique info per row, short factual items, and a
+# brief note before a code block must all stay silent.
+
+_STRUCT_SUFFIXES = (".md", ".markdown", ".txt")
+
+MIN_RUN = 3                    # "three-part lists" is the rule's own floor
+BULLET_MIN_CHARS = 60          # below this a bullet is a factual item, not prose
+BULLET_CV_MAX = 0.12           # stddev/mean of item lengths
+PARA_MIN_CHARS = 100
+PARA_CV_MAX = 0.12
+TABLE_MIN_ROWS = 3
+TABLE_CELL_MIN_CHARS = 40      # keeps ID / status / date columns out
+TABLE_CELL_MIN_WORDS = 6
+DEFLIST_TAIL_MIN_CHARS = 40
+DEFLIST_CV_MAX = 0.15
+MAX_STRUCT_HITS_PER_CATEGORY = 3
+
+# Function words survive into the skeleton literally: they are what makes a
+# shared opening a TEMPLATE rather than a coincidence of parts of speech.
+FUNCTION_WORDS = {
+    "a", "an", "the", "this", "that", "these", "those", "it", "its", "we",
+    "our", "you", "your", "they", "their", "there", "here", "is", "are", "was",
+    "were", "be", "been", "being", "has", "have", "had", "do", "does", "did",
+    "can", "will", "would", "should", "must", "may", "might", "and", "or",
+    "but", "if", "when", "while", "because", "which", "who", "what", "how",
+    "of", "in", "on", "to", "for", "with", "by", "from", "at", "as", "into",
+    "per", "than", "then", "so", "such", "only", "also", "still", "never",
+    "always", "each", "every", "all", "no", "not", "after", "before",
+    "during", "without", "within", "one", "two", "three", "now", "once",
+}
+
+_HEADING_RE = re.compile(r"^ {0,3}#{1,6}\s")
+_FENCE_RE = re.compile(r"^\s*(?:```|~~~)")
+_HR_RE = re.compile(r"^ {0,3}(?:-{3,}|\*{3,}|_{3,})\s*$")
+_BULLET_RE = re.compile(r"^(\s*)([-*+])\s+(.*)$")
+_ORDERED_RE = re.compile(r"^\s*\d+[.)]\s+")
+_TABLE_ROW_RE = re.compile(r"^\s*\|.*\|\s*$")
+_TABLE_DELIM_CELL_RE = re.compile(r"^:?-{2,}:?$")
+_CHECKBOX_RE = re.compile(r"^\[[ xX]\]\s")
+_BOLD_LEAD_RE = re.compile(r"^\*\*([^*\n]{1,80})\*\*\s*[:.,;)–-]?\s*(.*)$")
+_WORD_RE = re.compile(r"[A-Za-z][A-Za-z'’-]*|\d[\d,.]*%?")
+_SENTENCE_END_RE = re.compile(r"[.!?](?:\s|$)")
+# A bold lead that is a sequence label ("**Week 3:**", "**Phase 2:**") makes the
+# run an ordered list in disguise. Numbered lists imply sequence, so their
+# symmetry is the point, exactly as for `1.` / `2.` markers.
+_SEQ_LEAD_RE = re.compile(
+    r"^(?:\d|(?:week|phase|step|day|month|year|quarter|round|sprint|stage|part|"
+    r"tier|level|milestone|iteration|wave|batch|session|q|v)\s*\.?\s*\d)",
+    re.IGNORECASE,
+)
+
+
+def _cv(values: list[int]) -> float:
+    """Coefficient of variation (stddev / mean). 0 == identical lengths."""
+    if not values:
+        return 1.0
+    mean = sum(values) / len(values)
+    if mean <= 0:
+        return 1.0
+    var = sum((v - mean) ** 2 for v in values) / len(values)
+    return (var ** 0.5) / mean
+
+
+def _lead_skeleton(text: str, depth: int = 4) -> str | None:
+    """Approximate the opening grammar of `text` with no NLP dependency.
+
+    A bold lead collapses to `**`, numbers to `#`, content words to `X`;
+    function words survive literally. Returns None when the text is too short
+    to have a shape worth comparing.
+    """
+    t = text.strip()
+    parts: list[str] = []
+    m = _BOLD_LEAD_RE.match(t)
+    if m:
+        parts.append("**")
+        t = m.group(2)
+    toks = _WORD_RE.findall(t)
+    if len(toks) + len(parts) < 3:
+        return None
+    for tok in toks[: max(0, depth - len(parts))]:
+        low = tok.lower()
+        if low in FUNCTION_WORDS:
+            parts.append(low)
+        elif tok[0].isdigit():
+            parts.append("#")
+        else:
+            parts.append("X")
+    return " ".join(parts)
+
+
+def _is_templated(skeletons: list[str | None]) -> bool:
+    """One shared skeleton carrying at least one literal anchor.
+
+    `X X X X` is the shape of almost any English sentence, so an all-placeholder
+    skeleton is never evidence of a template on its own. Requiring a shared
+    function word or a shared bold lead is what keeps "lists with variable
+    sentence shape" (rule_anti_slop, What is NOT slop) silent.
+    """
+    if not skeletons or any(s is None for s in skeletons):
+        return False
+    if len(set(skeletons)) != 1:
+        return False
+    return any(part not in ("X", "#") for part in skeletons[0].split())
+
+
+def _is_enumeration(text: str) -> bool:
+    """A comma-separated inventory (deck contents, field lists, slide orders)
+    is data, not narration: many commas, at most one sentence terminator."""
+    return text.count(",") >= 4 and len(_SENTENCE_END_RE.findall(text)) <= 1
+
+
+def _is_sentence_shaped(text: str) -> bool:
+    """Per-category NARRATION means sentences. A column of noun phrases (a
+    routing table, a glossary) is parallel by design and never a hit."""
+    return bool(_SENTENCE_END_RE.search(text)) or len(text) >= 90
+
+
+def _is_sequence_run(run: list[dict]) -> bool:
+    """Bold-led run that is an ordered sequence -> exempt.
+
+    Every entry must carry a bold lead and at least two thirds of the leads
+    must be sequence labels, so a timeline that ends on a trailing
+    `**Retainer phase:**` still reads as the sequence it is.
+    """
+    leads = []
+    for entry in run:
+        m = _BOLD_LEAD_RE.match(entry["text"])
+        if not m:
+            return False
+        leads.append(m.group(1).strip())
+    seq = sum(1 for lead in leads if _SEQ_LEAD_RE.match(lead))
+    return seq * 3 >= len(leads) * 2
+
+
+def _is_question_run(run: list[dict]) -> bool:
+    """A run of questions is a checklist. Parallel by design, same as a
+    numbered procedure, so its symmetry is never the slop the rule targets."""
+    return all("?" in entry["text"] for entry in run)
+
+
+def _classify_lines(lines: list[str]) -> list[str]:
+    """Per-line structural kind. Fences, frontmatter, blockquotes, HTML and
+    comments become barriers so no run can span them."""
+    kinds: list[str] = []
+    in_fence = False
+    in_frontmatter = False
+    for i, raw in enumerate(lines):
+        s = raw.strip()
+        if i == 0 and s == "---":
+            in_frontmatter = True
+            kinds.append("barrier")
+            continue
+        if in_frontmatter:
+            kinds.append("barrier")
+            if s == "---":
+                in_frontmatter = False
+            continue
+        if _FENCE_RE.match(raw):
+            in_fence = not in_fence
+            kinds.append("barrier")
+            continue
+        if in_fence:
+            kinds.append("barrier")
+            continue
+        if not s:
+            kinds.append("blank")
+            continue
+        if _HR_RE.match(raw) or _HEADING_RE.match(raw):
+            kinds.append("heading")
+            continue
+        if s.startswith(">") or s.startswith("<"):
+            kinds.append("barrier")
+            continue
+        if _TABLE_ROW_RE.match(raw):
+            kinds.append("table")
+            continue
+        if _ORDERED_RE.match(raw):
+            # Numbered lists imply a sequence (a procedure, a protocol). Their
+            # symmetry is the point, so they are never symmetry-collapse hits.
+            kinds.append("ordered")
+            continue
+        if _BULLET_RE.match(raw):
+            kinds.append("bullet")
+            continue
+        kinds.append("text")
+    return kinds
+
+
+def _only_blank_between(kinds: list[str], a: int, b: int) -> bool:
+    """True when every line strictly between indices a and b is blank."""
+    return all(kinds[k] == "blank" for k in range(a + 1, b))
+
+
+def _collect_bullets(lines: list[str], kinds: list[str]) -> tuple[list[dict], set[int]]:
+    """Bullet items with lazy-continuation lines folded in, plus the set of
+    line indices those continuations consumed (so paragraphs skip them)."""
+    items: list[dict] = []
+    consumed: set[int] = set()
+    i = 0
+    n = len(lines)
+    while i < n:
+        if kinds[i] != "bullet":
+            i += 1
+            continue
+        m = _BULLET_RE.match(lines[i])
+        text = m.group(3).strip()
+        j = i + 1
+        while j < n and kinds[j] == "text":
+            text += " " + lines[j].strip()
+            consumed.add(j)
+            j += 1
+        items.append({
+            "line": i + 1,
+            "start": i,
+            "end": j - 1,
+            "indent": len(m.group(1).expandtabs(4)),
+            "marker": m.group(2),
+            "text": text,
+            "skip": bool(_CHECKBOX_RE.match(text)),
+        })
+        i = j
+    return items, consumed
+
+
+def _collect_paragraphs(lines: list[str], kinds: list[str],
+                        consumed: set[int]) -> list[dict]:
+    """Top-level prose blocks (blank-line separated, zero indent)."""
+    paras: list[dict] = []
+    i = 0
+    n = len(lines)
+    while i < n:
+        if kinds[i] != "text" or i in consumed or lines[i][:1].isspace():
+            i += 1
+            continue
+        start = i
+        buf: list[str] = []
+        while i < n and kinds[i] == "text" and i not in consumed:
+            buf.append(lines[i].strip())
+            i += 1
+        paras.append({"line": start + 1, "start": start, "end": i - 1,
+                      "text": " ".join(buf)})
+    return paras
+
+
+def _group_runs(entries: list[dict], kinds: list[str], sibling) -> list[list[dict]]:
+    """Chain entries into runs of >= MIN_RUN adjacent siblings."""
+    runs: list[list[dict]] = []
+    current: list[dict] = []
+    for entry in entries:
+        if current and sibling(current[-1], entry) and _only_blank_between(
+                kinds, current[-1]["end"], entry["start"]):
+            current.append(entry)
+        else:
+            if len(current) >= MIN_RUN:
+                runs.append(current)
+            current = [] if entry.get("skip") else [entry]
+    if len(current) >= MIN_RUN:
+        runs.append(current)
+    return runs
+
+
+def _deflist_verdict(run: list[dict]) -> str | None:
+    """`- **Name** sentence` run where every sentence has near-identical shape
+    (rule_anti_slop: per-category narration). Returns the shared shape or None."""
+    tails: list[str] = []
+    for item in run:
+        m = _BOLD_LEAD_RE.match(item["text"])
+        if not m or not m.group(2).strip():
+            return None
+        tails.append(m.group(2).strip())
+    if any(len(t) < DEFLIST_TAIL_MIN_CHARS for t in tails):
+        return None
+    if any(_is_enumeration(t) for t in tails):
+        return None
+    if _cv([len(t) for t in tails]) > DEFLIST_CV_MAX:
+        return None
+    firsts = []
+    for t in tails:
+        toks = _WORD_RE.findall(t)
+        if not toks:
+            return None
+        firsts.append(toks[0].lower())
+    skeletons = [_lead_skeleton(t, depth=3) for t in tails]
+    if len(set(firsts)) == 1:
+        return f"every entry's sentence opens on '{firsts[0]}'"
+    if _is_templated(skeletons):
+        return f"every entry's sentence matches the skeleton '{skeletons[0]}'"
+    return None
+
+
+def _clustered_verdict(run: list[dict], min_chars: int, cv_max: float) -> str | None:
+    """Shared verdict for plain bullet runs and paragraph runs: both length
+    clustering AND a shared literal opening template must hold."""
+    texts = [e["text"] for e in run]
+    if any(len(t) < min_chars for t in texts):
+        return None
+    if any(_is_enumeration(t) for t in texts):
+        return None
+    # Narration means sentences. Measure sentence-ness on the body AFTER any
+    # bold lead, so `**Complexity flags:** specs, infra, effort, deps` reads as
+    # the label-and-items reference row it is, not as three narrated categories.
+    for text in texts:
+        m = _BOLD_LEAD_RE.match(text)
+        if not _is_sentence_shaped(m.group(2).strip() if m else text):
+            return None
+    lengths = [len(t) for t in texts]
+    cv = _cv(lengths)
+    if cv > cv_max:
+        return None
+    skeletons = [_lead_skeleton(t) for t in texts]
+    if not _is_templated(skeletons):
+        return None
+    return (f"lengths cluster (mean {sum(lengths) // len(lengths)} chars, "
+            f"variation {cv:.0%}) and every entry opens on the same shape "
+            f"'{skeletons[0]}'")
+
+
+def _split_table_row(raw: str) -> list[str]:
+    return [c.strip() for c in raw.strip().strip("|").split("|")]
+
+
+def _collect_tables(lines: list[str], kinds: list[str]) -> list[list[tuple[int, str]]]:
+    tables: list[list[tuple[int, str]]] = []
+    i = 0
+    while i < len(lines):
+        if kinds[i] != "table":
+            i += 1
+            continue
+        block: list[tuple[int, str]] = []
+        while i < len(lines) and kinds[i] == "table":
+            block.append((i + 1, lines[i]))
+            i += 1
+        tables.append(block)
+    return tables
+
+
+def _table_hits(block: list[tuple[int, str]]) -> list[dict]:
+    """Flag a prose column whose every cell follows one grammar template."""
+    delim_at = None
+    for idx, (_, raw) in enumerate(block):
+        cells = _split_table_row(raw)
+        if cells and all(_TABLE_DELIM_CELL_RE.match(c) for c in cells):
+            delim_at = idx
+            break
+    if delim_at is None:
+        return []
+    header = _split_table_row(block[0][1]) if delim_at > 0 else []
+    body = [(ln, _split_table_row(raw)) for ln, raw in block[delim_at + 1:]]
+    if len(body) < TABLE_MIN_ROWS:
+        return []
+    ncols = max((len(c) for _, c in body), default=0)
+    hits: list[dict] = []
+    for col in range(ncols):
+        cells = [c[col] for _, c in body if col < len(c)]
+        if len(cells) != len(body):
+            continue
+        if any(len(c) < TABLE_CELL_MIN_CHARS for c in cells):
+            continue
+        if any(len(_WORD_RE.findall(c)) < TABLE_CELL_MIN_WORDS for c in cells):
+            continue
+        if any(not _is_sentence_shaped(c) or _is_enumeration(c) for c in cells):
+            continue
+        skeletons = [_lead_skeleton(c) for c in cells]
+        if not _is_templated(skeletons):
+            continue
+        label = header[col] if col < len(header) and header[col] else f"column {col + 1}"
+        hits.append({
+            "line": body[0][0],
+            "category": "per-category-narration",
+            "severity": "LOW",
+            "message": (
+                f"Suspected per-category narration: all {len(cells)} body rows of "
+                f"column '{label}' open on the same shape '{skeletons[0]}'. "
+                "rule_anti_slop 'Per-category narration on intuitive variance': "
+                "if one structural rule explains the variance, state it once "
+                "instead of giving each row a sentence of the same shape. "
+                "Non-obvious operator judgment per row is NOT slop; suppress with "
+                "`<!-- output-allow:per-category-narration reason -->`."
+            ),
+            "snippet": cells[0][:160],
+        })
+    return hits
+
+
+def check_structural_slop(text: str) -> list[dict]:
+    """symmetry-collapse + per-category-narration over markdown structure."""
+    lines = text.splitlines()
+    if not lines:
+        return []
+    kinds = _classify_lines(lines)
+    suppress = parse_suppressions(lines)
+    hits: list[dict] = []
+
+    bullets, consumed = _collect_bullets(lines, kinds)
+    bullet_runs = _group_runs(
+        bullets, kinds,
+        lambda a, b: (not b["skip"] and not a["skip"]
+                      and a["indent"] == b["indent"] and a["marker"] == b["marker"]),
+    )
+    for run in bullet_runs:
+        if _is_sequence_run(run) or _is_question_run(run):
+            continue
+        deflist = _deflist_verdict(run)
+        if deflist:
+            hits.append({
+                "line": run[0]["line"],
+                "category": "per-category-narration",
+                "severity": "LOW",
+                "message": (
+                    f"Suspected per-category narration: {len(run)} consecutive "
+                    f"`**Name** sentence` entries and {deflist}. rule_anti_slop "
+                    "'Per-category narration on intuitive variance': state the "
+                    "structural rule once instead of narrating each entry in the "
+                    "same shape. Suppress with "
+                    "`<!-- output-allow:per-category-narration reason -->`."
+                ),
+                "snippet": run[0]["text"][:160],
+            })
+            continue
+        verdict = _clustered_verdict(run, BULLET_MIN_CHARS, BULLET_CV_MAX)
+        if verdict:
+            hits.append({
+                "line": run[0]["line"],
+                "category": "symmetry-collapse",
+                "severity": "LOW",
+                "message": (
+                    f"Suspected symmetry slop: {len(run)} sibling bullets where "
+                    f"{verdict}. rule_anti_slop 'Three-part lists where two work' "
+                    "/ protocol step 2: if the bullets read in the same shape with "
+                    "the same information density, collapse them to one statement "
+                    "of the underlying rule. Unique information per row is NOT "
+                    "slop; suppress with "
+                    "`<!-- output-allow:symmetry-collapse reason -->`."
+                ),
+                "snippet": run[0]["text"][:160],
+            })
+
+    paragraphs = _collect_paragraphs(lines, kinds, consumed)
+    for run in _group_runs(paragraphs, kinds, lambda a, b: True):
+        if _is_sequence_run(run) or _is_question_run(run):
+            continue
+        verdict = _clustered_verdict(run, PARA_MIN_CHARS, PARA_CV_MAX)
+        if verdict:
+            hits.append({
+                "line": run[0]["line"],
+                "category": "symmetry-collapse",
+                "severity": "LOW",
+                "message": (
+                    f"Suspected symmetry slop: {len(run)} consecutive paragraphs "
+                    f"where {verdict}. rule_anti_slop protocol step 2 "
+                    "(symmetry-collapse): evenly-paced same-shape paragraphs are "
+                    "the strongest AI tell. Collapse to the underlying rule, or "
+                    "suppress with `<!-- output-allow:symmetry-collapse reason -->`."
+                ),
+                "snippet": run[0]["text"][:160],
+            })
+
+    for block in _collect_tables(lines, kinds):
+        hits.extend(_table_hits(block))
+
+    hits = [h for h in hits if h["category"] not in suppress.get(h["line"], set())]
+    hits.sort(key=lambda h: h["line"])
+    kept: list[dict] = []
+    seen: dict[str, int] = {}
+    for h in hits:
+        n = seen.get(h["category"], 0)
+        if n >= MAX_STRUCT_HITS_PER_CATEGORY:
+            continue
+        seen[h["category"]] = n + 1
+        kept.append(h)
+    return kept
+
+
+# Rule categories that still run on blockquoted (`> `) lines. Quoted inbound
+# text legitimately carries em-dashes and LLM-ish voice, so those rules stay
+# exempt — but an agent-authored blockquote with a brand misspell or a leaked
+# placeholder is our error regardless of the quoting (2026-07-22 residual
+# fix: `> ` used to exempt a line from ALL rules).
+BLOCKQUOTE_CHECKED_CATEGORIES = {"brand-misspell", "placeholder-leak"}
+
+
 def check_text(text: str, path: Path | None = None) -> list[dict]:
     """Return list of hit dicts."""
     lines = text.splitlines()
@@ -415,21 +946,21 @@ def check_text(text: str, path: Path | None = None) -> list[dict]:
 
     hits: list[dict] = []
     eligible: set[int] = set()
-    in_fence = False
-    for i, line in enumerate(lines, 1):
+
+    def scan_line(i: int, line: str) -> None:
         stripped = line.lstrip()
-        if stripped.startswith("```") or stripped.startswith("~~~"):
-            in_fence = not in_fence
-            continue
-        if in_fence:
-            continue
-        # Skip blockquoted citations
-        if stripped.startswith("> "):
-            continue
-        eligible.add(i)
+        # Blockquoted citations: voice/em-dash rules skip (quoted inbound
+        # text), brand + placeholder rules still apply. Blockquotes stay
+        # out of the unsourced-claim eligible set (a quoted claim is the
+        # sender's assertion, not ours).
+        blockquoted = stripped.startswith("> ")
+        if not blockquoted:
+            eligible.add(i)
         suppressed_here = suppress.get(i, set())
         for regex, category, severity, message in RULES:
             if category in suppressed_here:
+                continue
+            if blockquoted and category not in BLOCKQUOTE_CHECKED_CATEGORIES:
                 continue
             if re.search(regex, line, flags=re.IGNORECASE):
                 hits.append({
@@ -439,6 +970,38 @@ def check_text(text: str, path: Path | None = None) -> list[dict]:
                     "message": message,
                     "snippet": line.strip()[:160],
                 })
+
+    in_fence = False
+    last_fence_line = 0
+    for i, line in enumerate(lines, 1):
+        stripped = line.lstrip()
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            in_fence = not in_fence
+            last_fence_line = i
+            continue
+        if in_fence:
+            continue
+        scan_line(i, line)
+
+    if in_fence and last_fence_line:
+        # Unbalanced fence (2026-07-22 blind-spot fix): an opener with no
+        # closer used to exempt the whole rest of the file from every rule.
+        # The "fence" was decoration, not code — rescan the swallowed tail
+        # with fencing disabled, and surface the imbalance itself.
+        hits.append({
+            "line": last_fence_line,
+            "category": "fence-unbalanced",
+            "severity": "LOW",
+            "message": (
+                "Unclosed ``` fence: everything after this line would have "
+                "been exempt from all rules. Tail rescanned with fencing "
+                "disabled; close the fence if it is a real code block."
+            ),
+            "snippet": lines[last_fence_line - 1].strip()[:160],
+        })
+        for i in range(last_fence_line + 1, len(lines) + 1):
+            scan_line(i, lines[i - 1])
+
     # F3: contextual pre-client-message problem-claim gate (needs the
     # +/-2 line window, so it runs after the per-line eligible set is built).
     hits.extend(check_unsourced_claims(lines, suppress, eligible))
@@ -446,6 +1009,11 @@ def check_text(text: str, path: Path | None = None) -> list[dict]:
     # locate the client's comms-log.md. Skip when called without a path.
     if path is not None:
         hits.extend(check_cost_anchor(path, lines))
+    # Structural slop (symmetry-collapse / per-category-narration): markdown
+    # structure only, so gate on a prose suffix. HTML source lines would be
+    # read as paragraphs and fire on markup, not prose.
+    if path is None or path.suffix.lower() in _STRUCT_SUFFIXES:
+        hits.extend(check_structural_slop(text))
     hits.sort(key=lambda h: h["line"])
     return hits
 

@@ -8,7 +8,7 @@ Only use Python when you have complex Python-specific logic, need stdlib feature
 
 ## Pattern Reference
 
-The same 10 patterns from `n8n-code-javascript/modules/COMMON-PATTERNS.md` apply. Translate using the syntax map below.
+The same 10 patterns from `.claude/skills/skil_n8n-code-javascript/modules/COMMON-PATTERNS.md` apply. Translate using the syntax map below.
 
 ---
 
@@ -39,7 +39,7 @@ The same 10 patterns from `n8n-code-javascript/modules/COMMON-PATTERNS.md` apply
 
 ## See Also
 
-- [COMMON-PATTERNS.md (JavaScript)](../../n8n-code-javascript/modules/COMMON-PATTERNS.md) — Full pattern implementations
-- [DATA_ACCESS.md](DATA_ACCESS.md) — Data access patterns
-- [STANDARD_LIBRARY.md](STANDARD_LIBRARY.md) — Available modules
-- [ERROR_PATTERNS.md](ERROR_PATTERNS.md) — Common mistakes
+- [COMMON-PATTERNS.md (JavaScript)](../../skil_n8n-code-javascript/modules/COMMON-PATTERNS.md) — Full pattern implementations
+- [DATA-ACCESS.md](DATA-ACCESS.md) — Data access patterns
+- [STANDARD-LIBRARY.md](STANDARD-LIBRARY.md) — Available modules
+- [ERROR-PATTERNS.md](ERROR-PATTERNS.md) — Common mistakes

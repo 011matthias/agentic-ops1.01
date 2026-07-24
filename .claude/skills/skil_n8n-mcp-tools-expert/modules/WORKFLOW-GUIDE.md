@@ -614,5 +614,5 @@ update → update → update → ... (56s avg between edits)
 - `n8n_executions` - Manage executions
 
 **Related**:
-- [SEARCH_GUIDE.md](SEARCH_GUIDE.md) - Find nodes to add
-- [VALIDATION_GUIDE.md](VALIDATION_GUIDE.md) - Validate workflows
+- [SEARCH-GUIDE.md](SEARCH-GUIDE.md) - Find nodes to add
+- [VALIDATION-GUIDE.md](VALIDATION-GUIDE.md) - Validate workflows

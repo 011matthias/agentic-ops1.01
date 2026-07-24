@@ -151,6 +151,24 @@ def demo_client_for(file_path: str) -> str | None:
     return client if client in cfg.get("clients", {}) else None
 
 
+def in_platform_content_scope(file_path: str) -> bool:
+    """Platform public-content validator scope (rule_platform_standards §10.3):
+    writes under platform/src/app/(public)/**, platform/src/content/proposals/**
+    and platform/src/content/blog/** route into validate-platform-content.py.
+    2026-07-22 blind-spot fix: the rule promised exactly this wiring; the
+    dispatcher never had it, so platform pages and proposal markdowns were
+    written with no validator firing. Blog joined the validator's scope the
+    same day (PR #376), so it rides the same gate."""
+    if not file_path:
+        return False
+    p = normalize_for_match(file_path)
+    if not p.endswith((".tsx", ".ts", ".md", ".mdx", ".txt")):
+        return False
+    return ("platform/src/app/(public)/" in p
+            or "platform/src/content/proposals/" in p
+            or "platform/src/content/blog/" in p)
+
+
 def in_spec_scope(file_path: str) -> bool:
     """Spec frontmatter validator scope: any .md file written under a client's
     specs/ tree. Catches malformed-spec drift at write-time so it doesn't
@@ -221,6 +239,36 @@ def format_advisory(label: str, payload: dict, file_path: str) -> str | None:
     return "\n".join(parts)
 
 
+def plan_validators(file_path: str) -> list[tuple[str, str, list[str], int]]:
+    """Plan which validators to run: (label, tool, args, timeout) entries."""
+    planned: list[tuple[str, str, list[str], int]] = []
+    if in_deliverable_scope(file_path):
+        planned.append(("DELIVERABLE GATE", "validate-deliverable.py", [file_path], 25))
+    if in_comms_scope(file_path):
+        planned.append(("COMMS GATE", "lint-comms-draft.py",
+                        [file_path, "--skip-em-dash"], 30))
+    if in_output_scope(file_path):
+        planned.append(("OUTPUT GATE", "validate-output.py", [file_path], 15))
+    if in_cell_scope(file_path):
+        planned.append(("CELL VOICE GATE", "validate-output.py", [file_path], 20))
+    if in_demo_material_scope(file_path):
+        demo_client = demo_client_for(file_path)
+        if demo_client:
+            planned.append(("DEMO CONTENT GATE", "validate-demo-material.py",
+                            [file_path, "--client", demo_client], 20))
+    if in_platform_content_scope(file_path):
+        planned.append(("PLATFORM CONTENT GATE", "validate-platform-content.py",
+                        [file_path], 25))
+    if in_spec_scope(file_path):
+        planned.append(("SPEC GATE", "validate-spec.py", [file_path], 10))
+    if in_skill_scope(file_path):
+        planned.append(("SKILL MAP GATE", "check-skill-map.py", [file_path], 15))
+    if in_pilot_routing_scope(file_path):
+        planned.append(("PILOT ROUTING GATE", "validate-pilot-routing.py",
+                        [file_path], 10))
+    return planned
+
+
 def main() -> None:
     try:
         data = json.load(sys.stdin)
@@ -243,29 +291,7 @@ def main() -> None:
         json.dump({}, sys.stdout)
         sys.exit(0)
 
-    # Plan which validators to run
-    planned: list[tuple[str, str, list[str], int]] = []  # (label, tool, args, timeout)
-    if in_deliverable_scope(file_path):
-        planned.append(("DELIVERABLE GATE", "validate-deliverable.py", [file_path], 25))
-    if in_comms_scope(file_path):
-        planned.append(("COMMS GATE", "lint-comms-draft.py",
-                        [file_path, "--skip-em-dash"], 30))
-    if in_output_scope(file_path):
-        planned.append(("OUTPUT GATE", "validate-output.py", [file_path], 15))
-    if in_cell_scope(file_path):
-        planned.append(("CELL VOICE GATE", "validate-output.py", [file_path], 20))
-    if in_demo_material_scope(file_path):
-        demo_client = demo_client_for(file_path)
-        if demo_client:
-            planned.append(("DEMO CONTENT GATE", "validate-demo-material.py",
-                            [file_path, "--client", demo_client], 20))
-    if in_spec_scope(file_path):
-        planned.append(("SPEC GATE", "validate-spec.py", [file_path], 10))
-    if in_skill_scope(file_path):
-        planned.append(("SKILL MAP GATE", "check-skill-map.py", [file_path], 15))
-    if in_pilot_routing_scope(file_path):
-        planned.append(("PILOT ROUTING GATE", "validate-pilot-routing.py",
-                        [file_path], 10))
+    planned = plan_validators(file_path)
 
     if not planned:
         log_fire("SKIP:out-of-scope")

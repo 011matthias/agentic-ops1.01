@@ -34,6 +34,10 @@ PLATFORM = REPO / "platform" / "src"
 
 PUBLIC_APP = PLATFORM / "app" / "(public)"
 PROPOSALS = PLATFORM / "content" / "proposals"
+# Blog markdown renders public at /blog/[slug]; before 2026-07-22 it was the
+# one public content surface the validator never scanned (the corpus build
+# would have shipped un-gated against the house voice standard).
+BLOG = PLATFORM / "content" / "blog"
 COMPONENTS = PLATFORM / "components"
 EMAIL_LIB = PLATFORM / "lib" / "email.ts"
 LAYOUT = PLATFORM / "app" / "layout.tsx"
@@ -52,7 +56,10 @@ META_PHRASES = [
     r"in summary",
     r"in conclusion",
     r"to summarize",
-    r"not just [\w ]+ but",
+    # "not just X but Y": X may carry commas, apostrophes, hyphens ("not just
+    # fast, but reliable" escaped the old `[\w ]+`). Bound at 60 chars and stop
+    # at sentence ends so the phrase never spans two sentences.
+    r"not just [^.!?\n]{1,60}?\bbut\b",
 ]
 DRIVE_PATTERN = re.compile(r"\bdrive (results|value|growth)\b", re.IGNORECASE)
 
@@ -81,6 +88,11 @@ TRACK_FAMILY_HEADINGS = {
 EM_DASH = "—"
 EM_DASH_ENT = "&mdash;"
 DD_SUBSTITUTE = re.compile(r" -- ")  # space, two hyphens, space
+
+# A leading `*` is a block-comment continuation (` * foo`) only in JS/TS source.
+# In markdown it opens a bullet (`* item`) or a bold run (`**Lead** ...`), both
+# of which render, so the comment skip must not apply there.
+JS_FAMILY_SUFFIXES = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"}
 
 # Permitted em-dash patterns (placeholders in tables; metadata titles for admin).
 EM_DASH_PLACEHOLDER = re.compile(r'\?\?\s*"' + EM_DASH + r'"|<span[^>]*>' + EM_DASH + r"</span>")
@@ -112,8 +124,8 @@ def is_in_scope(path: Path) -> bool:
     # app/(public)/**
     if parts[0] == "app" and len(parts) > 1 and parts[1] == "(public)":
         return True
-    # content/proposals/**
-    if parts[0] == "content" and len(parts) > 1 and parts[1] == "proposals":
+    # content/proposals/** and content/blog/**
+    if parts[0] == "content" and len(parts) > 1 and parts[1] in {"proposals", "blog"}:
         return True
     # components/Header.tsx, Footer.tsx, proposal/**
     if parts[0] == "components":
@@ -147,7 +159,7 @@ def iter_target_files(explicit: list[Path] | None) -> Iterable[Path]:
                 yield p
         return
     # Default scan: all in-scope files.
-    for sub in (PUBLIC_APP, PROPOSALS):
+    for sub in (PUBLIC_APP, PROPOSALS, BLOG):
         if sub.exists():
             for ext in ("*.tsx", "*.ts", "*.md", "*.mdx", "*.txt"):
                 for p in sub.rglob(ext):
@@ -172,10 +184,15 @@ def iter_target_files(explicit: list[Path] | None) -> Iterable[Path]:
 def check_em_dashes(path: Path, lines: list[str]) -> list[Finding]:
     findings: list[Finding] = []
     admin_or_portal = is_admin_or_portal(path)
+    js_family = path.suffix.lower() in JS_FAMILY_SUFFIXES
     for i, line in enumerate(lines, 1):
-        # Skip JS/TS comments and JSX comments — they don't render.
+        # Skip JS/TS comments and JSX comments; they don't render.
         stripped = line.lstrip()
-        if stripped.startswith("//") or stripped.startswith("*") or stripped.startswith("/*"):
+        if stripped.startswith("//") or stripped.startswith("/*"):
+            continue
+        # Block-comment continuation lines, JS/TS source only. Applying this
+        # to markdown silently exempted every bullet and every bold-lead line.
+        if js_family and stripped.startswith("*"):
             continue
         # Markdown YAML frontmatter does render (slugs, project_title used in metadata).
         # Check raw line for em-dash variants.
@@ -212,8 +229,23 @@ def check_brand_spelling(path: Path, lines: list[str]) -> list[Finding]:
     return findings
 
 
+# Prose surfaces where a double-quoted span or a `>` blockquote is a genuine
+# citation of someone else's words (research-block posting quotes, cover
+# letters anchoring on the client's phrasing). In JS/TS/TSX the same marks
+# delimit string literals, which ARE the rendered copy, so no demotion there.
+QUOTE_DEMOTION_SUFFIXES = {".md", ".mdx", ".markdown", ".txt"}
+# Narrow carve for JS/TS string literals: a banned word inside a NESTED
+# quotation ('...' or curly-quoted span whose marks function as quote marks,
+# not contraction apostrophes) is the copy quoting a specimen, e.g. the
+# oneproposal FAQ mocking "'I am excited to leverage my experience.'".
+# Both quote marks must not touch a word character, so won't / doesn't
+# apostrophes can never open or close a span.
+_NESTED_QUOTE_TMPL = r"(?<!\w)['‘][^'‘’]*\b{word}\b[^'‘’]*['’](?!\w)"
+
+
 def check_banned_vocab(path: Path, lines: list[str]) -> list[Finding]:
     findings: list[Finding] = []
+    quote_demotes = path.suffix.lower() in QUOTE_DEMOTION_SUFFIXES
     for i, line in enumerate(lines, 1):
         # Skip code-fence-like lines (rough heuristic for .md).
         if line.lstrip().startswith("```"):
@@ -222,16 +254,24 @@ def check_banned_vocab(path: Path, lines: list[str]) -> list[Finding]:
         for word in CORPORATE_THESAURUS:
             # Word boundary search.
             if re.search(rf"\b{word}\b", low):
-                # Allow inside a markdown blockquote (lifted from source posting).
-                if line.lstrip().startswith(">"):
-                    continue
-                # Allow inside a quoted string within a "research:" block
-                # (frontmatter quotes from job postings).
-                if re.search(rf'"[^"]*\b{word}\b[^"]*"', line):
-                    # likely a citation of the posting in research notes
+                if quote_demotes:
+                    # Allow inside a markdown blockquote (lifted from source posting).
+                    if line.lstrip().startswith(">"):
+                        continue
+                    # Demote inside a quoted string within a "research:" block
+                    # (frontmatter quotes from job postings).
+                    if re.search(rf'"[^"]*\b{word}\b[^"]*"', line):
+                        # likely a citation of the posting in research notes
+                        findings.append(Finding(
+                            file=str(path), line=i, severity="LOW",
+                            rule=f"banned-word:{word}", text=line.rstrip("\n")[:200] + "  (quoted — review)",
+                        ))
+                        continue
+                elif re.search(_NESTED_QUOTE_TMPL.format(word=word), low):
+                    # JS/TS string literal quoting a specimen inside the copy.
                     findings.append(Finding(
                         file=str(path), line=i, severity="LOW",
-                        rule=f"banned-word:{word}", text=line.rstrip("\n")[:200] + "  (quoted — review)",
+                        rule=f"banned-word:{word}", text=line.rstrip("\n")[:200] + "  (quoted specimen — review)",
                     ))
                     continue
                 findings.append(Finding(
@@ -256,10 +296,18 @@ def check_proposal_headings(path: Path, lines: list[str]) -> list[Finding]:
     findings: list[Finding] = []
     if path.suffix.lower() not in {".md", ".mdx"}:
         return findings
-    # Skip Track-family proposals (heading vocabulary differs).
-    text = "".join(lines)
-    is_track_family = any(h in text for h in TRACK_FAMILY_HEADINGS)
-    if is_track_family:
+    # The canonical-heading contract is proposal-specific (rule_platform_standards
+    # §3). A blog post may legitimately carry "## Timeline"; only proposals drift.
+    try:
+        path.resolve().relative_to(PROPOSALS)
+    except ValueError:
+        return findings
+    # Skip Track-family proposals (heading vocabulary differs). Detect by
+    # EXACT heading lines, not substring: "## Tracking metrics" contains the
+    # substring "## Track" but is not a Track-family proposal, and the old
+    # substring test exempted such a file from ALL heading checks.
+    heading_lines = {line.strip() for line in lines}
+    if heading_lines & TRACK_FAMILY_HEADINGS:
         return findings
     for i, line in enumerate(lines, 1):
         for bad, good in HEADING_FIXES.items():
@@ -300,9 +348,12 @@ def check_dead_links(public_jsx_files: list[Path]) -> list[Finding]:
     findings: list[Finding] = []
     if not PUBLIC_APP.exists():
         return findings
-    # Enumerate available routes.
+    # Enumerate available routes. NOTE: "/" is deliberately NOT in this set.
+    # It used to be, and the walk-up loop below reduced every target to "/",
+    # so hit=True for every href and the check could never flag anything
+    # (2026-07-22 blind-spot fix). href="/" is handled as an explicit
+    # exact-match special case instead.
     available: set[str] = set()
-    available.add("/")
     for p in PUBLIC_APP.rglob("page.tsx"):
         rel = p.parent.relative_to(PUBLIC_APP)
         if str(rel) == ".":
@@ -332,17 +383,26 @@ def check_dead_links(public_jsx_files: list[Path]) -> list[Finding]:
                     target = "/"
                 # Normalize: collapse dynamic-segment placeholders.
                 norm = target
-                # Quick lookup: exact match or prefix in available routes.
+                # href="/" is always valid (exact match only, never via walk-up).
+                if norm == "/":
+                    continue
+                # Quick lookup: exact match in available routes.
                 if norm in available or norm + "/" in available:
                     continue
-                # Try walking up: a target like /proposals/foo should match /proposals/*.
+                # Walk up: a target like /proposals/foo matches ONLY a dynamic
+                # parent route (/proposals/*). A bare static parent does NOT
+                # make an arbitrary child valid, and the root is never an
+                # implicit accept (that combination made this check a no-op).
                 hit = False
                 head = norm
-                while "/" in head:
-                    head = head.rsplit("/", 1)[0] or "/"
-                    if head + "/*" in available or head in available:
+                while True:
+                    parent = head.rsplit("/", 1)[0]
+                    if not parent:
+                        break
+                    if parent + "/*" in available:
                         hit = True
                         break
+                    head = parent
                 if hit:
                     continue
                 findings.append(Finding(
@@ -386,6 +446,34 @@ def main() -> int:
         all_findings.extend(check_proposal_headings(p, lines))
         all_findings.extend(check_email_consistency(p, lines))
     all_findings.extend(check_dead_links(public_jsx_files))
+
+    if args.format == "json" and explicit is not None and len(explicit) == 1:
+        # Hook contract (post-write-gate dispatcher): one file in, one
+        # {total, hits, by_category, by_severity} payload out — the same
+        # shape every other dispatched validator emits. Out-of-scope files
+        # yield an empty payload.
+        hits = [
+            {
+                "line": f.line,
+                "category": f.rule,
+                "severity": f.severity,
+                "message": f.text,
+                "snippet": f.text,
+            }
+            for f in all_findings
+        ]
+        by_cat: dict[str, int] = {}
+        by_sev: dict[str, int] = {}
+        for h in hits:
+            by_cat[h["category"]] = by_cat.get(h["category"], 0) + 1
+            by_sev[h["severity"]] = by_sev.get(h["severity"], 0) + 1
+        print(json.dumps({
+            "total": len(hits),
+            "hits": hits,
+            "by_category": by_cat,
+            "by_severity": by_sev,
+        }))
+        return 1 if any(f.severity == "HIGH" for f in all_findings) else 0
 
     severity_rank = {"HIGH": 3, "MEDIUM": 2, "LOW": 1}
     threshold = severity_rank.get(args.severity or "LOW", 1)

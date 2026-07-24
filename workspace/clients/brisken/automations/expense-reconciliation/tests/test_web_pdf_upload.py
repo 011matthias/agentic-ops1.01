@@ -134,17 +134,18 @@ def test_web_pdf_upload_parses_multi_card_and_fx(client, monkeypatch):
         ),
     }
     resp = client.post(
-        "/runs",
+        "/api/runs",
         files=files,
         data={
             "account_id": "",  # no card name — the PDF supplies the cards
             "account_card_currency": "USD",
             "receipts_source": "csv",
         },
-        follow_redirects=False,
     )
-    assert resp.status_code == 303, resp.text
-    run_id = resp.headers["location"].rstrip("/").rsplit("/", 1)[-1]
+    assert resp.status_code == 200, resp.text
+    job = client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
+    run_id = job["run_id"]
 
     run = _snapshot(client, run_id)
     # The statement was parsed by the PDF path, not the column-map path.

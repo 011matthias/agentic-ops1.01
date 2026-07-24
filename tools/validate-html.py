@@ -14,7 +14,7 @@ but break in production:
   * Artefact weight vs origin/main (WARNING when a file grew >20% AND >10 KB
     vs its committed version; catches silently duplicated embedded assets,
     e.g. the 2026-07-22 PDF regen that doubled a 92KB logo blob per page)
-  * Cross-page consistency (in --dir mode):
+  * Cross-page consistency (in --dir mode, recursive over the tree):
       - All pages reference the same set of sibling pages
       - All pages share the same theme-toggle and search wiring
       - Inter-page links all use absolute paths (Vercel cleanUrls fix)
@@ -52,6 +52,17 @@ VOID_TAGS = {
 # absolute floor keeps tiny files from warning on trivial edits).
 WEIGHT_RATIO = 1.20
 WEIGHT_ABS_FLOOR = 10 * 1024
+
+# Any RFC-3986 scheme prefix (http:, https:, mailto:, tel:, data:, ...).
+SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")
+
+# Cross-page wiring probes (--dir mode). Mirror validate-deliverable.py's
+# per-page QoL patterns: a page "has" a feature when ALL patterns in the
+# tuple match somewhere in the file.
+THEME_WIRING = (re.compile(r"data-theme", re.IGNORECASE),
+                re.compile(r"localStorage", re.IGNORECASE))
+SEARCH_WIRING = (re.compile(r"metaKey|ctrlKey", re.IGNORECASE),
+                 re.compile(r"['\"]k['\"]|KeyK", re.IGNORECASE))
 
 
 class StructuralChecker(HTMLParser):
@@ -96,10 +107,14 @@ class StructuralChecker(HTMLParser):
             if href and (href.startswith("http://") or href.startswith("https://") or href.startswith("//")):
                 self.external_links.append((href, line))
         if tag == "a":
-            href = attr_dict.get("href", "")
-            if href and not href.startswith(("http://", "https://", "mailto:", "tel:", "javascript:", "#", "/")):
-                if href.endswith(".html") or href.endswith(".htm") or "/" in href:
-                    self.relative_links.append((href, line))
+            href = (attr_dict.get("href") or "").strip()
+            # Flag ANY relative href: not absolute (/...), not a scheme URL
+            # (http:, https:, mailto:, tel:, data:, javascript:, ...), not a
+            # pure #anchor. The old suffix test only caught .html/.htm or
+            # slash-bearing hrefs, so the extensionless form the Vercel
+            # cleanUrls breakage actually produces (href="solution") passed.
+            if href and not href.startswith(("#", "/")) and not SCHEME_RE.match(href):
+                self.relative_links.append((href, line))
 
         elem_id = attr_dict.get("id")
         if elem_id:
@@ -252,8 +267,8 @@ def check_weight(path: Path) -> list[dict]:
 
 
 def check_directory(d: Path) -> list[dict]:
-    """Cross-page consistency for a directory of HTML files."""
-    files = sorted(d.glob("*.html")) + sorted(d.glob("*.htm"))
+    """Cross-page consistency for a directory of HTML files (recursive)."""
+    files = sorted(d.rglob("*.html")) + sorted(d.rglob("*.htm"))
     if len(files) < 2:
         return []
 
@@ -261,12 +276,15 @@ def check_directory(d: Path) -> list[dict]:
     # All page filenames as expected absolute references
     page_names = {f.name for f in files}
 
-    # Collect inter-page links per file
+    # Collect inter-page links + feature wiring per file
     link_map: dict[Path, set[str]] = {}
+    wiring: dict[str, dict[Path, bool]] = {"theme-toggle": {}, "keyboard-search": {}}
     for f in files:
         text = f.read_text(encoding="utf-8", errors="replace")
         if "chrome-allow: chromeless" in text[:2000]:
             continue  # PDF/print/redirect-stub pages carry no nav by design (rule §2)
+        wiring["theme-toggle"][f] = all(p.search(text) for p in THEME_WIRING)
+        wiring["keyboard-search"][f] = all(p.search(text) for p in SEARCH_WIRING)
         refs = set()
         for m in re.finditer(r'href=["\']([^"\']+)["\']', text):
             href = m.group(1)
@@ -279,17 +297,37 @@ def check_directory(d: Path) -> list[dict]:
                 pass
         link_map[f] = refs
 
-    # Inconsistency: page A links to B/C/D but page B only links to A/C
+    # Inconsistency: page A links to B/C/D but page B doesn't. Even ONE
+    # missing link is a hole in the set's navigation (was >= 2, which let
+    # a single dropped sibling ship silently).
     if len(link_map) >= 3:
         all_refs = set().union(*link_map.values()) if link_map.values() else set()
         for f, refs in link_map.items():
             missing = all_refs - refs - {f.stem}
-            if missing and len(missing) >= 2:
+            if missing:
                 hits.append({
                     "line": 0, "category": "nav-inconsistency", "severity": "MEDIUM",
                     "message": f"{f.name} is missing nav links to: {', '.join(sorted(missing))}. Multi-page sets should have consistent navigation.",
                     "snippet": "",
                 })
+
+    # Wiring consistency (the docstring's promised check): if SOME pages
+    # carry theme-toggle / Ctrl-Cmd+K search wiring and others don't, the
+    # set is inconsistent. All-present and all-absent are both uniform
+    # (per-page requirements are validate-deliverable.py's job).
+    for feature, presence in wiring.items():
+        if len(presence) < 2:
+            continue
+        have = sorted(f.name for f, ok in presence.items() if ok)
+        lack = sorted(f.name for f, ok in presence.items() if not ok)
+        if have and lack:
+            hits.append({
+                "line": 0, "category": f"{feature}-inconsistency", "severity": "MEDIUM",
+                "message": (f"{len(have)}/{len(presence)} pages carry {feature} wiring "
+                            f"but these do not: {', '.join(lack)}. "
+                            "Multi-page sets should share the same wiring."),
+                "snippet": "",
+            })
 
     return hits
 
@@ -320,6 +358,11 @@ def main() -> int:
         p = Path(f)
         if p.is_file() and p.suffix.lower() in (".html", ".htm"):
             targets.append(p)
+        elif not p.is_file():
+            print(f"WARNING: skipping '{f}' — not a file.", file=sys.stderr)
+        else:
+            print(f"WARNING: skipping '{f}' — not an .html/.htm file "
+                  "(this tool validates HTML only).", file=sys.stderr)
 
     extra_hits: list[dict] = []
     if args.dir:
@@ -327,8 +370,8 @@ def main() -> int:
         if not d.is_dir():
             print(f"ERROR: not a directory: {d}", file=sys.stderr)
             return 2
-        targets.extend(d.glob("*.html"))
-        targets.extend(d.glob("*.htm"))
+        targets.extend(d.rglob("*.html"))
+        targets.extend(d.rglob("*.htm"))
         extra_hits.extend(check_directory(d))
 
     if not targets and not extra_hits:

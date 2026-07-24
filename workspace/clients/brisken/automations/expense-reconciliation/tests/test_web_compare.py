@@ -84,29 +84,17 @@ def test_compare_runs_absent_charge_marked():
     assert changes["zz"] == ("(absent)", "matched")
 
 
-def test_compare_page_renders_picker_and_comparison(tmp_path):
-    app = create_app(tmp_path)
-    with TestClient(app) as c:
-        # picker renders with no selection
-        assert "Compare two runs" in c.get("/compare").text
-        # create two real runs (sync seam from conftest)
-        files = {
-            "statement": ("statement.example.csv", (EXAMPLES / "statement.example.csv").read_bytes(), "text/csv"),
-            "receipts": ("receipts.example.csv", (EXAMPLES / "receipts.example.csv").read_bytes(), "text/csv"),
-        }
-        data = {"account_id": "amex-9001", "legal_entity_id": "brisken-llc", "receipts_source": "csv"}
-        r1 = c.post("/runs", files=files, data=data, follow_redirects=False).headers["location"].rsplit("/", 1)[-1]
-        r2 = c.post("/runs", files=files, data=data, follow_redirects=False).headers["location"].rsplit("/", 1)[-1]
-        page = c.get(f"/compare?a={r1}&b={r2}")
-        assert page.status_code == 200
-        assert "changed bucket" in page.text
-        # identical re-runs of the same data -> no bucket changes
-        assert "No charge changed bucket" in page.text
+def _api_run(c, files, data) -> str:
+    resp = c.post("/api/runs", files=files, data=data)
+    assert resp.status_code == 200, resp.text
+    job = c.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
+    return job["run_id"]
 
 
 def test_api_compare_returns_server_computed_diff(tmp_path):
     """The SPA compare endpoint returns the diff computed by compare_runs, so
-    the front end never derives it. Mirrors the HTML page's data."""
+    the front end never derives it."""
     app = create_app(tmp_path)
     with TestClient(app) as c:
         files = {
@@ -114,8 +102,8 @@ def test_api_compare_returns_server_computed_diff(tmp_path):
             "receipts": ("receipts.example.csv", (EXAMPLES / "receipts.example.csv").read_bytes(), "text/csv"),
         }
         data = {"account_id": "amex-9001", "legal_entity_id": "brisken-llc", "receipts_source": "csv"}
-        r1 = c.post("/runs", files=files, data=data, follow_redirects=False).headers["location"].rsplit("/", 1)[-1]
-        r2 = c.post("/runs", files=files, data=data, follow_redirects=False).headers["location"].rsplit("/", 1)[-1]
+        r1 = _api_run(c, files, data)
+        r2 = _api_run(c, files, data)
 
         # No selection yet: the run list is present, comparison is null.
         empty = c.get("/api/compare").json()

@@ -768,6 +768,6 @@ Schedule → HTTP Request (check feature flag)
 - **Cron**: Advanced complex schedules
 
 **Related**:
-- [http_api_integration.md](http_api_integration.md) - Fetching data on schedule
-- [database_operations.md](database_operations.md) - Scheduled database tasks
-- [webhook_processing.md](webhook_processing.md) - Alternative to scheduling
+- [HTTP-API-INTEGRATION.md](HTTP-API-INTEGRATION.md) - Fetching data on schedule
+- [DATABASE-OPERATIONS.md](DATABASE-OPERATIONS.md) - Scheduled database tasks
+- [WEBHOOK-PROCESSING.md](WEBHOOK-PROCESSING.md) - Alternative to scheduling

@@ -1,31 +1,46 @@
-"""FastAPI app: the browser front end for the reconciliation tool.
+"""FastAPI app: the JSON API behind the Lovable SPA front end.
 
 `create_app(data_root)` builds the application; `serve.py` launches it
 with uvicorn. Every route opens a short-lived `RunStore` against the
 SQLite db under `data_root`; uploads and generated exports live under
 `data_root/runs/<run_id>/`.
 
-Routes:
+The browser UI is the SPA (repo `brisken-expense-review`, Lovable-hosted);
+the server-rendered Jinja workbench was retired 2026-07-22 once the SPA
+reached parity. This app serves JSON plus file downloads only:
 
-    GET  /                      upload + recent runs
-    POST /runs                  run a reconciliation from the upload
-    GET  /runs/{id}             the review workbench
-    POST /runs/{id}/decisions   confirm / reject / pick a match (JSON)
-    POST /runs/{id}/categories  reclassify one receipt line (JSON)
-    GET  /runs/{id}/report.xlsx download the report with edits applied
-    GET  /runs/{id}/zoho.csv    download the Zoho journal import (matched)
-    GET  /runs/{id}/reconciled.csv  download the flat reconciled CSV
-    GET  /guide / /how-it-works  embedded docs
-    POST /feedback              anchored reviewer note (any logged-in role)
-    GET  /feedback-log          the collected notes (operator only)
-    GET  /feedback.jsonl        raw notes download (operator only)
+    POST /api/login                bearer-token login
+    GET  /healthz                  health probe
+    POST /api/intakes              upload a document set (queue, run nothing)
+    POST /api/intakes/{id}/files   replace files on a queued intake
+    POST /api/intakes/{id}/run     run the pipeline on a stored intake
+    POST /api/runs                 run a reconciliation from an upload
+    GET  /api/runs/{id}            the review render model
+    POST /api/runs/{id}/...        review mutations: decisions,
+                                   decisions/confirm-matched, categories,
+                                   manual-match, disposition,
+                                   duplicates/resolve, publish, unpublish,
+                                   forget, commit-memory
+    GET/PUT /api/settings          §16 export policy
+    GET  /api/compare              across-runs bucket deltas
+    GET  /api/memory               learned facts; POST /api/memory/forget,
+                                   POST /api/memory/reset to correct them
+    GET  /api/operator/state       polled by the dev-side notifier
+    POST /api/feedback             anchored reviewer note
+    GET  /feedback.jsonl           raw notes download
+    GET  /jobs/{job_id}            background-run poll
+    GET  /runs/{id}/report.xlsx / zoho.csv / reconciled.csv /
+         statement-categorized.xlsx    file downloads with edits applied
 """
 from __future__ import annotations
 
 import json
 import os
+import shutil
+import time
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, Form, Request, UploadFile
@@ -36,23 +51,20 @@ from fastapi.responses import (
     HTMLResponse,
     JSONResponse,
     PlainTextResponse,
-    RedirectResponse,
 )
-from fastapi.templating import Jinja2Templates
 
 from ..cards_provision import card_by_key, load_cards
 from .service import (
     DEFAULT_EXPENSE_COLUMN_MAP,
-    STATEMENT_MAP_FIELDS,
     PreparedRun,
     RunForm,
     RunInputError,
     build_memory_view,
     build_view,
+    bulk_decisions,
     commit_to_memory,
     compare_runs,
     create_intake,
-    create_run,
     execute_run,
     forget_memory_vendor,
     matched_autopick_decisions,
@@ -72,44 +84,22 @@ from .store import (
     INTAKE_RECEIVED,
     JOB_DONE,
     JOB_ERROR,
+    SETTINGS_MAP_KEYS,
     STATUS_CONFIRMED,
     VALID_DISPOSITIONS,
     VALID_DUP_RESOLUTIONS,
     VALID_STATUSES,
     RunStore,
 )
-from . import auth
-
-_TEMPLATES_DIR = Path(__file__).parent / "templates"
-# Packaged brand assets (design tokens, Brisken logos, favicon). Served
-# ungated so the login page can style itself; nothing here is client data.
-_STATIC_DIR = Path(__file__).parent / "static"
-_STATIC_TYPES = {".css": "text/css", ".png": "image/png", ".svg": "image/svg+xml"}
+from . import auth, ratelimit
 
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def _wants_json(request: Request) -> bool:
-    """True when this request came in on the /api surface.
-
-    The browser-facing mutations answer with a 303 back to the page they
-    were posted from; the SPA needs a JSON body it can read a result and
-    an error out of. Rather than fork the handlers (two implementations
-    of publish that drift), each is mounted on both paths and branches
-    here. Keyed on the path, not on the Accept header, so the contract is
-    a property of the URL the caller chose and cannot be changed by a
-    header the browser happens to send.
-    """
-    return request.url.path.startswith("/api/")
-
-
-def _not_found(request: Request, message: str):
-    """404 in the shape the caller's surface expects."""
-    if _wants_json(request):
-        return JSONResponse({"error": message.lower()}, status_code=404)
-    return HTMLResponse(message, status_code=404)
+def _not_found(message: str) -> JSONResponse:
+    return JSONResponse({"error": message.lower()}, status_code=404)
 
 
 def _operator() -> str | None:
@@ -159,6 +149,12 @@ def _run_job(db_path: Path, job_id: str, prepared: PreparedRun) -> None:
                 )
 
 
+# Upper bound on one bulk-decision call. A month is ~100 charges, so this
+# is far above any real batch; it exists so a malformed client cannot
+# open a huge write transaction.
+_BULK_DECISION_LIMIT = 1000
+
+
 def create_app(data_root: str | Path | None = None) -> FastAPI:
     data_root_path = Path(
         data_root or os.environ.get("EXPENSE_RECON_WEB_DATA", "recon-web-data")
@@ -184,48 +180,30 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     _intake_id, INTAKE_RECEIVED, updated_at=_now_iso()
                 )
 
-    def _template_globals(request: Request) -> dict:
-        # Every template can branch on the session role (user surface vs
-        # operator surface) without each handler threading it through.
-        return {"role": getattr(request.state, "role", auth.ROLE_OPERATOR)}
-
-    templates = Jinja2Templates(
-        directory=str(_TEMPLATES_DIR), context_processors=[_template_globals]
-    )
-
     def open_store() -> RunStore:
         return RunStore(db_path)
 
     # --- Password gate (hosted only) -------------------------------------
-    # Active iff an access code is set. Loopback/local use leaves the codes
-    # unset, stays open, and resolves to the operator role (full surface);
-    # a public host MUST set them (this tool serves financial data). See
-    # auth.py for the role model.
+    # Active iff the operator code is set. Loopback/local use leaves it
+    # unset and stays open; a public host MUST set it (this tool serves
+    # financial data). Operator is the only role (owner 2026-07-22): an
+    # authenticated session has the full surface. See auth.py.
     @app.middleware("http")
     async def require_login(request: Request, call_next):
-        role = auth.ROLE_OPERATOR
-        if auth.gate_enabled():
+        if auth.gate_enabled() and not auth.path_is_open(request.url.path):
             role = auth.token_role(request.cookies.get(auth.COOKIE_NAME))
-            # The SPA front end (Lovable) has no cookie; it authenticates
-            # with the same signed token in an Authorization: Bearer header.
+            # The SPA has no cookie; it authenticates with the same signed
+            # token in an Authorization: Bearer header. A 401 tells it to
+            # clear the token and show its own login screen.
             if role is None:
                 role = auth.token_role(
                     auth.bearer_token(request.headers.get("authorization"))
                 )
-            if role is None and not auth.path_is_open(request.url.path):
-                # HTML pages redirect a signed-out browser to the login
-                # form; API paths return a JSON 401 the SPA can act on
-                # (clear the token, show its own login screen).
-                if request.method == "GET" and not request.url.path.startswith("/api/"):
-                    return RedirectResponse(url="/login", status_code=303)
-                return JSONResponse({"error": "authentication required"}, status_code=401)
-        request.state.role = role or auth.ROLE_USER
-        if request.state.role != auth.ROLE_OPERATOR and auth.path_requires_operator(
-            request.url.path, request.method
-        ):
-            if request.method == "GET" and not request.url.path.startswith("/api/"):
-                return RedirectResponse(url="/", status_code=303)
-            return JSONResponse({"error": "operator access required"}, status_code=403)
+            if role is None:
+                return JSONResponse(
+                    {"error": "authentication required"}, status_code=401
+                )
+        request.state.role = auth.ROLE_OPERATOR
         return await call_next(request)
 
     # Cross-origin access for the SPA front end (Lovable-built React app)
@@ -244,35 +222,6 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         allow_credentials=False,
     )
 
-    @app.get("/login", response_class=HTMLResponse)
-    def login_form(request: Request) -> HTMLResponse:
-        if not auth.gate_enabled():
-            return RedirectResponse(url="/", status_code=303)
-        return templates.TemplateResponse(request, "login.html", {"error": None})
-
-    @app.post("/login")
-    def login_submit(request: Request, code: str = Form("")):
-        if not auth.gate_enabled():
-            return RedirectResponse(url="/", status_code=303)
-        role = auth.code_role(code)
-        if role is None:
-            return templates.TemplateResponse(
-                request, "login.html", {"error": "Wrong access code."}, status_code=401
-            )
-        resp = RedirectResponse(url="/", status_code=303)
-        resp.set_cookie(
-            auth.COOKIE_NAME, auth.issue_token(role),
-            max_age=auth.SESSION_MAX_AGE, httponly=True,
-            secure=auth.cookie_is_secure(), samesite="lax",
-        )
-        return resp
-
-    @app.post("/logout")
-    def logout():
-        resp = RedirectResponse(url="/login", status_code=303)
-        resp.delete_cookie(auth.COOKIE_NAME)
-        return resp
-
     @app.post("/api/login")
     async def api_login(request: Request):
         """Token login for the SPA front end. Returns the same signed
@@ -283,12 +232,32 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             return JSONResponse(
                 {"token": auth.issue_token(auth.ROLE_OPERATOR), "role": auth.ROLE_OPERATOR}
             )
+        # One shared code is this app's entire security boundary, so an
+        # attempt is throttled BEFORE the code is checked: per-caller with
+        # a doubling lockout (bucketed by IPv6 /64, so one end site cannot
+        # rotate addresses for fresh buckets), plus a global budget for the
+        # distributed case. See web/ratelimit.py.
+        caller = ratelimit.client_ip(request)
+        now = time.time()
+        with open_store() as store:
+            verdict = ratelimit.evaluate(store, caller, now)
+        if not verdict.allowed:
+            return JSONResponse(
+                ratelimit.denial_body(verdict),
+                status_code=429,
+                headers={"Retry-After": str(verdict.retry_after)},
+            )
         try:
             body = await request.json()
         except Exception:  # noqa: BLE001 - a malformed body is a client error
             body = {}
         code = str((body or {}).get("code", ""))
         role = auth.code_role(code)
+        with open_store() as store:
+            if role is None:
+                ratelimit.register_failure(store, caller, now)
+            else:
+                ratelimit.register_success(store, caller)
         if role is None:
             return JSONResponse({"error": "invalid code"}, status_code=401)
         return JSONResponse({"token": auth.issue_token(role), "role": role})
@@ -297,59 +266,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     def healthz():
         return JSONResponse({"status": "ok"})
 
-    @app.get("/favicon.ico")
-    def favicon():
-        return FileResponse(_STATIC_DIR / "favicon.png", media_type="image/png")
-
-    @app.get("/static/{name}")
-    def static_asset(name: str):
-        # Basename-only lookup in the packaged static dir; unknown names 404.
-        target = _STATIC_DIR / Path(name).name
-        media_type = _STATIC_TYPES.get(target.suffix.lower())
-        if media_type is None or not target.is_file():
-            return HTMLResponse("Not found", status_code=404)
-        return FileResponse(
-            target, media_type=media_type,
-            headers={"Cache-Control": "public, max-age=3600"},
-        )
-
-    def _operator_home_ctx(store: RunStore, *, error=None, headers=None) -> dict:
-        return {
-            "runs": store.list_runs(),
-            "intakes": store.list_intakes(),
-            "cards": load_cards(),
-            "statement_fields": STATEMENT_MAP_FIELDS,
-            "expense_map": DEFAULT_EXPENSE_COLUMN_MAP,
-            "error": error,
-            "headers": headers,
-        }
-
-    def _user_home_ctx(store: RunStore, *, error=None) -> dict:
-        return {
-            "intakes": store.list_intakes(),
-            "published_runs": store.list_runs(published_only=True),
-            "cards": load_cards(),
-            "error": error,
-        }
-
-    @app.get("/", response_class=HTMLResponse)
-    def index(request: Request) -> HTMLResponse:
-        with open_store() as store:
-            if request.state.role == auth.ROLE_OPERATOR:
-                return templates.TemplateResponse(
-                    request, "home_operator.html", _operator_home_ctx(store)
-                )
-            return templates.TemplateResponse(
-                request, "home_user.html", _user_home_ctx(store)
-            )
-
-    # ── Intake (testing mode): the USER path. Saves the documents, runs
-    # nothing. Operators run the pipeline from the queue; the dev-side
-    # notifier polls /api/operator/state and mails us about new uploads.
-    # Upload a document set. Mounted twice; the multipart body is the
-    # same on both, only the response shape differs (see `_wants_json`).
+    # ── Intake (testing mode): saves the documents, runs nothing. The
+    # operator runs the pipeline from the queue; the dev-side notifier
+    # polls /api/operator/state and mails us about new uploads.
     @app.post("/api/intakes")
-    @app.post("/intakes")
     async def post_intake(
         request: Request,
         statement: UploadFile,
@@ -385,36 +305,17 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     uploaded_by=request.state.role,
                 )
         except RunInputError as exc:
-            if _wants_json(request):
-                return JSONResponse({"error": exc.message}, status_code=400)
-            with open_store() as store:
-                if request.state.role == auth.ROLE_OPERATOR:
-                    return templates.TemplateResponse(
-                        request,
-                        "home_operator.html",
-                        _operator_home_ctx(store, error=exc.message),
-                        status_code=400,
-                    )
-                return templates.TemplateResponse(
-                    request,
-                    "home_user.html",
-                    _user_home_ctx(store, error=exc.message),
-                    status_code=400,
-                )
-        if _wants_json(request):
-            return JSONResponse(
-                {"ok": True, "intake_id": intake_row.intake_id,
-                 "label": intake_row.label, "status": intake_row.status}
-            )
-        return RedirectResponse(url="/", status_code=303)
+            return JSONResponse({"error": exc.message}, status_code=400)
+        return JSONResponse(
+            {"ok": True, "intake_id": intake_row.intake_id,
+             "label": intake_row.label, "status": intake_row.status}
+        )
 
     # Replace (or late-add) files on a queued intake (2026-07-16 user
     # feedback: a wrongly-attached file needs a way out). `received` only;
     # the service layer enforces that and validates extensions.
     @app.post("/api/intakes/{intake_id}/files")
-    @app.post("/intakes/{intake_id}/files")
     async def post_intake_files(
-        request: Request,
         intake_id: str,
         statement: UploadFile | None = None,
         receipts: UploadFile | None = None,
@@ -422,7 +323,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             intake = store.get_intake(intake_id)
         if intake is None:
-            return _not_found(request, "Upload not found")
+            return _not_found("Upload not found")
 
         statement_bytes = await statement.read() if statement is not None else None
         receipts_bytes = await receipts.read() if receipts is not None else None
@@ -442,25 +343,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     now_iso=_now_iso(),
                 )
         except RunInputError as exc:
-            if _wants_json(request):
-                return JSONResponse({"error": exc.message}, status_code=400)
-            with open_store() as store:
-                if request.state.role == auth.ROLE_OPERATOR:
-                    return templates.TemplateResponse(
-                        request,
-                        "home_operator.html",
-                        _operator_home_ctx(store, error=exc.message),
-                        status_code=400,
-                    )
-                return templates.TemplateResponse(
-                    request,
-                    "home_user.html",
-                    _user_home_ctx(store, error=exc.message),
-                    status_code=400,
-                )
-        if _wants_json(request):
-            return JSONResponse({"ok": True, "intake_id": intake_id})
-        return RedirectResponse(url="/", status_code=303)
+            return JSONResponse({"error": exc.message}, status_code=400)
+        return JSONResponse({"ok": True, "intake_id": intake_id})
 
     def _parse_run_form(
         *,
@@ -480,7 +364,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         card_key: str = "",
         map_card: str = "",
     ) -> RunForm:
-        """Shared form parsing for POST /runs and POST /intakes/{id}/run.
+        """Shared form parsing for POST /api/runs and POST /api/intakes/{id}/run.
         Raises RunInputError for a user-fixable problem. A provisioned card
         preset fills account/entity/currency; explicit fields still win.
 
@@ -541,121 +425,15 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             use_llm=bool(use_llm.strip()),
         )
 
-    def _start_background_run(request: Request, background: BackgroundTasks, prepared: PreparedRun, label: str):
+    def _start_background_run(
+        background: BackgroundTasks, prepared: PreparedRun, label: str
+    ) -> JSONResponse:
         job_id = uuid.uuid4().hex[:12]
         with open_store() as store:
             store.create_job(job_id, prepared.intake_id, _now_iso())
         background.add_task(_run_job, app.state.db_path, job_id, prepared)
-        # The page renders a poller; the SPA gets the job id and polls
-        # GET /jobs/{id} itself.
-        if _wants_json(request):
-            return JSONResponse({"ok": True, "job_id": job_id, "label": label})
-        return templates.TemplateResponse(
-            request, "running.html", {"job_id": job_id, "label": label}
-        )
-
-    @app.post("/runs")
-    async def post_run(
-        request: Request,
-        background: BackgroundTasks,
-        statement: UploadFile,
-        receipts: UploadFile,
-        account_id: str = Form(""),
-        account_legal_entities: str = Form(""),
-        account_card_currency: str = Form("USD"),
-        sheet_name: str = Form(""),
-        receipts_source: str = Form("csv"),
-        receipts_default_currency: str = Form(""),
-        use_llm: str = Form(""),
-        expense_column_map: str = Form(""),
-        map_transaction_date: str = Form(""),
-        map_amount: str = Form(""),
-        map_vendor: str = Form(""),
-        map_posting_date: str = Form(""),
-        map_transaction_currency: str = Form(""),
-        map_card: str = Form(""),
-        card_key: str = Form(""),
-    ):
-        try:
-            form = _parse_run_form(
-                account_id=account_id,
-                account_legal_entities=account_legal_entities,
-                account_card_currency=account_card_currency,
-                sheet_name=sheet_name,
-                receipts_source=receipts_source,
-                receipts_default_currency=receipts_default_currency,
-                use_llm=use_llm,
-                expense_column_map=expense_column_map,
-                map_transaction_date=map_transaction_date,
-                map_amount=map_amount,
-                map_vendor=map_vendor,
-                map_posting_date=map_posting_date,
-                map_transaction_currency=map_transaction_currency,
-                map_card=map_card,
-                card_key=card_key,
-            )
-        except RunInputError as exc:
-            return _render_form_error(templates, request, open_store, exc.message)
-
-        statement_bytes = await statement.read()
-        receipts_bytes = await receipts.read()
-        if not statement_bytes:
-            return _render_form_error(
-                templates, request, open_store, "No statement file uploaded."
-            )
-        if not receipts_bytes:
-            return _render_form_error(
-                templates, request, open_store, "No receipts file uploaded."
-            )
-
-        statement_name = statement.filename or "statement.csv"
-        receipts_name = receipts.filename or "receipts.csv"
-
-        # Sync seam (tests): run inline and 303 to the workbench, the
-        # original contract. Default (production): background the slow
-        # pipeline and hand back a polling page so an LLM run never blocks.
-        if os.environ.get("EXPENSE_RECON_WEB_SYNC") == "1":
-            try:
-                with open_store() as store:
-                    run_id = create_run(
-                        store,
-                        app.state.data_root,
-                        statement_bytes=statement_bytes,
-                        statement_filename=statement_name,
-                        receipts_bytes=receipts_bytes,
-                        receipts_filename=receipts_name,
-                        form=form,
-                        now_iso=_now_iso(),
-                        operator=_operator(),
-                        learning_db_path=app.state.learning_db_path,
-                    )
-            except RunInputError as exc:
-                return _render_form_error(
-                    templates, request, open_store, exc.message, headers=exc.headers
-                )
-            return RedirectResponse(url=f"/runs/{run_id}", status_code=303)
-
-        # Async: validate synchronously (a bad column map is still a form
-        # error), then run the pipeline in the background.
-        try:
-            prepared = prepare_run(
-                app.state.data_root,
-                statement_bytes=statement_bytes,
-                statement_filename=statement_name,
-                receipts_bytes=receipts_bytes,
-                receipts_filename=receipts_name,
-                form=form,
-                now_iso=_now_iso(),
-                operator=_operator(),
-                learning_db_path=app.state.learning_db_path,
-            )
-        except RunInputError as exc:
-            return _render_form_error(
-                templates, request, open_store, exc.message, headers=exc.headers
-            )
-        return _start_background_run(
-            request, background, prepared, form.account_id or "this month"
-        )
+        # The SPA gets the job id and polls GET /jobs/{id} itself.
+        return JSONResponse({"ok": True, "job_id": job_id, "label": label})
 
     @app.post("/api/runs")
     async def api_post_run(
@@ -679,13 +457,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         map_card: str = Form(""),
         card_key: str = Form(""),
     ):
-        """JSON twin of POST /runs for the SPA front end: upload statement +
-        receipts, validate synchronously, kick the pipeline in the
-        background, return {job_id}. The SPA polls GET /jobs/{job_id} until
-        status flips to "done" (then navigates to /runs/{run_id}) or
-        "error". A user-fixable input problem is a JSON 400, not an HTML
-        form re-render. Always async (no sync seam): the SPA is built to
-        poll."""
+        """Run a reconciliation from an upload: statement + receipts in,
+        validate synchronously, kick the pipeline in the background, return
+        {job_id}. The SPA polls GET /jobs/{job_id} until status flips to
+        "done" (then loads GET /api/runs/{run_id}) or "error". A
+        user-fixable input problem is a JSON 400. Always async (no sync
+        seam): the SPA is built to poll."""
         try:
             form = _parse_run_form(
                 account_id=account_id,
@@ -718,6 +495,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 {"error": "No receipts file uploaded."}, status_code=400
             )
 
+        with open_store() as store:
+            settings = store.get_settings()
         try:
             prepared = prepare_run(
                 app.state.data_root,
@@ -729,6 +508,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 now_iso=_now_iso(),
                 operator=_operator(),
                 learning_db_path=app.state.learning_db_path,
+                settings=settings,
             )
         except RunInputError as exc:
             return JSONResponse({"error": exc.message}, status_code=400)
@@ -742,31 +522,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         )
 
     # ── Operator: run the pipeline on a stored intake ──────────────────
-    @app.get("/intakes/{intake_id}/prepare", response_class=HTMLResponse)
-    def intake_prepare(request: Request, intake_id: str):
-        with open_store() as store:
-            intake = store.get_intake(intake_id)
-        if intake is None:
-            return _not_found(request, "Upload not found")
-        card = card_by_key(intake.card_key, load_cards())
-        return templates.TemplateResponse(
-            request,
-            "operator_run.html",
-            {
-                "intake": intake,
-                "card": card,
-                "cards": load_cards(),
-                "statement_fields": STATEMENT_MAP_FIELDS,
-                "expense_map": DEFAULT_EXPENSE_COLUMN_MAP,
-                "error": None,
-                "headers": None,
-            },
-        )
 
     @app.post("/api/intakes/{intake_id}/run")
-    @app.post("/intakes/{intake_id}/run")
     async def intake_run(
-        request: Request,
         background: BackgroundTasks,
         intake_id: str,
         account_id: str = Form(""),
@@ -787,28 +545,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     ):
         with open_store() as store:
             intake = store.get_intake(intake_id)
+            settings = store.get_settings()
         if intake is None:
-            return _not_found(request, "Upload not found")
+            return _not_found("Upload not found")
 
         def _error_page(message: str, headers=None, status_code: int = 400):
-            if _wants_json(request):
-                return JSONResponse(
-                    {"error": message, "headers": headers},
-                    status_code=status_code,
-                )
-            card = card_by_key(intake.card_key, load_cards())
-            return templates.TemplateResponse(
-                request,
-                "operator_run.html",
-                {
-                    "intake": intake,
-                    "card": card,
-                    "cards": load_cards(),
-                    "statement_fields": STATEMENT_MAP_FIELDS,
-                    "expense_map": DEFAULT_EXPENSE_COLUMN_MAP,
-                    "error": message,
-                    "headers": headers,
-                },
+            return JSONResponse(
+                {"error": message, "headers": headers},
                 status_code=status_code,
             )
 
@@ -837,6 +580,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 now_iso=_now_iso(),
                 operator=_operator(),
                 learning_db_path=app.state.learning_db_path,
+                settings=settings,
             )
         except RunInputError as exc:
             return _error_page(exc.message, headers=exc.headers)
@@ -846,6 +590,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 intake_id, INTAKE_PROCESSING, updated_at=_now_iso()
             )
 
+        # Sync seam (tests): run inline and answer with the run id directly,
+        # no background job to poll.
         if os.environ.get("EXPENSE_RECON_WEB_SYNC") == "1":
             try:
                 with open_store() as store:
@@ -856,49 +602,81 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                         intake_id, INTAKE_RECEIVED, updated_at=_now_iso()
                     )
                 return _error_page(exc.message, headers=exc.headers)
-            return RedirectResponse(url=f"/runs/{run_id}", status_code=303)
+            return JSONResponse({"ok": True, "run_id": run_id})
 
-        return _start_background_run(request, background, prepared, intake.label)
+        return _start_background_run(background, prepared, intake.label)
 
-    # ── Operator: publish a reviewed run back to the user ───────────────
-    # Publish / unpublish. Mounted twice: the bare path answers the
-    # server-rendered page with a redirect back to the run, the /api path
-    # answers the SPA with JSON. `_wants_json` keys off the request path,
-    # so one handler serves both contracts and they can never drift.
-    # Operator-only on either path (auth.path_requires_operator
-    # canonicalizes the /api prefix before matching its rules).
+    # ── Publish / unpublish a reviewed run (drives the intake status the
+    # dashboard and the dev-side notifier read).
     @app.post("/api/runs/{run_id}/publish")
-    @app.post("/runs/{run_id}/publish")
-    def publish_run(run_id: str, request: Request):
+    def publish_run(run_id: str):
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                return _not_found(request, "Run not found")
+                return _not_found("Run not found")
             store.set_run_published(run_id, True, _now_iso())
             if run.intake_id is not None:
                 store.set_intake_status(
                     run.intake_id, INTAKE_READY,
                     run_id=run_id, updated_at=_now_iso(),
                 )
-        if _wants_json(request):
-            return JSONResponse({"ok": True, "run_id": run_id, "published": True})
-        return RedirectResponse(url=f"/runs/{run_id}", status_code=303)
+        return JSONResponse({"ok": True, "run_id": run_id, "published": True})
 
     @app.post("/api/runs/{run_id}/unpublish")
-    @app.post("/runs/{run_id}/unpublish")
-    def unpublish_run(run_id: str, request: Request):
+    def unpublish_run(run_id: str):
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
-                return _not_found(request, "Run not found")
+                return _not_found("Run not found")
             store.set_run_published(run_id, False, None)
             if run.intake_id is not None:
                 store.set_intake_status(
                     run.intake_id, INTAKE_PROCESSING, updated_at=_now_iso()
                 )
-        if _wants_json(request):
-            return JSONResponse({"ok": True, "run_id": run_id, "published": False})
-        return RedirectResponse(url=f"/runs/{run_id}", status_code=303)
+        return JSONResponse({"ok": True, "run_id": run_id, "published": False})
+
+    # ── Rename / delete a run (F9). The operator accumulates test runs and
+    # needs to relabel or clear them; deleting also removes the on-disk
+    # upload/export tree so the volume does not grow without bound.
+    runs_root = (data_root_path / "runs").resolve()
+
+    @app.post("/api/runs/{run_id}/rename")
+    async def rename_run(run_id: str, request: Request):
+        try:
+            data = await request.json()
+        except Exception:  # noqa: BLE001 - malformed body is a client error
+            return JSONResponse({"error": "invalid json"}, status_code=400)
+        label = str((data or {}).get("label", "")).strip()[:200] if isinstance(data, dict) else ""
+        if not label:
+            return JSONResponse({"error": "label is required"}, status_code=400)
+        with open_store() as store:
+            if not store.set_run_label(run_id, label):
+                return _not_found("Run not found")
+        return JSONResponse({"ok": True, "run_id": run_id, "label": label})
+
+    @app.post("/api/runs/{run_id}/delete")
+    def delete_run(run_id: str):
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return _not_found("Run not found")
+            store.delete_run(run_id)
+            # A deleted run must not leave its intake pointing at a gone run;
+            # put the intake back in the queue so it can be re-run.
+            if run.intake_id is not None:
+                store.set_intake_status(
+                    run.intake_id, INTAKE_RECEIVED, run_id=None,
+                    updated_at=_now_iso(),
+                )
+        # Remove the on-disk work tree, but only inside data_root/runs — never
+        # follow a stored path outside the volume.
+        try:
+            work_dir = Path(run.work_dir).resolve()
+            if runs_root in work_dir.parents and work_dir.is_dir():
+                shutil.rmtree(work_dir, ignore_errors=True)
+        except (OSError, ValueError):
+            pass
+        return JSONResponse({"ok": True, "run_id": run_id, "deleted": True})
 
     # ── Operator state API: polled by the dev-side notifier (server stays
     # API-free per the One Assessment precedent; mail is sent from a dev
@@ -908,6 +686,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         with open_store() as store:
             intakes = store.list_intakes()
             all_runs = store.list_runs()
+            active_jobs = store.list_active_jobs()
         published = [r for r in all_runs if r.published]
         return JSONResponse(
             {
@@ -951,22 +730,23 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     }
                     for r in published
                 ],
+                # In-flight pipeline work (F3): a run row appears only once
+                # its pipeline finished, so a mid-flight upload is otherwise
+                # invisible. The dashboard shows these as "processing".
+                "processing": active_jobs,
                 "feedback": {
                     "count": len(_read_feedback()),
                 },
             }
         )
 
-    # ── Reviewer feedback: the double-click widget in base.html posts here
-    # from every logged-in page. Attribution comes from the SESSION (the
-    # role), never from the body; the page path and the run id (when the
-    # note was left on a run page) locate the note. Storage is an
-    # append-only jsonl on the data volume; reading it is operator-only
-    # (auth._OPERATOR_RULES).
+    # ── Reviewer feedback: the SPA's note widget posts here. Attribution
+    # comes from the SESSION (the role), never from the body; the page path
+    # and the run id (when the note was left on a run page) locate the
+    # note. Storage is an append-only jsonl on the data volume.
     feedback_file = data_root_path / "feedback.jsonl"
 
     @app.post("/api/feedback")
-    @app.post("/feedback")
     async def leave_feedback(request: Request) -> JSONResponse:
         try:
             data = await request.json()
@@ -1024,88 +804,29 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     rows.append(row)
         return rows
 
-    @app.get("/feedback-log", response_class=HTMLResponse)
-    def feedback_log(request: Request) -> HTMLResponse:
-        rows = _read_feedback()
-        rows.reverse()  # newest first
-        return templates.TemplateResponse(request, "feedback_log.html", {"rows": rows})
-
     @app.get("/feedback.jsonl")
     def feedback_raw() -> PlainTextResponse:
         text = feedback_file.read_text(encoding="utf-8") if feedback_file.exists() else ""
         return PlainTextResponse(text, media_type="application/x-ndjson")
 
-    @app.get("/compare", response_class=HTMLResponse)
-    def compare(request: Request, a: str = "", b: str = ""):
-        # PR G — pick two runs, show the bucket deltas in the browser
-        # (mirror of the CLI `diff`). The index already re-opens a run; this
-        # adds the across-runs view.
-        with open_store() as store:
-            runs = store.list_runs()
-            run_a = store.get_run(a.strip()) if a.strip() else None
-            run_b = store.get_run(b.strip()) if b.strip() else None
-        comparison = (
-            compare_runs(run_a, run_b) if run_a is not None and run_b is not None else None
-        )
-        return templates.TemplateResponse(
-            request,
-            "compare.html",
-            {
-                "runs": runs,
-                "a": a.strip(),
-                "b": b.strip(),
-                "run_a": run_a,
-                "run_b": run_b,
-                "comparison": comparison,
-            },
-        )
-
     @app.get("/jobs/{job_id}")
     def job_status(job_id: str):
-        # PR F — the running page polls this until status flips to done (then
-        # it navigates to the workbench) or error. Durable read: the row
-        # survives a restart, so an interrupted job reports honestly.
+        # PR F — the SPA polls this until status flips to done (then it
+        # loads the run) or error. Durable read: the row survives a
+        # restart, so an interrupted job reports honestly.
         with open_store() as store:
             job = store.get_job(job_id)
         if job is None:
             return JSONResponse({"error": "unknown job"}, status_code=404)
         return JSONResponse(job)
 
-    def _visible_run(store: RunStore, request: Request, run_id: str):
-        """The run, or None when it does not exist OR the session is a user
-        and the run is unpublished (404 either way, so unpublished run ids
-        are not confirmable from the user role)."""
-        run = store.get_run(run_id)
-        if run is None:
-            return None
-        if request.state.role != auth.ROLE_OPERATOR and not run.published:
-            return None
-        return run
-
-    @app.get("/runs/{run_id}", response_class=HTMLResponse)
-    def workbench(request: Request, run_id: str):
-        with open_store() as store:
-            run = _visible_run(store, request, run_id)
-            if run is None:
-                return HTMLResponse("Run not found", status_code=404)
-            decisions = store.get_decisions(run_id)
-            overrides = store.get_category_overrides(run_id)
-            resolutions = store.get_duplicate_resolutions(run_id)
-        view = build_view(run, decisions, overrides, resolutions)
-        return templates.TemplateResponse(
-            request, "workbench.html", {"view": view, "run": run}
-        )
-
     @app.get("/api/runs/{run_id}")
-    def api_workbench(request: Request, run_id: str):
-        """JSON twin of the workbench: the same build_view render model the
-        Jinja page uses, for the SPA front end to render the review screen.
-        The mutation endpoints (/runs/{id}/decisions, /categories,
-        /manual-match, /confirm-matched, /forget, /commit-memory) already
-        speak JSON and are reused as-is. jsonable_encoder handles the view's
-        Decimal / date values for the display-only client."""
+    def api_workbench(run_id: str):
+        """The review render model (build_view) for the SPA's workbench
+        screen. jsonable_encoder handles the view's Decimal / date values
+        for the display-only client."""
         with open_store() as store:
-            run = _visible_run(store, request, run_id)
+            run = store.get_run(run_id)
             if run is None:
                 return JSONResponse({"error": "run not found"}, status_code=404)
             decisions = store.get_decisions(run_id)
@@ -1118,7 +839,6 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return JSONResponse(jsonable_encoder(view))
 
     @app.post("/api/runs/{run_id}/decisions")
-    @app.post("/runs/{run_id}/decisions")
     async def post_decision(run_id: str, request: Request):
         body = await request.json()
         tx_id = body.get("transaction_id")
@@ -1127,7 +847,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if not tx_id or status not in VALID_STATUSES:
             return JSONResponse({"error": "bad request"}, status_code=400)
         with open_store() as store:
-            run = _visible_run(store, request, run_id)
+            run = store.get_run(run_id)
             if run is None:
                 return JSONResponse({"error": "run not found"}, status_code=404)
             store.set_decision(run_id, tx_id, status, chosen, _now_iso())
@@ -1136,13 +856,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         view = build_view(run, decisions, overrides)
         return JSONResponse({"ok": True, "summary": view["summary"]})
 
-    # §17 disposition. Registered on both the /api surface (the SPA's
-    # merged JSON API) and the bare /runs/{id}/... family the other JSON
-    # mutation handlers live on, so either client contract resolves. One
-    # shared handler; the disposition upsert is status-preserving in the
-    # store (never clobbers the row's triage verdict).
+    # §17 disposition. The upsert is status-preserving in the store (never
+    # clobbers the row's triage verdict).
     @app.post("/api/runs/{run_id}/disposition")
-    @app.post("/runs/{run_id}/disposition")
     async def post_disposition(run_id: str, request: Request):
         body = await request.json()
         tx_id = body.get("transaction_id")
@@ -1150,7 +866,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if not tx_id or disposition not in VALID_DISPOSITIONS:
             return JSONResponse({"error": "bad request"}, status_code=400)
         with open_store() as store:
-            run = _visible_run(store, request, run_id)
+            run = store.get_run(run_id)
             if run is None:
                 return JSONResponse({"error": "run not found"}, status_code=404)
             store.set_disposition(run_id, tx_id, disposition, _now_iso())
@@ -1163,9 +879,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     # flagged duplicate group (ignore / confirmed); never touches buckets or
     # the invariant, never deletes. Accepts either the backend-native
     # {group_id, resolution} or the SPA contract's {group_id, action}.
-    # Registered on both the /api surface and the bare /runs family.
     @app.post("/api/runs/{run_id}/duplicates/resolve")
-    @app.post("/runs/{run_id}/duplicates/resolve")
     async def post_duplicate_resolve(run_id: str, request: Request):
         body = await request.json()
         group_id = body.get("group_id") or body.get("group_key")
@@ -1173,7 +887,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if not group_id or resolution not in VALID_DUP_RESOLUTIONS:
             return JSONResponse({"error": "bad request"}, status_code=400)
         with open_store() as store:
-            run = _visible_run(store, request, run_id)
+            run = store.get_run(run_id)
             if run is None:
                 return JSONResponse({"error": "run not found"}, status_code=404)
             store.set_duplicate_resolution(run_id, group_id, resolution, _now_iso())
@@ -1183,12 +897,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         view = build_view(run, decisions, overrides, resolutions)
         return JSONResponse({"ok": True, "summary": view["summary"]})
 
-    # §16 export policy. GET is readable by any logged-in role (reference);
-    # PUT is operator-only (enforced in auth._OPERATOR_RULES). The policy is
-    # snapshotted into each new run's config at creation, so changing it
-    # affects future runs, never re-writes a run already produced.
+    # §16 export policy. The policy is snapshotted into each new run's
+    # config at creation, so changing it affects future runs, never
+    # re-writes a run already produced.
     @app.get("/api/settings")
-    def api_get_settings(request: Request):
+    def api_get_settings():
         with open_store() as store:
             return JSONResponse(store.get_settings())
 
@@ -1198,18 +911,54 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         patch: dict = {}
         if "export_approved_only" in body:
             patch["export_approved_only"] = bool(body["export_approved_only"])
+        # Master-data maps (FX reference rates, card -> legal entity, card
+        # -> Zoho bank account). Values normalize to trimmed strings; a
+        # blank value drops the key, which is how the UI deletes a row. An
+        # FX rate must parse as a positive number: a typo here would
+        # silently mis-match a whole month, so it is rejected at the edge
+        # instead of being swallowed at match time.
+        for key in SETTINGS_MAP_KEYS:
+            if key not in body:
+                continue
+            raw = body[key]
+            if not isinstance(raw, dict):
+                return JSONResponse(
+                    {"error": f"{key} must be an object"}, status_code=400
+                )
+            cleaned: dict[str, str] = {}
+            for k, v in raw.items():
+                name = str(k).strip()
+                value = str(v).strip()
+                if not name or not value:
+                    continue
+                if key == "fx_reference_rates":
+                    from_ccy, _, to_ccy = name.partition(":")
+                    if not from_ccy.strip() or not to_ccy.strip():
+                        return JSONResponse(
+                            {"error": f"rate key {name!r} must be 'FROM:TO'"},
+                            status_code=400,
+                        )
+                    try:
+                        if Decimal(value) <= 0:
+                            raise ValueError(value)
+                    except (ArithmeticError, ValueError):
+                        return JSONResponse(
+                            {"error": f"rate {name} must be a positive number"},
+                            status_code=400,
+                        )
+                cleaned[name] = value
+            patch[key] = cleaned
         with open_store() as store:
             settings = store.set_settings(patch, _now_iso())
         return JSONResponse(settings)
 
     @app.get("/api/compare")
-    def api_compare(request: Request, a: str = "", b: str = ""):
-        """JSON twin of the HTML /compare: the SPA picks two runs and shows
-        the bucket deltas. The diff is computed server-side by
-        `compare_runs` (the same function the Jinja page uses), so the front
-        end never derives it. Returns the run list for the two selectors plus
-        the comparison (null until both a and b resolve to real runs).
-        Operator-only, mirroring the HTML compare rule."""
+    def api_compare(a: str = "", b: str = ""):
+        """Across-runs compare: the SPA picks two runs and shows the bucket
+        deltas. The diff is computed server-side by `compare_runs`, so the
+        front end never derives it. Returns the run list for the two
+        selectors plus the comparison (null until both a and b resolve to
+        real runs)."""
         with open_store() as store:
             runs = store.list_runs()
             run_a = store.get_run(a.strip()) if a.strip() else None
@@ -1230,24 +979,21 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         })
 
     @app.get("/api/memory")
-    def api_memory(request: Request):
-        """JSON twin of the HTML /memory page: everything the tool has
-        learned (merchant categories, vendor aliases, FX means) grouped by
-        table, for the SPA memory screen. build_memory_view is already a
-        JSON-safe dict; jsonable_encoder is kept for symmetry with the
-        other /api render-model routes. Operator-only, mirroring the HTML
-        /memory rule."""
+    def api_memory():
+        """Everything the tool has learned (merchant categories, vendor
+        aliases, FX means) grouped by table, for the SPA memory screen.
+        build_memory_view is already a JSON-safe dict; jsonable_encoder is
+        kept for symmetry with the other render-model routes."""
         return JSONResponse(
             jsonable_encoder(build_memory_view(app.state.learning_db_path))
         )
 
     @app.post("/api/memory/forget")
     async def api_memory_forget(request: Request):
-        """JSON twin of the /memory/forget form post: drop everything
-        learned for one merchant in one entity so next month stops
-        auto-filling it. Same {legal_entity_id, vendor} body and
-        {ok, forgotten: <per-table delete counts>} reply as the workbench's
-        /runs/{id}/forget. Operator-only."""
+        """Drop everything learned for one merchant in one entity so next
+        month stops auto-filling it. Same {legal_entity_id, vendor} body
+        and {ok, forgotten: <per-table delete counts>} reply as the
+        workbench's /api/runs/{id}/forget."""
         body = await request.json()
         legal_entity_id = (body.get("legal_entity_id") or "").strip()
         vendor = (body.get("vendor") or "").strip()
@@ -1259,14 +1005,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return JSONResponse({"ok": True, "forgotten": forgotten})
 
     @app.post("/api/runs/{run_id}/decisions/confirm-matched")
-    @app.post("/runs/{run_id}/decisions/confirm-matched")
-    def post_confirm_matched(run_id: str, request: Request):
+    def post_confirm_matched(run_id: str):
         # PR A — one click confirms every matched-bucket transaction with
         # its auto-picked receipt, so only review + unmatched need hand
         # work. Reuses the per-row decision write; never stomps an
         # explicit confirm/reject.
         with open_store() as store:
-            run = _visible_run(store, request, run_id)
+            run = store.get_run(run_id)
             if run is None:
                 return JSONResponse({"error": "run not found"}, status_code=404)
             decisions = store.get_decisions(run_id)
@@ -1282,8 +1027,57 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             {"ok": True, "confirmed": len(pairs), "summary": view["summary"]}
         )
 
+    @app.post("/api/runs/{run_id}/decisions/bulk")
+    async def post_bulk_decisions(run_id: str, request: Request):
+        """Confirm or reject a named set of charges in one call (2026-07-22).
+
+        The review bucket held 34 rows on the real April run and could only
+        be cleared one row at a time. The client sends the ids it is acting
+        on, so the scope is explicit and auditable rather than the server
+        guessing "everything that looks like this". Confirming uses each
+        charge's own top candidate and skips any charge without one.
+        """
+        body = await request.json()
+        tx_ids = body.get("transaction_ids")
+        status = body.get("status")
+        if not isinstance(tx_ids, list) or not tx_ids:
+            return JSONResponse(
+                {"error": "transaction_ids must be a non-empty list"},
+                status_code=400,
+            )
+        if status not in VALID_STATUSES:
+            return JSONResponse(
+                {"error": f"status must be one of {sorted(VALID_STATUSES)}"},
+                status_code=400,
+            )
+        tx_ids = [str(t) for t in tx_ids]
+        if len(tx_ids) > _BULK_DECISION_LIMIT:
+            return JSONResponse(
+                {"error": f"at most {_BULK_DECISION_LIMIT} rows per call"},
+                status_code=400,
+            )
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found"}, status_code=404)
+            decisions = store.get_decisions(run_id)
+            writes = bulk_decisions(run, decisions, tx_ids, status)
+            for tx_id, doc_id in writes:
+                store.set_decision(run_id, tx_id, status, doc_id, _now_iso())
+            decisions = store.get_decisions(run_id)
+            overrides = store.get_category_overrides(run_id)
+            resolutions = store.get_duplicate_resolutions(run_id)
+        view = build_view(run, decisions, overrides, resolutions)
+        # `skipped` is the honest half of the count: rows already decided,
+        # or (when confirming) rows with no candidate to confirm against.
+        return JSONResponse({
+            "ok": True,
+            "updated": len(writes),
+            "skipped": len(tx_ids) - len(writes),
+            "summary": view["summary"],
+        })
+
     @app.post("/api/runs/{run_id}/categories")
-    @app.post("/runs/{run_id}/categories")
     async def post_category(run_id: str, request: Request):
         body = await request.json()
         document_id = body.get("document_id")
@@ -1293,7 +1087,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if not document_id or not isinstance(line_index, int):
             return JSONResponse({"error": "bad request"}, status_code=400)
         with open_store() as store:
-            if _visible_run(store, request, run_id) is None:
+            if store.get_run(run_id) is None:
                 return JSONResponse({"error": "run not found"}, status_code=404)
             store.set_category_override(
                 run_id, document_id, line_index, category, zoho_account, _now_iso()
@@ -1301,7 +1095,6 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return JSONResponse({"ok": True})
 
     @app.post("/api/runs/{run_id}/manual-match")
-    @app.post("/runs/{run_id}/manual-match")
     async def post_manual_match(run_id: str, request: Request):
         # PR B — assign a receipt to a charge by hand. Recorded as a
         # confirmed decision with the chosen document; the chosen receipt
@@ -1313,7 +1106,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if not tx_id or not document_id:
             return JSONResponse({"error": "bad request"}, status_code=400)
         with open_store() as store:
-            run = _visible_run(store, request, run_id)
+            run = store.get_run(run_id)
             if run is None:
                 return JSONResponse({"error": "run not found"}, status_code=404)
             err = validate_manual_match(run, tx_id, document_id)
@@ -1328,12 +1121,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return JSONResponse({"ok": True, "summary": view["summary"]})
 
     @app.post("/api/runs/{run_id}/forget")
-    @app.post("/runs/{run_id}/forget")
     async def post_forget(run_id: str, request: Request):
         # PR C — "this was wrong": drop everything the tool learned for one
-        # merchant so next month stops auto-filling it. JSON sibling of the
-        # /memory/forget form post, so the workbench can forget in place and
-        # then reopen the reclassify dropdown without a page nav.
+        # merchant so next month stops auto-filling it. Sibling of
+        # /api/memory/forget, so the workbench can forget in place and then
+        # reopen the reclassify dropdown without a page nav.
         body = await request.json()
         legal_entity_id = (body.get("legal_entity_id") or "").strip()
         vendor = (body.get("vendor") or "").strip()
@@ -1345,7 +1137,6 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return JSONResponse({"ok": True, "forgotten": forgotten})
 
     @app.post("/api/runs/{run_id}/commit-memory")
-    @app.post("/runs/{run_id}/commit-memory")
     def post_commit_memory(run_id: str):
         # Explicit finalize: fold THIS run's confirmed decisions into the
         # durable learning store so next month consults them (Phase 2).
@@ -1361,9 +1152,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return JSONResponse({"ok": True, "learned": learned})
 
     @app.get("/runs/{run_id}/report.xlsx")
-    def download_report(run_id: str, request: Request):
+    def download_report(run_id: str):
         with open_store() as store:
-            run = _visible_run(store, request, run_id)
+            run = store.get_run(run_id)
             if run is None:
                 return HTMLResponse("Run not found", status_code=404)
             decisions = store.get_decisions(run_id)
@@ -1378,12 +1169,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         )
 
     @app.get("/runs/{run_id}/zoho.csv")
-    def download_zoho(run_id: str, request: Request):
+    def download_zoho(run_id: str):
         # PR E — the Zoho Books journal-entry import CSV, with the reviewer's
         # decisions + category overrides applied. Only effective matched
         # transactions are exported (the writer's posting policy).
         with open_store() as store:
-            run = _visible_run(store, request, run_id)
+            run = store.get_run(run_id)
             if run is None:
                 return HTMLResponse("Run not found", status_code=404)
             decisions = store.get_decisions(run_id)
@@ -1396,12 +1187,12 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         )
 
     @app.get("/runs/{run_id}/reconciled.csv")
-    def download_reconciled(run_id: str, request: Request):
+    def download_reconciled(run_id: str):
         # The flat reconciled CSV — the CSV twin of the .xlsx report, with
         # the reviewer's decisions + category overrides applied. Every
         # statement line with its match status + matched-expense enrichment.
         with open_store() as store:
-            run = _visible_run(store, request, run_id)
+            run = store.get_run(run_id)
             if run is None:
                 return HTMLResponse("Run not found", status_code=404)
             decisions = store.get_decisions(run_id)
@@ -1414,11 +1205,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         )
 
     @app.get("/runs/{run_id}/statement-categorized.xlsx")
-    def download_writeback(run_id: str, request: Request):
+    def download_writeback(run_id: str):
         # L3 — her own uploaded workbook with one new "Zoho Account (tool)"
         # column; only for xlsx/xlsm statements.
         with open_store() as store:
-            run = _visible_run(store, request, run_id)
+            run = store.get_run(run_id)
             if run is None:
                 return HTMLResponse("Run not found", status_code=404)
             decisions = store.get_decisions(run_id)
@@ -1436,38 +1227,8 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             ),
         )
 
-    # ── Help: one merged trilingual page (replaces the old /guide +
-    # /how-it-works standalone docs, which had drifted). Rendered inside
-    # the app chrome so it inherits the brand tokens, theme, and role nav.
-    @app.get("/help", response_class=HTMLResponse)
-    def help_page(request: Request) -> HTMLResponse:
-        return templates.TemplateResponse(request, "help.html", {})
-
-    @app.get("/guide")
-    def guide_redirect():
-        return RedirectResponse(url="/help", status_code=301)
-
-    @app.get("/how-it-works")
-    def how_it_works_redirect():
-        return RedirectResponse(url="/help", status_code=301)
-
-    # ── Memory (PR 2e): see and correct what the tool has learned ──────
-    @app.get("/memory", response_class=HTMLResponse)
-    def memory(request: Request):
-        view = build_memory_view(app.state.learning_db_path)
-        return templates.TemplateResponse(request, "memory.html", {"view": view})
-
-    @app.post("/memory/forget")
-    def memory_forget(
-        legal_entity_id: str = Form(...), vendor: str = Form(...)
-    ):
-        forget_memory_vendor(app.state.learning_db_path, legal_entity_id, vendor)
-        return RedirectResponse(url="/memory", status_code=303)
-
-    # The SPA twin of the page's forget form. `/api/memory/forget` already
-    # existed with a JSON body; this is the reset counterpart, which had no
-    # JSON surface at all. Operator-only via the ^/memory($|/) rule, which
-    # the /api canonicalization now also applies to /api/memory/reset.
+    # Memory reset: the destructive counterpart of /api/memory/forget
+    # (whole tables / whole entities instead of one merchant).
     @app.post("/api/memory/reset")
     async def api_memory_reset(request: Request):
         body = await request.json() if await request.body() else {}
@@ -1478,41 +1239,4 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             {"ok": True, "table": table, "legal_entity_id": legal_entity_id}
         )
 
-    @app.post("/memory/reset")
-    def memory_reset(
-        table: str = Form(""), legal_entity_id: str = Form("")
-    ):
-        reset_memory(
-            app.state.learning_db_path, table.strip() or None,
-            legal_entity_id.strip() or None,
-        )
-        return RedirectResponse(url="/memory", status_code=303)
-
     return app
-
-
-def _render_form_error(
-    templates: Jinja2Templates,
-    request: Request,
-    open_store,
-    message: str,
-    headers: list[str] | None = None,
-) -> HTMLResponse:
-    # Operator-only surface (POST /runs is operator-gated), so the error
-    # re-render is the operator home WITH its real context: losing the
-    # recent-runs table on a form error was a long-standing paper cut.
-    with open_store() as store:
-        return templates.TemplateResponse(
-            request,
-            "home_operator.html",
-            {
-                "runs": store.list_runs(),
-                "intakes": store.list_intakes(),
-                "cards": load_cards(),
-                "statement_fields": STATEMENT_MAP_FIELDS,
-                "expense_map": DEFAULT_EXPENSE_COLUMN_MAP,
-                "error": message,
-                "headers": headers,
-            },
-            status_code=400,
-        )

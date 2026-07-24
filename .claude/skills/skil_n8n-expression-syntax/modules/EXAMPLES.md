@@ -480,4 +480,4 @@ Conditions: {{$node["Weather API"].json.properties.shortForecast}}
 
 ---
 
-**Related**: See [COMMON_MISTAKES.md](COMMON_MISTAKES.md) for error examples and fixes.
+**Related**: See [COMMON-MISTAKES.md](COMMON-MISTAKES.md) for error examples and fixes.

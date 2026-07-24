@@ -328,10 +328,20 @@ def validate_manifest(repo: str, tag: str, meta: dict) -> dict:
             if t not in guard_files:
                 guard_files.append(t)
 
+    # These defaults are the RECIPES.md manifest skeleton, byte-for-byte;
+    # test_engine_budget_defaults_match_the_recipes_skeleton pins the pair
+    # together. wall_clock_minutes was 240 here against 120 in the skeleton,
+    # so the "default" a manifest author read was never the default the engine
+    # applied - and no real run has ever declared more than 120.
     budgets = dict(meta.get("budgets") or {})
     budgets.setdefault("rounds", 10)
-    budgets.setdefault("wall_clock_minutes", 240)
+    budgets.setdefault("wall_clock_minutes", 120)
     budgets.setdefault("score_timeout_seconds", 300)
+    # Guards get their OWN budget: a correctness check's runtime has nothing
+    # to do with the scorer's, and sharing one number meant a tight scoring
+    # budget silently became a tight guard budget. Absent key -> this default,
+    # so every manifest written before the key existed still runs.
+    budgets.setdefault("guard_timeout_seconds", 300)
     budgets.setdefault("max_rework_attempts", 2)
     mode = meta.get("mode", "converge")
     if mode not in VALID_MODES:
@@ -358,19 +368,30 @@ def validate_manifest(repo: str, tag: str, meta: dict) -> dict:
     }
 
 
-def run_scorer(repo: str, state: dict, log_name: str) -> tuple[float | None, str]:
-    """Run the pinned scorer under timeout. (score, status) status in
-    {'ok','crash','timeout'}. Full output -> docs/optimize/<tag>/logs/."""
-    timeout = int(state["budgets"]["score_timeout_seconds"])
-    cmd = ["uv", "run", state["scorer"], *state["scorer_args"]]
+def run_under_timeout(repo: str, argv: list[str],
+                      timeout: int) -> tuple[str, int | None]:
+    """Run argv (no shell) under `timeout`, killing the whole process TREE.
+
+    Returns (combined output, returncode); returncode is None on timeout.
+
+    The tree kill is the load-bearing part: `subprocess.run(timeout=...)`
+    kills only the DIRECT child, and everything the engine launches goes
+    through a launcher (`uv run ...`) whose real interpreter is a grandchild.
+    That grandchild survives, keeps the stdout pipe open, and the follow-up
+    read blocks for the full runtime of the thing that was supposed to be
+    killed - so a "timeout" hangs exactly as long as no timeout would have.
+    Shared by the scorer and the guards; pinned by
+    test_round_timeout_kills_process_tree (scorer) and
+    test_round_guard_timeout_is_journaled_not_as_a_guard_fail (guards).
+    """
     kwargs: dict = {}
     if os.name != "nt":
         kwargs["start_new_session"] = True
-    proc = subprocess.Popen(cmd, cwd=repo, stdout=subprocess.PIPE,
+    proc = subprocess.Popen(argv, cwd=repo, stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, text=True, **kwargs)
     try:
         out, _ = proc.communicate(timeout=timeout)
-        status = "ok" if proc.returncode == 0 else "crash"
+        return out or "", proc.returncode
     except subprocess.TimeoutExpired:
         if os.name == "nt":
             subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
@@ -379,7 +400,16 @@ def run_scorer(repo: str, state: dict, log_name: str) -> tuple[float | None, str
             import signal
             os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
         out, _ = proc.communicate()
-        status = "timeout"
+        return out or "", None
+
+
+def run_scorer(repo: str, state: dict, log_name: str) -> tuple[float | None, str]:
+    """Run the pinned scorer under timeout. (score, status) status in
+    {'ok','crash','timeout'}. Full output -> docs/optimize/<tag>/logs/."""
+    timeout = int(state["budgets"]["score_timeout_seconds"])
+    cmd = ["uv", "run", state["scorer"], *state["scorer_args"]]
+    out, rc = run_under_timeout(repo, cmd, timeout)
+    status = "timeout" if rc is None else ("ok" if rc == 0 else "crash")
 
     log_dir = os.path.join(repo, "docs", "optimize", state["tag"], "logs")
     os.makedirs(log_dir, exist_ok=True)
@@ -395,22 +425,38 @@ def run_scorer(repo: str, state: dict, log_name: str) -> tuple[float | None, str
     return float(matches[-1]), "ok"
 
 
-def run_guards(repo: str, state: dict, log_prefix: str) -> tuple[bool, str]:
-    """Run guard commands (argv, no shell). (all_passed, first_failed_cmd)."""
-    timeout = int(state["budgets"]["score_timeout_seconds"])
+def run_guards(repo: str, state: dict, log_prefix: str) -> tuple[str, str]:
+    """Run guard commands (argv, no shell). (status, first_not_ok_cmd).
+
+    status is 'ok' | 'fail' | 'timeout'. A guard TIMEOUT is deliberately a
+    third outcome, not a flavour of failure: a failing guard says the
+    experiment is wrong (and the round may be reworked), while a guard that
+    never finished says nothing about the experiment at all. Collapsing the
+    two journaled an environmental hang as `guard_fail` and invited a rework
+    cycle against a hypothesis no guard had actually judged.
+
+    Guards run on their OWN budget (`budgets.guard_timeout_seconds`), and
+    through the same process-tree kill as the scorer.
+    """
+    timeout = int(state["budgets"].get("guard_timeout_seconds", 300))
     for i, cmd in enumerate(state["guards"]):
         argv = shlex.split(cmd, posix=True)
+        log = f"{log_prefix}-guard{i}.log"
         try:
-            proc = subprocess.run(argv, cwd=repo, capture_output=True,
-                                  text=True, timeout=timeout)
-        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-            _log_guard(repo, state, f"{log_prefix}-guard{i}.log", str(e))
-            return False, cmd
-        _log_guard(repo, state, f"{log_prefix}-guard{i}.log",
-                   (proc.stdout or "") + (proc.stderr or ""))
-        if proc.returncode != 0:
-            return False, cmd
-    return True, ""
+            out, rc = run_under_timeout(repo, argv, timeout)
+        except OSError as e:  # unlaunchable guard (missing executable, ...)
+            _log_guard(repo, state, log, str(e))
+            return "fail", cmd
+        if rc is None:
+            _log_guard(repo, state, log,
+                       out + f"\n[engine] guard exceeded "
+                             f"budgets.guard_timeout_seconds={timeout}s; "
+                             "process tree killed\n")
+            return "timeout", cmd
+        _log_guard(repo, state, log, out)
+        if rc != 0:
+            return "fail", cmd
+    return "ok", ""
 
 
 def _log_guard(repo: str, state: dict, name: str, content: str) -> None:
@@ -576,6 +622,14 @@ def cmd_start(tag: str) -> int:
               "items - it is the run's hypothesis queue. RUN.md LOCKS at "
               "lock-on, so a catalog cannot be added later; add it now or "
               "accept ad-hoc hypotheses for the whole run.")
+    if not state.get("guards"):
+        print("WARNING: manifest declares ZERO guards. Guards carry the "
+              "anti-overfit floor (rule_optimize_loop; RECIPES rule 3 makes "
+              "a held-out score-floor guard MANDATORY for constructed "
+              "metrics). A guardless run can keep an overfit 'win' with "
+              "every lock intact, and RUN.md locks at lock-on so guards "
+              "cannot be added later. Stop now and add one unless the "
+              "metric is a natural scalar and the omission is deliberate.")
 
     # Cross-check declared guards against the reviewed guard-pin registry
     # (tools/guard-pins.json). guard_shas below anchors guards for the run's
@@ -619,8 +673,14 @@ def cmd_start(tag: str) -> int:
         die(f"baseline scoring failed ({status}) - the harness is broken; "
             f"never start a run on a guessed score (docs/optimize/{tag}/"
             "logs/r0.log)")
-    ok, failed = run_guards(repo, state, "r0")
-    if not ok:
+    gstatus, failed = run_guards(repo, state, "r0")
+    if gstatus == "timeout":
+        die(f"baseline guard timed out after "
+            f"{state['budgets']['guard_timeout_seconds']}s: {failed!r} - that "
+            "is a broken harness, not a failing baseline. Fix the guard or "
+            "raise budgets.guard_timeout_seconds, then start again "
+            f"(docs/optimize/{tag}/logs/r0-guard*.log)")
+    if gstatus != "ok":
         die(f"baseline guard failed: {failed!r} - a run cannot enforce "
             "'discard on guard-fail' from a baseline that already fails")
 
@@ -747,8 +807,8 @@ def cmd_round(desc: str, simplification: bool, rework: bool,
     elif forced_discard and not probe:
         verdict = "discard"
     elif improved(state, score, allow_equal=simplification):
-        ok, failed_guard = run_guards(repo, state, f"r{n}")
-        if ok:
+        guard_status, failed_guard = run_guards(repo, state, f"r{n}")
+        if guard_status == "ok":
             verdict = "keep"
             if probe:
                 # A probe is a prediction that the score will NOT improve.
@@ -760,6 +820,19 @@ def cmd_round(desc: str, simplification: bool, rework: bool,
                       "discard but beat the best score. The current optimum "
                       "was not the boundary you assumed - re-read the asset "
                       "before the next hypothesis.")
+        elif guard_status == "timeout":
+            # An environment event, NOT a judgment on the hypothesis: the
+            # guard never returned a verdict, so there is nothing to rework
+            # against. Reverted and journaled under its own status so the
+            # journal cannot be read as "the change broke a guard".
+            verdict = "guard_timeout"
+            print(f"guard TIMED OUT after "
+                  f"{state['budgets'].get('guard_timeout_seconds', 300)}s: "
+                  f"{failed_guard!r} (see logs/r{n}-guard*.log). The guard "
+                  "never judged this experiment, so no rework is offered - "
+                  "the round is reverted and journaled as guard_timeout. Fix "
+                  "the guard or raise budgets.guard_timeout_seconds in a NEW "
+                  "run, then re-run this hypothesis.")
         else:
             verdict = "guard_fail"
             print(f"guard failed: {failed_guard!r} (see logs/r{n}-guard*.log). "
@@ -783,6 +856,9 @@ def cmd_round(desc: str, simplification: bool, rework: bool,
             # Park the experiment commit for an in-round rework. The marker
             # makes the parked state distinguishable from a crash so `resume`
             # cannot destroy it (a clean tree at exp_sha is otherwise identical).
+            # `guard_timeout` deliberately does NOT reach here: a guard that
+            # never finished judged nothing, so parking the round for a fix
+            # would burn rework attempts on an environment problem.
             state["pending_rework"] = exp_sha
             save_state(repo, state)
             return 0
@@ -935,6 +1011,12 @@ def cmd_resume() -> int:
 
 
 def cmd_stop(reason: str) -> int:
+    # Mirrors round --desc: the journal is the durable record, and 7/7 real
+    # runs ended via stop, so an empty reason is a hole in every journal
+    # (2026-07-22 verify, finding #30).
+    if not reason or not reason.strip():
+        die("--reason is required: one line on WHY the run is stopping "
+            "(converged / budget / superseded / stale lock / ...)")
     repo = repo_root()
     state = load_state(repo, corrupt_ok=True)
     if state is None:
@@ -1001,7 +1083,7 @@ def main() -> int:
                         "`probe` and does not count toward PLATEAU. A probe "
                         "that improves anyway is kept and flagged loudly.")
     sub.add_parser("resume")
-    p = sub.add_parser("stop"); p.add_argument("--reason", default="")
+    p = sub.add_parser("stop"); p.add_argument("--reason", required=True)
     sub.add_parser("status")
     args = ap.parse_args()
     if args.cmd == "start":

@@ -100,16 +100,6 @@ def test_prepare_run_pdf_source_on_csv_upload_is_form_error(tmp_path):
         )
 
 
-def test_operator_form_offers_report_pdf_source(client):
-    """The operator home run-form dropdown lists the report-PDF source
-    (added 2026-07-16 alongside the CSV options, not replacing them)."""
-    html = client.get("/").text
-    assert 'value="expense_report_pdf"' in html
-    assert "Zoho Expense report PDF" in html
-    assert 'value="expense_csv"' in html          # still offered
-    assert 'value="csv"' in html                  # still the default
-
-
 def test_prepare_run_keeps_csv_source_for_csv_receipts(tmp_path):
     prepared = prepare_run(
         tmp_path,
@@ -157,17 +147,18 @@ def test_web_pdf_receipts_upload_parses_expense_summary(client, monkeypatch):
         ),
     }
     resp = client.post(
-        "/runs",
+        "/api/runs",
         files=files,
         data={
             "account_id": "amex",
             "account_card_currency": "USD",
             "receipts_source": "csv",  # must be overridden by the .pdf sniff
         },
-        follow_redirects=False,
     )
-    assert resp.status_code == 303, resp.text
-    run_id = resp.headers["location"].rstrip("/").rsplit("/", 1)[-1]
+    assert resp.status_code == 200, resp.text
+    job = client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
+    run_id = job["run_id"]
 
     run = _snapshot(client, run_id)
     assert run.config["receipts"]["source"] == "expense_report_pdf"

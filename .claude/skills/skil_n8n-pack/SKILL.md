@@ -43,36 +43,36 @@ Load ONE module at a time based on your current task.
 
 | When | Module | Source |
 |------|--------|--------|
-| Searching for nodes | [SEARCH-GUIDE](../n8n-mcp-tools-expert/modules/SEARCH-GUIDE.md) | n8n-mcp-tools-expert |
-| Managing workflows (create/update/activate) | [WORKFLOW-GUIDE](../n8n-mcp-tools-expert/modules/WORKFLOW-GUIDE.md) | n8n-mcp-tools-expert |
-| Validating node configs | [VALIDATION-GUIDE](../n8n-mcp-tools-expert/modules/VALIDATION-GUIDE.md) | n8n-mcp-tools-expert |
-| Choosing architecture pattern | [WEBHOOK-PROCESSING](../n8n-workflow-patterns/modules/WEBHOOK-PROCESSING.md) / [SCHEDULED-TASKS](../n8n-workflow-patterns/modules/SCHEDULED-TASKS.md) / [HTTP-API](../n8n-workflow-patterns/modules/HTTP-API-INTEGRATION.md) / [AI-AGENT](../n8n-workflow-patterns/modules/AI-AGENT-WORKFLOW.md) / [DATABASE](../n8n-workflow-patterns/modules/DATABASE-OPERATIONS.md) | n8n-workflow-patterns |
-| Configuring specific nodes | [OPERATION-PATTERNS](../n8n-node-configuration/modules/OPERATION-PATTERNS.md) | n8n-node-configuration |
-| Writing `{{}}` expressions | [n8n-expression-syntax SKILL](../n8n-expression-syntax/SKILL.md) | n8n-expression-syntax |
-| Writing JavaScript Code nodes | [n8n-code-javascript SKILL](../n8n-code-javascript/SKILL.md) | n8n-code-javascript |
-| Writing Python Code nodes | [n8n-code-python SKILL](../n8n-code-python/SKILL.md) | n8n-code-python |
-| Debugging runtime issues | [AUTONOMOUS-DIAGNOSTICS](../n8n-mcp-tools-expert/modules/AUTONOMOUS-DIAGNOSTICS.md) | n8n-mcp-tools-expert |
-| Verifying execution outcomes | [POST-EXECUTION-VERIFICATION](../n8n-mcp-tools-expert/modules/POST-EXECUTION-VERIFICATION.md) | n8n-mcp-tools-expert |
-| Pre-handover checklist | [PRE-CLIENT-REVIEW](../n8n-mcp-tools-expert/modules/PRE-CLIENT-REVIEW.md) | n8n-mcp-tools-expert |
-| Discovering webhook payloads | [WEBHOOK-PAYLOAD-INSPECTOR](../n8n-workflow-patterns/modules/WEBHOOK-PAYLOAD-INSPECTOR.md) | n8n-workflow-patterns |
-| Large workflow handling | [LARGE-WORKFLOWS](../n8n-mcp-tools-expert/modules/LARGE-WORKFLOWS.md) | n8n-mcp-tools-expert |
-| Project setup principles | [PROJECT-SETUP](../n8n-mcp-tools-expert/modules/PROJECT-SETUP.md) | n8n-mcp-tools-expert |
+| Searching for nodes | [SEARCH-GUIDE](../skil_n8n-mcp-tools-expert/modules/SEARCH-GUIDE.md) | n8n-mcp-tools-expert |
+| Managing workflows (create/update/activate) | [WORKFLOW-GUIDE](../skil_n8n-mcp-tools-expert/modules/WORKFLOW-GUIDE.md) | n8n-mcp-tools-expert |
+| Validating node configs | [VALIDATION-GUIDE](../skil_n8n-mcp-tools-expert/modules/VALIDATION-GUIDE.md) | n8n-mcp-tools-expert |
+| Choosing architecture pattern | [WEBHOOK-PROCESSING](../skil_n8n-workflow-patterns/modules/WEBHOOK-PROCESSING.md) / [SCHEDULED-TASKS](../skil_n8n-workflow-patterns/modules/SCHEDULED-TASKS.md) / [HTTP-API](../skil_n8n-workflow-patterns/modules/HTTP-API-INTEGRATION.md) / [AI-AGENT](../skil_n8n-workflow-patterns/modules/AI-AGENT-WORKFLOW.md) / [DATABASE](../skil_n8n-workflow-patterns/modules/DATABASE-OPERATIONS.md) | n8n-workflow-patterns |
+| Configuring specific nodes | [OPERATION-PATTERNS](../skil_n8n-node-configuration/modules/OPERATION-PATTERNS.md) | n8n-node-configuration |
+| Writing `{{}}` expressions | [n8n-expression-syntax SKILL](../skil_n8n-expression-syntax/SKILL.md) | n8n-expression-syntax |
+| Writing JavaScript Code nodes | [n8n-code-javascript SKILL](../skil_n8n-code-javascript/SKILL.md) | n8n-code-javascript |
+| Writing Python Code nodes | [n8n-code-python SKILL](../skil_n8n-code-python/SKILL.md) | n8n-code-python |
+| Debugging runtime issues | [AUTONOMOUS-DIAGNOSTICS](../skil_n8n-mcp-tools-expert/modules/AUTONOMOUS-DIAGNOSTICS.md) | n8n-mcp-tools-expert |
+| Verifying execution outcomes | [POST-EXECUTION-VERIFICATION](../skil_n8n-mcp-tools-expert/modules/POST-EXECUTION-VERIFICATION.md) | n8n-mcp-tools-expert |
+| Pre-handover checklist | [PRE-CLIENT-REVIEW](../skil_n8n-mcp-tools-expert/modules/PRE-CLIENT-REVIEW.md) | n8n-mcp-tools-expert |
+| Discovering webhook payloads | [WEBHOOK-PAYLOAD-INSPECTOR](../skil_n8n-workflow-patterns/modules/WEBHOOK-PAYLOAD-INSPECTOR.md) | n8n-workflow-patterns |
+| Large workflow handling | [LARGE-WORKFLOWS](../skil_n8n-mcp-tools-expert/modules/LARGE-WORKFLOWS.md) | n8n-mcp-tools-expert |
+| Project setup principles | [PROJECT-SETUP](../skil_n8n-mcp-tools-expert/modules/PROJECT-SETUP.md) | n8n-mcp-tools-expert |
 
 ### Reference Modules (load ONLY for specific lookups — never proactively)
 
 | When | Module | Source |
 |------|--------|--------|
-| Runtime error encountered | [N8N-RUNTIME-GOTCHAS](../n8n-mcp-tools-expert/modules/N8N-RUNTIME-GOTCHAS.md) | n8n-mcp-tools-expert |
-| Validation error to interpret | [ERROR-CATALOG](../n8n-validation-expert/modules/ERROR-CATALOG.md) | n8n-validation-expert |
-| False positive validation | [FALSE-POSITIVES](../n8n-validation-expert/modules/FALSE-POSITIVES.md) | n8n-validation-expert |
-| Node displayOptions dependencies | [DEPENDENCIES](../n8n-node-configuration/modules/DEPENDENCIES.md) | n8n-node-configuration |
-| Expression common mistakes | [COMMON-MISTAKES](../n8n-expression-syntax/modules/COMMON-MISTAKES.md) | n8n-expression-syntax |
-| Expression examples | [EXAMPLES](../n8n-expression-syntax/modules/EXAMPLES.md) | n8n-expression-syntax |
-| JS builtin functions | [BUILTIN-FUNCTIONS](../n8n-code-javascript/modules/BUILTIN-FUNCTIONS.md) | n8n-code-javascript |
-| Python stdlib catalog | [STANDARD-LIBRARY](../n8n-code-python/modules/STANDARD-LIBRARY.md) | n8n-code-python |
-| JS/Python data access | [DATA-ACCESS (JS)](../n8n-code-javascript/modules/DATA-ACCESS.md) / [DATA-ACCESS (Python)](../n8n-code-python/modules/DATA-ACCESS.md) | n8n-code-* |
-| JS/Python error patterns | [ERROR-PATTERNS (JS)](../n8n-code-javascript/modules/ERROR-PATTERNS.md) / [ERROR-PATTERNS (Python)](../n8n-code-python/modules/ERROR-PATTERNS.md) | n8n-code-* |
-| JS/Python common patterns | [COMMON-PATTERNS (JS)](../n8n-code-javascript/modules/COMMON-PATTERNS.md) / [COMMON-PATTERNS (Python)](../n8n-code-python/modules/COMMON-PATTERNS.md) | n8n-code-* |
+| Runtime error encountered | [N8N-RUNTIME-GOTCHAS](../skil_n8n-mcp-tools-expert/modules/N8N-RUNTIME-GOTCHAS.md) | n8n-mcp-tools-expert |
+| Validation error to interpret | [ERROR-CATALOG](../skil_n8n-validation-expert/modules/ERROR-CATALOG.md) | n8n-validation-expert |
+| False positive validation | [FALSE-POSITIVES](../skil_n8n-validation-expert/modules/FALSE-POSITIVES.md) | n8n-validation-expert |
+| Node displayOptions dependencies | [DEPENDENCIES](../skil_n8n-node-configuration/modules/DEPENDENCIES.md) | n8n-node-configuration |
+| Expression common mistakes | [COMMON-MISTAKES](../skil_n8n-expression-syntax/modules/COMMON-MISTAKES.md) | n8n-expression-syntax |
+| Expression examples | [EXAMPLES](../skil_n8n-expression-syntax/modules/EXAMPLES.md) | n8n-expression-syntax |
+| JS builtin functions | [BUILTIN-FUNCTIONS](../skil_n8n-code-javascript/modules/BUILTIN-FUNCTIONS.md) | n8n-code-javascript |
+| Python stdlib catalog | [STANDARD-LIBRARY](../skil_n8n-code-python/modules/STANDARD-LIBRARY.md) | n8n-code-python |
+| JS/Python data access | [DATA-ACCESS (JS)](../skil_n8n-code-javascript/modules/DATA-ACCESS.md) / [DATA-ACCESS (Python)](../skil_n8n-code-python/modules/DATA-ACCESS.md) | n8n-code-* |
+| JS/Python error patterns | [ERROR-PATTERNS (JS)](../skil_n8n-code-javascript/modules/ERROR-PATTERNS.md) / [ERROR-PATTERNS (Python)](../skil_n8n-code-python/modules/ERROR-PATTERNS.md) | n8n-code-* |
+| JS/Python common patterns | [COMMON-PATTERNS (JS)](../skil_n8n-code-javascript/modules/COMMON-PATTERNS.md) / [COMMON-PATTERNS (Python)](../skil_n8n-code-python/modules/COMMON-PATTERNS.md) | n8n-code-* |
 
 ---
 

@@ -17,7 +17,7 @@ The user should not need to provide raw payloads, field names, or API responses 
 3. **Check scenario blueprint:** `scenarios_get(scenarioId)` — review mapper expressions for obvious errors (wrong paths, typos, function errors)
 4. **Compare transfer bytes:** A successful execution with lower-than-expected transfer bytes means data is empty/missing even though status is success
 5. **Check execution detail:** `executions_get_detail(scenarioId, executionId)` — returns status, operations count, and transfer bytes ONLY. Does NOT return module output data. Use for counting operations and comparing transfer bytes, NOT for reading actual values.
-6. **Check entry point binding:** If the pipeline starts from an external source (website form, CRM, third-party), verify the source actually posts to the correct scenario. Use `WebFetch` for website forms. See [E2E-PIPELINE-VERIFICATION](../../build-test-fix/modules/E2E-PIPELINE-VERIFICATION.md) Step 0.
+6. **Check entry point binding:** If the pipeline starts from an external source (website form, CRM, third-party), verify the source actually posts to the correct scenario. Use `WebFetch` for website forms. See [E2E-PIPELINE-VERIFICATION](../../skil_build-test-fix/modules/E2E-PIPELINE-VERIFICATION.md) Step 0.
 7. **Check ops feasibility:** If the symptom is "account paused" or "ops limit reached", load [OPERATIONS-ANALYZER](./OPERATIONS-ANALYZER.md) Section B for post-hoc analysis.
 
 ### Level 2: Research (no side effects)

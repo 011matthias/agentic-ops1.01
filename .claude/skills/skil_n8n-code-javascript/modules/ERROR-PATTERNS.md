@@ -758,6 +758,6 @@ console.log('Input structure:', JSON.stringify(items[0], null, 2));
 - Use browser console for debugging
 
 **See Also**:
-- [SKILL.md](SKILL.md) - Overview and best practices
-- [DATA_ACCESS.md](DATA_ACCESS.md) - Safe data access patterns
-- [COMMON_PATTERNS.md](COMMON_PATTERNS.md) - Working examples
+- [SKILL.md](../SKILL.md) - Overview and best practices
+- [DATA-ACCESS.md](DATA-ACCESS.md) - Safe data access patterns
+- [COMMON-PATTERNS.md](COMMON-PATTERNS.md) - Working examples

@@ -781,5 +781,5 @@ Use `search_templates({query: "database"})` to find more!
 **Pattern**: Trigger → Query → Transform → Write → Verify
 
 **Related**:
-- [http_api_integration.md](http_api_integration.md) - Fetching data to store in DB
-- [scheduled_tasks.md](scheduled_tasks.md) - Periodic database maintenance
+- [HTTP-API-INTEGRATION.md](HTTP-API-INTEGRATION.md) - Fetching data to store in DB
+- [SCHEDULED-TASKS.md](SCHEDULED-TASKS.md) - Periodic database maintenance

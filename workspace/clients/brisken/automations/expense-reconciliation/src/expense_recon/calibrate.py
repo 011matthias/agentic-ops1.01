@@ -34,6 +34,54 @@ from .matching.types import MatchOutcome, Receipt, Transaction
 FX_MULTIPLICITY_TARGET = 2.0  # BLUEPRINT slice-3 acceptance criterion
 
 
+def _contested_receipts(
+    transactions: list[Transaction],
+    receipts: list[Receipt],
+    cfg,
+) -> int:
+    """Receipts with assignable candidates from MORE THAN ONE transaction
+    (2026-07-23). This is the only population where greedy assignment
+    order can matter, so it is the measured evidence for/against ever
+    replacing the greedy assignment with a global bipartite optimum.
+    Mirrors match_month's candidate gates (entity, card scope, match_one
+    with the run's self-derived rates) over the credit-free set."""
+    from .matching.deterministic import (
+        _card_keys,
+        _tx_card_keys,
+        derive_fx_reference_rates,
+        match_one,
+    )
+
+    purchases = [t for t in transactions if not t.is_credit]
+    derived = derive_fx_reference_rates(purchases, receipts, cfg)
+    tx_card_keys = {t.transaction_id: _tx_card_keys(t) for t in purchases}
+    present_keys: set[str] = set()
+    for keys in tx_card_keys.values():
+        present_keys |= keys
+    scope_by_doc: dict[str, set[str]] = {}
+    if cfg.card_scoping:
+        for r in receipts:
+            pm_keys = _card_keys(r.payment_mode)
+            if pm_keys and (pm_keys & present_keys):
+                scope_by_doc[r.document_id] = pm_keys
+
+    claimants: dict[str, set[str]] = {}
+    for t in purchases:
+        for r in receipts:
+            if r.legal_entity_id != t.legal_entity_id:
+                continue
+            scope = scope_by_doc.get(r.document_id)
+            if scope is not None and not (
+                scope & tx_card_keys[t.transaction_id]
+            ):
+                continue
+            if match_one(t, r, cfg, derived) is not None:
+                claimants.setdefault(r.document_id, set()).add(
+                    t.transaction_id
+                )
+    return sum(1 for txs in claimants.values() if len(txs) > 1)
+
+
 def _metrics(
     outcome: MatchOutcome,
     transactions: list[Transaction],
@@ -187,6 +235,14 @@ def main(argv: list[str] | None = None) -> int:
 
     outcome = match_month(transactions, receipts, match_cfg)
     m = _metrics(outcome, transactions, receipts, card_currency)
+    # Greedy-vs-global evidence counter (2026-07-23): how many receipts
+    # are genuinely contested (candidates from >1 charge). Reported, never
+    # gated.
+    from .matching.deterministic import MatchingConfig as _MC
+
+    m["contested_receipts"] = _contested_receipts(
+        transactions, receipts, match_cfg or _MC()
+    )
 
     # Categorization-accuracy gate (PR 2b): a labeled-fixture regression
     # check on the Sort pass, segmented so a drop in the memory-auto-applied

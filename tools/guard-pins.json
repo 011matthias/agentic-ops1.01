@@ -30,5 +30,9 @@
   "tools/pricing-tiers-validate.py": {
     "pinned": "2026-07-22",
     "sha": "5244b2dd0618dfef3d3de257e71d9f7eefd73fdc"
+  },
+  "tools/recon-accuracy-guard.py": {
+    "pinned": "2026-07-23",
+    "sha": "85852695b952b2e02bc882a7bd3976d1618f9fa3"
   }
 }

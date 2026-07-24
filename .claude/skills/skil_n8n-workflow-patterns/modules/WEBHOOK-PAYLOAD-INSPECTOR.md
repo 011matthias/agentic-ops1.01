@@ -10,7 +10,7 @@ Discover the actual payload structure from a webhook source before building expr
 - Webhook data structure is undocumented or uncertain
 - Expressions return undefined and you need to see the actual data shape
 
-**Check first:** See `webhook-inspector/modules/KNOWN-PROVIDERS.md` for pre-documented formats (Tally, Typeform, Stripe, HubSpot, Google Forms). If listed, skip to the expression translation table below.
+**Check first:** See `.claude/skills/skil_webhook-inspector/modules/KNOWN-PROVIDERS.md` for pre-documented formats (Tally, Typeform, Stripe, HubSpot, Google Forms). If listed, skip to the expression translation table below.
 
 ---
 

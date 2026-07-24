@@ -83,7 +83,37 @@ VALID_DUP_RESOLUTIONS = (DUP_IGNORE, DUP_CONFIRMED)
 # applies). Snapshotted into each run's `config["policy"]` at creation so a
 # run reproduces under the policy that was live when it ran, not whatever
 # the setting later becomes.
-SETTINGS_DEFAULTS: dict = {"export_approved_only": False}
+#
+# Master data (2026-07-22). The hosted surface had no home for the
+# operator input the pipeline needs, so three capabilities were dead on
+# every hosted run while working locally from a config file:
+#
+#   fx_reference_rates  {"BRL:USD": "0.192448"} — the month's reference
+#     rate per currency pair. Without one, a cross-currency receipt can
+#     only reach the implied-rate band / LLM judgment: the real April run
+#     matched 0 of 94 while the same two files matched 29/36 locally with
+#     a rate file. Month-scoped operator input, never derived from Zoho's
+#     per-line rate (wrong by up to 12.8%, LD-5).
+#   card_entities  {"2838": "Corporate Services"} — maps a card to the
+#     legal entity whose chart of accounts guards the export. Without it
+#     `resolve_legal_entity` falls back to the raw card id, matching no
+#     COA entity, so the gate silently never fires (`has_coa: false`).
+#   card_accounts  {"2838": "1010 Chase Corporate"} — the Zoho bank/card
+#     account each card's balancing credit posts to. Without it every
+#     journal entry credits the visible `Card: 2838` placeholder.
+#
+# All three are read at run creation and snapshotted into the run's own
+# config, so an existing run keeps the master data it ran under.
+SETTINGS_DEFAULTS: dict = {
+    "export_approved_only": False,
+    "fx_reference_rates": {},
+    "card_entities": {},
+    "card_accounts": {},
+}
+
+# Settings keys holding a {str: str} map. Values are kept as STRINGS: a
+# Decimal FX rate keeps full precision as text, a json float does not.
+SETTINGS_MAP_KEYS = ("fx_reference_rates", "card_entities", "card_accounts")
 
 # Background-job states (durable: a Fly machine can scale to zero mid-run;
 # a job row that is still `running` at boot was interrupted).
@@ -221,6 +251,15 @@ class RunStore:
                 updated_at TEXT,
                 PRIMARY KEY (run_id, group_id)
             );
+            CREATE TABLE IF NOT EXISTS login_failures (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ip TEXT NOT NULL,
+                ts REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_login_failures_ts
+                ON login_failures (ts);
+            CREATE INDEX IF NOT EXISTS idx_login_failures_ip_ts
+                ON login_failures (ip, ts);
             """
         )
         self._migrate()
@@ -311,6 +350,30 @@ class RunStore:
             "SELECT * FROM runs WHERE run_id = ?", (run_id,)
         ).fetchone()
         return self._row_to_run(row) if row else None
+
+    def set_run_label(self, run_id: str, label: str) -> bool:
+        """Rename a run. Returns True when a row was updated (F9)."""
+        cur = self.conn.execute(
+            "UPDATE runs SET label = ? WHERE run_id = ?", (label, run_id)
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def delete_run(self, run_id: str) -> bool:
+        """Drop a run and its per-run edit rows. Returns True when the run
+        existed. The on-disk work_dir is removed by the caller (the store
+        owns the db, not the volume); dropping the edit rows here keeps the
+        db from carrying orphaned decisions/overrides for a gone run (F9)."""
+        cur = self.conn.execute("DELETE FROM runs WHERE run_id = ?", (run_id,))
+        self.conn.execute("DELETE FROM decisions WHERE run_id = ?", (run_id,))
+        self.conn.execute(
+            "DELETE FROM category_overrides WHERE run_id = ?", (run_id,)
+        )
+        self.conn.execute(
+            "DELETE FROM duplicate_resolutions WHERE run_id = ?", (run_id,)
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
 
     @staticmethod
     def _row_to_run(row: sqlite3.Row) -> RunRow:
@@ -472,6 +535,26 @@ class RunStore:
             (status, run_id, error, stage, updated_at, job_id),
         )
         self.conn.commit()
+
+    def list_active_jobs(self) -> list[dict]:
+        """Jobs still `running`: the in-flight pipeline work the dashboard
+        should show as processing (F3). A run row only exists once its
+        pipeline finished, so without this a mid-flight upload is invisible
+        between kickoff and completion."""
+        rows = self.conn.execute(
+            "SELECT job_id, intake_id, stage, created_at FROM jobs "
+            "WHERE status = ? ORDER BY created_at",
+            (JOB_RUNNING,),
+        ).fetchall()
+        return [
+            {
+                "job_id": r["job_id"],
+                "intake_id": r["intake_id"],
+                "stage": r["stage"],
+                "created_at": r["created_at"],
+            }
+            for r in rows
+        ]
 
     def set_job_stage(self, job_id: str, stage: str, updated_at: str) -> None:
         self.conn.execute(
@@ -682,3 +765,42 @@ class RunStore:
         )
         self.conn.commit()
         return {**SETTINGS_DEFAULTS, **merged}
+
+    # -- login throttle (see web/ratelimit.py for the policy) --------------
+    # Failed /api/login attempts only. Timestamps are epoch seconds, so the
+    # policy never has to parse a date. Successful logins clear the caller's
+    # rows; `prune_login_failures` keeps the table bounded to one window.
+
+    def record_login_failure(self, ip: str, ts: float) -> None:
+        self.conn.execute(
+            "INSERT INTO login_failures (ip, ts) VALUES (?, ?)", (ip, float(ts))
+        )
+        self.conn.commit()
+
+    def login_failure_stats(
+        self, since: float, ip: str | None = None
+    ) -> tuple[int, float]:
+        """`(count, latest_ts)` for failures at or after `since` — for one
+        caller when `ip` is given, else across every caller. `latest_ts` is
+        0.0 when there are none."""
+        if ip is None:
+            row = self.conn.execute(
+                "SELECT COUNT(*) AS n, COALESCE(MAX(ts), 0.0) AS last "
+                "FROM login_failures WHERE ts >= ?",
+                (float(since),),
+            ).fetchone()
+        else:
+            row = self.conn.execute(
+                "SELECT COUNT(*) AS n, COALESCE(MAX(ts), 0.0) AS last "
+                "FROM login_failures WHERE ip = ? AND ts >= ?",
+                (ip, float(since)),
+            ).fetchone()
+        return int(row["n"]), float(row["last"])
+
+    def clear_login_failures(self, ip: str) -> None:
+        self.conn.execute("DELETE FROM login_failures WHERE ip = ?", (ip,))
+        self.conn.commit()
+
+    def prune_login_failures(self, before: float) -> None:
+        self.conn.execute("DELETE FROM login_failures WHERE ts < ?", (float(before),))
+        self.conn.commit()

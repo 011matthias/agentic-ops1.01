@@ -59,48 +59,6 @@ def test_build_memory_view_seeded(tmp_path):
     assert v["fx"][0]["mean"] == "1.1000"
 
 
-# -- routes ---------------------------------------------------------------
-
-def test_memory_page_empty(client):
-    r = client.get("/memory")
-    assert r.status_code == 200
-    assert "Nothing learned yet" in r.text
-
-
-def test_memory_page_lists_learned(client):
-    _seed(client._data_root)
-    r = client.get("/memory")
-    assert r.status_code == 200
-    assert "delancey tavern" in r.text
-    assert "Meals" in r.text                 # category (& is html-escaped)
-    assert "mega cente constr" in r.text     # alias statement side
-    assert "hostaria" in r.text and "1.1000" in r.text  # fx mean
-
-
-def test_forget_removes_the_merchant(client):
-    _seed(client._data_root)
-    r = client.post(
-        "/memory/forget",
-        data={"legal_entity_id": LE, "vendor": "delancey tavern"},
-        follow_redirects=False,
-    )
-    assert r.status_code == 303
-    with LearningStore(client._data_root / "learning.sqlite") as s:
-        assert s.get_merchant_category(LE, normalize_vendor("Delancey Tavern")) is None
-        # other merchants untouched
-        assert s.get_merchant_fx(LE, normalize_vendor("Hostaria"))
-
-
-def test_reset_clears_everything(client):
-    _seed(client._data_root)
-    r = client.post("/memory/reset", data={}, follow_redirects=False)
-    assert r.status_code == 303
-    with LearningStore(client._data_root / "learning.sqlite") as s:
-        assert s.count_rows() == {
-            "merchant_category": 0, "vendor_alias": 0, "merchant_fx": 0,
-        }
-
-
 # -- SPA JSON API (the memory screen the Lovable front end renders) --------
 
 def test_api_memory_empty(client):
@@ -142,3 +100,19 @@ def test_api_memory_forget_bad_request(client):
     r = client.post("/api/memory/forget", json={"legal_entity_id": LE})
     assert r.status_code == 400
     assert r.json()["error"]
+
+
+def test_api_memory_reset_clears_everything(client):
+    _seed(client._data_root)
+    # An empty body is accepted (reset everything)...
+    r = client.post("/api/memory/reset")
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+    with LearningStore(client._data_root / "learning.sqlite") as s:
+        assert s.count_rows() == {
+            "merchant_category": 0, "vendor_alias": 0, "merchant_fx": 0,
+        }
+    # ...and a scoped body echoes the scope back.
+    r = client.post("/api/memory/reset", json={"table": "merchant_category"})
+    assert r.status_code == 200
+    assert r.json()["table"] == "merchant_category"

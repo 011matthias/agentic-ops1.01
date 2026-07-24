@@ -370,5 +370,5 @@ get_node({
 
 ## Related
 
-- [VALIDATION_GUIDE.md](VALIDATION_GUIDE.md) - Validate node configs
-- [WORKFLOW_GUIDE.md](WORKFLOW_GUIDE.md) - Use nodes in workflows
+- [VALIDATION-GUIDE.md](VALIDATION-GUIDE.md) - Validate node configs
+- [WORKFLOW-GUIDE.md](WORKFLOW-GUIDE.md) - Use nodes in workflows

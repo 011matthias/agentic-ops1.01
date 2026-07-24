@@ -37,12 +37,12 @@ Load ONE module at a time based on your current task.
 
 | When | Module | Source |
 |------|--------|--------|
-| Writing basic tasks | [TRIGGER-DEV-BASIC-TASKS](../build/modules/TRIGGER-DEV-BASIC-TASKS.md) | build |
-| Full build workflow | [TRIGGER-DEV-BUILD](../build/modules/TRIGGER-DEV-BUILD.md) | build |
-| Modifying trigger.config.ts | [TRIGGER-DEV-CONFIG](../build/modules/TRIGGER-DEV-CONFIG.md) | build |
-| Advanced patterns (concurrency, retries) | [TRIGGER-DEV-ADVANCED-TASKS](../build/modules/TRIGGER-DEV-ADVANCED-TASKS.md) | build |
-| Scheduled/cron tasks | [TRIGGER-DEV-SCHEDULED](../build/modules/TRIGGER-DEV-SCHEDULED.md) | build |
-| Frontend monitoring | [TRIGGER-DEV-REALTIME](../build/modules/TRIGGER-DEV-REALTIME.md) | build |
+| Writing basic tasks | [TRIGGER-DEV-BASIC-TASKS](../skil_build/modules/TRIGGER-DEV-BASIC-TASKS.md) | build |
+| Full build workflow | [TRIGGER-DEV-BUILD](../skil_build/modules/TRIGGER-DEV-BUILD.md) | build |
+| Modifying trigger.config.ts | [TRIGGER-DEV-CONFIG](../skil_build/modules/TRIGGER-DEV-CONFIG.md) | build |
+| Advanced patterns (concurrency, retries) | [TRIGGER-DEV-ADVANCED-TASKS](../skil_build/modules/TRIGGER-DEV-ADVANCED-TASKS.md) | build |
+| Scheduled/cron tasks | [TRIGGER-DEV-SCHEDULED](../skil_build/modules/TRIGGER-DEV-SCHEDULED.md) | build |
+| Frontend monitoring | [TRIGGER-DEV-REALTIME](../skil_build/modules/TRIGGER-DEV-REALTIME.md) | build |
 | AI agent tasks | [AGENTS](modules/AGENTS.md) | trigger-pack |
 | Configuration reference | [CONFIG](modules/CONFIG.md) | trigger-pack |
 | Realtime reference | [REALTIME](modules/REALTIME.md) | trigger-pack |
@@ -59,3 +59,7 @@ Load ONE module at a time based on your current task.
 | Basic task reference | [basic-tasks](references/basic-tasks.md) | trigger-pack |
 | Advanced task reference | [advanced-tasks](references/advanced-tasks.md) | trigger-pack |
 | Scheduled task reference | [scheduled-tasks](references/scheduled-tasks.md) | trigger-pack |
+| Full trigger.config.ts reference (custom + advanced build extensions) | [config](references/config.md) | trigger-pack |
+| Full realtime reference (public tokens, run object properties) | [realtime](references/realtime.md) | trigger-pack |
+| Env vars, dev vs prod keys, CI/CD and multi-environment setup | [environment-setup](references/environment-setup.md) | trigger-pack |
+| Project layout, monorepos, multiple or collocated task dirs | [project-structure](references/project-structure.md) | trigger-pack |
