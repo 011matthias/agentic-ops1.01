@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Users - Brisken Lead Desk{% endblock %}
+{% block content %}
+
+<div class="card">
+  <h1>Users &amp; access</h1>
+  <div class="muted">Approve who can sign in, and manage roles. Sign-in is passwordless: an approved
+    person enters their email and gets a one-time link.</div>
+  {% if not auth_email_on %}
+  <div class="badge suppressed" style="margin-top:10px; display:inline-block;">Email sign-in is OFF</div>
+  <div class="muted" style="margin-top:6px;">
+    <code>LEAD_DESK_AUTH_EMAILS</code> is not set, so approved users can't receive links yet.
+    They can still sign in with an access code. Turn email on after the watched send drill.
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Add a user</h2>
+  <div class="muted" style="margin-bottom:10px;">Adds an approved account directly, so you don't have to wait for a request.</div>
+  <form method="post" action="/admin/users/invite">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <div class="grid4" style="align-items:end;">
+      <div>
+        <label for="inv-email">Email</label>
+        <input type="email" id="inv-email" name="email" placeholder="name@brisken.com" required>
+      </div>
+      <div>
+        <label for="inv-name">Name (optional)</label>
+        <input type="text" id="inv-name" name="name" placeholder="Full name">
+      </div>
+      <div>
+        <label for="inv-role">Role</label>
+        <select id="inv-role" name="role">
+          {% for r in roles %}<option value="{{ r }}" {% if r == 'member' %}selected{% endif %}>{{ r }}</option>{% endfor %}
+        </select>
+      </div>
+      <div><button class="btn" type="submit">Add user</button></div>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>{{ users|length }} user{{ 's' if users|length != 1 else '' }}</h2>
+  <div class="scroll-x">
+  <table>
+    <thead>
+      <tr><th>Email</th><th>Name</th><th>Role</th><th>Status</th><th>Last sign-in</th><th>Actions</th></tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr {% if u.status == 'disabled' %}class="suppressed"{% endif %}>
+        <td class="mono">{{ u.email }}</td>
+        <td>{{ u.name or '' }}</td>
+        <td>
+          <span class="badge tier">{{ u.role }}</span>
+        </td>
+        <td>
+          {% if u.status == 'approved' %}<span class="badge stage-booked">approved</span>
+          {% elif u.status == 'pending' %}<span class="badge stage-replied">pending</span>
+          {% else %}<span class="badge suppressed">disabled</span>{% endif %}
+        </td>
+        <td class="muted">{{ (u.last_login_at or '')[:10] }}</td>
+        <td>
+          <div class="row-actions">
+            {% if u.status == 'pending' %}
+              <form method="post" action="/admin/users/approve" style="margin:0;">
+                <input type="hidden" name="csrf" value="{{ csrf_token }}">
+                <input type="hidden" name="email" value="{{ u.email }}">
+                <button class="btn btn-small" type="submit">Approve</button>
+              </form>
+              <form method="post" action="/admin/users/disable" style="margin:0;">
+                <input type="hidden" name="csrf" value="{{ csrf_token }}">
+                <input type="hidden" name="email" value="{{ u.email }}">
+                <button class="btn btn-small btn-secondary" type="submit">Decline</button>
+              </form>
+            {% elif u.status == 'approved' %}
+              <form method="post" action="/admin/users/role" style="margin:0;">
+                <input type="hidden" name="csrf" value="{{ csrf_token }}">
+                <input type="hidden" name="email" value="{{ u.email }}">
+                <input type="hidden" name="role" value="{{ 'member' if u.role == 'admin' else 'admin' }}">
+                <button class="btn btn-small btn-secondary" type="submit">Make {{ 'member' if u.role == 'admin' else 'admin' }}</button>
+              </form>
+              <form method="post" action="/admin/users/disable" style="margin:0;">
+                <input type="hidden" name="csrf" value="{{ csrf_token }}">
+                <input type="hidden" name="email" value="{{ u.email }}">
+                <button class="btn btn-small btn-secondary" type="submit">Disable</button>
+              </form>
+            {% else %}
+              <form method="post" action="/admin/users/approve" style="margin:0;">
+                <input type="hidden" name="csrf" value="{{ csrf_token }}">
+                <input type="hidden" name="email" value="{{ u.email }}">
+                <button class="btn btn-small" type="submit">Re-approve</button>
+              </form>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+      {% if not users %}
+      <tr><td colspan="6" class="muted">No users yet.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+{% endblock %}

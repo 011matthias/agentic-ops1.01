@@ -378,6 +378,55 @@ def _add_column(table: str, col: str, decl: str):
     return _step
 
 
+# v6 (passwordless auth) DDL. Kept out of _SCHEMA so a fresh DB gets these via
+# the migration and an existing prod DB via the same migration - one code path,
+# so the runner's user_version guard covers both.
+_USERS_DDL = """
+CREATE TABLE IF NOT EXISTS users (
+    email         TEXT PRIMARY KEY,
+    name          TEXT,
+    role          TEXT NOT NULL DEFAULT 'member',
+    status        TEXT NOT NULL DEFAULT 'pending',
+    created_at    TEXT NOT NULL,
+    approved_at   TEXT,
+    approved_by   TEXT,
+    last_login_at TEXT
+)
+"""
+# Single-use magic-link tokens. Only the sha256 of the raw token is stored, so
+# a DB leak never yields a live link; the raw token lives only in the email.
+_LOGIN_TOKENS_DDL = """
+CREATE TABLE IF NOT EXISTS login_tokens (
+    token_hash  TEXT PRIMARY KEY,
+    email       TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    expires_at  TEXT NOT NULL,
+    used_at     TEXT,
+    request_ip  TEXT
+)
+"""
+
+USER_ROLES = ("admin", "member")
+USER_STATUSES = ("pending", "approved", "disabled")
+
+
+def _seed_admin_users(conn) -> None:
+    """Seed the two known operators as approved admins so the gate is never
+    left with zero approvers after cut-over. Idempotent: INSERT OR IGNORE
+    keyed on the email PK, and it never demotes an existing row."""
+    from datetime import datetime, timezone
+
+    from .auth import SEED_ADMIN_EMAILS
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    for email in SEED_ADMIN_EMAILS:
+        conn.execute(
+            "INSERT OR IGNORE INTO users "
+            "(email, name, role, status, created_at, approved_at, approved_by) "
+            "VALUES (?, '', 'admin', 'approved', ?, ?, 'seed')",
+            (email, now, now),
+        )
+
+
 # Ordered schema migrations. Each key N holds the steps that move a DB from
 # user_version N-1 to N; a step is either a raw SQL string or a callable(conn).
 # All steps are replay-safe (DROP...IF EXISTS / guarded ADD COLUMN). BUMP
@@ -416,6 +465,16 @@ _MIGRATIONS: dict[int, list] = {
         _add_column("contacts", "next_step_at", "TEXT"),
         "UPDATE contacts SET next_step_at = created_at "
         "WHERE next_step LIKE 'No reply yet%' AND next_step_at IS NULL",
+    ],
+    # v6: passwordless auth. A per-account registry (`users`) plus single-use
+    # magic-link tokens (`login_tokens`), and the two known operators seeded as
+    # approved admins. Access-code login stays as an admin break-glass; this
+    # only ADDS the email path and the admin-approval registry.
+    6: [
+        _USERS_DDL.strip(),
+        _LOGIN_TOKENS_DDL.strip(),
+        "CREATE INDEX IF NOT EXISTS ix_login_tokens_email ON login_tokens(email)",
+        _seed_admin_users,
     ],
 }
 
@@ -707,6 +766,127 @@ class ContactStore:
     def campaign_ids(self) -> set[str]:
         rows = self.conn.execute("SELECT campaign_id FROM campaigns").fetchall()
         return {r["campaign_id"] for r in rows}
+
+    # -- users + magic-link tokens (passwordless auth) ----------------------
+
+    def get_user(self, email: str) -> sqlite3.Row | None:
+        email = (email or "").strip().lower()
+        if not email:
+            return None
+        return self.conn.execute(
+            "SELECT * FROM users WHERE email = ?", (email,)
+        ).fetchone()
+
+    def list_users(self) -> list[sqlite3.Row]:
+        """Pending first (they need action), then by email."""
+        return self.conn.execute(
+            "SELECT * FROM users ORDER BY "
+            "CASE status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END, "
+            "email"
+        ).fetchall()
+
+    def create_pending_user(self, email: str, name: str, now: str) -> bool:
+        """Record a new access request. Idempotent (no-op if the email already
+        exists in any state). Returns True when a new pending row was created."""
+        email = (email or "").strip().lower()
+        cur = self.conn.execute(
+            "INSERT OR IGNORE INTO users (email, name, role, status, created_at) "
+            "VALUES (?, ?, 'member', 'pending', ?)",
+            (email, name.strip(), now),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def upsert_user(self, email: str, name: str, role: str, status: str,
+                    by: str | None, now: str) -> None:
+        """Admin proactively adds/updates a user (the 'invite' path). Sets
+        approved_at/by when the status is 'approved'."""
+        email = (email or "").strip().lower()
+        role = role if role in USER_ROLES else "member"
+        status = status if status in USER_STATUSES else "pending"
+        approved_at = now if status == "approved" else None
+        approved_by = by if status == "approved" else None
+        self.conn.execute(
+            "INSERT INTO users (email, name, role, status, created_at, approved_at, approved_by) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(email) DO UPDATE SET name = excluded.name, role = excluded.role, "
+            "status = excluded.status, "
+            "approved_at = COALESCE(approved_at, excluded.approved_at), "
+            "approved_by = COALESCE(approved_by, excluded.approved_by)",
+            (email, name.strip(), role, status, now, approved_at, approved_by),
+        )
+        self.conn.commit()
+
+    def set_user_status(self, email: str, status: str, by: str | None, now: str) -> None:
+        email = (email or "").strip().lower()
+        if status not in USER_STATUSES:
+            raise ValueError(f"bad status {status!r}")
+        if status == "approved":
+            self.conn.execute(
+                "UPDATE users SET status = 'approved', approved_at = ?, approved_by = ? "
+                "WHERE email = ?",
+                (now, by, email),
+            )
+        else:
+            self.conn.execute(
+                "UPDATE users SET status = ? WHERE email = ?", (status, email))
+        self.conn.commit()
+
+    def set_user_role(self, email: str, role: str) -> None:
+        email = (email or "").strip().lower()
+        if role not in USER_ROLES:
+            raise ValueError(f"bad role {role!r}")
+        self.conn.execute("UPDATE users SET role = ? WHERE email = ?", (role, email))
+        self.conn.commit()
+
+    def touch_user_login(self, email: str, now: str) -> None:
+        self.conn.execute(
+            "UPDATE users SET last_login_at = ? WHERE email = ?",
+            (now, (email or "").strip().lower()),
+        )
+        self.conn.commit()
+
+    def count_admins(self) -> int:
+        """Approved admins - the guard that stops the last admin disabling
+        themselves and locking everyone out."""
+        return self.conn.execute(
+            "SELECT COUNT(*) FROM users WHERE role = 'admin' AND status = 'approved'"
+        ).fetchone()[0]
+
+    def create_login_token(self, token_hash: str, email: str, now: str,
+                           expires_at: str, request_ip: str | None) -> None:
+        self.conn.execute(
+            "INSERT INTO login_tokens (token_hash, email, created_at, expires_at, request_ip) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (token_hash, (email or "").strip().lower(), now, expires_at, request_ip),
+        )
+        self.conn.commit()
+
+    def consume_login_token(self, token_hash: str, now: str) -> str | None:
+        """Single-use redemption: return the token's email iff it exists, is
+        unused, and is unexpired - and atomically mark it used so a replay (or
+        a concurrent click) cannot redeem it twice. Fail-closed on any miss."""
+        row = self.conn.execute(
+            "SELECT email, expires_at, used_at FROM login_tokens WHERE token_hash = ?",
+            (token_hash,),
+        ).fetchone()
+        if row is None or row["used_at"] is not None or row["expires_at"] < now:
+            return None
+        cur = self.conn.execute(
+            "UPDATE login_tokens SET used_at = ? WHERE token_hash = ? AND used_at IS NULL",
+            (now, token_hash),
+        )
+        self.conn.commit()
+        return row["email"] if cur.rowcount == 1 else None
+
+    def purge_expired_tokens(self, now: str) -> int:
+        """Drop spent/expired tokens so the table cannot grow unbounded."""
+        cur = self.conn.execute(
+            "DELETE FROM login_tokens WHERE expires_at < ? OR used_at IS NOT NULL",
+            (now,),
+        )
+        self.conn.commit()
+        return cur.rowcount
 
     # -- campaigns ---------------------------------------------------------
 

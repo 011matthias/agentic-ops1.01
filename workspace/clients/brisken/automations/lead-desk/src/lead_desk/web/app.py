@@ -42,16 +42,32 @@ from fastapi.responses import (
 )
 from fastapi.templating import Jinja2Templates
 
-from . import auth, cadence, uploads
+from . import accounts, auth, cadence, uploads
 from .service import (
     EDITABLE_FLAGS, EDITABLE_TEXT, StaleWriteError, apply_fields, build_board,
     build_contact_view, create_contact, ingest_event, log_touch, now_iso,
     toggle_suppress,
 )
 from .store import (
-    CHANNELS, DEGREES, DIRECTIONS, EVENT_TYPES, SEND_MODES, ContactStore,
+    CHANNELS, DEGREES, DIRECTIONS, EVENT_TYPES, SEND_MODES, USER_ROLES,
+    ContactStore,
 )
 from ..sync import have_creds, run_all, run_sync
+
+# Login-page banners, keyed by ?notice= / ?err= so a POST can 303-redirect
+# (no form re-submit on refresh) and the GET renders the message.
+_LOGIN_NOTICES = {
+    "sent": "Check your email. We just sent you a one-time sign-in link.",
+    "pending": "Your access request is with an admin. We'll email you once it's approved.",
+}
+_LOGIN_ERRORS = {
+    "badcode": "Wrong access code.",
+    "throttled": "Too many attempts. Wait a few minutes and try again.",
+    "badlink": "That sign-in link is invalid, expired, or already used. Request a new one below.",
+    "invalidemail": "Enter a valid email address.",
+    "nomailer": "Email sign-in is not switched on yet. Use your access code, or ask an admin.",
+    "sendfail": "We couldn't send the email just now. Please try again in a moment.",
+}
 
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 # Packaged brand assets (design tokens, Brisken logos, favicon). Served
@@ -132,8 +148,23 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         # Auto-inject the session CSRF token into every template render.
         return {"csrf_token": auth.csrf_for_cookie(request.cookies.get(auth.COOKIE_NAME))}
 
+    def _nav_context(request: Request) -> dict:
+        # Expose is_admin so base.html can show the admin nav link only to
+        # admins. Fail-closed: any lookup error hides the link, never 500s.
+        ident = auth.read_user(request.cookies.get(auth.COOKIE_NAME))
+        if not ident and not auth.gate_enabled():
+            ident = "local"
+        admin = False
+        if ident:
+            try:
+                with ContactStore(db_path) as store:
+                    admin = accounts.is_admin(store, ident)
+            except Exception:  # noqa: BLE001 - a nav flag must never break a render
+                admin = False
+        return {"is_admin": admin}
+
     templates = Jinja2Templates(directory=str(_TEMPLATES_DIR),
-                                context_processors=[_csrf_context])
+                                context_processors=[_csrf_context, _nav_context])
     app.add_middleware(_CSRFMiddleware)
 
     def open_store() -> ContactStore:
@@ -168,10 +199,64 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return resp
 
     @app.get("/login", response_class=HTMLResponse)
-    def login_form(request: Request):
+    def login_form(request: Request, notice: str = "", err: str = ""):
         if not auth.gate_enabled():
             return RedirectResponse(url="/", status_code=303)
-        return templates.TemplateResponse(request, "login.html", {"error": None})
+        return templates.TemplateResponse(request, "login.html", {
+            "error": _LOGIN_ERRORS.get(err),
+            "notice": _LOGIN_NOTICES.get(notice),
+            "auth_email_on": accounts.auth_emails_enabled(),
+        })
+
+    def _client_ip(request: Request) -> str:
+        # Fly puts the real client IP in Fly-Client-IP; request.client.host is
+        # the fly-proxy, so keying a throttle on it would rate-limit everyone.
+        return request.headers.get("fly-client-ip") or (
+            request.client.host if request.client else "unknown")
+
+    @app.post("/login/magic")
+    def login_magic(request: Request, email: str = Form("")):
+        """Passwordless: email in -> single-use link out (approved), or an
+        access request recorded (new). Never reveals a password; rate-limited
+        per client IP so it cannot be used to spam an inbox."""
+        if not auth.gate_enabled():
+            return RedirectResponse(url="/", status_code=303)
+        ip = _client_ip(request)
+        if auth.magic_blocked(ip):
+            return RedirectResponse(url="/login?err=throttled", status_code=303)
+        auth.record_magic_request(ip)
+        with open_store() as store:
+            result = accounts.request_magic_link(
+                store, email, base_url=accounts.base_url_from(request),
+                ip=ip, now=now_iso())
+        # Map the outcome to a neutral banner. pending / disabled / new all read
+        # as "with an admin" so the page never discloses account state.
+        target = {
+            "sent": "/login?notice=sent",
+            "pending_new": "/login?notice=pending",
+            "pending": "/login?notice=pending",
+            "disabled": "/login?notice=pending",
+            "invalid": "/login?err=invalidemail",
+            "no_mailer": "/login?err=nomailer",
+            "send_failed": "/login?err=sendfail",
+        }.get(result["status"], "/login?notice=sent")
+        return RedirectResponse(url=target, status_code=303)
+
+    @app.get("/auth/verify")
+    def auth_verify(request: Request, token: str = ""):
+        if not auth.gate_enabled():
+            return RedirectResponse(url="/", status_code=303)
+        with open_store() as store:
+            email = accounts.verify_and_login(store, token, now_iso())
+        if not email:
+            return RedirectResponse(url="/login?err=badlink", status_code=303)
+        resp = RedirectResponse(url="/", status_code=303)
+        resp.set_cookie(
+            auth.COOKIE_NAME, auth.issue_token(email),
+            max_age=auth.SESSION_MAX_AGE, httponly=True,
+            secure=auth.cookie_is_secure(), samesite="lax",
+        )
+        return resp
 
     @app.post("/login")
     def login_submit(request: Request, code: str = Form("")):
@@ -206,6 +291,76 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         resp = RedirectResponse(url="/login", status_code=303)
         resp.delete_cookie(auth.COOKIE_NAME)
         return resp
+
+    # --- admin: user management (gated + admin-only) --------------------
+    # These paths are NOT in OPEN_PATHS, so require_login already blocks the
+    # unauthenticated; every handler then re-checks admin (deny by default).
+
+    @app.get("/admin/users", response_class=HTMLResponse)
+    def admin_users(request: Request):
+        with open_store() as store:
+            if not accounts.is_admin(store, current_user(request)):
+                return HTMLResponse("Forbidden", status_code=403)
+            users = [dict(u) for u in store.list_users()]
+        return templates.TemplateResponse(request, "admin_users.html", {
+            "users": users, "user": current_user(request),
+            "roles": USER_ROLES,
+            "auth_email_on": accounts.auth_emails_enabled(),
+        })
+
+    @app.post("/admin/users/approve")
+    def admin_user_approve(request: Request, email: str = Form(...)):
+        with open_store() as store:
+            if not accounts.is_admin(store, current_user(request)):
+                return HTMLResponse("Forbidden", status_code=403)
+            accounts.approve_user(store, email, by=current_user(request),
+                                  now=now_iso(),
+                                  base_url=accounts.base_url_from(request))
+        return RedirectResponse(url="/admin/users", status_code=303)
+
+    @app.post("/admin/users/disable")
+    def admin_user_disable(request: Request, email: str = Form(...)):
+        with open_store() as store:
+            if not accounts.is_admin(store, current_user(request)):
+                return HTMLResponse("Forbidden", status_code=403)
+            u = store.get_user(email)
+            # Never disable the last approved admin - that would lock everyone
+            # out of the admin surface.
+            if (u and u["role"] == "admin" and u["status"] == "approved"
+                    and store.count_admins() <= 1):
+                return HTMLResponse("Cannot disable the last admin.", status_code=400)
+            store.set_user_status(auth.normalize_email(email), "disabled",
+                                  current_user(request), now_iso())
+        return RedirectResponse(url="/admin/users", status_code=303)
+
+    @app.post("/admin/users/role")
+    def admin_user_role(request: Request, email: str = Form(...),
+                        role: str = Form(...)):
+        role = role.strip().lower()
+        if role not in USER_ROLES:
+            return HTMLResponse("bad role", status_code=400)
+        with open_store() as store:
+            if not accounts.is_admin(store, current_user(request)):
+                return HTMLResponse("Forbidden", status_code=403)
+            email_n = auth.normalize_email(email)
+            u = store.get_user(email_n)
+            if (u and u["role"] == "admin" and role == "member"
+                    and store.count_admins() <= 1):
+                return HTMLResponse("Cannot demote the last admin.", status_code=400)
+            store.set_user_role(email_n, role)
+        return RedirectResponse(url="/admin/users", status_code=303)
+
+    @app.post("/admin/users/invite")
+    def admin_user_invite(request: Request, email: str = Form(...),
+                          name: str = Form(""), role: str = Form("member")):
+        with open_store() as store:
+            if not accounts.is_admin(store, current_user(request)):
+                return HTMLResponse("Forbidden", status_code=403)
+            accounts.invite_user(store, email, name=name,
+                                 role=role.strip().lower(), by=current_user(request),
+                                 now=now_iso(),
+                                 base_url=accounts.base_url_from(request))
+        return RedirectResponse(url="/admin/users", status_code=303)
 
     @app.get("/healthz")
     def healthz():
