@@ -627,47 +627,86 @@
   .mm-back:hover { border-color: var(--teal); color: var(--teal-strong); }
   .mm-section[data-view="overview"] .mm-back { display: none; }
 
-  /* the node graph (overview) */
-  .mm-graph { position: relative; max-width: 940px; margin: 48px auto 0; height: clamp(540px, 62vh, 690px); }
+  /* the nested field (overview): OnePilot is the field, TreasuryCentral the workspace inside it */
+  .mm-graph { position: relative; max-width: 1000px; margin: 46px auto 0; }
   .mm-section[data-view="open"] .mm-graph { pointer-events: none; }
-  .mm-edges { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-  .mm-edge { fill: none; stroke: var(--border-strong); stroke-width: 1.4; vector-effect: non-scaling-stroke; }
-  .mm-flow { fill: none; stroke: var(--teal); stroke-width: 2; stroke-dasharray: 4 13; opacity: .42; vector-effect: non-scaling-stroke; animation: mmDash 5s linear infinite; }
-  @keyframes mmDash { to { stroke-dashoffset: -34; } }
 
-  .mm-node { position: absolute; left: var(--nx); top: var(--ny); transform: translate(-50%,-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; width: max-content; max-width: 198px; cursor: pointer; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 18px; padding: 14px 18px; box-shadow: var(--shadow); font-family: var(--font-body); text-align: center; transition: transform .16s, border-color .16s, box-shadow .16s; }
-  .mm-node:hover { border-color: var(--teal); box-shadow: var(--shadow-lift); transform: translate(-50%,-50%) translateY(-3px); }
+  .mm-field { position: relative; border: 1.5px solid var(--border-strong); border-radius: 28px; padding: 40px clamp(14px, 3vw, 30px) 24px; background:
+      radial-gradient(130% 100% at 50% -12%, color-mix(in srgb, var(--teal) 10%, transparent), transparent 62%),
+      var(--surface); box-shadow: var(--shadow); }
+  .mm-field::before { content: ""; position: absolute; inset: 6px; border: 1px dashed color-mix(in srgb, var(--teal) 32%, transparent); border-radius: 22px; pointer-events: none; }
+
+  /* the OnePilot legend straddling the top edge: the boundary of the field, and it opens the platform */
+  .mm-field-tab { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 11px; max-width: calc(100% - 26px); background: var(--navy); border: 1.5px solid var(--teal); border-radius: var(--radius-pill); padding: 11px 24px; cursor: pointer; box-shadow: var(--shadow-lift); transition: transform .16s, box-shadow .16s, border-color .16s; }
+  .mm-field-tab:hover { transform: translateX(-50%) translateY(-2px); border-color: #7fe3ec; }
+  .mm-field-tab:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+  .mm-field-tab[aria-expanded="true"] { border-color: #7fe3ec; }
+  .mm-field-mark { width: 25px; height: 25px; color: #7fe3ec; display: inline-flex; flex: none; }
+  .mm-field-mark svg { width: 25px; height: 25px; }
+  .mm-field-txt { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0; }
+  .mm-field-name { font-family: var(--font-display); font-weight: 600; font-size: 18px; color: #fff; line-height: 1.05; }
+  .mm-field-tag { font-size: 11.5px; color: #8fd9e0; line-height: 1.2; }
+
+  .mm-inner { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.55fr) minmax(0, 1fr); align-items: stretch; gap: clamp(9px, 1.7vw, 20px); margin-top: 18px; }
+
+  /* the source zones around the workspace */
+  .mm-zone { display: flex; flex-direction: column; gap: 9px; padding: 15px 15px 16px; border: 1px solid var(--border); border-radius: 16px; background: color-mix(in srgb, var(--surface-2) 55%, transparent); text-align: left; }
+  button.mm-zone { cursor: pointer; font: inherit; color: inherit; transition: border-color .16s, box-shadow .16s, transform .16s; }
+  button.mm-zone:hover { border-color: var(--teal); box-shadow: var(--shadow); transform: translateY(-2px); }
+  button.mm-zone:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+  button.mm-zone[aria-expanded="true"] { border-color: var(--teal); }
+  .mm-zone-h { font-family: var(--font-display); font-weight: 600; font-size: 13px; color: var(--heading); line-height: 1.25; }
+  .mm-zone-flow { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: var(--teal-strong); }
+  .mm-zone-flow svg { width: 22px; height: 12px; flex: none; }
+  .mm-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .mm-chip { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: var(--radius-pill); border: 1px solid var(--border); background: var(--surface); font-size: 11.5px; color: var(--text); line-height: 1.3; white-space: nowrap; }
+  .mm-chip.is-sap { border-color: var(--teal); font-weight: 700; color: var(--heading); }
+  .mm-zone-more { font-family: var(--font-mono); font-size: 10.5px; color: var(--teal-strong); }
+
+  /* the workspace at the center */
+  .mm-core { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
+  .mm-node { display: inline-flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 18px; padding: 14px 18px; box-shadow: var(--shadow); font-family: var(--font-body); text-align: center; transition: transform .16s, border-color .16s, box-shadow .16s; }
+  .mm-node:hover { border-color: var(--teal); box-shadow: var(--shadow-lift); transform: translateY(-3px); }
   .mm-node:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
   .mm-node[aria-expanded="true"] { border-color: var(--teal); }
   .mm-node-cue { width: 26px; height: 26px; color: var(--teal-strong); display: inline-flex; }
   .mm-node-cue svg { width: 26px; height: 26px; }
-  .mm-node-name { font-family: var(--font-display); font-weight: 600; font-size: 14.5px; color: var(--heading); line-height: 1.2; }
-  .mm-node-sub { font-size: 11px; color: var(--muted); line-height: 1.3; }
+  .mm-node-name { font-family: var(--font-display); font-weight: 600; font-size: 15px; color: var(--heading); line-height: 1.2; }
+  .mm-node-sub { font-size: 11.5px; color: var(--muted); line-height: 1.3; }
 
-  .mm-node.is-hub { background: var(--navy); border-color: var(--teal); border-width: 2px; box-shadow: var(--shadow-lift); border-radius: 30px; padding: 26px 38px; max-width: 280px; }
-  .mm-node.is-hub .mm-node-name { color: #fff; font-size: 24px; }
-  .mm-node.is-hub .mm-node-sub { color: #8fd9e0; font-size: 12.5px; }
-  .mm-node.is-hub .mm-node-cue { color: #7fe3ec; width: 36px; height: 36px; }
-  .mm-node.is-hub .mm-node-cue svg { width: 36px; height: 36px; }
+  .mm-node.is-tc { align-self: center; width: 100%; max-width: 340px; border-color: var(--teal); border-width: 1.5px; border-radius: 22px; padding: 20px 26px; background: radial-gradient(150% 130% at 50% 0%, color-mix(in srgb, var(--teal) 11%, var(--surface)), var(--surface)); }
+  .mm-node.is-tc .mm-node-cue { width: 30px; height: 30px; }
+  .mm-node.is-tc .mm-node-cue svg { width: 30px; height: 30px; }
+  .mm-node.is-tc .mm-node-name { font-size: 22px; }
+  .mm-node.is-tc .mm-node-name .ac { color: var(--teal-strong); }
+  .mm-node.is-tc .mm-node-sub { font-size: 12.5px; }
 
-  .mm-node.is-tc { border-color: var(--teal); border-width: 1.5px; border-radius: 22px; padding: 15px 26px; max-width: 270px; }
-  .mm-node.is-tc .mm-node-name { font-size: 18px; color: var(--teal-strong); }
+  .mm-apps { display: flex; flex-direction: column; gap: 8px; }
+  .mm-apps-h, .mm-desk-h { font-family: var(--font-mono); font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); text-align: center; }
+  .mm-appchips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+  .mm-appchip { display: inline-flex; align-items: center; gap: 6px; padding: 7px 13px; border-radius: var(--radius-pill); border: 1px solid var(--border-strong); background: var(--surface); font-family: var(--font-body); font-size: 12.5px; font-weight: 500; color: var(--text); cursor: pointer; transition: border-color .14s, color .14s, transform .14s, box-shadow .14s; }
+  .mm-appchip:hover { border-color: var(--teal); color: var(--teal-strong); transform: translateY(-2px); box-shadow: var(--shadow); }
+  .mm-appchip:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+  .mm-appchip[aria-expanded="true"] { border-color: var(--teal); color: var(--teal-strong); }
+  .mm-appchip-cue { width: 15px; height: 15px; display: inline-flex; color: var(--teal-strong); flex: none; }
+  .mm-appchip-cue svg { width: 15px; height: 15px; }
+  .mm-apps-more { text-align: center; font-size: 11.5px; color: var(--muted); line-height: 1.45; margin: 0; }
+  .mm-apps-more a { color: var(--accent-strong); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent-strong) 40%, transparent); white-space: nowrap; }
+  .mm-desk { display: flex; flex-direction: column; gap: 6px; padding-top: 11px; border-top: 1px dashed var(--border); }
+  .mm-desk-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; }
+  .mm-desk-item { display: inline-flex; align-items: center; padding: 3px 11px; border-radius: var(--radius-pill); background: var(--surface-2); font-size: 11px; color: var(--muted); }
 
-  .mm-node.is-base { background: rgba(0,57,111,.05); }
-  [data-theme="dark"] .mm-node.is-base { background: rgba(127,227,236,.06); }
+  /* the governed layer woven between the sources and the workspace */
+  .mm-weave { margin-top: 16px; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 13px 16px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--teal) 30%, transparent); background: color-mix(in srgb, var(--teal-bg) 60%, transparent); }
+  .mm-weave-name { display: inline-flex; align-items: center; gap: 7px; font-family: var(--font-display); font-weight: 600; font-size: 12.5px; color: var(--teal-strong); }
+  .mm-weave-name svg { width: 15px; height: 15px; }
+  .mm-weave-t { font-size: 12px; color: var(--text); text-align: center; line-height: 1.5; max-width: 640px; }
 
-  /* the four OnePilot branch nodes share one size */
-  .mm-graph .mm-node:not(.is-hub):not(.is-tc) { width: 190px; max-width: 190px; min-height: 98px; justify-content: center; }
-
-  /* the "why now" node: a separate wide pill centered under the map */
-  .mm-why-wrap { display: flex; justify-content: center; margin-top: 12px; }
+  /* the "why now" pill centered under the field */
+  .mm-why-wrap { display: flex; justify-content: center; margin-top: 14px; }
   .mm-section[data-view="open"] .mm-why-wrap { pointer-events: none; }
-  .mm-node.is-why { position: static; left: auto; top: auto; transform: none; flex-direction: row; align-items: center; justify-content: center; gap: 11px; width: min(360px, 84vw); max-width: 360px; padding: 13px 28px; border-radius: var(--radius-pill); border-style: dashed; }
+  .mm-node.is-why { flex-direction: row; align-items: center; justify-content: center; gap: 11px; width: min(360px, 84vw); max-width: 360px; padding: 13px 28px; border-radius: var(--radius-pill); border-style: dashed; }
   .mm-node.is-why:hover { transform: translateY(-3px); }
-  .mm-endpoints-wrap { max-width: 760px; margin: 6px auto 0; text-align: center; }
-  .mm-endpoints-label { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
-  .mm-endpoints { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
-  .mm-endpoint { display: inline-flex; align-items: center; padding: 8px 16px; border-radius: var(--radius-pill); border: 1px dashed var(--border-strong); background: var(--surface); font-size: 13px; font-weight: 500; color: var(--text); }
   .mm-node.is-why .mm-node-cue { width: 22px; height: 22px; }
   .mm-node.is-why .mm-node-cue svg { width: 22px; height: 22px; }
   .mm-node.is-why .mm-node-name { font-size: 15px; }
@@ -720,29 +759,29 @@
     .hero-grid { padding: 40px 0 30px; gap: 18px; }
     .hero-split { gap: 30px; margin-top: 8px; }
     .hero-research .big-stat { font-size: 54px; }
-    /* phone: the platform map becomes a tiered infographic (platform -> edition -> apps) */
-    .mm-graph { height: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: stretch; margin-top: 18px; }
-    .mm-edges { display: none; }
-    .mm-node { position: static; transform: none; width: 100%; max-width: none; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 14px 12px; }
-    .mm-node:hover { transform: none; }
-    .mm-node.is-hub { grid-column: 1 / -1; order: 1; position: relative; left: auto; top: auto; max-width: none; justify-self: stretch; border-radius: 18px; padding: 18px 16px; }
-    .mm-node.is-hub .mm-node-name { font-size: 20px; }
-    .mm-node.is-tc { grid-column: 1 / -1; order: 2; position: relative; left: auto; top: auto; max-width: none; justify-self: stretch; border-radius: 16px; padding: 15px 16px; }
-    .mm-node.is-tc .mm-node-name { font-size: 16px; }
-    .mm-node.is-hub::after, .mm-node.is-tc::after { content: ""; position: absolute; left: 50%; bottom: -10px; width: 2px; height: 10px; background: var(--border-strong); transform: translateX(-50%); }
+    /* phone: the field stacks, the workspace first, then the sources it spans */
+    .mm-graph { margin-top: 26px; }
+    .mm-field { padding: 30px 12px 20px; border-radius: 20px; }
+    .mm-field::before { inset: 5px; border-radius: 15px; }
+    .mm-field-tab { top: -17px; padding: 9px 16px; gap: 8px; max-width: calc(100% - 20px); }
+    .mm-field-name { font-size: 15.5px; }
+    .mm-field-tag { display: none; }
+    .mm-inner { grid-template-columns: 1fr; gap: 11px; margin-top: 14px; }
+    .mm-core { order: -1; }
+    .mm-node.is-tc { max-width: none; }
+    .mm-weave { margin-top: 13px; }
     .float-demo { right: 14px; bottom: 70px; }
     .hero-split .hero-research .mini-stats { width: 100%; max-width: 100%; }
     .hero-split .hero-research .mini { grid-template-columns: 76px minmax(0, 1fr); }
     .faq-section table { display: block; overflow-x: auto; max-width: 100%; }
     .mm-node.is-why { width: 100%; max-width: none; border-radius: 16px; justify-content: center; }
     .mm-why-wrap { margin-top: 10px; }
-    .mm-graph .mm-node:not(.is-hub):not(.is-tc) { order: 3; width: 100%; max-width: none; min-height: 96px; }
     .mm-read table { display: block; overflow-x: auto; max-width: 100%; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .mm-node, .mm-loc { transition: none !important; }
-    .mm-node:hover { transform: translate(-50%,-50%); }
-    .mm-flow { animation: none !important; }
+    .mm-node, .mm-loc, .mm-appchip, .mm-field-tab, button.mm-zone { transition: none !important; }
+    .mm-node:hover, .mm-appchip:hover, button.mm-zone:hover { transform: none; }
+    .mm-field-tab:hover { transform: translateX(-50%); }
     .mm-panel { animation: none !important; }
   }
 
@@ -965,54 +1004,57 @@
   <h2 class="mm-sr-title">OnePilot platform map</h2>
   <div class="wrap mm-head">
     <span class="eyebrow">Explore the platform</span>
-    <p class="section-sub mm-hint"><a href="https://onepilot.brisken.com/" style="color:var(--accent-strong);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--accent-strong) 40%,transparent);">OnePilot</a> is Brisken's governed, no-code platform. TreasuryCentral is its treasurer's edition, bringing the treasury apps together. Click any node to open it.</p>
+    <p class="section-sub mm-hint">It is all <a href="https://onepilot.brisken.com/" style="color:var(--accent-strong);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--accent-strong) 40%,transparent);">OnePilot</a>, Brisken's governed, no-code platform. TreasuryCentral is the treasury workspace inside it: the apps, your counterparties and your enterprise systems, on one governed layer. Click the workspace, an app, or the platform to open it.</p>
   </div>
 
   <div class="mm-graph" aria-label="OnePilot platform map">
-    <svg class="mm-edges" viewBox="0 0 1000 600" preserveAspectRatio="none" aria-hidden="true">
-      <path class="mm-edge" d="M500 100 C500 150 500 195 500 216"/>
-      <path class="mm-edge" d="M488 296 C400 360 250 415 162 462"/>
-      <path class="mm-edge" d="M497 300 C470 385 408 470 388 508"/>
-      <path class="mm-edge" d="M503 300 C530 385 592 470 612 508"/>
-      <path class="mm-edge" d="M512 296 C600 360 750 415 838 462"/>
-      <path class="mm-flow" d="M488 296 C400 360 250 415 162 462"/>
-      <path class="mm-flow" style="animation-delay:-1s" d="M497 300 C470 385 408 470 388 508"/>
-      <path class="mm-flow" style="animation-delay:-2s" d="M503 300 C530 385 592 470 612 508"/>
-      <path class="mm-flow" style="animation-delay:-3s" d="M512 296 C600 360 750 415 838 462"/>
-      <path class="mm-flow" style="animation-delay:-1.5s" d="M500 100 C500 150 500 195 500 216"/>
-    </svg>
+    <div class="mm-field">
+      <button class="mm-field-tab mm-open-tier" type="button" data-tier="onepilot" id="node-onepilot" aria-expanded="false" aria-controls="onepilot">
+        <span class="mm-field-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3 4 14h7l-1 7 9-11h-7z"/></svg></span>
+        <span class="mm-field-txt"><span class="mm-field-name">OnePilot</span><span class="mm-field-tag">the governed field, there is no outside</span></span>
+      </button>
 
-    <button class="mm-node is-tc" type="button" data-tier="treasury-central" id="node-treasury-central" aria-expanded="false" aria-controls="treasury-central" style="--nx:50%;--ny:43%">
-      <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 9v11"/></svg></span>
-      <span class="mm-node-name">TreasuryCentral</span>
-      <span class="mm-node-sub">The treasurer's edition</span>
-    </button>
+      <div class="mm-inner">
+        <div class="mm-zone">
+          <span class="mm-zone-h">Everything treasury deals with</span>
+          <span class="mm-zone-flow"><svg viewBox="0 0 22 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 6h16M13 2l5 4-5 4"/></svg>into the workspace</span>
+          <span class="mm-chips"><span class="mm-chip">Banks</span><span class="mm-chip">Central banks</span><span class="mm-chip">Trading venues</span><span class="mm-chip">Data providers</span><span class="mm-chip">Exchanges</span><span class="mm-chip">Custodians</span><span class="mm-chip">Clearing houses</span><span class="mm-chip">Payment networks</span><span class="mm-chip">Authorities</span></span>
+        </div>
 
-    <button class="mm-node is-hub" type="button" data-tier="onepilot" id="node-onepilot" aria-expanded="false" aria-controls="onepilot" style="--nx:50%;--ny:10%">
-      <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3 4 14h7l-1 7 9-11h-7z"/></svg></span>
-      <span class="mm-node-name">OnePilot</span>
-      <span class="mm-node-sub">The platform</span>
-    </button>
+        <div class="mm-core">
+          <button class="mm-node is-tc mm-open-tier" type="button" data-tier="treasury-central" id="node-treasury-central" aria-expanded="false" aria-controls="treasury-central">
+            <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 9v11"/></svg></span>
+            <span class="mm-node-name">Treasury<span class="ac">Central</span></span>
+            <span class="mm-node-sub">the treasury workspace</span>
+          </button>
+          <div class="mm-apps">
+            <span class="mm-apps-h">The apps, in the workspace</span>
+            <div class="mm-appchips">
+              <button class="mm-appchip mm-open-tier" type="button" data-tier="mdh" id="node-mdh" aria-expanded="false" aria-controls="mdh"><span class="mm-appchip-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg></span>Market Data Hub</button>
+              <button class="mm-appchip mm-open-tier" type="button" data-tier="bst" id="node-bst" aria-expanded="false" aria-controls="bst"><span class="mm-appchip-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg></span>Brisken Smart Trading</button>
+              <button class="mm-appchip mm-open-tier" type="button" data-tier="rag" id="node-rag" aria-expanded="false" aria-controls="rag"><span class="mm-appchip-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 8l9 6 9-6"/></svg></span>Remittance Advice Gate</button>
+            </div>
+            <p class="mm-apps-more">On the same platform: Cash Flow and Exposure Hub, Bank Fee Portal, Credit Data Hub, ESG Data Hub, plus the AI Digital Workforce, and the use cases your own team builds. <a href="https://onepilot.brisken.com/">See the full platform &rarr;</a></p>
+          </div>
+          <div class="mm-desk">
+            <span class="mm-desk-h">Your workstation, now in the workspace</span>
+            <div class="mm-desk-row"><span class="mm-desk-item">Mail</span><span class="mm-desk-item">Teams</span><span class="mm-desk-item">Calendar</span><span class="mm-desk-item">Documents</span></div>
+          </div>
+        </div>
 
-    <button class="mm-node" type="button" data-tier="mdh" id="node-mdh" aria-expanded="false" aria-controls="mdh" style="--nx:15%;--ny:80%">
-      <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg></span>
-      <span class="mm-node-name">Market Data Hub</span>
-    </button>
+        <button class="mm-zone mm-open-tier" type="button" data-tier="sap" id="node-sap" aria-expanded="false" aria-controls="sap">
+          <span class="mm-zone-h">Everything the business runs on</span>
+          <span class="mm-zone-flow"><svg viewBox="0 0 22 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 6h18M6 2 2 6l4 4M16 2l4 4-4 4"/></svg>in and out, both ways</span>
+          <span class="mm-chips"><span class="mm-chip is-sap">SAP</span><span class="mm-chip">Other ERPs</span><span class="mm-chip">Databases</span><span class="mm-chip">Data lakes</span><span class="mm-chip">BI and analytics</span><span class="mm-chip">Trading and OMS</span><span class="mm-chip">Risk systems</span><span class="mm-chip">Document management</span><span class="mm-chip">APIs and connectors</span></span>
+          <span class="mm-zone-more">Open the foundation &rarr;</span>
+        </button>
+      </div>
 
-    <button class="mm-node" type="button" data-tier="bst" id="node-bst" aria-expanded="false" aria-controls="bst" style="--nx:39%;--ny:89%">
-      <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg></span>
-      <span class="mm-node-name">Brisken Smart Trading</span>
-    </button>
-
-    <button class="mm-node" type="button" data-tier="rag" id="node-rag" aria-expanded="false" aria-controls="rag" style="--nx:61%;--ny:89%">
-      <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 8l9 6 9-6"/></svg></span>
-      <span class="mm-node-name">Remittance Advice Gate</span>
-    </button>
-
-    <button class="mm-node is-base" type="button" data-tier="sap" id="node-sap" aria-expanded="false" aria-controls="sap" style="--nx:85%;--ny:80%">
-      <span class="mm-node-cue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7l9-4 9 4-9 4z"/><path d="M3 7v10l9 4 9-4V7M3 12l9 4 9-4"/></svg></span>
-      <span class="mm-node-name">SAP applications</span>
-    </button>
+      <div class="mm-weave">
+        <span class="mm-weave-name"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h18M12 3v18"/></svg>Brisken OnePilot</span>
+        <span class="mm-weave-t">One governed layer brings every source into the workspace, visible, accessible, actionable, and every enterprise system too: one layer for data, process and control.</span>
+      </div>
+    </div>
   </div>
 
   <div class="mm-why-wrap">
@@ -1388,7 +1430,7 @@
   var mq = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
   function reduced(){ return mq && mq.matches; }
   function panelFor(t){ return document.getElementById(t); }
-  function tierBtn(t){ return map.querySelector('.mm-node[data-tier="'+t+'"]'); }
+  function tierBtn(t){ return map.querySelector('.mm-open-tier[data-tier="'+t+'"]'); }
   function locBtn(t){ return map.querySelector('.mm-loc[data-tier="'+t+'"]'); }
   function labelDialog(t){ var pp=panelFor(t); if(!pp) return; var h=pp.querySelector('h2,h3'); if(!h) return; if(!h.id) h.id='mm-h-'+t; mmOpen.setAttribute('aria-labelledby', h.id); }
 
@@ -1441,8 +1483,8 @@
     mmOpen.addEventListener('animationend', function h(ev){ if(ev.target!==mmOpen) return; mmOpen.classList.remove('is-closing'); mmOpen.removeEventListener('animationend', h); finish(); });
   }
 
-  map.querySelectorAll('.mm-node').forEach(function(b){
-    b.addEventListener('click', function(){ var t=b.getAttribute('data-tier'); if (t==='onepilot'){ window.location.href='https://onepilot.brisken.com/'; return; } if (S.view==='open' && S.tier===t) closeTier(); else openTier(t,'panel', b); });
+  map.querySelectorAll('.mm-open-tier').forEach(function(b){
+    b.addEventListener('click', function(){ var t=b.getAttribute('data-tier'); if (S.view==='open' && S.tier===t) closeTier(); else openTier(t,'panel', b); });
   });
   map.querySelectorAll('.mm-loc').forEach(function(b){
     b.addEventListener('click', function(){ openTier(b.getAttribute('data-tier'),'panel'); });
