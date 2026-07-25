@@ -1,11 +1,15 @@
 """Server-side access gate for the hosted Lead Desk.
 
-Local (loopback) use needs no auth, so the gate is active ONLY when access
-codes are configured via ``LEAD_DESK_ACCESS_CODES``. When set (the hosted
-case), every page requires a signed session cookie obtained by entering a code
-at ``/login``. Codes are compared in constant time and never leave the server;
-the cookie carries only ``<user>.<hmac(user)>``, never the code. Each user gets
-their own code so every logged event is attributed to a real person.
+Login is passwordless: a user enters their email at ``/login`` and follows a
+single-use magic link (see ``accounts.py``). The signed session cookie is the
+only auth artifact; it carries the user's email plus an issued-at + nonce.
+
+The gate is active whenever ``LEAD_DESK_AUTH_SECRET`` is set (the hosted case).
+Local (loopback) dev leaves it unset, so no gate applies - the same
+prod-vs-local split the access-code presence used to key, now anchored on the
+secret that actually secures the session. There is deliberately no shared
+access code: the ONLY way in is the email magic link, so a compromised code can
+never grant access and every session maps to a real, approved person.
 
 The event-ingest endpoint (``POST /events``) sits outside the cookie gate but
 carries its own shared-secret check (``LEAD_DESK_INGEST_SECRET``) so the cloud
@@ -17,8 +21,9 @@ from the ingest secret because claim responses carry lead PII and mutate queue
 state, so the two rotate independently.
 
 Env vars:
-    LEAD_DESK_ACCESS_CODES    "matthias:code1,dirk:code2,chris:code3"; gate on iff set
-    LEAD_DESK_AUTH_SECRET     HMAC key for cookies; set in prod so sessions survive restart
+    LEAD_DESK_AUTH_SECRET     HMAC key for cookies; its presence turns the gate
+                              on (set in prod; unset for local loopback dev)
+    LEAD_DESK_AUTH_EMAILS     "1" turns the magic-link sender on (see accounts.py)
     LEAD_DESK_INGEST_SECRET   bearer secret required on POST /events
     LEAD_DESK_WORKER_SECRET   bearer secret for the local send worker's outbox API
     LEAD_DESK_INSECURE_COOKIE set to "1" to drop the cookie Secure flag for local http
@@ -35,10 +40,6 @@ import time
 
 COOKIE_NAME = "lead_desk_session"
 SESSION_MAX_AGE = 60 * 60 * 12  # 12 hours
-
-# /login brute-force throttle: block after this many fails within the window.
-LOGIN_MAX_FAILS = 8
-LOGIN_WINDOW = 300  # seconds
 
 # Magic-link (passwordless) login. A raw url-safe token (256 bits) is emailed;
 # only its sha256 is stored (store.login_tokens), and each is single-use with a
@@ -117,42 +118,16 @@ OPEN_PATHS = frozenset({
 _PROCESS_SECRET = secrets.token_hex(32)
 
 
-def _codes() -> dict[str, str]:
-    """Parse ``LEAD_DESK_ACCESS_CODES`` into {user: code}. Empty => gate off."""
-    raw = os.environ.get("LEAD_DESK_ACCESS_CODES", "").strip()
-    out: dict[str, str] = {}
-    for pair in raw.split(","):
-        pair = pair.strip()
-        if not pair or ":" not in pair:
-            continue
-        user, code = pair.split(":", 1)
-        user, code = user.strip().lower(), code.strip()
-        if user and code:
-            out[user] = code
-    return out
-
-
 def gate_enabled() -> bool:
-    """True when at least one access code is configured (the hosted case)."""
-    return bool(_codes())
+    """True in the hosted case: the gate turns on when a stable HMAC session
+    secret is configured. Local loopback dev leaves ``LEAD_DESK_AUTH_SECRET``
+    unset and runs ungated (the same prod-vs-local split the old access-code
+    presence keyed, now anchored on the secret that secures the session)."""
+    return bool(os.environ.get("LEAD_DESK_AUTH_SECRET", "").strip())
 
 
 def _secret() -> bytes:
     return (os.environ.get("LEAD_DESK_AUTH_SECRET") or _PROCESS_SECRET).encode("utf-8")
-
-
-def resolve_user(submitted: str) -> str | None:
-    """Return the user whose code matches (constant time), else None.
-
-    Compares against every configured code without early return so timing does
-    not reveal which user (if any) matched.
-    """
-    submitted = (submitted or "").strip()
-    match: str | None = None
-    for user, code in _codes().items():
-        if hmac.compare_digest(submitted, code):
-            match = user
-    return match
 
 
 def issue_token(user: str, now: float | None = None) -> str:
@@ -205,33 +180,8 @@ def csrf_valid(cookie_token: str | None, submitted: str | None) -> bool:
     return hmac.compare_digest(submitted, csrf_token(user))
 
 
-# -- /login brute-force throttle (in-process, per client IP) ------------------
-
-_LOGIN_FAILS: dict[str, list[float]] = {}
-
-
-def _prune(ip: str, now: float) -> list[float]:
-    fails = [t for t in _LOGIN_FAILS.get(ip, []) if now - t < LOGIN_WINDOW]
-    _LOGIN_FAILS[ip] = fails
-    return fails
-
-
-def login_blocked(ip: str, now: float | None = None) -> bool:
-    now = now if now is not None else time.time()
-    return len(_prune(ip, now)) >= LOGIN_MAX_FAILS
-
-
-def record_login_fail(ip: str, now: float | None = None) -> None:
-    now = now if now is not None else time.time()
-    _prune(ip, now).append(now)
-
-
-def record_login_success(ip: str) -> None:
-    _LOGIN_FAILS.pop(ip, None)
-
-
-# -- magic-link request throttle (separate from the code-login fail counter so
-#    legit link requests never lock out the access-code break-glass) ----------
+# -- magic-link request throttle (per client IP; the only login throttle now
+#    that code login is gone) ---------------------------------------------------
 
 MAGIC_MAX_REQS = 5
 MAGIC_WINDOW = 300  # seconds

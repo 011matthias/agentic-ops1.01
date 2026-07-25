@@ -9,8 +9,8 @@
   {% if not auth_email_on %}
   <div class="badge suppressed" style="margin-top:10px; display:inline-block;">Email sign-in is OFF</div>
   <div class="muted" style="margin-top:6px;">
-    <code>LEAD_DESK_AUTH_EMAILS</code> is not set, so approved users can't receive links yet.
-    They can still sign in with an access code. Turn email on after the watched send drill.
+    <code>LEAD_DESK_AUTH_EMAILS</code> is not set, so approved users can't receive links and
+    nobody can sign in. Set it to <code>1</code> (with Graph creds present) to turn sign-in on.
   </div>
   {% endif %}
 </div>

@@ -49,13 +49,6 @@
     background: var(--green-bg); color: var(--green); border: 1px solid var(--green);
     border-radius: 8px; padding: 9px 12px; font-size: 13.5px; margin-bottom: 16px;
   }
-  .divider { display: flex; align-items: center; gap: 10px; color: var(--muted);
-    font-size: 12px; margin: 20px 0 4px; }
-  .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
-  details { margin-top: 6px; }
-  details summary { cursor: pointer; color: var(--muted); font-size: 13px; list-style: none; text-align: center; }
-  details summary::-webkit-details-marker { display: none; }
-  details summary:hover { color: var(--text); }
   .foot { color: var(--muted); font-size: 12px; margin-top: 18px; text-align: center; }
   .theme-toggle {
     position: fixed; top: 14px; right: 14px; width: auto; margin: 0;
@@ -83,16 +76,6 @@
              placeholder="you@brisken.com" autofocus required>
       <button type="submit">Email me a sign-in link</button>
     </form>
-
-    <div class="divider">or</div>
-    <details>
-      <summary>Use an access code</summary>
-      <form method="post" action="/login">
-        <label for="code">Access code</label>
-        <input type="password" id="code" name="code" autocomplete="current-password" required>
-        <button type="submit">Sign in with code</button>
-      </form>
-    </details>
 
     <div class="foot">UnpauseAI</div>
   </div>

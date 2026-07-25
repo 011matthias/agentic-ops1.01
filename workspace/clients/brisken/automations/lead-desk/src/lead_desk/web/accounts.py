@@ -15,10 +15,8 @@ is the policy layer on top of it and the ``users`` / ``login_tokens`` store:
 
 Email goes out via the existing app-only Graph sender (``graph_mail.GraphMailer``,
 matthias.silva only). It is INERT until ``LEAD_DESK_AUTH_EMAILS=1`` AND the
-Graph creds are present, so the very first live auth-email is a deliberate,
-owner-gated flip - not a side effect of deploying this code. Access-code login
-(``auth.resolve_user``) remains as an admin break-glass so no one is locked out
-while auth-email is still off.
+Graph creds are present. The email magic link is the ONLY way in - there is no
+shared access code - so every session maps to a real, approved person.
 
 Mailer is dependency-injected (``mailer=`` param) so tests never touch Graph.
 """
@@ -30,10 +28,6 @@ from datetime import datetime, timedelta
 from . import auth
 
 _UNSET = object()
-
-# Legacy access-code identities (short names, no '@') that are admins by
-# break-glass: the two known operators. A code login as anyone else is a member.
-_LEGACY_ADMIN_NAMES = ("matthias", "dirk")
 
 
 # -- mailer resolution --------------------------------------------------------
@@ -185,17 +179,15 @@ def verify_and_login(store, raw_token: str, now: str) -> str | None:
 # -- admin half ---------------------------------------------------------------
 
 def is_admin(store, identity: str | None) -> bool:
-    """True when the session identity may use the admin surface. Email
-    identities resolve against the users table; legacy short-name access-code
-    identities map the two known operators to admin; the ungated-local 'local'
-    identity is trusted (the gate is off there anyway)."""
+    """True when the session identity may use the admin surface. Sessions now
+    carry an email (magic-link login); it must resolve to an approved admin in
+    the users table. The ungated-local 'local' identity is trusted (the gate is
+    off there anyway)."""
     ident = auth.normalize_email(identity)
     if not ident or ident == "local":
         return True
-    if "@" in ident:
-        u = store.get_user(ident)
-        return bool(u and u["role"] == "admin" and u["status"] == "approved")
-    return ident in _LEGACY_ADMIN_NAMES
+    u = store.get_user(ident)
+    return bool(u and u["role"] == "admin" and u["status"] == "approved")
 
 
 def approve_user(store, email: str, *, by: str, now: str, base_url: str,

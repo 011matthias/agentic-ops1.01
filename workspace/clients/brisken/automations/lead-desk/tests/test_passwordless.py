@@ -30,9 +30,8 @@ class FakeMailer:
 @pytest.fixture(autouse=True)
 def _reset_throttles():
     # The per-IP throttles are module-global; TestClient shares one client host
-    # across tests, so clear them each test for determinism.
+    # across tests, so clear it each test for determinism.
     auth._MAGIC_REQS.clear()
-    auth._LOGIN_FAILS.clear()
     yield
 
 
@@ -176,10 +175,9 @@ def test_verify_fails_if_approval_revoked_after_issue(store):
 
 def test_is_admin_resolution(store):
     store.upsert_user("member@brisken.com", "", "member", "approved", "a", NOW)
-    assert accounts.is_admin(store, MATTHIAS) is True
-    assert accounts.is_admin(store, "member@brisken.com") is False
-    assert accounts.is_admin(store, "matthias") is True             # legacy code login
-    assert accounts.is_admin(store, "chris") is False               # legacy member
+    assert accounts.is_admin(store, MATTHIAS) is True               # seeded admin
+    assert accounts.is_admin(store, "member@brisken.com") is False  # approved member
+    assert accounts.is_admin(store, "stranger@brisken.com") is False  # not a user
     assert accounts.is_admin(store, "local") is True                # ungated dev
 
 
@@ -188,7 +186,6 @@ def test_is_admin_resolution(store):
 @pytest.fixture
 def app_mail(tmp_path, monkeypatch):
     """A gated app whose auth-email path is wired to a fake mailer."""
-    monkeypatch.setenv("LEAD_DESK_ACCESS_CODES", "matthias:testcode123")
     monkeypatch.setenv("LEAD_DESK_AUTH_SECRET", "test-secret")
     monkeypatch.setenv("LEAD_DESK_INSECURE_COOKIE", "1")
     monkeypatch.setenv("LEAD_DESK_AUTH_EMAILS", "1")
@@ -211,10 +208,11 @@ def _magic_login(client, email):
     assert auth.COOKIE_NAME in r2.cookies
 
 
-def test_login_page_offers_email_and_code(app_mail):
+def test_login_page_is_email_only(app_mail):
     html = app_mail.get("/login").text
     assert 'action="/login/magic"' in html and 'name="email"' in html
-    assert 'action="/login"' in html and 'name="code"' in html   # fallback kept
+    # access code fully removed - no code field, no fallback
+    assert 'name="code"' not in html and 'Use an access code' not in html
 
 
 def test_magic_flow_end_to_end_admin(app_mail):
