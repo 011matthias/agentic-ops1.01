@@ -1405,6 +1405,81 @@ def _fmt_amount(value: Decimal | None) -> str:
     return "" if value is None else f"{value:,.2f}"
 
 
+def _fmt_rate(value: Decimal | None) -> str:
+    """A conversion rate, trimmed to six significant decimals with trailing
+    zeros removed (0.196078, 0.2298). Empty for None/non-finite."""
+    if value is None or not value.is_finite():
+        return ""
+    q = value.quantize(Decimal("0.000001"))
+    s = format(q, "f")
+    if "." in s:
+        s = s.rstrip("0").rstrip(".")
+    return s
+
+
+def _fx_breakdown(tx: "Transaction", receipt: "Receipt | None") -> dict | None:
+    """Side-by-side FX comparison for a cross-currency candidate pair, so a
+    reviewer sees WHY an uncertain pair is uncertain without decoding the
+    prose reason (owner directive 2026-07-25).
+
+    Returns None when the pair is same-currency, or either amount/currency is
+    missing (nothing to compare). Otherwise a flat dict the SPA renders as a
+    table:
+
+    * charge_* — what the BANK STATEMENT charged (the card currency).
+    * receipt_* — what the RECEIPT says (its own currency).
+    * zoho_rate / zoho_converted — the receipt's own booked rate and the
+      charge-currency amount it implies (Zoho's `exchange_rate` /
+      `base_amount`); the "the receipt is worth $X" figure. None when the
+      receipt carried no Zoho conversion (a manual/emailed receipt).
+    * implied_rate — the rate THIS pairing would require (charge / receipt
+      total), directly comparable to zoho_rate: a wide gap is the FX
+      coincidence tell.
+    * converted_gap / converted_gap_pct — charge minus Zoho's converted
+      amount, the discrepancy the amount score reflects. None without a Zoho
+      conversion.
+
+    All money/rate values are preformatted strings; direction is always
+    "charge currency per one unit of receipt currency", so zoho_rate and
+    implied_rate sit in the same column and compare at a glance.
+    """
+    if receipt is None:
+        return None
+    charge_amt = tx.amount
+    charge_ccy = tx.transaction_currency
+    rec_amt = receipt.detected_total
+    rec_ccy = receipt.detected_currency
+    if not charge_ccy or not rec_ccy or charge_ccy == rec_ccy:
+        return None
+    if charge_amt is None or rec_amt is None:
+        return None
+
+    implied = (
+        (charge_amt / rec_amt) if rec_amt and rec_amt != 0 else None
+    )
+    zoho_converted = receipt.base_amount
+    gap = (
+        (charge_amt - zoho_converted) if zoho_converted is not None else None
+    )
+    gap_pct = None
+    if gap is not None and charge_amt and charge_amt != 0:
+        gap_pct = round(abs(gap) / abs(charge_amt) * 100)
+
+    return {
+        "charge_amount": _fmt_amount(charge_amt),
+        "charge_currency": charge_ccy,
+        "receipt_amount": _fmt_amount(rec_amt),
+        "receipt_currency": rec_ccy,
+        # "USD per BRL" — labels the rate column without the SPA guessing.
+        "rate_label": f"{charge_ccy} per {rec_ccy}",
+        "implied_rate": _fmt_rate(implied),
+        "zoho_rate": _fmt_rate(receipt.exchange_rate),
+        "zoho_converted": _fmt_amount(zoho_converted),
+        "converted_gap": _fmt_amount(gap) if gap is not None else "",
+        "converted_gap_pct": gap_pct,
+    }
+
+
 def _receipt_view(r: Receipt, overrides: dict[tuple[str, int], dict]) -> dict:
     items = []
     for i, li in enumerate(r.line_items):
@@ -1682,6 +1757,9 @@ def build_view(
                     # a card, so it neither corroborates nor contradicts.
                     "card_pct": round(m.card_score * 100),
                     "receipt": _receipt_view(r, overrides) if r else None,
+                    # Cross-currency comparison (charge vs receipt vs Zoho's
+                    # own conversion); None for same-currency pairs.
+                    "fx": _fx_breakdown(tx, r),
                 }
             )
         # PR B — a hand-made manual match: the held receipt was never an
@@ -1700,6 +1778,7 @@ def build_view(
                     "date_pct": None,
                     "vendor_pct": None,
                     "receipt": _receipt_view(rec_by_id[held_doc], overrides),
+                    "fx": _fx_breakdown(tx, rec_by_id[held_doc]),
                 }
             )
 
