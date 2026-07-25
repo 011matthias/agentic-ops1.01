@@ -26,7 +26,7 @@ CSV = (
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("LEAD_DESK_WORKER_SECRET", "wsecret")
-    monkeypatch.delenv("LEAD_DESK_ACCESS_CODES", raising=False)
+    monkeypatch.delenv("LEAD_DESK_AUTH_SECRET", raising=False)
     app = create_app(tmp_path)
     c = TestClient(app)
     c.app_state_db = tmp_path / "lead-desk.sqlite"

@@ -61,11 +61,10 @@ _LOGIN_NOTICES = {
     "pending": "Your access request is with an admin. We'll email you once it's approved.",
 }
 _LOGIN_ERRORS = {
-    "badcode": "Wrong access code.",
     "throttled": "Too many attempts. Wait a few minutes and try again.",
     "badlink": "That sign-in link is invalid, expired, or already used. Request a new one below.",
     "invalidemail": "Enter a valid email address.",
-    "nomailer": "Email sign-in is not switched on yet. Use your access code, or ask an admin.",
+    "nomailer": "Email sign-in is temporarily unavailable. Please contact an admin.",
     "sendfail": "We couldn't send the email just now. Please try again in a moment.",
 }
 
@@ -253,34 +252,6 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         resp = RedirectResponse(url="/", status_code=303)
         resp.set_cookie(
             auth.COOKIE_NAME, auth.issue_token(email),
-            max_age=auth.SESSION_MAX_AGE, httponly=True,
-            secure=auth.cookie_is_secure(), samesite="lax",
-        )
-        return resp
-
-    @app.post("/login")
-    def login_submit(request: Request, code: str = Form("")):
-        if not auth.gate_enabled():
-            return RedirectResponse(url="/", status_code=303)
-        # Fly puts the real client IP in Fly-Client-IP; request.client.host is
-        # the fly-proxy, so keying the throttle on it would rate-limit everyone.
-        ip = request.headers.get("fly-client-ip") or (
-            request.client.host if request.client else "unknown")
-        if auth.login_blocked(ip):
-            return templates.TemplateResponse(
-                request, "login.html",
-                {"error": "Too many attempts. Wait a few minutes and try again."},
-                status_code=429)
-        user = auth.resolve_user(code)
-        if not user:
-            auth.record_login_fail(ip)
-            return templates.TemplateResponse(
-                request, "login.html", {"error": "Wrong access code."}, status_code=401
-            )
-        auth.record_login_success(ip)
-        resp = RedirectResponse(url="/", status_code=303)
-        resp.set_cookie(
-            auth.COOKIE_NAME, auth.issue_token(user),
             max_age=auth.SESSION_MAX_AGE, httponly=True,
             secure=auth.cookie_is_secure(), samesite="lax",
         )
