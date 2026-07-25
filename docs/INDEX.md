@@ -402,3 +402,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 |------|-------|------|------|
 | 2026-03-20 | Arthur Project Professionalization | - | [Checkpoint](docs/2026-03-20%20-%20Arthur%20Project%20Professionalization/Checkpoint.md) |
 | 2026-03-20 | Arthur Project Folder Classification | - | [Checkpoint](docs/2026-03-20%20-%20Arthur%20Project%20Folder%20Classification/Checkpoint.md) |
+
+## upwork-independence
+| Date | Topic | Type | Link |
+|------|-------|------|------|
+| 2026-07-25 | Upwork Independence Repo Move + u5 Delivery Kit | misc | [→](docs/2026-07-25%20-%20Upwork%20Independence%20Repo%20Move%20%2B%20u5%20Delivery%20Kit/Checkpoint.md) |
