@@ -160,6 +160,7 @@ def receipt_to_dict(r: Receipt) -> dict:
         "reimbursable": r.reimbursable,
         "expense_location": r.expense_location,
         "data_quality_note": r.data_quality_note,
+        "receipt_image_page": r.receipt_image_page,
     }
 
 
@@ -186,6 +187,7 @@ def receipt_from_dict(d: dict) -> Receipt:
         expense_location=d.get("expense_location"),
         # .get keeps pre-WS2 snapshots loadable (no data_quality_note key).
         data_quality_note=d.get("data_quality_note"),
+        receipt_image_page=d.get("receipt_image_page"),
     )
 
 

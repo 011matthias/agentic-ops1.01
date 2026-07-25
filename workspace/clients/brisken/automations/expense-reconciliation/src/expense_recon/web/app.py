@@ -35,7 +35,9 @@ reached parity. This app serves JSON plus file downloads only:
 from __future__ import annotations
 
 import json
+import mimetypes
 import os
+import re
 import shutil
 import time
 import uuid
@@ -51,9 +53,12 @@ from fastapi.responses import (
     HTMLResponse,
     JSONResponse,
     PlainTextResponse,
+    Response,
 )
 
 from ..cards_provision import card_by_key, load_cards
+from ..ingest.expense_report_images import render_receipt_page
+from .serialize import receipt_from_dict
 from .service import (
     DEFAULT_EXPENSE_COLUMN_MAP,
     PreparedRun,
@@ -1150,6 +1155,59 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         view = build_view(run, decisions, overrides)
         return JSONResponse(
             {"ok": True, "document_id": document_id, "summary": view["summary"]}
+        )
+
+    @app.get("/api/runs/{run_id}/receipts/{document_id:path}/image")
+    def receipt_image(run_id: str, document_id: str):
+        # Receipt preview (owner directive 2026-07-25): a reviewer working
+        # the needs-review queue gets a quick look at the actual receipt.
+        # Serves the vision-mapped page of the uploaded ER PDF (rendered to
+        # PNG) or an operator-uploaded manual receipt file, straight from
+        # the run's work dir. 404 whenever no image is attributable — the
+        # SPA keys its preview control off `receipt_image_available`.
+        with open_store() as store:
+            run = store.get_run(run_id)
+        if run is None:
+            return JSONResponse({"error": "run not found"}, status_code=404)
+        work_dir = Path(run.work_dir)
+
+        if document_id.startswith("manual:"):
+            tx_part = document_id[len("manual:"):]
+            fs_tx = re.sub(r"[^A-Za-z0-9._-]", "_", tx_part)
+            folder = work_dir / "manual-receipts"
+            hits = sorted(folder.glob(f"{fs_tx}__*")) if folder.is_dir() else []
+            if not hits:
+                return JSONResponse(
+                    {"error": "no receipt image"}, status_code=404
+                )
+            media = (
+                mimetypes.guess_type(hits[0].name)[0]
+                or "application/octet-stream"
+            )
+            return FileResponse(hits[0], media_type=media)
+
+        receipts = [
+            receipt_from_dict(x) for x in run.snapshot.get("receipts", [])
+        ]
+        rec = next(
+            (r for r in receipts if r.document_id == document_id), None
+        )
+        if rec is None or rec.receipt_image_page is None:
+            return JSONResponse({"error": "no receipt image"}, status_code=404)
+        rcpt_rel = ((run.config or {}).get("receipts") or {}).get("path") or ""
+        pdf_path = work_dir / rcpt_rel
+        if not rcpt_rel or not pdf_path.is_file():
+            return JSONResponse(
+                {"error": "report file missing"}, status_code=404
+            )
+        png = render_receipt_page(pdf_path, rec.receipt_image_page)
+        if png is None:
+            return JSONResponse({"error": "no receipt image"}, status_code=404)
+        # Immutable per run: the snapshot never re-maps pages after creation.
+        return Response(
+            png,
+            media_type="image/png",
+            headers={"Cache-Control": "private, max-age=86400"},
         )
 
     @app.post("/api/runs/{run_id}/forget")

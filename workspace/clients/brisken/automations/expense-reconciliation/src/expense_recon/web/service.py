@@ -1452,6 +1452,13 @@ def _receipt_view(r: Receipt, overrides: dict[tuple[str, int], dict]) -> dict:
         # L4: the missing-comprovante state. The template renders the badge
         # only when the run-level `has_image_info` flag is set (noise guard).
         "has_receipt_image": r.has_receipt_image,
+        # Receipt preview (2026-07-25): True when the backend can serve this
+        # receipt's image via GET /api/runs/{id}/receipts/{doc}/image (a
+        # vision-mapped ER-PDF page, or an operator-uploaded file).
+        "receipt_image_available": (
+            r.receipt_image_page is not None
+            or r.document_id.startswith("manual:")
+        ),
         "reference": r.detected_reference or "",
         "report_number": r.report_number or "",
         "receipt_url": r.receipt_url or "",
