@@ -157,3 +157,86 @@ def test_upload_validation(client):
     assert (
         _upload(client, run_id, target_tx, data=b"").status_code == 400
     )
+
+
+# ── receipt preview endpoint (2026-07-25) ──────────────────────────
+
+
+PNG_1PX = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+    b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\xff\xff"
+    b"?\x00\x05\xfe\x02\xfe\xa75\x81\x84\x00\x00\x00\x00IEND\xaeB`\x82"
+)
+
+
+def test_receipt_image_serves_manual_upload(client):
+    run_id = _create_run(client)
+    db = _store(client)
+    run = db.get_run(run_id)
+    db.close()
+    target_tx = run.snapshot["outcome"]["unmatched_transactions"][0]
+    assert _upload(
+        client, run_id, target_tx, name="uber.png", data=PNG_1PX
+    ).status_code == 200
+
+    resp = client.get(f"/api/runs/{run_id}/receipts/manual:{target_tx}/image")
+    assert resp.status_code == 200, resp.text
+    assert resp.headers["content-type"].startswith("image/png")
+    assert resp.content == PNG_1PX
+
+
+def test_receipt_image_404_when_no_image(client):
+    run_id = _create_run(client)
+    db = _store(client)
+    run = db.get_run(run_id)
+    db.close()
+    # CSV-sourced receipts carry no vision page mapping -> 404.
+    doc = run.snapshot["receipts"][0]["document_id"]
+    assert (
+        client.get(f"/api/runs/{run_id}/receipts/{doc}/image").status_code
+        == 404
+    )
+    assert (
+        client.get(f"/api/runs/{run_id}/receipts/ghost/image").status_code
+        == 404
+    )
+    assert (
+        client.get("/api/runs/nope00000000/receipts/x/image").status_code
+        == 404
+    )
+
+
+def test_receipt_image_renders_mapped_er_pdf_page(client):
+    """A snapshot receipt with a vision-mapped page serves a PNG render of
+    that page from the stored receipts PDF."""
+    from pypdf import PdfWriter
+
+    run_id = _create_run(client)
+    db = _store(client)
+    run = db.get_run(run_id)
+
+    # Stand in for the uploaded ER PDF: a one-page PDF in the work dir,
+    # pointed to by config.receipts.path, with page 0 mapped to a receipt.
+    pdf_path = Path(run.work_dir) / "er.pdf"
+    w = PdfWriter()
+    w.add_blank_page(width=200, height=200)
+    with open(pdf_path, "wb") as fh:
+        w.write(fh)
+    snap = dict(run.snapshot)
+    receipts = [dict(r) for r in snap["receipts"]]
+    receipts[0]["receipt_image_page"] = 0
+    snap["receipts"] = receipts
+    db.update_run_snapshot(run_id, snap)
+    db.conn.execute(
+        "UPDATE runs SET config = json_set(config, '$.receipts.path', 'er.pdf') "
+        "WHERE run_id = ?",
+        (run_id,),
+    )
+    db.conn.commit()
+    doc = receipts[0]["document_id"]
+    db.close()
+
+    resp = client.get(f"/api/runs/{run_id}/receipts/{doc}/image")
+    assert resp.status_code == 200, resp.text
+    assert resp.headers["content-type"] == "image/png"
+    assert resp.content[:8] == b"\x89PNG\r\n\x1a\n"
