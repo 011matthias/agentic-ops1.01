@@ -11,6 +11,10 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-25 | Lead Desk Passwordless Auth | client-dev | [→](docs/2026-07-25%20-%20Lead%20Desk%20Passwordless%20Auth/Checkpoint.md) |
+| 2026-07-25 | Brisken Website Map Rework + Logo Unification | client-dev | [→](docs/2026-07-25%20-%20Brisken%20Website%20Map%20Rework%20%2B%20Logo%20Unification/Checkpoint.md) |
+| 2026-07-24 | Brisken Product Decks NEW Wave | comms | [Mini-Checkpoint-2](docs/2026-07-24%20-%20Brisken%20Product%20Decks%20NEW%20Wave/Mini-Checkpoint-2.md) |
+| 2026-07-24 | Brisken TreasuryCentral Deploy + Deck Alignment | client-dev | [→](docs/2026-07-24%20-%20Brisken%20TreasuryCentral%20Deploy%20%2B%20Deck%20Alignment/Checkpoint.md) |
 | 2026-07-23 | Brisken Product Decks NEW Wave | client-dev | [->](docs/2026-07-23%20-%20Brisken%20Product%20Decks%20NEW%20Wave/Checkpoint.md) |
 | 2026-07-23 | Brisken Planner Audit | client-dev | [→](docs/2026-07-23%20-%20Brisken%20Planner%20Audit/Checkpoint.md) |
 | 2026-07-23 | Brisken Hours Log + Overlap Purge | misc | [→](docs/2026-07-23%20-%20Brisken%20Hours%20Log%20+%20Overlap%20Purge/Checkpoint.md) |
@@ -354,6 +358,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## platform
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-25 | Platform Deploy Reframe + Health-Pass Round 3 | system-infra | [→](docs/2026-07-25%20-%20Platform%20Deploy%20Reframe%20%2B%20Health-Pass%20Round%203/Checkpoint.md) |
 | 2026-06-10 | n8n Multi-Client Ops Proposal Teardown | misc | [Checkpoint](docs/2026-06-10%20-%20n8n%20Multi-Client%20Ops%20Proposal%20Teardown/Checkpoint.md) |
 | 2026-06-10 | VolaByg Proposal Reframe and Deploy | comms | [Checkpoint](docs/2026-06-10%20-%20VolaByg%20Proposal%20Reframe%20and%20Deploy/Checkpoint.md) |
 | 2026-06-09 | VolaByg Proposal + Short-Hook Pipeline | system-infra | [Checkpoint](docs/2026-06-09%20-%20VolaByg%20Proposal%20+%20Short-Hook%20Pipeline/Checkpoint.md) |
@@ -403,3 +408,8 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 |------|-------|------|------|
 | 2026-03-20 | Arthur Project Professionalization | - | [Checkpoint](docs/2026-03-20%20-%20Arthur%20Project%20Professionalization/Checkpoint.md) |
 | 2026-03-20 | Arthur Project Folder Classification | - | [Checkpoint](docs/2026-03-20%20-%20Arthur%20Project%20Folder%20Classification/Checkpoint.md) |
+
+## Jochen Projekt
+| Date | Topic | Type | Link |
+|------|-------|------|------|
+| 2026-07-25 | 1Assessment Next-Level Round 1 | client-dev | [→](docs/2026-07-25%20-%201Assessment%20Next-Level%20Round%201/Checkpoint.md) |
