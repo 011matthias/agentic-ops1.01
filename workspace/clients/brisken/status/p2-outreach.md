@@ -4,17 +4,44 @@ workstream: p2-outreach
 group: lead-generation
 spec: p2
 state: active
-updated: 2026-06-21
+updated: 2026-07-25
 general_ref: status/p2-lead-gen-general.md
 ---
 
 # Brisken / Outreach (p2)
 
 The outbound motion: borrowed-trust (AEO answer pages + a published research
-report) under a precision-LinkedIn tail. Cold email is retired (Brisken already
-ran ~150 mailboxes / ~2M cold emails for 0 leads; the buy is too high-risk to
-grant a meeting cold). Shared lead-gen context is in
+report) under a precision-LinkedIn tail. Shared lead-gen context is in
 `status/p2-lead-gen-general.md`.
+
+## 2026-07-25 — cold-email TRIAL reopened via Cristian Fuze (getken)
+
+Matthias reopened cold email as a scoped TRIAL run by Cristian Fuze on getken
+(834-lead AI-qualified pool, sends from a generic domain). This reverses, for a
+measured trial only, the 2026-06-12 retirement (Brisken's own ~150 mailboxes /
+~2M cold emails returned 0 leads). Metric: meetings booked; judged on results.
+NOTE: no Dirk sign-off for the trial is logged here; Matthias committed to
+launch in his 2026-07-22 email to Cristian, so the decision is treated as made.
+
+Launch gated on two Matthias deliverables (Cristian's 2026-07-22 email): (1)
+suppression list, (2) product naming (TreasuryCentral lead / OnePilot platform).
+Cristian confirmed naming done 2026-07-25 and is waiting on the suppression list.
+
+**Suppression list BUILT 2026-07-25 (Standard scope), read-only from 3 live
+sources**, deduped to 1,595 emails + 77 customer domains at
+`context/lead-generation/outreach-assets/suppression-list.csv`:
+- customer (317 emails + 77 domains): live Zoho CRM, Account_Status
+  Active/Churned/Blocked; domain-level suppression for customer companies.
+- active-thread (1,204): both-mailbox Graph 90d scan (inbound aggregate + Sent
+  Items), external human counterparties, brisken.com + automated stripped.
+- opt-out (73) + bounce (1): Rome master Tier=STOP/ANON + stop=X +
+  sponsor_opt_in=No; send-log fails.
+- GAP (flagged to Matthias): no local Instantly unsubscribe export, so
+  historical opt-outs from the old ~2M-send lists are NOT included; only matters
+  if the 834 overlaps those lists. Rebuild: `.scratch/build_suppression_lean.py`
+  (Graph result cached in `.scratch/active_threads.json`).
+- Draft reply to Cristian written; SEND HELD for Matthias (he sends from Outlook
+  with the CSV attached, or authorizes a Graph send under the invasive gate).
 
 ## Elements
 

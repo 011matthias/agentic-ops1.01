@@ -4,11 +4,19 @@ workstream: p2-product-decks
 group: lead-generation
 spec: p2
 state: active
-updated: 2026-07-23
+updated: 2026-07-24
 general_ref: status/p2-lead-gen-general.md
 ---
 
 # Brisken / Product decks (p2)
+
+## 2026-07-24 — Dirk notification SENT
+
+Owner-approved notification sent to Dirk 2026-07-24 09:03Z (Graph,
+matthias.silva → dirk.neumann, verified real send, logged verbatim in
+comms-log.md): the four `NEW - ... 2026-07-23` decks in Asset Testing, ask
+= per-deck approval. Next inbound from Dirk triggers the swap runbook
+(per-deck, invasive) or a spec regen if he comments. Nothing else changed.
 
 ## 2026-07-23 — NEW Overview APPROVED; engine promoted; product-deck rebuild wave
 
