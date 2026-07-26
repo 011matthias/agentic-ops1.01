@@ -5,20 +5,21 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from lead_desk.web import auth
 from lead_desk.web.app import create_app
 
 
 @pytest.fixture
 def gated(tmp_path, monkeypatch):
-    monkeypatch.setenv("LEAD_DESK_ACCESS_CODES", "matthias:testcode123")
+    # Gate is on iff LEAD_DESK_AUTH_SECRET is set (no access codes anymore).
     monkeypatch.setenv("LEAD_DESK_AUTH_SECRET", "test-secret")
     monkeypatch.setenv("LEAD_DESK_INSECURE_COOKIE", "1")
     return TestClient(create_app(tmp_path))
 
 
 def login(client):
-    r = client.post("/login", data={"code": "testcode123"}, follow_redirects=False)
-    assert r.status_code == 303
+    # Magic-link is the only login; seat a valid session cookie directly.
+    client.cookies.set(auth.COOKIE_NAME, auth.issue_token("matthias.silva@brisken.com"))
     return client
 
 

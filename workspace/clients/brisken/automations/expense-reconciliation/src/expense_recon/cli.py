@@ -308,19 +308,26 @@ def _apply_vision_receipts(
 
 
 def _apply_judgment(
-    outcome: MatchOutcome, tx_by_id, rec_by_id, client: LLMClient | None
+    outcome: MatchOutcome, tx_by_id, rec_by_id, client: LLMClient | None,
+    *, suggest_floor: float = 0.0,
 ) -> None:
     """Replace each judgment_required entry with the judgment verdict.
 
     With an `LLMClient`, every FX case gets a real model judgment
-    (D1b); without one, `judge_fx_match` returns the stub Match. Either
-    way the entry stays in `judgment_required` with
-    `requires_review=True` — the reconciliation guarantee holds and
-    Chris reviews every FX case (call-outcomes D2).
+    (D1b); without one, `judge_fx_match` returns the stub Match and the
+    entry stays in `judgment_required` with `requires_review=True`.
+
+    A real verdict BELOW `suggest_floor` is unbound instead of kept
+    (owner call 2026-07-24): showing a pair the model itself rejected
+    at p=0.10 as "the suggested receipt" wastes the reviewer and reads
+    as a tool error. The charge and the receipt fall to the plain
+    unmatched buckets when nothing else claims them, so every id still
+    lands in a bucket and the reconciliation guarantee holds.
     """
     if not outcome.judgment_required:
         return
     judged: list = []
+    suppressed: list = []
     for m in outcome.judgment_required:
         tx = tx_by_id.get(m.transaction_id)
         rec = rec_by_id.get(m.document_id)
@@ -335,19 +342,51 @@ def _apply_judgment(
         # card, so the review queue could not sort them and the reviewer
         # could not see WHY a pair was proposed. The verdict itself
         # (match_type, confidence, reason) still comes from the judgment.
-        judged.append(
-            replace(
-                verdict,
-                score=m.score,
-                amount_score=m.amount_score,
-                date_score=m.date_score,
-                vendor_score=m.vendor_score,
-                card_score=m.card_score,
-            )
+        full = replace(
+            verdict,
+            score=m.score,
+            amount_score=m.amount_score,
+            date_score=m.date_score,
+            vendor_score=m.vendor_score,
+            card_score=m.card_score,
         )
+        # Only a REAL model verdict can be suppressed; the no-client stub
+        # (confidence 0.5) always stays, so no-LLM runs are unaffected.
+        if client is not None and full.confidence < suggest_floor:
+            suppressed.append(full)
+            continue
+        judged.append(full)
     # In-place: MatchOutcome is frozen (E6); rebinding the attribute
     # would raise. Slice-assignment revises the same list object.
     outcome.judgment_required[:] = judged
+    if suppressed:
+        logger.info(
+            "%d FX pair(s) below suggest floor %.2f unbound to unmatched",
+            len(suppressed), suggest_floor,
+        )
+        claimed_tx = (
+            {m.transaction_id for m in outcome.matches}
+            | {m.transaction_id for m in judged}
+            | {m.transaction_id for m in outcome.ambiguous}
+        )
+        claimed_rec = (
+            {m.document_id for m in outcome.matches}
+            | {m.document_id for m in judged}
+            | {m.document_id for m in outcome.ambiguous}
+        )
+        for m in suppressed:
+            if (
+                m.transaction_id not in claimed_tx
+                and m.transaction_id not in outcome.unmatched_transactions
+            ):
+                outcome.unmatched_transactions.append(m.transaction_id)
+                claimed_tx.add(m.transaction_id)
+            if (
+                m.document_id not in claimed_rec
+                and m.document_id not in outcome.unmatched_receipts
+            ):
+                outcome.unmatched_receipts.append(m.document_id)
+                claimed_rec.add(m.document_id)
 
 
 def _apply_ambiguous_judgment(
@@ -715,7 +754,10 @@ def reconcile(
     _stage("judging")
     tx_by_id = {tx.transaction_id: tx for tx in transactions}
     rec_by_id = {r.document_id: r for r in receipts}
-    _apply_judgment(outcome, tx_by_id, rec_by_id, llm_client)
+    _apply_judgment(
+        outcome, tx_by_id, rec_by_id, llm_client,
+        suggest_floor=(match_cfg or MatchingConfig()).fx_judgment_suggest_floor,
+    )
     _apply_ambiguous_judgment(outcome, tx_by_id, rec_by_id, llm_client)
     # WS3: opt-in second chance for the leftovers, after the deterministic
     # buckets are settled so it only ever sees genuinely free receipts.
@@ -1201,7 +1243,7 @@ def _build_chart_of_accounts(
         {
           "zoho": {
             "enabled": true,                  // optional, default true
-            "coa_source": "api",              // "api" | "csv"
+            "coa_source": "api",              // "api" | "csv" | "none"
             "coa_csv_path": "chart.csv",      // required when source == "csv"
             "coa_column_map": { ... },        // optional, csv only
             "scope_groups": [                 // approved root-group names;
@@ -1231,6 +1273,14 @@ def _build_chart_of_accounts(
         return None, {}
 
     source = z.get("coa_source", "api")
+    if source == "none":
+        # The zoho block carries run config (card_accounts, export flags)
+        # but explicitly no chart source. The hosted upload path fabricates
+        # such a block from stored master data; its categorizer chart comes
+        # from the coa_validation fallback in _resolve_categorizer_chart,
+        # and a live API pull would demand ZOHO_* env vars the hosted
+        # environment does not have.
+        return None, z
     if source == "csv":
         if "coa_csv_path" not in z:
             raise ConfigError("config.zoho.coa_csv_path required when coa_source is 'csv'")
@@ -1246,7 +1296,7 @@ def _build_chart_of_accounts(
         coa = ChartOfAccounts.from_api(client.list_chart_of_accounts())
     else:
         raise ConfigError(
-            f"config.zoho.coa_source {source!r} not supported (use 'api' or 'csv')"
+            f"config.zoho.coa_source {source!r} not supported (use 'api', 'csv' or 'none')"
         )
     return coa, z
 

@@ -314,7 +314,7 @@ def test_outbox_claim_bearer_auth(tmp_path, monkeypatch):
 
     from lead_desk.web.app import create_app
 
-    monkeypatch.delenv("LEAD_DESK_ACCESS_CODES", raising=False)
+    monkeypatch.delenv("LEAD_DESK_AUTH_SECRET", raising=False)
     monkeypatch.setenv("LEAD_DESK_WORKER_SECRET", "s3cret")
     app = create_app(tmp_path)
     with TestClient(app) as client:

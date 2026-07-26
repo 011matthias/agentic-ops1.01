@@ -226,6 +226,88 @@ def test_apply_judgment_without_client_keeps_stub():
     assert outcome.judgment_required[0].reason == STUB_REASON
 
 
+def test_apply_judgment_suggest_floor_unbinds_rejected_pair():
+    """A real verdict below the suggest floor is not kept as a suggestion:
+    the pair is unbound and both ids land in the plain unmatched buckets
+    (owner call 2026-07-24: the p=0.10 OpenAI-vs-construction-materials
+    pair must not be proposed)."""
+    tx = _tx()
+    rec = _receipt()
+    outcome = MatchOutcome(
+        judgment_required=[
+            Match(
+                transaction_id=tx.transaction_id,
+                document_id=rec.document_id,
+                match_type=MatchType.FX_JUDGMENT,
+                confidence=0.5,
+                reason="placeholder",
+                requires_review=True,
+            )
+        ]
+    )
+    mock = MockLLMClient(fx_responses=[
+        FxJudgmentResult(
+            is_match=False, same_purchase_confidence=0.10,
+            implied_rate=None, converted_amount=None,
+            reasoning="amount and vendor do not line up",
+        )
+    ])
+
+    _apply_judgment(
+        outcome, {tx.transaction_id: tx}, {rec.document_id: rec}, mock,
+        suggest_floor=0.2,
+    )
+
+    assert outcome.judgment_required == []
+    assert outcome.unmatched_transactions == [tx.transaction_id]
+    assert outcome.unmatched_receipts == [rec.document_id]
+
+
+def test_apply_judgment_suggest_floor_keeps_stub_and_confident_pairs():
+    """The floor never touches the no-client stub (0.5), and a verdict at
+    or above the floor stays in review."""
+    tx = _tx()
+    rec = _receipt()
+
+    def _outcome() -> MatchOutcome:
+        return MatchOutcome(
+            judgment_required=[
+                Match(
+                    transaction_id=tx.transaction_id,
+                    document_id=rec.document_id,
+                    match_type=MatchType.FX_JUDGMENT,
+                    confidence=0.5,
+                    reason="placeholder",
+                    requires_review=True,
+                )
+            ]
+        )
+
+    # Stub path: no client, floor set — entry stays.
+    stub = _outcome()
+    _apply_judgment(
+        stub, {tx.transaction_id: tx}, {rec.document_id: rec}, None,
+        suggest_floor=0.2,
+    )
+    assert len(stub.judgment_required) == 1
+
+    # Real verdict at the floor — stays as a suggestion.
+    kept = _outcome()
+    mock = MockLLMClient(fx_responses=[
+        FxJudgmentResult(
+            is_match=False, same_purchase_confidence=0.20,
+            implied_rate=None, converted_amount=None,
+            reasoning="borderline",
+        )
+    ])
+    _apply_judgment(
+        kept, {tx.transaction_id: tx}, {rec.document_id: rec}, mock,
+        suggest_floor=0.2,
+    )
+    assert len(kept.judgment_required) == 1
+    assert kept.unmatched_transactions == []
+
+
 # ── judge_ambiguous (tie-break) ─────────────────────────────────────
 
 

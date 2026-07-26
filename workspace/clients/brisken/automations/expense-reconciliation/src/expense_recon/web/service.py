@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import uuid
 from dataclasses import dataclass, replace
 from datetime import date
@@ -57,6 +58,8 @@ from ..output.zoho_export import write_zoho_export
 from .serialize import (
     categorization_from_dict,
     categorization_to_dict,
+    outcome_to_dict,
+    receipt_to_dict,
     snapshot_from_dict,
     snapshot_to_dict,
 )
@@ -402,6 +405,12 @@ def apply_master_data(
             card_accounts = dict(zoho.get("card_accounts") or {})
             card_accounts.setdefault(account_id, resolved)
             zoho["card_accounts"] = card_accounts
+            # A zoho block with no coa_source defaults to a live API chart
+            # pull, which demands ZOHO_* credentials the hosted environment
+            # does not have (2026-07-24: every upload died on it). This block
+            # exists only to carry card_accounts; the hosted categorizer
+            # chart comes from the coa_validation fallback.
+            zoho.setdefault("coa_source", "none")
             out["zoho"] = zoho
     return out
 
@@ -1284,6 +1293,109 @@ def validate_manual_match(
     return None
 
 
+MANUAL_RECEIPT_MAX_BYTES = 15 * 1024 * 1024
+MANUAL_RECEIPT_SUFFIXES = frozenset(
+    {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".gif"}
+)
+
+
+def attach_emailed_receipt(
+    store,
+    run: "RunRow",
+    transaction_id: str,
+    file_name: str,
+    file_bytes: bytes,
+    now_iso: str,
+) -> tuple[str | None, str | None]:
+    """Attach a receipt that arrived OUTSIDE the ER export to one charge.
+
+    Some receipts reach Criss by email instead of Zoho Expense (owner
+    directive 2026-07-24), so their charges sit in unmatched with no
+    receipt to pair. The uploaded file is stored beside the run's other
+    artifacts (`work_dir/manual-receipts/`), read into a Receipt (with
+    the run's LLM when configured, a bare filename-only Receipt
+    otherwise), appended to the snapshot's receipt pool, and immediately
+    paired with the charge as a confirmed decision — the same mechanism
+    as a manual match, so review, exports, and memory treat it like any
+    other confirmed pair. Re-uploading for the same charge replaces the
+    prior attachment. Returns (error, document_id).
+    """
+    from ..cli import _build_llm_client
+    from ..ingest.receipts_folder import parse_receipt_file
+
+    transactions, receipts, outcome, _parse_errors = snapshot_from_dict(
+        run.snapshot
+    )
+    tx = next(
+        (t for t in transactions if t.transaction_id == transaction_id), None
+    )
+    if tx is None:
+        return "Unknown transaction for this run.", None
+    safe_name = Path(file_name or "").name
+    suffix = Path(safe_name or "receipt").suffix.lower()
+    if suffix not in MANUAL_RECEIPT_SUFFIXES:
+        return f"Unsupported receipt file type {suffix or '(none)'}.", None
+    if not file_bytes:
+        return "Empty file.", None
+    if len(file_bytes) > MANUAL_RECEIPT_MAX_BYTES:
+        return "File too large (15 MB max).", None
+
+    dest_dir = Path(run.work_dir) / "manual-receipts"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    # Transaction ids carry slashes/colons (statement row keys); flatten
+    # both name parts so the file lands IN manual-receipts, not a subdir.
+    fs_tx = re.sub(r"[^A-Za-z0-9._-]", "_", transaction_id)
+    fs_name = re.sub(r"[^A-Za-z0-9._-]", "_", safe_name)
+    dest = dest_dir / f"{fs_tx}__{fs_name}"
+    dest.write_bytes(file_bytes)
+
+    # One manual receipt per charge: a stable id makes re-upload replace.
+    document_id = f"manual:{transaction_id}"
+    receipt = None
+    llm_client, _tracker = _build_llm_client(run.config or {})
+    if llm_client is not None:
+        try:
+            parsed = parse_receipt_file(
+                dest,
+                legal_entity_id=tx.legal_entity_id,
+                client=llm_client,
+            )
+            receipt = replace(
+                parsed, document_id=document_id, receipt_name=safe_name
+            )
+        except Exception:  # noqa: BLE001 - extraction is best-effort
+            receipt = None
+    if receipt is None:
+        # No LLM (or extraction failed): the file itself is still the
+        # evidence. Store a bare receipt; the reviewer sees the filename
+        # and the charge's own categorization carries the export.
+        receipt = Receipt(
+            document_id=document_id,
+            legal_entity_id=tx.legal_entity_id,
+            detected_date=None,
+            detected_total=None,
+            detected_currency=None,
+            detected_vendor=safe_name,
+            receipt_name=safe_name,
+        )
+
+    receipts = [r for r in receipts if r.document_id != document_id]
+    receipts.append(receipt)
+    if document_id not in outcome.unmatched_receipts:
+        outcome.unmatched_receipts.append(document_id)
+
+    # Preserve extra snapshot keys (charge_categorizations, version):
+    # revise only the two entries this attachment touches.
+    new_snapshot = dict(run.snapshot)
+    new_snapshot["receipts"] = [receipt_to_dict(r) for r in receipts]
+    new_snapshot["outcome"] = outcome_to_dict(outcome)
+    store.update_run_snapshot(run.run_id, new_snapshot)
+    store.set_decision(
+        run.run_id, transaction_id, STATUS_CONFIRMED, document_id, now_iso
+    )
+    return None, document_id
+
+
 # --------------------------------------------------------------------------
 # View model for the workbench template
 # --------------------------------------------------------------------------
@@ -1291,6 +1403,81 @@ def validate_manual_match(
 
 def _fmt_amount(value: Decimal | None) -> str:
     return "" if value is None else f"{value:,.2f}"
+
+
+def _fmt_rate(value: Decimal | None) -> str:
+    """A conversion rate, trimmed to six significant decimals with trailing
+    zeros removed (0.196078, 0.2298). Empty for None/non-finite."""
+    if value is None or not value.is_finite():
+        return ""
+    q = value.quantize(Decimal("0.000001"))
+    s = format(q, "f")
+    if "." in s:
+        s = s.rstrip("0").rstrip(".")
+    return s
+
+
+def _fx_breakdown(tx: "Transaction", receipt: "Receipt | None") -> dict | None:
+    """Side-by-side FX comparison for a cross-currency candidate pair, so a
+    reviewer sees WHY an uncertain pair is uncertain without decoding the
+    prose reason (owner directive 2026-07-25).
+
+    Returns None when the pair is same-currency, or either amount/currency is
+    missing (nothing to compare). Otherwise a flat dict the SPA renders as a
+    table:
+
+    * charge_* — what the BANK STATEMENT charged (the card currency).
+    * receipt_* — what the RECEIPT says (its own currency).
+    * zoho_rate / zoho_converted — the receipt's own booked rate and the
+      charge-currency amount it implies (Zoho's `exchange_rate` /
+      `base_amount`); the "the receipt is worth $X" figure. None when the
+      receipt carried no Zoho conversion (a manual/emailed receipt).
+    * implied_rate — the rate THIS pairing would require (charge / receipt
+      total), directly comparable to zoho_rate: a wide gap is the FX
+      coincidence tell.
+    * converted_gap / converted_gap_pct — charge minus Zoho's converted
+      amount, the discrepancy the amount score reflects. None without a Zoho
+      conversion.
+
+    All money/rate values are preformatted strings; direction is always
+    "charge currency per one unit of receipt currency", so zoho_rate and
+    implied_rate sit in the same column and compare at a glance.
+    """
+    if receipt is None:
+        return None
+    charge_amt = tx.amount
+    charge_ccy = tx.transaction_currency
+    rec_amt = receipt.detected_total
+    rec_ccy = receipt.detected_currency
+    if not charge_ccy or not rec_ccy or charge_ccy == rec_ccy:
+        return None
+    if charge_amt is None or rec_amt is None:
+        return None
+
+    implied = (
+        (charge_amt / rec_amt) if rec_amt and rec_amt != 0 else None
+    )
+    zoho_converted = receipt.base_amount
+    gap = (
+        (charge_amt - zoho_converted) if zoho_converted is not None else None
+    )
+    gap_pct = None
+    if gap is not None and charge_amt and charge_amt != 0:
+        gap_pct = round(abs(gap) / abs(charge_amt) * 100)
+
+    return {
+        "charge_amount": _fmt_amount(charge_amt),
+        "charge_currency": charge_ccy,
+        "receipt_amount": _fmt_amount(rec_amt),
+        "receipt_currency": rec_ccy,
+        # "USD per BRL" — labels the rate column without the SPA guessing.
+        "rate_label": f"{charge_ccy} per {rec_ccy}",
+        "implied_rate": _fmt_rate(implied),
+        "zoho_rate": _fmt_rate(receipt.exchange_rate),
+        "zoho_converted": _fmt_amount(zoho_converted),
+        "converted_gap": _fmt_amount(gap) if gap is not None else "",
+        "converted_gap_pct": gap_pct,
+    }
 
 
 def _receipt_view(r: Receipt, overrides: dict[tuple[str, int], dict]) -> dict:
@@ -1340,6 +1527,13 @@ def _receipt_view(r: Receipt, overrides: dict[tuple[str, int], dict]) -> dict:
         # L4: the missing-comprovante state. The template renders the badge
         # only when the run-level `has_image_info` flag is set (noise guard).
         "has_receipt_image": r.has_receipt_image,
+        # Receipt preview (2026-07-25): True when the backend can serve this
+        # receipt's image via GET /api/runs/{id}/receipts/{doc}/image (a
+        # vision-mapped ER-PDF page, or an operator-uploaded file).
+        "receipt_image_available": (
+            r.receipt_image_page is not None
+            or r.document_id.startswith("manual:")
+        ),
         "reference": r.detected_reference or "",
         "report_number": r.report_number or "",
         "receipt_url": r.receipt_url or "",
@@ -1563,6 +1757,9 @@ def build_view(
                     # a card, so it neither corroborates nor contradicts.
                     "card_pct": round(m.card_score * 100),
                     "receipt": _receipt_view(r, overrides) if r else None,
+                    # Cross-currency comparison (charge vs receipt vs Zoho's
+                    # own conversion); None for same-currency pairs.
+                    "fx": _fx_breakdown(tx, r),
                 }
             )
         # PR B — a hand-made manual match: the held receipt was never an
@@ -1581,6 +1778,7 @@ def build_view(
                     "date_pct": None,
                     "vendor_pct": None,
                     "receipt": _receipt_view(rec_by_id[held_doc], overrides),
+                    "fx": _fx_breakdown(tx, rec_by_id[held_doc]),
                 }
             )
 

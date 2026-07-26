@@ -25,17 +25,17 @@ def test_old_format_token_rejected():
     assert auth.read_user(f"matthias.{mac}") is None
 
 
-# --- #2 login throttle --------------------------------------------------------
+# --- #2 magic-link request throttle ------------------------------------------
 
-def test_login_throttle():
+def test_magic_throttle():
     ip = "203.0.113.9"
-    auth._LOGIN_FAILS.pop(ip, None)
-    for _ in range(auth.LOGIN_MAX_FAILS):
-        assert not auth.login_blocked(ip, now=100.0)
-        auth.record_login_fail(ip, now=100.0)
-    assert auth.login_blocked(ip, now=100.0)
-    # the window slides: far in the future the fails have aged out
-    assert not auth.login_blocked(ip, now=100.0 + auth.LOGIN_WINDOW + 1)
+    auth._MAGIC_REQS.pop(ip, None)
+    for _ in range(auth.MAGIC_MAX_REQS):
+        assert not auth.magic_blocked(ip, now=100.0)
+        auth.record_magic_request(ip, now=100.0)
+    assert auth.magic_blocked(ip, now=100.0)
+    # the window slides: far in the future the requests have aged out
+    assert not auth.magic_blocked(ip, now=100.0 + auth.MAGIC_WINDOW + 1)
 
 
 # --- #3 CSRF token ------------------------------------------------------------
@@ -58,7 +58,7 @@ def test_sync_is_open_path():
 
 @pytest.fixture
 def gated(tmp_path, monkeypatch):
-    monkeypatch.setenv("LEAD_DESK_ACCESS_CODES", "matthias:testcode123")
+    # The gate is on iff LEAD_DESK_AUTH_SECRET is set (no access codes anymore).
     monkeypatch.setenv("LEAD_DESK_AUTH_SECRET", "test-secret")
     monkeypatch.setenv("LEAD_DESK_INSECURE_COOKIE", "1")
     return TestClient(create_app(tmp_path))
@@ -72,13 +72,13 @@ def test_security_headers_present(gated):
 
 
 def test_csrf_blocks_cookie_post_without_token(gated):
-    login = gated.post("/login", data={"code": "testcode123"}, follow_redirects=False)
-    assert login.status_code == 303                      # cookie set on the client
+    # Magic-link is the only login now; seat a valid session cookie directly.
+    email = "matthias.silva@brisken.com"
+    gated.cookies.set(auth.COOKIE_NAME, auth.issue_token(email))
     # a cookie-authed mutating POST with NO csrf field is rejected
     r = gated.post("/worker/kill", data={"on": "1"}, follow_redirects=False)
     assert r.status_code == 403
     # the same POST WITH the session csrf token is accepted (303 redirect)
-    user = auth.read_user(gated.cookies.get(auth.COOKIE_NAME))
-    r2 = gated.post("/worker/kill", data={"on": "1", "csrf": auth.csrf_token(user)},
+    r2 = gated.post("/worker/kill", data={"on": "1", "csrf": auth.csrf_token(email)},
                     follow_redirects=False)
     assert r2.status_code == 303

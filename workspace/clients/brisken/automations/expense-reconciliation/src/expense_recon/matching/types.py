@@ -276,6 +276,12 @@ class Receipt:
     # when vision agreed with the summary, or vision did not run.
     data_quality_note: str | None = None
 
+    # Receipt preview (2026-07-25): the ER-PDF page index (0-based) whose
+    # rendered image the vision join attributed to this expense row, so the
+    # workbench can serve a per-receipt preview without re-running the join.
+    # None when vision did not run or no image reading mapped to this row.
+    receipt_image_page: int | None = None
+
     @property
     def has_receipt_image(self) -> bool:
         """True when the expense carries any receipt-image reference (a

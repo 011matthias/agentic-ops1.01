@@ -1,5 +1,11 @@
 # Editorial backlog (u2)
 
+**Publish target (2026-07-25):** `akkton/unpauseai-web`, NOT
+`agentic-ops1/platform`. The site moved to its own repo; new posts are a
+branch + PR into unpauseai-web (`src/content/blog/*.md`, auto-discovered),
+and go live only when Nico runs the deploy. See u2 status + memory
+`reference_vercel_platform_team_scope`.
+
 The corpus piece list, derived 2026-07-22 from `icp.md`'s demand
 taxonomy. Titles are phrased in the buyer's problem language, never our
 solution language (icp §channel-filter-derivation). Shapes follow the
@@ -28,9 +34,9 @@ rescue, T4 compliance/DACH, R1 local-proof (Route 1, fill-only).
 
 | # | Working title (buyer language) | Bucket | Shape | Query cluster | Intent | Pool | Status |
 |---|---|---|---|---|---|---|---|
-| 1 | Your Make.com contractor left: taking over an automation you did not build | T3 | How-to + checklist | make.com contractor left, take over automation | H | H | Drafted (first-posts PR) |
-| 2 | Cold email getting no replies: find the real problem before sending more | T1 | Diagnostic guide + table | cold email no replies, low reply rate | H | H | Drafted (first-posts PR) |
-| 3 | SPF, DKIM, DMARC for cold email: the minimum that actually passes | T1 | Technical how-to + table | spf dkim dmarc cold email setup | H | H | Drafted (first-posts PR) |
+| 1 | Your Make.com contractor left: taking over an automation you did not build | T3 | How-to + checklist | make.com contractor left, take over automation | H | H | In unpauseai-web PR #1 |
+| 2 | Cold email getting no replies: find the real problem before sending more | T1 | Diagnostic guide + table | cold email no replies, low reply rate | H | H | In unpauseai-web PR #1 |
+| 3 | SPF, DKIM, DMARC for cold email: the minimum that actually passes | T1 | Technical how-to + table | spf dkim dmarc cold email setup | H | H | In unpauseai-web PR #1 |
 | 4 | Zapier vs Make vs n8n for a small business: an operator's decision table | T3 | Comparison | zapier vs make vs n8n | H | H | Backlog |
 | 5 | How long does cold-email warm-up really take (and what skipping it costs) | T1 | FAQ + guide | email warmup how long | H | H | Backlog |
 | 6 | Leads dropping between your ad form and your CRM: where handoffs silently fail | T1 | Guide | facebook lead ads not reaching crm | H | M-H | Backlog |

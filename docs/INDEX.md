@@ -208,6 +208,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## system
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-24 | Checkpoint Scaffold Speedup | system-infra | [→](docs/2026-07-24%20-%20Checkpoint%20Scaffold%20Speedup/Checkpoint.md) |
 | 2026-07-22 | Optimize Loop Audit + Hardening | system-infra | [→](docs/2026-07-22%20-%20Optimize%20Loop%20Audit%20+%20Hardening/Checkpoint.md) |
 | 2026-07-20 | System Development | system-infra | [→](docs/2026-07-20%20-%20System%20Development/Checkpoint.md) |
 | 2026-07-17 | Ruff Push Gate CI Prevention | system-infra | [→](docs/2026-07-17%20-%20Ruff%20Push%20Gate%20CI%20Prevention/Checkpoint.md) |
@@ -413,3 +414,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | Date | Topic | Type | Link |
 |------|-------|------|------|
 | 2026-07-25 | 1Assessment Next-Level Round 1 | client-dev | [→](docs/2026-07-25%20-%201Assessment%20Next-Level%20Round%201/Checkpoint.md) |
+## upwork-independence
+| Date | Topic | Type | Link |
+|------|-------|------|------|
+| 2026-07-25 | Upwork Independence Repo Move + u5 Delivery Kit | misc | [→](docs/2026-07-25%20-%20Upwork%20Independence%20Repo%20Move%20%2B%20u5%20Delivery%20Kit/Checkpoint.md) |
