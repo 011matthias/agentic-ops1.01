@@ -82,6 +82,15 @@ def test_api_workbench_returns_json_render_model(client):
     for key in ("summary", "rows", "unmatched_receipts", "category_options"):
         assert key in body
     assert "match_rate" in body["summary"]
+    # The honest, receipt-based rate rides alongside the charge-based one
+    # (2026-07-27): receipts placed over receipts that exist, so a
+    # receiptless-heavy month no longer under-reads.
+    s = body["summary"]
+    assert "receipt_match_rate" in s and "n_receipts_matched" in s
+    placed = s["n_receipts"] - s["n_unmatched_rec"]
+    assert s["n_receipts_matched"] == placed
+    expected = round(placed / s["n_receipts"] * 100, 1) if s["n_receipts"] else 0.0
+    assert s["receipt_match_rate"] == expected
     # Tier-1 triage + the duplicate scan ride the same model.
     assert "duplicate_groups" in body
     # unknown run -> JSON 404, never a redirect

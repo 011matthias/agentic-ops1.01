@@ -598,7 +598,23 @@ def execute_run(
         "n_unmatched_rec": len(outcome.unmatched_receipts),
         "n_parse_errors": count_parse_issues(result.parse_errors)["errors"],
         "n_parse_notes": count_parse_issues(result.parse_errors)["notes"],
+        # `match_rate` divides matched charges by ALL charges, which reads
+        # low on a month where most charges never had a receipt (57 of 94 in
+        # April 2026) and made the tool look broken when it placed 34/37
+        # receipts. `receipt_match_rate` is the honest denominator: receipts
+        # placed on a charge over receipts that exist. Both are exposed; the
+        # SPA leads with the receipt rate. (2026-07-27)
         "match_rate": round(len(outcome.matches) / n_tx * 100, 1) if n_tx else 0.0,
+        "n_receipts_matched": max(
+            len(result.receipts) - len(outcome.unmatched_receipts), 0
+        ),
+        "receipt_match_rate": (
+            round(
+                (len(result.receipts) - len(outcome.unmatched_receipts))
+                / len(result.receipts) * 100, 1
+            )
+            if result.receipts else 0.0
+        ),
         "llm_cost_usd": (
             str(result.cost_tracker.total_cost_usd) if result.cost_tracker else "0"
         ),
@@ -2046,7 +2062,20 @@ def build_view(
         # 3.10: credits, partitioned before matching, never receipt-matched.
         "n_refunds": n_refunds,
         "n_unmatched_rec": len(unmatched_receipts),
+        # See the run-summary note above: charge-based `match_rate` under-reads
+        # a receiptless-heavy month; `receipt_match_rate` reports receipts
+        # placed (reconciled + review) over receipts that exist. The SPA leads
+        # with the receipt rate and keeps the charge rate as a labelled
+        # secondary figure. (2026-07-27)
         "match_rate": round(n_reconciled / n_tx * 100, 1) if n_tx else 0.0,
+        "n_receipts_matched": max(len(receipts) - len(unmatched_receipts), 0),
+        "receipt_match_rate": (
+            round(
+                (len(receipts) - len(unmatched_receipts))
+                / len(receipts) * 100, 1
+            )
+            if receipts else 0.0
+        ),
         "invariant_ok": (
             n_reconciled + n_review + n_unmatched_tx + n_refunds
         ) == n_tx,
