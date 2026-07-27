@@ -4,11 +4,48 @@ workstream: p2-product-decks
 group: lead-generation
 spec: p2
 state: active
-updated: 2026-07-24
+updated: 2026-07-27
 general_ref: status/p2-lead-gen-general.md
 ---
 
 # Brisken / Product decks (p2)
+
+## 2026-07-27 — Logo-wall redesign (Dirk direction) built, awaiting upload greenlight
+
+Dirk's 2026-07-27 mail (relayed): his `MN - ...Overview 2026-07-27.pptx` carries
+a before/after customer wall (old slide 6 -> new slide 5) with his intended
+changes, and asks to (a) apply them across the decks, (b) use TRANSPARENT logos,
+(c) build multiple walls swappable per customer. His changes decoded off the file:
+transparent logos replace white-boxed marks (Nike/ADM/ASR done, Angus still boxed),
+Ford + Siemens Energy added, Beautycounter/Global Brands dropped, headline
+"...run on TreasuryCentral." Owner calls (this session): apply to Overview + all 4
+product decks; build master + 3 industry cuts; his named logos are all confirmed
+customers.
+
+Built (engine-first; his pptx = design spec, not the artifact to hand-edit):
+- **Curated transparent logo library** (25 logos) at
+  `context/decks/customer-logos/normalized/`, re-derivable via tracked
+  `deckgen/build-logo-library.py` from three durable sources: SharePoint "CUSTOMER
+  LOGOS" folder (`20_Assets/BRISKEN logos and icons/CUSTOMER LOGOS`; his 6 new
+  2026-07-27 transparent files live here), Commons renders (Nestle/Sony/LG), and 4
+  reference-only marks (accenture/ab-inbev + white-keyed medmix/entegris). Angus
+  upgraded to transparent (improves on his still-boxed slide 5). KAUST + Grupo
+  Moura found in the folder; **Tradeweb/ICD flagged** (no clean source, ambiguous
+  ICD-vs-Tradeweb name) for Dirk.
+- **Named-logo-set engine**: `native/logosets.py` (`LOGO_SETS`: master + agri-food
+  + chemicals-industrials + financial-services); `customers(logo_set=...)`
+  grammar; assets.py overlays the transparent library + tripwires on a missing
+  wall logo; compose validates `logo_set`. DESIGN.md §2 documents it.
+- **Walls applied**: Overview -> master (Dirk's slide 5, improved); MDH + Smart
+  Trading -> financial-services; MDH Commodities -> agri-food; Digital Co-Worker
+  -> chemicals-industrials. All 5 rebuilt as `NEW - ... 2026-07-27` (product decks
+  +1 slide; Overview wall replaced in place). Caught + fixed a real 4-row-master
+  headline collision (2-line "...TreasuryCentral." over the top logo row).
+- **Gates**: em-dash zero + banned-terms pass on all 5; 15/15 engine pytest
+  (incl. 2 new logo-set tests); full-size visual review of all 5 walls (clean).
+
+NOT YET DONE: upload to Asset Testing (SharePoint write = owner-gated); PDFs.
+Local pptx in `.scratch/deckgen-v2/dist/*/NEW - ... 2026-07-27.pptx`.
 
 ## 2026-07-24 — Dirk notification SENT
 

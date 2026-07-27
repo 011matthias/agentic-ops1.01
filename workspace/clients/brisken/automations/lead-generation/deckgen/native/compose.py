@@ -44,6 +44,7 @@ def _load(name, path=None):
 T = _load("tokens")
 grammar = _load("grammar")
 assets = _load("assets")
+logosets = _load("logosets")
 common = _load("common", _here.parent / "common.py")
 
 UNNUMBERED = {"cover", "divider", "contact"}
@@ -123,6 +124,9 @@ def validate_spec(spec: dict) -> list[str]:
             if isinstance(items, list) and len(items) > cap:
                 errs.append(f"slide {i} ({t}): {field} has {len(items)} entries, max {cap} "
                             f"(overflow collides with the layout — split the slide)")
+        if t == "customers" and "logo_set" in sl and sl["logo_set"] not in logosets.LOGO_SETS:
+            errs.append(f"slide {i} (customers): unknown logo_set '{sl['logo_set']}' "
+                        f"(known: {sorted(logosets.LOGO_SETS)})")
         if t == "problem" and isinstance(sl.get("bands"), list) and len(sl["bands"]) != 3:
             errs.append(f"slide {i} (problem): needs exactly 3 bands")
         if t == "usecase" and isinstance(sl.get("steps"), list):

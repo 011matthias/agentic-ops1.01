@@ -112,6 +112,32 @@ Substance rules (from the approved deck's substance pass):
    number; body pages run sequentially (the hand-numbering drift class is
    dead in this family).
 
+### Customer wall + logo sets (2026-07-27, Dirk's direction)
+
+The `customers` slide renders a named logo set, swappable per prospect
+("multiple walls ... swap the logos according to the customer", Dirk
+2026-07-27). Sets live in `native/logosets.py` (`LOGO_SETS`): `master`
+(the 20-logo Overview wall), plus the industry cuts `agri-food`,
+`chemicals-industrials`, `financial-services` (~10 each). A spec names one
+via `logo_set:` (default `master`); compose validates it against the known
+sets. Deck assignment: Overview -> master; Market Data Hub + Smart Trading
+-> financial-services; MDH Commodities -> agri-food; Digital Co-Worker ->
+chemicals-industrials. Every company is an owner-confirmed live customer,
+so the wall's "already run on TreasuryCentral" headline is a real claim,
+not a wishlist; adding a name is an owner decision, not an engine one.
+
+Logos render TRANSPARENT (Dirk's change: white-boxed marks looked cheap on
+the neutral cards). The curated library is
+`context/decks/customer-logos/normalized/` (durable, gitignored),
+(re)built by `deckgen/build-logo-library.py` from three durable sources:
+the Brisken SharePoint "CUSTOMER LOGOS" folder pull, Wikimedia-Commons
+renders for names the folder lacks (Nestle/Sony/LG), and the four
+reference-only marks (accenture/ab-inbev/medmix/entegris, the last two
+white-keyed). `assets.py` overlays this library onto the build logos every
+`ensure()` and tripwires if any `logosets.ALL_WALL_LOGOS` name is missing.
+The grid is 5-wide, vertically centred, and compresses card height only
+when a 4-row master would collide with the two-line headline.
+
 ## 3. Verification gates (per deck, in order)
 
 Failures loop back to the SPEC or the engine, never to the artifact.

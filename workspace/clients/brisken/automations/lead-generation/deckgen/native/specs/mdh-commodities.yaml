@@ -8,7 +8,7 @@
 # family decision (Dirk's certification mark, printed on his own product
 # decks' functional diagrams, REF s13).
 deck: mdh-commodities
-output: "NEW - Brisken - Market Data Hub Commodities 2026-07-23"
+output: "NEW - Brisken - Market Data Hub Commodities 2026-07-27"
 palette: mdh-commodities
 slides:
   - type: cover
@@ -103,6 +103,11 @@ slides:
       - {label: "Anomaly alerts", body: "The system flags what looks wrong before it posts, not after, so a bad value is caught on the way in."}
       - {label: "Manage by exception", body: "People only touch the cases that need judgment. The rest just runs, and you hear about the odd one out."}
     footline: "AI grounded in SAP, with a human in the loop.    ·    Certified to ISO 27001 and SOC 1 Type II."
+
+  - type: customers
+    head: "Treasury teams already run on TreasuryCentral."
+    logo_set: agri-food
+    caption: "A selection of treasury and finance teams running live on OnePilot applications."
 
   - type: contact
     head: "Let's price your first curve."

@@ -17,7 +17,6 @@ import importlib.util
 import pathlib
 
 from PIL import Image
-from pptx.util import Pt
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.dml.color import RGBColor
 
@@ -33,6 +32,7 @@ def _load(name):
 
 T = _load("tokens")
 D = _load("draw")
+LS = _load("logosets")
 
 INK, PAPER, NEUTRAL, MUTED, FAINT, LINE = T.INK, T.PAPER, T.NEUTRAL, T.MUTED, T.FAINT, T.LINE
 ONINK, ONINK_SUB, NEUTRAL_DK = T.ONINK, T.ONINK_SUB, T.NEUTRAL_DK
@@ -47,12 +47,9 @@ PLATFORM_APPS = [
     ("open", "+ your own apps", "an open platform"),
 ]
 
-CUSTOMER_LOGOS = [
-    "google", "accenture", "equinor", "nike", "adm",
-    "ab-inbev", "sulzer", "barry-callebaut", "zespri", "angus-chemical",
-    "medmix", "entegris", "weyerhaeuser", "southwire", "yeti",
-    "sothebys", "imax", "beautycounter", "global-brands", "asr-group",
-]
+# Back-compat alias; the wall now renders a named set from logosets.LOGO_SETS
+# (transparent library). The Overview default is the master set.
+CUSTOMER_LOGOS = LS.LOGO_SETS[LS.DEFAULT_SET]
 
 
 class Deck:
@@ -221,17 +218,34 @@ class Deck:
         self.footer(s, page)
         return s
 
-    def customers(self, page, head, caption):
+    def customers(self, page, head, caption, logo_set=None):
+        """Customer logo wall. `logo_set` names a set in logosets.LOGO_SETS
+        (default master); transparent logos sit on the neutral rounded cards.
+        The grid is 5-wide and vertically centres so a 10-logo industry cut
+        and the 20-logo master both sit balanced in the content band."""
         s = self.blank(PAPER)
         self.kicker(s, MARGIN, 0.62, "Customers")
         self.headline(s, MARGIN, 1.02, head, size=38)
+        names = LS.LOGO_SETS[logo_set or LS.DEFAULT_SET]
         cols = 5
         gx, gy = 0.28, 0.22
         cellw = (CW - gx * (cols - 1)) / cols
-        top, cellh = 2.2, 0.82
-        for i, name in enumerate(CUSTOMER_LOGOS):
+        rows = (len(names) + cols - 1) // cols
+        # Grid band sits below a two-line headline (the product-forward
+        # "...TreasuryCentral." wraps at 38pt) and above the caption. Cards
+        # compress only when a 4-row master would otherwise overflow the band;
+        # a 2-row industry cut keeps the full card height and centres lower.
+        grid_top, grid_bot = 2.55, 6.2
+        avail = grid_bot - grid_top
+        cellh = min(0.82, (avail - (rows - 1) * gy) / rows)
+        block_h = rows * cellh + (rows - 1) * gy
+        top = grid_top + (avail - block_h) / 2
+        for i, name in enumerate(names):
             r, c = divmod(i, cols)
-            x = MARGIN + c * (cellw + gx)
+            in_row = min(cols, len(names) - r * cols)
+            row_w = in_row * cellw + (in_row - 1) * gx
+            x0 = MARGIN + (CW - row_w) / 2          # centre a partial last row
+            x = x0 + c * (cellw + gx)
             y = top + r * (cellh + gy)
             D.rect(s, x, y, cellw, cellh, fill=NEUTRAL, rounded=True, radius=0.12)
             D.place_image(s, self.A / "logos" / f"{name}.png", x + 0.2, y + 0.13,

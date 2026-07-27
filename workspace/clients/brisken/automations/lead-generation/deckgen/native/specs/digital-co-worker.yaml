@@ -11,7 +11,7 @@
 # functional slide is a deliberate family decision (Dirk's certification
 # mark, printed on his own product decks' functional diagrams).
 deck: digital-co-worker
-output: "NEW - Brisken - Digital Co-Worker 2026-07-23"
+output: "NEW - Brisken - Digital Co-Worker 2026-07-27"
 palette: digital-co-worker
 slides:
   - type: cover
@@ -159,6 +159,11 @@ slides:
         what: "The intercompany funding process, run by the Digital Co-Worker."
         highlight: "A complex process with many SAP touch-points, fully automated."
         replaced: "Replaced a manual solution."
+
+  - type: customers
+    head: "Treasury teams already run on TreasuryCentral."
+    logo_set: chemicals-industrials
+    caption: "A selection of treasury and finance teams running live on OnePilot applications."
 
   - type: contact
     head: "Let's map your first request."

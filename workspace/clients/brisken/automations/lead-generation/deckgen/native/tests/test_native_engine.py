@@ -27,6 +27,7 @@ def _load(name, path):
 
 
 T = _load("tokens", NATIVE / "tokens.py")
+logosets = _load("logosets", NATIVE / "logosets.py")
 grammar = _load("grammar", NATIVE / "grammar.py")
 assets_mod = _load("assets", NATIVE / "assets.py")
 compose = _load("compose", NATIVE / "compose.py")
@@ -41,7 +42,7 @@ def dummy_assets(tmp_path):
     (a / "logos").mkdir(parents=True)
     for name in ("brisken_dark.png", "brisken_reversed.png", "sap_certified.png"):
         Image.new("RGBA", (120, 30), (10, 10, 10, 255)).save(a / name)
-    for name in grammar.CUSTOMER_LOGOS:
+    for name in logosets.ALL_WALL_LOGOS:
         Image.new("RGBA", (80, 40), (40, 40, 40, 255)).save(a / "logos" / f"{name}.png")
     return a
 
@@ -212,8 +213,37 @@ def test_badge_identity_pins():
         "sap_certified.png", "0a4e1f2466238d0723f83a4edb2d9475")
     assert "image34.png" not in assets_mod.BRAND_ASSETS, \
         "image34 is the Fortitude Re art, never the SAP badge"
+    # The reference extraction still pins 20 logos (provenance/fallback). The
+    # wall itself now renders the curated transparent library (logosets),
+    # decoupled from the reference names since 2026-07-27 (Dirk's transparent
+    # set: Ford/Siemens added, Angus transparent, Beautycounter/Global Brands
+    # retired).
     assert len(assets_mod.CLIENT_LOGOS) == 20
-    assert set(assets_mod.CLIENT_LOGOS.values()) == set(grammar.CUSTOMER_LOGOS)
+
+
+def test_logo_sets_wellformed():
+    assert logosets.DEFAULT_SET in logosets.LOGO_SETS
+    assert len(logosets.LOGO_SETS["master"]) == 20
+    # every set entry resolves to a curated-library name
+    for name, members in logosets.LOGO_SETS.items():
+        assert members, f"logo set {name} is empty"
+        assert set(members) <= set(logosets.ALL_WALL_LOGOS)
+    # ALL_WALL_LOGOS is exactly the union, sorted + deduped
+    union = sorted({m for ms in logosets.LOGO_SETS.values() for m in ms})
+    assert logosets.ALL_WALL_LOGOS == union
+
+
+def test_customers_logo_set_validation(tmp_path, dummy_assets):
+    ok = _mini_spec([{"type": "customers", "head": "H.", "caption": "C.",
+                      "logo_set": "financial-services"}])
+    assert compose.validate_spec(ok) == []
+    bad = _mini_spec([{"type": "customers", "head": "H.", "caption": "C.",
+                       "logo_set": "nope"}])
+    assert any("unknown logo_set" in e for e in compose.validate_spec(bad))
+    # a product-deck wall (industry cut) builds without error
+    dest = compose.build(ok, tmp_path, dummy_assets)
+    from pptx import Presentation
+    assert len(Presentation(str(dest)).slides._sldIdLst) == 1
 
 
 @pytest.mark.skipif(

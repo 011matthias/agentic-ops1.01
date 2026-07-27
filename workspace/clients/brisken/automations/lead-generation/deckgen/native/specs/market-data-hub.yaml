@@ -10,7 +10,7 @@
 # Dirk's own product decks' functional diagrams (REF s13), not only the
 # platform slide.
 deck: market-data-hub
-output: "NEW - Brisken - Market Data Hub 2026-07-23"
+output: "NEW - Brisken - Market Data Hub 2026-07-27"
 palette: market-data-hub
 slides:
   - type: cover
@@ -143,6 +143,11 @@ slides:
         what: "A single OnePilot deployment governing several financial-data domains at once."
         highlight: "One platform to govern all data integrations and controls."
         replaced: "Replaced a manual solution."
+
+  - type: customers
+    head: "Treasury teams already run on TreasuryCentral."
+    logo_set: financial-services
+    caption: "A selection of treasury and finance teams running live on OnePilot applications."
 
   - type: contact
     head: "Let's map your first feed."

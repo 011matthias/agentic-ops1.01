@@ -82,6 +82,16 @@ def library_path() -> Path:
     return context_dir() / "library.pptx"
 
 
+def customer_logos_dir() -> Path:
+    """Durable curated transparent customer-logo library (gitignored client
+    context; built by deckgen/build-logo-library.py, re-derivable). The
+    native assets pipeline overlays these onto the build logos dir so the
+    `customers` wall renders Dirk's transparent set, not the boxed
+    reference-deck extraction."""
+    return (main_clone_root()
+            / "workspace/clients/brisken/context/decks/customer-logos/normalized")
+
+
 # ------------------------------------------------------------------ CDP
 
 def _http_json(path: str):

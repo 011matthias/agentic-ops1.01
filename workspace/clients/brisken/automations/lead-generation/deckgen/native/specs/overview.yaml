@@ -4,7 +4,7 @@
 # the approved deck visually unchanged. Copy provenance:
 # deliverables/tc-overview-redesign/CHANGELOG-substance-pass.md.
 deck: overview
-output: "NEW - Brisken - TreasuryCentral Solutions Overview 2026-07-21"
+output: "NEW - Brisken - TreasuryCentral Solutions Overview 2026-07-27"
 palette: overview
 slides:
   - type: cover
@@ -40,8 +40,9 @@ slides:
     footnote: "Market-data partners: 360T, CME, Refinitiv, Bloomberg, OANDA.   Headquarters: Houston, TX."
 
   - type: customers
-    head: "Treasury teams already run on it."
-    caption: "A selection of treasury and finance teams live on OnePilot applications."
+    head: "Treasury teams already run on TreasuryCentral."
+    logo_set: master
+    caption: "A selection of treasury and finance teams running live on OnePilot applications."
 
   - type: divider
     num: "02"
