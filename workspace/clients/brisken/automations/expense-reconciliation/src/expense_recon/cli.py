@@ -105,6 +105,7 @@ from .output.report_xlsx import write_report
 from .output.sheet_writeback import write_sheet_writeback
 from .runlog import RunLog, decisions_from_outcome
 from .output.zoho_export import write_zoho_export
+from .output.zoho_expense_export import write_zoho_expense_export
 from .store import (
     ReportConflictError,
     ReportStore,
@@ -949,6 +950,14 @@ def run(
     config_dir = config_path.parent
     logger.info("run started: config=%s", config_path)
 
+    # Receipt-first branch (Dirk's note #1): generate one expense per
+    # receipt with no statement, write the Zoho Expenses CSV. Separate from
+    # the statement-mode body below so no transaction-anchored writer runs.
+    if cfg.get("mode") == "expense_generation":
+        return _run_expense_generation(
+            cfg, config_dir, out_override, dry_run=dry_run,
+        )
+
     result = reconcile(cfg, config_dir)
     outcome = result.outcome
     transactions = result.transactions
@@ -1088,6 +1097,45 @@ def run(
     )
 
     return report_path
+
+
+def _run_expense_generation(
+    cfg: dict, config_dir: Path, out_override: Path | None, *, dry_run: bool,
+) -> Path | None:
+    """CLI entry for receipt-first expense generation (mode=expense_generation):
+    generate one expense per receipt, write the Zoho Expenses import CSV.
+
+    A separate branch of `run()` so no transaction-anchored writer (journal,
+    reconciled CSV, sheet writeback, subscription derivation) fires in
+    expense mode; the statement-mode `run()` body is untouched.
+    """
+    result = generate_expenses(cfg, config_dir)
+    if dry_run:
+        print(
+            f"Expense generation (dry run): {len(result.receipts)} expense(s) "
+            "from receipts, no statement."
+        )
+        return None
+
+    out_cfg = cfg.get("output") or {}
+    export_path = out_override or (
+        config_dir / (out_cfg.get("expenses_csv") or "expenses.csv")
+    )
+    # Same COA validation gate the journal export uses; None when no
+    # `coa_validation:` block (unguarded, no change).
+    coa_gate = _build_coa_gate(cfg, config_dir)
+    receipt_urls = _host_receipts(cfg, config_dir, result.receipts)
+    write_zoho_expense_export(
+        result.receipts,
+        export_path,
+        chart_of_accounts=result.chart_of_accounts,
+        coa_gate=coa_gate,
+        default_paid_through=(cfg.get("expense") or {}).get("default_paid_through"),
+        receipt_urls=receipt_urls,
+    )
+    logger.info("wrote Zoho Expenses export: %s", export_path)
+    print(f"Wrote Zoho Expenses export: {export_path}")
+    return export_path
 
 
 def _derive_subscriptions(
