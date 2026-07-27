@@ -923,8 +923,10 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         field_overrides = store.get_expense_field_overrides(run.run_id)
         edits = store.get_expense_edits(run.run_id)
         resolutions = store.get_duplicate_resolutions(run.run_id)
+        settings = store.get_settings()
         return build_expense_view(
-            run, overrides, field_overrides, edits, resolutions
+            run, overrides, field_overrides, edits, resolutions,
+            settings=settings,
         )
 
     @app.get("/api/runs/{run_id}")
@@ -1013,8 +1015,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     # re-writes a run already produced.
     @app.get("/api/settings")
     def api_get_settings():
+        # `categories` is the fixed 8, surfaced read-only (Phase 5) so the
+        # settings screen can show them; PUT ignores the key entirely.
         with open_store() as store:
-            return JSONResponse(store.get_settings())
+            return JSONResponse({
+                **store.get_settings(),
+                "categories": list(EXPENSE_CATEGORIES),
+            })
 
     @app.put("/api/settings")
     async def api_put_settings(request: Request):
@@ -1059,9 +1066,50 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                         )
                 cleaned[name] = value
             patch[key] = cleaned
+        # Legal-entity registry (Phase 5): {label: {org_id, chart_path,
+        # default_paid_through, scope_groups, account_picks}}. String
+        # fields trim; list fields must be lists of strings. The whole map
+        # replaces the stored one (same contract as the other map keys), so
+        # deleting an entity is omitting it. `categories` is read-only and
+        # never persisted.
+        if "entities" in body:
+            raw = body["entities"]
+            if not isinstance(raw, dict):
+                return JSONResponse(
+                    {"error": "entities must be an object"}, status_code=400
+                )
+            cleaned_entities: dict[str, dict] = {}
+            for label, ent in raw.items():
+                name = str(label).strip()
+                if not name:
+                    continue
+                if not isinstance(ent, dict):
+                    return JSONResponse(
+                        {"error": f"entities[{name!r}] must be an object"},
+                        status_code=400,
+                    )
+                entry: dict = {}
+                for skey in ("org_id", "chart_path", "default_paid_through"):
+                    if str(ent.get(skey) or "").strip():
+                        entry[skey] = str(ent[skey]).strip()
+                for lkey in ("scope_groups", "account_picks"):
+                    if ent.get(lkey) is None:
+                        continue
+                    if not isinstance(ent[lkey], list):
+                        return JSONResponse(
+                            {"error": f"entities[{name!r}].{lkey} must be a list"},
+                            status_code=400,
+                        )
+                    values = [str(v).strip() for v in ent[lkey] if str(v).strip()]
+                    if values:
+                        entry[lkey] = values
+                cleaned_entities[name] = entry
+            patch["entities"] = cleaned_entities
         with open_store() as store:
             settings = store.set_settings(patch, _now_iso())
-        return JSONResponse(settings)
+        return JSONResponse({
+            **settings, "categories": list(EXPENSE_CATEGORIES),
+        })
 
     @app.get("/api/compare")
     def api_compare(a: str = "", b: str = ""):

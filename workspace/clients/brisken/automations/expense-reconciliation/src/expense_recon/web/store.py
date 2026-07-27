@@ -117,11 +117,18 @@ VALID_DUP_RESOLUTIONS = (DUP_IGNORE, DUP_CONFIRMED)
 #
 # All three are read at run creation and snapshotted into the run's own
 # config, so an existing run keeps the master data it ran under.
+#   entities  (Phase 5, receipt-first) — the legal-entity REGISTRY:
+#     {"Corporate Services": {org_id, chart_path?, scope_groups?,
+#     default_paid_through?, account_picks?}}. Definable in the UI; wins
+#     over the /data provisioning file's entity mapping when present
+#     (coa_provision.coa_validation_from_settings). Distinct from
+#     `card_entities`, which stays the card -> entity MAP.
 SETTINGS_DEFAULTS: dict = {
     "export_approved_only": False,
     "fx_reference_rates": {},
     "card_entities": {},
     "card_accounts": {},
+    "entities": {},
 }
 
 # Settings keys holding a {str: str} map. Values are kept as STRINGS: a

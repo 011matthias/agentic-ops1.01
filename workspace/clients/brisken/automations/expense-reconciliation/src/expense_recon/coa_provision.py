@@ -102,28 +102,83 @@ def coa_validation_for(entity_label: str, provisioning: dict) -> dict | None:
     return block
 
 
+def entity_from_settings(settings: dict | None, entity_label: str) -> dict | None:
+    """The stored settings-registry entry for one legal entity
+    (`settings["entities"]`, Phase 5), matched case-insensitively like the
+    provisioning file's entities. None when the registry has no entry."""
+    entities = (settings or {}).get("entities")
+    if not isinstance(entities, dict):
+        return None
+    key = (entity_label or "").strip().lower()
+    return next(
+        (
+            v
+            for k, v in entities.items()
+            if str(k).strip().lower() == key and isinstance(v, dict)
+        ),
+        None,
+    )
+
+
+def coa_validation_from_settings(
+    entity_label: str, settings: dict | None, provisioning: dict | None
+) -> dict | None:
+    """Build a ``coa_validation`` block preferring the settings entity
+    registry over the /data provisioning file (Phase 5: entities become
+    definable in the UI, the file stays the fallback).
+
+    The settings entry supplies ``org_id`` / ``scope_groups`` (and may carry
+    its own ``chart_path``); the chart file path falls back to the
+    provisioning file's ``chart_path``, so a registry entry works without
+    re-stating where the chart lives. No settings entry => the file's own
+    entity mapping, exactly as before. None when neither source can build a
+    complete block (fail-open, run left unguarded)."""
+    ent = entity_from_settings(settings, entity_label)
+    file_chart = (provisioning or {}).get("chart_path")
+    if ent is not None and ent.get("org_id"):
+        chart_path = ent.get("chart_path") or file_chart
+        if chart_path:
+            block: dict = {
+                "enabled": True,
+                "chart_path": str(chart_path),
+                "org_id": str(ent["org_id"]),
+                "entity_label": entity_label,
+            }
+            if ent.get("scope_groups"):
+                block["scope_groups"] = list(ent["scope_groups"])
+            if ent.get("types"):
+                block["types"] = list(ent["types"])
+            return block
+    if provisioning is not None:
+        return coa_validation_for(entity_label, provisioning)
+    return None
+
+
 def apply_to_config(
-    cfg: dict, entity_label: str, *, path: str | Path | None = None
+    cfg: dict,
+    entity_label: str,
+    *,
+    path: str | Path | None = None,
+    settings: dict | None = None,
 ) -> dict:
     """Return ``cfg`` with a per-entity ``coa_validation`` block injected from
     the provisioning file, or the same ``cfg`` unchanged when provisioning is
     absent / disabled / does not cover this entity.
 
     ``path`` defaults to the ``EXPENSE_RECON_COA_PROVISION`` env var. An
-    existing ``coa_validation`` block in ``cfg`` is never overwritten. Wholly
-    fail-open: any unexpected error returns ``cfg`` untouched, because the gate
-    guards the export and must not be able to break a run.
+    existing ``coa_validation`` block in ``cfg`` is never overwritten.
+    ``settings`` (Phase 5) is the stored web settings; when its ``entities``
+    registry covers this entity, that entry wins over the file's mapping
+    (``coa_validation_from_settings``). Wholly fail-open: any unexpected
+    error returns ``cfg`` untouched, because the gate guards the export and
+    must not be able to break a run.
     """
     try:
         if cfg.get("coa_validation") is not None:
             return cfg  # respect an explicit block; don't clobber
         prov_path = path if path is not None else os.environ.get(PROVISION_ENV)
-        if not prov_path:
-            return cfg
-        provisioning = load_provisioning(prov_path)
-        if provisioning is None:
-            return cfg
-        block = coa_validation_for(entity_label, provisioning)
+        provisioning = load_provisioning(prov_path) if prov_path else None
+        block = coa_validation_from_settings(entity_label, settings, provisioning)
         if block is None:
             logger.info(
                 "COA provisioning: no chart for legal entity %r; run left "

@@ -31,6 +31,7 @@ from pathlib import Path
 from .. import inspect as stmt_inspect
 from ..cli import ConfigError, generate_expenses, reconcile
 from ..coa_provision import apply_to_config as apply_coa_provisioning
+from ..coa_provision import entity_from_settings
 from ..duplicates import (
     duplicate_group_id,
     find_duplicate_charges,
@@ -307,7 +308,9 @@ def prepare_run(
     # them too and a pulled-down run reproduces the hosted match.
     cfg = apply_master_data(cfg, form, settings)
     entity = resolve_entity(form, settings)
-    cfg = apply_coa_provisioning(cfg, entity)
+    # Phase 5: the settings entity registry (definable in the UI) wins over
+    # the /data provisioning file; empty registry => file behaviour intact.
+    cfg = apply_coa_provisioning(cfg, entity, settings=settings)
 
     # Local-repro config: write a self-contained `run.local.json` next to the
     # uploaded files so pulling this run dir off the /data volume (flyctl
@@ -3211,12 +3214,20 @@ def create_expense_batch(
     }
     if default_currency.strip():
         cfg["receipts"]["default_currency"] = default_currency.strip()
+    # Phase 5: the entity registry's default Paid Through account rides in
+    # the run config, so the export resolves it with no per-expense edit.
+    entity_entry = entity_from_settings(settings, legal_entity)
+    if entity_entry and entity_entry.get("default_paid_through"):
+        cfg["expense"]["default_paid_through"] = str(
+            entity_entry["default_paid_through"]
+        )
     if use_llm_effective:
         cfg["llm"] = {"provider": "openai", "model": "gpt-4o-mini"}
     # Per-entity chart provisioning (the same gate a statement run gets):
     # the export validates posting accounts against the paying entity's
-    # chart when the entity is provisioned; absent => unguarded, unchanged.
-    cfg = apply_coa_provisioning(cfg, legal_entity.strip())
+    # chart when the entity is provisioned (settings registry first, /data
+    # file fallback); absent => unguarded, unchanged.
+    cfg = apply_coa_provisioning(cfg, legal_entity.strip(), settings=settings)
     _write_local_run_config(work_dir, cfg)
 
     learned = None
@@ -3459,18 +3470,42 @@ def _expense_review(r: Receipt, overrides: dict) -> dict:
     return _matched_category_review(r, overrides)
 
 
+def _expense_account_options(run: RunRow, settings: dict | None) -> list[str]:
+    """The curated account picker for an expense batch (Phase 5): the
+    entity registry's explicit `account_picks` shortlist when one is
+    defined, else the same scoped postable-account labels the categorizer
+    was constrained to (rebuilt from the run's `coa_validation` block via
+    `_resolve_categorizer_chart`'s fallback). Empty when no chart — the
+    picker offers nothing rather than the full unscoped chart."""
+    entity = ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
+    ent = entity_from_settings(settings, entity)
+    if ent and ent.get("account_picks"):
+        return [str(a) for a in ent["account_picks"]]
+    try:
+        from ..cli import _resolve_categorizer_chart
+
+        _, labels, _ = _resolve_categorizer_chart(
+            run.config or {}, Path(run.work_dir), None, {}
+        )
+        return labels or []
+    except Exception:  # noqa: BLE001 - picker degrades, view never breaks
+        return []
+
+
 def build_expense_view(
     run: RunRow,
     overrides: dict,
     field_overrides: dict[str, dict[str, str]],
     edits: list[dict],
     resolutions: dict[str, str] | None = None,
+    settings: dict | None = None,
 ) -> dict:
     """Compose the receipt-spine render model for an expense batch: one row
     per expense with the reviewer's edits applied, review-by-exception
     states, duplicate flags, and a receipt-centric summary. The parallel of
     `build_view` (which is NOT modified); the SPA renders `expenses`, never
-    `rows`."""
+    `rows`. `settings` (Phase 5) feeds the curated account picker and the
+    entity picker options."""
     _, receipts, _, parse_errors = snapshot_from_dict(run.snapshot)
     default_entity = (
         ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
@@ -3567,6 +3602,17 @@ def build_expense_view(
         "upload_issues": run.summary.get("upload_issues", []),
     }
 
+    # Phase 5 pickers: entities the reviewer can assign (the registry's
+    # labels plus this batch's own default), and the curated account list.
+    entity_options = sorted(
+        {
+            str(k).strip()
+            for k in ((settings or {}).get("entities") or {})
+            if str(k).strip()
+        }
+        | ({default_entity} if default_entity else set())
+    )
+
     return {
         "run_id": run.run_id,
         "label": run.label,
@@ -3579,6 +3625,8 @@ def build_expense_view(
         "expenses": expenses,
         "duplicate_groups": duplicate_groups,
         "category_options": list(EXPENSE_CATEGORIES),
+        "account_options": _expense_account_options(run, settings),
+        "entity_options": entity_options,
         "parse_errors": parse_errors,
         "parse_issues": [
             {
