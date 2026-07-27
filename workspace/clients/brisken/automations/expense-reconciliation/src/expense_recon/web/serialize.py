@@ -169,6 +169,9 @@ def receipt_to_dict(r: Receipt) -> dict:
         "expense_location": r.expense_location,
         "data_quality_note": r.data_quality_note,
         "receipt_image_page": r.receipt_image_page,
+        # Receipt-first tax parity (2026-07-27).
+        "detected_tax": _dec(r.detected_tax),
+        "tax_label": r.tax_label,
     }
 
 
@@ -196,6 +199,9 @@ def receipt_from_dict(d: dict) -> Receipt:
         # .get keeps pre-WS2 snapshots loadable (no data_quality_note key).
         data_quality_note=d.get("data_quality_note"),
         receipt_image_page=d.get("receipt_image_page"),
+        # .get keeps pre-2026-07-27 snapshots loadable (no tax keys).
+        detected_tax=_as_dec(d.get("detected_tax")),
+        tax_label=d.get("tax_label"),
     )
 
 
