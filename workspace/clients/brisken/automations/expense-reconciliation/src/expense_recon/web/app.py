@@ -1803,14 +1803,19 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
     def post_commit_memory(run_id: str):
         # Explicit finalize: fold THIS run's confirmed decisions into the
         # durable learning store so next month consults them (Phase 2).
+        # Expense batches (Phase 6) branch inside commit_to_memory: the
+        # field/edit overlays teach entity mappings + field corrections.
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
                 return JSONResponse({"error": "run not found"}, status_code=404)
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
+            field_overrides = store.get_expense_field_overrides(run_id)
+            edits = store.get_expense_edits(run_id)
         learned = commit_to_memory(
-            run, decisions, overrides, app.state.learning_db_path, _now_iso()
+            run, decisions, overrides, app.state.learning_db_path, _now_iso(),
+            field_overrides=field_overrides, edits=edits,
         )
         return JSONResponse({"ok": True, "learned": learned})
 

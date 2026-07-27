@@ -49,9 +49,11 @@ from ..matching.types import (
     Transaction,
 )
 from ..learning import (
+    ExpenseMemory,
     LearningStore,
     MatchMemory,
     MerchantCategoryLookup,
+    learn_from_expense_run,
     learn_from_run,
     normalize_vendor,
 )
@@ -2939,12 +2941,47 @@ def commit_to_memory(
     overrides: dict,
     learning_db_path: Path,
     now_iso: str,
+    *,
+    field_overrides: dict[str, dict[str, str]] | None = None,
+    edits: list[dict] | None = None,
 ) -> dict:
     """Harvest this run's confirmed decisions into the durable learning
     store (Phase 2 capture). This is the explicit finalize gate: only
     confirmed matches (alias + FX) and explicit category reclassifications
     (merchant -> category) teach; a half-reviewed run teaches nothing
-    wrong. Returns a summary of what was written."""
+    wrong. Returns a summary of what was written.
+
+    An expense batch (Phase 6) branches to `learn_from_expense_run`: entity
+    overrides teach merchant -> entity, header edits teach per-merchant
+    field corrections (keyed on the ORIGINAL extracted vendor), category
+    reclassifications teach merchant -> category. `field_overrides` /
+    `edits` are the expense-mode overlays; ignored in statement mode."""
+    if run_mode(run) == MODE_EXPENSE_GENERATION:
+        _, receipts, _, _ = snapshot_from_dict(run.snapshot)
+        default_entity = (
+            ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
+        )
+        edits = edits or []
+        effective = apply_expense_edits(
+            receipts, field_overrides or {}, edits,
+            category_overrides=overrides, default_entity=default_entity,
+        )
+        manual_payloads = {
+            e["document_id"]: e["payload"] for e in edits if e["op"] == "add"
+        }
+        with LearningStore(learning_db_path) as store:
+            summary = learn_from_expense_run(
+                store,
+                receipts=receipts,
+                effective_receipts=effective,
+                field_overrides=field_overrides or {},
+                category_overrides=overrides,
+                manual_payloads=manual_payloads,
+                source_run=run.run_id,
+                now_iso=now_iso,
+            )
+        return summary.as_dict()
+
     transactions, receipts, outcome, _ = snapshot_from_dict(run.snapshot)
     effective = apply_decisions(outcome, transactions, receipts, decisions)
     confirmed_tx_ids = {
@@ -2974,7 +3011,11 @@ def build_memory_view(learning_db_path: Path | None) -> dict:
     grouped by table. Read-only; an absent store yields an empty view."""
     empty = {
         "categories": [], "aliases": [], "fx": [],
-        "counts": {"merchant_category": 0, "vendor_alias": 0, "merchant_fx": 0},
+        "entities": [], "field_corrections": [],
+        "counts": {
+            "merchant_category": 0, "vendor_alias": 0, "merchant_fx": 0,
+            "merchant_entity": 0, "field_correction": 0,
+        },
         "total": 0,
     }
     if learning_db_path is None or not Path(learning_db_path).exists():
@@ -2984,6 +3025,8 @@ def build_memory_view(learning_db_path: Path | None) -> dict:
         cats = s.all_merchant_categories()
         aliases = s.get_vendor_aliases()
         fx = s.all_merchant_fx()
+        entities = s.all_merchant_entities()
+        corrections = s.all_field_corrections()
         counts = s.count_rows()
 
     categories = [
@@ -3011,8 +3054,27 @@ def build_memory_view(learning_db_path: Path | None) -> dict:
         }
         for f in fx
     ]
+    # Receipt-first memory (Phase 6): merchant -> entity mappings and
+    # per-merchant field corrections, so the /memory screen shows what
+    # will auto-fill next batch and "forget" can target it.
+    entity_rows = [
+        {
+            "vendor": e.vendor_norm, "entity": e.legal_entity_id,
+            "count": e.decision_count, "last": (e.last_confirmed_at or "")[:10],
+        }
+        for e in entities
+    ]
+    correction_rows = [
+        {
+            "entity": c.legal_entity_id, "vendor": c.vendor_norm,
+            "field": c.field, "value": c.value or "",
+            "count": c.decision_count, "last": (c.last_confirmed_at or "")[:10],
+        }
+        for c in corrections
+    ]
     return {
         "categories": categories, "aliases": alias_rows, "fx": fx_rows,
+        "entities": entity_rows, "field_corrections": correction_rows,
         "counts": counts, "total": sum(counts.values()),
     }
 
@@ -3022,7 +3084,10 @@ def forget_memory_vendor(
 ) -> dict:
     """Drop everything learned for one merchant in one entity. Returns the
     per-table delete counts (zero everywhere when nothing matched)."""
-    zero = {"merchant_category": 0, "vendor_alias": 0, "merchant_fx": 0}
+    zero = {
+        "merchant_category": 0, "vendor_alias": 0, "merchant_fx": 0,
+        "merchant_entity": 0, "field_correction": 0,
+    }
     vnorm = normalize_vendor(vendor)
     if learning_db_path is None or not Path(learning_db_path).exists() or not vnorm:
         return zero
@@ -3118,6 +3183,9 @@ class PreparedExpenseBatch:
     now_iso: str
     operator: str | None
     upload_issues: list[str]
+    # Phase 6: learned merchant->entity + field corrections, consulted by
+    # generate_expenses only (never reconcile).
+    expense_memory: object | None = None
 
 
 def create_expense_batch(
@@ -3230,9 +3298,10 @@ def create_expense_batch(
     cfg = apply_coa_provisioning(cfg, legal_entity.strip(), settings=settings)
     _write_local_run_config(work_dir, cfg)
 
-    learned = None
+    learned = expense_memory = None
     if learning_db_path is not None:
         learned = MerchantCategoryLookup.from_db_path(learning_db_path)
+        expense_memory = ExpenseMemory.from_db_path(learning_db_path)
 
     return PreparedExpenseBatch(
         run_id=run_id,
@@ -3245,6 +3314,7 @@ def create_expense_batch(
         now_iso=now_iso,
         operator=operator,
         upload_issues=issues,
+        expense_memory=expense_memory,
     )
 
 
@@ -3260,6 +3330,7 @@ def execute_expense_batch(
             prepared.work_dir,
             learned=prepared.learned,
             on_stage=on_stage,
+            expense_memory=prepared.expense_memory,
         )
     except ConfigError as exc:
         raise RunInputError(str(exc)) from exc

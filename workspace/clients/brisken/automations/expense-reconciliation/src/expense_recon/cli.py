@@ -826,7 +826,7 @@ def reconcile(
 
 def generate_expenses(
     cfg: dict, config_dir: Path, *, learned=None, llm_client=None,
-    on_stage=None,
+    on_stage=None, expense_memory=None,
 ) -> ReconcileResult:
     """Receipt-first expense generation: ingest -> vision -> categorize a
     batch of receipts with NO bank statement, one "expense" per receipt.
@@ -844,6 +844,11 @@ def generate_expenses(
     MerchantCategoryLookup) upgrades the weak vendor-fallback path to
     Tier-1 LEARNED, exactly as in `reconcile()`. `llm_client` may be
     injected (tests / a pre-built client); None builds it from `cfg`.
+
+    `expense_memory` (Phase 6, an `learning.ExpenseMemory`) applies learned
+    merchant -> entity mappings and per-merchant field corrections right
+    after ingest — entity BEFORE categorization, so downstream sees the
+    corrected receipt. Consulted here ONLY; `reconcile()` never takes it.
 
     `reconcile()` is deliberately untouched: statement-mode reconciliation
     runs the identical path it always has.
@@ -876,6 +881,11 @@ def generate_expenses(
     receipts, vision_issues = _apply_vision_receipts(
         cfg, config_dir, receipts, llm_client
     )
+    # Phase 6 consult: learned merchant->entity + field corrections, applied
+    # before categorization so the corrected vendor/entity drive everything
+    # downstream. Provenance lands on data_quality_note (grid-visible).
+    if expense_memory is not None:
+        receipts = expense_memory.apply(receipts)
     logger.info("ingested %d receipt(s) (no statement)", len(receipts))
 
     parse_errors: list[tuple[str, int, str, str]] = [
