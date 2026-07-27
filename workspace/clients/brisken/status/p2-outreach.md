@@ -4,7 +4,7 @@ workstream: p2-outreach
 group: lead-generation
 spec: p2
 state: active
-updated: 2026-07-25
+updated: 2026-07-27
 general_ref: status/p2-lead-gen-general.md
 ---
 
@@ -27,21 +27,35 @@ Launch gated on two Matthias deliverables (Cristian's 2026-07-22 email): (1)
 suppression list, (2) product naming (TreasuryCentral lead / OnePilot platform).
 Cristian confirmed naming done 2026-07-25 and is waiting on the suppression list.
 
-**Suppression list BUILT 2026-07-25 (Standard scope), read-only from 3 live
-sources**, deduped to 1,595 emails + 77 customer domains at
-`context/lead-generation/outreach-assets/suppression-list.csv`:
-- customer (317 emails + 77 domains): live Zoho CRM, Account_Status
-  Active/Churned/Blocked; domain-level suppression for customer companies.
-- active-thread (1,204): both-mailbox Graph 90d scan (inbound aggregate + Sent
-  Items), external human counterparties, brisken.com + automated stripped.
+**Definition SET BY DIRK 2026-07-27** (email to Matthias): suppress a pool
+contact if they are IN THE CRM or IN THE MAILBOX ("if they are not in our CRM,
+and maybe also not in my e-mail box then we should be fine"). This supersedes
+the earlier customer-only Standard cut.
+
+**Suppression list REBUILT 2026-07-27 to Dirk's rule**, read-only, deduped to
+2,377 emails + 77 customer domains at
+`context/lead-generation/outreach-assets/suppression-list.csv` (cols
+value,kind,reason,source). Verified: 0 dupes, 0 malformed, 0 brisken.com leak.
+- crm (1,396): every live Zoho CRM Contact email (not just customers).
+- active-thread (907): both-mailbox Graph 90d scan (inbound aggregate + Sent
+  Items), external human counterparties in the mailbox but not in the CRM.
 - opt-out (73) + bounce (1): Rome master Tier=STOP/ANON + stop=X +
   sponsor_opt_in=No; send-log fails.
-- GAP (flagged to Matthias): no local Instantly unsubscribe export, so
-  historical opt-outs from the old ~2M-send lists are NOT included; only matters
-  if the 834 overlaps those lists. Rebuild: `.scratch/build_suppression_lean.py`
-  (Graph result cached in `.scratch/active_threads.json`).
-- Draft reply to Cristian written; SEND HELD for Matthias (he sends from Outlook
-  with the CSV attached, or authorizes a Graph send under the invasive gate).
+- customer domains (77): Zoho customer companies (Active/Churned/Blocked),
+  domain-level so the whole company is suppressed.
+- LIMITATION: Zoho **Leads** module returns 401 (the refresh token's OAuth
+  scope covers Accounts/Contacts, not Leads). If Brisken keeps prospects as
+  Leads, those are NOT covered; USER ACTION = re-auth the Zoho app with
+  ZohoCRM Leads read scope, then rebuild.
+- GAP (carried): no local Instantly unsubscribe export; historical opt-outs
+  from the old ~2M-send lists are NOT included (matters only if the 834
+  overlaps those lists).
+- Rebuild: `.scratch/build_suppression_lean.py` (Graph result cached in
+  `.scratch/active_threads.json`; Zoho pulled live each run).
+- SENT 2026-07-27 to cristian@getken.ai (Graph, reply-in-thread "RE: Cristian
+  Out of Office", CSV attached). VERIFIED in Sent Items (isDraft=false,
+  hasAttachments=true). Ball now in Cristian's court: dedup the 834, confirm
+  the count, launch. Cristian also uses cristian@ken.com.co on a separate thread.
 
 ## Elements
 
