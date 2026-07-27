@@ -8,10 +8,12 @@ on:
   pull_request:
     paths:
       - "workspace/clients/brisken/automations/expense-reconciliation/**"
+      - ".github/workflows/expense-recon-tests.yml"
   push:
     branches: [main]
     paths:
       - "workspace/clients/brisken/automations/expense-reconciliation/**"
+      - ".github/workflows/expense-recon-tests.yml"
 
 jobs:
   test:
@@ -24,4 +26,8 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
       - name: Run tests
-        run: uv run --with 'pytest>=8.0' pytest -q
+        # dev + web extras so the FastAPI / SPA-API tests actually run in CI
+        # (they importorskip without fastapi, so the whole web layer used to
+        # silently skip here). dev carries pytest + httpx; web carries
+        # fastapi + uvicorn + python-multipart.
+        run: uv run --extra dev --extra web pytest -q
