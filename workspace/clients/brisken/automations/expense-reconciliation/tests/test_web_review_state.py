@@ -84,6 +84,22 @@ def test_rejected_is_none():
     assert _rv(_rec(_cat()), status="rejected")["state"] == "none"
 
 
+# ── stable reason_code for the SPA to localize (EN + PT) ────────────
+
+
+def test_reason_codes():
+    assert _rv(effective_bucket="review")["reason_code"] == "uncertain_match"
+    assert _rv(_rec(None))["reason_code"] == "uncategorized"
+    assert _rv(_rec(_cat(source=ClassificationSource.LINE), None))["reason_code"] == "partial_uncategorized"
+    assert _rv(_rec(_cat(decision="ai_override_heavy")))["reason_code"] == "category_account_mismatch"
+    assert _rv(_rec(_cat(source=ClassificationSource.VENDOR)))["reason_code"] == "vendor_guess"
+    assert _rv(_rec(_cat(source=None)))["reason_code"] == "unknown_provenance"
+    assert _rv(_rec(_cat()))["reason_code"] is None  # ready
+    cc = {"category": "M", "zoho_account": "M", "source": "LEARNED"}
+    assert _rv(effective_bucket="unmatched", charge_category=cc)["reason_code"] == "receiptless_suggested"
+    assert _rv(effective_bucket="refund")["reason_code"] is None
+
+
 # ── uncertain match -> check ────────────────────────────────────────
 
 
