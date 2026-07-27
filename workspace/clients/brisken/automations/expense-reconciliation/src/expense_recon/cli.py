@@ -578,6 +578,43 @@ def _load_match_memory(cfg: dict, config_dir: Path):
     return MatchMemory.from_db_path((config_dir / block["path"]).resolve())
 
 
+def build_match_cfg(cfg: dict, config_dir: Path, match_memory=None) -> MatchingConfig | None:
+    """Assemble the run's `MatchingConfig` from its config + learned memory.
+
+    The single source of truth for how the `matching:` block becomes a
+    MatchingConfig: an optional `tuning_path` file, the inline tunables the
+    hosted surface passes (the month's FX reference rates etc.), and the
+    learned vendor aliases / per-merchant FX layered on top. Extracted from
+    `reconcile` so a later re-match of a stored run (the bulk receipts-folder
+    attach) reproduces the SAME config the run first matched under, instead
+    of duplicating this assembly. `match_memory` is passed already-resolved
+    (falsy => no memory layer); callers that want the config's own
+    `learning:` block resolve it via `_load_match_memory` first.
+    """
+    match_cfg = None
+    matching_block = dict(cfg.get("matching") or {})
+    tuning_path = matching_block.pop("tuning_path", None)
+    inline = {
+        k: v
+        for k, v in matching_block.items()
+        if k not in _MATCHING_NON_TUNABLE
+    }
+    if tuning_path:
+        tuning = json.loads(
+            (config_dir / tuning_path).read_text(encoding="utf-8")
+        )
+        match_cfg = MatchingConfig.from_dict({**tuning, **inline})
+    elif inline:
+        match_cfg = MatchingConfig.from_dict(inline)
+    if match_memory:
+        match_cfg = replace(
+            match_cfg or MatchingConfig(),
+            vendor_aliases=match_memory.vendor_aliases,
+            merchant_fx=dict(match_memory.merchant_fx),
+        )
+    return match_cfg
+
+
 def reconcile(
     cfg: dict, config_dir: Path, *, learned=None, match_memory=None,
     on_stage=None,
@@ -719,27 +756,7 @@ def reconcile(
     # over the file's, so a run can override one rate without copying the
     # whole file. The second-pass keys are consumed elsewhere in this module
     # and are not MatchingConfig tunables, so they never reach from_dict.
-    match_cfg = None
-    matching_block = dict(cfg.get("matching") or {})
-    tuning_path = matching_block.pop("tuning_path", None)
-    inline = {
-        k: v
-        for k, v in matching_block.items()
-        if k not in _MATCHING_NON_TUNABLE
-    }
-    if tuning_path:
-        tuning = json.loads(
-            (config_dir / tuning_path).read_text(encoding="utf-8")
-        )
-        match_cfg = MatchingConfig.from_dict({**tuning, **inline})
-    elif inline:
-        match_cfg = MatchingConfig.from_dict(inline)
-    if match_memory:
-        match_cfg = replace(
-            match_cfg or MatchingConfig(),
-            vendor_aliases=match_memory.vendor_aliases,
-            merchant_fx=dict(match_memory.merchant_fx),
-        )
+    match_cfg = build_match_cfg(cfg, config_dir, match_memory)
     _stage("matching")
     outcome = match_month(transactions, receipts, match_cfg)
     logger.info(

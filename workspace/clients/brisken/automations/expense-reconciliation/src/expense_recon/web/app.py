@@ -73,6 +73,7 @@ from .service import (
     create_intake,
     execute_run,
     forget_memory_vendor,
+    ingest_receipts_folder_into_run,
     matched_autopick_decisions,
     prepare_intake_run,
     prepare_run,
@@ -153,6 +154,39 @@ def _run_job(db_path: Path, job_id: str, prepared: PreparedRun) -> None:
                 store.set_intake_status(
                     prepared.intake_id, INTAKE_RECEIVED, updated_at=_now_iso()
                 )
+
+
+def _run_folder_job(
+    db_path: Path, job_id: str, run_id: str, staging_dir: Path
+) -> None:
+    """Ingest + re-match a bulk receipts-folder upload against an existing run
+    (2026-07-27), off the request in a worker thread like `_run_job`. Vision
+    OCR over a folder is minutes of work, so it never runs synchronously; the
+    SPA polls GET /jobs/{id} and reloads the run when it flips to done. The
+    staging dir (raw uploads spooled by the endpoint) is removed either way."""
+    try:
+        with RunStore(db_path) as store:
+            run = store.get_run(run_id)
+            if run is None:
+                store.set_job_status(
+                    job_id, JOB_ERROR, error="run not found",
+                    updated_at=_now_iso(),
+                )
+                return
+            ingest_receipts_folder_into_run(
+                store, run, staging_dir, _now_iso(),
+                on_stage=lambda s: store.set_job_stage(job_id, s, _now_iso()),
+            )
+            store.set_job_status(
+                job_id, JOB_DONE, run_id=run_id, updated_at=_now_iso()
+            )
+    except Exception as exc:  # noqa: BLE001 - surface any failure to the poller
+        with RunStore(db_path) as store:
+            store.set_job_status(
+                job_id, JOB_ERROR, error=str(exc), updated_at=_now_iso()
+            )
+    finally:
+        shutil.rmtree(staging_dir, ignore_errors=True)
 
 
 # Upper bound on one bulk-decision call. A month is ~100 charges, so this
@@ -1157,6 +1191,56 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             {"ok": True, "document_id": document_id, "summary": view["summary"]}
         )
 
+    @app.post("/api/runs/{run_id}/receipts/folder")
+    async def post_receipts_folder(
+        run_id: str, background: BackgroundTasks, request: Request
+    ):
+        # Bulk digital-receipt folder upload (2026-07-27). Criss drops a whole
+        # folder (or a .zip) of receipts she only has digitally; each is OCR'd
+        # and the matcher proposes pairings against the run's not-yet-decided
+        # charges, WITHOUT disturbing confirmed / rejected / posted work. Heavy
+        # (vision per file), so it runs in the background: returns {job_id}, the
+        # SPA polls GET /jobs/{id} and reloads the run on done. Raw uploads are
+        # spooled to a staging dir the job consumes and deletes.
+        with open_store() as store:
+            run = store.get_run(run_id)
+        if run is None:
+            return JSONResponse({"error": "run not found"}, status_code=404)
+
+        form = await request.form()
+        uploads = [
+            u for u in form.getlist("files") if getattr(u, "filename", None)
+        ]
+        one = form.get("file")  # tolerate the singular field name too
+        if one is not None and getattr(one, "filename", None):
+            uploads.append(one)
+        if not uploads:
+            return JSONResponse({"error": "no files uploaded"}, status_code=400)
+
+        job_id = uuid.uuid4().hex[:12]
+        staging = Path(run.work_dir) / f"folder-staging-{job_id}"
+        staging.mkdir(parents=True, exist_ok=True)
+        saved = 0
+        for i, up in enumerate(uploads):
+            data = await up.read()
+            if not data:
+                continue
+            safe = re.sub(r"[^A-Za-z0-9._-]", "_", Path(up.filename).name) or "file"
+            (staging / f"{i:04d}__{safe}").write_bytes(data)
+            saved += 1
+        if saved == 0:
+            shutil.rmtree(staging, ignore_errors=True)
+            return JSONResponse(
+                {"error": "all uploaded files were empty"}, status_code=400
+            )
+
+        with open_store() as store:
+            store.create_job(job_id, None, _now_iso())
+        background.add_task(
+            _run_folder_job, app.state.db_path, job_id, run_id, staging
+        )
+        return JSONResponse({"ok": True, "job_id": job_id, "n_files": saved})
+
     @app.get("/api/runs/{run_id}/receipts/{document_id:path}/image")
     def receipt_image(run_id: str, document_id: str):
         # Receipt preview (owner directive 2026-07-25): a reviewer working
@@ -1176,6 +1260,24 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             fs_tx = re.sub(r"[^A-Za-z0-9._-]", "_", tx_part)
             folder = work_dir / "manual-receipts"
             hits = sorted(folder.glob(f"{fs_tx}__*")) if folder.is_dir() else []
+            if not hits:
+                return JSONResponse(
+                    {"error": "no receipt image"}, status_code=404
+                )
+            media = (
+                mimetypes.guess_type(hits[0].name)[0]
+                or "application/octet-stream"
+            )
+            return FileResponse(hits[0], media_type=media)
+
+        if document_id.startswith("folder:"):
+            # Bulk folder receipt (2026-07-27): the file is stored under
+            # folder-receipts/ named by its content hash (the id after the
+            # prefix), so glob it back the same way the manual branch does.
+            digest = document_id[len("folder:"):]
+            fs_digest = re.sub(r"[^A-Za-z0-9._-]", "_", digest)
+            folder = work_dir / "folder-receipts"
+            hits = sorted(folder.glob(f"{fs_digest}__*")) if folder.is_dir() else []
             if not hits:
                 return JSONResponse(
                     {"error": "no receipt image"}, status_code=404

@@ -18,6 +18,7 @@ which keeps the layer unit-testable without an HTTP client.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -1413,6 +1414,292 @@ def attach_emailed_receipt(
 
 
 # --------------------------------------------------------------------------
+# Bulk digital-receipt folder attach (2026-07-27)
+# --------------------------------------------------------------------------
+
+FOLDER_RECEIPT_SUFFIXES = frozenset({".pdf", ".png", ".jpg", ".jpeg", ".webp"})
+FOLDER_RECEIPT_MAX_BYTES = 15 * 1024 * 1024
+# One bulk upload is one operator action on one run; a receipts-folder month
+# is ~20-40 files. The cap bounds vision cost and a zip's blast radius.
+FOLDER_MAX_FILES = 80
+# Charges the reviewer has decided; held out of the re-match entirely so a
+# folder upload can never disturb confirmed / rejected / already-posted work.
+_FOLDER_TERMINAL = frozenset(
+    {STATUS_CONFIRMED, STATUS_REJECTED, STATUS_ALREADY_POSTED}
+)
+
+
+def _folder_receipt_files(staging_dir: Path):
+    """Yield (display_name, data_bytes) for every receipt in a staging dir,
+    expanding a `.zip` member-by-member so memory stays bounded to one file at
+    a time. A bad zip yields a single empty entry so the caller surfaces it as
+    an issue; unsupported members are yielded too and the caller's suffix
+    check turns them into a visible issue rather than a silent drop."""
+    import zipfile
+
+    for p in sorted(Path(staging_dir).iterdir()):
+        if not p.is_file() or p.name.startswith("."):
+            continue
+        if p.suffix.lower() == ".zip":
+            try:
+                with zipfile.ZipFile(p) as zf:
+                    for info in zf.infolist():
+                        if info.is_dir():
+                            continue
+                        name = Path(info.filename).name
+                        if not name or name.startswith("."):
+                            continue
+                        with zf.open(info) as fh:
+                            yield name, fh.read(FOLDER_RECEIPT_MAX_BYTES + 1)
+            except zipfile.BadZipFile:
+                yield p.name, b""
+            continue
+        yield p.name, p.read_bytes()
+
+
+def ingest_receipts_folder_into_run(
+    store, run: "RunRow", staging_dir: str | Path, now_iso: str, *, on_stage=None,
+) -> dict:
+    """Bulk sibling of `attach_emailed_receipt`: ingest a FOLDER of receipts
+    (Criss has them digitally, not in the Zoho ER export) against an EXISTING
+    run and propose pairings for the charges she has NOT decided yet, without
+    touching anything she already confirmed / rejected / marked posted.
+
+    Unlike the single-file attach, this does not pre-assign. It re-runs the
+    real matcher (`match_month` + the FX judgment layer, reusing the run's own
+    `MatchingConfig` so the 0.2 FX suggest floor and card scoping apply) over
+    the sub-universe of {charges with no terminal decision} x {new receipts +
+    still-unmatched existing receipts}, then splices the result back beside the
+    untouched decided work. New receipts that pair land in the review bucket as
+    candidates she confirms, exactly like ER receipts; new receipts that do not
+    pair land in `unmatched_receipts` (reconciliation guarantee). The reviewer's
+    stored decisions are never written here — `apply_decisions` overlays them at
+    view time, so confirmed pairs render exactly as before.
+
+    `staging_dir` holds the raw uploaded files (the endpoint spools them there,
+    off the request); a `.zip` among them is expanded. Returns a summary dict
+    (counts + LLM cost + possible-duplicate count), also persisted onto the
+    snapshot as `folder_ingest` so the SPA can show it once the job finishes.
+    """
+    from ..cli import (
+        _apply_ambiguous_judgment,
+        _apply_judgment,
+        _apply_unmatched_judgment,
+        _build_llm_client,
+        _load_match_memory,
+        build_match_cfg,
+    )
+    from ..ingest.receipts_folder import parse_receipt_file
+    from ..matching.deterministic import MatchingConfig, match_month
+
+    def _stage(name: str) -> None:
+        if on_stage is not None:
+            try:
+                on_stage(name)
+            except Exception:  # noqa: BLE001 - progress is best-effort
+                pass
+
+    transactions, receipts, outcome, _parse_errors = snapshot_from_dict(run.snapshot)
+    decisions = store.get_decisions(run.run_id)
+    work_dir = Path(run.work_dir)
+    dest_dir = work_dir / "folder-receipts"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    # LLM client for OCR (constraint 5). Prefer the run's own llm block; if the
+    # run had none, source the deployment default so a folder still gets read,
+    # with the cost made visible below. Without any client every receipt falls
+    # to bare-filename, which carries no amount/date and so cannot match — the
+    # summary flags `llm_source == "none"` so the operator knows why.
+    llm_client, tracker, llm_source = None, None, "none"
+    try:
+        llm_client, tracker = _build_llm_client(run.config or {})
+        if llm_client is not None:
+            llm_source = "run"
+    except ConfigError:
+        llm_client = None
+    if llm_client is None and _default_llm_on() and os.environ.get("OPENAI_API_KEY"):
+        llm_client, tracker = _build_llm_client(
+            {"llm": {"provider": "openai", "model": "gpt-4o-mini"}}
+        )
+        llm_source = "env-default"
+
+    entity = (
+        transactions[0].legal_entity_id
+        if transactions
+        else ((run.config or {}).get("statement") or {}).get("legal_entity_id", "")
+    )
+    default_ccy = ((run.config or {}).get("receipts") or {}).get("default_currency")
+
+    _stage("ingesting")
+    existing_doc_ids = {r.document_id for r in receipts}
+    new_receipts: list[Receipt] = []
+    seen_hashes: set[str] = set()
+    issues: list[str] = []
+    n_seen = 0
+    for name, data in _folder_receipt_files(staging_dir):
+        n_seen += 1
+        if n_seen > FOLDER_MAX_FILES:
+            issues.append(
+                f"upload cap {FOLDER_MAX_FILES} reached; {name} and later skipped"
+            )
+            break
+        safe_name = Path(name or "").name
+        suffix = Path(safe_name or "receipt").suffix.lower()
+        if suffix not in FOLDER_RECEIPT_SUFFIXES:
+            issues.append(f"{safe_name}: unsupported type {suffix or '(none)'} (skipped)")
+            continue
+        if not data:
+            issues.append(f"{safe_name}: empty or unreadable (skipped)")
+            continue
+        if len(data) > FOLDER_RECEIPT_MAX_BYTES:
+            issues.append(f"{safe_name}: too large (15 MB max) (skipped)")
+            continue
+        digest = hashlib.sha1(data).hexdigest()[:16]
+        if digest in seen_hashes:
+            continue  # identical bytes twice in one upload
+        seen_hashes.add(digest)
+        document_id = f"folder:{digest}"
+        fs_name = re.sub(r"[^A-Za-z0-9._-]", "_", safe_name)
+        # Stable, content-addressed name so a re-upload of the same file lands
+        # on the same path and the image endpoint can glob it by hash.
+        dest = dest_dir / f"{digest}__{fs_name}"
+        dest.write_bytes(data)
+        if document_id in existing_doc_ids:
+            continue  # already in the pool from a prior upload; file refreshed
+        receipt = None
+        if llm_client is not None:
+            try:
+                parsed = parse_receipt_file(
+                    dest,
+                    legal_entity_id=entity,
+                    client=llm_client,
+                    default_currency=default_ccy,
+                )
+                receipt = replace(
+                    parsed, document_id=document_id, receipt_name=safe_name
+                )
+            except Exception:  # noqa: BLE001 - extraction is best-effort
+                receipt = None
+        if receipt is None:
+            # No LLM (or extraction failed): the file itself is still evidence.
+            receipt = Receipt(
+                document_id=document_id,
+                legal_entity_id=entity,
+                detected_date=None,
+                detected_total=None,
+                detected_currency=None,
+                detected_vendor=safe_name,
+                receipt_name=safe_name,
+            )
+        new_receipts.append(receipt)
+
+    new_ids = {r.document_id for r in new_receipts}
+    pool = [r for r in receipts if r.document_id not in new_ids] + new_receipts
+
+    _stage("matching")
+    # Partition. Terminal-decision charges (and every receipt a terminal
+    # decision owns) are held out; only not-yet-decided, non-credit charges are
+    # re-matched, and only against receipts no terminal decision owns.
+    def _terminal(tx_id: str) -> bool:
+        d = decisions.get(tx_id)
+        return d is not None and d.status in _FOLDER_TERMINAL
+
+    held_tx = {t.transaction_id for t in transactions if _terminal(t.transaction_id)}
+    held_docs: set[str] = set()
+    for tx_id in held_tx:
+        d = decisions.get(tx_id)
+        if d and d.chosen_document_id:
+            held_docs.add(d.chosen_document_id)
+    for m in (*outcome.matches, *outcome.judgment_required, *outcome.ambiguous):
+        if m.transaction_id in held_tx:
+            held_docs.add(m.document_id)
+
+    in_play_tx = [
+        t for t in transactions
+        if t.transaction_id not in held_tx and not t.is_credit
+    ]
+    available = [r for r in pool if r.document_id not in held_docs]
+
+    match_memory = _load_match_memory(run.config or {}, work_dir)
+    match_cfg = build_match_cfg(run.config or {}, work_dir, match_memory)
+    sub = match_month(in_play_tx, available, match_cfg)
+
+    _stage("judging")
+    tx_by_id = {t.transaction_id: t for t in in_play_tx}
+    rec_by_id = {r.document_id: r for r in available}
+    _apply_judgment(
+        sub, tx_by_id, rec_by_id, llm_client,
+        suggest_floor=(match_cfg or MatchingConfig()).fx_judgment_suggest_floor,
+    )
+    _apply_ambiguous_judgment(sub, tx_by_id, rec_by_id, llm_client)
+    _apply_unmatched_judgment(
+        sub, in_play_tx, available, llm_client,
+        match_cfg or MatchingConfig(), run.config or {},
+    )
+
+    # Merge: the decided work is spliced back verbatim; the in-play portion is
+    # replaced wholesale by the fresh sub-outcome. Every charge and receipt
+    # lands in exactly one bucket (reconciliation guarantee): held ones via
+    # their kept entry, in-play ones via `sub`, all credits via refunds.
+    merged = MatchOutcome(
+        matches=[m for m in outcome.matches if m.transaction_id in held_tx]
+        + sub.matches,
+        unmatched_transactions=[
+            t for t in outcome.unmatched_transactions if t in held_tx
+        ]
+        + sub.unmatched_transactions,
+        unmatched_receipts=[d for d in outcome.unmatched_receipts if d in held_docs]
+        + sub.unmatched_receipts,
+        judgment_required=[
+            m for m in outcome.judgment_required if m.transaction_id in held_tx
+        ]
+        + sub.judgment_required,
+        ambiguous=[m for m in outcome.ambiguous if m.transaction_id in held_tx]
+        + sub.ambiguous,
+        refunds=list(outcome.refunds),
+    )
+
+    _stage("saving")
+    # Dedup surfacing (constraint 4): a new receipt whose vendor+date+total+ccy
+    # equals an existing one is flagged, never dropped. Reuse the view-time
+    # detector so the headline count matches the §18 duplicate panel the
+    # reviewer then works.
+    dup_new_docs: set[str] = set()
+    for grp in find_duplicate_receipts(pool):
+        grp_new = [d for d in grp if d in new_ids]
+        if grp_new and any(d not in new_ids for d in grp):
+            dup_new_docs.update(grp_new)
+
+    n_matched_new = sum(1 for m in sub.matches if m.document_id in new_ids)
+    n_review_new = sum(
+        1
+        for m in (*sub.judgment_required, *sub.ambiguous)
+        if m.document_id in new_ids
+    )
+    n_unmatched_new = sum(1 for d in sub.unmatched_receipts if d in new_ids)
+    summary = {
+        "at": now_iso,
+        "n_files": n_seen,
+        "n_ingested": len(new_receipts),
+        "n_matched_new": n_matched_new,
+        "n_review_new": n_review_new,
+        "n_unmatched_new": n_unmatched_new,
+        "n_possible_duplicates": len(dup_new_docs),
+        "llm_source": llm_source,
+        "llm_calls": tracker.call_count if tracker else 0,
+        "cost_usd": round(tracker.total_cost_usd, 4) if tracker else 0.0,
+        "issues": issues,
+    }
+
+    new_snapshot = dict(run.snapshot)
+    new_snapshot["receipts"] = [receipt_to_dict(r) for r in pool]
+    new_snapshot["outcome"] = outcome_to_dict(merged)
+    new_snapshot["folder_ingest"] = summary
+    store.update_run_snapshot(run.run_id, new_snapshot)
+    return summary
+
+
+# --------------------------------------------------------------------------
 # View model for the workbench template
 # --------------------------------------------------------------------------
 
@@ -1545,10 +1832,12 @@ def _receipt_view(r: Receipt, overrides: dict[tuple[str, int], dict]) -> dict:
         "has_receipt_image": r.has_receipt_image,
         # Receipt preview (2026-07-25): True when the backend can serve this
         # receipt's image via GET /api/runs/{id}/receipts/{doc}/image (a
-        # vision-mapped ER-PDF page, or an operator-uploaded file).
+        # vision-mapped ER-PDF page, or an operator-uploaded file — the
+        # single-file `manual:` attach or a bulk `folder:` receipt).
         "receipt_image_available": (
             r.receipt_image_page is not None
             or r.document_id.startswith("manual:")
+            or r.document_id.startswith("folder:")
         ),
         "reference": r.detected_reference or "",
         "report_number": r.report_number or "",
