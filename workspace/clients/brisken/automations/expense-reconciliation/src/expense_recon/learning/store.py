@@ -46,6 +46,8 @@ from ..matching.deterministic import _normalize as normalize_vendor
 __all__ = [
     "LearningStore",
     "MerchantCategory",
+    "MerchantEntity",
+    "FieldCorrection",
     "VendorAlias",
     "MerchantFx",
     "normalize_vendor",
@@ -58,6 +60,36 @@ class MerchantCategory:
     vendor_norm: str
     category: str | None
     zoho_account: str | None
+    decision_count: int
+    last_confirmed_at: str | None
+    source_run: str | None
+
+
+@dataclass(frozen=True)
+class MerchantEntity:
+    """Receipt-first (Phase 6): which legal entity a merchant's expenses
+    belong to, learned from EXPLICIT per-expense entity overrides. Keyed by
+    vendor alone — the mapping IS the cross-entity fact (a batch's default
+    entity never teaches; only a per-expense correction does)."""
+
+    vendor_norm: str
+    legal_entity_id: str
+    decision_count: int
+    last_confirmed_at: str | None
+    source_run: str | None
+
+
+@dataclass(frozen=True)
+class FieldCorrection:
+    """Receipt-first (Phase 6): a reviewer's header-field correction for
+    one merchant (vendor spelling, tax label, paid-through account), keyed
+    by the ORIGINAL extracted vendor so next month's identical OCR output
+    auto-fills the same fix."""
+
+    legal_entity_id: str
+    vendor_norm: str
+    field: str
+    value: str | None
     decision_count: int
     last_confirmed_at: str | None
     source_run: str | None
@@ -150,6 +182,23 @@ class LearningStore:
                 last_seen_at    TEXT,
                 source_run      TEXT,
                 PRIMARY KEY (legal_entity_id, vendor_norm, from_ccy, to_ccy)
+            );
+            CREATE TABLE IF NOT EXISTS merchant_entity (
+                vendor_norm       TEXT NOT NULL PRIMARY KEY,
+                legal_entity_id   TEXT NOT NULL,
+                decision_count    INTEGER NOT NULL DEFAULT 1,
+                last_confirmed_at TEXT,
+                source_run        TEXT
+            );
+            CREATE TABLE IF NOT EXISTS field_correction (
+                legal_entity_id   TEXT NOT NULL,
+                vendor_norm       TEXT NOT NULL,
+                field             TEXT NOT NULL,
+                value             TEXT,
+                decision_count    INTEGER NOT NULL DEFAULT 1,
+                last_confirmed_at TEXT,
+                source_run        TEXT,
+                PRIMARY KEY (legal_entity_id, vendor_norm, field)
             );
             """
         )
@@ -347,16 +396,142 @@ class LearningStore:
             source_run=row["source_run"],
         )
 
+    # -- merchant_entity (receipt-first, Phase 6) --------------------------
+
+    def record_merchant_entity(
+        self,
+        vendor_norm: str,
+        legal_entity_id: str,
+        now_iso: str,
+        source_run: str | None,
+    ) -> None:
+        """Upsert a merchant -> legal-entity mapping (latest-wins,
+        decision_count as the audit trail)."""
+        self.conn.execute(
+            "INSERT INTO merchant_entity (vendor_norm, legal_entity_id, "
+            "decision_count, last_confirmed_at, source_run) "
+            "VALUES (?, ?, 1, ?, ?) "
+            "ON CONFLICT(vendor_norm) DO UPDATE SET "
+            "legal_entity_id = excluded.legal_entity_id, "
+            "decision_count = merchant_entity.decision_count + 1, "
+            "last_confirmed_at = excluded.last_confirmed_at, "
+            "source_run = excluded.source_run",
+            (vendor_norm, legal_entity_id, now_iso, source_run),
+        )
+        self.conn.commit()
+
+    def get_merchant_entity(self, vendor_norm: str) -> MerchantEntity | None:
+        row = self.conn.execute(
+            "SELECT * FROM merchant_entity WHERE vendor_norm = ?",
+            (vendor_norm,),
+        ).fetchone()
+        return self._row_to_entity(row) if row else None
+
+    def all_merchant_entities(
+        self, legal_entity_id: str | None = None
+    ) -> list[MerchantEntity]:
+        if legal_entity_id is None:
+            rows = self.conn.execute(
+                "SELECT * FROM merchant_entity ORDER BY vendor_norm"
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT * FROM merchant_entity WHERE legal_entity_id = ? "
+                "ORDER BY vendor_norm",
+                (legal_entity_id,),
+            ).fetchall()
+        return [self._row_to_entity(r) for r in rows]
+
+    @staticmethod
+    def _row_to_entity(row: sqlite3.Row) -> MerchantEntity:
+        return MerchantEntity(
+            vendor_norm=row["vendor_norm"],
+            legal_entity_id=row["legal_entity_id"],
+            decision_count=row["decision_count"],
+            last_confirmed_at=row["last_confirmed_at"],
+            source_run=row["source_run"],
+        )
+
+    # -- field_correction (receipt-first, Phase 6) -------------------------
+
+    def record_field_correction(
+        self,
+        legal_entity_id: str,
+        vendor_norm: str,
+        field: str,
+        value: str | None,
+        now_iso: str,
+        source_run: str | None,
+    ) -> None:
+        self.conn.execute(
+            "INSERT INTO field_correction (legal_entity_id, vendor_norm, "
+            "field, value, decision_count, last_confirmed_at, source_run) "
+            "VALUES (?, ?, ?, ?, 1, ?, ?) "
+            "ON CONFLICT(legal_entity_id, vendor_norm, field) DO UPDATE SET "
+            "value = excluded.value, "
+            "decision_count = field_correction.decision_count + 1, "
+            "last_confirmed_at = excluded.last_confirmed_at, "
+            "source_run = excluded.source_run",
+            (legal_entity_id, vendor_norm, field, value, now_iso, source_run),
+        )
+        self.conn.commit()
+
+    def get_field_corrections(
+        self, legal_entity_id: str, vendor_norm: str
+    ) -> dict[str, str]:
+        """field -> value for one merchant in one entity (empty when
+        nothing learned)."""
+        rows = self.conn.execute(
+            "SELECT field, value FROM field_correction "
+            "WHERE legal_entity_id = ? AND vendor_norm = ?",
+            (legal_entity_id, vendor_norm),
+        ).fetchall()
+        return {r["field"]: r["value"] for r in rows if r["value"]}
+
+    def all_field_corrections(
+        self, legal_entity_id: str | None = None
+    ) -> list[FieldCorrection]:
+        if legal_entity_id is None:
+            rows = self.conn.execute(
+                "SELECT * FROM field_correction "
+                "ORDER BY legal_entity_id, vendor_norm, field"
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT * FROM field_correction WHERE legal_entity_id = ? "
+                "ORDER BY vendor_norm, field",
+                (legal_entity_id,),
+            ).fetchall()
+        return [
+            FieldCorrection(
+                legal_entity_id=r["legal_entity_id"],
+                vendor_norm=r["vendor_norm"],
+                field=r["field"],
+                value=r["value"],
+                decision_count=r["decision_count"],
+                last_confirmed_at=r["last_confirmed_at"],
+                source_run=r["source_run"],
+            )
+            for r in rows
+        ]
+
     # -- maintenance (the 2d escape hatch) --------------------------------
 
-    TABLES = ("merchant_category", "vendor_alias", "merchant_fx")
+    TABLES = (
+        "merchant_category",
+        "vendor_alias",
+        "merchant_fx",
+        "merchant_entity",
+        "field_correction",
+    )
 
     def forget_vendor(
         self, legal_entity_id: str, vendor_norm: str
     ) -> dict[str, int]:
         """Drop everything learned about one vendor in one entity: its
-        category, its FX history, and any alias where it sits on EITHER
-        side. Returns per-table delete counts."""
+        category, its FX history, any alias where it sits on EITHER side,
+        its entity mapping, and its field corrections. Returns per-table
+        delete counts."""
         counts = {
             "merchant_category": self.conn.execute(
                 "DELETE FROM merchant_category WHERE legal_entity_id = ? "
@@ -372,6 +547,19 @@ class LearningStore:
                 "DELETE FROM vendor_alias WHERE legal_entity_id = ? AND "
                 "(stmt_vendor_norm = ? OR receipt_vendor_norm = ?)",
                 (legal_entity_id, vendor_norm, vendor_norm),
+            ).rowcount,
+            # The entity MAPPING is forgotten only when it points at the
+            # entity being forgotten from — forgetting vendor X in entity A
+            # must not silently drop X's (explicit) mapping to entity B.
+            "merchant_entity": self.conn.execute(
+                "DELETE FROM merchant_entity WHERE vendor_norm = ? "
+                "AND legal_entity_id = ?",
+                (vendor_norm, legal_entity_id),
+            ).rowcount,
+            "field_correction": self.conn.execute(
+                "DELETE FROM field_correction WHERE legal_entity_id = ? "
+                "AND vendor_norm = ?",
+                (legal_entity_id, vendor_norm),
             ).rowcount,
         }
         self.conn.commit()

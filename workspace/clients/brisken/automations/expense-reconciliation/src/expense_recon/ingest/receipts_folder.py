@@ -206,6 +206,11 @@ def _to_receipt(
         detected_currency=currency,
         detected_vendor=extraction.vendor,
         detected_reference=extraction.reference,
+        detected_tax=_parse_decimal_lenient(extraction.tax),
+        tax_label=extraction.tax_label,
+        # Folder OCR has no ER "payment_mode"; the receipt's own card/tender
+        # hint is the best paying-card signal for the Zoho Expenses export.
+        payment_mode=extraction.payment_hint,
         ocr_text=ocr_text,
         line_items=tuple(
             LineItem(

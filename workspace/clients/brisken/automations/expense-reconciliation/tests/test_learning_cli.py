@@ -36,7 +36,10 @@ def test_forget_vendor_clears_all_three_tables(tmp_path):
         counts = s.forget_vendor(LE, normalize_vendor("Coffee Shop NYC"))
         assert s.get_merchant_category(LE, normalize_vendor("Coffee Shop NYC")) is None
         assert s.get_vendor_aliases(LE) == []  # matched on either side
-    assert counts == {"merchant_category": 1, "vendor_alias": 1, "merchant_fx": 0}
+    assert counts == {
+        "merchant_category": 1, "vendor_alias": 1, "merchant_fx": 0,
+        "merchant_entity": 0, "field_correction": 0,
+    }
 
 
 def test_reset_scoped_by_entity_and_table(tmp_path):
@@ -55,7 +58,10 @@ def test_reset_all_clears_everything(tmp_path):
     _seed(db)
     with LearningStore(db) as s:
         s.reset()
-        assert s.count_rows() == {"merchant_category": 0, "vendor_alias": 0, "merchant_fx": 0}
+        assert s.count_rows() == {
+            "merchant_category": 0, "vendor_alias": 0, "merchant_fx": 0,
+            "merchant_entity": 0, "field_correction": 0,
+        }
 
 
 def test_reset_rejects_unknown_table(tmp_path):
@@ -116,7 +122,10 @@ def test_cli_reset_preview_then_apply(tmp_path, capsys):
     rc = memory_main(["reset", "--db", str(db), "--yes"])
     assert rc == 0
     with LearningStore(db) as s:
-        assert s.count_rows() == {"merchant_category": 0, "vendor_alias": 0, "merchant_fx": 0}
+        assert s.count_rows() == {
+            "merchant_category": 0, "vendor_alias": 0, "merchant_fx": 0,
+            "merchant_entity": 0, "field_correction": 0,
+        }
 
 
 def test_cli_reset_invalid_table_rejected(tmp_path):

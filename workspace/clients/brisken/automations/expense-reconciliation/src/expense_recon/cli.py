@@ -105,6 +105,7 @@ from .output.report_xlsx import write_report
 from .output.sheet_writeback import write_sheet_writeback
 from .runlog import RunLog, decisions_from_outcome
 from .output.zoho_export import write_zoho_export
+from .output.zoho_expense_export import write_zoho_expense_export
 from .store import (
     ReportConflictError,
     ReportStore,
@@ -823,6 +824,121 @@ def reconcile(
     )
 
 
+def generate_expenses(
+    cfg: dict, config_dir: Path, *, learned=None, llm_client=None,
+    on_stage=None, expense_memory=None,
+) -> ReconcileResult:
+    """Receipt-first expense generation: ingest -> vision -> categorize a
+    batch of receipts with NO bank statement, one "expense" per receipt.
+
+    The statement-independent sibling of `reconcile()` (Dirk's note #1,
+    "the flow is backwards"): it runs the SAME OCR + categorization
+    helpers but SKIPS `_load_statement`, `match_month`, the judgment
+    passes, and `categorize_charges` — all of which are transaction-
+    anchored. The result carries `transactions=[]` and every receipt in
+    `outcome.unmatched_receipts`, so the existing snapshot round-trips
+    unchanged; the receipt-first web view keys off the run's mode marker.
+
+    `cfg["expense"]["legal_entity_id"]` is required — the receipt-first
+    analogue of the statement's legal-entity guard. `learned` (a
+    MerchantCategoryLookup) upgrades the weak vendor-fallback path to
+    Tier-1 LEARNED, exactly as in `reconcile()`. `llm_client` may be
+    injected (tests / a pre-built client); None builds it from `cfg`.
+
+    `expense_memory` (Phase 6, an `learning.ExpenseMemory`) applies learned
+    merchant -> entity mappings and per-merchant field corrections right
+    after ingest — entity BEFORE categorization, so downstream sees the
+    corrected receipt. Consulted here ONLY; `reconcile()` never takes it.
+
+    `reconcile()` is deliberately untouched: statement-mode reconciliation
+    runs the identical path it always has.
+    """
+    def _stage(name: str) -> None:
+        if on_stage is not None:
+            try:
+                on_stage(name)
+            except Exception:  # noqa: BLE001 - progress is best-effort
+                logger.debug("on_stage(%r) callback failed", name, exc_info=True)
+
+    if llm_client is None:
+        llm_client, cost_tracker = _build_llm_client(cfg)
+    else:
+        cost_tracker = getattr(llm_client, "cost_tracker", None)
+
+    expense_block = cfg.get("expense")
+    if not isinstance(expense_block, dict) or not expense_block.get("legal_entity_id"):
+        raise ConfigError(
+            "expense.legal_entity_id is required for receipt-first expense "
+            "generation (the statement-free analogue of statement.legal_entity_id)"
+        )
+    legal_entity_id = expense_block["legal_entity_id"]
+
+    _stage("receipts")
+    receipts, receipt_issues = _load_receipts(
+        cfg, config_dir, legal_entity_id=legal_entity_id, llm_client=llm_client,
+    )
+    _stage("receipt-images")
+    receipts, vision_issues = _apply_vision_receipts(
+        cfg, config_dir, receipts, llm_client
+    )
+    # Phase 6 consult: learned merchant->entity + field corrections, applied
+    # before categorization so the corrected vendor/entity drive everything
+    # downstream. Provenance lands on data_quality_note (grid-visible).
+    if expense_memory is not None:
+        receipts = expense_memory.apply(receipts)
+    logger.info("ingested %d receipt(s) (no statement)", len(receipts))
+
+    parse_errors: list[tuple[str, int, str, str]] = [
+        (issue.file_name, issue.line_number, issue.message, issue.severity)
+        for issue in (*receipt_issues, *vision_issues)
+    ]
+
+    chart_of_accounts, zoho_cfg = _build_chart_of_accounts(cfg, config_dir)
+    cat_chart, account_labels, scope_groups = _resolve_categorizer_chart(
+        cfg, config_dir, chart_of_accounts, zoho_cfg
+    )
+    chart_of_accounts = cat_chart
+
+    if learned is None:
+        learned = _load_learned(cfg, config_dir)
+    override_er_category = bool(
+        (cfg.get("categorization") or {}).get("override_er_category", False)
+    )
+    _stage("categorizing")
+    receipts = categorize_receipts(
+        receipts, client=llm_client, chart_of_accounts=account_labels,
+        learned=learned, override_er_category=override_er_category,
+    )
+    if override_er_category and cat_chart is not None:
+        receipts = adjudicate_receipts(
+            receipts, cat_chart, scope_groups=scope_groups
+        )
+
+    # No statement => no matching. Every receipt IS an expense; they live in
+    # `unmatched_receipts` so the snapshot shape is identical to a run with
+    # zero matches, and the receipt-first view reads them as the row spine.
+    outcome = MatchOutcome(
+        unmatched_receipts=[r.document_id for r in receipts]
+    )
+
+    if cost_tracker and cost_tracker.call_count:
+        logger.info(
+            "LLM: %d call(s), est. $%.4f",
+            cost_tracker.call_count, cost_tracker.total_cost_usd,
+        )
+
+    return ReconcileResult(
+        outcome=outcome,
+        transactions=[],
+        receipts=receipts,
+        parse_errors=parse_errors,
+        cost_tracker=cost_tracker,
+        chart_of_accounts=chart_of_accounts,
+        zoho_cfg=zoho_cfg,
+        charge_categorizations={},
+    )
+
+
 def run(
     config_path: Path,
     out_override: Path | None = None,
@@ -843,6 +959,14 @@ def run(
     cfg = json.loads(config_path.read_text(encoding="utf-8"))
     config_dir = config_path.parent
     logger.info("run started: config=%s", config_path)
+
+    # Receipt-first branch (Dirk's note #1): generate one expense per
+    # receipt with no statement, write the Zoho Expenses CSV. Separate from
+    # the statement-mode body below so no transaction-anchored writer runs.
+    if cfg.get("mode") == "expense_generation":
+        return _run_expense_generation(
+            cfg, config_dir, out_override, dry_run=dry_run,
+        )
 
     result = reconcile(cfg, config_dir)
     outcome = result.outcome
@@ -983,6 +1107,45 @@ def run(
     )
 
     return report_path
+
+
+def _run_expense_generation(
+    cfg: dict, config_dir: Path, out_override: Path | None, *, dry_run: bool,
+) -> Path | None:
+    """CLI entry for receipt-first expense generation (mode=expense_generation):
+    generate one expense per receipt, write the Zoho Expenses import CSV.
+
+    A separate branch of `run()` so no transaction-anchored writer (journal,
+    reconciled CSV, sheet writeback, subscription derivation) fires in
+    expense mode; the statement-mode `run()` body is untouched.
+    """
+    result = generate_expenses(cfg, config_dir)
+    if dry_run:
+        print(
+            f"Expense generation (dry run): {len(result.receipts)} expense(s) "
+            "from receipts, no statement."
+        )
+        return None
+
+    out_cfg = cfg.get("output") or {}
+    export_path = out_override or (
+        config_dir / (out_cfg.get("expenses_csv") or "expenses.csv")
+    )
+    # Same COA validation gate the journal export uses; None when no
+    # `coa_validation:` block (unguarded, no change).
+    coa_gate = _build_coa_gate(cfg, config_dir)
+    receipt_urls = _host_receipts(cfg, config_dir, result.receipts)
+    write_zoho_expense_export(
+        result.receipts,
+        export_path,
+        chart_of_accounts=result.chart_of_accounts,
+        coa_gate=coa_gate,
+        default_paid_through=(cfg.get("expense") or {}).get("default_paid_through"),
+        receipt_urls=receipt_urls,
+    )
+    logger.info("wrote Zoho Expenses export: %s", export_path)
+    print(f"Wrote Zoho Expenses export: {export_path}")
+    return export_path
 
 
 def _derive_subscriptions(

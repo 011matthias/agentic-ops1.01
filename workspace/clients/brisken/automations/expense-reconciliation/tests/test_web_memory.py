@@ -111,6 +111,7 @@ def test_api_memory_reset_clears_everything(client):
     with LearningStore(client._data_root / "learning.sqlite") as s:
         assert s.count_rows() == {
             "merchant_category": 0, "vendor_alias": 0, "merchant_fx": 0,
+            "merchant_entity": 0, "field_correction": 0,
         }
     # ...and a scoped body echoes the scope back.
     r = client.post("/api/memory/reset", json={"table": "merchant_category"})
