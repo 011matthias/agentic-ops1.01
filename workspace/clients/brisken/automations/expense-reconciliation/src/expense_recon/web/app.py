@@ -37,6 +37,9 @@ route 404s while the flag is unset):
 
     POST /api/expense-batches      upload receipts -> statement-less batch
     GET  /api/expense-batches      list batches; /{id} the expense grid
+    POST /api/expense-batches/{id}/receipts   add receipts mid-month
+    POST /api/expense-batches/{id}/statement  month-end: attach statement,
+         reconcile the batch (the run then serves the workbench)
     PUT  /api/runs/{id}/expenses/{doc}           one field edit {field,value}
     PUT  /api/runs/{id}/expenses/{doc}/entity    per-expense legal entity
     POST /api/runs/{id}/expenses                 manual expense add
@@ -79,6 +82,7 @@ from .service import (
     PreparedRun,
     RunForm,
     RunInputError,
+    add_receipts_to_expense_batch,
     apply_expense_edits,
     attach_emailed_receipt,
     build_expense_view,
@@ -91,6 +95,9 @@ from .service import (
     create_intake,
     execute_expense_batch,
     execute_run,
+    execute_statement_attach,
+    has_statement,
+    prepare_statement_attach,
     forget_memory_vendor,
     ingest_receipts_folder_into_run,
     matched_autopick_decisions,
@@ -234,6 +241,77 @@ def _run_expense_job(
                 prepared,
                 on_stage=lambda s: store.set_job_stage(job_id, s, _now_iso()),
             )
+            store.set_job_status(
+                job_id, JOB_DONE, run_id=run_id, updated_at=_now_iso()
+            )
+    except Exception as exc:  # noqa: BLE001 - surface any failure to the poller
+        with RunStore(db_path) as store:
+            store.set_job_status(
+                job_id, JOB_ERROR, error=str(exc), updated_at=_now_iso()
+            )
+
+
+def _run_batch_receipts_job(
+    db_path: Path, job_id: str, run_id: str, staging_dir: Path,
+    learning_db_path: Path,
+) -> None:
+    """Incremental receipt-add on an expense batch, off the request (OCR is
+    slow). Staging dir is consumed and removed either way."""
+    try:
+        with RunStore(db_path) as store:
+            run = store.get_run(run_id)
+            if run is None:
+                store.set_job_status(
+                    job_id, JOB_ERROR, error="run not found",
+                    updated_at=_now_iso(),
+                )
+                return
+            add_receipts_to_expense_batch(
+                store, run, staging_dir, _now_iso(),
+                learning_db_path=learning_db_path,
+                on_stage=lambda s: store.set_job_stage(job_id, s, _now_iso()),
+            )
+            store.set_job_status(
+                job_id, JOB_DONE, run_id=run_id, updated_at=_now_iso()
+            )
+    except Exception as exc:  # noqa: BLE001 - surface any failure to the poller
+        with RunStore(db_path) as store:
+            store.set_job_status(
+                job_id, JOB_ERROR, error=str(exc), updated_at=_now_iso()
+            )
+    finally:
+        shutil.rmtree(staging_dir, ignore_errors=True)
+
+
+def _run_attach_statement_job(
+    db_path: Path, job_id: str, run_id: str, stmt_name: str,
+    column_map: dict | None, form: RunForm, learning_db_path: Path,
+) -> None:
+    """Graduate an expense batch into a reconciliation, off the request
+    (statement load + match + judgment can take minutes with the LLM)."""
+    try:
+        with RunStore(db_path) as store:
+            run = store.get_run(run_id)
+            if run is None:
+                store.set_job_status(
+                    job_id, JOB_ERROR, error="run not found",
+                    updated_at=_now_iso(),
+                )
+                return
+            settings = store.get_settings()
+            result = execute_statement_attach(
+                store, run,
+                stmt_name=stmt_name, column_map=column_map, form=form,
+                settings=settings, now_iso=_now_iso(),
+                learning_db_path=learning_db_path,
+                on_stage=lambda s: store.set_job_stage(job_id, s, _now_iso()),
+            )
+            # The mismatch warning must survive the job round-trip: park it
+            # on the job's stage-free error-less row via the stage field.
+            if result.get("entity_mismatch"):
+                store.set_job_stage(
+                    job_id, f"warning: {result['entity_mismatch']}", _now_iso()
+                )
             store.set_job_status(
                 job_id, JOB_DONE, run_id=run_id, updated_at=_now_iso()
             )
@@ -940,7 +1018,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             run = store.get_run(run_id)
             if run is None:
                 return JSONResponse({"error": "run not found"}, status_code=404)
-            if run_mode(run) == MODE_EXPENSE_GENERATION:
+            # A batch WITH a statement attached graduates to the workbench:
+            # build_view over the baked snapshot, every statement-mode
+            # surface (decisions / confirm-ready / exports) unchanged. The
+            # expense grid stays reachable via GET /api/expense-batches/{id}.
+            if run_mode(run) == MODE_EXPENSE_GENERATION and not has_statement(run):
                 return JSONResponse(jsonable_encoder(_expense_view(store, run)))
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
@@ -1504,6 +1586,23 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             )
         return run, None
 
+    def _mutable_expense_run_or_error(store: RunStore, run_id: str):
+        """Like `_expense_run_or_error`, but additionally refuses a batch
+        whose statement is attached: from that point the receipt pool is
+        the reconciliation's provenance and review continues in the
+        workbench (decisions / categories / manual match), never through
+        the expense-edit overlay."""
+        run, err = _expense_run_or_error(store, run_id)
+        if err is not None:
+            return None, err
+        if has_statement(run):
+            return None, JSONResponse(
+                {"error": "a statement is attached; review this month in "
+                          "the reconciliation workbench"},
+                status_code=400,
+            )
+        return run, None
+
     @app.post("/api/expense-batches")
     async def post_expense_batch(
         background: BackgroundTasks,
@@ -1575,6 +1674,9 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     "label": r.label,
                     "created_at": r.created_at,
                     "summary": r.summary,
+                    # Lifecycle: False = still collecting receipts; True =
+                    # statement attached, review lives in the workbench.
+                    "has_statement": has_statement(r),
                 }
                 for r in runs
                 if (r.config or {}).get("mode") == MODE_EXPENSE_GENERATION
@@ -1591,6 +1693,130 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 return err
             return JSONResponse(jsonable_encoder(_expense_view(store, run)))
 
+    @app.post("/api/expense-batches/{run_id}/receipts")
+    async def post_batch_receipts(
+        run_id: str, background: BackgroundTasks, request: Request
+    ):
+        """Add receipts to an existing batch — they arrive gradually all
+        month. Multipart `files` (a .zip expands); identical bytes already
+        in the pool are skipped. Background OCR job -> {job_id}, the SPA
+        polls GET /jobs/{id}. Refused once a statement is attached."""
+        if not _receipt_first_on():
+            return _flag_off()
+        with open_store() as store:
+            run, err = _mutable_expense_run_or_error(store, run_id)
+        if err is not None:
+            return err
+
+        form = await request.form()
+        uploads = [
+            u for u in form.getlist("files") if getattr(u, "filename", None)
+        ]
+        one = form.get("file")
+        if one is not None and getattr(one, "filename", None):
+            uploads.append(one)
+        if not uploads:
+            return JSONResponse({"error": "no files uploaded"}, status_code=400)
+
+        job_id = uuid.uuid4().hex[:12]
+        staging = Path(run.work_dir) / f"add-staging-{job_id}"
+        staging.mkdir(parents=True, exist_ok=True)
+        saved = 0
+        for i, up in enumerate(uploads):
+            data = await up.read()
+            if not data:
+                continue
+            safe = re.sub(r"[^A-Za-z0-9._-]", "_", Path(up.filename).name) or "file"
+            (staging / f"{i:04d}__{safe}").write_bytes(data)
+            saved += 1
+        if saved == 0:
+            shutil.rmtree(staging, ignore_errors=True)
+            return JSONResponse(
+                {"error": "all uploaded files were empty"}, status_code=400
+            )
+
+        with open_store() as store:
+            store.create_job(job_id, None, _now_iso())
+        background.add_task(
+            _run_batch_receipts_job, app.state.db_path, job_id, run_id,
+            staging, app.state.learning_db_path,
+        )
+        return JSONResponse({"ok": True, "job_id": job_id, "n_files": saved})
+
+    @app.post("/api/expense-batches/{run_id}/statement")
+    async def post_batch_statement(
+        run_id: str,
+        background: BackgroundTasks,
+        statement: UploadFile,
+        account_id: str = Form(""),
+        account_legal_entities: str = Form(""),
+        account_card_currency: str = Form("USD"),
+        sheet_name: str = Form(""),
+        card_key: str = Form(""),
+        map_transaction_date: str = Form(""),
+        map_amount: str = Form(""),
+        map_vendor: str = Form(""),
+        map_posting_date: str = Form(""),
+        map_transaction_currency: str = Form(""),
+        map_card: str = Form(""),
+    ):
+        """Month-end: attach the bank statement to a batch and reconcile
+        it. THIS is where the card / account id is asked (never at batch
+        creation). Fail-fast half (file save + column-map resolve) runs
+        synchronously so a mapping problem is a form 400 with the file's
+        headers; the match runs in the background -> {job_id}. On done the
+        run serves the reconciliation workbench at GET /api/runs/{id}."""
+        if not _receipt_first_on():
+            return _flag_off()
+        with open_store() as store:
+            run, err = _mutable_expense_run_or_error(store, run_id)
+        if err is not None:
+            return err
+
+        try:
+            form = _parse_run_form(
+                account_id=account_id,
+                account_legal_entities=account_legal_entities,
+                account_card_currency=account_card_currency,
+                sheet_name=sheet_name,
+                receipts_source="csv",
+                receipts_default_currency="",
+                use_llm="",
+                expense_column_map="",
+                map_transaction_date=map_transaction_date,
+                map_amount=map_amount,
+                map_vendor=map_vendor,
+                map_posting_date=map_posting_date,
+                map_transaction_currency=map_transaction_currency,
+                map_card=map_card,
+                card_key=card_key,
+            )
+        except RunInputError as exc:
+            return JSONResponse({"error": exc.message}, status_code=400)
+
+        statement_bytes = await statement.read()
+        try:
+            stmt_name, column_map = prepare_statement_attach(
+                run,
+                statement_bytes=statement_bytes,
+                statement_filename=statement.filename or "statement.csv",
+                form=form,
+            )
+        except RunInputError as exc:
+            return JSONResponse(
+                {"error": exc.message, "headers": exc.headers},
+                status_code=400,
+            )
+
+        job_id = uuid.uuid4().hex[:12]
+        with open_store() as store:
+            store.create_job(job_id, None, _now_iso())
+        background.add_task(
+            _run_attach_statement_job, app.state.db_path, job_id, run_id,
+            stmt_name, column_map, form, app.state.learning_db_path,
+        )
+        return JSONResponse({"ok": True, "job_id": job_id})
+
     @app.put("/api/runs/{run_id}/expenses/{document_id:path}/entity")
     async def put_expense_entity(run_id: str, document_id: str, request: Request):
         """Per-expense legal-entity override — sugar over the generic field
@@ -1605,7 +1831,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 {"error": "legal_entity is required"}, status_code=400
             )
         with open_store() as store:
-            run, err = _expense_run_or_error(store, run_id)
+            run, err = _mutable_expense_run_or_error(store, run_id)
             if err is not None:
                 return err
             store.set_expense_field_override(
@@ -1642,7 +1868,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                 return JSONResponse({"error": err_msg}, status_code=400)
 
         with open_store() as store:
-            run, err = _expense_run_or_error(store, run_id)
+            run, err = _mutable_expense_run_or_error(store, run_id)
             if err is not None:
                 return err
             if field in EXPENSE_CATEGORY_FIELDS:
@@ -1731,7 +1957,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
 
         document_id = f"manual:{uuid.uuid4().hex[:12]}"
         with open_store() as store:
-            run, err = _expense_run_or_error(store, run_id)
+            run, err = _mutable_expense_run_or_error(store, run_id)
             if err is not None:
                 return err
             store.set_expense_edit(run_id, document_id, "add", payload, _now_iso())
@@ -1748,7 +1974,7 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         if not _receipt_first_on():
             return _flag_off()
         with open_store() as store:
-            run, err = _expense_run_or_error(store, run_id)
+            run, err = _mutable_expense_run_or_error(store, run_id)
             if err is not None:
                 return err
             known = {

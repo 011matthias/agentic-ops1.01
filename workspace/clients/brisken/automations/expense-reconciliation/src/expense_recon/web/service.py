@@ -3506,8 +3506,17 @@ def apply_expense_edits(
                 ),
             )
         out.append(r)
+    # A manual add whose document already sits in the pool is skipped: after
+    # a statement attach BAKES the effective receipts into the snapshot, the
+    # edit rows stay (they still feed learning), and this guard keeps the
+    # overlay idempotent instead of duplicating every manual expense.
+    existing_ids = {r.document_id for r in out}
     for e in edits:
-        if e["op"] != "add" or e["document_id"] in deleted:
+        if (
+            e["op"] != "add"
+            or e["document_id"] in deleted
+            or e["document_id"] in existing_ids
+        ):
             continue
         r = _manual_expense_receipt(e["document_id"], e["payload"], default_entity)
         fields = field_overrides.get(r.document_id)
@@ -3692,6 +3701,12 @@ def build_expense_view(
         "llm_enabled": run.llm_enabled,
         "has_coa": run.has_coa,
         "legal_entity_id": default_entity,
+        # Batch lifecycle: True once a statement was attached (the batch is
+        # frozen; review continues in the reconciliation workbench).
+        "has_statement": has_statement(run),
+        # The last incremental receipt-add's summary (counts / cost /
+        # skipped files), or None when receipts only came in at creation.
+        "expense_ingest": run.snapshot.get("expense_ingest"),
         "summary": summary,
         "expenses": expenses,
         "duplicate_groups": duplicate_groups,
@@ -3749,3 +3764,435 @@ def regenerate_expense_export(
         customer_by_doc=customer_by_doc,
     )
     return out_path
+
+
+# --------------------------------------------------------------------------
+# Batch lifecycle (owner directive 2026-07-28): receipts arrive gradually
+# all month, the statement only at month end. An expense batch is the
+# month's container — receipts get ADDED to it over time, and attaching a
+# statement later graduates it into a full reconciliation on the SAME run
+# row (the "same object at two life-stages" model). No statement, no card
+# id needed to start; both are asked at attach time.
+# --------------------------------------------------------------------------
+
+
+def has_statement(run: RunRow) -> bool:
+    """True once a statement was attached to this run (the snapshot carries
+    transactions). Statement runs are always True; a pre-attach expense
+    batch is False."""
+    return bool((run.snapshot or {}).get("transactions"))
+
+
+def _batch_llm_client(cfg: dict):
+    """(client, tracker, source) for batch-lifecycle OCR, mirroring the
+    folder-ingest sourcing: the run's own llm block first, the deployment
+    default when the run had none and a key exists, else no client (bare
+    filename-only receipts, honestly flagged)."""
+    from ..cli import _build_llm_client
+
+    llm_client, tracker, source = None, None, "none"
+    try:
+        llm_client, tracker = _build_llm_client(cfg or {})
+        if llm_client is not None:
+            source = "run"
+    except ConfigError:
+        llm_client = None
+    if llm_client is None and _default_llm_on() and os.environ.get("OPENAI_API_KEY"):
+        llm_client, tracker = _build_llm_client(
+            {"llm": {"provider": "openai", "model": "gpt-4o-mini"}}
+        )
+        source = "env-default"
+    return llm_client, tracker, source
+
+
+def add_receipts_to_expense_batch(
+    store: RunStore,
+    run: RunRow,
+    staging_dir: str | Path,
+    now_iso: str,
+    *,
+    learning_db_path: Path | None = None,
+    on_stage=None,
+) -> dict:
+    """Add receipts to an EXISTING expense batch (they arrive gradually all
+    month). Only the new files are OCR'd (never a re-read of the pool),
+    memory auto-fill + categorization run on them exactly as at batch
+    creation, and they append to the snapshot's receipt pool. Identical
+    bytes (within this upload or vs an already-stored file) are skipped.
+    Refused once a statement is attached — the pool is then the
+    reconciliation's provenance and must not shift under it."""
+    from ..categorize import categorize_receipts
+    from ..cli import _resolve_categorizer_chart
+    from ..ingest.receipts_folder import parse_receipt_file
+
+    def _stage(name: str) -> None:
+        if on_stage is not None:
+            try:
+                on_stage(name)
+            except Exception:  # noqa: BLE001 - progress is best-effort
+                pass
+
+    if has_statement(run):
+        raise RunInputError(
+            "A statement is already attached to this batch; its receipt "
+            "pool is fixed. Start a new batch for new receipts."
+        )
+
+    _, receipts, outcome, _parse_errors = snapshot_from_dict(run.snapshot)
+    work_dir = Path(run.work_dir)
+    receipts_dir = work_dir / "receipts"
+    receipts_dir.mkdir(parents=True, exist_ok=True)
+    cfg = run.config or {}
+    entity = (cfg.get("expense") or {}).get("legal_entity_id", "")
+    default_ccy = (cfg.get("receipts") or {}).get("default_currency")
+
+    llm_client, tracker, llm_source = _batch_llm_client(cfg)
+
+    # Existing content hashes: a re-upload of a file already in the pool is
+    # a no-op, not a duplicate expense.
+    existing_hashes = set()
+    existing_files = [p for p in sorted(receipts_dir.iterdir()) if p.is_file()]
+    for p in existing_files:
+        existing_hashes.add(hashlib.sha1(p.read_bytes()).hexdigest()[:16])
+
+    _stage("ingesting")
+    issues: list[str] = []
+    new_receipts: list[Receipt] = []
+    n_seen = 0
+    n_index = len(existing_files)
+    for name, data in _folder_receipt_files(staging_dir):
+        n_seen += 1
+        if n_seen > FOLDER_MAX_FILES:
+            issues.append(
+                f"upload cap {FOLDER_MAX_FILES} reached; {name} and later skipped"
+            )
+            break
+        display = re.sub(r"^\d{4}__", "", Path(name).name)
+        suffix = Path(display or "receipt").suffix.lower()
+        if suffix not in FOLDER_RECEIPT_SUFFIXES:
+            issues.append(
+                f"{display}: unsupported type {suffix or '(none)'} (skipped)"
+            )
+            continue
+        if not data:
+            issues.append(f"{display}: empty or unreadable (skipped)")
+            continue
+        if len(data) > FOLDER_RECEIPT_MAX_BYTES:
+            issues.append(f"{display}: too large (15 MB max) (skipped)")
+            continue
+        digest = hashlib.sha1(data).hexdigest()[:16]
+        if digest in existing_hashes:
+            continue  # already in the pool (or earlier in this upload)
+        existing_hashes.add(digest)
+        fs_name = re.sub(r"[^A-Za-z0-9._-]", "_", display) or f"receipt{suffix}"
+        dest = receipts_dir / f"{n_index:04d}__{fs_name}"
+        n_index += 1
+        dest.write_bytes(data)
+        receipt = None
+        if llm_client is not None:
+            try:
+                parsed = parse_receipt_file(
+                    dest,
+                    legal_entity_id=entity,
+                    client=llm_client,
+                    default_currency=default_ccy,
+                )
+                receipt = replace(parsed, receipt_name=display)
+            except Exception:  # noqa: BLE001 - extraction is best-effort
+                receipt = None
+        if receipt is None:
+            receipt = Receipt(
+                document_id=dest.name,
+                legal_entity_id=entity,
+                detected_date=None,
+                detected_total=None,
+                detected_currency=None,
+                detected_vendor=display,
+                receipt_name=display,
+            )
+        new_receipts.append(receipt)
+
+    if new_receipts:
+        _stage("categorizing")
+        memory = ExpenseMemory.from_db_path(learning_db_path)
+        new_receipts = memory.apply(new_receipts)
+        learned = (
+            MerchantCategoryLookup.from_db_path(learning_db_path)
+            if learning_db_path is not None else None
+        )
+        try:
+            _, account_labels, _scope = _resolve_categorizer_chart(
+                cfg, work_dir, None, {}
+            )
+        except Exception:  # noqa: BLE001 - labels degrade, ingest never breaks
+            account_labels = None
+        new_receipts = categorize_receipts(
+            new_receipts,
+            client=llm_client,
+            chart_of_accounts=account_labels,
+            learned=learned,
+        )
+
+    _stage("saving")
+    pool = receipts + new_receipts
+    outcome.unmatched_receipts.extend(r.document_id for r in new_receipts)
+    n_categorized = sum(
+        1
+        for r in pool
+        if r.line_items
+        and all(li.categorization and li.categorization.category for li in r.line_items)
+    )
+    summary = {
+        "at": now_iso,
+        "n_files": n_seen,
+        "n_added": len(new_receipts),
+        "llm_source": llm_source,
+        "cost_usd": round(tracker.total_cost_usd, 4) if tracker else 0.0,
+        "issues": issues,
+    }
+    new_snapshot = dict(run.snapshot)
+    new_snapshot["receipts"] = [receipt_to_dict(r) for r in pool]
+    new_snapshot["outcome"] = outcome_to_dict(outcome)
+    new_snapshot["expense_ingest"] = summary
+    store.update_run_snapshot(run.run_id, new_snapshot)
+    store.update_run_summary(run.run_id, {
+        **run.summary,
+        "n_expenses": len(pool),
+        "n_receipts": len(pool),
+        "n_categorized": n_categorized,
+        "n_uncategorized": len(pool) - n_categorized,
+    })
+    return summary
+
+
+def prepare_statement_attach(
+    run: RunRow,
+    *,
+    statement_bytes: bytes,
+    statement_filename: str,
+    form: RunForm,
+) -> tuple[str, dict | None]:
+    """The fail-fast half of a statement attach: save the file into the
+    batch's work dir and resolve the column map. Raises `RunInputError`
+    (with the file's headers) for a user-fixable mapping problem, so the
+    form can re-prompt synchronously; the slow match runs in the
+    background. Returns (stmt_name, column_map) — column_map None for the
+    Chase PDF path."""
+    if has_statement(run):
+        raise RunInputError("A statement is already attached to this batch.")
+    if not statement_bytes:
+        raise RunInputError("No statement file uploaded.")
+    stmt_name = _safe_name(statement_filename or "", "statement.csv")
+    if Path(stmt_name).suffix.lower() not in _STATEMENT_SUFFIXES:
+        raise RunInputError(
+            "The statement file should be a .csv, .xlsx or .pdf export from "
+            "the bank."
+        )
+    work_dir = Path(run.work_dir)
+    stmt_path = work_dir / stmt_name
+    stmt_path.write_bytes(statement_bytes)
+    if stmt_path.suffix.lower() == ".pdf":
+        return stmt_name, None
+    return stmt_name, _resolve_statement_map(stmt_path, form)
+
+
+def execute_statement_attach(
+    store: RunStore,
+    run: RunRow,
+    *,
+    stmt_name: str,
+    column_map: dict | None,
+    form: RunForm,
+    settings: dict | None,
+    now_iso: str,
+    learning_db_path: Path | None = None,
+    on_stage=None,
+) -> dict:
+    """Graduate an expense batch into a reconciliation: load the attached
+    statement, run the SAME matching + judgment + receiptless-charge
+    categorization primitives `reconcile()` uses over the batch's
+    reviewer-corrected receipt pool, and persist transactions + outcome
+    onto the run. From here every statement-mode surface (workbench,
+    decisions, confirm-ready, journal/report/reconciled exports) works on
+    this run unchanged; the expense pool is frozen (edits already BAKED
+    into the snapshot receipts here — the edit rows stay for learning, and
+    `apply_expense_edits`' add-guard keeps the overlay idempotent).
+
+    `reconcile()` itself is untouched: this reuses the module-level
+    pipeline pieces exactly as the folder-ingest re-match already does.
+    """
+    from ..categorize import categorize_receipts  # noqa: F401 (parity import)
+    from ..categorize_charges import categorize_charges
+    from ..cli import (
+        _apply_ambiguous_judgment,
+        _apply_judgment,
+        _apply_unmatched_judgment,
+        _load_statement,
+        _resolve_categorizer_chart,
+        build_match_cfg,
+    )
+    from ..matching.deterministic import MatchingConfig, match_month
+
+    def _stage(name: str) -> None:
+        if on_stage is not None:
+            try:
+                on_stage(name)
+            except Exception:  # noqa: BLE001 - progress is best-effort
+                pass
+
+    work_dir = Path(run.work_dir)
+    cfg = run.config or {}
+    batch_entity = (cfg.get("expense") or {}).get("legal_entity_id", "")
+
+    # Bake the reviewer's truth into the receipt pool the matcher sees.
+    _, receipts0, _, parse_errors = snapshot_from_dict(run.snapshot)
+    overrides = store.get_category_overrides(run.run_id)
+    field_overrides = store.get_expense_field_overrides(run.run_id)
+    edits = store.get_expense_edits(run.run_id)
+    receipts = apply_expense_edits(
+        receipts0, field_overrides, edits,
+        category_overrides=overrides, default_entity=batch_entity,
+    )
+    receipts = apply_overrides(receipts, overrides)
+
+    entity = resolve_entity(form, settings)
+    stmt_block: dict = {
+        "path": stmt_name,
+        "legal_entity_id": entity,
+        "account_card_currency": form.account_card_currency or "USD",
+    }
+    if column_map is not None:
+        stmt_block["account_id"] = form.account_id or "card"
+        stmt_block["column_map"] = column_map
+        if form.sheet_name:
+            stmt_block["sheet_name"] = form.sheet_name
+    new_cfg = {**cfg, "statement": stmt_block}
+    new_cfg = apply_master_data(new_cfg, form, settings)
+
+    llm_client, tracker, _source = _batch_llm_client(new_cfg)
+
+    _stage("reading")
+    try:
+        transactions, stmt_issues = _load_statement(new_cfg, work_dir)
+    except ConfigError as exc:
+        raise RunInputError(str(exc)) from exc
+
+    match_memory = (
+        MatchMemory.from_db_path(learning_db_path)
+        if learning_db_path is not None else None
+    )
+    match_cfg = build_match_cfg(new_cfg, work_dir, match_memory)
+    _stage("matching")
+    outcome = match_month(transactions, receipts, match_cfg)
+
+    _stage("judging")
+    tx_by_id = {t.transaction_id: t for t in transactions}
+    rec_by_id = {r.document_id: r for r in receipts}
+    _apply_judgment(
+        outcome, tx_by_id, rec_by_id, llm_client,
+        suggest_floor=(match_cfg or MatchingConfig()).fx_judgment_suggest_floor,
+    )
+    _apply_ambiguous_judgment(outcome, tx_by_id, rec_by_id, llm_client)
+    _apply_unmatched_judgment(
+        outcome, transactions, receipts, llm_client,
+        match_cfg or MatchingConfig(), new_cfg,
+    )
+
+    learned = (
+        MerchantCategoryLookup.from_db_path(learning_db_path)
+        if learning_db_path is not None else None
+    )
+    try:
+        _, account_labels, _scope = _resolve_categorizer_chart(
+            new_cfg, work_dir, None, {}
+        )
+    except Exception:  # noqa: BLE001 - labels degrade, attach never breaks
+        account_labels = None
+    charge_categorizations = categorize_charges(
+        outcome,
+        transactions,
+        client=llm_client,
+        chart_of_accounts=account_labels,
+        learned=learned,
+    )
+
+    _stage("saving")
+    all_issues = list(parse_errors) + [
+        (i.file_name, i.line_number, i.message, i.severity) for i in stmt_issues
+    ]
+    base = snapshot_to_dict(transactions, receipts, outcome, all_issues)
+    new_snapshot = {**dict(run.snapshot), **base}
+    if charge_categorizations:
+        new_snapshot["charge_categorizations"] = {
+            tx_id: categorization_to_dict(c)
+            for tx_id, c in charge_categorizations.items()
+        }
+    else:
+        new_snapshot.pop("charge_categorizations", None)
+
+    n_tx = len(transactions)
+    n_review = len(
+        {m.transaction_id for m in outcome.judgment_required}
+        | {m.transaction_id for m in outcome.ambiguous}
+    )
+    counts = count_parse_issues(all_issues)
+    summary = {
+        **run.summary,
+        "n_transactions": n_tx,
+        "n_receipts": len(receipts),
+        "n_expenses": len(receipts),
+        "n_matched": len(outcome.matches),
+        "n_review": n_review,
+        "n_unmatched_tx": len(outcome.unmatched_transactions),
+        "n_refunds": len(outcome.refunds),
+        "n_unmatched_rec": len(outcome.unmatched_receipts),
+        "n_parse_errors": counts["errors"],
+        "n_parse_notes": counts["notes"],
+        "match_rate": (
+            round(len(outcome.matches) / n_tx * 100, 1) if n_tx else 0.0
+        ),
+        "n_receipts_matched": max(
+            len(receipts) - len(outcome.unmatched_receipts), 0
+        ),
+        "receipt_match_rate": (
+            round(
+                (len(receipts) - len(outcome.unmatched_receipts))
+                / len(receipts) * 100, 1
+            )
+            if receipts else 0.0
+        ),
+        "llm_cost_usd": (
+            str(tracker.total_cost_usd) if tracker else
+            run.summary.get("llm_cost_usd", "0")
+        ),
+        "has_statement": True,
+    }
+    summary["setup_advisories"] = _setup_advisories(
+        new_cfg, transactions, receipts,
+        has_coa=bool(new_cfg.get("coa_validation")),
+    )
+    store.update_run_config(run.run_id, new_cfg)
+    store.update_run_snapshot(run.run_id, new_snapshot)
+    store.update_run_summary(run.run_id, summary)
+
+    entity_mismatch = None
+    if (
+        batch_entity
+        and entity
+        and batch_entity.strip().lower() != entity.strip().lower()
+    ):
+        # Matching is entity-scoped, so a mismatched card mapping yields a
+        # silent 0-match month. Loud, never silent.
+        entity_mismatch = (
+            f"The statement's card resolves to legal entity {entity!r} but "
+            f"this batch's expenses belong to {batch_entity!r}; nothing "
+            "will match across entities. Check the card / entity mapping."
+        )
+    return {
+        "n_transactions": n_tx,
+        "n_matched": len(outcome.matches),
+        "n_review": n_review,
+        "n_unmatched_tx": len(outcome.unmatched_transactions),
+        "n_refunds": len(outcome.refunds),
+        "entity_mismatch": entity_mismatch,
+    }
