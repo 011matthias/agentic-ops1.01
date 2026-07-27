@@ -31,6 +31,17 @@ reached parity. This app serves JSON plus file downloads only:
     GET  /jobs/{job_id}            background-run poll
     GET  /runs/{id}/report.xlsx / zoho.csv / reconciled.csv /
          statement-categorized.xlsx    file downloads with edits applied
+
+Receipt-first expense mode (behind EXPENSE_RECON_RECEIPT_FIRST; every
+route 404s while the flag is unset):
+
+    POST /api/expense-batches      upload receipts -> statement-less batch
+    GET  /api/expense-batches      list batches; /{id} the expense grid
+    PUT  /api/runs/{id}/expenses/{doc}           one field edit {field,value}
+    PUT  /api/runs/{id}/expenses/{doc}/entity    per-expense legal entity
+    POST /api/runs/{id}/expenses                 manual expense add
+    DELETE /api/runs/{id}/expenses/{doc}         soft-remove an expense
+    GET  /runs/{id}/expenses.csv   Zoho Expenses import CSV, edits applied
 """
 from __future__ import annotations
 
@@ -61,16 +72,24 @@ from ..ingest.expense_report_images import render_receipt_page
 from .serialize import receipt_from_dict
 from .service import (
     DEFAULT_EXPENSE_COLUMN_MAP,
+    EXPENSE_CATEGORY_FIELDS,
+    EXPENSE_HEADER_FIELDS,
+    MODE_EXPENSE_GENERATION,
+    PreparedExpenseBatch,
     PreparedRun,
     RunForm,
     RunInputError,
+    apply_expense_edits,
     attach_emailed_receipt,
+    build_expense_view,
     build_memory_view,
     build_view,
     bulk_decisions,
     commit_to_memory,
     compare_runs,
+    create_expense_batch,
     create_intake,
+    execute_expense_batch,
     execute_run,
     forget_memory_vendor,
     ingest_receipts_folder_into_run,
@@ -78,14 +97,19 @@ from .service import (
     ready_confirm_pairs,
     prepare_intake_run,
     prepare_run,
+    regenerate_expense_export,
     regenerate_reconciled,
     regenerate_report,
     regenerate_writeback,
     regenerate_zoho,
     replace_intake_files,
     reset_memory,
+    run_mode,
+    validate_expense_field,
     validate_manual_match,
 )
+from ..matching.types import EXPENSE_CATEGORIES
+from .serialize import snapshot_from_dict
 from .store import (
     INTAKE_PROCESSING,
     INTAKE_READY,
@@ -116,6 +140,13 @@ def _operator() -> str | None:
         or os.environ.get("USERNAME")
         or os.environ.get("USER")
     )
+
+
+def _receipt_first_on() -> bool:
+    """Receipt-first expense mode (Dirk's note #1). Off by default so a
+    deploy changes nothing for Criss until the flag flips (Phase 8). Read
+    per request, never cached, so a restartless env change takes effect."""
+    return os.environ.get("EXPENSE_RECON_RECEIPT_FIRST") == "1"
 
 
 def _run_id_from_path(page: str) -> str | None:
@@ -188,6 +219,29 @@ def _run_folder_job(
             )
     finally:
         shutil.rmtree(staging_dir, ignore_errors=True)
+
+
+def _run_expense_job(
+    db_path: Path, job_id: str, prepared: PreparedExpenseBatch
+) -> None:
+    """Run a prepared expense batch (OCR + categorization) off the request,
+    the receipt-first twin of `_run_job`. Same durable jobs-table contract:
+    the SPA polls GET /jobs/{id} until done/error."""
+    try:
+        with RunStore(db_path) as store:
+            run_id = execute_expense_batch(
+                store,
+                prepared,
+                on_stage=lambda s: store.set_job_stage(job_id, s, _now_iso()),
+            )
+            store.set_job_status(
+                job_id, JOB_DONE, run_id=run_id, updated_at=_now_iso()
+            )
+    except Exception as exc:  # noqa: BLE001 - surface any failure to the poller
+        with RunStore(db_path) as store:
+            store.set_job_status(
+                job_id, JOB_ERROR, error=str(exc), updated_at=_now_iso()
+            )
 
 
 # Upper bound on one bulk-decision call. A month is ~100 charges, so this
@@ -861,15 +915,31 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             return JSONResponse({"error": "unknown job"}, status_code=404)
         return JSONResponse(job)
 
+    def _expense_view(store: RunStore, run) -> dict:
+        """The receipt-spine render model for an expense batch, with every
+        stored edit overlay loaded. Shared by the run dispatch, the batch
+        GET, and the edit endpoints' summary replies."""
+        overrides = store.get_category_overrides(run.run_id)
+        field_overrides = store.get_expense_field_overrides(run.run_id)
+        edits = store.get_expense_edits(run.run_id)
+        resolutions = store.get_duplicate_resolutions(run.run_id)
+        return build_expense_view(
+            run, overrides, field_overrides, edits, resolutions
+        )
+
     @app.get("/api/runs/{run_id}")
     def api_workbench(run_id: str):
-        """The review render model (build_view) for the SPA's workbench
-        screen. jsonable_encoder handles the view's Decimal / date values
-        for the display-only client."""
+        """The review render model for the SPA: `build_view` (transaction
+        spine) for a statement run, `build_expense_view` (receipt spine)
+        for an expense batch — dispatched on the run's stored mode marker.
+        jsonable_encoder handles the view's Decimal / date values for the
+        display-only client."""
         with open_store() as store:
             run = store.get_run(run_id)
             if run is None:
                 return JSONResponse({"error": "run not found"}, status_code=404)
+            if run_mode(run) == MODE_EXPENSE_GENERATION:
+                return JSONResponse(jsonable_encoder(_expense_view(store, run)))
             decisions = store.get_decisions(run_id)
             overrides = store.get_category_overrides(run_id)
             resolutions = store.get_duplicate_resolutions(run_id)
@@ -1325,6 +1395,23 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             )
             return FileResponse(hits[0], media_type=media)
 
+        if run_mode(run) == MODE_EXPENSE_GENERATION:
+            # Expense batch (receipt-first): document ids ARE filenames
+            # under the batch's receipts dir. Resolve inside it only —
+            # never follow a crafted id out of the run's tree.
+            exp_dir = (work_dir / "receipts").resolve()
+            try:
+                target = (exp_dir / document_id).resolve()
+                if exp_dir in target.parents and target.is_file():
+                    media = (
+                        mimetypes.guess_type(target.name)[0]
+                        or "application/octet-stream"
+                    )
+                    return FileResponse(target, media_type=media)
+            except (OSError, ValueError):
+                pass
+            return JSONResponse({"error": "no receipt image"}, status_code=404)
+
         receipts = [
             receipt_from_dict(x) for x in run.snapshot.get("receipts", [])
         ]
@@ -1347,6 +1434,305 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             png,
             media_type="image/png",
             headers={"Cache-Control": "private, max-age=86400"},
+        )
+
+    # ── Receipt-first expense batches (Phase 4, behind the env flag) ────
+    # The decoupled upload step (Dirk's note #1): receipts are their own
+    # top-level object, not an attachment to a statement run. Every route
+    # below 404s while EXPENSE_RECON_RECEIPT_FIRST is unset, so a deploy
+    # changes nothing until the flag flips.
+
+    def _flag_off() -> JSONResponse:
+        return JSONResponse({"error": "not found"}, status_code=404)
+
+    def _expense_run_or_error(store: RunStore, run_id: str):
+        """(run, None) for an expense batch; (None, response) otherwise."""
+        run = store.get_run(run_id)
+        if run is None:
+            return None, JSONResponse({"error": "run not found"}, status_code=404)
+        if run_mode(run) != MODE_EXPENSE_GENERATION:
+            return None, JSONResponse(
+                {"error": "not an expense batch"}, status_code=400
+            )
+        return run, None
+
+    @app.post("/api/expense-batches")
+    async def post_expense_batch(
+        background: BackgroundTasks,
+        request: Request,
+        legal_entity: str = Form(""),
+        default_currency: str = Form(""),
+        label: str = Form(""),
+    ):
+        """Upload a batch of receipts -> statement-less run + background OCR
+        job. Multipart `files` (repeatable; a .zip expands); returns
+        {batch_id, job_id}, the SPA polls GET /jobs/{job_id} then loads
+        GET /api/expense-batches/{batch_id}."""
+        if not _receipt_first_on():
+            return _flag_off()
+        form = await request.form()
+        uploads = [
+            u for u in form.getlist("files") if getattr(u, "filename", None)
+        ]
+        one = form.get("file")  # tolerate the singular field name too
+        if one is not None and getattr(one, "filename", None):
+            uploads.append(one)
+        files = []
+        for up in uploads:
+            files.append((up.filename, await up.read()))
+        with open_store() as store:
+            settings = store.get_settings()
+        try:
+            prepared = create_expense_batch(
+                app.state.data_root,
+                files=files,
+                legal_entity=legal_entity,
+                default_currency=default_currency,
+                label=label,
+                now_iso=_now_iso(),
+                operator=_operator(),
+                learning_db_path=app.state.learning_db_path,
+                settings=settings,
+            )
+        except RunInputError as exc:
+            return JSONResponse({"error": exc.message}, status_code=400)
+
+        job_id = uuid.uuid4().hex[:12]
+        with open_store() as store:
+            store.create_job(job_id, None, _now_iso())
+        background.add_task(
+            _run_expense_job, app.state.db_path, job_id, prepared
+        )
+        return JSONResponse({
+            "ok": True,
+            "batch_id": prepared.run_id,
+            "job_id": job_id,
+            "label": prepared.label,
+            "upload_issues": prepared.upload_issues,
+        })
+
+    @app.get("/api/expense-batches")
+    def list_expense_batches():
+        """Expense batches only (mode-filtered runs), newest first — the
+        SPA's batch landing screen."""
+        if not _receipt_first_on():
+            return _flag_off()
+        with open_store() as store:
+            runs = store.list_runs()
+        return JSONResponse({
+            "batches": [
+                {
+                    "batch_id": r.run_id,
+                    "run_id": r.run_id,
+                    "label": r.label,
+                    "created_at": r.created_at,
+                    "summary": r.summary,
+                }
+                for r in runs
+                if (r.config or {}).get("mode") == MODE_EXPENSE_GENERATION
+            ]
+        })
+
+    @app.get("/api/expense-batches/{run_id}")
+    def get_expense_batch(run_id: str):
+        if not _receipt_first_on():
+            return _flag_off()
+        with open_store() as store:
+            run, err = _expense_run_or_error(store, run_id)
+            if err is not None:
+                return err
+            return JSONResponse(jsonable_encoder(_expense_view(store, run)))
+
+    @app.put("/api/runs/{run_id}/expenses/{document_id:path}/entity")
+    async def put_expense_entity(run_id: str, document_id: str, request: Request):
+        """Per-expense legal-entity override — sugar over the generic field
+        edit, kept as its own route per the SPA contract. Registered BEFORE
+        the generic {document_id:path} PUT so `/x/entity` resolves here."""
+        if not _receipt_first_on():
+            return _flag_off()
+        body = await request.json()
+        entity = str((body or {}).get("legal_entity") or "").strip()
+        if not entity:
+            return JSONResponse(
+                {"error": "legal_entity is required"}, status_code=400
+            )
+        with open_store() as store:
+            run, err = _expense_run_or_error(store, run_id)
+            if err is not None:
+                return err
+            store.set_expense_field_override(
+                run_id, document_id, "legal_entity", entity, _now_iso()
+            )
+            view = _expense_view(store, run)
+        return JSONResponse({"ok": True, "summary": view["summary"]})
+
+    @app.put("/api/runs/{run_id}/expenses/{document_id:path}")
+    async def put_expense_field(run_id: str, document_id: str, request: Request):
+        """One field edit on one expense: {field, value}. Header fields land
+        in expense_field_overrides; category / zoho_account fold into the
+        existing line-level category_overrides (every line of the expense),
+        so the export path needs no second override mechanism. value null /
+        "" clears the edit."""
+        if not _receipt_first_on():
+            return _flag_off()
+        body = await request.json()
+        field = str((body or {}).get("field") or "").strip()
+        raw_value = (body or {}).get("value")
+        value = "" if raw_value is None else str(raw_value).strip()
+        if field not in EXPENSE_HEADER_FIELDS | EXPENSE_CATEGORY_FIELDS:
+            return JSONResponse(
+                {"error": f"unknown field {field!r}"}, status_code=400
+            )
+        if value:
+            if field == "category" and value not in EXPENSE_CATEGORIES:
+                return JSONResponse(
+                    {"error": f"category must be one of {sorted(EXPENSE_CATEGORIES)}"},
+                    status_code=400,
+                )
+            err_msg = validate_expense_field(field, value)
+            if err_msg:
+                return JSONResponse({"error": err_msg}, status_code=400)
+
+        with open_store() as store:
+            run, err = _expense_run_or_error(store, run_id)
+            if err is not None:
+                return err
+            if field in EXPENSE_CATEGORY_FIELDS:
+                # Whole-expense category/account edit -> a category_override
+                # per line. Find the expense in the EFFECTIVE receipt set so
+                # a manual add is editable too; merge with any existing
+                # override so setting the account never clears the category.
+                _, receipts, _, _ = snapshot_from_dict(run.snapshot)
+                field_overrides = store.get_expense_field_overrides(run_id)
+                edits = store.get_expense_edits(run_id)
+                overrides = store.get_category_overrides(run_id)
+                default_entity = (
+                    ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
+                )
+                effective = apply_expense_edits(
+                    receipts, field_overrides, edits,
+                    category_overrides=overrides, default_entity=default_entity,
+                )
+                rec = next(
+                    (r for r in effective if r.document_id == document_id), None
+                )
+                if rec is None:
+                    return JSONResponse(
+                        {"error": "unknown expense"}, status_code=404
+                    )
+                indices = list(range(len(rec.line_items))) or [0]
+                for i in indices:
+                    ov = overrides.get((document_id, i)) or {}
+                    base = (
+                        rec.line_items[i].categorization
+                        if i < len(rec.line_items) else None
+                    )
+                    if field == "category":
+                        category = value or None
+                        account = ov.get("zoho_account")
+                    else:
+                        account = value or None
+                        # apply_overrides only fires on an override WITH a
+                        # category; carry the line's own when none is set.
+                        category = ov.get("category") or (
+                            base.category if base else None
+                        )
+                    store.set_category_override(
+                        run_id, document_id, i, category, account, _now_iso()
+                    )
+            else:
+                store.set_expense_field_override(
+                    run_id, document_id, field, value or None, _now_iso()
+                )
+            view = _expense_view(store, run)
+        return JSONResponse({"ok": True, "summary": view["summary"]})
+
+    @app.post("/api/runs/{run_id}/expenses")
+    async def post_expense_add(run_id: str, request: Request):
+        """Add a manual expense (Note 3: some expenses have no receipt
+        file). Vendor + total required; date / currency / tax / category /
+        paid_through / legal_entity optional, validated like field edits."""
+        if not _receipt_first_on():
+            return _flag_off()
+        body = await request.json()
+        if not isinstance(body, dict):
+            return JSONResponse({"error": "invalid payload"}, status_code=400)
+        payload = {
+            k: str(body.get(k) or "").strip()
+            for k in (
+                "vendor", "date", "total", "currency", "tax", "tax_label",
+                "category", "zoho_account", "paid_through", "legal_entity",
+                "reference", "description",
+            )
+            if str(body.get(k) or "").strip()
+        }
+        if not payload.get("vendor") or not payload.get("total"):
+            return JSONResponse(
+                {"error": "vendor and total are required"}, status_code=400
+            )
+        if payload.get("category") and payload["category"] not in EXPENSE_CATEGORIES:
+            return JSONResponse(
+                {"error": f"category must be one of {sorted(EXPENSE_CATEGORIES)}"},
+                status_code=400,
+            )
+        for f in ("date", "total", "currency", "tax"):
+            if payload.get(f):
+                err_msg = validate_expense_field(f, payload[f])
+                if err_msg:
+                    return JSONResponse({"error": err_msg}, status_code=400)
+
+        document_id = f"manual:{uuid.uuid4().hex[:12]}"
+        with open_store() as store:
+            run, err = _expense_run_or_error(store, run_id)
+            if err is not None:
+                return err
+            store.set_expense_edit(run_id, document_id, "add", payload, _now_iso())
+            view = _expense_view(store, run)
+        return JSONResponse({
+            "ok": True, "document_id": document_id, "summary": view["summary"],
+        })
+
+    @app.delete("/api/runs/{run_id}/expenses/{document_id:path}")
+    async def delete_expense(run_id: str, document_id: str):
+        """Remove one expense from the batch (soft: an edit-table row, the
+        snapshot is never rewritten). Deleting a manual add overwrites its
+        add row, so it simply disappears."""
+        if not _receipt_first_on():
+            return _flag_off()
+        with open_store() as store:
+            run, err = _expense_run_or_error(store, run_id)
+            if err is not None:
+                return err
+            known = {
+                r["document_id"] for r in run.snapshot.get("receipts", [])
+            } | {
+                e["document_id"] for e in store.get_expense_edits(run_id)
+            }
+            if document_id not in known:
+                return JSONResponse({"error": "unknown expense"}, status_code=404)
+            store.set_expense_edit(run_id, document_id, "delete", None, _now_iso())
+            view = _expense_view(store, run)
+        return JSONResponse({"ok": True, "summary": view["summary"]})
+
+    @app.get("/runs/{run_id}/expenses.csv")
+    def download_expenses_csv(run_id: str):
+        """The Zoho Books Expenses import CSV for an expense batch, with
+        every reviewer edit applied — the receipt-first sibling of
+        /runs/{id}/zoho.csv."""
+        if not _receipt_first_on():
+            return _flag_off()
+        with open_store() as store:
+            run, err = _expense_run_or_error(store, run_id)
+            if err is not None:
+                return err
+            overrides = store.get_category_overrides(run_id)
+            field_overrides = store.get_expense_field_overrides(run_id)
+            edits = store.get_expense_edits(run_id)
+        path = regenerate_expense_export(run, overrides, field_overrides, edits)
+        return FileResponse(
+            path,
+            filename=f"zoho-expenses-{run_id}.csv",
+            media_type="text/csv",
         )
 
     @app.post("/api/runs/{run_id}/forget")

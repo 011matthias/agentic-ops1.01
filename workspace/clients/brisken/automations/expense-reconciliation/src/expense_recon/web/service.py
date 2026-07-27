@@ -29,7 +29,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from .. import inspect as stmt_inspect
-from ..cli import ConfigError, reconcile
+from ..cli import ConfigError, generate_expenses, reconcile
 from ..coa_provision import apply_to_config as apply_coa_provisioning
 from ..duplicates import (
     duplicate_group_id,
@@ -40,6 +40,7 @@ from ..matching.types import (
     Categorization,
     ClassificationSource,
     EXPENSE_CATEGORIES,
+    LineItem,
     Match,
     MatchOutcome,
     MatchType,
@@ -55,6 +56,7 @@ from ..learning import (
 )
 from ..output.reconciled_csv import write_reconciled_csv
 from ..output.report_xlsx import write_report
+from ..output.zoho_expense_export import write_zoho_expense_export
 from ..output.zoho_export import write_zoho_export
 from .serialize import (
     categorization_from_dict,
@@ -3035,3 +3037,596 @@ def reset_memory(
         return {}
     with LearningStore(learning_db_path) as s:
         return s.reset(table or None, legal_entity_id or None)
+
+
+# --------------------------------------------------------------------------
+# Receipt-first expense mode (Phase 4, behind EXPENSE_RECON_RECEIPT_FIRST)
+#
+# The statement-free sibling of the run pipeline above: an expense BATCH is
+# a run whose config carries `mode: expense_generation`, whose snapshot has
+# `transactions=[]` and every receipt in `unmatched_receipts` (the shape
+# `cli.generate_expenses` returns), and whose review surface is a
+# receipt-spine grid (`build_expense_view`) instead of the transaction-spine
+# workbench (`build_view`, NOT modified). Reviewer edits overlay at
+# render/export time exactly like decisions do in statement mode:
+# header-field edits in `expense_field_overrides`, whole-expense add/delete
+# in `expense_edits`, line-level category reclassification in the existing
+# `category_overrides`.
+# --------------------------------------------------------------------------
+
+MODE_EXPENSE_GENERATION = "expense_generation"
+
+
+def run_mode(run: RunRow) -> str:
+    """The run's pipeline mode, from its stored config. Statement runs
+    predate the marker, so an absent key reads as reconciliation."""
+    return (run.config or {}).get("mode") or "reconciliation"
+
+
+# Header-level fields a reviewer may edit on one expense. `category` /
+# `zoho_account` are deliberately NOT here: they are line-level and fold
+# into the existing `category_overrides` path (the endpoint does that).
+# `customer` is export-only passthrough (Zoho's Customer Name column);
+# Receipt has no field for it, so it rides in the overrides map alone.
+EXPENSE_HEADER_FIELDS = frozenset({
+    "vendor", "date", "total", "currency", "tax", "tax_label",
+    "paid_through", "legal_entity", "reference", "customer",
+})
+EXPENSE_CATEGORY_FIELDS = frozenset({"category", "zoho_account"})
+
+
+def validate_expense_field(field: str, value: str) -> str | None:
+    """Validate one header-field edit at the edge, so stored overrides are
+    always parseable. Returns an error string, or None when valid."""
+    if field == "date":
+        try:
+            date.fromisoformat(value)
+        except ValueError:
+            return "date must be YYYY-MM-DD"
+    elif field in ("total", "tax"):
+        try:
+            if not Decimal(value).is_finite():
+                raise ValueError(value)
+        except (ArithmeticError, ValueError):
+            return f"{field} must be a number"
+    elif field == "currency":
+        if not (len(value) == 3 and value.isalpha()):
+            return "currency must be a 3-letter code"
+    elif field == "legal_entity":
+        if not value.strip():
+            return "legal_entity cannot be blank"
+    return None
+
+
+@dataclass
+class PreparedExpenseBatch:
+    """The fail-fast result of `create_expense_batch` (uploads validated and
+    spooled, config built). `execute_expense_batch` consumes it to run the
+    OCR + categorization pipeline in the background — the expense-mode twin
+    of `PreparedRun` / `execute_run`."""
+
+    run_id: str
+    work_dir: Path
+    cfg: dict
+    label: str
+    learned: object | None
+    ai_unavailable: bool
+    use_llm_effective: bool
+    now_iso: str
+    operator: str | None
+    upload_issues: list[str]
+
+
+def create_expense_batch(
+    data_root: Path,
+    *,
+    files: "list[tuple[str, bytes]]",
+    legal_entity: str,
+    default_currency: str = "",
+    label: str = "",
+    now_iso: str,
+    operator: str | None,
+    learning_db_path: Path | None = None,
+    settings: dict | None = None,
+) -> PreparedExpenseBatch:
+    """Validate + spool an uploaded batch of receipts and build the
+    expense-generation config. No statement, no run row yet — this is the
+    decoupled upload step (POST /api/expense-batches), a top-level object of
+    its own rather than an attachment to an existing run.
+
+    `files` is [(filename, bytes)]; a `.zip` among them is expanded
+    member-by-member (`_folder_receipt_files`). Invalid entries (wrong type,
+    empty, oversized) become `upload_issues`, mirroring the folder-ingest
+    tolerance; zero valid files raises `RunInputError`.
+    """
+    if not legal_entity.strip():
+        raise RunInputError("Pick the legal entity these expenses belong to.")
+    if not files:
+        raise RunInputError("No receipt files uploaded.")
+
+    run_id = uuid.uuid4().hex[:12]
+    work_dir = data_root / "runs" / run_id
+    receipts_dir = work_dir / "receipts"
+    receipts_dir.mkdir(parents=True, exist_ok=True)
+
+    # Spool raw uploads, then re-walk them through the shared folder reader
+    # so zips expand and validation matches the folder-ingest path exactly.
+    staging = work_dir / "upload-staging"
+    staging.mkdir(parents=True, exist_ok=True)
+    for i, (name, data) in enumerate(files):
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", Path(name or "file").name) or "file"
+        (staging / f"{i:04d}__{safe}").write_bytes(data or b"")
+
+    issues: list[str] = []
+    seen_hashes: set[str] = set()
+    n_saved = n_seen = 0
+    for name, data in _folder_receipt_files(staging):
+        n_seen += 1
+        if n_seen > FOLDER_MAX_FILES:
+            issues.append(
+                f"upload cap {FOLDER_MAX_FILES} reached; {name} and later skipped"
+            )
+            break
+        # Staged files carry the spool prefix; strip it for the stored name.
+        display = re.sub(r"^\d{4}__", "", Path(name).name)
+        suffix = Path(display or "receipt").suffix.lower()
+        if suffix not in FOLDER_RECEIPT_SUFFIXES:
+            issues.append(
+                f"{display}: unsupported type {suffix or '(none)'} (skipped)"
+            )
+            continue
+        if not data:
+            issues.append(f"{display}: empty or unreadable (skipped)")
+            continue
+        if len(data) > FOLDER_RECEIPT_MAX_BYTES:
+            issues.append(f"{display}: too large (15 MB max) (skipped)")
+            continue
+        digest = hashlib.sha1(data).hexdigest()[:16]
+        if digest in seen_hashes:
+            continue  # identical bytes twice in one upload
+        seen_hashes.add(digest)
+        fs_name = re.sub(r"[^A-Za-z0-9._-]", "_", display) or f"receipt{suffix}"
+        (receipts_dir / f"{n_saved:04d}__{fs_name}").write_bytes(data)
+        n_saved += 1
+    import shutil as _shutil
+
+    _shutil.rmtree(staging, ignore_errors=True)
+
+    if n_saved == 0:
+        _shutil.rmtree(work_dir, ignore_errors=True)
+        detail = f" ({issues[0]})" if issues else ""
+        raise RunInputError(f"No readable receipt files uploaded.{detail}")
+
+    # LLM: folder OCR has no keyword fallback, so without a key the batch
+    # will fail honestly at execute time (ConfigError -> job error). The
+    # cfg carries the llm block only when a key is present, mirroring
+    # prepare_run's default-on policy.
+    have_key = bool(os.environ.get("OPENAI_API_KEY"))
+    use_llm_effective = _default_llm_on() and have_key
+
+    cfg: dict = {
+        "mode": MODE_EXPENSE_GENERATION,
+        "expense": {"legal_entity_id": legal_entity.strip()},
+        "receipts": {"path": "receipts", "source": "folder"},
+    }
+    if default_currency.strip():
+        cfg["receipts"]["default_currency"] = default_currency.strip()
+    if use_llm_effective:
+        cfg["llm"] = {"provider": "openai", "model": "gpt-4o-mini"}
+    # Per-entity chart provisioning (the same gate a statement run gets):
+    # the export validates posting accounts against the paying entity's
+    # chart when the entity is provisioned; absent => unguarded, unchanged.
+    cfg = apply_coa_provisioning(cfg, legal_entity.strip())
+    _write_local_run_config(work_dir, cfg)
+
+    learned = None
+    if learning_db_path is not None:
+        learned = MerchantCategoryLookup.from_db_path(learning_db_path)
+
+    return PreparedExpenseBatch(
+        run_id=run_id,
+        work_dir=work_dir,
+        cfg=cfg,
+        label=(label.strip() or f"Expenses {legal_entity.strip()} {now_iso[:10]}"),
+        learned=learned,
+        ai_unavailable=not have_key,
+        use_llm_effective=use_llm_effective,
+        now_iso=now_iso,
+        operator=operator,
+        upload_issues=issues,
+    )
+
+
+def execute_expense_batch(
+    store: RunStore, prepared: PreparedExpenseBatch, *, on_stage=None
+) -> str:
+    """Run OCR + categorization for a prepared expense batch and persist the
+    run row (mode marker in config AND summary). Slow (vision per file);
+    the web layer runs it in the background and the SPA polls the job."""
+    try:
+        result = generate_expenses(
+            prepared.cfg,
+            prepared.work_dir,
+            learned=prepared.learned,
+            on_stage=on_stage,
+        )
+    except ConfigError as exc:
+        raise RunInputError(str(exc)) from exc
+
+    receipts = result.receipts
+    n_categorized = sum(
+        1
+        for r in receipts
+        if r.line_items
+        and all(li.categorization and li.categorization.category for li in r.line_items)
+    )
+    counts = count_parse_issues(result.parse_errors)
+    summary = {
+        "mode": MODE_EXPENSE_GENERATION,
+        "n_expenses": len(receipts),
+        "n_receipts": len(receipts),
+        "n_categorized": n_categorized,
+        "n_uncategorized": len(receipts) - n_categorized,
+        "n_parse_errors": counts["errors"],
+        "n_parse_notes": counts["notes"],
+        "llm_cost_usd": (
+            str(result.cost_tracker.total_cost_usd) if result.cost_tracker else "0"
+        ),
+        "ai_unavailable": prepared.ai_unavailable,
+        "upload_issues": prepared.upload_issues,
+    }
+    snapshot = snapshot_to_dict([], receipts, result.outcome, result.parse_errors)
+
+    if on_stage is not None:
+        try:
+            on_stage("saving")
+        except Exception:  # noqa: BLE001
+            pass
+    store.create_run(
+        run_id=prepared.run_id,
+        created_at=prepared.now_iso,
+        label=prepared.label,
+        operator=prepared.operator,
+        summary=summary,
+        snapshot=snapshot,
+        config=prepared.cfg,
+        work_dir=str(prepared.work_dir),
+        llm_enabled=prepared.use_llm_effective,
+        has_coa=result.chart_of_accounts is not None,
+    )
+    return prepared.run_id
+
+
+def _apply_header_overrides(r: Receipt, fields: dict[str, str]) -> Receipt:
+    """One expense with its header-field edits applied (frozen dataclass,
+    so a `replace`). Values were validated at the edge; a corrupt stored
+    value is skipped rather than breaking the whole view."""
+    kw: dict = {}
+    for field, value in fields.items():
+        try:
+            if field == "vendor":
+                kw["detected_vendor"] = value or None
+            elif field == "date":
+                kw["detected_date"] = date.fromisoformat(value) if value else None
+            elif field == "total":
+                kw["detected_total"] = Decimal(value) if value else None
+            elif field == "currency":
+                kw["detected_currency"] = value.upper() if value else None
+            elif field == "tax":
+                kw["detected_tax"] = Decimal(value) if value else None
+            elif field == "tax_label":
+                kw["tax_label"] = value or None
+            elif field == "paid_through":
+                kw["paid_through"] = value or None
+            elif field == "legal_entity":
+                if value.strip():
+                    kw["legal_entity_id"] = value.strip()
+            elif field == "reference":
+                kw["detected_reference"] = value or None
+            # `customer` is export passthrough only — no Receipt field.
+        except (ArithmeticError, ValueError):
+            continue
+    return replace(r, **kw) if kw else r
+
+
+def _manual_expense_receipt(
+    document_id: str, payload: dict, default_entity: str
+) -> Receipt:
+    """Build the Receipt for a manually-added expense (Note 3: expenses
+    with no receipt file). Always synthesizes one full-total line item so
+    category overrides, the view, and the export treat it like any
+    categorized receipt. Payload values were validated at the edge."""
+    def _s(key: str) -> str | None:
+        v = str(payload.get(key) or "").strip()
+        return v or None
+
+    def _d(key: str) -> Decimal | None:
+        v = _s(key)
+        try:
+            return Decimal(v) if v else None
+        except ArithmeticError:
+            return None
+
+    try:
+        detected_date = date.fromisoformat(_s("date")) if _s("date") else None
+    except ValueError:
+        detected_date = None
+    total = _d("total")
+    vendor = _s("vendor")
+    currency = _s("currency")
+    categorization = None
+    if _s("category") or _s("zoho_account"):
+        categorization = Categorization(
+            category=_s("category"),
+            zoho_account=_s("zoho_account"),
+            confidence=1.0,
+            source=ClassificationSource.LINE,
+            reasoning="entered by reviewer",
+        )
+    line = LineItem(
+        description=_s("description") or vendor or "manual expense",
+        line_total=total,
+        quantity=None,
+        unit_price=None,
+        categorization=categorization,
+    )
+    return Receipt(
+        document_id=document_id,
+        legal_entity_id=_s("legal_entity") or default_entity,
+        detected_date=detected_date,
+        detected_total=total,
+        detected_currency=currency.upper() if currency else None,
+        detected_vendor=vendor,
+        detected_reference=_s("reference"),
+        receipt_name=None,
+        line_items=(line,),
+        paid_through=_s("paid_through"),
+        detected_tax=_d("tax"),
+        tax_label=_s("tax_label"),
+    )
+
+
+def apply_expense_edits(
+    receipts: list[Receipt],
+    field_overrides: dict[str, dict[str, str]],
+    edits: list[dict],
+    category_overrides: dict | None = None,
+    default_entity: str = "",
+) -> list[Receipt]:
+    """The expense-mode overlay: drop soft-deleted expenses, append manual
+    adds, apply header-field edits. Line-level category overrides stay in
+    `apply_overrides` / `_receipt_view` (the shared path); they are taken
+    here ONLY to synthesize a line item on a bare receipt (failed OCR left
+    no lines) so a category assigned to it has somewhere to land."""
+    deleted = {e["document_id"] for e in edits if e["op"] == "delete"}
+    out: list[Receipt] = []
+    for r in receipts:
+        if r.document_id in deleted:
+            continue
+        fields = field_overrides.get(r.document_id)
+        if fields:
+            r = _apply_header_overrides(r, fields)
+        if (
+            not r.line_items
+            and category_overrides
+            and (r.document_id, 0) in category_overrides
+        ):
+            r = replace(
+                r,
+                line_items=(
+                    LineItem(
+                        description=r.detected_vendor or "",
+                        line_total=r.detected_total,
+                        quantity=None,
+                        unit_price=None,
+                        categorization=None,
+                    ),
+                ),
+            )
+        out.append(r)
+    for e in edits:
+        if e["op"] != "add" or e["document_id"] in deleted:
+            continue
+        r = _manual_expense_receipt(e["document_id"], e["payload"], default_entity)
+        fields = field_overrides.get(r.document_id)
+        if fields:
+            r = _apply_header_overrides(r, fields)
+        out.append(r)
+    return out
+
+
+def _expense_review(r: Receipt, overrides: dict) -> dict:
+    """Review-by-exception for one expense (receipt-spine). Missing core
+    fields first (an expense cannot export cleanly without date / amount /
+    currency), then the shared category judgment — the same
+    ready / check / pick vocabulary the statement workbench uses."""
+    missing = [
+        label
+        for label, value in (
+            ("date", r.detected_date),
+            ("amount", r.detected_total),
+            ("currency", r.detected_currency),
+        )
+        if value is None
+    ]
+    if missing:
+        return _review(
+            "check",
+            "Missing " + ", ".join(missing) + ". Fill these in before this "
+            "expense can export cleanly.",
+            "missing_fields",
+        )
+    return _matched_category_review(r, overrides)
+
+
+def build_expense_view(
+    run: RunRow,
+    overrides: dict,
+    field_overrides: dict[str, dict[str, str]],
+    edits: list[dict],
+    resolutions: dict[str, str] | None = None,
+) -> dict:
+    """Compose the receipt-spine render model for an expense batch: one row
+    per expense with the reviewer's edits applied, review-by-exception
+    states, duplicate flags, and a receipt-centric summary. The parallel of
+    `build_view` (which is NOT modified); the SPA renders `expenses`, never
+    `rows`."""
+    _, receipts, _, parse_errors = snapshot_from_dict(run.snapshot)
+    default_entity = (
+        ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
+    )
+    receipts = apply_expense_edits(
+        receipts, field_overrides, edits,
+        category_overrides=overrides, default_entity=default_entity,
+    )
+    receipts_dir = Path(run.work_dir) / "receipts"
+
+    n_learned_lines = 0
+    for r in receipts:
+        for i, li in enumerate(r.line_items):
+            ov = overrides.get((r.document_id, i))
+            if ov and ov.get("category"):
+                continue
+            if (
+                li.categorization
+                and li.categorization.source is ClassificationSource.LEARNED
+            ):
+                n_learned_lines += 1
+
+    expenses = []
+    totals: dict[str, Decimal] = {}
+    n_categorized = 0
+    for r in receipts:
+        review = _expense_review(r, overrides)
+        posting = _row_posting_category(r, overrides, None)
+        rv = _receipt_view(r, overrides)
+        # An expense batch's receipt files live under the run's receipts
+        # dir named `<document_id>`; the view flag drives the SPA preview.
+        rv["receipt_image_available"] = (
+            rv["receipt_image_available"]
+            or (receipts_dir / r.document_id).is_file()
+        )
+        if review["state"] == "ready":
+            n_categorized += 1
+        ccy = r.detected_currency or "?"
+        if r.detected_total is not None:
+            totals[ccy] = totals.get(ccy, Decimal("0")) + r.detected_total
+        expenses.append({
+            **rv,
+            # Receipt-first fields _receipt_view does not carry (build_view
+            # consumers are unchanged; these are expense-row additions).
+            "tax": _fmt_amount(r.detected_tax),
+            "tax_label": r.tax_label or "",
+            "customer": field_overrides.get(r.document_id, {}).get("customer", ""),
+            "posting_category": posting,
+            "review": review,
+            "is_manual": r.document_id.startswith("manual:"),
+            "edited_fields": sorted(field_overrides.get(r.document_id, {})),
+        })
+
+    # §18 duplicate flags, receipt-kind only (no charges in an expense
+    # batch), with the reviewer's advisory resolutions attached.
+    resolutions = resolutions or {}
+    rec_ids = {r.document_id for r in receipts}
+    duplicate_groups = []
+    for grp in find_duplicate_receipts(receipts):
+        members = [d for d in grp if d in rec_ids]
+        gid = duplicate_group_id("receipt", members)
+        duplicate_groups.append({
+            "group_id": gid,
+            "kind": "receipt",
+            "members": members,
+            "resolution": resolutions.get(gid),
+        })
+
+    has_image_info = any(r.has_receipt_image for r in receipts)
+    summary = {
+        "mode": MODE_EXPENSE_GENERATION,
+        "n_expenses": len(expenses),
+        "n_receipts": len(expenses),
+        "n_categorized": n_categorized,
+        "n_uncategorized": len(expenses) - n_categorized,
+        "n_review": sum(
+            1 for e in expenses if e["review"]["state"] in ("check", "pick")
+        ),
+        "n_unknown_currency": sum(1 for r in receipts if r.detected_currency is None),
+        "n_learned_lines": n_learned_lines,
+        "has_image_info": has_image_info,
+        "n_missing_receipt_image": (
+            sum(1 for r in receipts if not r.has_receipt_image)
+            if has_image_info else 0
+        ),
+        "n_duplicate_groups": len(duplicate_groups),
+        "totals_by_ccy": {
+            ccy: f"{amt:,.2f}" for ccy, amt in sorted(totals.items())
+        },
+        "n_parse_errors": count_parse_issues(parse_errors)["errors"],
+        "n_parse_notes": count_parse_issues(parse_errors)["notes"],
+        "llm_cost_usd": run.summary.get("llm_cost_usd", "0"),
+        "ai_unavailable": run.summary.get("ai_unavailable", False),
+        "upload_issues": run.summary.get("upload_issues", []),
+    }
+
+    return {
+        "run_id": run.run_id,
+        "label": run.label,
+        "created_at": run.created_at,
+        "mode": MODE_EXPENSE_GENERATION,
+        "llm_enabled": run.llm_enabled,
+        "has_coa": run.has_coa,
+        "legal_entity_id": default_entity,
+        "summary": summary,
+        "expenses": expenses,
+        "duplicate_groups": duplicate_groups,
+        "category_options": list(EXPENSE_CATEGORIES),
+        "parse_errors": parse_errors,
+        "parse_issues": [
+            {
+                "file": i[0],
+                "line": i[1],
+                "message": i[2],
+                "severity": parse_issue_severity(i),
+            }
+            for i in parse_errors
+        ],
+    }
+
+
+def regenerate_expense_export(
+    run: RunRow,
+    overrides: dict,
+    field_overrides: dict[str, dict[str, str]],
+    edits: list[dict],
+) -> Path:
+    """Write the Zoho Expenses import CSV for an expense batch with every
+    reviewer edit applied — the SAME overlay order the view uses
+    (`apply_expense_edits` then `apply_overrides`), so the grid and the
+    export agree by construction. Returns the path."""
+    _, receipts, _, _ = snapshot_from_dict(run.snapshot)
+    default_entity = (
+        ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
+    )
+    receipts = apply_expense_edits(
+        receipts, field_overrides, edits,
+        category_overrides=overrides, default_entity=default_entity,
+    )
+    receipts = apply_overrides(receipts, overrides)
+    coa_gate = _coa_gate_from_config(run.config, run.work_dir)
+    chart = getattr(coa_gate, "chart", None) if coa_gate is not None else None
+    customer_by_doc = {
+        doc: fields["customer"]
+        for doc, fields in field_overrides.items()
+        if fields.get("customer")
+    }
+    out_path = Path(run.work_dir) / "expenses.csv"
+    write_zoho_expense_export(
+        receipts,
+        out_path,
+        chart_of_accounts=chart,
+        coa_gate=coa_gate,
+        default_paid_through=(
+            (run.config or {}).get("expense") or {}
+        ).get("default_paid_through"),
+        customer_by_doc=customer_by_doc,
+    )
+    return out_path
