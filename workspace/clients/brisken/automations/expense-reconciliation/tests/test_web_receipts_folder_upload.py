@@ -206,6 +206,28 @@ def test_folder_matches_unmatched_charge(client, monkeypatch):
     assert row["chosen_document_id"].startswith("folder:")
 
 
+# ── the run view surfaces the ingest summary for the SPA ───────────
+
+
+def test_folder_ingest_summary_on_run_view(client, monkeypatch):
+    run_id = _create_run(client)
+    # A run with no folder upload exposes folder_ingest as None (not missing).
+    assert _view(client, run_id)["folder_ingest"] is None
+
+    _patch_ocr(monkeypatch, _extraction())
+    resp = _upload_folder(client, run_id, [("staples.jpg", JPG)])
+    assert client.get(f"/jobs/{resp.json()['job_id']}").json()["status"] == "done"
+
+    fi = _view(client, run_id)["folder_ingest"]
+    assert fi is not None
+    assert fi["n_ingested"] == 1
+    assert fi["n_matched_new"] == 1
+    assert fi["n_possible_duplicates"] == 0
+    # llm_source + cost are carried so the SPA can show what the upload cost.
+    assert fi["llm_source"] in {"run", "env-default", "none"}
+    assert "cost_usd" in fi
+
+
 # ── constraint 1: never disturb a decided charge ───────────────────
 
 

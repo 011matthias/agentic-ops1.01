@@ -2430,6 +2430,13 @@ def build_view(
         ],
         # L3: xlsx statements can be written back with the resolved accounts.
         "writeback_available": writeback_available(run),
+        # Bulk receipts-folder attach (2026-07-27): the last upload's summary
+        # (n_ingested / n_matched_new / n_review_new / n_possible_duplicates /
+        # llm_source / cost_usd / issues), or None when no folder was uploaded.
+        # Stored on the snapshot by ingest_receipts_folder_into_run; surfaced
+        # here so the SPA can show a post-upload report next to the new
+        # suggestions instead of the reviewer guessing what landed.
+        "folder_ingest": run.snapshot.get("folder_ingest"),
     }
 
 
