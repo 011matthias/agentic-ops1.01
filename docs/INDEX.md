@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-27 | Expense-Recon Receipt-First Expense Generation | client-dev | [Mini-Checkpoint-2](docs/2026-07-27%20-%20Expense-Recon%20Receipt-First%20Expense%20Generation/Mini-Checkpoint-2.md) |
 | 2026-07-27 | Brisken Cold-Trial Suppression List | client-dev | [→](docs/2026-07-27%20-%20Brisken%20Cold-Trial%20Suppression%20List/Checkpoint.md) |
 | 2026-07-27 | Expense-Recon Categorization UX (Review-by-Exception) | client-dev | [→](docs/2026-07-27%20-%20Expense-Recon%20Categorization%20UX%20%28Review-by-Exception%29/Checkpoint.md) |
 | 2026-07-27 | Expense-Recon Review UX + Honest Match Metric | client-dev | [→](docs/2026-07-27%20-%20Expense-Recon%20Review%20UX%20%2B%20Honest%20Match%20Metric/Checkpoint.md) |
