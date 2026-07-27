@@ -1942,8 +1942,10 @@ _ADJ_DISAGREE = frozenset({"ai_override_heavy", "review_unresolved"})
 _TRUSTED_SOURCE = frozenset({"LINE", "LEARNED", "EDITED"})
 
 
-def _review(state: str, reason: str | None = None) -> dict:
-    return {"state": state, "reason": reason}
+def _review(state: str, reason: str | None = None, code: str | None = None) -> dict:
+    # `reason` is the English hint; `reason_code` is a stable enum the SPA
+    # localizes (EN + PT) so a PT reviewer reads the hint in her language.
+    return {"state": state, "reason": reason, "reason_code": code}
 
 
 def _matched_category_review(rec: "Receipt | None", overrides: dict) -> dict:
@@ -1957,7 +1959,7 @@ def _matched_category_review(rec: "Receipt | None", overrides: dict) -> dict:
     the gap (adversarial-verify finding, 2026-07-27).
     """
     if rec is None or not rec.line_items:
-        return _review("pick", "No category yet. Assign one before this charge can post.")
+        return _review("pick", "No category yet. Assign one before this charge can post.", "uncategorized")
     srcs: list[str | None] = []
     decs: list[str | None] = []
     uncategorized = False
@@ -1974,14 +1976,20 @@ def _matched_category_review(rec: "Receipt | None", overrides: dict) -> dict:
         srcs.append(base.source.value if base.source else None)
         decs.append(getattr(base, "decision", None))
     if uncategorized:
-        return _review("pick", "One or more receipt lines still need a category before this can post.")
+        # `srcs` holds a token per CATEGORIZED line; empty => nothing is
+        # categorized (fully uncategorized), non-empty => some lines are and
+        # some are not (partial). The hint and code differ so the SPA can say
+        # "assign a category" vs "one line still needs a category".
+        if not srcs:
+            return _review("pick", "No category yet. Assign one before this charge can post.", "uncategorized")
+        return _review("pick", "One or more receipt lines still need a category before this can post.", "partial_uncategorized")
     if any(d in _ADJ_DISAGREE for d in decs):
-        return _review("check", "The receipt's category and the account it would post to don't agree. A quick look to confirm the account is right.")
+        return _review("check", "The receipt's category and the account it would post to don't agree. A quick look to confirm the account is right.", "category_account_mismatch")
     if any(s == "VENDOR" for s in srcs):
-        return _review("check", "The category was guessed from the merchant name, not the receipt's line items. A quick look to confirm it fits.")
+        return _review("check", "The category was guessed from the merchant name, not the receipt's line items. A quick look to confirm it fits.", "vendor_guess")
     if any(s not in _TRUSTED_SOURCE for s in srcs):
         # categorized, but the provenance is unknown/empty: not a trusted tier.
-        return _review("check", "The tool couldn't record how it chose this category. Confirm it fits before posting.")
+        return _review("check", "The tool couldn't record how it chose this category. Confirm it fits before posting.", "unknown_provenance")
     return _review("ready")
 
 
@@ -2016,12 +2024,12 @@ def resolve_review(
     if status == STATUS_REJECTED:
         return _review("none")
     if effective_bucket == "review":
-        return _review("check", "This match isn't certain. More than one receipt could be this charge, or the best candidate scored low. Confirm which receipt belongs here, or that none does.")
+        return _review("check", "This match isn't certain. More than one receipt could be this charge, or the best candidate scored low. Confirm which receipt belongs here, or that none does.", "uncertain_match")
     if effective_bucket == "reconciled":
         return _matched_category_review(matched_rec, overrides)
     # unmatched / receiptless
     if charge_category is not None:
-        return _review("check", "No receipt is attached, but the tool suggested a category from the charge. Confirm the category or attach the receipt before it posts.")
+        return _review("check", "No receipt is attached, but the tool suggested a category from the charge. Confirm the category or attach the receipt before it posts.", "receiptless_suggested")
     return _review("none")
 
 
