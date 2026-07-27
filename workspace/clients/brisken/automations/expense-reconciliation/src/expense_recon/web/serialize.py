@@ -112,6 +112,11 @@ def transaction_to_dict(t: Transaction) -> dict:
         "fx_rate": _dec(t.fx_rate),
         "entry_status": t.entry_status,
         "is_credit": t.is_credit,
+        # Per-row card identity (WS3). Load-bearing when a snapshot is
+        # re-matched later (the bulk receipts-folder attach): without it the
+        # card-scoping / card-contradiction gate that keeps FX-false-pairs out
+        # would silently fall back to account_id on a multi-card statement.
+        "card_last4": t.card_last4,
     }
 
 
@@ -134,6 +139,9 @@ def transaction_from_dict(d: dict) -> Transaction:
         entry_status=d.get("entry_status"),
         # .get keeps pre-3.15 snapshots loadable (no is_credit key).
         is_credit=d.get("is_credit", False),
+        # .get keeps pre-WS3 snapshots loadable (no card_last4 key); those
+        # re-match on account_id, exactly as they did before this field.
+        card_last4=d.get("card_last4"),
     )
 
 
