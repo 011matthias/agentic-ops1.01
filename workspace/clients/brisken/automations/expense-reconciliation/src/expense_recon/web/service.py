@@ -1932,6 +1932,122 @@ def _row_posting_category(
     return charge_cat_view
 
 
+# Categorization.decision verdicts that mean "category and account may not
+# agree, glance before posting" (categorize.DECISION_AI_OVERRIDE_HEAVY /
+# _REVIEW_UNRESOLVED; kept_er / None do not need a look). Literal here to
+# avoid importing categorize into the view layer; the values are the ones
+# serialize.py round-trips onto the snapshot.
+_ADJ_DISAGREE = frozenset({"ai_override_heavy", "review_unresolved"})
+# Source tiers that are trusted enough to post without a glance.
+_TRUSTED_SOURCE = frozenset({"LINE", "LEARNED", "EDITED"})
+
+
+def _review(state: str, reason: str | None = None) -> dict:
+    return {"state": state, "reason": reason}
+
+
+def _matched_category_review(rec: "Receipt | None", overrides: dict) -> dict:
+    """Review-state for a matched/held receipt, judged from the CATEGORY it
+    will post (2026-07-27). Verdict order is pick > check > ready.
+
+    Judged STRUCTURALLY over the receipt's own line items, not the row's
+    "; "-joined posting source: `_row_posting_category` silently drops a line
+    with no categorization object, so a partly-uncategorized receipt can read
+    as all-trusted in that string. Iterating the lines is the only way to see
+    the gap (adversarial-verify finding, 2026-07-27).
+    """
+    if rec is None or not rec.line_items:
+        return _review("pick", "No category yet. Assign one before this charge can post.")
+    srcs: list[str | None] = []
+    decs: list[str | None] = []
+    uncategorized = False
+    for i, li in enumerate(rec.line_items):
+        ov = overrides.get((rec.document_id, i))
+        if ov and ov.get("category"):
+            srcs.append("EDITED")
+            decs.append(None)
+            continue
+        base = li.categorization
+        if base is None or not base.category:
+            uncategorized = True  # a line with no category cannot post cleanly
+            continue
+        srcs.append(base.source.value if base.source else None)
+        decs.append(getattr(base, "decision", None))
+    if uncategorized:
+        return _review("pick", "One or more receipt lines still need a category before this can post.")
+    if any(d in _ADJ_DISAGREE for d in decs):
+        return _review("check", "The receipt's category and the account it would post to don't agree. A quick look to confirm the account is right.")
+    if any(s == "VENDOR" for s in srcs):
+        return _review("check", "The category was guessed from the merchant name, not the receipt's line items. A quick look to confirm it fits.")
+    if any(s not in _TRUSTED_SOURCE for s in srcs):
+        # categorized, but the provenance is unknown/empty: not a trusted tier.
+        return _review("check", "The tool couldn't record how it chose this category. Confirm it fits before posting.")
+    return _review("ready")
+
+
+def resolve_review(
+    *, is_posted: bool, effective_bucket: str, status: str,
+    matched_rec: "Receipt | None", overrides: dict, charge_category: dict | None,
+) -> dict:
+    """The review-state a workbench row needs, so the SPA can review by
+    exception instead of reading every row (2026-07-27).
+
+    { "state": "ready" | "check" | "pick" | "none", "reason": str | None }
+
+    - ready: reconciled, categorized from a trusted tier, in agreement. Safe
+      to confirm in bulk; nothing to do.
+    - check: needs one human glance (uncertain match, a vendor-name guess, a
+      category/account disagreement, or a receiptless suggested category).
+    - pick: a category (every matched line) still has to be assigned by hand.
+    - none: not a review target (already posted, refund, rejected, or a plain
+      no-receipt row with no signal).
+
+    First-match-wins, top to bottom. `reason` is a plain human "why", non-null
+    only where a hint helps (check + pick). A confirmed MATCH is not a
+    confirmed CATEGORY: a confirmed row still flows through the category tests,
+    so a confirmed-but-uncategorized row is `pick`, not a false `ready`
+    (adversarial-verify finding, 2026-07-27). Confirm-all excludes it anyway
+    because it is not pending.
+    """
+    if is_posted:
+        return _review("none")
+    if effective_bucket == "refund":
+        return _review("none")
+    if status == STATUS_REJECTED:
+        return _review("none")
+    if effective_bucket == "review":
+        return _review("check", "This match isn't certain. More than one receipt could be this charge, or the best candidate scored low. Confirm which receipt belongs here, or that none does.")
+    if effective_bucket == "reconciled":
+        return _matched_category_review(matched_rec, overrides)
+    # unmatched / receiptless
+    if charge_category is not None:
+        return _review("check", "No receipt is attached, but the tool suggested a category from the charge. Confirm the category or attach the receipt before it posts.")
+    return _review("none")
+
+
+def ready_confirm_pairs(run, decisions: dict, overrides: dict) -> list:
+    """The (transaction_id, auto-picked document_id) writes a SAFE
+    "Confirm all Ready" should make: exactly the rows the view classifies
+    review.state == "ready", intersected with the matcher's pending auto-pick
+    set (`matched_autopick_decisions`). A check / pick / none row is never in
+    this set, and the intersection guarantees every id is a real
+    `outcome.matches` pairing, so a bulk confirm can only ratify rows that
+    need no further work (adversarial-verify: never wire Confirm-all to the
+    broader bulk path). Callers apply `_BULK_DECISION_LIMIT` and report any
+    remainder rather than silently truncating.
+    """
+    view = build_view(run, decisions, overrides)
+    ready = {
+        r["transaction_id"] for r in view["rows"]
+        if r.get("review", {}).get("state") == "ready"
+    }
+    return [
+        (tx_id, doc_id)
+        for tx_id, doc_id in matched_autopick_decisions(run, decisions)
+        if tx_id in ready
+    ]
+
+
 def effective_disposition(
     matched_receipt: Receipt | None, decision: Decision | None
 ) -> tuple[str, str]:
@@ -2194,6 +2310,22 @@ def build_view(
         matched_rec = rec_by_id.get(held_doc) if held_doc else None
         eff_disp, disp_default = effective_disposition(matched_rec, decision)
 
+        # Categorization on the row: the receiptless suggestion, the resolved
+        # posting category+account, and the review-by-exception state, computed
+        # once here so the SPA groups + bulk-confirms with no logic of its own.
+        charge_cat_view = _charge_category_view(charge_cats.get(tx_id))
+        posting_category = _row_posting_category(
+            matched_rec, overrides, charge_cat_view
+        )
+        review = resolve_review(
+            is_posted=is_posted,
+            effective_bucket=effective_bucket,
+            status=status,
+            matched_rec=matched_rec,
+            overrides=overrides,
+            charge_category=charge_cat_view,
+        )
+
         rows.append(
             {
                 "transaction_id": tx_id,
@@ -2214,16 +2346,16 @@ def build_view(
                 "entry_status": tx.entry_status,
                 # Slice 10: the tool's suggested category for a receiptless
                 # charge (None on matched rows and pre-Slice-10 snapshots).
-                "charge_category": _charge_category_view(charge_cats.get(tx_id)),
+                "charge_category": charge_cat_view,
                 # The category + Zoho account this charge posts to, resolved
                 # for BOTH matched and receiptless rows (2026-07-27), so the
                 # SPA can show categorization on reconciled rows too. None when
                 # the matched receipt is not categorized (e.g. a folder upload).
-                "posting_category": _row_posting_category(
-                    matched_rec,
-                    overrides,
-                    _charge_category_view(charge_cats.get(tx_id)),
-                ),
+                "posting_category": posting_category,
+                # Review-by-exception state (2026-07-27): ready / check / pick
+                # / none + a plain "why". Server-computed so the SPA groups and
+                # bulk-confirms on it, never re-derives it.
+                "review": review,
                 # §17: the reviewer's effective disposition + the seeded
                 # default (so the SPA can show "auto: reimbursable" hints).
                 "disposition": eff_disp,
@@ -2504,6 +2636,19 @@ def build_view(
         # here so the SPA can show a post-upload report next to the new
         # suggestions instead of the reviewer guessing what landed.
         "folder_ingest": run.snapshot.get("folder_ingest"),
+        # Whether this run has the category-vs-account adjudication signal
+        # (Categorization.decision), which only exists on override-on +
+        # chart-wired runs. False => a review.state of "ready" means "category
+        # source is trusted", NOT "the account was verified against the chart";
+        # the SPA must phrase Confirm-all honestly and not claim account
+        # verification on a run that never adjudicated (adversarial-verify
+        # finding, 2026-07-27).
+        "adjudication_available": any(
+            li.categorization is not None
+            and getattr(li.categorization, "decision", None) is not None
+            for r in rec_by_id.values()
+            for li in r.line_items
+        ),
     }
 
 

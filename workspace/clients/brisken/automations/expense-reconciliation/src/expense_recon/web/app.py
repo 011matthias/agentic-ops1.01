@@ -75,6 +75,7 @@ from .service import (
     forget_memory_vendor,
     ingest_receipts_folder_into_run,
     matched_autopick_decisions,
+    ready_confirm_pairs,
     prepare_intake_run,
     prepare_run,
     regenerate_reconciled,
@@ -1066,6 +1067,42 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
         return JSONResponse(
             {"ok": True, "confirmed": len(pairs), "summary": view["summary"]}
         )
+
+    @app.post("/api/runs/{run_id}/decisions/confirm-ready")
+    def post_confirm_ready(run_id: str):
+        # Safe "Confirm all Ready" (2026-07-27): confirms ONLY the rows the
+        # server classifies review.state == "ready" (reconciled, categorized
+        # from a trusted tier, no category/account disagreement), each with the
+        # matcher's own auto-picked receipt. Check / pick / none rows and any
+        # already-decided row are never touched, so a bulk confirm can only
+        # ratify rows that need no further work. Reversible in-app (re-POST the
+        # row pending) until the run is exported. When more than the per-call
+        # cap are eligible, confirm the cap and report the remainder rather
+        # than silently truncating.
+        with open_store() as store:
+            run = store.get_run(run_id)
+            if run is None:
+                return JSONResponse({"error": "run not found"}, status_code=404)
+            decisions = store.get_decisions(run_id)
+            overrides = store.get_category_overrides(run_id)
+            pairs = ready_confirm_pairs(run, decisions, overrides)
+            remaining = 0
+            if len(pairs) > _BULK_DECISION_LIMIT:
+                remaining = len(pairs) - _BULK_DECISION_LIMIT
+                pairs = pairs[:_BULK_DECISION_LIMIT]
+            for tx_id, doc_id in pairs:
+                store.set_decision(
+                    run_id, tx_id, STATUS_CONFIRMED, doc_id, _now_iso()
+                )
+            decisions = store.get_decisions(run_id)
+            overrides = store.get_category_overrides(run_id)
+        view = build_view(run, decisions, overrides)
+        return JSONResponse({
+            "ok": True,
+            "confirmed": len(pairs),
+            "remaining": remaining,
+            "summary": view["summary"],
+        })
 
     @app.post("/api/runs/{run_id}/decisions/bulk")
     async def post_bulk_decisions(run_id: str, request: Request):
