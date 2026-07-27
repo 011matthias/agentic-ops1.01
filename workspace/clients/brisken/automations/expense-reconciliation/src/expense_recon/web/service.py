@@ -1874,6 +1874,64 @@ def _charge_category_view(cat) -> dict | None:
     }
 
 
+def _row_posting_category(
+    matched_receipt: "Receipt | None",
+    overrides: dict[tuple[str, int], dict],
+    charge_cat_view: dict | None,
+) -> dict | None:
+    """The category + Zoho account a charge will post to, resolved onto the
+    workbench row (2026-07-27).
+
+    The row previously exposed a category only for a RECEIPTLESS charge
+    (`charge_category`, None on matched rows); a matched charge's category
+    lived nested in the chosen candidate's receipt line items, and the
+    posting ACCOUNT was not in the view at all, so the SPA could not show
+    what a reconciled charge posts to. This resolves it server-side (the
+    api.ts "frontend does zero business logic" rule):
+
+    - matched charge: aggregate the chosen receipt's line-item categories +
+      accounts, distinct values joined with '; ', override-aware (a reviewer
+      reclassification wins). Mirrors the journal export's `_ai_category_cells`
+      so the workbench and the journal agree.
+    - receiptless charge: the Slice-10 `charge_category` view.
+    - neither (an uncategorized receipt, e.g. a not-yet-categorized folder
+      upload): None, so the UI shows a plain "assign" state, not noise.
+    """
+    if matched_receipt is not None:
+        cats: list[str] = []
+        accts: list[str] = []
+        srcs: list[str] = []
+        for i, li in enumerate(matched_receipt.line_items):
+            ov = overrides.get((matched_receipt.document_id, i))
+            base = li.categorization
+            if ov and ov.get("category"):
+                category = ov["category"]
+                account = ov.get("zoho_account") or (
+                    base.zoho_account if base else None
+                )
+                src = "EDITED"
+            elif base is not None:
+                category = base.category
+                account = base.zoho_account
+                src = base.source.value if base.source else None
+            else:
+                continue
+            if category and category not in cats:
+                cats.append(category)
+            if account and account not in accts:
+                accts.append(account)
+            if src and src not in srcs:
+                srcs.append(src)
+        if not cats and not accts:
+            return None
+        return {
+            "category": "; ".join(cats),
+            "zoho_account": "; ".join(accts),
+            "source": "; ".join(srcs),
+        }
+    return charge_cat_view
+
+
 def effective_disposition(
     matched_receipt: Receipt | None, decision: Decision | None
 ) -> tuple[str, str]:
@@ -2157,6 +2215,15 @@ def build_view(
                 # Slice 10: the tool's suggested category for a receiptless
                 # charge (None on matched rows and pre-Slice-10 snapshots).
                 "charge_category": _charge_category_view(charge_cats.get(tx_id)),
+                # The category + Zoho account this charge posts to, resolved
+                # for BOTH matched and receiptless rows (2026-07-27), so the
+                # SPA can show categorization on reconciled rows too. None when
+                # the matched receipt is not categorized (e.g. a folder upload).
+                "posting_category": _row_posting_category(
+                    matched_rec,
+                    overrides,
+                    _charge_category_view(charge_cats.get(tx_id)),
+                ),
                 # §17: the reviewer's effective disposition + the seeded
                 # default (so the SPA can show "auto: reimbursable" hints).
                 "disposition": eff_disp,
