@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-28 | Brisken Zoho Posting 4b-4.8 + Readiness Audit | client-dev | [→](docs/2026-07-28%20-%20Brisken%20Zoho%20Posting%204b-4.8%20%2B%20Readiness%20Audit/Checkpoint.md) |
 | 2026-07-28 | Brisken Receipt-First Expense Engine Live | client-dev | [→](docs/2026-07-28%20-%20Brisken%20Receipt-First%20Expense%20Engine%20Live/Checkpoint.md) |
 | 2026-07-27 | Expense-Recon Receipt-First Expense Generation | client-dev | [Mini-Checkpoint-2](docs/2026-07-27%20-%20Expense-Recon%20Receipt-First%20Expense%20Generation/Mini-Checkpoint-2.md) |
 | 2026-07-27 | Brisken Cold-Trial Suppression List | client-dev | [→](docs/2026-07-27%20-%20Brisken%20Cold-Trial%20Suppression%20List/Checkpoint.md) |
