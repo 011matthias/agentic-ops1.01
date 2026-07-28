@@ -1694,7 +1694,9 @@ def ingest_receipts_folder_into_run(
         "n_possible_duplicates": len(dup_new_docs),
         "llm_source": llm_source,
         "llm_calls": tracker.call_count if tracker else 0,
-        "cost_usd": round(tracker.total_cost_usd, 4) if tracker else 0.0,
+        # float(): same latent Decimal-into-json.dumps bug as the expense
+        # add path (caught live 2026-07-28); a real tracker returns Decimal.
+        "cost_usd": float(round(tracker.total_cost_usd, 4)) if tracker else 0.0,
         "issues": issues,
     }
 
@@ -3947,7 +3949,10 @@ def add_receipts_to_expense_batch(
         "n_files": n_seen,
         "n_added": len(new_receipts),
         "llm_source": llm_source,
-        "cost_usd": round(tracker.total_cost_usd, 4) if tracker else 0.0,
+        # float(): CostTracker.total_cost_usd is a Decimal, and this summary
+        # goes straight into json.dumps via update_run_snapshot (caught live
+        # 2026-07-28: the add job died at "saving" with a real tracker).
+        "cost_usd": float(round(tracker.total_cost_usd, 4)) if tracker else 0.0,
         "issues": issues,
     }
     new_snapshot = dict(run.snapshot)

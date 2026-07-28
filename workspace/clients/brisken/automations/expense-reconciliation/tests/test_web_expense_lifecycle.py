@@ -98,6 +98,77 @@ def _attach_statement(client, batch_id, entity_map='{"amex-9001": "Corporate Ser
 # ── incremental receipt adds ────────────────────────────────────────
 
 
+class _DecimalTracker:
+    """The real CostTracker's shape: `total_cost_usd` is a Decimal. The
+    2026-07-28 live run died at 'saving' because the ingest summary put it
+    straight into json.dumps; MockLLM's tracker-less default hid it."""
+
+    call_count = 1
+
+    @property
+    def total_cost_usd(self):
+        from decimal import Decimal
+
+        return Decimal("0.0123")
+
+
+def test_add_receipts_with_real_shaped_tracker_serializes(client, monkeypatch):
+    _patch_ocr(monkeypatch, _extraction())
+    batch_id = _create_batch(client)
+    mock = MockLLMClient(
+        extraction_responses=[_extraction(vendor="Cafe", total="9.00")]
+    )
+    monkeypatch.setattr(
+        "expense_recon.cli._build_llm_client",
+        lambda cfg: (mock, _DecimalTracker()),
+    )
+    resp = client.post(
+        f"/api/expense-batches/{batch_id}/receipts",
+        files=[("files", ("cafe.jpg", JPG + b"2", "application/octet-stream"))],
+    )
+    assert resp.status_code == 200, resp.text
+    job = client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job  # Decimal cost must not kill 'saving'
+    assert _grid(client, batch_id)["expense_ingest"]["cost_usd"] == 0.0123
+
+
+def test_folder_ingest_with_real_shaped_tracker_serializes(client, monkeypatch):
+    # Same latent bug existed in the statement-run folder ingest; cover it.
+    mock = MockLLMClient(extraction_responses=[_extraction()])
+    monkeypatch.setattr(
+        "expense_recon.cli._build_llm_client",
+        lambda cfg: (mock, _DecimalTracker()),
+    )
+    resp = client.post(
+        "/api/runs",
+        files={
+            "statement": (
+                "statement.example.csv",
+                (EXAMPLES / "statement.example.csv").read_bytes(),
+                "text/csv",
+            ),
+            "receipts": (
+                "receipts.example.csv",
+                (EXAMPLES / "receipts.example.csv").read_bytes(),
+                "text/csv",
+            ),
+        },
+        data={"account_id": "amex-9001", "receipts_source": "csv"},
+    )
+    assert resp.status_code == 200, resp.text
+    job = client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
+    run_id = job["run_id"]
+    resp = client.post(
+        f"/api/runs/{run_id}/receipts/folder",
+        files=[("files", ("a.jpg", JPG, "application/octet-stream"))],
+    )
+    assert resp.status_code == 200, resp.text
+    job = client.get(f"/jobs/{resp.json()['job_id']}").json()
+    assert job["status"] == "done", job
+    assert client.get(f"/api/runs/{run_id}").status_code == 200
+
+
 def test_add_receipts_appends_and_dedupes(client, monkeypatch):
     _patch_ocr(monkeypatch, _extraction())
     batch_id = _create_batch(client)
