@@ -1141,6 +1141,7 @@ def _run_expense_generation(
         chart_of_accounts=result.chart_of_accounts,
         coa_gate=coa_gate,
         default_paid_through=(cfg.get("expense") or {}).get("default_paid_through"),
+        card_accounts=(cfg.get("expense") or {}).get("card_accounts"),
         receipt_urls=receipt_urls,
     )
     logger.info("wrote Zoho Expenses export: %s", export_path)

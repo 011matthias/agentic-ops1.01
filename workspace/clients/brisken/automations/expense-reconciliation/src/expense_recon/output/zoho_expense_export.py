@@ -19,6 +19,7 @@ spellings against the tenant's own import template before go-live — the
 from __future__ import annotations
 
 import csv
+import re
 from collections.abc import Mapping, Sequence
 from decimal import Decimal
 from pathlib import Path
@@ -61,6 +62,39 @@ EXPENSE_COLUMNS = (
 _PAID_THROUGH_PLACEHOLDER = "(paid-through - assign)"
 
 
+def _card_last4(payment_mode: str | None) -> str | None:
+    """The paying card's last 4 digits from the receipt's OCR payment
+    hint. The vision extractor writes it as "Visa ...1234" / "1234" / a
+    tender word ("Cash", "Amex"), so this pulls the trailing 4-digit
+    group, or None when none is printed (cash, tender-only, unreadable).
+    """
+    if not payment_mode:
+        return None
+    groups = re.findall(r"\d{4}", payment_mode)
+    return groups[-1] if groups else None
+
+
+def _card_account(
+    payment_mode: str | None, card_accounts: "Mapping[str, str] | None"
+) -> str | None:
+    """The Zoho "Paid Through" account for the card a receipt was paid on,
+    via the `card_accounts` last4 -> account map (the same map the journal
+    export credits against). None when the receipt names no card, or names
+    a card the map does not know: an unknown card falls through to the
+    default rather than posting to a wrong account (B4).
+    """
+    if not card_accounts:
+        return None
+    last4 = _card_last4(payment_mode)
+    if not last4:
+        return None
+    for key, account in card_accounts.items():
+        k = str(key).strip()
+        if k and account and (k == last4 or last4.endswith(k) or k.endswith(last4)):
+            return str(account)
+    return None
+
+
 def _paid_through(
     receipt: "Receipt",
     override: str | None,
@@ -68,22 +102,29 @@ def _paid_through(
     disposition: str | None,
     reimbursable_account: str | None,
     coa: "ChartOfAccounts | None",
+    card_accounts: "Mapping[str, str] | None" = None,
 ) -> str:
     """Resolve the "Paid Through" account for one expense.
 
     Order: a reimbursable_personal expense (§17) redirects to the
     reimbursement clearing account; otherwise per-expense override ->
-    the receipt's own Zoho "Paid Through" (ER path) -> the run-level
-    default -> a visible placeholder (never guessed, B4). The OCR
-    `payment_mode` card hint is deliberately NOT used here: it names a
-    card, not a Zoho account, so it would fail import; it stays a review
-    signal on the receipt.
+    the receipt's own Zoho "Paid Through" (ER path) -> the card the
+    receipt was paid on (its OCR'd last4 mapped through `card_accounts`)
+    -> the run-level default -> a visible placeholder (never guessed, B4).
+    The card step reads the last4 the receipt prints and translates it to
+    a real Zoho account via `card_accounts`; a card the map does not know
+    falls through rather than posting to a wrong account.
     """
     if disposition == _DISPOSITION_REIMBURSABLE:
         ref = reimbursable_account
         placeholder = _REIMBURSABLE_PLACEHOLDER
     else:
-        ref = override or receipt.paid_through or default
+        ref = (
+            override
+            or receipt.paid_through
+            or _card_account(receipt.payment_mode, card_accounts)
+            or default
+        )
         placeholder = _PAID_THROUGH_PLACEHOLDER
     if not ref:
         return placeholder
@@ -104,6 +145,7 @@ def build_expense_rows(
     reimbursable_account: str | None = None,
     receipt_urls: "Mapping[str, str | None] | None" = None,
     customer_by_doc: "Mapping[str, str] | None" = None,
+    card_accounts: "Mapping[str, str] | None" = None,
 ) -> list[list[str]]:
     """Build the Zoho Expenses rows (no header), one row per expense.
 
@@ -151,6 +193,7 @@ def build_expense_rows(
             disposition,
             reimbursable_account,
             chart_of_accounts,
+            card_accounts,
         )
 
         charged = r.detected_total or Decimal("0")
@@ -226,6 +269,7 @@ def write_zoho_expense_export(
     reimbursable_account: str | None = None,
     receipt_urls: "Mapping[str, str | None] | None" = None,
     customer_by_doc: "Mapping[str, str] | None" = None,
+    card_accounts: "Mapping[str, str] | None" = None,
 ) -> Path:
     """Write the Zoho Books Expenses import CSV (one row per expense).
     Returns the path."""
@@ -242,6 +286,7 @@ def write_zoho_expense_export(
         reimbursable_account=reimbursable_account,
         receipt_urls=receipt_urls,
         customer_by_doc=customer_by_doc,
+        card_accounts=card_accounts,
     )
     with out_path.open("w", encoding="utf-8", newline="") as fh:
         writer = csv.writer(fh)

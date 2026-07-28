@@ -17,6 +17,7 @@ from expense_recon.matching.types import (
 )
 from expense_recon.output.zoho_expense_export import (
     EXPENSE_COLUMNS,
+    _card_last4,
     build_expense_rows,
     write_zoho_expense_export,
 )
@@ -91,6 +92,84 @@ def test_reimbursable_disposition_redirects_paid_through():
 @pytest.mark.parametrize("disp", ["do_not_export", "personal_on_business_card"])
 def test_withheld_disposition_emits_no_row(disp):
     assert build_expense_rows([_receipt()], dispositions={"r1": disp}) == []
+
+
+# --- card-number -> Paid Through (receipt-first) -------------------------
+
+_CARD_MAP = {"2838": "CHASE VISA - 2838 - TRAVEL", "6013": "VISA 6013 TRAVEL"}
+
+
+@pytest.mark.parametrize(
+    "hint,expected",
+    [
+        ("Visa ...2838", "2838"),
+        ("2838", "2838"),
+        ("XXXX XXXX XXXX 2838", "2838"),
+        ("Mastercard 1234 5678", "5678"),  # trailing 4-digit group wins
+        ("Cash", None),
+        ("Amex", None),
+        ("", None),
+        (None, None),
+    ],
+)
+def test_card_last4_parsing(hint, expected):
+    assert _card_last4(hint) == expected
+
+
+def test_card_number_resolves_paid_through():
+    rows = build_expense_rows(
+        [_receipt(payment_mode="Visa ...2838")], card_accounts=_CARD_MAP,
+    )
+    assert _row(rows[0])["Paid Through"] == "CHASE VISA - 2838 - TRAVEL"
+
+
+def test_card_beats_run_default():
+    rows = build_expense_rows(
+        [_receipt(payment_mode="6013")],
+        default_paid_through="Some Default", card_accounts=_CARD_MAP,
+    )
+    assert _row(rows[0])["Paid Through"] == "VISA 6013 TRAVEL"
+
+
+def test_unknown_card_falls_through_to_default():
+    rows = build_expense_rows(
+        [_receipt(payment_mode="Visa ...9999")],  # not in the map
+        default_paid_through="Default Bank", card_accounts=_CARD_MAP,
+    )
+    assert _row(rows[0])["Paid Through"] == "Default Bank"
+
+
+def test_unknown_card_without_default_is_placeholder():
+    rows = build_expense_rows(
+        [_receipt(payment_mode="Visa ...9999")], card_accounts=_CARD_MAP,
+    )
+    assert _row(rows[0])["Paid Through"] == "(paid-through - assign)"
+
+
+def test_cash_receipt_falls_through_to_default():
+    rows = build_expense_rows(
+        [_receipt(payment_mode="Cash")],
+        default_paid_through="Petty Cash", card_accounts=_CARD_MAP,
+    )
+    assert _row(rows[0])["Paid Through"] == "Petty Cash"
+
+
+def test_paid_through_override_beats_card():
+    rows = build_expense_rows(
+        [_receipt(payment_mode="2838")],
+        card_accounts=_CARD_MAP, paid_through_by_doc={"r1": "Manual Pick"},
+    )
+    assert _row(rows[0])["Paid Through"] == "Manual Pick"
+
+
+def test_receipt_own_paid_through_beats_card():
+    # ER-path receipts carry their own resolved Zoho Paid Through; it wins
+    # over the card lookup so an ER export is byte-identical to before.
+    rows = build_expense_rows(
+        [_receipt(payment_mode="2838", paid_through="ER Resolved Account")],
+        card_accounts=_CARD_MAP,
+    )
+    assert _row(rows[0])["Paid Through"] == "ER Resolved Account"
 
 
 def test_multi_account_receipt_splits_shares_ref_and_taxes_once():
