@@ -95,7 +95,19 @@ def _card_account(
     return None
 
 
-def _paid_through(
+def _resolve_or(
+    ref: str | None, coa: "ChartOfAccounts | None", placeholder: str
+) -> str:
+    """A reference resolved against the chart, or the placeholder when the
+    reference is empty. Mirrors the export's account resolution exactly."""
+    if not ref:
+        return placeholder
+    if coa is None:
+        return ref
+    return _resolve_account(ref, coa) or ref
+
+
+def resolve_paid_through(
     receipt: "Receipt",
     override: str | None,
     default: str | None,
@@ -103,8 +115,10 @@ def _paid_through(
     reimbursable_account: str | None,
     coa: "ChartOfAccounts | None",
     card_accounts: "Mapping[str, str] | None" = None,
-) -> str:
-    """Resolve the "Paid Through" account for one expense.
+) -> tuple[str, str]:
+    """Resolve the "Paid Through" account AND how it was chosen, so the
+    review grid can show the same account the export will post plus its
+    provenance.
 
     Order: a reimbursable_personal expense (§17) redirects to the
     reimbursement clearing account; otherwise per-expense override ->
@@ -114,23 +128,42 @@ def _paid_through(
     The card step reads the last4 the receipt prints and translates it to
     a real Zoho account via `card_accounts`; a card the map does not know
     falls through rather than posting to a wrong account.
+
+    Returns (account, source) where source is one of: reimbursable,
+    override, receipt, card, default, unassigned.
     """
     if disposition == _DISPOSITION_REIMBURSABLE:
-        ref = reimbursable_account
-        placeholder = _REIMBURSABLE_PLACEHOLDER
-    else:
-        ref = (
-            override
-            or receipt.paid_through
-            or _card_account(receipt.payment_mode, card_accounts)
-            or default
+        return (
+            _resolve_or(reimbursable_account, coa, _REIMBURSABLE_PLACEHOLDER),
+            "reimbursable",
         )
-        placeholder = _PAID_THROUGH_PLACEHOLDER
-    if not ref:
-        return placeholder
-    if coa is None:
-        return ref
-    return _resolve_account(ref, coa) or ref
+    if override:
+        return _resolve_or(override, coa, _PAID_THROUGH_PLACEHOLDER), "override"
+    if receipt.paid_through:
+        return _resolve_or(receipt.paid_through, coa, _PAID_THROUGH_PLACEHOLDER), "receipt"
+    card = _card_account(receipt.payment_mode, card_accounts)
+    if card:
+        return _resolve_or(card, coa, _PAID_THROUGH_PLACEHOLDER), "card"
+    if default:
+        return _resolve_or(default, coa, _PAID_THROUGH_PLACEHOLDER), "default"
+    return _PAID_THROUGH_PLACEHOLDER, "unassigned"
+
+
+def _paid_through(
+    receipt: "Receipt",
+    override: str | None,
+    default: str | None,
+    disposition: str | None,
+    reimbursable_account: str | None,
+    coa: "ChartOfAccounts | None",
+    card_accounts: "Mapping[str, str] | None" = None,
+) -> str:
+    """The exported Paid Through account (the account half of
+    `resolve_paid_through`)."""
+    return resolve_paid_through(
+        receipt, override, default, disposition, reimbursable_account, coa,
+        card_accounts,
+    )[0]
 
 
 def build_expense_rows(

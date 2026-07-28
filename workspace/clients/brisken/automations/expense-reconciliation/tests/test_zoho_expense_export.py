@@ -19,6 +19,7 @@ from expense_recon.output.zoho_expense_export import (
     EXPENSE_COLUMNS,
     _card_last4,
     build_expense_rows,
+    resolve_paid_through,
     write_zoho_expense_export,
 )
 
@@ -170,6 +171,46 @@ def test_receipt_own_paid_through_beats_card():
         card_accounts=_CARD_MAP,
     )
     assert _row(rows[0])["Paid Through"] == "ER Resolved Account"
+
+
+# --- resolve_paid_through: account + provenance (the grid's source badge) --
+
+def _rpt(receipt, override=None, default=None, card_accounts=None):
+    return resolve_paid_through(
+        receipt, override, default, None, None, None, card_accounts,
+    )
+
+
+def test_resolve_paid_through_source_card():
+    assert _rpt(
+        _receipt(payment_mode="Visa ...2838"), card_accounts=_CARD_MAP,
+    ) == ("CHASE VISA - 2838 - TRAVEL", "card")
+
+
+def test_resolve_paid_through_source_override():
+    assert _rpt(
+        _receipt(payment_mode="2838"), override="Manual Acct",
+        card_accounts=_CARD_MAP,
+    ) == ("Manual Acct", "override")
+
+
+def test_resolve_paid_through_source_receipt():
+    assert _rpt(
+        _receipt(payment_mode="2838", paid_through="ER Acct"),
+        card_accounts=_CARD_MAP,
+    ) == ("ER Acct", "receipt")
+
+
+def test_resolve_paid_through_source_default():
+    assert _rpt(_receipt(payment_mode="Cash"), default="Entity Default") == (
+        "Entity Default", "default",
+    )
+
+
+def test_resolve_paid_through_source_unassigned():
+    assert _rpt(_receipt(payment_mode="Cash")) == (
+        "(paid-through - assign)", "unassigned",
+    )
 
 
 def test_multi_account_receipt_splits_shares_ref_and_taxes_once():

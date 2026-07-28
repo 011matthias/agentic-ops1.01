@@ -59,7 +59,10 @@ from ..learning import (
 )
 from ..output.reconciled_csv import write_reconciled_csv
 from ..output.report_xlsx import write_report
-from ..output.zoho_expense_export import write_zoho_expense_export
+from ..output.zoho_expense_export import (
+    resolve_paid_through,
+    write_zoho_expense_export,
+)
 from ..output.zoho_export import write_zoho_export
 from .serialize import (
     categorization_from_dict,
@@ -3625,9 +3628,21 @@ def build_expense_view(
     expenses = []
     totals: dict[str, Decimal] = {}
     n_categorized = 0
+    # Master data the export uses to resolve Paid Through, so the grid shows
+    # the same account (and how it was chosen). coa is None here, matching
+    # posting_category above: the grid renders raw names, the export resolves
+    # against the chart, and the two agree for the card/default cases.
+    exp_cfg = (run.config or {}).get("expense") or {}
+    default_pt = exp_cfg.get("default_paid_through")
+    card_accts = exp_cfg.get("card_accounts")
     for r in receipts:
         review = _expense_review(r, overrides)
         posting = _row_posting_category(r, overrides, None)
+        pt_account, pt_source = resolve_paid_through(
+            r,
+            field_overrides.get(r.document_id, {}).get("paid_through") or None,
+            default_pt, None, None, None, card_accts,
+        )
         rv = _receipt_view(r, overrides)
         # An expense batch's receipt files live under the run's receipts
         # dir named `<document_id>`; the view flag drives the SPA preview.
@@ -3648,6 +3663,7 @@ def build_expense_view(
             "tax_label": r.tax_label or "",
             "customer": field_overrides.get(r.document_id, {}).get("customer", ""),
             "posting_category": posting,
+            "posting_paid_through": {"account": pt_account, "source": pt_source},
             "review": review,
             "is_manual": r.document_id.startswith("manual:"),
             "edited_fields": sorted(field_overrides.get(r.document_id, {})),
