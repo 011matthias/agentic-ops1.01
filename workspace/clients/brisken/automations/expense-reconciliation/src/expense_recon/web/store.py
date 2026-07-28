@@ -61,6 +61,19 @@ VALID_DISPOSITIONS = (
     DISPOSITION_DO_NOT_EXPORT,
 )
 
+# Receipt-first expense edits (Phase 4). `expense_field_overrides` holds
+# the reviewer's per-expense HEADER edits (vendor / date / total / currency /
+# tax / paid-through / legal entity), one row per (run, document, field);
+# line-level category reclassification stays in `category_overrides`.
+# `expense_edits` records whole-expense add / delete: one row per document,
+# `op` add carries the manual expense's payload JSON, `op` delete soft-hides
+# the document from the view + export. Both are applied at render/export
+# time (`apply_expense_edits`), never written into the snapshot, mirroring
+# how decisions overlay the statement-mode outcome.
+EXPENSE_EDIT_ADD = "add"
+EXPENSE_EDIT_DELETE = "delete"
+VALID_EXPENSE_EDIT_OPS = (EXPENSE_EDIT_ADD, EXPENSE_EDIT_DELETE)
+
 # Intake lifecycle (testing mode): the user's uploaded document set, waiting
 # for an operator. `received` on upload; `processing` once an operator runs
 # the pipeline on it; `ready` when the resulting run is published back.
@@ -104,11 +117,18 @@ VALID_DUP_RESOLUTIONS = (DUP_IGNORE, DUP_CONFIRMED)
 #
 # All three are read at run creation and snapshotted into the run's own
 # config, so an existing run keeps the master data it ran under.
+#   entities  (Phase 5, receipt-first) — the legal-entity REGISTRY:
+#     {"Corporate Services": {org_id, chart_path?, scope_groups?,
+#     default_paid_through?, account_picks?}}. Definable in the UI; wins
+#     over the /data provisioning file's entity mapping when present
+#     (coa_provision.coa_validation_from_settings). Distinct from
+#     `card_entities`, which stays the card -> entity MAP.
 SETTINGS_DEFAULTS: dict = {
     "export_approved_only": False,
     "fx_reference_rates": {},
     "card_entities": {},
     "card_accounts": {},
+    "entities": {},
 }
 
 # Settings keys holding a {str: str} map. Values are kept as STRINGS: a
@@ -251,6 +271,22 @@ class RunStore:
                 updated_at TEXT,
                 PRIMARY KEY (run_id, group_id)
             );
+            CREATE TABLE IF NOT EXISTS expense_field_overrides (
+                run_id      TEXT NOT NULL,
+                document_id TEXT NOT NULL,
+                field       TEXT NOT NULL,
+                value       TEXT,
+                updated_at  TEXT,
+                PRIMARY KEY (run_id, document_id, field)
+            );
+            CREATE TABLE IF NOT EXISTS expense_edits (
+                run_id      TEXT NOT NULL,
+                document_id TEXT NOT NULL,
+                op          TEXT NOT NULL,
+                payload     TEXT,
+                updated_at  TEXT,
+                PRIMARY KEY (run_id, document_id)
+            );
             CREATE TABLE IF NOT EXISTS login_failures (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ip TEXT NOT NULL,
@@ -369,6 +405,28 @@ class RunStore:
         self.conn.commit()
         return cur.rowcount > 0
 
+    def update_run_summary(self, run_id: str, summary: dict) -> bool:
+        """Persist a revised run summary (batch lifecycle: incremental
+        receipt adds and statement attach change the headline counts the
+        list screens read). Returns True when a row was updated."""
+        cur = self.conn.execute(
+            "UPDATE runs SET summary = ? WHERE run_id = ?",
+            (json.dumps(summary), run_id),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
+    def update_run_config(self, run_id: str, config: dict) -> bool:
+        """Persist a revised run config (statement attach adds the
+        statement block + master data to an expense batch's config).
+        Returns True when a row was updated."""
+        cur = self.conn.execute(
+            "UPDATE runs SET config = ? WHERE run_id = ?",
+            (json.dumps(config), run_id),
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+
     def delete_run(self, run_id: str) -> bool:
         """Drop a run and its per-run edit rows. Returns True when the run
         existed. The on-disk work_dir is removed by the caller (the store
@@ -381,6 +439,12 @@ class RunStore:
         )
         self.conn.execute(
             "DELETE FROM duplicate_resolutions WHERE run_id = ?", (run_id,)
+        )
+        self.conn.execute(
+            "DELETE FROM expense_field_overrides WHERE run_id = ?", (run_id,)
+        )
+        self.conn.execute(
+            "DELETE FROM expense_edits WHERE run_id = ?", (run_id,)
         )
         self.conn.commit()
         return cur.rowcount > 0
@@ -713,6 +777,91 @@ class RunStore:
             "zoho_account = excluded.zoho_account, "
             "updated_at = excluded.updated_at",
             (run_id, document_id, line_index, category, zoho_account, updated_at),
+        )
+        self.conn.commit()
+
+    # -- expense field overrides + edits (receipt-first, Phase 4) ----------
+
+    def get_expense_field_overrides(self, run_id: str) -> dict[str, dict[str, str]]:
+        """document_id -> {field: value} for a run's header-level expense
+        edits. Absent documents / fields keep their extracted values."""
+        rows = self.conn.execute(
+            "SELECT document_id, field, value FROM expense_field_overrides "
+            "WHERE run_id = ?",
+            (run_id,),
+        ).fetchall()
+        out: dict[str, dict[str, str]] = {}
+        for r in rows:
+            if r["value"] is None:
+                continue
+            out.setdefault(r["document_id"], {})[r["field"]] = r["value"]
+        return out
+
+    def set_expense_field_override(
+        self,
+        run_id: str,
+        document_id: str,
+        field: str,
+        value: str | None,
+        updated_at: str,
+    ) -> None:
+        """Upsert one header-field edit. `value=None` clears the override
+        (the expense reverts to its extracted value)."""
+        if value is None:
+            self.conn.execute(
+                "DELETE FROM expense_field_overrides "
+                "WHERE run_id = ? AND document_id = ? AND field = ?",
+                (run_id, document_id, field),
+            )
+        else:
+            self.conn.execute(
+                "INSERT INTO expense_field_overrides (run_id, document_id, "
+                "field, value, updated_at) VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT(run_id, document_id, field) DO UPDATE SET "
+                "value = excluded.value, updated_at = excluded.updated_at",
+                (run_id, document_id, field, value, updated_at),
+            )
+        self.conn.commit()
+
+    def get_expense_edits(self, run_id: str) -> list[dict]:
+        """The run's whole-expense add/delete edits, oldest first (stable
+        manual-expense ordering in the grid)."""
+        rows = self.conn.execute(
+            "SELECT document_id, op, payload, updated_at FROM expense_edits "
+            "WHERE run_id = ? ORDER BY updated_at, document_id",
+            (run_id,),
+        ).fetchall()
+        return [
+            {
+                "document_id": r["document_id"],
+                "op": r["op"],
+                "payload": json.loads(r["payload"]) if r["payload"] else {},
+            }
+            for r in rows
+        ]
+
+    def set_expense_edit(
+        self,
+        run_id: str,
+        document_id: str,
+        op: str,
+        payload: dict | None,
+        updated_at: str,
+    ) -> None:
+        """Upsert one whole-expense edit. One row per document: a delete on
+        a manually-added document overwrites its add row, so the manual
+        expense simply disappears."""
+        if op not in VALID_EXPENSE_EDIT_OPS:
+            raise ValueError(
+                f"invalid expense edit op {op!r}; expected {VALID_EXPENSE_EDIT_OPS}"
+            )
+        self.conn.execute(
+            "INSERT INTO expense_edits (run_id, document_id, op, payload, "
+            "updated_at) VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(run_id, document_id) DO UPDATE SET "
+            "op = excluded.op, payload = excluded.payload, "
+            "updated_at = excluded.updated_at",
+            (run_id, document_id, op, json.dumps(payload or {}), updated_at),
         )
         self.conn.commit()
 

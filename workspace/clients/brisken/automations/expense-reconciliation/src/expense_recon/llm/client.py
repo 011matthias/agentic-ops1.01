@@ -115,6 +115,11 @@ class ExtractedReceipt:
     line_items: tuple[ExtractedLineItem, ...]
     confidence: float
     notes: str = ""
+    # Receipt-first parity (2026-07-27): tax/VAT + paying-card hint, raw
+    # model readings. None when the receipt does not print them.
+    tax: str | None = None
+    tax_label: str | None = None
+    payment_hint: str | None = None
 
 
 @dataclass(frozen=True)
@@ -391,6 +396,9 @@ Extract:
 - vendor: the merchant/issuer name as printed, or null.
 - reference: an invoice/ticket/booking/order number if one is printed, else null.
 - line_items: every purchased line item with description, quantity, unit_price, line_total (all amounts as plain number strings, quantity/unit_price null when not shown). If the receipt shows only a final total with NO itemization (taxi slips, card slips, simple tickets), return an empty array. NEVER invent line items. If a line item is illegible, include it with description "(illegible)" and line_total null.
+- tax: the total tax/VAT amount as a plain number string like "3.80", or null if the receipt does not show tax separately. Do NOT compute it; only report a printed tax figure.
+- tax_label: the tax name if printed (VAT, GST, Sales Tax, IVA, MwSt...), else null.
+- payment_hint: the last 4 digits of the paying card, or the tender type (Visa ...1234, Amex, Mastercard, Cash, PayPal), exactly as printed, or null.
 - confidence: your honest 0.0-1.0 confidence that the header fields (date, total, vendor) are read correctly.
 - notes: one short sentence on anything unusual (illegible areas, multiple currencies, handwriting), or "".
 
@@ -413,6 +421,9 @@ _EXTRACT_SCHEMA = {
         "currency": {"type": ["string", "null"]},
         "vendor": {"type": ["string", "null"]},
         "reference": {"type": ["string", "null"]},
+        "tax": {"type": ["string", "null"]},
+        "tax_label": {"type": ["string", "null"]},
+        "payment_hint": {"type": ["string", "null"]},
         "line_items": {
             "type": "array",
             "items": {
@@ -432,6 +443,7 @@ _EXTRACT_SCHEMA = {
     },
     "required": [
         "date", "total", "currency", "vendor", "reference",
+        "tax", "tax_label", "payment_hint",
         "line_items", "confidence", "notes",
     ],
     "additionalProperties": False,
@@ -778,6 +790,9 @@ def _extraction_from_payload(payload: dict) -> ExtractedReceipt:
         line_items=tuple(items),
         confidence=float(payload.get("confidence", 0.0) or 0.0),
         notes=str(payload.get("notes", "") or ""),
+        tax=_opt_str(payload.get("tax")),
+        tax_label=_opt_str(payload.get("tax_label")),
+        payment_hint=_opt_str(payload.get("payment_hint")),
     )
 
 

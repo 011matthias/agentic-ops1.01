@@ -189,6 +189,61 @@ def test_garbled_date_and_total_become_none(tmp_path):
     assert receipts[0].detected_total is None
 
 
+def test_tax_and_payment_hint_flow_through(tmp_path):
+    """Receipt-first parity (2026-07-27): the OCR tax/VAT + paying-card hint
+    reach the domain Receipt (tax → detected_tax, hint → payment_mode)."""
+    (tmp_path / "r.jpg").write_bytes(b"x")
+    client = MockLLMClient(extraction_responses=[
+        _extraction(tax="3.80", tax_label="VAT", payment_hint="Visa ...1234")
+    ])
+
+    receipts, _ = parse_receipts_folder(tmp_path, "brisken-llc", client)
+
+    r = receipts[0]
+    assert r.detected_tax == Decimal("3.80")
+    assert r.tax_label == "VAT"
+    # folder OCR has no ER payment_mode; the hint fills it
+    assert r.payment_mode == "Visa ...1234"
+
+
+def test_tax_fields_absent_default_to_none(tmp_path):
+    (tmp_path / "r.jpg").write_bytes(b"x")
+    client = MockLLMClient(extraction_responses=[_extraction()])  # no tax fields
+
+    receipts, _ = parse_receipts_folder(tmp_path, "brisken-llc", client)
+
+    assert receipts[0].detected_tax is None
+    assert receipts[0].tax_label is None
+
+
+def test_receipt_tax_fields_round_trip():
+    """The new tax fields survive a snapshot round-trip, and a pre-2026-07-27
+    snapshot (no tax keys) still loads (back-compat via .get)."""
+    from expense_recon.matching.types import Receipt
+    from expense_recon.web.serialize import receipt_from_dict, receipt_to_dict
+
+    r = Receipt(
+        document_id="r1.jpg",
+        legal_entity_id="brisken-llc",
+        detected_date=None,
+        detected_total=Decimal("24.50"),
+        detected_currency="EUR",
+        detected_vendor="Uber",
+        detected_tax=Decimal("3.80"),
+        tax_label="VAT",
+    )
+    back = receipt_from_dict(receipt_to_dict(r))
+    assert back.detected_tax == Decimal("3.80")
+    assert back.tax_label == "VAT"
+
+    legacy = receipt_to_dict(r)
+    del legacy["detected_tax"]
+    del legacy["tax_label"]
+    back_legacy = receipt_from_dict(legacy)
+    assert back_legacy.detected_tax is None
+    assert back_legacy.tax_label is None
+
+
 def test_extract_receipt_rejects_both_or_neither_input():
     client = MockLLMClient()
     with pytest.raises(ValueError):

@@ -112,6 +112,11 @@ def transaction_to_dict(t: Transaction) -> dict:
         "fx_rate": _dec(t.fx_rate),
         "entry_status": t.entry_status,
         "is_credit": t.is_credit,
+        # Per-row card identity (WS3). Load-bearing when a snapshot is
+        # re-matched later (the bulk receipts-folder attach): without it the
+        # card-scoping / card-contradiction gate that keeps FX-false-pairs out
+        # would silently fall back to account_id on a multi-card statement.
+        "card_last4": t.card_last4,
     }
 
 
@@ -134,6 +139,9 @@ def transaction_from_dict(d: dict) -> Transaction:
         entry_status=d.get("entry_status"),
         # .get keeps pre-3.15 snapshots loadable (no is_credit key).
         is_credit=d.get("is_credit", False),
+        # .get keeps pre-WS3 snapshots loadable (no card_last4 key); those
+        # re-match on account_id, exactly as they did before this field.
+        card_last4=d.get("card_last4"),
     )
 
 
@@ -161,6 +169,9 @@ def receipt_to_dict(r: Receipt) -> dict:
         "expense_location": r.expense_location,
         "data_quality_note": r.data_quality_note,
         "receipt_image_page": r.receipt_image_page,
+        # Receipt-first tax parity (2026-07-27).
+        "detected_tax": _dec(r.detected_tax),
+        "tax_label": r.tax_label,
     }
 
 
@@ -188,6 +199,9 @@ def receipt_from_dict(d: dict) -> Receipt:
         # .get keeps pre-WS2 snapshots loadable (no data_quality_note key).
         data_quality_note=d.get("data_quality_note"),
         receipt_image_page=d.get("receipt_image_page"),
+        # .get keeps pre-2026-07-27 snapshots loadable (no tax keys).
+        detected_tax=_as_dec(d.get("detected_tax")),
+        tax_label=d.get("tax_label"),
     )
 
 

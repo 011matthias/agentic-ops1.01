@@ -20,6 +20,10 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 | 2026-07-24 | Brisken TreasuryCentral Deploy + Deck Alignment | client-dev | [→](docs/2026-07-24%20-%20Brisken%20TreasuryCentral%20Deploy%20%2B%20Deck%20Alignment/Checkpoint.md) |
 | 2026-07-23 | Brisken Product Decks NEW Wave | client-dev | [->](docs/2026-07-23%20-%20Brisken%20Product%20Decks%20NEW%20Wave/Checkpoint.md) |
 | 2026-07-23 | Brisken Planner Audit | client-dev | [→](docs/2026-07-23%20-%20Brisken%20Planner%20Audit/Checkpoint.md) |
+| 2026-07-27 | Expense-Recon Receipt-First Expense Generation | client-dev | [Mini-Checkpoint-2](docs/2026-07-27%20-%20Expense-Recon%20Receipt-First%20Expense%20Generation/Mini-Checkpoint-2.md) |
+| 2026-07-27 | Brisken Cold-Trial Suppression List | client-dev | [→](docs/2026-07-27%20-%20Brisken%20Cold-Trial%20Suppression%20List/Checkpoint.md) |
+| 2026-07-27 | Expense-Recon Categorization UX (Review-by-Exception) | client-dev | [→](docs/2026-07-27%20-%20Expense-Recon%20Categorization%20UX%20%28Review-by-Exception%29/Checkpoint.md) |
+| 2026-07-27 | Expense-Recon Review UX + Honest Match Metric | client-dev | [→](docs/2026-07-27%20-%20Expense-Recon%20Review%20UX%20%2B%20Honest%20Match%20Metric/Checkpoint.md) |
 | 2026-07-23 | Brisken Hours Log + Overlap Purge | misc | [→](docs/2026-07-23%20-%20Brisken%20Hours%20Log%20+%20Overlap%20Purge/Checkpoint.md) |
 | 2026-07-23 | Post-Rome Outreach Truth | client-dev | [→](docs/2026-07-23%20-%20Post-Rome%20Outreach%20Truth/Checkpoint.md) |
 | 2026-07-23 | Recon Matcher V2 | client-dev | [→](docs/2026-07-23%20-%20Recon%20Matcher%20V2/Checkpoint.md) |

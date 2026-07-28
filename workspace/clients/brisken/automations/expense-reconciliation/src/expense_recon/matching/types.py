@@ -282,6 +282,14 @@ class Receipt:
     # None when vision did not run or no image reading mapped to this row.
     receipt_image_page: int | None = None
 
+    # Receipt-first tax parity (2026-07-27). Zoho Expense carries a tax/VAT
+    # line per expense; the receipt-first OCR path reads it off the receipt.
+    # The statement path never needs it (the charge is tax-inclusive), so
+    # both default None and only the OCR path + the Zoho Expenses export
+    # populate/consume them.
+    detected_tax: Decimal | None = None
+    tax_label: str | None = None
+
     @property
     def has_receipt_image(self) -> bool:
         """True when the expense carries any receipt-image reference (a
