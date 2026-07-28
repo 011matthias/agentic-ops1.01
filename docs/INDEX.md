@@ -11,6 +11,9 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-27 | Brisken Product-Deck Logo Walls + Overview Splice | client-dev | [→](docs/2026-07-27%20-%20Brisken%20Product-Deck%20Logo%20Walls%20%2B%20Overview%20Splice/Checkpoint.md) |
+| 2026-07-27 | Brisken Rome GA Post-Event Wave | comms | [→](docs/2026-07-27%20-%20Brisken%20Rome%20GA%20Post-Event%20Wave/Checkpoint.md) |
+| 2026-07-27 | Brisken Hours Log | misc | [→](docs/2026-07-27%20-%20Brisken%20Hours%20Log/Checkpoint.md) |
 | 2026-07-25 | Lead Desk Passwordless Auth | client-dev | [→](docs/2026-07-25%20-%20Lead%20Desk%20Passwordless%20Auth/Checkpoint.md) |
 | 2026-07-25 | Brisken Website Map Rework + Logo Unification | client-dev | [→](docs/2026-07-25%20-%20Brisken%20Website%20Map%20Rework%20%2B%20Logo%20Unification/Checkpoint.md) |
 | 2026-07-24 | Brisken Product Decks NEW Wave | comms | [Mini-Checkpoint-2](docs/2026-07-24%20-%20Brisken%20Product%20Decks%20NEW%20Wave/Mini-Checkpoint-2.md) |
