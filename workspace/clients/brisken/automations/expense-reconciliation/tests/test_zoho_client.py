@@ -186,3 +186,78 @@ def test_from_env_builds_config_and_defaults_us_domain():
     })
     assert cfg.api_domain == "https://www.zohoapis.com"
     assert cfg.accounts_domain == "https://accounts.zoho.com"
+
+
+# ── slice 4b: create_journal + list_journals ─────────────────────────
+
+
+class RecordingHttp(FakeHttp):
+    """FakeHttp that also records request bodies (the 4b POST tests
+    assert on the exact JSON sent)."""
+
+    def __init__(self, responses):
+        super().__init__(responses)
+        self.requests: list[tuple[str, str, bytes | None]] = []
+
+    def __call__(self, method, url, headers, body):
+        self.requests.append((method, url, body))
+        return super().__call__(method, url, headers, body)
+
+
+def test_create_journal_posts_json_and_returns_journal():
+    http = RecordingHttp([
+        _TOKEN_OK,
+        (201, {"code": 0, "journal": {"journal_id": "J9", "entry_number": "JE-4"}}),
+    ])
+    client = ZohoClient(_cfg(), http=http)
+    payload = {
+        "journal_date": "2026-04-03",
+        "reference_number": "t1",
+        "status": "draft",
+        "line_items": [
+            {"account_id": "111", "amount": 180.0, "debit_or_credit": "debit"},
+            {"account_id": "222", "amount": 180.0, "debit_or_credit": "credit"},
+        ],
+    }
+    journal = client.create_journal(payload)
+    assert journal["journal_id"] == "J9"
+    method, url, body = http.requests[1]
+    assert method == "POST" and "/books/v3/journals" in url
+    assert "organization_id=999" in url
+    assert json.loads(body.decode("utf-8")) == payload
+
+
+def test_create_journal_api_error_carries_status_and_code():
+    http = FakeHttp([_TOKEN_OK, (400, {"code": 15, "message": "invalid account"})])
+    client = ZohoClient(_cfg(), http=http)
+    with pytest.raises(ZohoAPIError) as exc:
+        client.create_journal({"journal_date": "2026-04-03", "line_items": []})
+    assert exc.value.status == 400
+    assert exc.value.code == 15
+
+
+def test_create_journal_success_without_journal_id_raises():
+    # Accepted but unconfirmable: the 4.8 caller must be able to file
+    # this as ambiguous, so it MUST surface as an error, not a success.
+    http = FakeHttp([_TOKEN_OK, (201, {"code": 0, "message": "ok"})])
+    client = ZohoClient(_cfg(), http=http)
+    with pytest.raises(ZohoAPIError) as exc:
+        client.create_journal({"journal_date": "2026-04-03", "line_items": []})
+    assert exc.value.status is None
+
+
+def test_list_journals_paginates_and_filters_client_side():
+    http = FakeHttp([
+        _TOKEN_OK,
+        (200, {"code": 0, "journals": [
+            {"reference_number": "t1", "journal_date": "2026-04-01"},
+            {"reference_number": "t2", "journal_date": "2026-05-01"},
+        ], "page_context": {"has_more_page": True}}),
+        (200, {"code": 0, "journals": [
+            {"reference_number": "t3", "journal_date": "2026-04-15"},
+        ], "page_context": {"has_more_page": False}}),
+    ])
+    client = ZohoClient(_cfg(), http=http)
+    journals = client.list_journals(date_start="2026-04-01", date_end="2026-04-30")
+    assert [j["reference_number"] for j in journals] == ["t1", "t3"]
+    assert "date" not in http.calls[1][1]  # filtering is client-side

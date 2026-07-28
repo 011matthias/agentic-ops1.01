@@ -592,3 +592,38 @@ def write_zoho_export(
         writer.writerows(rows)
 
     return out_path
+
+
+def read_journal_csv(path: str | Path) -> list[list[str]]:
+    """Read a journal CSV this module wrote and return its data rows
+    (no header), validated against ZOHO_COLUMNS. The 4b posting path
+    consumes the REVIEWED export artifact rather than rebuilding rows,
+    so what gets posted is byte-for-byte what a human saw (send-by-id
+    discipline); this reader lives beside the writer so the column
+    contract cannot drift between them."""
+    path = Path(path)
+    with path.open("r", encoding="utf-8", newline="") as fh:
+        reader = csv.reader(fh)
+        try:
+            header = next(reader)
+        except StopIteration:
+            raise ValueError(f"journal CSV is empty: {path}") from None
+        if tuple(header) != ZOHO_COLUMNS:
+            raise ValueError(
+                f"journal CSV header mismatch in {path}: expected "
+                f"{list(ZOHO_COLUMNS)}, found {header}"
+            )
+        # Track real file line numbers BEFORE filtering blanks, so an
+        # error points at the line the operator will actually find.
+        numbered = [
+            (lineno, row)
+            for lineno, row in enumerate(reader, start=2)
+            if any(cell.strip() for cell in row)
+        ]
+    for lineno, row in numbered:
+        if len(row) != len(ZOHO_COLUMNS):
+            raise ValueError(
+                f"journal CSV line {lineno} has {len(row)} columns, expected "
+                f"{len(ZOHO_COLUMNS)}: {path}"
+            )
+    return [row for _, row in numbered]

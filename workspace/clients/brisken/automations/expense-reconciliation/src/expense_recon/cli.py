@@ -1675,6 +1675,11 @@ def main(argv: list[str] | None = None) -> int:
 
         return memory_main(argv[1:])
 
+    if argv and argv[0] == "zoho-post":
+        from .zoho_post_cli import main as zoho_post_main
+
+        return zoho_post_main(argv[1:])
+
     parser = argparse.ArgumentParser(
         prog="expense-recon",
         description="Brisken expense reconciliation tool (slice 1).",

@@ -13,10 +13,13 @@ The client refreshes a short-lived access token on demand and caches
 it until just before expiry. All network I/O goes through an
 injectable `http` callable so tests run without touching Zoho.
 
-Scope of this slice: READ endpoints (organizations, chart of
-accounts). The journal-posting path (`create_journal`, slice 4b) is
-deliberately not here yet — posting real journal entries is
-irreversible and gated on the account-scope decision with Chris.
+Scope: READ endpoints (organizations, chart of accounts, expenses,
+journals) plus the slice-4b WRITE path `create_journal`. Posting real
+journal entries is irreversible, so the write path never runs on its
+own: it is reachable only through `zoho_post_cli` behind the 4.8
+idempotency ledger (`zoho/idempotent.py`), a config+env double gate
+that defaults OFF, and a hard org allowlist. This module stays a thin
+transport wrapper; every posting safety decision lives in the caller.
 """
 from __future__ import annotations
 
@@ -159,6 +162,35 @@ class ZohoClient:
             )
         return payload
 
+    def _post(self, path: str, payload: dict) -> dict:
+        """POST a JSON body. Zoho signals errors two ways and callers
+        depend on the split: a non-2xx/`code` failure with the HTTP
+        status attached (Zoho answered, the write was rejected) versus
+        a raised transport error with NO status (network failure — the
+        caller cannot know whether the write committed and must treat
+        the entry as ambiguous, never retry blindly)."""
+        url = f"{self._cfg.api_domain}{path}?{urlencode({'organization_id': self._cfg.org_id})}"
+        body = json.dumps(payload).encode("utf-8")
+        status, resp = self._http(
+            "POST",
+            url,
+            {
+                "Authorization": f"Zoho-oauthtoken {self._token()}",
+                "Content-Type": "application/json",
+            },
+            body,
+        )
+        if not isinstance(resp, dict):
+            raise ZohoAPIError(f"POST {path}: non-JSON response", status=status)
+        code = resp.get("code", 0)
+        if status not in (200, 201) or code not in (0, None):
+            raise ZohoAPIError(
+                f"POST {path} failed: {resp.get('message', 'unknown error')}",
+                status=status,
+                code=code,
+            )
+        return resp
+
     # ── endpoints ────────────────────────────────────────────────────
 
     def list_organizations(self) -> list[dict]:
@@ -212,6 +244,58 @@ class ZohoClient:
             return True
 
         return [e for e in expenses if _in_window(e)]
+
+    def create_journal(self, journal: dict) -> dict:
+        """POST one journal entry (slice 4b write path) and return the
+        created journal object (carries `journal_id` / `entry_number`).
+        The payload is built by `zoho.idempotent` — this method adds no
+        defaults and applies no policy; it will not even be reached
+        unless the 4.8 gates upstream all passed."""
+        payload = self._post("/books/v3/journals", journal)
+        journal_obj = payload.get("journal")
+        if not isinstance(journal_obj, dict) or not journal_obj.get("journal_id"):
+            # Accepted but unconfirmable: no journal_id means the caller
+            # cannot record what was created — surface as an API error
+            # (the 4.8 caller files this as ambiguous, not as success).
+            raise ZohoAPIError(
+                "POST /books/v3/journals: response carried no journal.journal_id",
+                status=None,
+            )
+        return journal_obj
+
+    def list_journals(
+        self, *, date_start: str | None = None, date_end: str | None = None
+    ) -> list[dict]:
+        """All journal records (paginated per_page=200), date-filtered
+        CLIENT-SIDE on each record's `journal_date` (mirrors
+        `list_expenses`: Zoho's own list filters are inconsistent
+        across DCs). Used by the 4.8 verify path to resolve ambiguous
+        posts by reference_number."""
+        journals: list[dict] = []
+        page = 1
+        while True:
+            payload = self._get(
+                "/books/v3/journals", {"page": str(page), "per_page": "200"}
+            )
+            journals.extend(payload.get("journals", []))
+            ctx = payload.get("page_context") or {}
+            if not ctx.get("has_more_page"):
+                break
+            page += 1
+        if date_start is None and date_end is None:
+            return journals
+
+        def _in_window(rec: dict) -> bool:
+            d = rec.get("journal_date") or ""
+            if not d:
+                return False  # an undated record cannot be affirmed in-window
+            if date_start is not None and d < date_start:
+                return False
+            if date_end is not None and d > date_end:
+                return False
+            return True
+
+        return [j for j in journals if _in_window(j)]
 
 
 def _urllib_transport(
