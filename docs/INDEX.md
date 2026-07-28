@@ -412,4 +412,5 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## upwork-independence
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-28 | UnpauseAI Cold-Email u1 Provisioning | misc | [→](docs/2026-07-28%20-%20UnpauseAI%20Cold-Email%20u1%20Provisioning/Checkpoint.md) |
 | 2026-07-25 | Upwork Independence Repo Move + u5 Delivery Kit | misc | [→](docs/2026-07-25%20-%20Upwork%20Independence%20Repo%20Move%20%2B%20u5%20Delivery%20Kit/Checkpoint.md) |
