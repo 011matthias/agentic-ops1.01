@@ -15,6 +15,69 @@ Trigger = the moment this becomes urgent enough to revisit.
 
 ---
 
+## Resolved 2026-07-28 — 4b write path + 4.8 idempotency ledger (built, OFF)
+
+Owner order 2026-07-28: build the direct Zoho connection, leave it
+completely shut off during testing, guarantee no duplicates via a
+memory cross-reference before upload. Shipped as `zoho/idempotent.py`
+(PostLedger + plan/execute/verify) + `zoho_post_cli.py` + the
+`create_journal`/`list_journals` client methods.
+
+**The guarantee.** Zoho v3 has no API-side idempotency (verified
+against the journals docs), so the ledger is the entire guarantee:
+write-ahead intent means no instant exists where a journal can reach
+Zoho without a ledger row; ambiguous outcomes (network error, 5xx,
+success-without-journal_id) quarantine the entry AND abort the batch,
+and only `--verify` (which asks Zoho itself, by reference_number) can
+move it out. Clean 4xx rejections roll back and continue. Content
+hashes exclude Notes/provenance so an LLM-confidence string change
+reads as a skip, not a conflict; an amount/account change reads as a
+conflict and refuses.
+
+**Why entries come from the CSV, not a rebuild.** `zoho-post` consumes
+the reviewed export artifact (`read_journal_csv`, header-validated,
+grouped by Reference#) — send-by-id: what posts is byte-for-byte what
+a human reviewed. Freshness is on the operator: regenerate the CSV
+before posting (the CLI run always does).
+
+**Gates (all must hold).** config `zoho.post.enabled` (strictly the
+boolean `true`; default false) AND env `EXPENSE_RECON_ZOHO_POST=1`
+AND org allowlist {822741658, 697686691} (the config's
+`org_allowlist` can only NARROW this set — widening means editing
+`DEFAULT_ORG_ALLOWLIST` in a PR) AND `--go` AND a clean plan
+(conflicts / unresolved ledger states always refuse; typed refusal
+kinds, so `--allow-partial` waives ONLY unpostable entries and
+`--allow-cross-org` ONLY the cross-org check; `--expect N` count
+assert). Journals post as `draft` status, so even a live post lands
+reviewable in Zoho. Fly carries no ZOHO_* creds and never sets the
+env, so the hosted path is structurally inert. Live posting to the
+real tenant additionally stays behind the invasive-action per-action
+owner yes; the OAuth token also still lacks the Books journal write
+scope until the owner re-consents (same gate as `memory seed-zoho`).
+
+**Adversarially reviewed before ship (26-agent find→refute workflow),
+16 confirmed findings fixed same-session.** The load-bearing ones:
+verify is now confirm-only by default (absence from one point-in-time
+listing is not proof of non-commit — a timed-out POST can land later,
+and draft journals may not appear in the unfiltered listing; clearing
+needs `--clear-absent` AND the row aged past `zoho.post.grace_hours`,
+default 1h, which `--forget` also honors for inflight rows);
+`mark_posted`/`mark_ambiguous` are UPSERTs so a concurrent clear can
+never leave a posted journal without a ledger record; a reference
+already recorded under the OTHER Brisken org refuses as a
+cross-entity duplicate; account verdicts reuse the COA gate
+(`classify_account`), so a hand-edited CSV cannot smuggle a
+DO-NOT-USE / inactive / non-leaf account past the export's gate; and
+a `ZohoAuthError` rolls back as a known non-commit instead of
+quarantining the entry.
+
+53 tests across `test_zoho_idempotent.py` / `test_zoho_post_cli.py` /
+`test_zoho_client.py` additions (incl. a write_zoho_export →
+read_journal_csv → entries_from_rows round-trip pinning the column
+contract); suite 901 → 954 green.
+
+---
+
 ## Resolved 2026-07-23 — matcher-v2 card-contradiction gate (the ~14 no_charge frontier)
 
 `brisken-recon-tuning-v1` left a precision frontier its SUMMARY named: 14

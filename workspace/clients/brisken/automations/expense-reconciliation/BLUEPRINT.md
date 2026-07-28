@@ -840,8 +840,8 @@ loop into the posting system.
 | 4.4 | Output rewrite for 5+N tab structure (LD-3) — Summary + per-card tabs + Needs Review + Unmatched + Errors | `output/report_xlsx.py` |
 | 4.5 | Row coloring per Source tier (LD-4) | `output/report_xlsx.py` |
 | 4.6 | Zoho journal-entry export — one entry per categorized line item (LD-2: one receipt → N entries) | `src/expense_recon/output/zoho_export.py` |
-| 4.7 | Optional: direct Zoho Books API client (slice 4b) | `src/expense_recon/zoho/client.py` |
-| 4.8 | Idempotency: don't double-post same line item (run-log integration, slice 5) | `src/expense_recon/zoho/idempotent.py` |
+| 4.7 | Optional: direct Zoho Books API client (slice 4b) — **read path BUILT 2026-06; write path (`create_journal` + `list_journals`) BUILT 2026-07-28, reachable only via `zoho-post`** | `src/expense_recon/zoho/client.py` |
+| 4.8 | Idempotency: don't double-post same line item — **BUILT 2026-07-28, OFF by default.** `PostLedger` (sqlite, runlog conventions + privacy: refs/hashes/journal-ids, never amounts) with write-ahead intent (`inflight`→`posted`), content-hash conflict detection, ambiguous-failure quarantine (network/5xx → batch abort → `--verify` reconciles against Zoho by reference_number). `expense-recon zoho-post` posts the REVIEWED export CSV (send-by-id), dry-run default, `--go` gated on config `zoho.post.enabled` AND env `EXPENSE_RECON_ZOHO_POST=1` AND hard org allowlist (822741658/697686691) AND a clean plan (`--expect N` count assert; conflicts/unresolved always refuse). Journals post as `draft`. Adversarially reviewed pre-ship (16 findings fixed: confirm-only verify + grace window, UPSERT marks, cross-org refusal, COA-verdict blockers, narrow-only allowlist — detail in ANNEALING resolved-2026-07-28). 53 tests | `src/expense_recon/zoho/idempotent.py`, `zoho_post_cli.py` |
 | 4.9 | Config extension: `zoho:` block (export path OR API creds) | `cli.py` |
 | 4.10 | End-to-end tests on Zoho export format | `tests/test_zoho_export.py` |
 | 4.11 | Pre-write COA validation gate + provisioning | `src/expense_recon/coa_gate.py`, `coa_provision.py` |
@@ -977,7 +977,7 @@ Configuration is Brisken-shaped. Run history persists so she can ask
 | 5.9 | `expense-recon diff <id> <id>` subcommand — **Done (2026-06-11):** count deltas + which transactions changed bucket (matched/review/unmatched) between two runs | new |
 | 5.10 | Run-log audit columns — **Done (2026-06-11):** when (created_at UTC), who (operator), source statement path, report path, counts, LLM cost. Stores tx IDs + match types only, never account/vendor/amount data | C1 |
 
-Slice 5b shipped with 11 tests (`tests/test_runlog.py`). NOT yet built: 4.8 line-item idempotency (guards Zoho *posting*, which stays gated; no surface until 4b lands).
+Slice 5b shipped with 11 tests (`tests/test_runlog.py`). 4.8 line-item idempotency BUILT 2026-07-28 (see the slice-4 table): its ledger is a separate `PostLedger` sqlite (posting is a Zoho-side fact, not a run-side fact — a run-log row records what a run computed; the post ledger records what exists in Zoho), so the run-log integration originally sketched here was deliberately not reused. Posting itself stays OFF until the owner flips `zoho.post.enabled` + env, and live posting remains an invasive action under [[rule_instantly_invasive]]-class per-action approval.
 
 ### 5c. Deployment
 
