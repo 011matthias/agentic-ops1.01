@@ -47,6 +47,26 @@ Built (engine-first; his pptx = design spec, not the artifact to hand-edit):
 NOT YET DONE: upload to Asset Testing (SharePoint write = owner-gated); PDFs.
 Local pptx in `.scratch/deckgen-v2/dist/*/NEW - ... 2026-07-27.pptx`.
 
+### Overview splice (Dirk 2026-07-27, second request)
+
+Dirk is hand-assembling the Overview in his `MN - ...2026-07-27.pptx` (NOT the
+engine): he reworked the front (slides 1-11, incl. TWO customer walls at 5/6)
+and asked to fill everything after slide 11 from the approved
+`Brisken - ...2026-07-21.pptx`. Root cause confirmed by render-diff: MN's
+back-half (12-33) is the OLD pre-review content; the approved back-half carries
+his review fixes (audit-trail bullet, "SAP and non-SAP" in MDH). Built the merge
+via PowerPoint COM `InsertFromFile`: kept MN 1-11 + grafted approved 11-31
+(from its MDH divider, so the section divider isn't dropped) = 32 slides, same
+native design so the seam is invisible; footer numbers stay continuous (front
+07 -> back 08..21). Local artifact:
+`.scratch/deckgen/splice/MN - ...2026-07-27 (filled).pptx`. AWAITING owner call
+on the gated write: recommend uploading as a NEW "(filled)" file (Dirk has the
+original open in edit mode; overwriting risks a co-authoring clobber). Note for
+Dirk: slides 5+6 are two customer walls both numbered "03" (his before/after) —
+a final deck likely wants one. TWO Overview tracks now diverge: the engine
+`NEW - ...2026-07-27` (single transparent master wall) vs Dirk's hand-built MN
+merge; his MN track is the one he's actively driving.
+
 ## 2026-07-24 — Dirk notification SENT
 
 Owner-approved notification sent to Dirk 2026-07-24 09:03Z (Graph,

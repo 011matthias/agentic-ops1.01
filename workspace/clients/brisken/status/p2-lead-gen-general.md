@@ -4,7 +4,7 @@ workstream: lead-gen-general
 group: lead-generation
 spec: p2
 state: active
-updated: 2026-06-21
+updated: 2026-07-27
 ---
 
 # Brisken / Lead Generation (group general reference)
@@ -16,9 +16,10 @@ Workstream-specific status lives in the per-workstream files indexed below. This
 file holds pointers, not copies.
 
 State: built to presentable across the board; the engine is gated on one Dirk
-go-live conversation (no Dirk contact yet, by directive). Cold email is retired;
-the motion is demand-gen + borrowed-trust + a precision-LinkedIn tail on a
-trigger-detection radar.
+go-live conversation. The core motion is demand-gen + borrowed-trust + a
+precision-LinkedIn tail on a trigger-detection radar. Cold email was retired
+2026-06-12, but a scoped TRIAL was reopened 2026-07-27 via Cristian Frunze
+(getken), suppression list sent; see `status/p2-outreach.md`.
 
 ## Shared context (the things that belong to the group, not one workstream)
 
