@@ -3291,6 +3291,18 @@ def create_expense_batch(
         cfg["expense"]["default_paid_through"] = str(
             entity_entry["default_paid_through"]
         )
+    # The card-number -> Zoho account map (settings `card_accounts`, keyed
+    # by last4) rides in the run config too, so the export resolves each
+    # receipt's Paid Through from the card it prints, ahead of the entity
+    # default. Snapshotted, so a run reproduces its mapping (incl. the
+    # local no-API replay).
+    card_accts = {
+        str(k).strip(): str(v).strip()
+        for k, v in (settings.get("card_accounts") or {}).items()
+        if str(k).strip() and str(v).strip()
+    }
+    if card_accts:
+        cfg["expense"]["card_accounts"] = card_accts
     if use_llm_effective:
         cfg["llm"] = {"provider": "openai", "model": "gpt-4o-mini"}
     # Per-entity chart provisioning (the same gate a statement run gets):
@@ -3763,6 +3775,9 @@ def regenerate_expense_export(
         default_paid_through=(
             (run.config or {}).get("expense") or {}
         ).get("default_paid_through"),
+        card_accounts=(
+            (run.config or {}).get("expense") or {}
+        ).get("card_accounts"),
         customer_by_doc=customer_by_doc,
     )
     return out_path
