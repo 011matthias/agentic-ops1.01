@@ -1,0 +1,45 @@
+:root {
+  /* Display — Poppins. Website headlines are SemiBold/Bold; deck headlines are regular. */
+  --font-display: "Poppins", "Century Gothic", "Avant Garde", sans-serif;
+  /* Text — Lato. */
+  --font-sans: "Lato", "Open Sans", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  /* Mono — carries every eyebrow, kicker and credential run on the websites. */
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+
+  /* Deck fidelity: the PPTX sets these two literally. */
+  --font-deck-display: "Century Gothic", "Poppins", "Avant Garde", sans-serif;
+  --font-deck-sans: "Segoe UI", "Lato", "Open Sans", system-ui, Arial, sans-serif;
+
+  --weight-light: 300;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* Web / UI type scale */
+  --text-display-xl: 60px;   /* hero H1 */
+  --text-display-l: 40px;    /* section H2 */
+  --text-display-m: 30px;
+  --text-display-s: 24px;
+  --text-title: 19px;
+  --text-lead: 18px;
+  --text-body: 16px;
+  --text-body-s: 15px;
+  --text-label: 13px;
+  --text-caption: 12px;
+  --text-eyebrow-size: 12px;
+
+  --leading-display: 1.14;   /* website headlines breathe more than the deck's 1.02 */
+  --leading-deck-display: 1.02;
+  --leading-title: 1.2;
+  --leading-body: 1.55;
+  --leading-card: 1.45;
+  --leading-list: 1.4;
+
+  /* Tracking. Mono eyebrows are the loudest typographic signal on the sites. */
+  --tracking-eyebrow: 0.18em;
+  --tracking-label: 0.12em;
+  --tracking-kicker: 0.08em;
+  --tracking-footer: 0.045em;
+  --tracking-display: -0.01em;
+}

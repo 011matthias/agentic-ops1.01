@@ -1,0 +1,6 @@
+/* Brisken fonts.
+   Chosen from the typefaces actually present in the source PPTX, picking the ones closest
+   to brisken.com: Poppins for display, Lato for text (both real Google Fonts, so no
+   substitution). Century Gothic + Segoe UI remain declared for 1:1 deck recreation, where
+   the licensed desktop fonts are installed. */
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Lato:wght@300;400;700;900&family=Open+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap");

@@ -1,0 +1,157 @@
+:root {
+  /* ================= BASE PALETTE =================
+     One teal and one navy carry the brand. The deck leans ink + teal;
+     the websites lean navy + teal; the OnePilot product is a dark app. */
+
+  /* Teal — shared by all three surfaces */
+  --brisken-teal-800: #0A5A61;
+  --brisken-teal-600: #0E7C86;   /* PRIMARY brand teal: buttons, links, eyebrows, accents */
+  --brisken-teal-400: #17B0BE;   /* bright teal: logo mark, highlight rules */
+  --brisken-teal-100: #D6ECEE;
+  --brisken-teal-050: #E4F3F4;   /* eyebrow pill fill on brisken.com */
+  --brisken-cyan-400: #00B5D0;
+
+  /* Navy — the website's text and dark panels */
+  --brisken-navy-900: #052A52;   /* footer */
+  --brisken-navy-800: #032E59;   /* dark CTA panel */
+  --brisken-navy-700: #01396F;   /* headlines, nav, OnePilot map card */
+  --brisken-navy-500: #2D394A;   /* body copy on the sites */
+  --brisken-navy-100: #E2E9F2;   /* hairlines */
+  --brisken-navy-050: #F4F7FB;   /* page background */
+
+  /* Ink + greys — the deck */
+  --brisken-ink-900: #0F1417;
+  --brisken-ink-800: #191F27;
+  --brisken-ink-700: #575B61;
+  --brisken-slate-600: #5B666B;
+  --brisken-slate-400: #8A9599;
+  --brisken-slate-300: #9AA6AB;
+  --brisken-line-200: #E2E7E9;
+  --brisken-surface-100: #F4F6F7;
+  --brisken-surface-050: #ECEFF0;
+  --brisken-white: #FFFFFF;
+
+  /* OnePilot product (dark app) */
+  --op-canvas: #131314;
+  --op-surface: #1E1F20;
+  --op-input: #292A2C;
+  --op-border: #333537;
+  --op-text: #E3E3E3;
+  --op-text-muted: #90959A;
+  --op-accent: #1876D2;
+  --op-mark: #E8352E;          /* the round avatar / app mark */
+  --op-positive: #069669;
+  --op-negative: #E5484D;
+  --op-chart-1: #1876D2;
+  --op-chart-2: #069669;
+  --op-chart-3: #D97708;
+  --op-chart-4: #7C3AED;
+
+  /* Flags — rare */
+  --brisken-amber-600: #C26A1B;
+  --brisken-red-500: #FF3A4C;
+
+  /* ================= SEMANTIC ALIASES =================
+     Default scope = the deck (light, ink + teal). */
+  --text-primary: var(--brisken-ink-900);
+  --text-secondary: var(--brisken-slate-600);
+  --text-muted: var(--brisken-slate-400);
+  --text-eyebrow: var(--brisken-teal-600);
+  --text-link: var(--brisken-teal-600);
+  --text-link-hover: var(--brisken-teal-800);
+
+  --text-on-dark: var(--brisken-surface-050);
+  --text-muted-on-dark: var(--brisken-slate-300);
+  --text-eyebrow-on-dark: var(--brisken-teal-400);
+  --text-on-accent: var(--brisken-white);
+
+  --surface-page: var(--brisken-white);
+  --surface-card: var(--brisken-surface-100);
+  --surface-card-raised: var(--brisken-white);
+  --surface-dark: var(--brisken-ink-900);
+  --surface-accent: var(--brisken-teal-600);
+  --surface-accent-bright: var(--brisken-teal-400);
+  --surface-accent-tint: var(--brisken-teal-050);
+  --surface-eyebrow-pill: var(--brisken-teal-050);
+
+  --border-subtle: var(--brisken-line-200);
+  --border-accent: var(--brisken-teal-600);
+  --border-accent-bright: var(--brisken-teal-400);
+
+  --accent: var(--brisken-teal-600);
+  --accent-bright: var(--brisken-teal-400);
+  --rule: var(--brisken-line-200);
+}
+
+/* WEB scope — brisken.com and onepilot.brisken.com. */
+[data-theme="web"] {
+  --text-primary: var(--brisken-navy-700);
+  --text-secondary: var(--brisken-navy-500);
+  --text-muted: #6B7A8F;
+  --text-eyebrow: var(--brisken-teal-600);
+  --text-link: var(--brisken-teal-600);
+  --text-link-hover: var(--brisken-teal-800);
+
+  --text-on-dark: var(--brisken-white);
+  --text-muted-on-dark: #B7C6DA;
+  --text-eyebrow-on-dark: #7FD3D9;
+
+  --surface-page: var(--brisken-navy-050);
+  --surface-card: var(--brisken-white);
+  --surface-card-raised: var(--brisken-white);
+  --surface-dark: var(--brisken-navy-800);
+  --surface-footer: var(--brisken-navy-900);
+  --surface-eyebrow-pill: var(--brisken-teal-050);
+  --surface-flat: var(--brisken-white);
+
+  --border-subtle: var(--brisken-navy-100);
+  --rule: var(--brisken-navy-100);
+}
+
+/* WEB dark mode — the ☼/☾ toggle on both sites. */
+[data-theme="web-dark"] {
+  --text-primary: var(--brisken-white);
+  --text-secondary: #B7C6DA;
+  --text-muted: #8296AF;
+  --text-eyebrow: #7FD3D9;
+  --text-link: #7FD3D9;
+  --text-link-hover: var(--brisken-teal-400);
+
+  --surface-page: #04203E;
+  --surface-card: #052A52;
+  --surface-card-raised: #06325F;
+  --surface-dark: #021829;
+  --surface-footer: #021829;
+  --surface-eyebrow-pill: rgba(127, 211, 217, 0.14);
+  --surface-flat: #052A52;
+
+  --border-subtle: rgba(226, 233, 242, 0.16);
+  --rule: rgba(226, 233, 242, 0.16);
+}
+
+/* APP scope — the OnePilot product UI. */
+[data-theme="app"] {
+  --text-primary: var(--op-text);
+  --text-secondary: #C3C7CB;
+  --text-muted: var(--op-text-muted);
+  --text-eyebrow: var(--op-text-muted);
+  --text-link: var(--op-accent);
+  --text-link-hover: #4E9BE8;
+
+  --surface-page: var(--op-canvas);
+  --surface-card: var(--op-surface);
+  --surface-card-raised: var(--op-input);
+  --surface-dark: #000000;
+
+  --border-subtle: var(--op-border);
+  --rule: var(--op-border);
+  --accent: var(--op-accent);
+}
+
+/* Legacy deck helper kept for the slide templates. */
+.on-dark {
+  --text-primary: var(--brisken-surface-050);
+  --text-secondary: var(--brisken-slate-300);
+  --text-eyebrow: var(--brisken-teal-400);
+  --surface-page: var(--brisken-ink-900);
+}
