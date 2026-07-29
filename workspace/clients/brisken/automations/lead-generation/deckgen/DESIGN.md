@@ -11,11 +11,13 @@ authority. Supersedes the 2026-07-15 `context/deck-fix-pass-prompt.md`
 
 ## 1. Tokens and palettes
 
-Base tokens (shared by every deck; source of truth `native/tokens.py`):
+Base tokens (shared by every deck; engine source of truth `native/tokens.py`,
+mirrored 1:1 from the canonical Brisken Design System in the `brisken-design`
+skill and parity-checked by `native/tests/test_ds_parity.py`):
 
 - Colors: INK `0F1417`, PAPER `FFFFFF`, NEUTRAL `F4F6F7`, MUTED `5B666B`,
   FAINT `8A9599`, LINE `E2E7E9`, ONINK `ECEFF0`, ONINK_SUB `9AA6AB`,
-  NEUTRAL_DK `1B2327`.
+  NEUTRAL_DK `191F27` (DS `--brisken-ink-800`).
 - Fonts: Century Gothic (display) / Segoe UI (body) / Segoe UI Semibold.
   Named system fonts, NOT embedded (the approved deck ships zero
   `ppt/fonts/` parts; the native render gate enforces exactly these three).
