@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import date
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
@@ -634,6 +635,25 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             # Structure changed: a frozen approval no longer matches reality.
             cadence.supersede_approval(store, cid, f"sequence '{degree}' edited")
         return RedirectResponse(url=f"/campaigns/{cid}", status_code=303)
+
+    @app.post("/campaigns/{cid}/schedule")
+    def campaign_schedule(request: Request, cid: str,
+                          start_not_before: str = Form("")):
+        """Set (or clear) the 'no earlier than' start date. A schedule change
+        alters neither copy nor recipient list, so it does NOT supersede an
+        approval; it only shifts when the first step becomes due."""
+        raw = start_not_before.strip()
+        if raw:
+            try:
+                date.fromisoformat(raw)
+            except ValueError:
+                return HTMLResponse("start_not_before must be YYYY-MM-DD",
+                                    status_code=400)
+        with open_store() as store:
+            if store.get_campaign(cid) is None:
+                return HTMLResponse("Campaign not found", status_code=404)
+            store.update_campaign(cid, {"start_not_before": raw or None}, now_iso())
+        return RedirectResponse(url=f"/campaigns/{cid}?scheduled=1", status_code=303)
 
     @app.post("/templates")
     def template_save(request: Request, template_key: str = Form(...),

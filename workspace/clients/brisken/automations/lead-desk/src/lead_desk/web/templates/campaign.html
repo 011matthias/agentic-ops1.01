@@ -256,6 +256,21 @@
   {% endif %}{# /status == 'done' #}
 </div>
 
+{% if campaign.status != 'done' %}
+<div class="card">
+  <h2>Schedule</h2>
+  <p class="muted" style="margin:0 0 10px;">
+    {% if campaign.start_not_before %}This campaign sends nothing before <strong>{{ campaign.start_not_before }}</strong>.{% else %}No start-date hold: approved sends become due immediately.{% endif %}
+    Use this to hold a wave until contacts are back from vacation; approve now, send later.
+  </p>
+  <form method="post" action="/campaigns/{{ campaign.campaign_id }}/schedule" class="row-actions">
+    <div style="min-width:220px;"><label>Start no earlier than (blank to clear)</label>
+      <input type="date" name="start_not_before" value="{{ campaign.start_not_before or '' }}"></div>
+    <button class="btn btn-small" type="submit">Save schedule</button>
+  </form>
+</div>
+{% endif %}
+
 {% if campaign.status in ('approved', 'sending', 'paused') %}
 <div class="card">
   <h2>7. Sending gate</h2>
