@@ -1,0 +1,30 @@
+<!-- @dsCard group="Spacing" viewport="700x230" subtitle="Every slide is the same rail: 89px margins, fixed y-positions" name="Slide grid geometry" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  html, body { margin: 0; }
+  body { padding: 18px 20px; font-family: var(--font-deck-sans); background: var(--brisken-white); }
+  .row { display: flex; gap: 10px; align-items: stretch; }
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--brisken-slate-400); }
+  .mono { font-family: var(--font-mono); font-size: 10.5px; color: var(--brisken-slate-600); }
+
+</style>
+</head>
+<body>
+<div style="position:relative;aspect-ratio:16/9;max-height:170px;background:#fff;box-shadow:inset 0 0 0 1px var(--border-subtle);border-radius:4px">
+  <div style="position:absolute;left:4.63%;right:4.63%;top:8.2%;height:1px;background:var(--brisken-teal-600)"></div>
+  <div style="position:absolute;left:4.63%;top:9%;font-weight:600;font-size:7px;letter-spacing:.2em;color:var(--brisken-teal-600)">EYEBROW · y 89</div>
+  <div style="position:absolute;left:4.63%;top:15%;font-family:var(--font-deck-display);font-size:15px;color:var(--brisken-ink-900)">Headline · y 147</div>
+  <div style="position:absolute;left:4.63%;right:4.63%;top:36%;bottom:22%;display:flex;gap:2.6%">
+    <div style="flex:1;background:var(--surface-card);border-radius:8px"></div><div style="flex:1;background:var(--surface-card);border-radius:8px"></div><div style="flex:1;background:var(--surface-card);border-radius:8px"></div>
+  </div>
+  <div style="position:absolute;left:4.63%;right:4.63%;top:92.2%;height:1px;background:var(--border-subtle)"></div>
+  <div style="position:absolute;left:4.63%;top:94%;font-size:6.5px;color:var(--brisken-slate-400)">TreasuryCentral, powered by OnePilot</div>
+  <div style="position:absolute;right:4.63%;top:94%;font-size:6.5px;color:var(--brisken-slate-400)">05</div>
+</div>
+<div class="mono" style="margin-top:10px">margin-x 89 · eyebrow y 89 · headline y 147 · footer rule y 996 · col gap 51</div>
+</body>
+</html>

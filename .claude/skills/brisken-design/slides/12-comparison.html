@@ -1,0 +1,63 @@
+<!-- @dsCard group="Slides" viewport="1280x720" subtitle="Grey card loses, ink card with a teal edge wins" name="Comparison" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  html, body { margin: 0; background: #FFFFFF; overflow: hidden; }
+  .frame { width: 1280px; height: 720px; overflow: hidden; }
+  .slide { position: relative; width: 1920px; height: 1080px; background: #FFFFFF;
+    transform: scale(0.6666667); transform-origin: 0 0; font-family: var(--font-deck-sans); color: var(--brisken-ink-900); }
+  .slide * { box-sizing: border-box; }
+  .a { position: absolute; }
+  .eyebrow { left: 89px; top: 89px; font-weight: 600; font-size: 25px; letter-spacing: .2em; color: var(--brisken-teal-600); }
+  .headline { left: 89px; top: 147px; width: 1684px; font-family: var(--font-deck-display); line-height: 1.02; color: var(--brisken-ink-900); }
+  .lead { left: 89px; width: 1642px; font-size: 32px; line-height: 1.25; color: var(--brisken-slate-600); }
+  .rule { left: 89px; top: 996px; width: 1741px; height: 2px; background: var(--brisken-line-200); }
+  .foot { top: 1008px; font-size: 18px; color: var(--brisken-slate-400); }
+  .foot.l { left: 89px; letter-spacing: .045em; }
+  .foot.r { left: 1543px; width: 288px; text-align: right; }
+  .card { background: var(--brisken-surface-100); border-radius: 24px; }
+  .tick { width: 49px; height: 7px; background: var(--brisken-teal-600); }
+  .tick.bright { background: var(--brisken-teal-400); }
+  .ctitle { font-weight: 600; font-size: 31px; line-height: 1.15; }
+  .cbody { font-size: 27px; line-height: 1.18; color: var(--brisken-slate-600); }
+  .kicker { font-weight: 600; font-size: 23px; letter-spacing: .043em; }
+  .logo { position: absolute; right: 89px; bottom: 58px; width: 210px; }
+  .step { display: flex; gap: 20px; align-items: flex-start; }
+  .badge { flex: 0 0 auto; width: 43px; height: 43px; border-radius: 11px; background: var(--brisken-teal-600);
+    color: #fff; font-weight: 600; font-size: 24px; display: flex; align-items: center; justify-content: center; }
+</style>
+</head>
+<body>
+<div class="frame"><div class="slide">
+  <div class="a eyebrow">APPENDIX · LEGACY VS ONEPILOT</div>
+  <div class="a headline" style="font-size:64px">Why custom and legacy apps get replaced.</div>
+  <div class="a card" style="left:89px;top:338px;width:835px;height:540px;padding:46px 49px">
+    <div style="font-weight:600;font-size:24px;letter-spacing:.083em;color:var(--brisken-slate-600)">CUSTOM &amp; LEGACY APPLICATIONS</div>
+    <div style="margin-top:44px;display:flex;flex-direction:column;gap:38px">
+      <div style="display:flex;gap:22px"><span style="color:var(--brisken-slate-400);font-size:32px;line-height:1">·</span><span style="font-size:27px;line-height:1.14">Custom-built and cumbersome, with unstable integrations.</span></div>
+      <div style="display:flex;gap:22px"><span style="color:var(--brisken-slate-400);font-size:32px;line-height:1">·</span><span style="font-size:27px;line-height:1.14">Frequent technical issues and a lot of maintenance.</span></div>
+      <div style="display:flex;gap:22px"><span style="color:var(--brisken-slate-400);font-size:32px;line-height:1">·</span><span style="font-size:27px;line-height:1.14">Inflexible: hard to change as the markets change.</span></div>
+      <div style="display:flex;gap:22px"><span style="color:var(--brisken-slate-400);font-size:32px;line-height:1">·</span><span style="font-size:27px;line-height:1.14">Old technology: no AI, no in-memory computing, no cloud.</span></div>
+    </div>
+  </div>
+  <div class="a" style="left:996px;top:338px;width:835px;height:540px;background:var(--brisken-ink-900);border-radius:24px;overflow:hidden">
+    <div style="position:absolute;left:0;top:0;width:13px;height:540px;background:var(--brisken-teal-400)"></div>
+    <div style="padding:46px 49px">
+      <div style="font-weight:600;font-size:24px;letter-spacing:.083em;color:var(--brisken-teal-400)">ONEPILOT APPS</div>
+      <div style="margin-top:44px;display:flex;flex-direction:column;gap:38px">
+        <div style="display:flex;gap:22px"><span style="color:var(--brisken-teal-400);font-size:28px;line-height:1.1">&rarr;</span><span style="font-size:27px;line-height:1.14;color:var(--brisken-surface-050)">Off-the-shelf. No custom code.</span></div>
+        <div style="display:flex;gap:22px"><span style="color:var(--brisken-teal-400);font-size:28px;line-height:1.1">&rarr;</span><span style="font-size:27px;line-height:1.14;color:var(--brisken-surface-050)">A managed subscription: third-party run, low maintenance.</span></div>
+        <div style="display:flex;gap:22px"><span style="color:var(--brisken-teal-400);font-size:28px;line-height:1.1">&rarr;</span><span style="font-size:27px;line-height:1.14;color:var(--brisken-surface-050)">100% configurable; connects to any app, process or data source.</span></div>
+        <div style="display:flex;gap:22px"><span style="color:var(--brisken-teal-400);font-size:28px;line-height:1.1">&rarr;</span><span style="font-size:27px;line-height:1.14;color:var(--brisken-surface-050)">A cloud app: no hardware cost, scalable, AI-ready.</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="a rule"></div>
+  <div class="a foot l">TreasuryCentral, powered by OnePilot</div>
+  <div class="a foot r">18</div>
+</div></div>
+</body>
+</html>

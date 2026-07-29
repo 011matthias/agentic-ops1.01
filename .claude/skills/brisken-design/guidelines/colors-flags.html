@@ -1,0 +1,39 @@
+<!-- @dsCard group="Colors" viewport="700x150" subtitle="Used once or twice, as flags — never as brand colour" name="Semantic flags" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  html, body { margin: 0; }
+  body { padding: 18px 20px; font-family: var(--font-sans); background: var(--brisken-white); }
+  .row { display: flex; gap: 10px; align-items: stretch; }
+  .lbl { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--brisken-slate-400); }
+  .mono { font-family: var(--font-mono); font-size: 10.5px; color: var(--brisken-slate-600); }
+
+</style>
+</head>
+<body>
+<div class="row" style="align-items:center">
+  <div style="width:180px"><div style="flex:1;display:flex;flex-direction:column;gap:6px">
+  <div style="height:56px;border-radius:6px;background:#C26A1B;"></div>
+  <div style="font-size:11px;font-weight:600;color:var(--brisken-ink-900)">Caution</div>
+  <div class="mono">#C26A1B</div>
+  <div class="mono" style="color:var(--brisken-slate-400)">--brisken-amber-600</div>
+</div></div>
+  <div style="width:180px"><div style="flex:1;display:flex;flex-direction:column;gap:6px">
+  <div style="height:56px;border-radius:6px;background:#FF3A4C;"></div>
+  <div style="font-size:11px;font-weight:600;color:var(--brisken-ink-900)">Alert</div>
+  <div class="mono">#FF3A4C</div>
+  <div class="mono" style="color:var(--brisken-slate-400)">--brisken-red-500</div>
+</div></div>
+  <div style="flex:1;padding-left:14px;border-left:1px solid var(--border-subtle)">
+    <div class="lbl">Rule</div>
+    <div style="font-size:13px;line-height:1.4;color:var(--brisken-slate-600);margin-top:6px">
+      There is no success green and no info blue. Positive state is teal; a flagged value uses
+      amber; only a hard error uses red. Never tint a whole surface with either.
+    </div>
+  </div>
+</div>
+</body>
+</html>

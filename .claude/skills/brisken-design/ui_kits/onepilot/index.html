@@ -1,0 +1,69 @@
+<!-- @dsCard group="OnePilot product" viewport="1440x900" -->
+<!-- @startingPoint section="OnePilot product" subtitle="Dark app shell: spaces sidebar, audit log, investment dashboard, assistant" viewport="1440x900" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OnePilot — product UI kit</title>
+<link rel="stylesheet" href="../../styles.css">
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--op-canvas); }
+  #root { height: 100vh; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #3a3c3e; border-radius: 999px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body data-theme="app">
+<div id="root">
+  <div style="height:100vh;background:#131314;display:flex;align-items:center;justify-content:center;font-family:Poppins,system-ui,sans-serif;font-size:40px;color:#E3E3E3">Welcome to Market Data Hub (DEMO)</div>
+</div>
+<script>
+  Babel.registerPreset('brisken', { presets: [[Babel.availablePresets.react, { runtime: 'classic' }]] });
+  (async function () {
+    for (const file of ['appds.jsx', 'Shell.jsx', 'Screens.jsx']) {
+      const src = await (await fetch(file)).text();
+      const el = document.createElement('script');
+      el.textContent = Babel.transform(src, { presets: ['brisken'], filename: file }).code;
+      document.head.appendChild(el);
+    }
+    const appSrc = `function App() {
+      const [sidebar, setSidebar] = React.useState(true);
+      const [space, setSpace] = React.useState('Home');
+      const [assistant, setAssistant] = React.useState(false);
+      const isAudit = space.indexOf('Audit') >= 0 || space.indexOf('Integration') >= 0;
+      const isInvestment = space === 'Investment Dashboard';
+      return (
+        <div style={{ display: 'flex', height: '100vh', background: 'var(--op-canvas)' }}>
+          <Sidebar open={sidebar} current={space} onSelect={setSpace} />
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+            <TopBar
+              sidebarOpen={sidebar}
+              onToggleSidebar={() => setSidebar(!sidebar)}
+              title={space}
+              search={isAudit}
+              onAssistant={() => setAssistant(!assistant)}
+            />
+            <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                {space === 'Home' ? <HomeView /> : isInvestment ? <InvestmentView /> : <AuditView title={space} />}
+              </div>
+              <AssistantPanel open={assistant} onClose={() => setAssistant(false)} />
+            </div>
+          </div>
+        </div>
+      );
+    }
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);`;
+    const app = document.createElement('script');
+    app.textContent = Babel.transform(appSrc, { presets: ['brisken'], filename: 'app.jsx' }).code;
+    document.head.appendChild(app);
+  })();
+</script>
+</body>
+</html>
