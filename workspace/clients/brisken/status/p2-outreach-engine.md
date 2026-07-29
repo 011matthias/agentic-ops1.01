@@ -51,9 +51,9 @@ sheet status cols are an upgrades-only projection out.
   for Dirk-voiced mail, watched drill before arming, kill_switch, hard mailbox
   allowlist. A sequence delta does not relax any of these (recipient pins +
   hash preserved).
-- Infra note for owner: the lead-desk 325-test suite is NOT in CI (ruff/pytest
-  scope is tools/.claude/hooks only). A lead-desk CI job would make the Band-1
-  verification structural, not agent-run.
+- Infra: the lead-desk 325-test suite now runs in CI (PR #482, `lead-desk`
+  job); since the repo auto-merges on green, Band-1 verification is structural
+  for this automation, not just agent-run.
 
 ## Pointers
 
