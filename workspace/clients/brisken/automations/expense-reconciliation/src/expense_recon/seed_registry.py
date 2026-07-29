@@ -66,16 +66,60 @@ _BUCKET_KEYWORDS: tuple[tuple[tuple[str, ...], str], ...] = (
 )
 
 
+def _label_leaf(label: str) -> str:
+    """The most specific segment of a nested GL label. Brisken's chart nests
+    the real category UNDER a parent ('E100010-31 - Travel Expense | Food'),
+    so the LEAF after the last '|' (else after ' - ') carries the signal, not
+    the parent. Without a leaf marker the whole label is returned."""
+    s = label
+    if "|" in s:
+        s = s.rsplit("|", 1)[1]
+    elif " - " in s:
+        s = s.split(" - ", 1)[1]
+    return s.strip()
+
+
 def label_to_bucket(label: str | None) -> str | None:
-    """Map an ER GL label (e.g. 'E100010 - Travel Expense') to one of the
-    fixed expense categories, or None when nothing clearly matches."""
+    """Map an ER GL label to one of the fixed expense categories, or None when
+    nothing clearly matches. Reads the LEAF segment first (so 'Travel Expense
+    | Food' -> Meals via 'Food', not Travel via the parent), then falls back
+    to the whole label."""
     if not label:
         return None
-    low = f" {label.lower()} "
-    for keywords, bucket in _BUCKET_KEYWORDS:
-        if any(k in low for k in keywords):
-            return bucket
+    for text in (_label_leaf(label), label):
+        low = f" {text.lower()} "
+        for keywords, bucket in _BUCKET_KEYWORDS:
+            if any(k in low for k in keywords):
+                return bucket
     return None
+
+
+import re
+
+# Vendor strings that are OCR / statement noise, not a merchant brand: an
+# amount fragment ("BRL94.00"), an "Expense Location" tail, a bare payment
+# processor / bank (a payment method, not the shop), or too few real
+# characters to be a name. Dropped before clustering.
+_AMOUNT_RE = re.compile(r"^[A-Za-z]{0,3}\s*[\d][\d.,]*$")
+_NOISE_PREFIXES = ("expense location", "brl", "usd", "eur")
+_PROCESSOR_BLOCKLIST = frozenset({
+    "cielo", "ton", "pagbank", "rede", "stone", "getnet", "pix",
+    "mercadopago", "picpay", "banco do brasil", "pagseguro",
+})
+
+
+def _is_noise_vendor(v: str) -> bool:
+    s = (v or "").strip()
+    if len(re.sub(r"[^a-z0-9]", "", s.lower())) < 3:
+        return True
+    if _AMOUNT_RE.match(s):
+        return True
+    low = s.lower()
+    if any(low.startswith(p) for p in _NOISE_PREFIXES):
+        return True
+    if normalize_vendor(s) in _PROCESSOR_BLOCKLIST:
+        return True
+    return False
 
 
 def _most_common(raws: list[str], counts: Counter) -> str:
@@ -96,7 +140,7 @@ def cluster_receipts(
     raw_labels: dict[str, Counter] = {}
     for r in receipts:
         raw = (r.detected_vendor or "").strip()
-        if not raw:
+        if not raw or _is_noise_vendor(raw):
             continue
         raw_counts[raw] += 1
         raw_labels.setdefault(raw, Counter())
