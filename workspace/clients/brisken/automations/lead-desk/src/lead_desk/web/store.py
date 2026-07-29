@@ -191,6 +191,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     daily_cap     INTEGER NOT NULL DEFAULT 40,
     throttle_seconds INTEGER NOT NULL DEFAULT 12,
     jitter_seconds   INTEGER NOT NULL DEFAULT 4,
+    start_not_before TEXT,
     approved_at   TEXT,
     approved_by   TEXT,
     approved_contacts_hash TEXT,
@@ -500,6 +501,11 @@ _MIGRATIONS: dict[int, list] = {
         "email TEXT NOT NULL, "
         "PRIMARY KEY (campaign_id, contact_id))",
     ],
+    # v8: vacation-aware scheduling. A nullable 'no earlier than' date per
+    # campaign: the claim path sends nothing before it, and step 1 anchors on
+    # max(approved_at, start_not_before) so day-offset math counts from the
+    # real start. Lets a wave be approved now but held until people are back.
+    8: [_add_column("campaigns", "start_not_before", "TEXT")],
 }
 
 # Highest applied migration. On a fresh DB the runner applies 1..N in order;
@@ -943,6 +949,7 @@ class ContactStore:
         cols = [c for c in fields if c in (
             "name", "status", "from_address", "cc_address", "bcc_address",
             "send_window", "daily_cap", "throttle_seconds", "jitter_seconds",
+            "start_not_before",
             "approved_at", "approved_by", "approved_contacts_hash",
         )]
         if not cols:

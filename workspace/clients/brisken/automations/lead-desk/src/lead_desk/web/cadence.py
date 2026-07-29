@@ -257,6 +257,13 @@ def enrollment_state(enrollment: dict, progress: dict, steps: list[dict],
               or enrollment.get("approved_at")
               or enrollment.get("enrollment_approved_at"))
     anchor_date = date.fromisoformat(str(anchor)[:10]) if anchor else None
+    # A campaign 'start no earlier than' date holds the FIRST step (which has no
+    # prior completion to anchor on) until that date; later steps already anchor
+    # on their prior step's real completion, which is >= the start date.
+    snb = campaign.get("start_not_before")
+    if snb and not progress.get("last_step_ts"):
+        snb_date = date.fromisoformat(str(snb)[:10])
+        anchor_date = max(anchor_date, snb_date) if anchor_date else snb_date
     next_due = (anchor_date + timedelta(days=int(next_step["day_offset"]))
                 if anchor_date else None)
     return {**base, "state": "active", "next_step": dict(next_step),
@@ -365,6 +372,9 @@ def claim_sends(store: ContactStore, worker_id: str, max_items: int,
         if not in_window(window, at):
             continue
         today = _campaign_today(campaign, at)
+        snb = campaign.get("start_not_before")
+        if snb and today.isoformat() < str(snb)[:10]:
+            continue  # scheduled to start on a later date (vacation window)
         cap_left = int(campaign["daily_cap"]) - store.cadence_sends_today(
             campaign["campaign_id"], today.isoformat())
         if cap_left <= 0:
@@ -665,12 +675,14 @@ def approval_report(store: ContactStore, campaign_id: str) -> dict:
     window = parse_window(campaign.get("send_window"))
     degree_summary = ", ".join(
         f"{samples[d]['cohort_size']} {d}" for d in degrees_in_use if d in samples)
+    snb = campaign.get("start_not_before")
+    schedule_text = f" Starts no earlier than {str(snb)[:10]}." if snb else ""
     scope_text = (
         f"Approving sends up to {total_emails} emails to {len(active)} contacts "
         f"({degree_summary}), "
         f"from {campaign['from_address']} (CC {campaign['cc_address']}, "
         f"BCC Zoho CRM dropbox), {window['start']}-{window['end']} "
-        f"{window['tz']} weekdays, max {campaign['daily_cap']}/day. "
+        f"{window['tz']} weekdays, max {campaign['daily_cap']}/day.{schedule_text} "
         "Warm-degree steps are staged as drafts in Dirk's mailbox instead of "
         "auto-sending. Follow-ups stop on reply, bounce, or suppression. "
         "NOTE: until inbound capture runs, replies are detected by the local "
