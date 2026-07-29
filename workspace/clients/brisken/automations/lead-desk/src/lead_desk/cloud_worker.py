@@ -199,6 +199,19 @@ def execute_one(store: ContactStore, mailer, send: dict, journal: Journal,
         journal.write(akey, "nacked", reason="draft-to-self test mode")
         return "draft_to_self"
 
+    # Hard recipient-domain backstop: even if a claim-time guard regressed, a
+    # send to a hard-denied domain never reaches Graph. Uses the immutable
+    # floor (cadence.DEFAULT_DENY_DOMAINS), not the state-configurable set, so a
+    # bad state write cannot weaken it. draft-to-self above targets our own
+    # mailbox and returns before this point.
+    if cadence._recipient_domain(send["to"]) in set(cadence.DEFAULT_DENY_DOMAINS):
+        journal.write(akey, "nacked", reason=f"recipient domain denied: {send['to']}")
+        cadence.resolve_result(store, {
+            "attempt_key": akey, "lease_id": send["lease_id"],
+            "status": "failed", "error_class": "config",
+            "failure_reason": f"recipient domain hard-denied: {send['to']}"[:300]})
+        return "recipient_denied"
+
     if send["send_mode"] == "draft-dirk":
         try:
             res = mailer.create_draft(DIRK_SMTP, send)
