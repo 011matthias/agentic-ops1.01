@@ -38,9 +38,9 @@ JPG = b"\xff\xd8\xff\xe0fake-jpeg-bytes"
 # EXPENSE_COLUMNS indices the assertions read.
 COL_DATE = EXPENSE_COLUMNS.index("Expense Date")
 COL_ACCOUNT = EXPENSE_COLUMNS.index("Expense Account")
-COL_AMOUNT = EXPENSE_COLUMNS.index("Amount")
+COL_AMOUNT = EXPENSE_COLUMNS.index("Expense Amount")
 COL_CCY = EXPENSE_COLUMNS.index("Currency Code")
-COL_VENDOR = EXPENSE_COLUMNS.index("Vendor Name")
+COL_VENDOR = EXPENSE_COLUMNS.index("Vendor")
 COL_TAX_AMT = EXPENSE_COLUMNS.index("Tax Amount")
 COL_ENTITY = EXPENSE_COLUMNS.index("Legal Entity")
 

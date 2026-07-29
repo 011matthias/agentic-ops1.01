@@ -55,11 +55,11 @@ def test_one_categorized_expense_is_one_row():
     row = _row(rows[0])
     assert row["Expense Date"] == "2026-06-02"
     assert row["Expense Account"] == "E100010 - Travel Expense"
-    assert row["Amount"] == "24.50"
+    assert row["Expense Amount"] == "24.50"
     assert row["Currency Code"] == "USD"
     assert row["Paid Through"] == "Chase Checking"
-    assert row["Vendor Name"] == "Uber"
-    assert row["Reference Number"] == "r1"  # falls back to document_id
+    assert row["Vendor"] == "Uber"
+    assert row["Reference#"] == "r1"  # falls back to document_id
     assert row["Legal Entity"] == "corp-services"
 
 
@@ -70,7 +70,7 @@ def test_uncategorized_expense_flags_account_and_paid_through():
     # never guessed: both flagged for assignment (B4)
     assert row["Expense Account"] == "(uncategorized - assign)"
     assert row["Paid Through"] == "(paid-through - assign)"
-    assert row["Amount"] == "24.50"
+    assert row["Expense Amount"] == "24.50"
 
 
 def test_paid_through_override_beats_default():
@@ -225,13 +225,13 @@ def test_multi_account_receipt_splits_shares_ref_and_taxes_once():
     rows = build_expense_rows([r])
     assert len(rows) == 2
     by = {_row(x)["Expense Account"]: _row(x) for x in rows}
-    assert by["Travel Acct"]["Amount"] == "80.00"
-    assert by["Meals Acct"]["Amount"] == "20.00"
+    assert by["Travel Acct"]["Expense Amount"] == "80.00"
+    assert by["Meals Acct"]["Expense Amount"] == "20.00"
     # allocation sums back to the receipt total
-    assert Decimal(by["Travel Acct"]["Amount"]) + Decimal(by["Meals Acct"]["Amount"]) \
+    assert Decimal(by["Travel Acct"]["Expense Amount"]) + Decimal(by["Meals Acct"]["Expense Amount"]) \
         == Decimal("100.00")
     # one Reference# across the split; tax on exactly one row (never doubled)
-    assert {_row(x)["Reference Number"] for x in rows} == {"r1"}
+    assert {_row(x)["Reference#"] for x in rows} == {"r1"}
     tax_amounts = [_row(x)["Tax Amount"] for x in rows]
     assert tax_amounts.count("9.00") == 1 and tax_amounts.count("") == 1
 
@@ -257,7 +257,7 @@ def test_write_csv_has_header_and_rows(tmp_path):
         rows = list(csv.reader(fh))
     assert tuple(rows[0]) == EXPENSE_COLUMNS
     assert len(rows) == 2
-    assert rows[1][EXPENSE_COLUMNS.index("Amount")] == "24.50"
+    assert rows[1][EXPENSE_COLUMNS.index("Expense Amount")] == "24.50"
 
 
 def test_generate_expenses_to_zoho_csv_end_to_end(tmp_path):
@@ -292,8 +292,8 @@ def test_generate_expenses_to_zoho_csv_end_to_end(tmp_path):
     assert tuple(rows[0]) == EXPENSE_COLUMNS
     assert len(rows) == 2
     data = _row(rows[1])
-    assert data["Vendor Name"] == "Uber"
-    assert data["Amount"] == "24.50"
+    assert data["Vendor"] == "Uber"
+    assert data["Expense Amount"] == "24.50"
     assert data["Expense Account"] == "Travel & Transport"  # mock categorized
 
 
@@ -324,6 +324,6 @@ def test_run_expense_mode_dispatch_writes_csv(tmp_path):
     assert tuple(rows[0]) == EXPENSE_COLUMNS
     assert len(rows) == 2
     data = _row(rows[1])
-    assert data["Vendor Name"] == "Uber"
-    assert data["Amount"] == "24.50"
+    assert data["Vendor"] == "Uber"
+    assert data["Expense Amount"] == "24.50"
     assert data["Paid Through"] == "Bank"

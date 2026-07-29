@@ -10,11 +10,16 @@ allocation, and the §17 disposition rules are REUSED from `zoho_export.py`
 so the two exports resolve accounts identically and a bad account can never
 reach either file.
 
-The column set is Zoho Books' standard Expenses import shape; `Legal Entity`
-and `Receipt URL` are our reference helpers (Zoho scopes the org per import
-and attaches receipts in-app, not via CSV). Validate the exact header
-spellings against the tenant's own import template before go-live — the
-`EXPENSE_COLUMNS` tuple below is one edit.
+The column set is Zoho Books' standard Expenses import shape. Header
+spellings were validated 2026-07-29 against this tenant's own downloaded
+import template (`sample_expense.xls`): `Expense Amount`, `Vendor`, and
+`Reference#` match Zoho's exact headers, so the import's field-mapping step
+auto-maps them (a mismatched header drops a column to "unmapped" and has to
+be hand-mapped on every import). `Tax Name`, `Tax Amount`, `Legal Entity`,
+and `Receipt URL` are NOT in Zoho's expense import template; they carry
+extracted or reference data, and Zoho silently ignores any column it cannot
+map, so they stay as human-reference helpers (Zoho scopes the org per
+import and attaches receipts in-app, not via CSV).
 """
 from __future__ import annotations
 
@@ -45,12 +50,12 @@ if TYPE_CHECKING:
 EXPENSE_COLUMNS = (
     "Expense Date",
     "Expense Account",
-    "Amount",
+    "Expense Amount",
     "Currency Code",
     "Exchange Rate",
     "Paid Through",
-    "Vendor Name",
-    "Reference Number",
+    "Vendor",
+    "Reference#",
     "Expense Description",
     "Tax Name",
     "Tax Amount",
