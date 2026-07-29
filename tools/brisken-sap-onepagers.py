@@ -205,12 +205,13 @@ footer b{color:#475569;}
 """
 
 
+# The shared credential strip. No blanket "live" claim: it shows on every page,
+# including Bank Fee (POC), so a live claim here would be false on that page.
 PROOF = ('<div class="proof">'
          '<span class="pchip"><span class="sapbadge">SAP</span> Co-Innovation Partner</span>'
          '<span class="pchip">SAP Store</span>'
          '<span class="pchip">ISO 27001</span>'
          '<span class="pchip">SOC 1 Type II</span>'
-         '<span class="pchip">Live with customers today</span>'
          '</div>')
 
 
@@ -732,7 +733,7 @@ DECK_CSS = r"""
 # (the qa-clusters, the onepilot platform/prototype pages, and the approved
 # one-pager copy in this file). No new claims; Bank Fee and TreasuryCentral keep
 # the restraint of the shipped one-pagers (no unbacked "live customer" line).
-LAST_UPDATED = "2026-07-14"
+LAST_UPDATED = "2026-07-29"
 
 # Brisken's own primary call to action, verified live 2026-07-22:
 # www.brisken.com's single nav CTA is "Book a demo" -> /demo, a working form
@@ -892,22 +893,23 @@ def vis_mdh():
 
 
 def vis_smart_trading():
-    return ('<div class="wvlab">Venue to SAP, straight through</div>'
+    return ('<div class="wvlab">The central status monitor</div>'
             '<div class="steps" style="grid-template-columns:1fr;gap:16px;">'
-            '<div class="step"><div class="sn">01</div><div class="st">Decide &amp; approve</div><div class="sd">Decision, approval and execution, with the controls applied up front.</div></div>'
-            '<div class="step"><div class="sn">02</div><div class="st">Execution venues</div><div class="sd">Captured at the venue: Bloomberg FX GO, FXall, 360T, BidFX and more.</div></div>'
-            '<div class="step"><div class="sn">03</div><div class="st">SAP TRM</div><div class="sd">The deal is created in SAP TRM straight through, validated on the way in.</div></div>'
+            '<div class="step"><div class="sn">01</div><div class="st">Request</div><div class="sd">Exposure in SAP becomes a request, with the controls and four-eyes applied up front.</div></div>'
+            '<div class="step"><div class="sn">02</div><div class="st">Execute</div><div class="sd">At the best bid, competitive bids recorded: 360T, FXall, Bloomberg FXGO, banks and brokers.</div></div>'
+            '<div class="step"><div class="sn">03</div><div class="st">Match &amp; book</div><div class="sd">Confirmations matched, the deal booked in SAP TRM straight through, no re-keying.</div></div>'
+            '<div class="step"><div class="sn">04</div><div class="st">Monitor</div><div class="sd">Every step in one place, with the integration log and anomaly alerts.</div></div>'
             '</div>')
 
 
 def vis_remittance():
-    return ('<div class="wvlab">Unstructured in &middot; posted out</div>'
+    return ('<div class="wvlab">Unstructured in &middot; ready to clear out</div>'
             '<div class="rflow">'
             '<div class="rrow"><span class="dpill">Email body</span><span class="dpill">PDF attachment</span><span class="dpill">Scanned advice</span></div>'
             '<div class="rside">Unstructured emails and attachments</div>'
-            '<div class="stem"></div><div class="dai">AI reads &middot; structures &middot; matches</div><div class="stem"></div>'
-            f'<div class="sapnode"><img src="data:image/png;base64,{LOGOS["sap"]}" alt="SAP"><b>SAP S/4HANA</b></div>'
-            '<div class="vcap">Posted, matched, exceptions surfaced.</div></div>')
+            '<div class="stem"></div><div class="dai">reads &middot; structures &middot; enriches</div><div class="stem"></div>'
+            f'<div class="sapnode"><img src="data:image/png;base64,{LOGOS["sap"]}" alt="SAP"><b>Your clearing engine</b></div>'
+            '<div class="vcap">Enriched and checked. The Gate never matches and never clears.</div></div>')
 
 
 def vis_bank_fee():
@@ -935,9 +937,20 @@ def vis_bank_fee():
 # (SharePoint MARKETING / WIP PPTX 2026, written 2026-07-21, sent 21:30 the same
 # evening). Rosters are his, verbatim except "&" spelled out: apps from 2.3,
 # desktop from 2.4, counterparties from 2.5, enterprise systems from 2.6.
-TC_APPS = ["Market Data Governance", "SmartTrading", "Liquidity Portal", "ESG Portal",
-           "Credit Data Portal", "Bank Statement Generator", "Bank Fee Portal",
-           "Bank Messaging Gate"]
+# The canon menu (tc-story-canon.md S17/S18): two APPLICATIONS + seven USE CASES,
+# each with its type (APP/UC) and status (LIVE/POC). "Bank Messaging Gate" has no
+# deck basis and is removed. Rendered as the workspace roster on the TC page.
+TC_APPS = [
+    ("Market Data Hub", "APP", "LIVE"),
+    ("Brisken Smart Trading", "APP", "LIVE"),
+    ("Intercompany Funding Request", "UC", "LIVE"),
+    ("Remittance Advice Gate", "UC", "LIVE"),
+    ("Cash Flow &amp; Exposure Hub", "UC", "LIVE"),
+    ("Bank Fee Portal", "UC", "POC"),
+    ("Bank Statement Generator", "UC", "LIVE"),
+    ("Credit Data Hub", "UC", "LIVE"),
+    ("ESG Data Hub", "UC", "POC"),
+]
 TC_DESK = ["Mail", "Teams", "Calendar", "Documents and office"]
 TC_EXTERNAL = ["Data providers", "Trading venues", "Banks", "Central banks",
                "Government offices", "Credit and rating agencies", "Exchanges",
@@ -962,6 +975,22 @@ def _tcflow(items):
     return ' <span class="sep">&middot;</span> '.join(f'<span class="it">{i}</span>' for i in items)
 
 
+def _tcapp(name, typ, status):
+    """One roster item on the workspace card: name + a small APP/UC + LIVE/POC
+    chip. Inline-styled to sit on the dark OnePilot field without adding CSS."""
+    live = status == "LIVE"
+    col = "#a5b0ff" if live else "#fbbf24"
+    bg = "rgba(129,140,248,.16)" if live else "rgba(251,191,36,.14)"
+    chip = ("<span style=\"font-family:'Space Grotesk';font-size:9px;font-weight:600;"
+            "letter-spacing:.06em;padding:1px 6px;border-radius:99px;margin-left:6px;"
+            f"background:{bg};color:{col};\">{typ} &middot; {status}</span>")
+    return f'<span class="it"><b>{name}</b>{chip}</span>'
+
+
+def _tcapps_roster(apps):
+    return ' <span class="sep">&middot;</span> '.join(_tcapp(*a) for a in apps)
+
+
 def _tcwoven(text=""):
     t = f'<span class="wt">{text}</span>' if text else ""
     return f'<div class="tcw"><span class="wn">Brisken OnePilot</span><span class="wr"></span>{t}</div>'
@@ -976,9 +1005,9 @@ def vis_treasurycentral():
             '<div class="tcws">'
             '<div class="nm">Treasury<span class="ac">Central</span></div>'
             '<div class="sub">The treasury workspace</div>'
-            '<div class="ln">Where your people and AI agents run treasury together, '
-            'the whole treasury day on one surface.</div>'
-            f'<div class="cap">{_tcflow(["Orchestration", "Automation", "Monitoring", "Compliance"])}</div>'
+            '<div class="ln">The workspace where your team and its Digital Co-Workers '
+            'run treasury together, the whole treasury day on one surface.</div>'
+            f'<div class="cap">{_tcflow(["Connect", "Orchestrate", "Govern"])}</div>'
             '</div>'
             + _tcwoven()
             + '<div class="tcb"><div class="bl">Everything treasury deals with</div>'
@@ -1000,15 +1029,15 @@ def tc_architecture():
     it carried dirk.neumann@brisken.com, which does not belong on a published
     page. Dataset in the shot is demo data."""
     shot = _b64("treasurycentral-workspace")
-    apps = (_tcflow(TC_APPS) + '<span class="sep">&middot;</span>'
+    apps = (_tcapps_roster(TC_APPS) + ' <span class="sep">&middot;</span> '
             '<span class="own">+ the use cases your own team builds</span>')
     return ('<div class="tcf">'
             '<div class="fl">It&rsquo;s all OnePilot &middot; <b>TreasuryCentral</b> is the treasury workspace inside it</div>'
             '<div class="tcws">'
             '<div class="nm">Treasury<span class="ac">Central</span></div>'
             '<div class="sub">The treasury workspace</div>'
-            '<div class="ln">Where humans and agents collaborate, the whole treasury day on one surface.</div>'
-            f'<div class="cap">{_tcflow(["Orchestration", "Automation", "Monitoring", "Compliance"])}</div>'
+            '<div class="ln">Where your team and its Digital Co-Workers run treasury together, the whole treasury day on one surface.</div>'
+            f'<div class="cap">{_tcflow(["Connect", "Orchestrate", "Govern"])}</div>'
             f'<figure class="tcshot"><img src="data:image/png;base64,{shot}" alt="The TreasuryCentral workspace: an investment dashboard in OnePilot, showing request status, volume by transaction type and top products by volume." loading="lazy">'
             '<figcaption>The workspace today: the investment dashboard, running in OnePilot.</figcaption></figure>'
             f'<div class="tcapps">{apps}</div>'
@@ -1025,13 +1054,12 @@ def tc_architecture():
 
 
 def vis_onepilot():
-    pillars = "".join(f'<div class="pil">{x}</div>' for x in
-                      ["Market Data Hub", "Smart Trading", "Remittance Gate", "Bank Fee Portal"])
+    pillars = "".join(f'<div class="pil">{x}</div>' for x in ["Connect", "Orchestrate", "Govern"])
     return ('<div class="arch">'
-            '<div class="arch-top">One<span class="ac">Pilot</span><span class="lab">the governed AI layer</span></div>'
+            '<div class="arch-top">One<span class="ac">Pilot</span><span class="lab">the platform</span></div>'
             '<div class="arch-conn"></div>'
-            f'<div class="arch-pillars">{pillars}</div>'
-            '<div class="arch-base">out to <b>SAP</b> and non-SAP, bi-directional, across your landscape</div></div>')
+            f'<div class="arch-pillars" style="grid-template-columns:repeat(3,1fr);">{pillars}</div>'
+            '<div class="arch-base"><b>TreasuryCentral</b>, powered by OnePilot &middot; grounded in SAP, your book of records</div></div>')
 
 
 # ---- per-product web page bodies ------------------------------------------- #
@@ -1039,16 +1067,20 @@ def web_body_market_data_hub(p):
     return (
         web_hero(
             p, "Market data", 'Market <span class="ac">Data Hub</span>',
-            "Every rate, curve and price through one managed feed. No hand-keyed uploads.",
-            ["Bloomberg, Refinitiv (LSEG), ICE, CME, 360T, OANDA and central banks through one governed feed.",
-             "Ingested once, normalized, then distributed to SAP and non-SAP, both directions, no code.",
-             "Adding or switching a provider is a configuration change, not a new interface to build.",
-             "One point of control for entitlements, usage, and the audit trail behind every rate."],
+            "One source for every rate you rely on.",
+            ["Market data means the FX and interest rates, commodity prices and credit ratings a treasury runs on. Today they arrive from a dozen places.",
+             "Any source in, any consumer out: Bloomberg, LSEG, 360T, OANDA, CME, central banks, government, websites and internal feeds.",
+             "Validated, cleansed and calculated on arrival, then distributed to SAP and non-SAP, both directions, 100% no-code.",
+             "An application on OnePilot; inside TreasuryCentral it runs as your team's market-data source."],
             vis_mdh())
-        + web_band("The problem",
-                   '<p class="wlede">Getting market data into SAP usually means a Datafeed RFC connection or a custom per-vendor script: one for Bloomberg, another for Refinitiv, another for 360T. Both need ABAP to set up and maintain, and both break the moment a provider changes a field. Rates, curves and prices for SAP TRM and Market Rates Management end up hand-keyed, or held together by scripts nobody owns, and the day a feed breaks is the day the close waits on it.</p>'
-                   '<p class="wlede" style="margin-bottom:0;">The Market Data Hub replaces that with one managed feed. It ingests every provider once, normalizes the data, and distributes the same governed number into SAP TRM and Market Rates Management, with a full audit trail and exception alerts, no code and no per-vendor interface to keep alive.</p>',
-                   h2="Market data into SAP, without the scripts that break")
+        + web_band("Pain and answer", web_cards([
+            ("Siloed data", "One source of truth",
+             "Rates and prices arrive from a dozen places and nobody owns the number. The hub centralizes them into consistent numbers, at lower data cost."),
+            ("Poor data quality", "Governed end to end",
+             "Every source is validated, cleansed and calculated on arrival, transparent from source to delivery, on a 360° audit trail."),
+            ("Inflexible tooling", "Configurable and agnostic",
+             "Any source, any target, any data class, changed any time, 100% no-code."),
+        ]), h2="Rates and prices, from a dozen places to one owned number")
         + web_band("The market", web_stats([
             ("71%", "of US SAP-treasury roles describe building or hand-running integrations into SAP, or manual data work (29 of 41)."),
             ("34%", "are tied to an active S/4HANA migration or SAP implementation, the moment feeds get re-plumbed (14 of 41)."),
@@ -1056,93 +1088,115 @@ def web_body_market_data_hub(p):
         ], "Source: Brisken Shadow Integration Report, N=41 US SAP-treasury job ads, read 2026-06-17. These are market-research figures, not a Market Data Hub performance metric."),
             h2="Loading market data by hand is the default, not the exception", alt=True)
         + web_band("How it works", web_steps([
-            ("1", "Ingest", "Every provider's rates, curves and prices arrive in their own formats: Bloomberg, Refinitiv, ICE, CME, 360T, OANDA, central banks and government agencies."),
-            ("2", "Govern", "One managed feed validates and normalizes each source, and controls entitlements and usage in a single place, with the audit trail attached."),
-            ("3", "Distribute", "The same number flows to SAP TRM, Market Rates Management and non-SAP targets, both directions, straight through, no ABAP."),
-        ]), h2="One managed feed, from source to system",
-            lede="The hub sits between every provider and every system that needs a rate. Ingest once, govern in one place, distribute everywhere, so the same governed figure reaches each consumer instead of arriving three different ways.")
-        + web_band("Governed by the feed",
-                   '<p class="wlede" style="margin-bottom:0;">Governance lives in the feed, not in each interface. Every source is validated and normalized on the way in, entitlements and usage are controlled from one place, and manage-by-exception alerts surface anything that looks wrong before it reaches a decision. Segregation of duties and a full audit trail sit on the feed itself, so control does not depend on whoever wrote the last script.</p>',
-                   h2="Control lives in the feed, not in each interface", alt=True)
+            ("1", "Integrate", "Push and pull, any protocol, any format, no coding."),
+            ("2", "Govern", "Validation, anomaly checks, quality and cleansing, with schedulers and the audit trail attached."),
+            ("3", "Transform", "Cleanse, normalize, map and date-shift each source into one shape."),
+            ("4", "Calculate", "Invert, triangulate and interpolate, plus your own formulas and libraries."),
+            ("5", "Store", "The curated market-data store, high performance and available. Any source in, any consumer out."),
+        ], cols=5), h2="Any source in, any consumer out",
+            lede="The hub sits between every provider and every system that needs a rate. Integrate once, govern and transform in one place, calculate what you need, and store the curated number every consumer reads.")
+        + web_band("The market-data space", web_callout(
+            "Your team and its Digital Co-Workers run the hub together.",
+            "The market-data space is where people and the Digital Co-Worker run the hub side by side. The Co-Worker configures, monitors and operates the feeds; people stay in charge. The Digital Co-Worker is a feature of OnePilot, not a separate product."),
+            h2="One new advantage: the market-data space", alt=True)
+        + web_band("Why it wins", web_cards([
+            ("Source and provider agnostic", "Any provider",
+             "Bloomberg, LSEG, 360T, OANDA, CME, central banks, government, websites and internal feeds, all through one governed feed."),
+            ("Governance without limits", "Validated and calculated",
+             "Validation, anomaly detection, quality and cleansing, schedulers, plus calculations: inversion, triangulation, interpolation, date shifts, averages and your own formula libraries."),
+            ("Open data models", "Any data class",
+             "Credit risk, security master, ESG, climate and social; any data class the treasury needs, beyond rates alone."),
+            ("Target system agnostic", "SAP and non-SAP",
+             "Push or pull over API, OData, SFTP, files or e-mail; out of the box for SAP ECC and S/4HANA, no coding."),
+        ]))
         + web_band("How it compares", web_table(
             ["", "Market Data Hub", "SAP-native Datafeed", "Custom script"],
             [("Setup", ["No-code configuration", "ABAP function lists and translation tables", "Bespoke code per provider"]),
-             ("Add or swap a provider", ["Configuration change", "New function list and mapping", "New script"]),
-             ("Multiple providers", ["One normalized pipe, many sources", "Configured per provider", "One interface per provider"]),
+             ("Add or swap a source", ["Configuration change", "New function list and mapping", "New script"]),
+             ("Multiple sources", ["One normalized pipe, many sources", "Configured per provider", "One interface per provider"]),
              ("Governance", ["Audit trail, segregation of duties, exception alerts built in", "Manual or custom", "None unless coded"]),
-             ("Maintenance owner", ["Vendor-managed (SaaS)", "In-house ABAP", "Whoever wrote it"]),
-             ("When a provider changes a field", ["Absorbed in configuration", "ABAP edit needed", "The script breaks"]),
+             ("Who maintains it", ["Managed product on your SAP landscape", "In-house ABAP", "Whoever wrote it"]),
+             ("When a source changes a field", ["Absorbed in configuration", "ABAP edit needed", "The script breaks"]),
              ("SAP-listed", ["Yes, on the SAP Store", "Native to SAP", "Not applicable"])],
-            note="Honest comparison. The SAP-native Datafeed is a real, supported path; the point of a hub is the no-code, multi-provider, governed layer over it, not a claim that SAP cannot do this."),
+            note="Honest comparison. The SAP-native Datafeed is a real, supported path; the point of a hub is the no-code, multi-source, governed layer over it, not a claim that SAP cannot do this."),
             h2="The hub versus the two usual paths")
         + web_band("What it retires", dark_band("What it <span>retires</span>", [
             "Per-provider upload scripts, maintained by hand and understood by one person",
             "Rates re-keyed into spreadsheets before they ever reach SAP",
             "Point-to-point integrations that break when a feed changes a field",
-            "ABAP upkeep for every new or changed provider"]), alt=True)
+            "ABAP upkeep for every new or changed source"]), alt=True)
         + web_band("Works with", web_chips([
             ("", "bloomberg"), ("", "lseg"), ("", "ice"), ("", "cme"),
             ("&rarr;", None), ("SAP TRM", None), ("Market Rates Management", None), ("SAP ECC / S/4HANA", None), ("non-SAP", None)]),
-            h2="Every provider in, SAP and non-SAP out",
-            lede="Beyond the four shown above, the hub also handles Refinitiv (LSEG), 360T, OANDA, central banks and government agencies. Switching or adding a provider is a configuration change, not a new interface, so there is no per-vendor rebuild to maintain.")
+            h2="Every source in, SAP and non-SAP out",
+            lede="Beyond the logos above, the hub also handles 360T, OANDA, central banks, government agencies, public websites and internal feeds. Switching or adding a source is a configuration change, not a new interface, so there is no per-source rebuild to maintain.")
         + web_band("Common questions", web_faq([
             ("How do I get Bloomberg market data into SAP TRM automatically?",
              "The SAP-native path is a Datafeed RFC connection with per-provider function lists and translation tables, or a per-security custom interface, both of which need ABAP upkeep and break when Bloomberg changes a field. A governed market-data hub ingests Bloomberg once, normalizes it, and distributes into SAP TRM with an audit trail and exception alerts, no code."),
-            ("How do I load Refinitiv (LSEG) rates and curves into SAP S/4HANA treasury?",
-             "Refinitiv (LSEG) rates and curves reach SAP S/4HANA treasury through the same governed hub that handles any provider: ingest the feed once, normalize it, distribute into Market Rates Management. Switching or adding a provider is a configuration change, not a new interface, so there is no per-vendor rebuild to maintain."),
+            ("How do I load LSEG rates and curves into SAP S/4HANA treasury?",
+             "LSEG rates and curves reach SAP S/4HANA treasury through the same governed hub that handles any source: integrate the feed once, transform it, distribute into Market Rates Management. Switching or adding a source is a configuration change, not a new interface, so there is no per-source rebuild to maintain."),
             ("Can I automate FX rates and yield curves into SAP Market Rates Management without ABAP?",
              "Yes. SAP's native route uses a Datafeed RFC with function lists and translation tables, which needs ABAP to set up and maintain. A no-code market-data hub maps and schedules FX rates and yield curves into SAP Market Rates Management through configuration, so the treasury team owns the feed without writing or changing ABAP."),
             ("What is the alternative to a custom Bloomberg-to-SAP script that keeps breaking?",
-             "A custom script breaks whenever the provider changes a field or the person who wrote it leaves. A managed market-data hub replaces it with a configured, monitored interface: provider changes are absorbed in configuration, the feed is governed with an audit trail and exception alerts, and nobody is babysitting a brittle script."),
+             "A custom script breaks whenever the source changes a field or the person who wrote it leaves. A managed market-data hub replaces it with a configured, monitored interface: source changes are absorbed in configuration, the feed is governed with an audit trail and exception alerts, and nobody is babysitting a brittle script."),
             ("How do I feed OANDA or central-bank rates into SAP cash management?",
-             "OANDA and central-bank rates feed into SAP cash management through the same hub as every other source. Multiple providers land in one normalized pipeline rather than separate point interfaces, so the rates that drive cash and liquidity views come from one governed feed with a single point of control."),
-            ("How do I govern multiple market-data providers into SAP from one place?",
-             "A market-data hub is the single point of control for every provider feeding SAP: Bloomberg, Refinitiv, OANDA, 360T, central banks. It validates, normalizes and distributes each feed, with an audit trail, segregation of duties, and manage-by-exception alerts. Governance is built into the feed, not bolted on per interface afterwards."),
+             "OANDA and central-bank rates feed into SAP cash management through the same hub as every other source. Multiple sources land in one normalized pipeline rather than separate point interfaces, so the rates that drive cash and liquidity views come from one governed feed with a single point of control."),
+            ("How do I govern multiple market-data sources into SAP from one place?",
+             "A market-data hub is the single point of control for every source feeding SAP: Bloomberg, LSEG, OANDA, 360T, central banks. It validates, normalizes and distributes each feed, with an audit trail, segregation of duties, and manage-by-exception alerts. Governance is built into the feed, not bolted on per interface afterwards."),
             ("What is the best way to handle market-data integration during an S/4HANA migration?",
              "A migration forces every treasury data feed to be re-plumbed, which is when hand-built market-data interfaces are most expensive to rebuild. Moving the feeds onto a governed hub during the migration re-platforms them once onto a managed interface instead of re-coding each script. In a read of US SAP-treasury job ads, 34% sat inside an active migration."),
             ("Is there a no-code alternative to SAP TRM datafeed configuration?",
-             "The SAP TRM Datafeed needs ABAP-side setup of function lists and translation tables per provider. The alternative is a no-code hub that handles ingest, mapping and distribution through configuration, aimed at treasury teams that do not have the ABAP capacity to build and maintain the datafeed themselves."),
+             "The SAP TRM Datafeed needs ABAP-side setup of function lists and translation tables per provider. The alternative is a no-code hub that handles integrate, transform and distribute through configuration, aimed at treasury teams that do not have the ABAP capacity to build and maintain the datafeed themselves."),
         ]), alt=True)
-        + web_band("Proof",
-                   '<p class="wlede" style="margin:0;">The Market Data Hub is the flagship product, with its own overview deck, and is listed on the SAP Store. Brisken is an SAP Co-Innovation Partner, certified to ISO 27001 and SOC 1 Type II, and delivers the hub as a managed product on your SAP landscape, with data partners including Bloomberg, Refinitiv, CME Group, 360T, Deutsche Boerse and OANDA.</p>')
+        + web_band("Where the truth lives",
+                   '<p class="wlede" style="margin:0;">Market Data Hub is a live application on the OnePilot platform, listed on the SAP Store. Brisken is an SAP Co-Innovation Partner, certified to ISO 27001 and SOC 1 Type II. OnePilot runs on SAP\'s own cloud, inside your landscape; your book of records stays in SAP. The market-data truth lives in the hub; SAP, your book of records, is one of its many consumers.</p>')
     )
 
 
 def web_body_smart_trading(p):
     return (
         web_hero(
-            p, "Trade capture", 'Brisken <span class="ac">Smart Trading</span>',
-            "The trade lifecycle from venue to booked deal, straight through. No re-keying.",
-            ["Captured at the execution venue and created in SAP TRM straight through, validated on the way in.",
-             "Venue and TMS agnostic, so a new venue is a configuration change, not a rebuild.",
-             "Four-eye approval and segregation of duties, built in as standard.",
-             "Brings exposure, market data and execution onto one surface, logged back into SAP."],
+            p, "Autonomous trading", 'Brisken <span class="ac">Smart Trading</span>',
+            "Autonomous trading, from the venue to booked in SAP.",
+            ["Autonomous trading means the trade carries itself from the decision to the booked deal, with no manual re-keying.",
+             "Provable by design: rule-based execution at the best bid, competitive bids recorded, every step on a 360° audit trail.",
+             "Any instrument, any venue, any system: FX spot and forward, swaps, NDFs, derivatives, money market and securities.",
+             "The trading space: your team and its Digital Co-Workers run it together; people stay in charge."],
             vis_smart_trading(),
             rename="Formerly Trade Automation / TraderPlus. Now Brisken Smart Trading (BST).")
-        + web_band("The problem",
-                   '<p class="wlede">Treasury desks still re-key trades from the venue into SAP TRM by hand. Someone executes on the trading platform, switches tabs to check exposure, then types the deal back into SAP. It is slow, it is a control risk, and it breaks the moment a venue changes a field.</p>'
-                   '<p class="wlede" style="margin-bottom:0;">Brisken Smart Trading captures the trade at the execution venue and creates the deal in SAP TRM straight through, validated on the way in. It brings exposure, market data and execution onto one surface and logs every action back into SAP under four-eye control. The manual middle is gone.</p>',
-                   h2="From the trade decision to the booked deal, straight through")
-        + web_band("The full trade lifecycle",
-                   web_flow(["Decision", "Request", "Approval", "Execution", "Mapping", "Fulfillment", "Deal creation"])
-                   + '<p class="wlede" style="margin-top:22px;margin-bottom:0;">Decision, request and approval happen with the controls applied up front. The trade is captured at the execution venue and mapped into SAP, then created in SAP TRM straight through, validated on the way in. One end-to-end lifecycle, trading-venue and TMS agnostic, so trades flow into SAP Treasury and Risk Management as governed deals, reconciled to source.</p>',
-                   h2="Decision to booked deal, in one flow", alt=True)
+        + web_band("Pain and answer", web_cards([
+            ("The manual middle", "Straight-through, no-touch",
+             "A trade is re-keyed between venue and SAP; a manual FX run takes 10 to 15 minutes a trade. BST carries exposure in SAP to a booked deal in TRM with zero re-keying, approvals under your rules, four-eyes on execution."),
+            ("Unprovable execution", "Provable by design",
+             "Policy and the FX Global Code expect evidenced best execution. BST executes rule-based at the best bid, records competitive bids, matches confirmations, and logs every step on a 360° audit trail."),
+            ("Fragmented landscape", "Any instrument, any venue, any system",
+             "FX spot and forward, swaps, NDFs, derivatives and options, money market, investments and securities; 360T, FXall, Bloomberg FXGO, Citi Pulse, BidFX, banks, brokers and exchanges; any OMS or TMS; out of the box for SAP, no coding."),
+        ]), h2="Best execution, provable, from the venue to booked in SAP")
+        + web_band("The central status monitor",
+                   web_flow(["Request", "Execute", "Match", "Book", "Monitor"])
+                   + '<p class="wlede" style="margin-top:22px;margin-bottom:0;">Every step in one place: request, order, merge, split, fill, match, booking and confirmation, with the integration log and anomaly alerts alongside. Exposure in SAP becomes a request, execution happens at the best bid, confirmations are matched, and the deal is booked in SAP TRM straight through. You see the trade mid-flight, not after it breaks.</p>',
+                   h2="You see the trade mid-flight, not after it breaks", alt=True)
+        + web_band("The trading space", web_callout(
+            "Your team and its Digital Co-Workers run BST together.",
+            "The trading space is where people and the Digital Co-Worker run BST side by side. The Co-Worker suggests trades, watches every run, alerts, fixes and configures; people stay in charge. The Digital Co-Worker is a feature of OnePilot, not a separate product."))
         + web_band("Built in", dark_band("Built <span>in</span>", [
             "Four-eye approval and segregation of duties, as standard",
             "No ABAP and no per-venue interface to maintain",
-            "Straight-through capture, so the manual re-key is gone"], mark="+"))
+            "Straight-through booking, so the manual re-key is gone"], mark="+"))
         + web_band("Works with", web_chips([
-            ("FXall", None), ("Bloomberg FX GO", None), ("360T", None), ("BidFX", None), ("Citi Pulse", None),
+            ("FXall", None), ("Bloomberg FXGO", None), ("360T", None), ("BidFX", None), ("Citi Pulse", None),
             ("&rarr;", None), ("SAP TRM", None)]),
             h2="Any venue in, SAP TRM out",
-            lede="Captured at Bloomberg FX GO, FXall, 360T, BidFX, Citi Pulse and more, then created in SAP TRM. It is trading-venue and TMS agnostic, so a new venue is a configuration change, and the deal flows into SAP Treasury and Risk Management reconciled to source.", alt=True)
+            lede="Executed at 360T, FXall, Bloomberg FXGO, Citi Pulse, BidFX, banks, brokers and exchanges, then booked in SAP TRM. It is instrument, venue and TMS agnostic, so a new venue is a configuration change, and the deal flows into SAP Treasury and Risk Management reconciled to source.", alt=True)
         + web_band("Common questions", web_faq([
             ("What is Brisken Smart Trading (BST)?",
-             "BST is the FX and trade-execution application in the family, and the live flagship. It brings exposure, market data and execution onto one surface and logs every action back into SAP under four-eye control."),
-            ("How is a trade captured without re-keying it into SAP?",
-             "The deal is captured at the execution venue and created in SAP TRM straight through, validated on the way in. Because it is venue and TMS agnostic, adding a new venue is a configuration change rather than a rebuild."),
+             "BST is an application on the OnePilot platform: autonomous best-bid execution across any instrument, from the venue to booked in SAP. It carries exposure in SAP to a booked deal in TRM with no re-keying, records competitive bids, and logs every action under four-eye control."),
+            ("How is a trade booked without re-keying it into SAP?",
+             "The trade is executed at the venue and booked in SAP TRM straight through, validated on the way in. Because it is instrument, venue and TMS agnostic, adding a new venue is a configuration change rather than a rebuild."),
+            ("Is the execution auditable for the FX Global Code?",
+             "Yes. Execution is rule-based at the best bid, competitive bids are recorded, confirmations are matched, and every step sits on a 360° audit trail, so best execution is evidenced rather than asserted."),
         ]))
-        + web_band("Proof", '<p class="wlede" style="margin:0;">Listed on the SAP Store as Trade Automation, and the live flagship on SAP. Brisken is an SAP Co-Innovation Partner, certified to ISO 27001 and SOC 1 Type II.</p>', alt=True)
+        + web_band("Proof", '<p class="wlede" style="margin:0;">Listed on the SAP Store as Trade Automation. Brisken is an SAP Co-Innovation Partner, certified to ISO 27001 and SOC 1 Type II. Decided once, dealt at the best bid, booked without a touch.</p>', alt=True)
     )
 
 
@@ -1150,52 +1204,70 @@ def web_body_remittance(p):
     return (
         web_hero(
             p, "Remittance processing", 'Remittance <span class="ac">Advice Gate</span>',
-            "AI reads the remittance and posts it. No one retypes anything.",
-            ["An LLM reads the unstructured email or attachment, structures it, and posts to SAP S/4HANA.",
-             "Clean items post straight through; only genuine exceptions reach the team, with the source advice attached.",
-             "In production: a live agricultural-sector customer runs it on S/4HANA Private Cloud."],
+            "A gate in front of your clearing engine. It makes sure what reaches the engine is worth clearing.",
+            ["A remittance advice is the note a payer sends listing which invoices a payment covers. The Gate turns it into data your clearing system can actually use.",
+             "It sits in front of your clearing engine, not instead of it. We do not match and we do not clear.",
+             "Deterministic where the format is known; the Digital Co-Worker reads what no rule anticipated and shows the evidence.",
+             "A correction made once becomes memory and context; the provider's model is never trained on your data."],
             vis_remittance())
-        + web_band("The problem",
-                   '<p class="wlede">Remittance advice still lands as email and PDF that someone keys into SAP cash application by hand. They open the remittance, find the invoices it pays, work out the deductions, and type the match into SAP, one document at a time. Volume is capped by headcount, and month-end is where the backlog shows.</p>'
-                   '<p class="wlede" style="margin-bottom:0;">The Remittance Advice Gate reads the unstructured input directly. An LLM extracts the payer, invoices, amounts and deductions, and posts structured data into SAP S/4HANA. Clean items flow through untouched; only genuine exceptions reach a person, with the source advice attached. The job shifts from retype-everything to review-the-exceptions.</p>',
-                   h2="Reading remittance advice into SAP, without the retype")
-        + web_band("How it works",
-                   '<p class="wlede" style="margin-bottom:0;">An LLM reads the unstructured email or attachment, whether that is an email body, a PDF, a scanned document or a spreadsheet export, and structures it into the fields SAP needs: payer, invoice references, amounts and deductions. It posts to SAP S/4HANA cash application, matching on the way in, so clean items post straight through. A monitor lets the team correct and retrain it as new layouts appear, so coverage improves over time rather than needing a new template each time a bank changes its format.</p>',
-                   h2="From unstructured advice to a posted match", alt=True)
+        + web_band("The boundary", web_callout(
+            "It enriches the advice; it never matches an item and never clears one.",
+            "The Gate sits in front of your clearing engine, not instead of it. We make sure what reaches the engine is worth clearing, then hand over to SAP S/4HANA or your cash-application processor, whether that is Serrala, HighRadius or another. Cash application by eye is the problem; the Gate removes the retype in front of it, not the engine behind it."),
+            h2="We do not match and we do not clear")
+        + web_band("How it works", web_steps([
+            ("1", "Parse", "Deterministic where the format is known: EDI 820, IDoc, camt.054, XML, CSV, fixed-width."),
+            ("2", "Normalise", "Every layout mapped into one shape, whatever shape it arrived in."),
+            ("3", "Clean and check", "Amounts footed, references resolved, short-pays and deductions read out."),
+            ("4", "Hand over", "The result goes to your clearing engine, worth clearing, with the evidence attached."),
+        ], cols=4), h2="Determinism where it works, intelligence where it doesn't",
+            lede="Rules handle the formats a rule can anticipate. For everything else, the Digital Co-Worker reads what no rule anticipated, any layout, scans, screenshots, infers the reference, shows the evidence, explains short-pays and learns the payer.")
+        + web_band("Three doors out", web_cards([
+            ("Door 1", "Ready to process",
+             "Clean and complete, straight to your clearing engine, no one touches it."),
+            ("Door 2", "Enriched, with a confidence label",
+             "The Co-Worker filled the gaps, and hands over the evidence and a confidence label alongside the data."),
+            ("Door 3", "On a person's list",
+             "Below the confidence threshold or above your value limit, with the proposed answer and the reasoning, for a person to decide."),
+        ]), h2="Every advice leaves by one of three doors", alt=True)
+        + web_band("Why a person still does it by hand", web_dots2([
+            "No reference", "Wrong reference", "Buried in narrative", "Locale and language",
+            "Unreadable by design", "Split across pages", "Duplicates", "Multi-invoice",
+            "One advice, many payments", "Out of sequence", "Partial payment", "Deductions and short-pay",
+            "Credit notes and rebates", "Amounts that don't foot", "Currency missing", "Group and third-party payers"]),
+            h2="Sixteen ways an advice arrives unusable, and every one is a person filling in the blanks by hand")
+        + web_band("The remittance space", web_callout(
+            "Your team and its Digital Co-Workers run the Gate together.",
+            "The remittance space is where people and the Digital Co-Worker work the advices side by side: the Co-Worker reads, infers and explains; a person decides the ones that carry judgment. The Digital Co-Worker is a feature of OnePilot, not a separate product."), alt=True)
         + web_band("How it compares", web_table(
             ["", "Remittance Advice Gate", "Manual cash application", "Rules / template OCR"],
-            [("Reads unstructured email and PDF", ["AI extraction, no fixed template", "A person reads and keys", "Works only on known layouts"]),
-             ("A new remittance format", ["Handled, the monitor retrains it", "Staff adapt by hand", "A new template rule is needed"]),
-             ("Output into SAP", ["Structured, posted to S/4HANA", "Hand-keyed", "Structured, if the template matched"]),
-             ("Effort per remittance", ["Review exceptions only", "Full retype each time", "Fix the unmatched ones"]),
-             ("Live proof", ["ChatGPT-powered agricultural customer", "Not applicable", "Not applicable"])],
-            note="Honest comparison. Manual cash application and template-based capture are both real, working approaches; the gate's difference is reading unstructured input directly and learning from corrections, not a claim that the alternatives do nothing."),
+            [("Reads unstructured email and PDF", ["The Co-Worker reads it, no fixed template", "A person reads and keys", "Works only on known layouts"]),
+             ("A new remittance format", ["Handled, the Co-Worker reads it and learns the payer", "Staff adapt by hand", "A new template rule is needed"]),
+             ("Output", ["Enriched and handed to your clearing engine", "Hand-keyed", "Structured, if the template matched"]),
+             ("Matching and clearing", ["Left to your engine, never done here", "A person does it by eye", "A person does it by eye"]),
+             ("Effort per advice", ["Review the exceptions only", "Full retype each time", "Fix the unmatched ones"])],
+            note="Honest comparison. Manual cash application and template-based capture are both real, working approaches; the Gate's difference is reading unstructured input directly and learning the payer, not a claim that the alternatives do nothing."),
             h2="The gate versus the two usual paths")
-        + web_band("What it delivers", web_cols2(
-            '<div><div class="band-lab">Straight through</div>' + dots([
-                "Clean items post straight through, untouched by a person.",
-                "The team reviews exceptions instead of retyping every remittance by hand."]) + '</div>',
-            '<div><div class="band-lab">Any input</div>' + dots([
-                "Reads email bodies, PDF attachments, scanned documents and spreadsheet exports.",
-                "Extracts payer, invoice references, amounts and deductions, no fixed template."]) + '</div>'), alt=True)
         + web_band("Works with", web_chips([
-            ("Email", None), ("PDF", None), ("Scanned advice", None), ("CSV", None),
-            ("&rarr;", None), ("SAP S/4HANA", None), ("Serrala", None), ("BPI", None), ("HighRadius", None)]),
-            h2="Any remittance format in, SAP cash application out")
+            ("Email", None), ("PDF", None), ("Scanned advice", None), ("EDI 820", None), ("camt.054", None),
+            ("&rarr;", None), ("SAP S/4HANA", None), ("Serrala", None), ("HighRadius", None)]),
+            h2="Any remittance format in, your clearing engine out", alt=True)
+        + web_band("Learning",
+                   '<p class="wlede" style="margin:0;">A correction made once becomes memory and context, so the next advice of the same shape arrives worked out rather than re-solved. The provider\'s model is never trained on your data. Coverage improves through experience, not by retraining a model on what you sent.</p>',
+                   h2="A correction becomes memory, not training data")
         + web_band("Common questions", web_faq([
-            ("How do I automate unstructured remittance advice emails into SAP cash application?",
-             "Remittance advice arrives as unstructured email and PDF, which staff retype into SAP cash application. An AI-powered remittance gate reads the unstructured input, identifies and structures the data (payer, invoices, amounts, deductions), and delivers it into SAP S/4HANA, with a monitor that trains it over time. The manual retype step is removed."),
-            ("Can AI read remittance PDFs and post them to SAP S/4HANA?",
-             "Yes. A remittance gate uses an LLM to read remittance PDFs, email bodies and attachments, extract the structured fields, and post them into SAP S/4HANA cash application. A live agricultural-sector customer runs this on a ChatGPT-powered deployment on S/4HANA Private Cloud."),
-            ("How do I reduce manual cash-application matching in SAP?",
-             "A remittance gate does the reading and structuring automatically and hands SAP the data already formatted for matching, so the team reviews exceptions instead of retyping every remittance by hand."),
-            ("What remittance inputs can an AI gate read?",
-             "Email bodies, PDF attachments, scanned documents and spreadsheet exports. It reads the unstructured input directly rather than relying on a fixed template, and a monitor lets the team correct and retrain it as new layouts appear."),
-            ("Does it work with Serrala, BPI or HighRadius?",
-             "The gate delivers structured remittance data into SAP S/4HANA, and can also target cash-application platforms such as Serrala, BPI or HighRadius. It sits upstream as the step that turns unstructured remittances into clean, structured input."),
+            ("How do I turn unstructured remittance advice emails into data my clearing engine can use?",
+             "Remittance advice arrives as unstructured email and PDF, which staff retype before anything can clear. The Gate reads the unstructured input, structures it (payer, invoices, amounts, deductions), enriches it and hands it to your clearing engine worth clearing. It sits in front of the engine; it does not match and does not clear."),
+            ("Does the Gate post into SAP and clear the items itself?",
+             "No. The Gate enriches the advice and hands over to SAP S/4HANA or your cash-application processor. Matching and clearing stay in your engine. The Gate makes sure what reaches the engine is worth clearing; it never matches an item and never clears one."),
+            ("Can it read remittance PDFs and scans, or only structured files?",
+             "Yes. Where the format is known it parses deterministically (EDI 820, IDoc, camt.054, XML, CSV, fixed-width). For everything else the Digital Co-Worker reads any layout, including scans and screenshots, infers the reference and shows the evidence."),
+            ("What happens when a new remittance format shows up?",
+             "The Digital Co-Worker reads it and learns the payer, so the next one arrives worked out. A correction made once becomes memory and context; the provider's model is never trained on your data, and no new template rule is needed."),
+            ("Does it work with Serrala or HighRadius?",
+             "Yes. The Gate hands the enriched, checked advice to SAP S/4HANA or to a cash-application processor such as Serrala or HighRadius. It sits upstream as the step that turns unstructured remittances into input worth clearing."),
         ]), alt=True)
         + web_band("In production",
-                   '<p class="wlede" style="margin:0;">Already in production: a live agricultural-sector customer runs this on a ChatGPT-powered deployment on S/4HANA Private Cloud, with the stated goal of removing the human from the retype entirely.</p>')
+                   '<p class="wlede" style="margin:0;">Already in production: a live agricultural-sector customer runs the Gate on S/4HANA Private Cloud. The Gate enriches the advice and hands it over; a person still owns the exceptions.</p>')
     )
 
 
@@ -1211,12 +1283,13 @@ def web_body_bank_fee(p):
     # throughout, never to the portal.
     return (
         web_hero(
-            p, "Bank fee statements", 'Bank <span class="ac">Fee Portal</span>',
+            p, "Bank fee statements &middot; UC-04 &middot; Use case &middot; POC", 'Bank <span class="ac">Fee Portal</span>',
             "Every bank's fee statement, whatever format it arrives in, turned into data your fee analyzer can actually read.",
             ["Reads every bank fee statement format: CAMT.086, XML, TWIST BSB and each bank's own layout.",
              "Validates each statement and enriches it, calculating the derived fees that are hard to catch by hand.",
              "Delivers the structured result to your Bank Fee Analyzer, your TMS or your analytics.",
-             "One dashboard for on-demand analysis across every account and every bank."],
+             "A use case on OnePilot; inside TreasuryCentral your team and its Digital Co-Workers run it.",
+             "One dashboard for on-demand analysis across every account and every bank. At proof-of-concept stage today."],
             vis_bank_fee())
         + web_band("The problem",
                    '<p class="wlede">Bank fee statements arrive in four shapes: the older TWIST BSB format, the ISO 20022 CAMT.086 that is replacing it, plain XML, and each bank\'s own proprietary layout. SAP added native bank-fee analysis in S/4HANA 1809, but it expects clean CAMT.086 in. The statements that arrive in any other format never reach the analyzer, so the fees on them never get reviewed.</p>'
@@ -1272,36 +1345,46 @@ def web_body_treasurycentral(p):
     return (
         web_hero(
             p, "The treasury workspace", 'Treasury<span class="ac">Central</span>',
-            "Where your people and AI agents run treasury together, on the systems you already have.",
-            ["The whole treasury day on one surface: orchestration, automation, monitoring and compliance.",
-             "The treasury applications run inside it, alongside the use cases your own team builds.",
-             "Every source, counterparty and enterprise system reached through one governed layer, on your SAP data."],
+            "The workspace where your team and its Digital Co-Workers run treasury, grounded in SAP.",
+            ["The workspace where your team and its Digital Co-Workers run treasury, on the OnePilot platform, grounded in SAP.",
+             "What it replaces: a dozen point tools, and the hand-keying between your systems and SAP.",
+             "Who it is for: treasury and finance teams on SAP.",
+             "Brisken's main product, and a single treasury use case of OnePilot. Both are true."],
             vis_treasurycentral(), bare=True)
         + web_band("The problem",
                    '<p class="wlede">A treasurer\'s day goes into the gaps between systems: grey-scale processing through endless SAP GUIs, and data parsed by hand out of one system and into the next process step. Around those gaps sit brittle, hand-built feeds that break when a field changes or the person who built them leaves, with no audit trail, no owner and no monitoring.</p>'
-                   '<p class="wlede" style="margin-bottom:0;">TreasuryCentral closes the gaps. It is the treasury workspace where humans and agents collaborate, and its value is bringing the business context for treasury together in one place. Underneath it, OnePilot reaches every source, counterparty and enterprise system, so the context a decision needs is already in the room instead of three screens away.</p>',
+                   '<p class="wlede" style="margin-bottom:0;">TreasuryCentral closes the gaps. It is the workspace where your team and its Digital Co-Workers run treasury together, and its value is bringing the business context for treasury into one place. Underneath it, OnePilot connects every source, counterparty and enterprise system, so the context a decision needs is already in the room instead of three screens away.</p>',
                    h2="The treasurer's day on one surface")
-        + web_band("What the workspace is", web_cards([
-            ("Humans and agents", "One surface, worked together",
-             "Cash, investments, debt and exposure roll up from every entity, reconciled to the statements already in SAP, so the group number is current instead of a Monday spreadsheet pull. Permissioned agents do the repetitive work underneath, ingesting, validating, posting and reconciling, and surface only what needs a decision. They work inside the context the backing systems provide, which is what makes the output worth acting on."),
-            ("The applications inside it", "Treasury apps, and the ones you build",
-             "Market data governance, SmartTrading, liquidity, ESG, credit data, bank statements, bank fees and bank messaging each run as an app in the workspace, on the same governed layer. The slot that matters most is the empty one: your team builds its own use cases into solid apps here, on OnePilot, with the connectivity and the audit trail the delivered apps use."),
-            ("Your workstation, replaced", "Mail, Teams, calendar, documents",
-             "Treasury collaboration does not happen inside a treasury system. It happens across mail, chat, a calendar and a folder of attachments, and then gets re-keyed. Those sit in the workspace next to the treasury apps, so the conversation about a position and the position itself are finally in one place."),
-        ]), alt=True)
+        + web_band("The Digital Co-Worker", web_cards([
+            ("A feature of OnePilot", "The agent inside a space",
+             "The Digital Co-Worker is the agent that works with your team inside a dedicated space: it drives the solution, watches every run, fixes what breaks, and brings you the decisions. It is a feature of OnePilot, never a product of its own."),
+            ("Division of labor", "The work splits three ways",
+             "The solution executes the deterministic steps, the same result every time. The Co-Worker drives every step across your systems. You keep the judgment."),
+            ("An agentic team", "Roles, not one bot",
+             "Specialised agents with roles: Domain Specialists, Analysts, Clerks and Personal Assistants, each briefed for its part of the work."),
+        ]), h2="Your team, and its Digital Co-Workers", alt=True)
+        + web_band("The Spaces", web_callout(
+            "A colleague, not a black box.",
+            "Every app and use case has a space; your team and its Digital Co-Workers run it together: chat, alerts, fixes, orchestration. The Co-Worker monitors every run where a human would, raises and records alerts, fixes data issues, and hands you the exceptions. Nothing fails in silence, and people stay in charge."))
         + web_band("The architecture", tc_architecture(),
                    h2="There is no outside",
-                   lede="Describing OnePilot as connecting to outside systems is a technical view, and the wrong one for how treasury actually works. Every source, counterparty and enterprise system sits inside the governed layer, and the workspace is where you meet them. What goes away: grey-scale processing through endless SAP GUIs, and manual data parsing between systems and process steps.")
-        + web_band("Governed by design",
-                   '<p class="wlede" style="margin:0;">Every value carries where it came from, who approved it and when, so an audit follows the trail without a reconstruction project. Limits and tolerances are set once; only the records that breach them surface for a person, and a second approver signs off before a payment or a deal is released. The workspace, the treasury apps and the ones you build yourself all run inside the same controls, on the SAP data you already trust, with no separate store to reconcile.</p>',
-                   h2="One set of controls across the workspace and every app", alt=True)
+                   lede="Describing OnePilot as connecting to outside systems is a technical view, and the wrong one for how treasury actually works. Every source, counterparty and enterprise system sits inside the governed platform, and the workspace is where you meet them. What goes away: grey-scale processing through endless SAP GUIs, and manual data parsing between systems and process steps.")
+        + web_band("Governance", web_cards([
+            ("", "Bounded autonomy", "Acts only within the permissions and limits you set."),
+            ("", "Human authority", "A person owns the moves that matter, and can review, override or stop."),
+            ("", "Four-eyes, segregation of duties", "Whatever initiates a step never approves it."),
+            ("", "Robust and fail-safe", "Tested before it runs, behaves predictably, safe-stops or rolls back on error."),
+            ("", "Traceable and explainable", "Every action and data change logged: who, what, when, why, and explainable."),
+            ("", "Monitored, managed by exception", "Outputs watched in real time; anomalies go to a person, the rest just runs."),
+        ]), h2="Six controls across the workspace and every app",
+            lede="Governed to EU AI Act principles, on a 360° audit trail, certified to ISO 27001 and SOC 1 Type II. It runs on the SAP data you already trust, with no separate store to reconcile, and a person approves the moves that matter.", alt=True)
         + web_band("Common questions", web_faq([
             ("What is TreasuryCentral?",
-             "TreasuryCentral is the treasury workspace where humans and AI agents collaborate. It brings the business context for treasury together in one place, the whole day on one surface, and orchestrates, automates, monitors and controls the work that runs across it."),
+             "TreasuryCentral is the workspace where your team and its Digital Co-Workers run treasury. It brings the business context for treasury into one place, the whole day on one surface, on the OnePilot platform and grounded in SAP. It is Brisken's main product."),
             ("How does TreasuryCentral relate to OnePilot?",
              "Technically all of it is OnePilot. TreasuryCentral is a treasury-centric use case of the platform, and the apps inside it are OnePilot applications wrapped into a treasury value proposition. OnePilot is not a layer the workspace sits on top of and calls out from; it is the environment everything runs inside, which is why a counterparty and an enterprise system are reached the same governed way."),
-            ("Which applications run inside it?",
-             "Market data governance, SmartTrading, liquidity, ESG, credit data, bank statement generation, bank fees and bank messaging, plus the use cases your own team builds as apps on OnePilot."),
+            ("Which applications and use cases run inside it?",
+             "Two applications, Market Data Hub and Brisken Smart Trading, plus the use cases: Intercompany Funding Request, Remittance Advice Gate, Cash Flow and Exposure Hub, Bank Fee Portal, Bank Statement Generator, Credit Data Hub and ESG Data Hub, and the use cases your own team builds as apps on OnePilot."),
             ("Can our own team build use cases in it?",
              "Yes, and it is the point. Customers build their own use cases into solid apps in the workspace, on OnePilot, using the same connectivity, governance and audit trail as the applications we deliver."),
             ("Does it need a separate data store?",
@@ -1313,16 +1396,16 @@ def web_body_treasurycentral(p):
 def web_body_onepilot(p):
     return (
         web_hero(
-            p, "The AI operating layer", 'One<span class="ac">Pilot</span>',
-            "The governed AI layer that runs your treasury apps. In production now.",
-            ["It asks, automates and acts across the applications, always inside your controls.",
-             "Build your own apps and automations without writing a line of code.",
-             "The book of record stays in SAP; OnePilot orchestrates on top, SAP and non-SAP, both ways.",
-             "In production: a financial-services group governs several data domains from one deployment."],
+            p, "The platform", 'One<span class="ac">Pilot</span>',
+            "The platform underneath everything: Connect, Orchestrate, Govern.",
+            ["One platform for everything between your systems and SAP. Not limited to treasury.",
+             "TreasuryCentral, powered by OnePilot, is its one shipped edition and Brisken's main product.",
+             "The Digital Co-Worker, a feature of OnePilot, runs each task with full context; people stay in charge.",
+             "The book of record stays in SAP; OnePilot orchestrates on top, SAP and non-SAP, both ways."],
             vis_onepilot(), bare=True)
         + web_band("The problem",
                    '<p class="wlede">A treasurer\'s day becomes tab management: the trading platform in one window, market data in another, bank portals and cash tools in others, and the numbers re-keyed between them. The day goes to moving data instead of using it. Around SAP, that shows up as shadow integrations, hand-keyed files and home-built scripts that move data in, fragile and unowned, plus a backlog of interfaces to build and maintain.</p>'
-                   '<p class="wlede" style="margin-bottom:0;">OnePilot puts the data in one governed place, so the day shifts back to using it: deciding, not re-typing. It is a no-code layer over your SAP landscape where permissioned AI agents do the repetitive work, ingesting, validating, posting and reconciling, always inside your controls. The book of record stays in SAP; OnePilot orchestrates on top.</p>',
+                   '<p class="wlede" style="margin-bottom:0;">OnePilot puts the data in one governed place, so the day shifts back to using it: deciding, not re-typing. It is a no-code platform over your SAP landscape where your team and its Digital Co-Workers do the repetitive work, ingesting, validating, posting and reconciling, always inside your controls. The book of record stays in SAP; OnePilot orchestrates on top.</p>',
                    h2="Why a treasurer's day becomes tab management")
         + web_band("The market", web_stats([
             ("71%", "of US SAP-treasury roles describe building or hand-running integrations into SAP, or manual data work (29 of 41)."),
@@ -1330,45 +1413,66 @@ def web_body_onepilot(p):
             ("22%", "name a specific market-data or trading vendor whose feed has to reach SAP, and that is a floor (9 of 41)."),
         ], "Source: Brisken Shadow Integration Report, N=41 US SAP-treasury job ads, read 2026-06-17. These are market-research figures, not an OnePilot performance metric."),
             h2="The shadow integration is the default state, not the exception", alt=True)
-        + web_band("How it works", web_steps([
-            ("1", "Ingest", "Any source and format: Bloomberg, Refinitiv, 360T, OANDA, central banks, banks, files, email."),
-            ("2", "Validate", "Cleansing, mapping, calculations and anomaly detection, before anything reaches SAP."),
-            ("3", "Govern", "Audit trail, manage-by-exception, segregation of duties and four-eye on every record."),
-            ("4", "Distribute", "Straight into S/4HANA, TRM, Cash and Credit Management. No ABAP, no custom interface."),
-        ], cols=4), h2="From any source to governed SAP records",
-            lede="OnePilot Agents learn your systems and recommend each mapping; you approve it, and the feed runs governed end to end, SAP and non-SAP, both ways. Configured, not coded, so a new feed goes live in weeks rather than a multi-quarter build your team then owns.")
-        + web_band("Governed by design", web_cards([
-            ("Permission-bound agents", "Agents act within access",
-             "An agent sees and acts only on what the user is allowed to. Access outside that boundary is not dimmed, it is absent, so an agent can never reach data or an action the person behind it could not."),
-            ("Four-eye and segregation of duties", "The agent prepares, a person releases",
-             "Approvals and separation of duties sit on the actions that need them. The agent prepares the work; a person releases it, so no payment or deal moves on the AI's say-so alone."),
-            ("Full audit trail", "Manage by exception",
-             "Every record is traceable, carrying where it came from, who approved it and when. You manage by exception, only the records that breach a rule surface for a person, and nothing moves outside the rules you set."),
+        + web_band("The platform", web_steps([
+            ("1", "Connect", "Every system, in and out: banks, market data, ERP, portals."),
+            ("2", "Orchestrate", "The Digital Co-Worker runs each task with full context, at scale."),
+            ("3", "Govern", "Audit, segregation of duties, anomaly alerts, person-in-the-loop."),
+        ], cols=3), h2="Connect, Orchestrate, Govern",
+            lede="The Digital Co-Worker learns your systems and recommends each mapping; you approve it, and the task runs governed end to end, SAP and non-SAP, both ways. Configured, not coded, so a new feed goes live in weeks rather than a multi-quarter build your team then owns.")
+        + web_band("The Digital Co-Worker", web_cards([
+            ("A feature of OnePilot", "The agent inside a space",
+             "The Digital Co-Worker drives the solution, watches every run, fixes what breaks, and brings you the decisions. It is a feature of OnePilot, never a product of its own, and never sold standalone."),
+            ("An agentic team", "Roles, not one bot",
+             "Specialised agents with roles: Domain Specialists, Analysts, Clerks and Personal Assistants, each briefed for its part of the work."),
+            ("The Spaces", "Run it together",
+             "Every app and use case has a space where your team and its Digital Co-Workers run it together: chat, alerts, fixes, orchestration. A colleague, not a black box."),
         ]))
+        + web_band("Governance", web_cards([
+            ("", "Bounded autonomy", "Acts only within the permissions and limits you set."),
+            ("", "Human authority", "A person owns the moves that matter, and can review, override or stop."),
+            ("", "Four-eyes, segregation of duties", "Whatever initiates a step never approves it."),
+            ("", "Robust and fail-safe", "Tested before it runs, behaves predictably, safe-stops or rolls back on error."),
+            ("", "Traceable and explainable", "Every action and data change logged: who, what, when, why, and explainable."),
+            ("", "Monitored, managed by exception", "Outputs watched in real time; anomalies go to a person, the rest just runs."),
+        ]), h2="Six controls on every record",
+            lede="Governed to EU AI Act principles, on a 360° audit trail, certified to ISO 27001 and SOC 1 Type II. A person approves the moves that matter.", alt=True)
         + web_band("How it connects", web_chips([
             ("RFC & OData", None), ("SFTP", None), ("SOAP & REST", None), ("AMQP", None),
             ("Email", None), ("Excel add-in", None), ("XLSX / CSV / TXT", None), ("Web scraping", None), ("LLM & browser automation", None)])
-            + '<p class="wlede" style="margin-top:22px;margin-bottom:0;">Push and pull, off-the-shelf, third-party-managed and low-maintenance. Sources on one side (Bloomberg, Refinitiv, 360T, OANDA, central banks, banks, files and email) and SAP on the other (S/4HANA, TRM, Cash and Credit Management), with non-SAP systems in the same governed perimeter. A new feed is set up on a managed product, so it goes live in weeks rather than a multi-quarter integration project your team has to build and then own.</p>',
-            h2="Connects to what you already run", alt=True)
+            + '<p class="wlede" style="margin-top:22px;margin-bottom:0;">Push and pull, off-the-shelf, third-party-managed and low-maintenance. Sources on one side (Bloomberg, LSEG, 360T, OANDA, central banks, banks, files and email) and SAP on the other (S/4HANA, TRM, Cash and Credit Management), with non-SAP systems in the same governed perimeter. A new feed is set up on a managed product, so it goes live in weeks rather than a multi-quarter integration project your team has to build and then own.</p>',
+            h2="Connects to what you already run")
+        + web_band("The modules", web_table(
+            ["Module", "Type", "Status", "Problem it removes"],
+            [("Market Data Hub", ["APP", "LIVE", "Rates and prices arrive from a dozen places; nobody owns the number."]),
+             ("Brisken Smart Trading", ["APP", "LIVE", "A trade is re-keyed between venue and SAP; best execution unprovable."]),
+             ("Intercompany Funding Request", ["UC", "LIVE", "Funding between entities runs on emails and hand-keyed bookings."]),
+             ("Remittance Advice Gate", ["UC", "LIVE", "Payments land, but which invoices do they clear? Cash application by eye."]),
+             ("Cash Flow &amp; Exposure Hub", ["UC", "LIVE", "Exposure data sits scattered across entities; the hedge is always late."]),
+             ("Bank Fee Portal", ["UC", "POC", "Bank charges get paid unchecked against what was actually agreed."]),
+             ("Bank Statement Generator", ["UC", "LIVE", "Statements are hand-built to each bank's format, every single day."]),
+             ("Credit Data Hub", ["UC", "LIVE", "Counterparty risk is spread across agencies and never quite current."]),
+             ("ESG Data Hub", ["UC", "POC", "ESG metrics are fragmented across providers when reporting falls due."])],
+            note="Two applications, built once and maintained by Brisken; the rest are use cases, assembled from the same kit and owned by you. Your problem isn't on the list? That's the next one."),
+            h2="Two applications, seven use cases, and the ones you build", alt=True)
         + web_band("In production", web_cards([
             ("Financial services", "S/4HANA Public Cloud", "A financial-services group already governs several data domains from one OnePilot deployment."),
-            ("Agricultural", "S/4HANA Private Cloud", "Posts remittances into S/4HANA on a governed AI gate, a ChatGPT-powered deployment with the retype removed."),
-            ("Chemicals", "S/4HANA On-Prem", "An AI funding-request process, a complex multi-integration with SAP, fully automated."),
+            ("Agricultural", "S/4HANA Private Cloud", "Runs the Remittance Advice Gate: the enriched advice is handed to the clearing engine, and a person owns the exceptions."),
+            ("Chemicals", "S/4HANA On-Prem", "An intercompany funding-request process across a complex SAP integration, governed; a person approves the moves that matter."),
         ]))
         + web_band("Common questions", web_faq([
             ("Does OnePilot replace SAP?",
              "No. OnePilot orchestrates on top of SAP. The book of record stays in SAP, execution on the trading platform, and market data through the hub. It composes the apps and data your work needs on one surface, without moving the system of record."),
-            ("Can we deploy AI agents in treasury without consuming our IT budget?",
-             "Yes. OnePilot is configured, not coded, and runs as a managed product on top of your SAP landscape, so there is no ABAP build and nothing new for your IT team to own or maintain. A new feed or agent is set up on the product and goes live in weeks, which keeps the work off the IT backlog and the cost off the development budget."),
+            ("Can we deploy a Digital Co-Worker in treasury without consuming our IT budget?",
+             "Yes. OnePilot is configured, not coded, and runs as a managed product on top of your SAP landscape, so there is no ABAP build and nothing new for your IT team to own or maintain. A new feed or Digital Co-Worker is set up on the product and goes live in weeks, which keeps the work off the IT backlog and the cost off the development budget."),
             ("Is AI automation in treasury safe?",
-             "It is safe when the AI runs inside your controls rather than around them. Each OnePilot process works to rules you set and approve, with four-eye release, segregation of duties and a full audit trail on every record. You keep command of policy and exceptions; the AI handles the repetitive steps, and nothing moves outside the rules you define."),
+             "It is safe when the AI runs inside your controls rather than around them. Each OnePilot process works to rules you set and approve, with four-eye release, segregation of duties and a full audit trail on every record. You keep command of policy and exceptions; the Digital Co-Worker handles the repetitive steps, and nothing moves outside the rules you define."),
             ("Can AI improve liquidity forecasting?",
-             "Yes. A forecast is only as good as the data feeding it, and most of the delay is in collecting and cleaning cash, bank and exposure data by hand. OnePilot keeps that data current and governed in SAP, so the forecast runs on a clean, reconciled base. Treasury still owns the assumptions and the call; the AI removes the manual data work that slows the forecast down."),
+             "Yes. A forecast is only as good as the data feeding it, and most of the delay is in collecting and cleaning cash, bank and exposure data by hand. OnePilot keeps that data current and governed in SAP, so the forecast runs on a clean, reconciled base. Treasury still owns the assumptions and the call; the Digital Co-Worker removes the manual data work that slows the forecast down."),
             ("Can AI help the team focus the day on what matters?",
              "Yes. The repetitive work, ingesting feeds, validating, posting and reconciling, runs underneath by exception, so the team sees what needs a decision instead of working through every record. Their day shifts from re-keying and chasing data to judgment, review and the exceptions that actually need a person."),
         ]))
         + web_band("Proof",
-                   '<p class="wlede" style="margin:0;">OnePilot is delivered by an SAP Co-Innovation Partner and PartnerEdge member, part of SAP Industry Cloud for Financial Services and Commodities, certified to ISO 27001 and SOC 1 Type II, with data partners including Bloomberg, Refinitiv, CME Group, 360T, Deutsche Boerse and OANDA. The Market Data Hub and Smart Trading are listed on the SAP Store.</p>', alt=True)
+                   '<p class="wlede" style="margin:0;">OnePilot is delivered by an SAP Co-Innovation Partner and PartnerEdge member, part of SAP Industry Cloud for Financial Services and Commodities, certified to ISO 27001 and SOC 1 Type II. It runs on SAP\'s own cloud, inside your landscape; your book of records stays in SAP. TreasuryCentral, powered by OnePilot, is its one shipped edition. The Market Data Hub and Brisken Smart Trading are listed on the SAP Store.</p>', alt=True)
     )
 
 
@@ -1384,14 +1488,17 @@ WEB_BODIES = {
 # Per-product deck link (only where a full deck exists on the site) + closing copy.
 WEB_META = {
     "market-data-hub": dict(deck="/market-data-hub-deck.html"),
-    "smart-trading": dict(deck="/smart-trading-deck.html"),
+    # The smart-trading deck is retired: its PDF carried a banned claim
+    # ("Evonik and RWZ already build on the platform"). It regenerates later from
+    # the deck engine; until then the page links no deck.
+    "smart-trading": dict(),
     "remittance-advice-gate": dict(),
     # 2026-07-21 Dirk review: the page claimed the charged-vs-agreed analysis
     # ("we do not do the analysis itself"), carried no call to action, and its
     # PDF said nothing about Brisken. Copy now claims only REF s23's four
     # application features; CTA + letterhead come from the shared layer.
     "bank-fee-portal": dict(
-        updated="2026-07-22",
+        updated="2026-07-29",
         cta_h="See it running on your fee statements",
         cta_p="Bring the formats your banks actually send; we will show what the portal reads and what it hands to your analyzer."),
     # 2026-07-21 21:30 Dirk review: "the site is a little messy", the diagram
@@ -1399,7 +1506,7 @@ WEB_META = {
     # everywhere". Page now runs his V3 model (workspace inside the OnePilot
     # field, the full app roster, the workstation) with the rosters as text.
     "treasurycentral": dict(
-        updated="2026-07-22",
+        updated="2026-07-29",
         cta_h="See the workspace running on your SAP",
         cta_p="Bring the systems and counterparties your treasury actually deals with; we will show what moves into the workspace and what stays where it is."),
     "onepilot": dict(),
@@ -1477,24 +1584,20 @@ DECKS = [
                  "One normalized feed your treasury apps read"],
          lede="Twelve pages: the providers, the governed layer in the middle, and the six steps "
               "that carry a rate from the source into SAP."),
-    dict(short="smart-trading-deck", pdf="smart-trading-deck", pages=10,
-         title="Brisken Smart Trading deck", h1="Brisken Smart Trading",
-         accent="#2563eb", accent2="#60a5fa", glow="rgba(37,99,235,.26)",
-         promise="From the trade decision to the booked deal in SAP, with the manual middle gone.",
-         points=["Straight-through capture into SAP TRM, no re-key",
-                 "The trade decision through to the booked deal in one flow",
-                 "The manual middle step removed"],
-         lede="Ten pages: how a trade moves from the decision to a booked deal in SAP TRM without "
-              "the manual re-keying that usually sits in between."),
+    # The Brisken Smart Trading deck is retired here: its served PDF carried a
+    # banned claim ("Evonik and RWZ already build on the platform"). It
+    # regenerates later from the deck engine; the smart-trading page links no
+    # deck in the meantime.
     dict(short="digital-co-worker", pdf="digital-co-worker", pages=11,
          title="Digital Co-Worker deck", h1="Digital Co-Worker",
          accent="#9333ea", accent2="#c084fc", glow="rgba(147,51,234,.30)",
-         promise="An AI co-worker that takes the repetitive steps across your systems, governed and logged.",
-         points=["Runs the repetitive steps across your SAP systems",
-                 "Every action governed and logged",
-                 "Works inside the controls you already run"],
-         lede="Eleven pages: where an AI co-worker fits across your systems, the steps it takes, "
-              "and the controls that keep every action governed and logged."),
+         promise="A feature of OnePilot: your team and its Digital Co-Workers run each app together, inside a dedicated space.",
+         points=["The solution executes the deterministic steps; the Co-Worker drives every step across your systems; you keep the judgment",
+                 "An agentic team: Domain Specialists, Analysts, Clerks and Personal Assistants, each briefed for its part",
+                 "A colleague who watches every run, raises alerts, fixes data issues, and hands you the exceptions"],
+         lede="Eleven pages: the Digital Co-Worker as a feature of OnePilot, the agentic team behind "
+              "it, the Spaces where your people and their Co-Workers work together, and the governance "
+              "that keeps a person on the moves that matter."),
 ]
 
 
