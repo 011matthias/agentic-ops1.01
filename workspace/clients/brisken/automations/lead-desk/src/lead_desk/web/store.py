@@ -1052,6 +1052,34 @@ class ContactStore:
         self.conn.commit()
         return seq_id
 
+    def frozen_step_nos(self, campaign_id: str, degree: str | None) -> set[int]:
+        """step_nos that are immutable send history for this (campaign, degree):
+        any step with a send_attempt (any status: sent / drafted / leased /
+        stalled / parked / queued) OR a landed cadence 'sent' event, for an
+        enrollment of that degree. A live sequence delta must preserve these
+        unchanged - their send ext_key ``cadence:{eid}:{step_no}`` is spoken for,
+        so reusing or renumbering the step_no would corrupt an enrollment's
+        pointer. Everything past them is the free-to-edit future region."""
+        attempts = self.conn.execute(
+            "SELECT DISTINCT sa.step_no FROM send_attempts sa "
+            "JOIN enrollments en ON en.enrollment_id = sa.enrollment_id "
+            "WHERE en.campaign_id = ? AND en.degree IS ?",
+            (campaign_id, degree),
+        ).fetchall()
+        frozen = {int(r["step_no"]) for r in attempts}
+        # Belt-and-suspenders: a landed cadence 'sent' event whose attempt row is
+        # somehow absent still freezes its step_no.
+        events = self.conn.execute(
+            "SELECT DISTINCT CAST(substr(e.ext_key, "
+            "  length('cadence:' || en.enrollment_id || ':') + 1) AS INTEGER) AS step_no "
+            "FROM outreach_events e "
+            "JOIN enrollments en ON e.ext_key LIKE 'cadence:' || en.enrollment_id || ':%' "
+            "WHERE en.campaign_id = ? AND en.degree IS ? AND e.type = 'sent'",
+            (campaign_id, degree),
+        ).fetchall()
+        frozen |= {int(r["step_no"]) for r in events if r["step_no"] is not None}
+        return frozen
+
     def delete_sequence(self, campaign_id: str, degree: str) -> None:
         row = self.conn.execute(
             "SELECT sequence_id FROM sequences WHERE campaign_id = ? AND degree = ?",

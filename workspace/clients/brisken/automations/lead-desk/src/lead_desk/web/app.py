@@ -638,6 +638,35 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             cadence.supersede_approval(store, cid, f"sequence '{degree}' edited")
         return RedirectResponse(url=f"/campaigns/{cid}", status_code=303)
 
+    @app.post("/campaigns/{cid}/sequences/{degree}/delta")
+    def campaign_sequence_delta(request: Request, cid: str, degree: str,
+                                steps: str = Form("")):
+        """Live sequence edit: append / insert / swap FUTURE steps on an
+        approved-or-sending campaign WITHOUT demoting it to draft. Already-sent
+        steps are immutable; the delta refuses any change to them (the operator
+        pauses and re-approves for that). Steps: one per line,
+        'channel template_key day_offset'."""
+        parsed = []
+        for i, raw in enumerate(s for s in steps.splitlines() if s.strip()):
+            parts = raw.split()
+            if len(parts) != 3 or parts[0] not in ("email", "linkedin"):
+                return HTMLResponse(
+                    f"bad step line {i + 1!r}: want 'channel template_key day_offset'",
+                    status_code=400)
+            try:
+                off = int(parts[2])
+            except ValueError:
+                return HTMLResponse(f"bad day_offset on line {i + 1}", status_code=400)
+            parsed.append({"channel": parts[0], "template_key": parts[1],
+                           "day_offset": off})
+        with open_store() as store:
+            if store.get_campaign(cid) is None:
+                return HTMLResponse("Campaign not found", status_code=404)
+            result = cadence.apply_sequence_delta(store, cid, degree.strip(),
+                                                  parsed, current_user(request))
+            store.set_state(f"delta-result:{cid}", json.dumps(result), now_iso())
+        return RedirectResponse(url=f"/campaigns/{cid}", status_code=303)
+
     @app.post("/campaigns/{cid}/schedule")
     def campaign_schedule(request: Request, cid: str,
                           start_not_before: str = Form(""),
