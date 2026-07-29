@@ -210,3 +210,24 @@ def test_seed_min_count_drops_singletons():
     recs = [_r("Acme", "Software Subscriptions"), _r("OneOff", "Meals")]
     m = build_merchants(recs, min_count=2)
     assert m == {}  # both seen once, both dropped
+
+
+def test_label_to_bucket_reads_the_leaf_of_a_nested_chart():
+    # Brisken's chart nests the real category under a "Travel Expense" parent;
+    # the leaf carries the signal, not the parent.
+    assert label_to_bucket("E100010-31 - Travel Expense | Food") == "Meals & Entertainment"
+    assert label_to_bucket("E100010-01 - Travel Expense | Transportation") == "Travel & Transport"
+    assert label_to_bucket("E100010 - Travel Expense") == "Travel & Transport"  # no leaf
+
+
+def test_seed_drops_noise_vendors():
+    recs = [
+        _r("BRL94.00", "E100010 - Travel Expense | Food"),                 # amount fragment
+        _r("Expense Location : Lisbon, Portugal", "E100010 | Food"),       # location tail
+        _r("cielo", "E100010 | Food"),                                     # payment processor
+        _r("AB", "E100010 | Food"),                                        # too short
+        _r("MARTINO SUPERMERCADO", "E100010 - Travel Expense | Food"),     # the real merchant
+    ]
+    m = build_merchants(recs)
+    assert set(m) == {"MARTINO SUPERMERCADO"}
+    assert m["MARTINO SUPERMERCADO"]["category"] == "Meals & Entertainment"
