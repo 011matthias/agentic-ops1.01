@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-29 | Expense-Recon Merchant Registry | client-dev | [→](docs/2026-07-29%20-%20Expense-Recon%20Merchant%20Registry/Checkpoint.md) |
 | 2026-07-29 | Lead Desk Increment 4 Live Sequence Editing | client-dev | [→](docs/2026-07-29%20-%20Lead%20Desk%20Increment%204%20Live%20Sequence%20Editing/Checkpoint.md) |
 | 2026-07-29 | Brisken Expense-Recon SPA Upload Fix + Vendor Registry Design | client-dev | [Mini-Checkpoint-2](docs/2026-07-29%20-%20Brisken%20Expense-Recon%20SPA%20Upload%20Fix%20%2B%20Vendor%20Registry%20Design/Mini-Checkpoint-2.md) |
 | 2026-07-28 | Brisken Expense-Recon Card-Driven Paid Through | client-dev | [→](docs/2026-07-28%20-%20Brisken%20Expense-Recon%20Card-Driven%20Paid%20Through/Checkpoint.md) |
