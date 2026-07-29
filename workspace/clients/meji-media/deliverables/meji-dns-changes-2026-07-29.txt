@@ -1,0 +1,29 @@
+DNS housekeeping for September email deliverability
+Meji Media, prepared 2026-07-29 by Matthias
+
+One small edit now, one that follows in August. Both live in Porkbun (where
+mejievent.com and mejixmas.com DNS is managed), and each is an edit to an
+existing record, a few minutes at most.
+
+------------------------------------------------------------------
+NOW: mejixmas.com
+   Edit the existing TXT record on host:  _dmarc
+   Set its value to exactly:
+
+   v=DMARC1; p=quarantine; pct=25; rua=mailto:gurmej@mejixmas.com; adkim=r; aspf=r
+
+   Only the report address changes. It currently points at a mejimedia.com
+   address, and mail providers refuse to deliver reports across domains
+   without an extra authorisation record, so today those reports simply
+   never arrive. Pointing it at gurmej@mejixmas.com makes them arrive.
+
+------------------------------------------------------------------
+AROUND 10 AUGUST: mejievent.com (no action now)
+   A similar one-line tightening on mejievent.com is planned for around
+   10 August, after we have had a look at the current authentication
+   reports. We will send the exact record when it is due; nothing to
+   remember in the meantime.
+
+------------------------------------------------------------------
+If Porkbun's screens are unclear at any point, a quick screen-share sorts
+it in minutes.
