@@ -11,6 +11,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## brisken
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-07-29 | Lead Desk Increment 4 CI Job | system-infra | [Mini-Checkpoint-2](docs/2026-07-29%20-%20Lead%20Desk%20Increment%204%20CI%20Job/Mini-Checkpoint-2.md) |
 | 2026-07-29 | Expense-Recon Merchant Registry | client-dev | [Mini-Checkpoint-2](docs/2026-07-29%20-%20Expense-Recon%20Merchant%20Registry/Mini-Checkpoint-2.md) |
 | 2026-07-29 | Expense-Recon Merchant Registry | client-dev | [→](docs/2026-07-29%20-%20Expense-Recon%20Merchant%20Registry/Checkpoint.md) |
 | 2026-07-29 | Lead Desk Increment 4 Live Sequence Editing | client-dev | [→](docs/2026-07-29%20-%20Lead%20Desk%20Increment%204%20Live%20Sequence%20Editing/Checkpoint.md) |
