@@ -100,3 +100,14 @@ jobs:
         with:
           name: playwright-report
           path: platform/playwright-report/
+
+  lead-desk:
+    name: Lead Desk tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.12'
+      - name: Run lead-desk test suite (web + dev extras)
+        run: uv run --directory workspace/clients/brisken/automations/lead-desk --extra web --extra dev pytest -q
