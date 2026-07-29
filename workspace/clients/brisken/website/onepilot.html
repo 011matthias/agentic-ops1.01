@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OnePilot, the orbit of your working day</title>
-<meta name="description" content="OnePilot is Brisken's governed, no-code Universal UI: one surface where each user composes the spaces, apps and data their work needs, and AI agents do the repetitive work across all of it inside their permissions. TreasuryCentral is its first scoped edition, live on SAP today.">
+<meta name="description" content="OnePilot is Brisken's governed, no-code Universal UI: one surface where each user composes the spaces, apps and data their work needs, and Digital Co-Workers do the repetitive work across all of it inside their permissions. TreasuryCentral is its first scoped edition, live on SAP today.">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Brisken">
 <meta property="og:title" content="OnePilot, the orbit of your working day">
@@ -385,10 +385,11 @@
   .app p{font-size:14px;color:var(--muted);line-height:1.5;margin-bottom:15px;flex:1;}
   .live{font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--approved);display:inline-flex;align-items:center;gap:7px;}
   .live::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--approved);box-shadow:0 0 0 3px color-mix(in srgb,var(--approved) 22%,transparent);}
-  .live.flagship{color:var(--brand-cyan-lo);}
-  .live.flagship::before{background:var(--brand-cyan);box-shadow:0 0 0 3px color-mix(in srgb,var(--brand-cyan) 22%,transparent);}
   .live.illus{color:var(--faint);}
   .live.illus::before{background:var(--faint);box-shadow:0 0 0 3px color-mix(in srgb,var(--faint) 22%,transparent);}
+  .live.poc{color:var(--amber);}
+  .live.poc::before{background:var(--amber);box-shadow:0 0 0 3px color-mix(in srgb,var(--amber) 22%,transparent);}
+  .app-type{display:inline-block;align-self:flex-start;font-family:var(--font-mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);border:1px solid var(--line-2);border-radius:var(--pill);padding:3px 9px;margin:0 0 12px;}
   .app-grid.collapsed .app:nth-child(n+4){display:none;}
   .show-all{font-family:var(--font-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);background:var(--glass);border:1px solid var(--line-2);border-radius:var(--pill);padding:11px 22px;cursor:pointer;transition:border-color .15s,color .15s;}
   .show-all:hover{border-color:var(--brand-cyan);color:var(--brand-cyan-lo);}
@@ -548,6 +549,7 @@
   </a>
   <nav class="topnav" aria-label="Sections">
     <a href="#applications">Applications</a>
+    <a href="#coworker">Digital Co-Worker</a>
     <a href="#governed">Governed on SAP</a>
     <a href="#answers">Answers</a>
   </nav>
@@ -616,12 +618,14 @@
       <a class="app" href="#answers">
         <span class="app-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h9l-3-3M7 7l3 3"/><path d="M17 17H8l3 3M17 17l-3-3"/></svg></span>
         <h3>BST, Brisken Smart Trading</h3>
+        <span class="app-type">Application</span>
         <p>FX and trade execution on the surface, logged and governed back into SAP.</p>
-        <span class="live flagship">Flagship, live on SAP</span>
+        <span class="live">Live on SAP</span>
       </a>
       <a class="app" href="#answers">
         <span class="app-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l3-4 3 3 4-6"/></svg></span>
         <h3>Market Data Hub</h3>
+        <span class="app-type">Application</span>
         <p>Brings live market data into SAP, in the context where the decision is made.</p>
         <span class="live">Live on SAP</span>
       </a>
@@ -634,20 +638,16 @@
       <a class="app" href="#answers">
         <span class="app-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg></span>
         <h3>Remittance Advice Gate</h3>
-        <p>An agent reads remittances and structures them into SAP cash application, with no re-keying.</p>
+        <span class="app-type">Use case</span>
+        <p>A Digital Co-Worker reads remittances and structures them for SAP cash application, with no re-keying.</p>
         <span class="live">Live on SAP</span>
       </a>
       <a class="app" href="#answers">
         <span class="app-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V10M19 21V10M3 10l9-6 9 6M9 21v-6h6v6"/></svg></span>
         <h3>Bank Fee Portal</h3>
+        <span class="app-type">Use case</span>
         <p>Bank-fee transparency and analysis, the charges checked against what was agreed.</p>
-        <span class="live">Live on SAP</span>
-      </a>
-      <a class="app" href="#answers">
-        <span class="app-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg></span>
-        <h3>AI Digital Workforce</h3>
-        <p>Permissioned agents that do the repetitive treasury work by exception, inside your access.</p>
-        <span class="live">Live on SAP</span>
+        <span class="live poc">POC</span>
       </a>
       <a class="app" href="#answers">
         <span class="app-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/></svg></span>
@@ -657,7 +657,7 @@
       </a>
       <a class="app" href="#answers">
         <span class="app-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg></span>
-        <h3>Executive cockpit</h3>
+        <h3>Executive workspace</h3>
         <p>One read across the business: finance, sales and operations in a single governed view.</p>
         <span class="live illus">Illustration</span>
       </a>
@@ -679,6 +679,36 @@
       });
     })();
     </script>
+    <div class="app-more">
+      <p>Five more use cases already run on the platform, no card required: <b>Intercompany Funding Request</b>, <b>Cash Flow &amp; Exposure Hub</b>, <b>Bank Statement Generator</b>, <b>Credit Data Hub</b> and <b>ESG Data Hub</b>.</p>
+      <div class="more-chips">
+        <span>Intercompany Funding Request <i>Live</i></span>
+        <span>Cash Flow &amp; Exposure Hub <i>Live</i></span>
+        <span>Bank Statement Generator <i>Live</i></span>
+        <span>Credit Data Hub <i>Live</i></span>
+        <span>ESG Data Hub <i>POC</i></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="coworker">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">The Digital Co-Worker</span>
+      <h2>Your team and its Digital Co-Workers</h2>
+      <p class="sec-intro"><b>The Digital Co-Worker is a feature of OnePilot, not a separate product.</b> It is the agent that works with your team inside a dedicated space: it drives the solution, watches every run, fixes what breaks, and brings you the decisions.</p>
+    </div>
+    <p class="holds-line">The solution executes the deterministic steps, the same result every time. The Digital Co-Worker drives every step across your systems. You keep the judgment.</p>
+    <div class="sub">An agentic team, not one bot</div>
+    <p class="sec-intro" style="margin-bottom:14px">Specialised agents, each briefed for its part of the work.</p>
+    <div class="estate-chips">
+      <span>Domain Specialists</span>
+      <span>Analysts</span>
+      <span>Clerks</span>
+      <span>Personal Assistants</span>
+    </div>
+    <p class="sec-intro" style="margin-top:26px">Every app and use case has a space where your team and its Digital Co-Workers run it together: chat, alerts, fixes, orchestration. The Digital Co-Worker monitors every run where a person would, raises and records alerts, fixes data issues, and hands you the exceptions. Nothing fails in silence, and a person stays in charge. A colleague, not a black box.</p>
   </div>
 </section>
 
@@ -687,13 +717,17 @@
     <div class="sec-head">
       <span class="eyebrow">Governance</span>
       <h2>Governed on SAP, end to end</h2>
-      <p class="sec-intro">An agent reaches exactly what the person it works for can reach, and nothing else. The controls a regulated finance team needs are built into the surface.</p>
+      <p class="sec-intro">A Digital Co-Worker reaches exactly what the person it works for can reach, and nothing else. The controls a regulated finance team needs are built into the surface.</p>
     </div>
     <div class="trust-grid">
-      <div class="trust"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg><h3>Permission-bound agents</h3><p>An agent sees and acts only on what the user is allowed to. Access outside that boundary is not dimmed, it is absent.</p></div>
-      <div class="trust"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="3"/><circle cx="15" cy="15" r="3"/></svg><h3>Four-eye and segregation of duties</h3><p>Approvals and separation of duties on the actions that need them. The agent prepares; a person releases.</p></div>
-      <div class="trust"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15l2 2 4-4"/></svg><h3>Full audit trail</h3><p>Every record is traceable. You manage by exception, and nothing moves outside the rules you set.</p></div>
+      <div class="trust"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg><h3>Bounded autonomy</h3><p>The Digital Co-Worker acts only within the permissions and limits you set. Access outside that boundary is absent, not dimmed.</p></div>
+      <div class="trust"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><h3>Human authority</h3><p>A person owns the moves that matter, and can review, override or stop the work at any point.</p></div>
+      <div class="trust"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="3"/><circle cx="15" cy="15" r="3"/></svg><h3>Four-eyes and segregation of duties</h3><p>Whatever initiates a step never approves it. Approvals and separation of duties sit on the actions that need them.</p></div>
+      <div class="trust"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg><h3>Robust and fail-safe</h3><p>Tested before it runs, it behaves predictably, and safe-stops or rolls back on error.</p></div>
+      <div class="trust"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15l2 2 4-4"/></svg><h3>Traceable and explainable</h3><p>Every action and data change is logged: who, what, when, why. Traceable and explainable, end to end.</p></div>
+      <div class="trust"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><h3>Monitored by exception</h3><p>Outputs are watched in real time. Anomalies go to a person; the rest just runs.</p></div>
     </div>
+    <p style="font-family:var(--font-mono);font-size:12.5px;letter-spacing:.02em;color:var(--muted);text-align:center;max-width:74ch;margin:22px auto 0;line-height:1.7;">Governed to EU AI Act principles &middot; 360&deg; audit trail &middot; ISO 27001 &amp; SOC 1 Type II &middot; people own the moves that matter.</p>
     <p class="holds-line">It orchestrates; it does not become the system of record. The book of record stays in SAP, execution on the trading platform, market data through the hub.</p>
   </div>
 </section>
@@ -723,10 +757,10 @@
     </div>
     <div class="qa">
       <div class="qa-group">What it is</div>
-      <div class="q"><button class="q-head" aria-expanded="false"><h3>What is OnePilot?</h3><span class="q-chev" aria-hidden="true"></span></button><div class="q-body"><div class="q-body-inner"><p class="a">OnePilot is Brisken's governed, no-code platform for running a team's work on one surface. Each user composes the apps, data and spaces their work needs, and permissioned AI agents do the repetitive work across all of it.</p><p class="d">It is a framework in three layers: the framework IT sets up once, the spaces a user builds in plain language, and the agents that act within that user's permissions. It connects to whatever a team uses, from ERP and banking to market data, email and spreadsheets; SAP is one example. TreasuryCentral, live on SAP today, is its first scoped edition.</p></div></div></div>
+      <div class="q"><button class="q-head" aria-expanded="false"><h3>What is OnePilot?</h3><span class="q-chev" aria-hidden="true"></span></button><div class="q-body"><div class="q-body-inner"><p class="a">OnePilot is Brisken's governed, no-code platform for running a team's work on one surface. Each user composes the apps, data and spaces their work needs, and permissioned Digital Co-Workers do the repetitive work across all of it.</p><p class="d">It is a framework in three layers: the framework IT sets up once, the spaces a user builds in plain language, and the Digital Co-Workers that act within that user's permissions. It connects to whatever a team uses, from ERP and banking to market data, email and spreadsheets; SAP is one example. TreasuryCentral, live on SAP today, is its first scoped edition.</p></div></div></div>
       <div class="q"><button class="q-head" aria-expanded="false"><h3>What is TreasuryCentral?</h3><span class="q-chev" aria-hidden="true"></span></button><div class="q-body"><div class="q-body-inner"><p class="a">TreasuryCentral is the one shipped edition of OnePilot, live on SAP today. It puts the treasurer's whole day on one surface: cash, FX, market data, trades, bank files and remittances, governed end to end.</p><p class="d">Each task moves from a string of logins to one glance: cash reconciled overnight by exception, payment runs staged for four-eye release, the board pack drafted to your template.</p></div></div></div>
       <div class="qa-group">The applications</div>
-      <div class="q"><button class="q-head" aria-expanded="false"><h3>What is BST, Brisken Smart Trading?</h3><span class="q-chev" aria-hidden="true"></span></button><div class="q-body"><div class="q-body-inner"><p class="a">BST is OnePilot's FX and trade-execution application, and the live flagship. It brings exposure, market data and execution onto one surface and logs every action back into SAP under four-eye control.</p></div></div></div>
+      <div class="q"><button class="q-head" aria-expanded="false"><h3>What is BST, Brisken Smart Trading?</h3><span class="q-chev" aria-hidden="true"></span></button><div class="q-body"><div class="q-body-inner"><p class="a">BST is OnePilot's FX and trade-execution application, live on SAP. It brings exposure, market data and execution onto one surface and logs every action back into SAP under four-eye control.</p></div></div></div>
       <div class="q"><button class="q-head" aria-expanded="false"><h3>How do you get market data into SAP?</h3><span class="q-chev" aria-hidden="true"></span></button><div class="q-body"><div class="q-body-inner"><p class="a">The Market Data Hub brings live market data into SAP in the context where it is used, so a rate sits next to the position it affects rather than in a separate terminal.</p></div></div></div>
       <div class="q"><button class="q-head" aria-expanded="false"><h3>How do you automate remittance advice in SAP?</h3><span class="q-chev" aria-hidden="true"></span></button><div class="q-body"><div class="q-body-inner"><p class="a">The Remittance Advice Gate has an agent read incoming remittances and structure them into SAP cash application, removing the manual re-keying. The agent prepares the entries; a person approves them.</p></div></div></div>
       <div class="qa-group">SAP, governance and how it compares</div>
@@ -753,7 +787,7 @@
   <div class="foot-grid">
     <div class="foot-brand">
       <div class="lock"><span class="brand-logo brand-logo--light" role="img" aria-label="Brisken"></span><span class="brand-logo brand-logo--dark" role="img" aria-label="Brisken"></span><span class="pr">OnePilot</span></div>
-      <p>OnePilot is Brisken's governed, no-code platform for financial data in SAP: market data, trades, bank files and remittances into SAP, with a full audit trail.</p>
+      <p>OnePilot is Brisken's governed, no-code platform: Connect, Orchestrate, Govern. TreasuryCentral, powered by OnePilot, is its shipped edition, live on SAP.</p>
       <a class="li" href="https://www.linkedin.com/company/brisken">Brisken on LinkedIn &rarr;</a>
     </div>
     <div class="foot-col">
@@ -762,13 +796,13 @@
       <a href="#applications">BST, Brisken Smart Trading</a>
       <a href="#applications">Remittance Advice Gate</a>
       <a href="#applications">Bank Fee Portal</a>
-      <a href="#applications">AI Digital Workforce</a>
     </div>
     <div class="foot-col">
       <h4>Explore</h4>
       <a href="#problem">The problem</a>
       <a href="#answers">TreasuryCentral</a>
       <a href="#applications">Applications</a>
+      <a href="#coworker">The Digital Co-Worker</a>
       <a href="#stage">The OnePilot platform</a>
       <a href="#answers">Answers</a>
       <a href="#contact" data-contact>Contact us</a>
@@ -777,7 +811,7 @@
   <div class="foot-legal">
     <p>Data is processed only to run the services you configure. It is not used to train models and is not sold. Access is logged and governed, and your data stays within the controls you set.</p>
     <p>Brisken LLC, 9595 Six Pines Drive, Bldg 8 Ste 8210, The Woodlands, TX 77380.</p>
-    <p class="upd">Last updated: 2026-06-21</p>
+    <p class="upd">Last updated: 2026-07-29</p>
   </div>
 </footer>
 
@@ -809,23 +843,28 @@
   </article>
 
   <article data-key="surface">
-    <p class="lead">OnePilot is not a fixed product; it is a framework in three layers. The framework is set up once; the spaces and the agents are yours, changed in plain language.</p>
+    <p class="lead">OnePilot is not a fixed product; it is a framework in three layers. The framework is set up once; the spaces and the Digital Co-Workers are yours, changed in plain language.</p>
     <div class="layers">
       <div class="layer"><span class="ln">1</span><div><span class="lwho">Brisken and IT, once</span><h4>The framework</h4><p>Connectivity, permissions, security and boundaries. Set up once, it makes the surface safe to build on and keeps every space inside the same governed perimeter.</p></div></div>
       <div class="layer"><span class="ln">2</span><div><span class="lwho">You, continuously, in plain language</span><h4>Your spaces</h4><p>A canvas of widgets that pull in whatever you work with, from wherever you have access. Build as many as the work needs: a day's flow, a recurring job, an occasional task. No build queue, no IT ticket.</p></div></div>
-      <div class="layer"><span class="ln">3</span><div><span class="lwho">You direct; the framework constrains</span><h4>The agents</h4><p>AI agents see and act across everything in your spaces, strictly within your permissions. You set the rules and approve the exceptions; the agents do the busywork, by exception, underneath.</p></div></div>
+      <div class="layer"><span class="ln">3</span><div><span class="lwho">You direct; the framework constrains</span><h4>The Digital Co-Workers</h4><p>Digital Co-Workers see and act across everything in your spaces, strictly within your permissions. You set the rules and approve the exceptions; the Digital Co-Worker does the busywork, by exception, underneath.</p></div></div>
     </div>
     <div class="sub">Composed, not coded</div>
     <p class="lead" style="margin-bottom:0">Integration moves from the IT ticket to a plain-language ask. Describe the space you want, for example <b>"build me a morning cash space"</b>, and the widgets compose onto the canvas, each pulling live from a connected source: cash position, FX exposure, bank files, email and Teams approvals, the board pack, market data. The same surface builds a close space, a deal space, an operations space.</p>
   </article>
 
   <article data-key="govern">
-    <p class="lead">The framework constrains; the user directs. An agent carries the same access limits as the person it works for, with the controls a regulated finance team needs to standardize on it.</p>
+    <p class="lead">The framework constrains; the user directs. A Digital Co-Worker carries the same access limits as the person it works for, with the six controls a regulated finance team needs to standardize on it.</p>
     <div class="guards">
-      <div class="guard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><div><h4>Permission-bound agents</h4><p>An agent sees and acts only on what the user is allowed to. Access outside that boundary is not dimmed, it is absent.</p></div></div>
-      <div class="guard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="3"/><circle cx="15" cy="15" r="3"/></svg><div><h4>Four-eye and segregation of duties</h4><p>Approvals and separation of duties on the actions that need them. The agent prepares; a person releases.</p></div></div>
-      <div class="guard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15l2 2 4-4"/></svg><div><h4>Full audit trail</h4><p>Every record traceable, manage by exception, nothing moves outside the rules you set.</p></div></div>
+      <div class="guard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg><div><h4>Bounded autonomy</h4><p>The Digital Co-Worker acts only within the permissions and limits you set. Access outside that boundary is absent, not dimmed.</p></div></div>
+      <div class="guard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><div><h4>Human authority</h4><p>A person owns the moves that matter, and can review, override or stop the work at any point.</p></div></div>
+      <div class="guard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="3"/><circle cx="15" cy="15" r="3"/></svg><div><h4>Four-eyes and segregation of duties</h4><p>Whatever initiates a step never approves it. Approvals and separation of duties sit on the actions that need them.</p></div></div>
+      <div class="guard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg><div><h4>Robust and fail-safe</h4><p>Tested before it runs, it behaves predictably, and safe-stops or rolls back on error.</p></div></div>
+      <div class="guard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15l2 2 4-4"/></svg><div><h4>Traceable and explainable</h4><p>Every action and data change is logged: who, what, when, why. Traceable and explainable, end to end.</p></div></div>
+      <div class="guard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><div><h4>Monitored by exception</h4><p>Outputs are watched in real time. Anomalies go to a person; the rest just runs.</p></div></div>
     </div>
+    <div class="sub">Certified and governed</div>
+    <p class="lead" style="margin-bottom:0">Governed to EU AI Act principles &middot; 360&deg; audit trail &middot; ISO 27001 &amp; SOC 1 Type II &middot; people own the moves that matter.</p>
   </article>
 
   <article data-key="diff">
@@ -844,7 +883,7 @@
     <div class="cov">
       <div class="covrow"><div class="top"><span class="nm"><b>Search and context layers</b><span>Glean</span></span><span class="pct">22%</span></div><div class="covbar"><i style="width:22%"></i></div><div class="gl"><div class="gives"><div class="h">Gives</div><p>Permission-aware search; finds things faster across your tools.</p></div><div class="leaves"><div class="h">Leaves</div><p>The ten tools stay in place. It finds; it does not become the place you work or execute.</p></div></div></div>
       <div class="covrow"><div class="top"><span class="nm"><b>Ecosystem-bound assistants</b><span>M365 Copilot, Gemini for Workspace</span></span><span class="pct">38%</span></div><div class="covbar"><i style="width:38%"></i></div><div class="gl"><div class="gives"><div class="h">Gives</div><p>Deep AI inside one suite, where most desk work already happens.</p></div><div class="leaves"><div class="h">Leaves</div><p>Shallow and ungoverned the moment work crosses out of the suite into ERP, banking or market data.</p></div></div></div>
-      <div class="covrow"><div class="top"><span class="nm"><b>Agent platforms</b><span>Agentforce, Copilot Studio</span></span><span class="pct">44%</span></div><div class="covbar"><i style="width:44%"></i></div><div class="gl"><div class="gives"><div class="h">Gives</div><p>Agents that act, not just answer.</p></div><div class="leaves"><div class="h">Leaves</div><p>The agents sit beside the old tools; there is no single cockpit the user works from.</p></div></div></div>
+      <div class="covrow"><div class="top"><span class="nm"><b>Agent platforms</b><span>Agentforce, Copilot Studio</span></span><span class="pct">44%</span></div><div class="covbar"><i style="width:44%"></i></div><div class="gl"><div class="gives"><div class="h">Gives</div><p>Agents that act, not just answer.</p></div><div class="leaves"><div class="h">Leaves</div><p>The agents sit beside the old tools; there is no single workspace the user works from.</p></div></div></div>
       <div class="covrow"><div class="top"><span class="nm"><b>Workspace and app builders</b><span>Notion, Airtable, Taskade</span></span><span class="pct">40%</span></div><div class="covbar"><i style="width:40%"></i></div><div class="gl"><div class="gives"><div class="h">Gives</div><p>Light composable spaces; easy to assemble.</p></div><div class="leaves"><div class="h">Leaves</div><p>Little deep ERP, treasury or market-data integration, and no permissioned agents across live systems.</p></div></div></div>
       <div class="covrow"><div class="top"><span class="nm"><b>AI app and auto-builders</b><span>Lovable, Base44, Replit, v0, Bolt</span></span><span class="pct">30%</span></div><div class="covbar"><i style="width:30%"></i></div><div class="gl"><div class="gives"><div class="h">Gives</div><p>Generate apps from a prompt, fast.</p></div><div class="leaves"><div class="h">Leaves</div><p>Point solutions with low governance and no unified surface. They add to the estate; OnePilot can consume what they build.</p></div></div></div>
       <div class="covrow op"><div class="top"><span class="nm"><b>OnePilot</b><span>The surface that closes the ring</span></span><span class="pct">100%</span></div><div class="covbar"><i style="width:100%"></i></div><div class="gl"><div class="gives"><div class="h">Gives</div><p>A composable, user-built surface that becomes the one place you work, reaches into ERP, banking and market data, and carries agents with your exact permissions across every source.</p></div><div class="holds"><div class="h">Holds the line</div><p>It orchestrates; it does not become the system of record. The book of record stays in SAP, execution on the trading platform, market data through the hub.</p></div></div></div>
@@ -869,7 +908,7 @@
     </div>
     <div class="sub">Scope it to a role, don't rebuild it</div>
     <div class="editions">
-      <div class="ed-live"><span class="badge"><i></i>Live on SAP today</span><b>TreasuryCentral</b><p>The treasurer's day in one cockpit: cash, FX, market data, trades, bank files and remittances, on SAP, governed end to end. Live with customers now.</p></div>
+      <div class="ed-live"><span class="badge"><i></i>Live on SAP today</span><b>TreasuryCentral</b><p>The treasurer's day in one workspace: cash, FX, market data, trades, bank files and remittances, on SAP, governed end to end. Live with customers now.</p></div>
       <div class="ghosts">
         <div class="ghost"><span class="tag">Illustration</span><b>Finance and controlling</b><p>A close-and-reconcile space: the numbers and the surrounding work on one surface.</p></div>
         <div class="ghost"><span class="tag">Illustration</span><b>Sales and account management</b><p>A deal space: pipeline, account history and the next action together.</p></div>
@@ -894,7 +933,7 @@
       <div class="ppanel on" data-p="0"><div class="pcard today"><div class="h">Today</div><p>Ten tabs, the same numbers re-keyed, the day spent moving data instead of using it.</p></div><div class="pcard gives"><div class="h">OnePilot gives</div><p>One surface, the mundane work gone; the day shifts to judgment and the exceptions that need a person.</p></div></div>
       <div class="ppanel" data-p="1"><div class="pcard today"><div class="h">Today</div><p>Every change to how the team works is an IT ticket and a wait.</p></div><div class="pcard gives"><div class="h">OnePilot gives</div><p>Automate the team's own work in plain language, no ticket, no build queue.</p></div></div>
       <div class="ppanel" data-p="2"><div class="pcard today"><div class="h">Today</div><p>A backlog of integrations to build and own, and shadow tools springing up around them.</p></div><div class="pcard gives"><div class="h">OnePilot gives</div><p>One governed framework, defined once; the breadth is composed on top without new code to maintain.</p></div></div>
-      <div class="ppanel" data-p="3"><div class="pcard today"><div class="h">Today</div><p>Ungoverned assistants reaching across systems with unclear access.</p></div><div class="pcard gives"><div class="h">OnePilot gives</div><p>Agents that access exactly what the user can, no more, with four-eye, segregation of duties and a full audit trail.</p></div></div>
+      <div class="ppanel" data-p="3"><div class="pcard today"><div class="h">Today</div><p>Ungoverned assistants reaching across systems with unclear access.</p></div><div class="pcard gives"><div class="h">OnePilot gives</div><p>Digital Co-Workers that access exactly what the user can, no more, with four-eye, segregation of duties and a full audit trail.</p></div></div>
       <div class="ppanel" data-p="4"><div class="pcard today"><div class="h">Today</div><p>AI licences signed and then barely used; spend without adoption.</p></div><div class="pcard gives"><div class="h">OnePilot gives</div><p>Adoption, because people want to use it. A platform that gets used renews and expands.</p></div></div>
     </div>
     <div class="sub">Why this matters</div>
@@ -907,25 +946,25 @@
   </article>
 
   <article data-key="onepilot">
-    <p class="lead"><b>OnePilot is Brisken's governed, no-code platform for running your work in SAP.</b> One surface where you compose the apps and data your work needs, and permissioned AI agents do the repetitive work across all of it. Everything on this map orbits it.</p>
+    <p class="lead"><b>OnePilot is Brisken's governed, no-code platform for running your work in SAP.</b> One surface where you compose the apps and data your work needs, and permissioned Digital Co-Workers do the repetitive work across all of it. Everything on this map orbits it.</p>
     <div class="sub">One surface, not ten tabs</div>
     <p class="lead">Instead of moving between SAP, two bank portals, a trading screen, market data, email and a spreadsheet, the work lives on one surface you assemble yourself. The numbers stop being re-keyed between systems, and the day shifts from moving data to using it.</p>
-    <div class="sub">Framework, spaces, agents</div>
+    <div class="sub">Framework, spaces, Digital Co-Workers</div>
     <div class="layers">
       <div class="layer"><span class="ln">1</span><div><span class="lwho">Brisken and IT, once</span><h4>The framework</h4><p>Connectivity, permissions, security and boundaries, set up once. Every space stays inside the same governed perimeter.</p></div></div>
       <div class="layer"><span class="ln">2</span><div><span class="lwho">You, in plain language</span><h4>Your spaces</h4><p>Compose the widgets and data your work needs, as many spaces as the work needs. No build queue, no ticket.</p></div></div>
-      <div class="layer"><span class="ln">3</span><div><span class="lwho">You direct; the framework constrains</span><h4>The agents</h4><p>Agents act across your spaces, strictly within your permissions, doing the busywork by exception.</p></div></div>
+      <div class="layer"><span class="ln">3</span><div><span class="lwho">You direct; the framework constrains</span><h4>The Digital Co-Workers</h4><p>Digital Co-Workers act across your spaces, strictly within your permissions, doing the busywork by exception.</p></div></div>
     </div>
     <div class="sub">Live today</div>
     <p class="lead" style="margin-bottom:0">OnePilot is the framework. <b>TreasuryCentral</b> is its one shipped edition, live on SAP with customers now: the treasurer's whole day, cash, FX, market data, trades, bank files and remittances, on one governed surface. The other editions on this map are illustrations of the same pattern.</p>
   </article>
 
   <article data-key="integrations">
-    <p class="lead">OnePilot composes whatever you have access to, from wherever it lives. <b>It is not tied to SAP, or to finance.</b> The surface reaches into the systems you already use and brings them onto one canvas, with agents that carry your exact permissions across all of them.</p>
+    <p class="lead">OnePilot composes whatever you have access to, from wherever it lives. <b>It is not tied to SAP, or to finance.</b> The surface reaches into the systems you already use and brings them onto one canvas, with Digital Co-Workers that carry your exact permissions across all of them.</p>
     <div class="sub">What it reaches</div>
-    <div class="estate-chips"><span>SAP and other ERPs</span><span>Bank portals and files</span><span>Market data: Bloomberg, Refinitiv, 360T, OANDA, CME</span><span>Trading platforms</span><span>Email and Teams</span><span>Spreadsheets</span><span>Anything with an API</span></div>
+    <div class="estate-chips"><span>SAP and other ERPs</span><span>Bank portals and files</span><span>Market data: Bloomberg, LSEG, 360T, OANDA, CME</span><span>Trading platforms</span><span>Email and Teams</span><span>Spreadsheets</span><span>Anything with an API</span></div>
     <div class="sub">SAP is one source, not the boundary</div>
-    <p class="lead" style="margin-bottom:0">TreasuryCentral, the shipped edition, runs on SAP today, so the first proof is in SAP treasury. The platform itself is source- and department-agnostic: the same surface composes a sales desk, an operations queue or an executive cockpit from whatever those teams have access to.</p>
+    <p class="lead" style="margin-bottom:0">TreasuryCentral, the shipped edition, runs on SAP today, so the first proof is in SAP treasury. The platform itself is source- and department-agnostic: the same surface composes a sales desk, an operations queue or an executive workspace from whatever those teams have access to.</p>
   </article>
 
 </div>
@@ -964,7 +1003,7 @@
     {key:'problem',      eyebrow:'Why it exists', short:'The problem',        title:'The problem today',            tip:'Ten tabs, the same numbers re-keyed.',                hue:'var(--h-problem)'},
     {key:'surface',      eyebrow:'The idea',      short:'What OnePilot is',   title:'What OnePilot is',             tip:'One surface, assembled by you in plain language.',    hue:'var(--h-surface)'},
     {key:'integrations', eyebrow:'Connects to',   short:'Integrations',       title:'What it connects to',          tip:'ERP, banks, market data, email, any API. Not just SAP.', hue:'var(--h-adopt)'},
-    {key:'govern',       eyebrow:'Trust',         short:'Security & control', title:'Security and control',         tip:'Agents reach exactly what you can, no more.',         hue:'var(--h-govern)'},
+    {key:'govern',       eyebrow:'Trust',         short:'Security & control', title:'Security and control',         tip:'Digital Co-Workers reach exactly what you can, no more.', hue:'var(--h-govern)'},
     {key:'diff',         eyebrow:'Versus',        short:'How it compares',    title:'How OnePilot compares',        tip:'The market covers slices; OnePilot closes the ring.', hue:'var(--h-diff)'},
     {key:'treasury',     eyebrow:'Live on SAP',   short:'TreasuryCentral',    title:'TreasuryCentral, live on SAP', tip:"The treasurer's whole day, shipped today.",           hue:'var(--h-treasury)'},
     {key:'adopt',        eyebrow:'Why it sticks', short:'Why teams adopt it', title:'Why teams adopt it',           tip:'It gets used because people want to use it.',         hue:'var(--h-adopt)'}
@@ -1236,7 +1275,7 @@
       "name": "Brisken",
       "legalName": "Brisken LLC",
       "url": "https://www.brisken.com",
-      "description": "Brisken builds OnePilot, a governed, no-code platform that brings a team's apps, data and AI agents onto one surface. TreasuryCentral, live on SAP, is its first scoped edition.",
+      "description": "Brisken builds OnePilot, a governed, no-code platform that brings a team's apps, data and Digital Co-Workers onto one surface. TreasuryCentral, live on SAP, is its first scoped edition.",
       "sameAs": ["https://www.linkedin.com/company/brisken"],
       "address": {
         "@type": "PostalAddress",
@@ -1253,7 +1292,7 @@
       "applicationCategory": "BusinessApplication",
       "operatingSystem": "SAP",
       "publisher": { "@id": "https://www.brisken.com/#org" },
-      "description": "OnePilot is Brisken's governed, no-code platform for running a team's work on one surface. Each user composes the apps, data and spaces their work needs, and permissioned AI agents do the repetitive work across all of it, inside the user's permissions. It connects to whatever a team uses, from ERP and banking to market data, email and spreadsheets; SAP is one example, and TreasuryCentral is its first scoped edition, live on SAP today."
+      "description": "OnePilot is Brisken's governed, no-code platform for running a team's work on one surface. Each user composes the apps, data and spaces their work needs, and permissioned Digital Co-Workers do the repetitive work across all of it, inside the user's permissions. It connects to whatever a team uses, from ERP and banking to market data, email and spreadsheets; SAP is one example, and TreasuryCentral is its first scoped edition, live on SAP today."
     },
     {
       "@type": "SoftwareApplication",
@@ -1267,9 +1306,9 @@
     {
       "@type": "FAQPage",
       "mainEntity": [
-        { "@type": "Question", "name": "What is OnePilot?", "acceptedAnswer": { "@type": "Answer", "text": "OnePilot is Brisken's governed, no-code platform for running a team's work on one surface. Each user composes the apps, data and spaces their work needs, and permissioned AI agents do the repetitive work across all of it. It connects to whatever a team uses, from ERP and banking to market data, email and spreadsheets; SAP is one example. TreasuryCentral, live on SAP today, is its first scoped edition." } },
+        { "@type": "Question", "name": "What is OnePilot?", "acceptedAnswer": { "@type": "Answer", "text": "OnePilot is Brisken's governed, no-code platform for running a team's work on one surface. Each user composes the apps, data and spaces their work needs, and permissioned Digital Co-Workers do the repetitive work across all of it. It connects to whatever a team uses, from ERP and banking to market data, email and spreadsheets; SAP is one example. TreasuryCentral, live on SAP today, is its first scoped edition." } },
         { "@type": "Question", "name": "What is TreasuryCentral?", "acceptedAnswer": { "@type": "Answer", "text": "TreasuryCentral is the one shipped edition of OnePilot, live on SAP today. It puts the treasurer's whole day on one surface: cash, FX, market data, trades, bank files and remittances, governed end to end." } },
-        { "@type": "Question", "name": "What is BST, Brisken Smart Trading?", "acceptedAnswer": { "@type": "Answer", "text": "BST is OnePilot's FX and trade-execution application, and the live flagship. It brings exposure, market data and execution onto one surface and logs every action back into SAP under four-eye control." } },
+        { "@type": "Question", "name": "What is BST, Brisken Smart Trading?", "acceptedAnswer": { "@type": "Answer", "text": "BST is OnePilot's FX and trade-execution application, live on SAP. It brings exposure, market data and execution onto one surface and logs every action back into SAP under four-eye control." } },
         { "@type": "Question", "name": "How do you get market data into SAP?", "acceptedAnswer": { "@type": "Answer", "text": "The Market Data Hub brings live market data into SAP in the context where it is used, so a rate sits next to the position it affects rather than in a separate terminal." } },
         { "@type": "Question", "name": "How do you automate remittance advice in SAP?", "acceptedAnswer": { "@type": "Answer", "text": "The Remittance Advice Gate has an agent read incoming remittances and structure them into SAP cash application, removing the manual re-keying. The agent prepares the entries; a person approves them." } },
         { "@type": "Question", "name": "Does OnePilot replace SAP?", "acceptedAnswer": { "@type": "Answer", "text": "No. OnePilot orchestrates on top of SAP. The book of record stays in SAP, execution on the trading platform, and market data through the hub." } },
