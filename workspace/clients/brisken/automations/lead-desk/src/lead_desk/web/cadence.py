@@ -939,6 +939,147 @@ def supersede_approval(store: ContactStore, campaign_id: str, reason: str) -> No
                     json.dumps({"at": now, "reason": reason}), now)
 
 
+# -- live sequence editing (delta approval) ----------------------------------------
+
+def _steps_equal(a: dict, b: dict) -> bool:
+    return (a["channel"] == b["channel"]
+            and a["template_key"] == b["template_key"]
+            and int(a["day_offset"]) == int(b["day_offset"]))
+
+
+def sequence_delta_report(store: ContactStore, campaign_id: str, degree: str,
+                          submitted_steps: list[dict]) -> dict:
+    """Plan a live sequence edit that keeps the campaign 'sending' (no demote to
+    draft, no full re-approval).
+
+    ``submitted_steps`` is the desired ordered sequence
+    ([{channel, template_key, day_offset}], no step_no - assigned here). The
+    edit is admissible ONLY in the FUTURE (unsent) region: every step already
+    sent to any enrollment (a frozen step_no, see ``store.frozen_step_nos``)
+    must stay byte-identical and in place, as the leading prefix. Future steps
+    are (re)assigned fresh step_nos ABOVE every attempted step_no, so a new or
+    moved step never collides with a spoken-for send ext_key (which is what
+    part-1's step_no-keyed pointer then reads correctly).
+
+    Returns {ok, frozen_count, new_steps, added, pins, added_pins, name,
+    send_mode, degree, campaign} on success, or {ok: False, errors} when the
+    edit would touch sent history (route the operator to pause -> edit ->
+    re-approve instead)."""
+    campaign = store.get_campaign(campaign_id)
+    if campaign is None:
+        return {"ok": False, "errors": ["unknown campaign"]}
+    if campaign["status"] not in ("approved", "sending", "paused"):
+        return {"ok": False, "errors": [
+            f"campaign is '{campaign['status']}'; a live sequence delta needs an "
+            "approved / sending / paused campaign (edit a draft sequence directly)"]}
+    seq = store.get_sequence(campaign_id, degree)
+    current = seq["steps"] if seq else []  # ORDER BY step_no
+    frozen_set = store.frozen_step_nos(campaign_id, degree)
+    # Frozen steps must be a contiguous LEADING run of the current sequence
+    # (sends advance in step_no order). A gap - e.g. a still-pending LinkedIn
+    # step wedged before a later sent one - is outside the delta's safe
+    # envelope, so refuse and route to the heavier pause -> re-approve path.
+    frozen_prefix: list[dict] = []
+    for s in current:
+        if int(s["step_no"]) in frozen_set:
+            frozen_prefix.append(s)
+        else:
+            break
+    if {int(s["step_no"]) for s in frozen_prefix} != frozen_set:
+        return {"ok": False, "errors": [
+            "already-sent steps are not a contiguous prefix (a mid-sequence step "
+            "is still pending); pause the campaign to edit this sequence"]}
+    k = len(frozen_prefix)
+    if len(submitted_steps) < k:
+        return {"ok": False, "errors": [
+            f"the first {k} step(s) have already been sent and cannot be removed; "
+            "keep them and add or change only later steps (or pause to re-approve)"]}
+    for i in range(k):
+        if not _steps_equal(submitted_steps[i], frozen_prefix[i]):
+            return {"ok": False, "errors": [
+                f"step {i + 1} has already been sent and cannot be changed; keep "
+                "it as-is and edit only later steps (or pause to re-approve)"]}
+
+    frozen_max = max(frozen_set) if frozen_set else 0
+    new_steps: list[dict] = [dict(s) for s in frozen_prefix]
+    for i, s in enumerate(submitted_steps[k:]):
+        new_steps.append({"step_no": frozen_max + 1 + i, "channel": s["channel"],
+                          "template_key": s["template_key"],
+                          "day_offset": int(s["day_offset"])})
+    future = new_steps[k:]
+
+    # Validate every future template exists and channel matches (mirror approval).
+    errors: list[str] = []
+    for st in future:
+        tpl = store.get_template(st["template_key"])
+        if tpl is None:
+            errors.append(f"template '{st['template_key']}' does not exist")
+        elif tpl["channel"] != st["channel"]:
+            errors.append(f"template '{st['template_key']}' is {tpl['channel']}, "
+                          f"step is {st['channel']}")
+    if errors:
+        return {"ok": False, "errors": errors}
+
+    # Re-pin: KEEP every existing campaign pin (other degrees + frozen steps);
+    # pin the latest version for each template_key a FUTURE step uses, so a saved
+    # new version applies to unsent steps and no future step is left unpinned
+    # (the increment-1 unpinned-template guard). A key shared with a frozen step
+    # keeps its frozen pinned version (that copy already went out).
+    existing = store.get_pins(campaign_id)
+    frozen_keys = {s["template_key"] for s in frozen_prefix}
+    pins = dict(existing)
+    added_pins: dict[str, int] = {}
+    for st in future:
+        key = st["template_key"]
+        latest = int(store.get_template(key)["version"])
+        if key in frozen_keys:
+            pins.setdefault(key, latest)
+        else:
+            if pins.get(key) != latest:
+                added_pins[key] = latest
+            pins[key] = latest
+    return {"ok": True, "frozen_count": k, "new_steps": new_steps, "added": future,
+            "pins": pins, "added_pins": added_pins,
+            "name": (seq["name"] if seq else degree),
+            "send_mode": (seq["send_mode"] if seq else "auto-matthias"),
+            "degree": degree, "campaign": dict(campaign)}
+
+
+def apply_sequence_delta(store: ContactStore, campaign_id: str, degree: str,
+                         submitted_steps: list[dict], user: str | None,
+                         now: str | None = None) -> dict:
+    """Apply a validated sequence delta WITHOUT demoting the campaign to draft.
+    Sent steps are preserved (same step_no); future steps are (re)written with
+    fresh step_nos; only changed/new template keys are re-pinned. The campaign
+    KEEPS its status, so a 'sending' wave never stops. Send-safety is intact:
+    recipient pins + contacts hash are untouched, and every step stays pinned."""
+    report = sequence_delta_report(store, campaign_id, degree, submitted_steps)
+    if not report["ok"]:
+        return report
+    now = now or _iso(now_utc())
+    store.upsert_sequence(campaign_id, degree, report["name"],
+                          report["send_mode"], report["new_steps"])
+    store.pin_templates(campaign_id, report["pins"])
+    # Keep the recorded approval pins in sync so the audit record matches what
+    # will render; do NOT touch campaign status (no supersede).
+    marker = store.get_state(f"approval:{campaign_id}")
+    if marker:
+        try:
+            data = json.loads(marker)
+            data["pins"] = report["pins"]
+            store.set_state(f"approval:{campaign_id}", json.dumps(data), now)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    store.set_state(f"sequence-delta:{campaign_id}:{degree}", json.dumps({
+        "at": now, "by": user, "frozen_count": report["frozen_count"],
+        "added": [s["template_key"] for s in report["added"]],
+        "pins_changed": report["added_pins"],
+    }), now)
+    return {"ok": True, "frozen_count": report["frozen_count"],
+            "added": report["added"], "pins": report["pins"],
+            "added_pins": report["added_pins"]}
+
+
 # -- reconcile -----------------------------------------------------------------------
 
 def reconcile(store: ContactStore) -> dict:

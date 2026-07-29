@@ -84,6 +84,18 @@
 {% endfor %}{% endif %}</textarea>
         <div style="margin-top:8px;"><button class="btn btn-small" type="submit">Save sequence</button></div>
       </form>
+      {% if campaign.status in ('approved', 'sending', 'paused') %}
+      <details style="margin-top:10px;">
+        <summary class="muted" style="cursor:pointer;">Edit live (keep sending)</summary>
+        <p class="muted" style="font-size:12px;">Append, insert, or swap the copy of steps not yet sent. Already-sent steps stay locked and must be kept unchanged at the top; the campaign keeps sending. To change a sent step, pause and re-approve.</p>
+        <form method="post" action="/campaigns/{{ campaign.campaign_id }}/sequences/{{ degree }}/delta">
+          <label>Steps</label>
+          <textarea name="steps" rows="4">{% if seq %}{% for s in seq.steps %}{{ s.channel }} {{ s.template_key }} {{ s.day_offset }}
+{% endfor %}{% endif %}</textarea>
+          <div style="margin-top:8px;"><button class="btn btn-small" type="submit">Apply delta</button></div>
+        </form>
+      </details>
+      {% endif %}
     </div>
   {% endfor %}
   </div>
