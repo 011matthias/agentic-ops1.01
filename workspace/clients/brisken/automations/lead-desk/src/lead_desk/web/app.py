@@ -523,9 +523,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                     (c["campaign_id"],),
                 ).fetchone()[0]
             kill = (store.get_state("kill_switch") or "0") == "1"
+            mailbox_cap = int(store.get_state("mailbox_daily_cap") or 0)
         return templates.TemplateResponse(
             request, "campaigns.html",
-            {"campaigns": rows, "kill_switch": kill, "user": current_user(request)},
+            {"campaigns": rows, "kill_switch": kill, "mailbox_cap": mailbox_cap,
+             "user": current_user(request)},
         )
 
     @app.post("/campaigns")
@@ -638,10 +640,11 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
 
     @app.post("/campaigns/{cid}/schedule")
     def campaign_schedule(request: Request, cid: str,
-                          start_not_before: str = Form("")):
-        """Set (or clear) the 'no earlier than' start date. A schedule change
-        alters neither copy nor recipient list, so it does NOT supersede an
-        approval; it only shifts when the first step becomes due."""
+                          start_not_before: str = Form(""),
+                          ramp_per_day: str = Form("")):
+        """Set (or clear) the 'no earlier than' start date and the per-day new
+        contact ramp. A pacing change alters neither copy nor recipient list, so
+        it does NOT supersede an approval; it only shifts when steps become due."""
         raw = start_not_before.strip()
         if raw:
             try:
@@ -649,11 +652,40 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             except ValueError:
                 return HTMLResponse("start_not_before must be YYYY-MM-DD",
                                     status_code=400)
+        ramp_raw = ramp_per_day.strip()
+        ramp_val = None
+        if ramp_raw:
+            try:
+                ramp_val = int(ramp_raw)
+            except ValueError:
+                return HTMLResponse("ramp_per_day must be a whole number",
+                                    status_code=400)
+            if ramp_val < 0:
+                return HTMLResponse("ramp_per_day must be >= 0", status_code=400)
         with open_store() as store:
             if store.get_campaign(cid) is None:
                 return HTMLResponse("Campaign not found", status_code=404)
-            store.update_campaign(cid, {"start_not_before": raw or None}, now_iso())
+            store.update_campaign(cid, {"start_not_before": raw or None,
+                                        "ramp_per_day": ramp_val}, now_iso())
         return RedirectResponse(url=f"/campaigns/{cid}?scheduled=1", status_code=303)
+
+    @app.post("/settings/mailbox-cap")
+    def settings_mailbox_cap(request: Request, mailbox_daily_cap: str = Form("")):
+        """Global per-mailbox daily send cap across ALL campaigns from one warm
+        mailbox (0 or blank = off)."""
+        raw = mailbox_daily_cap.strip()
+        val = 0
+        if raw:
+            try:
+                val = int(raw)
+            except ValueError:
+                return HTMLResponse("mailbox_daily_cap must be a whole number",
+                                    status_code=400)
+            if val < 0:
+                return HTMLResponse("mailbox_daily_cap must be >= 0", status_code=400)
+        with open_store() as store:
+            store.set_state("mailbox_daily_cap", str(val), now_iso())
+        return RedirectResponse(url="/campaigns?mbxcap=1", status_code=303)
 
     @app.post("/templates")
     def template_save(request: Request, template_key: str = Form(...),

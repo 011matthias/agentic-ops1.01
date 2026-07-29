@@ -258,16 +258,28 @@
 
 {% if campaign.status != 'done' %}
 <div class="card">
-  <h2>Schedule</h2>
+  <h2>Schedule &amp; pacing</h2>
   <p class="muted" style="margin:0 0 10px;">
-    {% if campaign.start_not_before %}This campaign sends nothing before <strong>{{ campaign.start_not_before }}</strong>.{% else %}No start-date hold: approved sends become due immediately.{% endif %}
-    Use this to hold a wave until contacts are back from vacation; approve now, send later.
+    {% if campaign.start_not_before %}Sends nothing before <strong>{{ campaign.start_not_before }}</strong>.{% else %}No start-date hold.{% endif %}
+    {% if campaign.ramp_per_day %}Up to <strong>{{ campaign.ramp_per_day }}</strong> new contacts/day.{% else %}No ramp (all first sends become due at once; only the daily cap brakes the burst).{% endif %}
+    Hold a wave until contacts are back, and spread the first touch over days.
   </p>
   <form method="post" action="/campaigns/{{ campaign.campaign_id }}/schedule" class="row-actions">
-    <div style="min-width:220px;"><label>Start no earlier than (blank to clear)</label>
+    <div style="min-width:200px;"><label>Start no earlier than (blank to clear)</label>
       <input type="date" name="start_not_before" value="{{ campaign.start_not_before or '' }}"></div>
-    <button class="btn btn-small" type="submit">Save schedule</button>
+    <div style="min-width:170px;"><label>New contacts per day (blank/0 = off)</label>
+      <input type="number" min="0" name="ramp_per_day" value="{{ campaign.ramp_per_day if campaign.ramp_per_day is not none else '' }}"></div>
+    <button class="btn btn-small" type="submit">Save</button>
   </form>
+  {% if report and report.projected_schedule %}
+  <p class="muted" style="margin:14px 0 4px;">Projected send schedule (estimate; ignores replies, bounces, and the cross-campaign mailbox cap):</p>
+  <table style="border-collapse:collapse; font-size:13px;">
+    <thead><tr><th style="text-align:left; padding:2px 16px 2px 0;">Date</th><th style="text-align:left; padding:2px 0;">Sends</th></tr></thead>
+    <tbody>
+    {% for d in report.projected_schedule %}<tr><td style="padding:2px 16px 2px 0;">{{ d.date }}</td><td style="padding:2px 0;">{{ d.count }}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
 </div>
 {% endif %}
 

@@ -362,6 +362,11 @@ def claim_sends(store: ContactStore, worker_id: str, max_items: int,
         return {"paused": True, "claims": []}
 
     claims: list[dict] = []
+    # Per-mailbox cap across ALL campaigns from one warm mailbox (global state,
+    # 0 = off). Seeded per mailbox on first use, then decremented as this pass
+    # claims, so two concurrent campaigns from one mailbox share the budget.
+    mailbox_cap = int(store.get_state("mailbox_daily_cap") or 0)
+    mailbox_used: dict[str, int] = {}
     for campaign_row in store.list_campaigns():
         campaign = dict(campaign_row)
         # The gate: the worker sends ONLY from a campaign a human has
@@ -379,13 +384,26 @@ def claim_sends(store: ContactStore, worker_id: str, max_items: int,
             campaign["campaign_id"], today.isoformat())
         if cap_left <= 0:
             continue
+        # Per-day NEW-contact ramp (None = off): how many more step-1 sends may
+        # start today. Follow-up steps are not ramp-limited.
+        ramp = int(campaign.get("ramp_per_day") or 0)
+        ramp_left = (ramp - store.first_step_sends_today(
+            campaign["campaign_id"], today.isoformat())) if ramp > 0 else None
+        mbx = campaign["from_address"]
+        if mailbox_cap > 0:
+            if mbx not in mailbox_used:
+                mailbox_used[mbx] = store.mailbox_sends_today(mbx, today.isoformat())
+            mbx_remaining = mailbox_cap - mailbox_used[mbx]
+        else:
+            mbx_remaining = None
         pins = store.get_pins(campaign["campaign_id"])
         recipient_pins = store.get_recipient_pins(campaign["campaign_id"])
         denied = deny_domains(store)
         blocks: list[dict] = []
         due = due_items(store, campaign["campaign_id"], at)
         for item in due["emails"]:
-            if len(claims) >= max_items or cap_left <= 0:
+            if (len(claims) >= max_items or cap_left <= 0
+                    or (mbx_remaining is not None and mbx_remaining <= 0)):
                 break
             e, step = item["enrollment"], item["step"]
             to_addr = (e.get("email") or "").strip()
@@ -415,6 +433,11 @@ def claim_sends(store: ContactStore, worker_id: str, max_items: int,
                                "detail": f"step {step['step_no']} template "
                                          f"{step['template_key']!r} not pinned; re-approve"})
                 continue
+            # Per-day ramp: hold fresh (step-1) contacts once today's ramp is
+            # spent. A benign, intentional deferral (no alert); the contact
+            # stays step-1 and starts on a later day.
+            if ramp_left is not None and step["step_no"] == 1 and ramp_left <= 0:
+                continue
             version = pins.get(step["template_key"])
             tpl = store.get_template(step["template_key"], version)
             if tpl is None:
@@ -436,6 +459,11 @@ def claim_sends(store: ContactStore, worker_id: str, max_items: int,
                 lease_id = None
                 lease_expires = None
             cap_left -= 1
+            if ramp_left is not None and step["step_no"] == 1:
+                ramp_left -= 1
+            if mbx_remaining is not None:
+                mbx_remaining -= 1
+                mailbox_used[mbx] = mailbox_used.get(mbx, 0) + 1
             prior = attempt_key_for(e["enrollment_id"], step["step_no"] - 1) \
                 if step["step_no"] > 1 else None
             claims.append({
@@ -599,6 +627,87 @@ def mark_manual_done(store: ContactStore, enrollment_id: int, step_no: int,
     return {"ok": True, "event_inserted": inserted}
 
 
+# -- projected schedule -----------------------------------------------------------
+
+def project_schedule(store: ContactStore, campaign_id: str,
+                     at: datetime | None = None, horizon_days: int = 120) -> list[dict]:
+    """A day-by-day forward projection of when this campaign's sends land, for
+    the confirm-page preview. Simulates the day-level pacing (send window,
+    daily_cap, per-day ramp) over the active cohort from each enrollment's
+    start. An ESTIMATE: it does not model the cross-campaign mailbox cap,
+    reply/bounce drop-off, or intra-day throttle. Returns
+    [{"date": "YYYY-MM-DD", "count": N}, ...] for days that carry sends."""
+    at = at or now_utc()
+    campaign_row = store.get_campaign(campaign_id)
+    if campaign_row is None:
+        return []
+    campaign = dict(campaign_row)
+    window = parse_window(campaign.get("send_window"))
+    daily_cap = int(campaign["daily_cap"])
+    ramp = int(campaign.get("ramp_per_day") or 0)
+    sequences = {s["degree"]: s for s in store.sequences_for_campaign(campaign_id)}
+    start_floor = _campaign_today(campaign, at)
+    snb = campaign.get("start_not_before")
+    if snb:
+        snb_date = date.fromisoformat(str(snb)[:10])
+        start_floor = max(start_floor, snb_date)
+
+    workers: list[dict] = []
+    for row in store.enrollments_for_campaign(campaign_id):
+        e = dict(row)
+        if e.get("suppressed") or e.get("cadence_replied") or e.get("cadence_bounced"):
+            continue
+        seq = sequences.get(e.get("degree") or "")
+        steps = [s for s in (seq["steps"] if seq else []) if s["channel"] == "email"]
+        done = int(e.get("steps_done") or 0)
+        remaining = steps[done:]
+        if not remaining:
+            continue
+        last = e.get("last_step_ts")
+        if last:
+            anchor = date.fromisoformat(str(last)[:10])
+        else:
+            appr = e.get("enrollment_approved_at")
+            anchor = date.fromisoformat(str(appr)[:10]) if appr else start_floor
+            anchor = max(anchor, start_floor)
+        workers.append({
+            "steps": remaining, "idx": 0,
+            "next_due": anchor + timedelta(days=int(remaining[0]["day_offset"])),
+            "fresh": done == 0,
+        })
+    if not workers:
+        return []
+
+    counts: dict[str, int] = {}
+    day = start_floor
+    pending = len(workers)
+    guard = 0
+    while pending > 0 and guard < horizon_days:
+        guard += 1
+        if day.weekday() in window["days"]:
+            cap = daily_cap
+            ramp_today = ramp if ramp > 0 else None
+            for w in workers:
+                if cap <= 0:
+                    break
+                if w["idx"] >= len(w["steps"]) or w["next_due"] > day:
+                    continue
+                is_first = w["fresh"] and w["idx"] == 0
+                if is_first and ramp_today is not None and ramp_today <= 0:
+                    continue
+                counts[day.isoformat()] = counts.get(day.isoformat(), 0) + 1
+                cap -= 1
+                if is_first and ramp_today is not None:
+                    ramp_today -= 1
+                w["idx"] += 1
+                if w["idx"] >= len(w["steps"]):
+                    pending -= 1
+                else:
+                    w["next_due"] = day + timedelta(days=int(w["steps"][w["idx"]]["day_offset"]))
+        day = day + timedelta(days=1)
+    return [{"date": d, "count": counts[d]} for d in sorted(counts)]
+
+
 # -- approval ---------------------------------------------------------------------
 
 def approval_report(store: ContactStore, campaign_id: str) -> dict:
@@ -677,6 +786,9 @@ def approval_report(store: ContactStore, campaign_id: str) -> dict:
         f"{samples[d]['cohort_size']} {d}" for d in degrees_in_use if d in samples)
     snb = campaign.get("start_not_before")
     schedule_text = f" Starts no earlier than {str(snb)[:10]}." if snb else ""
+    ramp = campaign.get("ramp_per_day")
+    if ramp:
+        schedule_text += f" Ramp: up to {int(ramp)} new contacts/day."
     scope_text = (
         f"Approving sends up to {total_emails} emails to {len(active)} contacts "
         f"({degree_summary}), "
@@ -695,6 +807,7 @@ def approval_report(store: ContactStore, campaign_id: str) -> dict:
         "degrees": degrees_in_use, "samples": samples,
         "total_emails": total_emails, "active_count": len(active),
         "scope_text": scope_text,
+        "projected_schedule": project_schedule(store, campaign_id),
     }
 
 
