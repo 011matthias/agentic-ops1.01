@@ -356,6 +356,18 @@ SELECT en.enrollment_id, en.contact_id, en.campaign_id,
   (SELECT COUNT(*) FROM outreach_events e
      WHERE e.contact_id = en.contact_id
        AND e.ext_key LIKE 'cadence:' || en.enrollment_id || ':%') AS steps_done,
+  -- The SET of step_nos already sent, parsed from the reserved ext_key
+  -- 'cadence:{eid}:{step_no}' (comma-joined, unordered). step_no is the stable
+  -- send-identity, so keying cadence progress on this set (not the bare count
+  -- above) keeps the pointer correct across a mid-sequence INSERT/REORDER: an
+  -- unsent step is never skipped and a sent step is never re-sent. Same WHERE as
+  -- steps_done, so len(sent_steps) == steps_done always.
+  (SELECT group_concat(
+       CAST(substr(e.ext_key,
+                   length('cadence:' || en.enrollment_id || ':') + 1) AS INTEGER))
+     FROM outreach_events e
+     WHERE e.contact_id = en.contact_id
+       AND e.ext_key LIKE 'cadence:' || en.enrollment_id || ':%') AS sent_steps,
   (SELECT MAX(e.ts) FROM outreach_events e
      WHERE e.contact_id = en.contact_id
        AND e.ext_key LIKE 'cadence:' || en.enrollment_id || ':%') AS last_step_ts,
@@ -513,6 +525,12 @@ _MIGRATIONS: dict[int, list] = {
     # bounds the total, not the fresh-contact burst). Follow-up steps are not
     # ramp-limited.
     9: [_add_column("campaigns", "ramp_per_day", "INTEGER")],
+    # v10: step_no-keyed cadence progress. enrollment_progress now also exposes
+    # sent_steps (the SET of sent step_nos), so enrollment_state picks the first
+    # UNSENT step by identity instead of a positional count. This makes live
+    # mid-sequence INSERT/REORDER safe (no re-send of old copy, no skipped new
+    # step). A pure view-definition change; refresh so the prod volume picks it up.
+    10: _refresh_views_sql("enrollment_progress"),
 }
 
 # Highest applied migration. On a fresh DB the runner applies 1..N in order;
@@ -1138,7 +1156,7 @@ class ContactStore:
             SELECT en.enrollment_id, en.degree, en.degree_source, en.degree_rule,
                    en.approved_at AS enrollment_approved_at, en.enrolled_at,
                    c.*, s.stage AS stage, a.last_out, a.last_in,
-                   ep.steps_done, ep.last_step_ts,
+                   ep.steps_done, ep.sent_steps, ep.last_step_ts,
                    ep.replied AS cadence_replied, ep.bounced AS cadence_bounced
             FROM enrollments en
             JOIN contacts c        ON c.contact_id = en.contact_id

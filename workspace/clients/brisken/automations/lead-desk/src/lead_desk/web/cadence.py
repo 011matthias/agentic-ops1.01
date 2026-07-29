@@ -214,15 +214,43 @@ def classify_enrollments(store: ContactStore, campaign_id: str,
 
 # -- cadence state derivation ---------------------------------------------------
 
+def parse_sent_steps(progress: dict) -> set[int]:
+    """The SET of step_nos already sent for one enrollment. Prefers the
+    ``sent_steps`` field (comma-joined step_nos from the enrollment_progress
+    view); falls back to treating a ``steps_done`` COUNT as the sent prefix
+    ``{1..steps_done}`` when only the count is available (which is exactly the
+    append-only truth). step_no is the stable send-identity, so this set is what
+    keeps the cadence pointer correct across a mid-sequence INSERT/REORDER."""
+    raw = progress.get("sent_steps")
+    if raw is None:
+        n = int(progress.get("steps_done") or 0)
+        return set(range(1, n + 1))
+    out: set[int] = set()
+    for part in str(raw).split(","):
+        part = part.strip()
+        if part.lstrip("-").isdigit():
+            out.add(int(part))
+    return out
+
+
 def enrollment_state(enrollment: dict, progress: dict, steps: list[dict],
                      contact: dict, campaign: dict) -> dict:
     """Pure derivation of one enrollment's cadence state.
 
     Returns {state, steps_done, steps_total, next_step, next_due}. States:
     stopped:suppressed / stopped:bounced / stopped:replied / no_sequence /
-    done / pending_approval / paused / inactive / active."""
-    steps_done = int(progress.get("steps_done") or 0)
+    done / pending_approval / paused / inactive / active.
+
+    The step pointer keys on the SET of sent step_nos, not a positional count:
+    the next step is the first (in step_no order) whose step_no has NOT been
+    sent, and 'done' means every sequence step's step_no is sent. Since a step's
+    identity is its step_no (== its send ext_key), inserting or reordering steps
+    never re-sends old copy under a shifted index nor skips the new step."""
+    sent = parse_sent_steps(progress)
     total = len(steps)
+    # Display count: how many of the CURRENT sequence's steps are already sent
+    # (== the old positional steps_done for an append-only sequence).
+    steps_done = sum(1 for st in steps if int(st["step_no"]) in sent)
     base = {"steps_done": steps_done, "steps_total": total,
             "next_step": None, "next_due": None}
     if contact.get("suppressed"):
@@ -233,7 +261,10 @@ def enrollment_state(enrollment: dict, progress: dict, steps: list[dict],
         return {**base, "state": "stopped:replied"}
     if not steps:
         return {**base, "state": "no_sequence"}
-    if steps_done >= total:
+    # First step whose step_no is unsent; None means every step has been sent.
+    next_idx = next((i for i, st in enumerate(steps)
+                     if int(st["step_no"]) not in sent), None)
+    if next_idx is None:
         return {**base, "state": "done"}
     status = campaign.get("status") or "draft"
     if not enrollment.get("approved_at") and not enrollment.get("enrollment_approved_at"):
@@ -250,7 +281,7 @@ def enrollment_state(enrollment: dict, progress: dict, steps: list[dict],
     if status != "sending":
         return {**base, "state": "inactive"}
 
-    next_step = steps[steps_done]  # 1-based step_no == steps_done + 1
+    next_step = steps[next_idx]  # first step whose step_no is not yet sent
     # Offsets anchor on the PREVIOUS step's actual completion (a delayed send
     # never compresses the follow-up gap); step 1 anchors on approval.
     anchor = (progress.get("last_step_ts")
@@ -311,7 +342,8 @@ def due_items(store: ContactStore, campaign_id: str, at: datetime) -> dict:
         steps = seq["steps"] if seq else []
         st = enrollment_state(
             {"approved_at": e.get("enrollment_approved_at")},
-            {"steps_done": e.get("steps_done"), "last_step_ts": e.get("last_step_ts"),
+            {"steps_done": e.get("steps_done"), "sent_steps": e.get("sent_steps"),
+             "last_step_ts": e.get("last_step_ts"),
              "replied": e.get("cadence_replied"), "bounced": e.get("cadence_bounced")},
             steps, e, campaign,
         )
@@ -659,10 +691,12 @@ def project_schedule(store: ContactStore, campaign_id: str,
             continue
         seq = sequences.get(e.get("degree") or "")
         steps = [s for s in (seq["steps"] if seq else []) if s["channel"] == "email"]
-        done = int(e.get("steps_done") or 0)
-        remaining = steps[done:]
+        sent = parse_sent_steps(
+            {"sent_steps": e.get("sent_steps"), "steps_done": e.get("steps_done")})
+        remaining = [s for s in steps if int(s["step_no"]) not in sent]
         if not remaining:
             continue
+        fresh = not any(int(s["step_no"]) in sent for s in steps)  # no email step sent yet
         last = e.get("last_step_ts")
         if last:
             anchor = date.fromisoformat(str(last)[:10])
@@ -673,7 +707,7 @@ def project_schedule(store: ContactStore, campaign_id: str,
         workers.append({
             "steps": remaining, "idx": 0,
             "next_due": anchor + timedelta(days=int(remaining[0]["day_offset"])),
-            "fresh": done == 0,
+            "fresh": fresh,
         })
     if not workers:
         return []

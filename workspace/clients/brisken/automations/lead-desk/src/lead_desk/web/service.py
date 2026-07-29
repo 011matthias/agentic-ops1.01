@@ -248,7 +248,8 @@ def _attach_cadence(store: ContactStore, rows: list[dict], campaign_row) -> None
         steps = seq["steps"] if seq else []
         st = cadence.enrollment_state(
             {"approved_at": r.get("enrollment_approved_at")},
-            {"steps_done": r.get("steps_done"), "last_step_ts": r.get("last_step_ts"),
+            {"steps_done": r.get("steps_done"), "sent_steps": r.get("sent_steps"),
+             "last_step_ts": r.get("last_step_ts"),
              "replied": r.get("cadence_replied"), "bounced": r.get("cadence_bounced")},
             steps, r, cdict,
         )
