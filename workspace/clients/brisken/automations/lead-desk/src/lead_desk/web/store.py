@@ -192,6 +192,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     throttle_seconds INTEGER NOT NULL DEFAULT 12,
     jitter_seconds   INTEGER NOT NULL DEFAULT 4,
     start_not_before TEXT,
+    ramp_per_day  INTEGER,
     approved_at   TEXT,
     approved_by   TEXT,
     approved_contacts_hash TEXT,
@@ -506,6 +507,12 @@ _MIGRATIONS: dict[int, list] = {
     # max(approved_at, start_not_before) so day-offset math counts from the
     # real start. Lets a wave be approved now but held until people are back.
     8: [_add_column("campaigns", "start_not_before", "TEXT")],
+    # v9: spaced sending. A nullable per-day NEW-contact ramp: at most
+    # ramp_per_day first-step (step 1) sends per day, so a large wave spreads
+    # over days instead of firing every step-1 at once (daily_cap alone only
+    # bounds the total, not the fresh-contact burst). Follow-up steps are not
+    # ramp-limited.
+    9: [_add_column("campaigns", "ramp_per_day", "INTEGER")],
 }
 
 # Highest applied migration. On a fresh DB the runner applies 1..N in order;
@@ -949,7 +956,7 @@ class ContactStore:
         cols = [c for c in fields if c in (
             "name", "status", "from_address", "cc_address", "bcc_address",
             "send_window", "daily_cap", "throttle_seconds", "jitter_seconds",
-            "start_not_before",
+            "start_not_before", "ramp_per_day",
             "approved_at", "approved_by", "approved_contacts_hash",
         )]
         if not cols:
@@ -1310,5 +1317,44 @@ class ContactStore:
             "JOIN enrollments en ON en.enrollment_id = sa.enrollment_id "
             "WHERE en.campaign_id = ? AND sa.status = 'leased'",
             (campaign_id,),
+        ).fetchone()[0]
+        return int(landed) + int(outstanding)
+
+    def first_step_sends_today(self, campaign_id: str, day_prefix: str) -> int:
+        """Ramp accounting: today's landed FIRST-step (step 1) cadence sends +
+        outstanding step-1 leases. 'New contacts started today' - what the
+        per-day ramp bounds (follow-up steps are not ramp-limited)."""
+        landed = self.conn.execute(
+            "SELECT COUNT(*) FROM outreach_events e "
+            "JOIN enrollments en ON e.ext_key = 'cadence:' || en.enrollment_id || ':1' "
+            "WHERE en.campaign_id = ? AND e.type = 'sent' AND e.ts LIKE ?",
+            (campaign_id, day_prefix + "%"),
+        ).fetchone()[0]
+        outstanding = self.conn.execute(
+            "SELECT COUNT(*) FROM send_attempts sa "
+            "JOIN enrollments en ON en.enrollment_id = sa.enrollment_id "
+            "WHERE en.campaign_id = ? AND sa.status = 'leased' AND sa.step_no = 1",
+            (campaign_id,),
+        ).fetchone()[0]
+        return int(landed) + int(outstanding)
+
+    def mailbox_sends_today(self, from_address: str, day_prefix: str) -> int:
+        """Per-mailbox cap accounting across ALL campaigns that send from this
+        address: today's landed cadence sends + outstanding leases. The
+        per-campaign daily_cap does not bound the mailbox's total when several
+        campaigns send from the same warm mailbox concurrently; this does."""
+        landed = self.conn.execute(
+            "SELECT COUNT(*) FROM outreach_events e "
+            "JOIN enrollments en ON e.ext_key LIKE 'cadence:' || en.enrollment_id || ':%' "
+            "JOIN campaigns c ON c.campaign_id = en.campaign_id "
+            "WHERE c.from_address = ? AND e.type = 'sent' AND e.ts LIKE ?",
+            (from_address, day_prefix + "%"),
+        ).fetchone()[0]
+        outstanding = self.conn.execute(
+            "SELECT COUNT(*) FROM send_attempts sa "
+            "JOIN enrollments en ON en.enrollment_id = sa.enrollment_id "
+            "JOIN campaigns c ON c.campaign_id = en.campaign_id "
+            "WHERE c.from_address = ? AND sa.status = 'leased'",
+            (from_address,),
         ).fetchone()[0]
         return int(landed) + int(outstanding)

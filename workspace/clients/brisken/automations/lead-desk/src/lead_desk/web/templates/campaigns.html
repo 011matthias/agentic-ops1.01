@@ -23,6 +23,13 @@
     </form>
     {% endif %}
   </div>
+  <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border, #ddd);">
+    <form method="post" action="/settings/mailbox-cap" class="inline" style="margin:0; gap:8px; align-items:center;">
+      <label style="margin:0;">Per-mailbox daily send cap (across all campaigns from one warm mailbox; 0 = off)</label>
+      <input type="number" min="0" name="mailbox_daily_cap" value="{{ mailbox_cap or '' }}" style="width:90px;">
+      <button class="btn btn-small btn-secondary" type="submit">Save cap</button>
+    </form>
+  </div>
 </div>
 
 <div class="card scroll-x">
