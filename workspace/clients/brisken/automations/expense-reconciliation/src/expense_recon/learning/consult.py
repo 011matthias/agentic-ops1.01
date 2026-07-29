@@ -198,6 +198,12 @@ class ExpenseMemory:
                         "detected_vendor" if f == "vendor" else f
                     ] = value
                     filled.append(f)
+                    if f == "vendor":
+                        # Mark where the DISPLAY vendor came from so the grid
+                        # can label a learned correction distinctly from a
+                        # registry canonicalization (the registry pass runs
+                        # after this and overwrites the marker on a hit).
+                        kw["vendor_source"] = "learned"
             if not kw:
                 out.append(r)
                 continue

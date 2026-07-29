@@ -50,6 +50,7 @@ class ClassificationSource(str, Enum):
     VENDOR = "VENDOR"      # Tier 2: vendor-name fallback; mark with ⚠
     REVIEW = "REVIEW"      # Tier 3: confidence too low or no signal at all
     LEARNED = "LEARNED"    # Tier 1: confirmed merchant->category recalled from memory (Phase 2)
+    REGISTRY = "REGISTRY"  # Tier 1: canonical merchant-registry default (2026-07-29); preempts the LLM
     UNCLASSIFIED = "UNCLASSIFIED"  # pre-categorization default
 
 
@@ -289,6 +290,23 @@ class Receipt:
     # populate/consume them.
     detected_tax: Decimal | None = None
     tax_label: str | None = None
+
+    # Merchant registry (2026-07-29): the short storefront brand for
+    # `detected_vendor` with legal suffixes / distributor tails stripped
+    # ("COMERCIO DE X LTDA" -> "X"). Populated by the vision extractor
+    # (`ExtractedReceipt.vendor_clean`) or deterministically at ingest;
+    # `detected_vendor` stays the raw reading for audit. The registry
+    # resolver reads this first and falls back to a deterministic clean of
+    # `detected_vendor` when it is None, so non-vision paths still resolve.
+    vendor_clean: str | None = None
+
+    # The canonical merchant name the registry resolved this receipt to, and
+    # where the DISPLAY vendor came from ("registry" | "learned"). Both set in
+    # `generate_expenses` only (registry consult / Phase-6 ExpenseMemory); the
+    # grid composes `vendor = {display, raw, source}` from these plus any
+    # reviewer override. None => display falls back to `detected_vendor`.
+    canonical_vendor: str | None = None
+    vendor_source: str | None = None
 
     @property
     def has_receipt_image(self) -> bool:

@@ -45,6 +45,7 @@ from pathlib import Path
 
 from ..llm.client import ExtractedReceipt, LLMClient
 from ..matching.types import LineItem, Receipt
+from ..vendor_names import clean_vendor_name
 from ._common import ParseIssue
 
 logger = logging.getLogger("expense_recon")
@@ -301,8 +302,15 @@ def _merge_receipt(receipt: Receipt, page: int, ext: ExtractedReceipt) -> Receip
     # still runs on the now-known merchant.
     new_items = line_items or receipt.line_items
     # Fill the merchant only when the summary lacked one -- the summary vendor,
-    # when present, is deterministic and stays the backbone.
-    vendor = receipt.detected_vendor or (ext.vendor or None)
+    # when present, is deterministic and stays the backbone. The short brand
+    # follows the effective vendor: when the summary owns it, clean the
+    # summary name; when vision supplied it, prefer the model's own brand.
+    if receipt.detected_vendor:
+        vendor = receipt.detected_vendor
+        vendor_clean = receipt.vendor_clean or clean_vendor_name(receipt.detected_vendor)
+    else:
+        vendor = ext.vendor or None
+        vendor_clean = ext.vendor_clean or clean_vendor_name(ext.vendor)
 
     notes: list[str] = []
     ext_total = _to_decimal(ext.total)
@@ -329,6 +337,7 @@ def _merge_receipt(receipt: Receipt, page: int, ext: ExtractedReceipt) -> Receip
     return replace(
         receipt,
         detected_vendor=vendor,
+        vendor_clean=vendor_clean,
         line_items=new_items,
         ocr_text=receipt.ocr_text or ext.notes,
         data_quality_note=note or receipt.data_quality_note,

@@ -216,6 +216,108 @@ def categorize_receipts(
     ]
 
 
+def apply_registry_category(
+    receipt: Receipt,
+    category: str | None,
+    zoho_account: str | None,
+    *,
+    override_er_category: bool = False,
+) -> Receipt:
+    """Stamp a deterministic REGISTRY categorization on every line of a
+    receipt whose merchant carries a registry default category (2026-07-29).
+
+    The highest-priority categorization source: it preempts the LLM entirely
+    (the caller does not run the LLM for these receipts), one tier above the
+    LEARNED fallback. `confidence=1.0`, `source=REGISTRY`. When the registry
+    also names a `zoho_account` it is kept (the ER account never clobbers it);
+    when it does not, the account resolves from the ER `zoho_category` / chart
+    exactly as the LLM path does, via `_carry_zoho_account`.
+
+    No-op when the registry entry carries no category (naming-only merchant);
+    the caller then runs the LLM as usual and only the canonical display name
+    changes."""
+    if not category:
+        return receipt
+    cat = Categorization(
+        category=category if category in EXPENSE_CATEGORIES else None,
+        zoho_account=zoho_account or None,
+        confidence=1.0,
+        source=ClassificationSource.REGISTRY,
+        reasoning="merchant registry default",
+    )
+    items = receipt.line_items or (_synthesize_total_line(receipt),)
+    stamped = replace(receipt, line_items=tuple(replace(li, categorization=cat) for li in items))
+    # A registry-provided account must survive; force the keep-account policy
+    # so `_carry_zoho_account` fills from the ER category only when the
+    # registry gave no account of its own.
+    return _carry_zoho_account(
+        stamped, override_er_category=override_er_category or bool(zoho_account)
+    )
+
+
+def categorize_receipts_with_registry(
+    receipts: list[Receipt],
+    *,
+    registry=None,
+    client: LLMClient | None = None,
+    chart_of_accounts: list[str] | None = None,
+    learned: "MerchantCategoryLookup | None" = None,
+    override_er_category: bool = False,
+    cat_chart=None,
+    scope_groups=None,
+) -> tuple[list[Receipt], dict]:
+    """Categorize a batch of receipt-first expenses with the merchant registry
+    as the top deterministic tier (2026-07-29).
+
+    For each receipt it resolves a canonical merchant (stamping
+    `canonical_vendor` + `vendor_source="registry"` on every match). A match
+    that carries a default category is stamped a REGISTRY categorization and
+    SKIPS the LLM (deterministic-first; the LLM only fills gaps); the rest run
+    through `categorize_receipts`, and through `adjudicate_receipts` when
+    `cat_chart` is supplied and `override_er_category` is on. An empty / None
+    registry behaves exactly like `categorize_receipts` alone.
+
+    Returns `(receipts, registry_matches)` where `registry_matches` maps
+    document_id -> MerchantMatch, for the grid's display vendor + provenance.
+    Order is preserved. Consulted in the statement-free expense paths only;
+    `reconcile()` never calls it."""
+    registry_matches: dict = {}
+    if registry:
+        for r in receipts:
+            m = registry.resolve(r.vendor_clean, r.detected_vendor)
+            if m is not None:
+                registry_matches[r.document_id] = m
+        receipts = [
+            replace(
+                r,
+                canonical_vendor=registry_matches[r.document_id].canonical_name,
+                vendor_source="registry",
+            )
+            if r.document_id in registry_matches
+            else r
+            for r in receipts
+        ]
+    cat_docs = {doc for doc, m in registry_matches.items() if m.category}
+    to_llm = [r for r in receipts if r.document_id not in cat_docs]
+    categorized = categorize_receipts(
+        to_llm, client=client, chart_of_accounts=chart_of_accounts,
+        learned=learned, override_er_category=override_er_category,
+    )
+    if override_er_category and cat_chart is not None:
+        categorized = adjudicate_receipts(
+            categorized, cat_chart, scope_groups=scope_groups
+        )
+    by_doc = {r.document_id: r for r in categorized}
+    for r in receipts:
+        if r.document_id in cat_docs:
+            m = registry_matches[r.document_id]
+            by_doc[r.document_id] = apply_registry_category(
+                r, m.category, m.zoho_account,
+                override_er_category=override_er_category,
+            )
+    return [by_doc[r.document_id] for r in receipts], registry_matches
+
+
 def _categorize_one(
     receipt: Receipt,
     client: LLMClient | None,

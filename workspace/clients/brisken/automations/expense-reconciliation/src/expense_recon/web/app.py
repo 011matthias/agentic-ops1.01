@@ -116,6 +116,7 @@ from .service import (
     validate_manual_match,
 )
 from ..matching.types import EXPENSE_CATEGORIES
+from ..merchant_registry import normalize_merchants_setting
 from .serialize import snapshot_from_dict
 from .store import (
     INTAKE_PROCESSING,
@@ -1187,6 +1188,16 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
                         entry[lkey] = values
                 cleaned_entities[name] = entry
             patch["entities"] = cleaned_entities
+        # Merchant registry (2026-07-29): {canonical_name: {aliases, category,
+        # zoho_account}}. Whole-map replace, same contract as `entities`;
+        # validated + cleaned by the registry module (blank canonical dropped,
+        # aliases de-duped on their normalized key, category constrained to
+        # the fixed 8). A malformed payload is rejected at the edge.
+        if "merchants" in body:
+            try:
+                patch["merchants"] = normalize_merchants_setting(body["merchants"])
+            except ValueError as exc:
+                return JSONResponse({"error": str(exc)}, status_code=400)
         with open_store() as store:
             settings = store.set_settings(patch, _now_iso())
         return JSONResponse({
@@ -2039,10 +2050,13 @@ def create_app(data_root: str | Path | None = None) -> FastAPI:
             overrides = store.get_category_overrides(run_id)
             field_overrides = store.get_expense_field_overrides(run_id)
             edits = store.get_expense_edits(run_id)
-        learned = commit_to_memory(
-            run, decisions, overrides, app.state.learning_db_path, _now_iso(),
-            field_overrides=field_overrides, edits=edits,
-        )
+            # Passing the open store lets the expense branch upsert the same
+            # vendor / category edits into settings["merchants"] (2026-07-29,
+            # self-improving registry) in the same transaction context.
+            learned = commit_to_memory(
+                run, decisions, overrides, app.state.learning_db_path, _now_iso(),
+                field_overrides=field_overrides, edits=edits, settings_store=store,
+            )
         return JSONResponse({"ok": True, "learned": learned})
 
     @app.get("/runs/{run_id}/report.xlsx")

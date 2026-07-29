@@ -9,6 +9,7 @@ dependencies = [
     "pypdf>=5.0",      # PDF text-layer extraction (digital receipts, 2.2)
     "pypdfium2>=4.30", # scanned-PDF rasterization for vision fallback (2.2)
     "pillow>=10.0",    # PNG encoding of rendered PDF pages (2.2)
+    "rapidfuzz>=3.0",  # token_set_ratio for the merchant-registry alias match
 ]
 
 [project.optional-dependencies]
@@ -23,6 +24,7 @@ web = [
 expense-recon = "expense_recon.cli:main"
 expense-recon-inspect = "expense_recon.inspect:main"
 expense-recon-web = "expense_recon.web.serve:main"
+expense-recon-seed-registry = "expense_recon.seed_registry:main"
 
 [build-system]
 requires = ["hatchling"]
