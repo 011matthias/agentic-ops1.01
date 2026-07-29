@@ -23,6 +23,7 @@ URL); feedback writes to JSONL on the Fly volume
 
 | Element | State | Status | Next action | Blocker | Detail |
 |---|---|---|---|---|---|
+| TC deck-story alignment (2026-07-29) | live | ALL live client surfaces re-aligned to Dirk's 2026-07-27 TC deck (S1-55; canon `context/tc-story-canon.md`): TC = main product but a single use case of OnePilot, Digital Co-Worker = a feature of OnePilot. New APP/UC + LIVE/POC taxonomy, six governance controls + EU AI Act, remittance never-match-never-clear, Bank Fee POC; killed AI Digital Workforce / the Evonik-RWZ deck / ChatGPT claims. PR #492 merged; DEPLOYED + live-verified resources.brisken.com + brisken.com/treasury + onepilot.brisken.com. Em-dash ban held (owner call). | Rome hub aligned in-repo but Rome has no Vercel project (deploy target pending); S56+ deck WIP pass when Dirk sends; treasury alt="Siemens" -> "Siemens Energy"; MDH "central repository" owner call | Rome deploy target; Dirk S56+ | PR #492; `context/tc-story-canon.md`; memory `project_brisken_tc_story_alignment` |
 | Site prototype | in-progress | Spine + corrected band/SOC; internal review pre-Dirk | Incorporate review feedback | Dirk hierarchy decision | `deliverables/lead-generation/onepilot/brisken-onepilot-website-prototype.html` |
 | Hosting (name-gated Fly) | live | brisken-onepilot-proto.fly.dev serving | none | none | `onepilot-site/` (FastAPI) |
 | Website blueprint | done | Build blueprint written | none | none | `deliverables/lead-generation/onepilot/brisken-onepilot-website-blueprint.md` |
