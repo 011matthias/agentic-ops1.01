@@ -27,6 +27,7 @@ from pathlib import Path
 
 from ..llm.client import ExtractedReceipt, LLMClient
 from ..matching.types import LineItem, Receipt
+from ..vendor_names import clean_vendor_name
 from ._common import ParseIssue, parse_date
 
 logger = logging.getLogger("expense_recon")
@@ -205,6 +206,7 @@ def _to_receipt(
         detected_total=_parse_decimal_lenient(extraction.total),
         detected_currency=currency,
         detected_vendor=extraction.vendor,
+        vendor_clean=extraction.vendor_clean or clean_vendor_name(extraction.vendor),
         detected_reference=extraction.reference,
         detected_tax=_parse_decimal_lenient(extraction.tax),
         tax_label=extraction.tax_label,

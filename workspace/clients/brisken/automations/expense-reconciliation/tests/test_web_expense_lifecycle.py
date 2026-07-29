@@ -190,10 +190,10 @@ def test_add_receipts_appends_and_dedupes(client, monkeypatch):
     grid = _grid(client, batch_id)
     assert grid["summary"]["n_expenses"] == 2
     assert grid["expense_ingest"]["n_added"] == 1  # duplicate bytes skipped
-    vendors = {e["vendor"] for e in grid["expenses"]}
+    vendors = {e["vendor"]["display"] for e in grid["expenses"]}
     assert vendors == {"Staples", "Cafe Lisboa"}
     # The added receipt's image serves like any other.
-    cafe = next(e for e in grid["expenses"] if e["vendor"] == "Cafe Lisboa")
+    cafe = next(e for e in grid["expenses"] if e["vendor"]["display"] == "Cafe Lisboa")
     img = client.get(
         f"/api/runs/{batch_id}/receipts/{cafe['document_id']}/image"
     )

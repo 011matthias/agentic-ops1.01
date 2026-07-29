@@ -84,7 +84,11 @@ from pathlib import Path
 import os
 from decimal import Decimal
 
-from .categorize import adjudicate_receipts, categorize_receipts
+from .categorize import (
+    adjudicate_receipts,
+    categorize_receipts,
+    categorize_receipts_with_registry,
+)
 from .categorize_charges import categorize_charges, derive_subscription_status
 from .ingest._common import ParseIssue
 from .ingest.chart_of_accounts import ChartOfAccounts
@@ -826,7 +830,7 @@ def reconcile(
 
 def generate_expenses(
     cfg: dict, config_dir: Path, *, learned=None, llm_client=None,
-    on_stage=None, expense_memory=None,
+    on_stage=None, expense_memory=None, registry=None,
 ) -> ReconcileResult:
     """Receipt-first expense generation: ingest -> vision -> categorize a
     batch of receipts with NO bank statement, one "expense" per receipt.
@@ -849,6 +853,13 @@ def generate_expenses(
     merchant -> entity mappings and per-merchant field corrections right
     after ingest — entity BEFORE categorization, so downstream sees the
     corrected receipt. Consulted here ONLY; `reconcile()` never takes it.
+
+    `registry` (2026-07-29, a `merchant_registry.MerchantRegistry` built from
+    `settings["merchants"]`) is the highest-priority DETERMINISTIC source: it
+    canonicalizes each receipt's DISPLAY vendor and, when the merchant carries
+    a default category, stamps a REGISTRY categorization and SKIPS the LLM for
+    that receipt (deterministic-first; the LLM only fills gaps). Consulted
+    here ONLY; `reconcile()` never takes it.
 
     `reconcile()` is deliberately untouched: statement-mode reconciliation
     runs the identical path it always has.
@@ -904,15 +915,22 @@ def generate_expenses(
     override_er_category = bool(
         (cfg.get("categorization") or {}).get("override_er_category", False)
     )
+
     _stage("categorizing")
-    receipts = categorize_receipts(
-        receipts, client=llm_client, chart_of_accounts=account_labels,
-        learned=learned, override_er_category=override_er_category,
+    # Merchant-registry consult (2026-07-29), between the Phase-6 memory pass
+    # and the LLM: canonicalize each receipt's display vendor and let a
+    # registry default category preempt the LLM (deterministic-first). An
+    # empty / None registry reduces to plain categorize_receipts + adjudicate.
+    receipts, _registry_matches = categorize_receipts_with_registry(
+        receipts,
+        registry=registry,
+        client=llm_client,
+        chart_of_accounts=account_labels,
+        learned=learned,
+        override_er_category=override_er_category,
+        cat_chart=cat_chart,
+        scope_groups=scope_groups,
     )
-    if override_er_category and cat_chart is not None:
-        receipts = adjudicate_receipts(
-            receipts, cat_chart, scope_groups=scope_groups
-        )
 
     # No statement => no matching. Every receipt IS an expense; they live in
     # `unmatched_receipts` so the snapshot shape is identical to a run with

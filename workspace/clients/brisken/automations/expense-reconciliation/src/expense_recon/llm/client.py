@@ -120,6 +120,11 @@ class ExtractedReceipt:
     tax: str | None = None
     tax_label: str | None = None
     payment_hint: str | None = None
+    # Merchant registry (2026-07-29): the short storefront brand with legal
+    # suffixes / distributor tails stripped ("COMERCIO DE X LTDA" -> "X"),
+    # so the registry can canonicalize consistently. `vendor` stays the raw
+    # reading for audit; None when the model gave no brand.
+    vendor_clean: str | None = None
 
 
 @dataclass(frozen=True)
@@ -394,6 +399,7 @@ Extract:
 - total: the final amount charged, as a plain number string like "24.50", or null. Prefer the grand total including tax/tip over any subtotal.
 - currency: the ISO 4217 code (USD, EUR, GBP...), or null if not determinable. Infer from symbols ($, €, £) only when unambiguous.
 - vendor: the merchant/issuer name as printed, or null.
+- vendor_clean: the short storefront brand for that merchant, or null. Strip legal-entity suffixes (LTDA, S.A., GmbH, Inc, LLC, Ltd, Co) and distributor/trading tails ("COMERCIO DE X LTDA" -> "X", "X INDUSTRIA E COMERCIO" -> "X"); prefer the storefront/brand a person would recognize. Keep it faithful to `vendor`; do not invent a brand that is not on the receipt.
 - reference: an invoice/ticket/booking/order number if one is printed, else null.
 - line_items: every purchased line item with description, quantity, unit_price, line_total (all amounts as plain number strings, quantity/unit_price null when not shown). If the receipt shows only a final total with NO itemization (taxi slips, card slips, simple tickets), return an empty array. NEVER invent line items. If a line item is illegible, include it with description "(illegible)" and line_total null.
 - tax: the total tax/VAT amount as a plain number string like "3.80", or null if the receipt does not show tax separately. Do NOT compute it; only report a printed tax figure.
@@ -420,6 +426,7 @@ _EXTRACT_SCHEMA = {
         "total": {"type": ["string", "null"]},
         "currency": {"type": ["string", "null"]},
         "vendor": {"type": ["string", "null"]},
+        "vendor_clean": {"type": ["string", "null"]},
         "reference": {"type": ["string", "null"]},
         "tax": {"type": ["string", "null"]},
         "tax_label": {"type": ["string", "null"]},
@@ -442,7 +449,7 @@ _EXTRACT_SCHEMA = {
         "notes": {"type": "string"},
     },
     "required": [
-        "date", "total", "currency", "vendor", "reference",
+        "date", "total", "currency", "vendor", "vendor_clean", "reference",
         "tax", "tax_label", "payment_hint",
         "line_items", "confidence", "notes",
     ],
@@ -793,6 +800,7 @@ def _extraction_from_payload(payload: dict) -> ExtractedReceipt:
         tax=_opt_str(payload.get("tax")),
         tax_label=_opt_str(payload.get("tax_label")),
         payment_hint=_opt_str(payload.get("payment_hint")),
+        vendor_clean=_opt_str(payload.get("vendor_clean")),
     )
 
 

@@ -143,9 +143,9 @@ def test_batch_create_ocr_and_grid(client, monkeypatch):
     assert grid["mode"] == "expense_generation"
     assert grid["summary"]["n_expenses"] == 2
     assert len(grid["category_options"]) == 8
-    vendors = {e["vendor"] for e in grid["expenses"]}
+    vendors = {e["vendor"]["display"] for e in grid["expenses"]}
     assert vendors == {"Staples", "Cafe Lisboa"}
-    staples = next(e for e in grid["expenses"] if e["vendor"] == "Staples")
+    staples = next(e for e in grid["expenses"] if e["vendor"]["display"] == "Staples")
     assert staples["total"] == "42.50"
     assert staples["tax"] == "5.00"
     assert staples["tax_label"] == "VAT"
@@ -220,7 +220,7 @@ def test_field_edit_updates_grid_and_export(client, monkeypatch):
         assert resp.status_code == 200, resp.text
 
     row = _grid(client, batch_id)["expenses"][0]
-    assert row["vendor"] == "Staples Inc"
+    assert row["vendor"]["display"] == "Staples Inc"
     assert row["total"] == "99.99"
     assert row["currency"] == "EUR"
     assert row["date"] == "2026-07-15"
@@ -240,7 +240,7 @@ def test_field_edit_updates_grid_and_export(client, monkeypatch):
         json={"field": "vendor", "value": None},
     )
     assert resp.status_code == 200
-    assert _grid(client, batch_id)["expenses"][0]["vendor"] == "Staples"
+    assert _grid(client, batch_id)["expenses"][0]["vendor"]["display"] == "Staples"
 
 
 def test_field_edit_validation(client, monkeypatch):
@@ -276,7 +276,7 @@ def test_category_edit_folds_into_overrides(client, monkeypatch):
     row = _grid(client, batch_id)["expenses"][0]
     assert row["posting_category"]["category"] == "Office Supplies & Consumables"
     assert row["posting_category"]["zoho_account"] == "E200010 - Office Supplies"
-    assert row["posting_category"]["source"] == "EDITED"
+    assert row["posting_category"]["source"] == "override"
     # Setting the account did NOT clear the category (merge, not clobber).
     (export_row,) = _export_rows(client, batch_id)
     assert export_row[COL_ACCOUNT] == "E200010 - Office Supplies"
@@ -307,7 +307,7 @@ def test_manual_add_and_delete(client, monkeypatch):
     assert grid["summary"]["n_expenses"] == 2
     manual = next(e for e in grid["expenses"] if e["document_id"] == manual_doc)
     assert manual["is_manual"] is True
-    assert manual["vendor"] == "Taxi Roma"
+    assert manual["vendor"]["display"] == "Taxi Roma"
     assert manual["legal_entity_id"] == "Corporate Services"  # batch default
     assert manual["posting_category"]["category"] == "Travel & Transport"
 
@@ -340,7 +340,7 @@ def test_delete_ocr_expense_soft_hides_it(client, monkeypatch):
     _patch_ocr(monkeypatch, _extraction(), _extraction(vendor="Cafe", total="9.00"))
     batch_id = _create_batch(client, files=[("a.jpg", JPG), ("b.jpg", JPG + b"2")])
     grid = _grid(client, batch_id)
-    doc = next(e["document_id"] for e in grid["expenses"] if e["vendor"] == "Cafe")
+    doc = next(e["document_id"] for e in grid["expenses"] if e["vendor"]["display"] == "Cafe")
 
     resp = client.request("DELETE", f"/api/runs/{batch_id}/expenses/{doc}")
     assert resp.status_code == 200, resp.text

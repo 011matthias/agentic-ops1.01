@@ -64,6 +64,7 @@ from ..output.zoho_expense_export import (
     write_zoho_expense_export,
 )
 from ..output.zoho_export import write_zoho_export
+from ..merchant_registry import MerchantRegistry, normalize_merchants_setting
 from .serialize import (
     categorization_from_dict,
     categorization_to_dict,
@@ -1950,8 +1951,57 @@ def _row_posting_category(
 # avoid importing categorize into the view layer; the values are the ones
 # serialize.py round-trips onto the snapshot.
 _ADJ_DISAGREE = frozenset({"ai_override_heavy", "review_unresolved"})
-# Source tiers that are trusted enough to post without a glance.
-_TRUSTED_SOURCE = frozenset({"LINE", "LEARNED", "EDITED"})
+# Source tiers that are trusted enough to post without a glance. REGISTRY
+# (2026-07-29) is a curated merchant default — a deterministic top tier like
+# LEARNED — so it reads `ready`, not `check`.
+_TRUSTED_SOURCE = frozenset({"LINE", "LEARNED", "EDITED", "REGISTRY"})
+
+# Coarse provenance the expense grid shows for WHY a category / vendor is what
+# it is (2026-07-29): the fine ClassificationSource tiers collapse to the
+# reviewer-facing set registry | learned | llm | override (REVIEW /
+# UNCLASSIFIED fold to "review"). Expense-grid only; the reconcile workbench
+# keeps the fine tiers.
+_COARSE_SOURCE = {
+    "EDITED": "override",
+    "REGISTRY": "registry",
+    "LEARNED": "learned",
+    "LINE": "llm",
+    "VENDOR": "llm",
+    "REVIEW": "review",
+    "UNCLASSIFIED": "review",
+}
+
+
+def _coarse_source_join(joined: str | None) -> str:
+    """Map a '; '-joined run of fine source tiers to distinct coarse tokens."""
+    out: list[str] = []
+    for tok in (joined or "").split(";"):
+        tok = tok.strip()
+        if not tok:
+            continue
+        coarse = _COARSE_SOURCE.get(tok, "llm")
+        if coarse not in out:
+            out.append(coarse)
+    return "; ".join(out)
+
+
+def _expense_vendor_view(eff: Receipt, orig: "Receipt | None", field_ov: dict) -> dict:
+    """The grid's `{display, raw, source}` vendor object (2026-07-29).
+
+    `raw` is the ORIGINAL extracted name (pre-edit snapshot), always kept for
+    audit. `display` + `source` follow the precedence a reviewer expects:
+    a manual vendor edit (override) wins, then the registry canonical, then a
+    Phase-6 learned spelling correction, else the extracted name as-is. The
+    override / learned displays read from `eff` because `apply_expense_edits` /
+    `ExpenseMemory.apply` have already folded those into `detected_vendor`."""
+    raw = ((orig.detected_vendor if orig else None) or eff.detected_vendor) or ""
+    if str(field_ov.get("vendor") or "").strip():
+        return {"display": eff.detected_vendor or "", "raw": raw, "source": "override"}
+    if eff.canonical_vendor:
+        return {"display": eff.canonical_vendor, "raw": raw, "source": "registry"}
+    if eff.vendor_source == "learned":
+        return {"display": eff.detected_vendor or "", "raw": raw, "source": "learned"}
+    return {"display": eff.detected_vendor or "", "raw": raw, "source": "extraction"}
 
 
 def _review(state: str, reason: str | None = None, code: str | None = None) -> dict:
@@ -2940,6 +2990,112 @@ def compare_runs(run_a: RunRow, run_b: RunRow) -> dict:
     return {"deltas": deltas, "rate": rate, "n_changed": len(changes), "changes": changes}
 
 
+def registry_upserts_from_expense_run(
+    merchants: dict,
+    *,
+    receipts: list[Receipt],
+    effective_receipts: list[Receipt],
+    field_overrides: dict[str, dict[str, str]],
+    category_overrides: dict,
+) -> tuple[dict, dict]:
+    """Fold reviewer vendor / category corrections into a COPY of the merchants
+    registry (2026-07-29, the self-improving half). Returns
+    `(new_merchants, summary)`.
+
+    - A VENDOR edit teaches canonicalization: the CHOSEN (edited) name is the
+      canonical merchant; the ORIGINAL extracted string becomes one of its
+      aliases (so next month's identical OCR output resolves to the canonical).
+    - A CATEGORY reclassification teaches the merchant default: the chosen
+      category (+ account) is set on the receipt's canonical merchant. The
+      merchant is the edited vendor if one was given, else the registry
+      canonical, else the effective vendor. A merchant whose category edits
+      disagree across its lines is skipped (mirrors Phase-6 `_learn_categories`).
+
+    Only explicit edits teach; the batch default and untouched OCR values do
+    not. Pure: it never touches the store, so it is unit-testable and the
+    caller decides whether to persist the changed map."""
+    orig_by_id = {r.document_id: r for r in receipts}
+    eff_by_id = {r.document_id: r for r in effective_receipts}
+    # Work on a mutable copy in the stored shape.
+    out: dict[str, dict] = {}
+    for name, entry in (merchants or {}).items():
+        out[str(name)] = {
+            "aliases": list((entry or {}).get("aliases") or []),
+            "category": (entry or {}).get("category"),
+            "zoho_account": (entry or {}).get("zoho_account"),
+        }
+
+    def _ensure(canonical: str) -> dict:
+        return out.setdefault(
+            canonical, {"aliases": [], "category": None, "zoho_account": None}
+        )
+
+    n_alias = n_category = n_skipped = 0
+
+    # 1) Vendor edits -> canonical + alias.
+    for document_id, fields in (field_overrides or {}).items():
+        canonical = str((fields or {}).get("vendor") or "").strip()
+        if not canonical:
+            continue
+        orig = orig_by_id.get(document_id)
+        raw = (orig.detected_vendor if orig else None) or ""
+        raw = raw.strip()
+        if not raw or normalize_vendor(raw) == normalize_vendor(canonical):
+            continue  # nothing to alias (renamed to itself / no original)
+        entry = _ensure(canonical)
+        have = {normalize_vendor(a) for a in entry["aliases"]}
+        if normalize_vendor(raw) not in have:
+            entry["aliases"].append(raw)
+            n_alias += 1
+
+    # 2) Category reclassifications -> merchant default (conflict-skipped).
+    pending: dict[str, dict] = {}
+    for (document_id, _line), ov in (category_overrides or {}).items():
+        category = (ov or {}).get("category")
+        if not category:
+            continue
+        eff = eff_by_id.get(document_id)
+        if eff is None:
+            continue
+        canonical = (
+            str((field_overrides or {}).get(document_id, {}).get("vendor") or "").strip()
+            or eff.canonical_vendor
+            or eff.detected_vendor
+            or ""
+        ).strip()
+        if not canonical:
+            continue
+        prior = pending.get(canonical)
+        cell = {"category": category, "zoho_account": (ov or {}).get("zoho_account")}
+        if prior is None:
+            pending[canonical] = {**cell, "conflict": False}
+        elif prior["category"] != category:
+            prior["conflict"] = True
+
+    for canonical, val in pending.items():
+        if val["conflict"]:
+            n_skipped += 1
+            continue
+        entry = _ensure(canonical)
+        entry["category"] = val["category"]
+        if val["zoho_account"]:
+            entry["zoho_account"] = val["zoho_account"]
+        n_category += 1
+
+    # Validate + clean back into the canonical stored shape (dedup aliases,
+    # confirm categories). Fail-open: a malformed result keeps the old map.
+    try:
+        new_merchants = normalize_merchants_setting(out)
+    except ValueError:
+        new_merchants = merchants or {}
+    summary = {
+        "aliases_added": n_alias,
+        "categories_set": n_category,
+        "skipped_conflict": n_skipped,
+    }
+    return new_merchants, summary
+
+
 def commit_to_memory(
     run: RunRow,
     decisions: dict[str, Decision],
@@ -2949,6 +3105,7 @@ def commit_to_memory(
     *,
     field_overrides: dict[str, dict[str, str]] | None = None,
     edits: list[dict] | None = None,
+    settings_store=None,
 ) -> dict:
     """Harvest this run's confirmed decisions into the durable learning
     store (Phase 2 capture). This is the explicit finalize gate: only
@@ -2985,7 +3142,24 @@ def commit_to_memory(
                 source_run=run.run_id,
                 now_iso=now_iso,
             )
-        return summary.as_dict()
+        result = summary.as_dict()
+        # Self-improving registry (2026-07-29): the same explicit vendor /
+        # category edits also upsert the canonical merchant registry, so the
+        # human-editable, seeded registry grows from corrections. Persist only
+        # when the map actually changed; skip silently without a settings store.
+        if settings_store is not None:
+            settings = settings_store.get_settings()
+            new_merchants, reg_summary = registry_upserts_from_expense_run(
+                settings.get("merchants") or {},
+                receipts=receipts,
+                effective_receipts=effective,
+                field_overrides=field_overrides or {},
+                category_overrides=overrides,
+            )
+            if new_merchants != (settings.get("merchants") or {}):
+                settings_store.set_settings({"merchants": new_merchants}, now_iso)
+            result["registry"] = reg_summary
+        return result
 
     transactions, receipts, outcome, _ = snapshot_from_dict(run.snapshot)
     effective = apply_decisions(outcome, transactions, receipts, decisions)
@@ -3191,6 +3365,9 @@ class PreparedExpenseBatch:
     # Phase 6: learned merchant->entity + field corrections, consulted by
     # generate_expenses only (never reconcile).
     expense_memory: object | None = None
+    # Merchant registry (2026-07-29): canonical vendor + default category,
+    # built from settings["merchants"]; also generate_expenses-only.
+    registry: object | None = None
 
 
 def create_expense_batch(
@@ -3319,6 +3496,8 @@ def create_expense_batch(
     if learning_db_path is not None:
         learned = MerchantCategoryLookup.from_db_path(learning_db_path)
         expense_memory = ExpenseMemory.from_db_path(learning_db_path)
+    # Merchant registry from the settings snapshot; empty => no-op.
+    registry = MerchantRegistry.from_settings(settings)
 
     return PreparedExpenseBatch(
         run_id=run_id,
@@ -3332,6 +3511,7 @@ def create_expense_batch(
         operator=operator,
         upload_issues=issues,
         expense_memory=expense_memory,
+        registry=registry,
     )
 
 
@@ -3348,6 +3528,7 @@ def execute_expense_batch(
             learned=prepared.learned,
             on_stage=on_stage,
             expense_memory=prepared.expense_memory,
+            registry=prepared.registry,
         )
     except ConfigError as exc:
         raise RunInputError(str(exc)) from exc
@@ -3603,12 +3784,16 @@ def build_expense_view(
     `build_view` (which is NOT modified); the SPA renders `expenses`, never
     `rows`. `settings` (Phase 5) feeds the curated account picker and the
     entity picker options."""
-    _, receipts, _, parse_errors = snapshot_from_dict(run.snapshot)
+    _, orig_receipts, _, parse_errors = snapshot_from_dict(run.snapshot)
+    # Keep the pre-edit snapshot so the vendor object can always show the
+    # ORIGINAL extracted name as `raw`, even after a reviewer vendor edit
+    # folded a new spelling into `detected_vendor`.
+    orig_by_id = {r.document_id: r for r in orig_receipts}
     default_entity = (
         ((run.config or {}).get("expense") or {}).get("legal_entity_id", "")
     )
     receipts = apply_expense_edits(
-        receipts, field_overrides, edits,
+        orig_receipts, field_overrides, edits,
         category_overrides=overrides, default_entity=default_entity,
     )
     receipts_dir = Path(run.work_dir) / "receipts"
@@ -3638,6 +3823,11 @@ def build_expense_view(
     for r in receipts:
         review = _expense_review(r, overrides)
         posting = _row_posting_category(r, overrides, None)
+        # Expense grid shows WHY the category is what it is in the reviewer's
+        # coarse vocabulary (registry | learned | llm | override); the fine
+        # tiers stay on each line item and on the reconcile workbench.
+        if posting is not None:
+            posting = {**posting, "source": _coarse_source_join(posting.get("source"))}
         pt_account, pt_source = resolve_paid_through(
             r,
             field_overrides.get(r.document_id, {}).get("paid_through") or None,
@@ -3657,6 +3847,15 @@ def build_expense_view(
             totals[ccy] = totals.get(ccy, Decimal("0")) + r.detected_total
         expenses.append({
             **rv,
+            # Canonical vendor provenance (2026-07-29): replace the bare
+            # `vendor` string from _receipt_view with {display, raw, source}
+            # so the grid shows the canonical name AND why it differs. This is
+            # an expense-grid-only shape; the reconcile workbench keeps the
+            # string (_receipt_view is unchanged there).
+            "vendor": _expense_vendor_view(
+                r, orig_by_id.get(r.document_id),
+                field_overrides.get(r.document_id, {}),
+            ),
             # Receipt-first fields _receipt_view does not carry (build_view
             # consumers are unchanged; these are expense-row additions).
             "tax": _fmt_amount(r.detected_tax),
@@ -3854,7 +4053,7 @@ def add_receipts_to_expense_batch(
     bytes (within this upload or vs an already-stored file) are skipped.
     Refused once a statement is attached — the pool is then the
     reconciliation's provenance and must not shift under it."""
-    from ..categorize import categorize_receipts
+    from ..categorize import categorize_receipts_with_registry
     from ..cli import _resolve_categorizer_chart
     from ..ingest.receipts_folder import parse_receipt_file
 
@@ -3953,14 +4152,16 @@ def add_receipts_to_expense_batch(
             MerchantCategoryLookup.from_db_path(learning_db_path)
             if learning_db_path is not None else None
         )
+        registry = MerchantRegistry.from_settings(store.get_settings())
         try:
             _, account_labels, _scope = _resolve_categorizer_chart(
                 cfg, work_dir, None, {}
             )
         except Exception:  # noqa: BLE001 - labels degrade, ingest never breaks
             account_labels = None
-        new_receipts = categorize_receipts(
+        new_receipts, _ = categorize_receipts_with_registry(
             new_receipts,
+            registry=registry,
             client=llm_client,
             chart_of_accounts=account_labels,
             learned=learned,

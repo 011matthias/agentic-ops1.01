@@ -123,12 +123,18 @@ VALID_DUP_RESOLUTIONS = (DUP_IGNORE, DUP_CONFIRMED)
 #     over the /data provisioning file's entity mapping when present
 #     (coa_provision.coa_validation_from_settings). Distinct from
 #     `card_entities`, which stays the card -> entity MAP.
+#   merchants (2026-07-29, receipt-first) — the canonical MERCHANT REGISTRY:
+#     {"Uber": {aliases: [...], category?, zoho_account?}}. Definable in the
+#     UI (like `entities`); the highest-priority deterministic source for a
+#     receipt's canonical vendor + default category in generate_expenses
+#     (expense_recon.merchant_registry). Empty => no canonicalization.
 SETTINGS_DEFAULTS: dict = {
     "export_approved_only": False,
     "fx_reference_rates": {},
     "card_entities": {},
     "card_accounts": {},
     "entities": {},
+    "merchants": {},
 }
 
 # Settings keys holding a {str: str} map. Values are kept as STRINGS: a

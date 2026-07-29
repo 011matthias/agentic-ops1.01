@@ -172,6 +172,10 @@ def receipt_to_dict(r: Receipt) -> dict:
         # Receipt-first tax parity (2026-07-27).
         "detected_tax": _dec(r.detected_tax),
         "tax_label": r.tax_label,
+        # Merchant registry (2026-07-29).
+        "vendor_clean": r.vendor_clean,
+        "canonical_vendor": r.canonical_vendor,
+        "vendor_source": r.vendor_source,
     }
 
 
@@ -202,6 +206,10 @@ def receipt_from_dict(d: dict) -> Receipt:
         # .get keeps pre-2026-07-27 snapshots loadable (no tax keys).
         detected_tax=_as_dec(d.get("detected_tax")),
         tax_label=d.get("tax_label"),
+        # .get keeps pre-2026-07-29 snapshots loadable (no registry keys).
+        vendor_clean=d.get("vendor_clean"),
+        canonical_vendor=d.get("canonical_vendor"),
+        vendor_source=d.get("vendor_source"),
     )
 
 

@@ -248,6 +248,10 @@ def test_commit_then_next_batch_autofills_then_forget_stops(client, monkeypatch)
     assert learned["merchant_entities"] >= 1
     assert learned["field_corrections"] == 2
     assert learned["merchant_categories"] == 1
+    # The same edits also seed the canonical registry (2026-07-29): the raw
+    # "Staples" becomes an alias of "Staples Inc", the category its default.
+    assert learned["registry"]["aliases_added"] >= 1
+    assert learned["registry"]["categories_set"] == 1
 
     # /api/memory shows the new rows.
     memory = client.get("/api/memory").json()
@@ -256,20 +260,24 @@ def test_commit_then_next_batch_autofills_then_forget_stops(client, monkeypatch)
     assert fields_learned == {"vendor", "paid_through"}
     assert memory["counts"]["merchant_entity"] >= 1
 
-    # A NEW batch with the same OCR output auto-fills everything.
+    # A NEW batch with the same OCR output auto-fills everything. The vendor
+    # spelling + category now resolve via the REGISTRY (the correction seeded
+    # settings["merchants"], which outranks the learned SQLite); the entity +
+    # paid-through still come from the learned memory (ExpenseMemory).
     _patch_ocr(monkeypatch, _extraction())
     batch2 = _create_batch(client, name="again.jpg", data=JPG + b"x")
     row = _row(client, batch2)
-    assert row["vendor"] == "Staples Inc"
+    assert row["vendor"]["display"] == "Staples Inc"
+    assert row["vendor"]["source"] == "registry"
     assert row["legal_entity_id"] == "Cloud Services"
     assert row["paid_through"] == "1010 Chase"
     assert "Auto-filled from a prior correction" in row["data_quality_note"]
-    # The learned category auto-fills as Tier-1 LEARNED (memory fallback
-    # consulted under the corrected vendor + entity scope).
     assert row["posting_category"]["category"] == "Office Supplies & Consumables"
-    assert row["posting_category"]["source"] == "LEARNED"
+    assert row["posting_category"]["source"] == "registry"
 
-    # Forget the merchant -> the next batch stops auto-filling.
+    # Forget the merchant -> the LEARNED memory (entity + paid-through) reverts,
+    # but the registry canonicalization persists: it is the durable, human-
+    # editable store, cleared from the Merchants editor, not /memory/forget.
     resp = client.post("/api/memory/forget", json={
         "legal_entity_id": "Cloud Services", "vendor": "Staples",
     })
@@ -278,8 +286,13 @@ def test_commit_then_next_batch_autofills_then_forget_stops(client, monkeypatch)
     _patch_ocr(monkeypatch, _extraction())
     batch3 = _create_batch(client, name="third.jpg", data=JPG + b"y")
     row = _row(client, batch3)
-    assert row["vendor"] == "Staples"
+    # Entity reverted (learned memory forgotten), the auto-fill note is gone...
     assert row["legal_entity_id"] == "Corporate Services"
+    assert "Auto-filled from a prior correction" not in (row["data_quality_note"] or "")
+    # ...but the registry still canonicalizes the vendor + its category.
+    assert row["vendor"]["display"] == "Staples Inc"
+    assert row["vendor"]["source"] == "registry"
+    assert row["posting_category"]["source"] == "registry"
 
 
 def test_batch_default_entity_never_teaches(client, monkeypatch):
