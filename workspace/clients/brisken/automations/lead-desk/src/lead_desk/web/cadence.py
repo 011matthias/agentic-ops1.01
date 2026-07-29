@@ -37,6 +37,14 @@ from .store import CADENCE_PREFIX, DEGREES, ContactStore, attempt_key_for
 LEASE_MINUTES = 30
 MAX_SEND_ATTEMPTS = 3
 
+# Recipient domains that must NEVER receive a campaign send, regardless of
+# approval (a competitor we hold, and our own internal domain). This is the
+# immutable floor; the claim path unions it with any operator-configured extras
+# in the 'send_deny_domains' state key, and the worker re-checks the floor
+# before the Graph POST. Mirrors the hard @sap.com deny in the ga_send_wave.py
+# guard pattern (rule_brisken_graph_send_by_id).
+DEFAULT_DENY_DOMAINS = ("sap.com", "brisken.com")
+
 # Merge variables a template may reference. Deliberately a whitelist over
 # contact columns (regex substitution, NOT Jinja - no template injection).
 MERGE_FIELDS = (
@@ -70,6 +78,37 @@ def now_utc() -> datetime:
 
 def _iso(dt: datetime) -> str:
     return dt.isoformat(timespec="seconds")
+
+
+def _recipient_domain(addr: str) -> str:
+    return (addr or "").strip().rsplit("@", 1)[-1].lower()
+
+
+def deny_domains(store: ContactStore) -> set[str]:
+    """Hard-denied recipient domains: the built-in floor unioned with any
+    operator-configured extras in the 'send_deny_domains' state key (JSON
+    array). A malformed state value falls back to the floor alone."""
+    try:
+        extra = json.loads(store.get_state("send_deny_domains") or "[]")
+    except (json.JSONDecodeError, TypeError):
+        extra = []
+    if not isinstance(extra, list):
+        extra = []
+    return {d.strip().lower() for d in (*DEFAULT_DENY_DOMAINS, *extra)
+            if isinstance(d, str) and d.strip()}
+
+
+def _record_guard_alert(store: ContactStore, campaign_id: str,
+                        blocks: list[dict], now: str) -> None:
+    """Surface send-guard blocks (drifted address, denied domain, unpinned
+    copy) as a single per-campaign state row, or clear a stale one when the
+    pass is clean. Never called on a peek (peek must not mutate state)."""
+    key = f"send_guard_alert:{campaign_id}"
+    if blocks:
+        store.set_state(key, json.dumps(
+            {"at": now, "count": len(blocks), "blocked": blocks[:50]}), now)
+    elif store.get_state(key) is not None:
+        store.delete_state(key)
 
 
 # -- templates ----------------------------------------------------------------
@@ -331,6 +370,9 @@ def claim_sends(store: ContactStore, worker_id: str, max_items: int,
         if cap_left <= 0:
             continue
         pins = store.get_pins(campaign["campaign_id"])
+        recipient_pins = store.get_recipient_pins(campaign["campaign_id"])
+        denied = deny_domains(store)
+        blocks: list[dict] = []
         due = due_items(store, campaign["campaign_id"], at)
         for item in due["emails"]:
             if len(claims) >= max_items or cap_left <= 0:
@@ -338,6 +380,30 @@ def claim_sends(store: ContactStore, worker_id: str, max_items: int,
             e, step = item["enrollment"], item["step"]
             to_addr = (e.get("email") or "").strip()
             if not to_addr:
+                continue
+            # SEND-SAFETY GUARDS (rule_brisken_graph_send_by_id): a send only
+            # ever goes to an address a human froze at approval, never to a
+            # denied domain, and only under approved (pinned) copy. Any breach
+            # blocks the item and surfaces a loud alert; the safe outcome of
+            # uncertainty is "send nothing".
+            cid = e["contact_id"]
+            pinned_to = recipient_pins.get(cid)
+            if pinned_to is None:
+                blocks.append({"contact_id": cid, "kind": "recipient_not_approved",
+                               "detail": f"{to_addr}: no approval-frozen address; re-approve"})
+                continue
+            if to_addr.lower() != pinned_to:
+                blocks.append({"contact_id": cid, "kind": "recipient_drift",
+                               "detail": f"approved {pinned_to!r}, now {to_addr.lower()!r}; re-approve"})
+                continue
+            if _recipient_domain(to_addr) in denied:
+                blocks.append({"contact_id": cid, "kind": "domain_denied",
+                               "detail": f"{to_addr}: hard-denied recipient domain"})
+                continue
+            if step["template_key"] not in pins:
+                blocks.append({"contact_id": cid, "kind": "unpinned_template",
+                               "detail": f"step {step['step_no']} template "
+                                         f"{step['template_key']!r} not pinned; re-approve"})
                 continue
             version = pins.get(step["template_key"])
             tpl = store.get_template(step["template_key"], version)
@@ -385,6 +451,8 @@ def claim_sends(store: ContactStore, worker_id: str, max_items: int,
                 "throttle_seconds": int(campaign["throttle_seconds"]),
                 "jitter_seconds": int(campaign["jitter_seconds"]),
             })
+        if not peek:
+            _record_guard_alert(store, campaign["campaign_id"], blocks, now)
     return {"paused": False, "claims": claims}
 
 
@@ -651,6 +719,15 @@ def approve_campaign(store: ContactStore, campaign_id: str, user: str,
             key = rs["step"]["template_key"]
             pins[key] = existing.get(key, int(rs["template_version"]))
     store.pin_templates(campaign_id, pins)
+    # Freeze each approved contact's EXACT recipient address. The claim path
+    # refuses to send to an address that drifted from this snapshot, closing
+    # the hole where a post-approval sheet-sync overwrites an email and the
+    # frozen copy would go to an address no human reviewed.
+    recipient_pins = {
+        e["contact_id"]: (e.get("email") or "").strip().lower()
+        for e in report["enrollments"] if (e.get("email") or "").strip()
+    }
+    store.pin_recipients(campaign_id, recipient_pins)
     ids = sorted(e["contact_id"] for e in report["enrollments"])
     contacts_hash = hashlib.sha1("|".join(ids).encode("utf-8")).hexdigest()
     store.update_campaign(campaign_id, {

@@ -284,6 +284,17 @@ CREATE TABLE IF NOT EXISTS campaign_template_pins (
     PRIMARY KEY (campaign_id, template_key)
 );
 
+-- Each approved contact's EXACT recipient address, frozen at approval. The
+-- claim path refuses to send to an address that has drifted from this value
+-- (the daily sheet-sync can overwrite a contact's email after approval), so a
+-- send only ever goes to an address a human reviewed at approval time.
+CREATE TABLE IF NOT EXISTS campaign_recipient_pins (
+    campaign_id  TEXT NOT NULL REFERENCES campaigns(campaign_id),
+    contact_id   TEXT NOT NULL REFERENCES contacts(contact_id),
+    email        TEXT NOT NULL,
+    PRIMARY KEY (campaign_id, contact_id)
+);
+
 CREATE INDEX IF NOT EXISTS ix_events_extkey  ON outreach_events(ext_key);
 CREATE INDEX IF NOT EXISTS ix_enroll_camp    ON enrollments(campaign_id);
 CREATE INDEX IF NOT EXISTS ix_attempts_enrl  ON send_attempts(enrollment_id, step_no);
@@ -475,6 +486,19 @@ _MIGRATIONS: dict[int, list] = {
         _LOGIN_TOKENS_DDL.strip(),
         "CREATE INDEX IF NOT EXISTS ix_login_tokens_email ON login_tokens(email)",
         _seed_admin_users,
+    ],
+    # v7: recipient pins. approve_campaign now snapshots each approved contact's
+    # exact email; the claim path refuses to send to an address that drifted
+    # from the approved value (the daily sheet-sync can overwrite a contact's
+    # email after approval). Table is in _SCHEMA for a fresh DB and here for the
+    # existing prod volume - one code path, both covered by the user_version
+    # guard.
+    7: [
+        "CREATE TABLE IF NOT EXISTS campaign_recipient_pins ("
+        "campaign_id TEXT NOT NULL REFERENCES campaigns(campaign_id), "
+        "contact_id TEXT NOT NULL REFERENCES contacts(contact_id), "
+        "email TEXT NOT NULL, "
+        "PRIMARY KEY (campaign_id, contact_id))",
     ],
 }
 
@@ -1155,6 +1179,28 @@ class ContactStore:
             (campaign_id,),
         ).fetchall()
         return {r["template_key"]: int(r["version"]) for r in rows}
+
+    def pin_recipients(self, campaign_id: str, pins: dict[str, str]) -> None:
+        """Freeze each approved contact's exact recipient address at approval.
+        Replace-all per approval (mirrors ``pin_templates``), so an incremental
+        re-approval re-snapshots the current, human-reviewed addresses."""
+        self.conn.execute(
+            "DELETE FROM campaign_recipient_pins WHERE campaign_id = ?", (campaign_id,)
+        )
+        for contact_id, email in pins.items():
+            self.conn.execute(
+                "INSERT INTO campaign_recipient_pins (campaign_id, contact_id, email) "
+                "VALUES (?, ?, ?)",
+                (campaign_id, contact_id, email),
+            )
+        self.conn.commit()
+
+    def get_recipient_pins(self, campaign_id: str) -> dict[str, str]:
+        rows = self.conn.execute(
+            "SELECT contact_id, email FROM campaign_recipient_pins WHERE campaign_id = ?",
+            (campaign_id,),
+        ).fetchall()
+        return {r["contact_id"]: r["email"] for r in rows}
 
     # -- send attempts (outbox lock table) --------------------------------------
 
