@@ -10,6 +10,12 @@ values were lifted verbatim from the Dirk-approved
 `NEW - Brisken - TreasuryCentral Solutions Overview 2026-07-21.pptx`
 build source. Changing a base token changes the whole family; do that only
 with a DESIGN.md update in the same commit.
+
+Canonical brand source: the `brisken-design` skill
+(`.claude/skills/brisken-design/tokens/`), Dirk's DesignSync codification of
+this same system. The deck-surface base ramp and the `overview` palette below
+mirror its tokens 1:1; `tests/test_ds_parity.py` enforces that parity so the
+engine can never silently drift from the design system.
 """
 from dataclasses import dataclass
 
@@ -24,7 +30,7 @@ FAINT = RGBColor(0x8A, 0x95, 0x99)      # tertiary text
 LINE = RGBColor(0xE2, 0xE7, 0xE9)       # hairline on paper
 ONINK = RGBColor(0xEC, 0xEF, 0xF0)      # primary text on ink
 ONINK_SUB = RGBColor(0x9A, 0xA6, 0xAB)  # subordinate text on ink
-NEUTRAL_DK = RGBColor(0x1B, 0x23, 0x27)  # panel on ink
+NEUTRAL_DK = RGBColor(0x19, 0x1F, 0x27)  # panel on ink (DS --brisken-ink-800)
 
 DISPLAY = "Century Gothic"
 BODY = "Segoe UI"
