@@ -67,6 +67,23 @@ def test_entity_prefers_settings_over_form_mapping():
     assert resolve_entity(form, settings) == "Corporate Services"
 
 
+def test_entity_matches_card_first_month_label():
+    """The real hosted bug (2026-08-06): Criss's Chase statement labels the
+    card "2838 - May 2026" (card number FIRST, month last). A plain
+    endswith("2838") missed it (the label ends in the year "2026"), so every
+    run came back has_coa:false with the card fully mapped and the chart
+    provisioned. The digit-token match resolves it."""
+    settings = {"card_entities": {"2838": "Corporate Services"}}
+    assert resolve_entity(_form("2838 - May 2026"), settings) == "Corporate Services"
+
+
+def test_entity_does_not_match_an_unrelated_card_in_a_label():
+    """A card the map does not know still falls back, even when the label
+    carries other digit tokens (the month/year)."""
+    settings = {"card_entities": {"9999": "Other Entity"}}
+    assert resolve_entity(_form("2838 - May 2026"), settings) == "2838 - May 2026"
+
+
 # ── FX reference rates (the 0-of-94 cause) ─────────────────────────────
 
 
@@ -109,6 +126,14 @@ def test_card_account_ignores_a_different_card():
     settings = {"card_accounts": {"9999": "Other card"}}
     cfg = apply_master_data({}, _form("2838"), settings)
     assert "zoho" not in cfg
+
+
+def test_card_account_matches_card_first_month_label():
+    """Same card-first fix for the balancing bank account (warning #2):
+    "2838 - May 2026" resolves card_accounts["2838"], which endswith missed."""
+    settings = {"card_accounts": {"2838": "1010 Chase Corporate"}}
+    cfg = apply_master_data({}, _form("2838 - May 2026"), settings)
+    assert cfg["zoho"]["card_accounts"]["2838 - May 2026"] == "1010 Chase Corporate"
 
 
 def test_card_account_keeps_an_explicit_chart_source():
