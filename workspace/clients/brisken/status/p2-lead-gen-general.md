@@ -4,7 +4,7 @@ workstream: lead-gen-general
 group: lead-generation
 spec: p2
 state: active
-updated: 2026-07-27
+updated: 2026-07-29
 ---
 
 # Brisken / Lead Generation (group general reference)
@@ -43,5 +43,6 @@ authority and this file does not restate it. Highest-leverage pair: sending iden
 
 - `status/p2-rome.md` : Rome 2026 / SAP T&WCM (24-25 Jun) event motion
 - `status/p2-outreach.md` : AEO + LinkedIn + borrowed-trust outreach
+- `status/p2-outreach-engine.md` : campaign engine on Lead Desk (decision 2026-07-29; phased arming plan)
 - `status/p2-onepilot-site.md` : OnePilot marketing site + positioning assets
 - `status/p2-targeting.md` : trigger-radar targeting + account lists
