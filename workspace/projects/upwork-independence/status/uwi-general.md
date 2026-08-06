@@ -31,6 +31,14 @@ the weekly hours ledger. It is a roll-up, not a copy.
    decides which client load gives way; the ledger below measures actuals.
 3. **Referral: ledger + offer definition only.** No outbound drafts until a
    separate go.
+4. **Warm retainer conversion is OFF the table (owner, 2026-07-28).** The
+   2026-07-25 research's Tier-1 step 1 (convert Brisken/Jochen/Meji hourly to
+   retainers) is falsified by owner input: Brisken and Jochen are special
+   agreements, not convertible; Meji is hour-capped by the client's own
+   reluctance (USD 40/hr, will not grow). The EUR 5k/mo target must come from
+   NEW clients via the u1-u7 channels, with the productized audit (research
+   loop A) as the fixed-price front door. A u8 warm-conversion workstream was
+   created and deleted same-week on this correction.
 
 ## Cross-model reconciliation (do not re-litigate)
 
@@ -51,6 +59,8 @@ expensive to win — run as spare-capacity fill / AEO proof only.
 - `u5-delivery-kit.md` — meji pipeline -> `workspace/templates/leadgen-delivery/`
 - `u6-offer-surface.md` — pricing/service pages from `pricing-tiers.json`
 - `u7-subcontracting.md` — starts when u5 exists (kit = contractor runbook)
+- `u8-bfsg-wedge.md` — BFSG audit -> remediation -> monitoring (owner-selected
+  first compliance wedge 2026-07-28; offer spec at owner review)
 
 ## Weekly acquisition-hours ledger (target ~14 h/wk)
 
