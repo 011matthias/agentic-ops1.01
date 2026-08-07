@@ -261,9 +261,15 @@ def test_commit_then_next_batch_autofills_then_forget_stops(client, monkeypatch)
     assert memory["counts"]["merchant_entity"] >= 1
 
     # A NEW batch with the same OCR output auto-fills everything. The vendor
-    # spelling + category now resolve via the REGISTRY (the correction seeded
-    # settings["merchants"], which outranks the learned SQLite); the entity +
-    # paid-through still come from the learned memory (ExpenseMemory).
+    # SPELLING still resolves via the REGISTRY (naming is its job), but since
+    # 2026-08-07 the CATEGORY comes from the per-entity learned row, which now
+    # outranks the registry default (owner call on reviewer feedback r1c: one
+    # merchant legitimately posts to different accounts per legal entity).
+    # Here one correction seeded both stores, so the resulting category is
+    # identical either way and only the provenance label moves; the divergence
+    # case itself is pinned in test_merchant_registry.py.
+    # The entity + paid-through still come from the learned memory
+    # (ExpenseMemory).
     _patch_ocr(monkeypatch, _extraction())
     batch2 = _create_batch(client, name="again.jpg", data=JPG + b"x")
     row = _row(client, batch2)
@@ -273,7 +279,7 @@ def test_commit_then_next_batch_autofills_then_forget_stops(client, monkeypatch)
     assert row["paid_through"] == "1010 Chase"
     assert "Auto-filled from a prior correction" in row["data_quality_note"]
     assert row["posting_category"]["category"] == "Office Supplies & Consumables"
-    assert row["posting_category"]["source"] == "registry"
+    assert row["posting_category"]["source"] == "learned"
 
     # Forget the merchant -> the LEARNED memory (entity + paid-through) reverts,
     # but the registry canonicalization persists: it is the durable, human-

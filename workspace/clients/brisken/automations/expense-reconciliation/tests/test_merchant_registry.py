@@ -231,3 +231,135 @@ def test_seed_drops_noise_vendors():
     m = build_merchants(recs)
     assert set(m) == {"MARTINO SUPERMERCADO"}
     assert m["MARTINO SUPERMERCADO"]["category"] == "Meals & Entertainment"
+
+
+# ── registry vs per-entity memory precedence (2026-08-07) ───────────
+#
+# Owner call on reviewer feedback r1c: the same merchant legitimately posts
+# to different accounts per legal entity, so a per-entity LEARNED row
+# outranks the registry's single canonical answer. Modeled on Brisken's real
+# Zoho history, where `anthropic` posts to two different accounts across the
+# two entities.
+
+_CORP = "Corporate Services"
+_CLOUD = "Cloud Services"
+_LEARNED_ACCOUNT = "Other Infra and IT Costs for Cloud Business"
+_REGISTRY_ACCOUNT = "COGS - DEV Infrastructure (SAP Apps & others)"
+
+
+def _anthropic_registry():
+    return MerchantRegistry({
+        "Anthropic": {
+            "aliases": ["ANTHROPIC"],
+            "category": "Software & Subscriptions",
+            "zoho_account": _REGISTRY_ACCOUNT,
+        },
+    })
+
+
+def _charge_receipt(doc_id: str, entity: str) -> Receipt:
+    """A receipt with NO line items, so categorization takes the
+    vendor-fallback path where memory is consulted."""
+    from decimal import Decimal
+    return Receipt(
+        document_id=doc_id,
+        legal_entity_id=entity,
+        detected_date=None,
+        detected_total=Decimal("20.00"),
+        detected_currency="USD",
+        detected_vendor="ANTHROPIC",
+        line_items=(),
+    )
+
+
+def _lookup_with_corp_row():
+    from expense_recon.learning.consult import MerchantCategoryLookup
+    from expense_recon.learning.store import MerchantCategory
+    return MerchantCategoryLookup([
+        MerchantCategory(
+            legal_entity_id=_CORP,
+            vendor_norm="anthropic",
+            category="Software & Subscriptions",
+            zoho_account=_LEARNED_ACCOUNT,
+            decision_count=1,
+            last_confirmed_at="2026-08-06T00:00:00",
+            source_run="manual-set",
+        ),
+    ])
+
+
+def _categorization(receipt):
+    return receipt.line_items[0].categorization
+
+
+def test_learned_entity_row_outranks_registry_default():
+    """The entity WITH a learned row gets its own account, not the
+    registry's."""
+    from expense_recon.categorize import categorize_receipts_with_registry
+    from expense_recon.matching.types import ClassificationSource
+
+    out, matches = categorize_receipts_with_registry(
+        [_charge_receipt("d-corp", _CORP)],
+        registry=_anthropic_registry(),
+        client=None,
+        learned=_lookup_with_corp_row(),
+    )
+    cat = _categorization(out[0])
+    assert cat.source is ClassificationSource.LEARNED
+    assert cat.zoho_account == _LEARNED_ACCOUNT
+    # naming is independent of categorization: the registry still supplies
+    # the canonical display vendor even though memory won the category.
+    assert "d-corp" in matches
+    assert out[0].canonical_vendor == "Anthropic"
+
+
+def test_registry_still_wins_for_entity_without_a_learned_row():
+    """The other entity has nothing learned, so the registry default stands
+    — this is what keeps the change additive rather than a regression."""
+    from expense_recon.categorize import categorize_receipts_with_registry
+    from expense_recon.matching.types import ClassificationSource
+
+    out, _ = categorize_receipts_with_registry(
+        [_charge_receipt("d-cloud", _CLOUD)],
+        registry=_anthropic_registry(),
+        client=None,
+        learned=_lookup_with_corp_row(),
+    )
+    cat = _categorization(out[0])
+    assert cat.source is ClassificationSource.REGISTRY
+    assert cat.zoho_account == _REGISTRY_ACCOUNT
+
+
+def test_same_vendor_two_entities_diverge_in_one_batch():
+    """Both receipts in ONE batch: the whole point of the owner's call."""
+    from expense_recon.categorize import categorize_receipts_with_registry
+    from expense_recon.matching.types import ClassificationSource
+
+    out, _ = categorize_receipts_with_registry(
+        [_charge_receipt("d-corp", _CORP), _charge_receipt("d-cloud", _CLOUD)],
+        registry=_anthropic_registry(),
+        client=None,
+        learned=_lookup_with_corp_row(),
+    )
+    by_doc = {r.document_id: _categorization(r) for r in out}
+    assert by_doc["d-corp"].source is ClassificationSource.LEARNED
+    assert by_doc["d-corp"].zoho_account == _LEARNED_ACCOUNT
+    assert by_doc["d-cloud"].source is ClassificationSource.REGISTRY
+    assert by_doc["d-cloud"].zoho_account == _REGISTRY_ACCOUNT
+    assert [r.document_id for r in out] == ["d-corp", "d-cloud"]
+
+
+def test_no_learned_store_leaves_registry_behavior_unchanged():
+    """learned=None must reduce to the pre-2026-08-07 behavior exactly."""
+    from expense_recon.categorize import categorize_receipts_with_registry
+    from expense_recon.matching.types import ClassificationSource
+
+    out, _ = categorize_receipts_with_registry(
+        [_charge_receipt("d-corp", _CORP)],
+        registry=_anthropic_registry(),
+        client=None,
+        learned=None,
+    )
+    cat = _categorization(out[0])
+    assert cat.source is ClassificationSource.REGISTRY
+    assert cat.zoho_account == _REGISTRY_ACCOUNT
