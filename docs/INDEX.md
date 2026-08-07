@@ -367,6 +367,7 @@ _Auto-updated by /comd_checkpoint. Most recent first within each section._
 ## platform
 | Date | Topic | Type | Link |
 |------|-------|------|------|
+| 2026-08-07 | unpauseai.com About Publish + Publish-Path Lock | system-infra | [→](docs/2026-08-07%20-%20unpauseai.com%20About%20Publish%20%2B%20Publish-Path%20Lock/Checkpoint.md) |
 | 2026-07-29 | Work Page Case Studies | misc | [→](docs/2026-07-29%20-%20Work%20Page%20Case%20Studies/Checkpoint.md) |
 | 2026-06-10 | n8n Multi-Client Ops Proposal Teardown | misc | [Checkpoint](docs/2026-06-10%20-%20n8n%20Multi-Client%20Ops%20Proposal%20Teardown/Checkpoint.md) |
 | 2026-06-10 | VolaByg Proposal Reframe and Deploy | comms | [Checkpoint](docs/2026-06-10%20-%20VolaByg%20Proposal%20Reframe%20and%20Deploy/Checkpoint.md) |
